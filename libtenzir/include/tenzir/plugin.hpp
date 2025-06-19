@@ -555,24 +555,6 @@ template <class Saver>
 class saver_plugin : public virtual saver_inspection_plugin<Saver>,
                      public virtual saver_parser_plugin {};
 
-// -- aggregation function plugin ---------------------------------------------
-
-/// A base class for plugins that add new aggregation functions.
-class aggregation_function_plugin : public virtual plugin {
-public:
-  /// Creates a new aggregation function that maps incrementally added input
-  /// to a single output value.
-  /// @param input_types The input types for which to create the aggregation
-  /// function.
-  [[nodiscard]] virtual auto
-  make_aggregation_function(const type& input_type) const
-    -> caf::expected<std::unique_ptr<aggregation_function>>
-    = 0;
-
-  /// Return the value that should be used if there is no input.
-  virtual auto aggregation_default() const -> data = 0;
-};
-
 // -- rest endpoint plugin -----------------------------------------------------
 
 // A rest endpoint plugin declares a set of routes on which it can respond

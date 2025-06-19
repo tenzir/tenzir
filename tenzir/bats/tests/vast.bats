@@ -21,16 +21,6 @@ teardown() {
 
 # -- Test Suites
 
-# bats test_tags=node,counting,zeek
-@test "Conn log counting" {
-  import_zeek_conn
-
-  check tenzir 'export | where :ip == 192.168.1.104 | summarize count=count(.)'
-  check tenzir 'export | where resp_p == 80 | summarize count=count(.)'
-  check tenzir 'export | where resp_p != 80 | summarize count=count(.)'
-  check tenzir 'export | where 861237 | summarize count=count(.)'
-}
-
 # bats test_tags=node,import,export,zeek
 @test "Node Zeek conn log" {
   import_zeek_conn
@@ -41,27 +31,6 @@ teardown() {
   check tenzir 'export | where #schema == "zeek.conn" and resp_h == 192.168.1.104 | sort ts'
   check tenzir 'export | where #schema != "zeek.conn" | sort ts'
   check tenzir 'export | where #schema != "foobar" and resp_h == 192.168.1.104 | sort ts'
-}
-
-# bats test_tags=node,import,export,zeek
-@test "Node zeek multiple imports" {
-  import_zeek_conn
-  import_zeek_dns
-
-  check tenzir "export | where resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts"
-  check tenzir "export | where zeek.conn.id.resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts"
-  check tenzir 'export | where :time >= 1970-01-01 | summarize count=count(.)'
-  check tenzir 'export | where #schema == "zeek.conn" | summarize count=count(.)'
-}
-
-# bats test_tags=node,import,export,zeek
-@test "Node Zeek dns log" {
-  import_zeek_dns
-
-  check tenzir "export | where resp_h == 192.168.1.104"
-  check tenzir 'export | where resp_h == 192.168.1.104 | write zeek-tsv --disable-timestamp-tags'
-  check tenzir "export | where :uint64 == 53 | summarize count=count(.)"
-  check tenzir 'export | where :uint64 == 53 and #schema == "zeek.dns" | summarize count=count(.)'
 }
 
 # bats test_tags=node,import,export,zeek
@@ -172,17 +141,6 @@ teardown() {
   import_data "from ${INPUTSDIR}/json/record-in-list.json"
 
   check --sort tenzir "export"
-}
-
-# bats test_tags=import,export,pipelines,chart,bar-chart
-@test "Bar chart" {
-  import_zeek_conn
-
-  check tenzir "export | top id.orig_h | chart bar"
-  check tenzir "export | top id.orig_h | chart bar | get-attributes"
-  check tenzir "export | top id.orig_h | chart bar -x=id.orig_h -y=count"
-  check tenzir "export | top id.orig_h | chart bar -x=id.orig_h -y=count | get-attributes"
-  check ! tenzir "export | top id.orig_h | repeat 2 | chart bar"
 }
 
 # bats test_tags=import,export,pipelines,chart,line-chart

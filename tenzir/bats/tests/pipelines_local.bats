@@ -195,22 +195,6 @@ setup() {
 }
 
 # bats test_tags=pipelines
-@test "Measure Events" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/json/files.log.json.gz read json | measure | summarize events=sum(events) by schema | write json"
-  check tenzir "from ${INPUTSDIR}/json/files.log.json.gz read json | measure --real-time | summarize events=sum(events) by schema | write json"
-}
-
-# bats test_tags=pipelines
-@test "Measure Bytes" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/json/conn.log.json.gz | measure | summarize bytes=sum(bytes) | write json"
-  check tenzir "from ${INPUTSDIR}/json/conn.log.json.gz | measure --real-time | summarize bytes=sum(bytes) | write json"
-}
-
-# bats test_tags=pipelines
 @test "Batch Events" {
   export TENZIR_LEGACY=true
 
@@ -218,26 +202,6 @@ setup() {
   check tenzir 'version | repeat 10 | batch 1 | measure | select events'
   check tenzir 'version | repeat 10 | batch 3 | measure | select events'
   check tenzir 'version | repeat 10 | batch 15 | measure | select events'
-}
-# bats test_tags=pipelines
-@test "Empty Record in Pipeline" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write json"
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write csv"
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write xsv \" \" ; NULL"
-}
-
-# bats test_tags=pipelines, repeat
-@test "Repeat" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | repeat 5 | read cef | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | repeat 5 | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | measure | summarize sum(events) by schema | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | repeat 5 | read cef | measure | summarize sum(events) by schema | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | repeat 5 | measure | summarize sum(events) by schema | write json"
 }
 
 # bats test_tags=pipelines
@@ -322,54 +286,6 @@ setup() {
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 1 | write json -c | shell rev"
   check tenzir 'shell "echo foo"'
   check tenzir 'shell "{ echo \"#\"; seq 1 2 10; }" | read csv | write json -c'
-}
-
-# bats test_tags=pipelines
-@test "Summarize All None Some" {
-  export TENZIR_LEGACY=true
-
-  # The summarize operator supports using fields which do not exist, using
-  # `null` instead of their value. Here, we test many combinations of this
-  # behavior. We use the letters A, N and S for all, none and some,
-  # respectively. For example, SA means that the some (but not all)
-  # schemas do not have the aggregation column present, but for all
-  # of them, the group-by column exists.
-
-  # AA
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path) by _path"
-  # NN
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y) by z"
-  # NA
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y) by _path"
-  # AN
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path) by z"
-  # NS
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y) by id.orig_h"
-  # SN
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h) by z"
-  # AS
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path) by id.orig_h"
-  # SA
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h) by _path"
-  # SS
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h) by id.orig_h"
-  # A
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path)"
-  # S
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h)"
-  # N
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y)"
-}
-
-# bats test_tags=pipelines
-@test "Summarize Dot" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=count(.)"
-  cat ${INPUTSDIR}/zeek/zeek.json |
-    check ! tenzir "from stdin read zeek-json | summarize x=distinct(.)"
-  cat ${INPUTSDIR}/zeek/zeek.json |
-    check ! tenzir "from stdin read zeek-json | summarize x=count(_path) by ."
 }
 
 # bats test_tags=pipelines, zeek
@@ -473,29 +389,6 @@ EOF
   check tenzir "shell \"cat ${INPUTSDIR}/pcap/vlan-*.pcap\" | read pcap -e | put schema=#schema | write json -c"
   # Decapsulate an SLL2 frame.
   check tenzir "from ${INPUTSDIR}/pcap/sll2.pcap | decapsulate | write json -c"
-}
-
-# bats test_tags=pipelines, compression
-@test "Compression" {
-  export TENZIR_LEGACY=true
-
-  # TODO: Also add tests for lz4, zstd, bz2, and brotli, and compression in
-  # general. The current integration testing framework does not support
-  # testing binary outputs very well, so we should implement more tests once
-  # we're completed the transition to bats (see tenzir/tenzir#2859).
-  check tenzir "load file ${INPUTSDIR}/json/conn.log.json.gz | decompress gzip | read zeek-json | summarize num_events=count(.)"
-}
-
-# bats test_tags=pipelines, formats
-@test "Lines" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/cef/checkpoint.log read lines | summarize n=count(.) | write json -c"
-  check tenzir "from ${INPUTSDIR}/cef/checkpoint.log read lines -s | summarize n=count(.) | write json -c"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | write lines"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | put e | write lines"
-  check tenzir "from ${INPUTSDIR}/json/type-mismatch.json read json | write lines"
-  check tenzir "from ${INPUTSDIR}/json/whitespace.json read json | write lines"
 }
 
 # bats test_#tags=pipelines
