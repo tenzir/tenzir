@@ -1,0 +1,12 @@
+{
+  data: "alpha",
+}
+{
+  data: "beta",
+}
+{
+  data: "gamma",
+}
+{
+  data: "delta\n",
+}

@@ -1,7 +1,7 @@
 ---
 title: read_lines
 category: Parsing
-example: 'read_lines'
+example: "read_lines"
 ---
 
 Parses an incoming bytes stream into events.
@@ -31,6 +31,11 @@ Use null byte (`\0`) as the delimiter instead of newline characters.
 
 ### `split_at_regex = string (optional)`
 
+:::warning Deprecated
+This option is deprecated. Use
+[`read_delimited_regex`](/reference/operators/read_delimited_regex) instead.
+:::
+
 Use the specified regex as the delimiter instead of newline characters.
 The regex flavor is Perl compatible and documented [here](https://www.boost.org/doc/libs/1_88_0/libs/regex/doc/html/boost_regex/syntax/perl_syntax.html).
 
@@ -46,6 +51,17 @@ is_error = line.starts_with("error:")
 
 ### Split Syslog-like events without newline terminators from a TCP input
 
+:::info
+Consider using [`read_delimited_regex`](/reference/operators/read_delimited_regex) for regex-based splitting:
+
+```tql
+load_tcp "0.0.0.0:514"
+read_delimited_regex "(?=<[0-9]+>)"
+this = line.parse_syslog()
+```
+
+:::
+
 ```tql
 load_tcp "0.0.0.0:514"
 read_lines split_at_regex="(?=<[0-9]+>)"
@@ -56,5 +72,6 @@ this = line.parse_syslog()
 
 [`read_ssv`](/reference/operators/read_ssv),
 [`read_tsv`](/reference/operators/read_tsv),
+[`read_delimited_regex`](/reference/operators/read_delimited_regex),
 [`read_xsv`](/reference/operators/read_xsv),
 [`write_lines`](/reference/operators/write_lines)
