@@ -44,7 +44,8 @@ public:
           .named("compression_level", options.compression_level)
           .named("compression_type", options.compression_type)
           .parse(inv, ctx));
-    return std::make_unique<writer_adapter<parquet_printer>>(parquet_printer{});
+    return std::make_unique<writer_adapter<parquet_printer>>(
+      parquet_printer{options});
   }
 
   auto write_properties() const

@@ -52,7 +52,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
                                            std::move(input_buffer),
                                            arrow_reader_properties,
                                            &out_buffer);
-    if (!arrow_file_reader_status.ok()) {
+    if (! arrow_file_reader_status.ok()) {
       diagnostic::error("{}",
                         arrow_file_reader_status.ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
@@ -66,7 +66,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
   auto record_batch_reader_status
     = out_buffer->GetRecordBatchReader(&rb_reader);
-  if (!record_batch_reader_status.ok()) {
+  if (! record_batch_reader_status.ok()) {
     diagnostic::error("{}",
                       record_batch_reader_status.ToStringWithoutContextLines())
       .note("failed create record batches from input data")
@@ -75,7 +75,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   }
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
        *rb_reader) {
-    if (!maybe_batch.ok()) {
+    if (! maybe_batch.ok()) {
       diagnostic::error("{}",
                         maybe_batch.status().ToStringWithoutContextLines())
         .note("failed read record batch")
@@ -225,7 +225,7 @@ public:
       if (options.compression_type) {
         auto result_compression_type = arrow::util::Codec::GetCompressionType(
           options.compression_type->inner);
-        if (!result_compression_type.ok()) {
+        if (! result_compression_type.ok()) {
           return diagnostic::error("{}", result_compression_type.status()
                                            .ToStringWithoutContextLines())
             .note("failed to parse compression type")
@@ -259,7 +259,9 @@ public:
         } else {
           diagnostic::warning("ignoring compression level option")
             .note("snappy does not accept `compression level`")
-            .primary(options.compression_level->source)
+            .primary(options.compression_level
+                       ? options.compression_level->source
+                       : location::unknown)
             .primary(options.compression_type->source)
             .emit(ctrl.diagnostics());
         }
@@ -302,7 +304,7 @@ public:
       }
       auto record_batch = remove_empty_records(to_record_batch(input));
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
-      if (!record_batch_status.ok()) {
+      if (! record_batch_status.ok()) {
         diagnostic::error("{}",
                           record_batch_status.ToStringWithoutContextLines())
           .note("failed to write record batch")
@@ -314,7 +316,7 @@ public:
 
     auto finish() -> generator<chunk_ptr> override {
       auto close_status = writer_->Close();
-      if (!close_status.ok()) {
+      if (! close_status.ok()) {
         diagnostic::error("{}", close_status.ToStringWithoutContextLines())
           .note("failed to write metadata and close")
           .emit(ctrl_.diagnostics());

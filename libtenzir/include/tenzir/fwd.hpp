@@ -131,7 +131,6 @@ class stringification_inspector;
 namespace tenzir {
 
 class active_store;
-class aggregation_function;
 class bitmap;
 class blob_type;
 class blob;
