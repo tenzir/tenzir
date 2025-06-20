@@ -302,7 +302,7 @@ auto main(int argc, char** argv) -> int try {
   auto sys = caf::actor_system{cfg};
   // The reflector scope variable cleans up the reflector on destruction.
   scope_linked<signal_reflector_actor> reflector{
-    sys.spawn<caf::detached>(signal_reflector)};
+    sys.spawn<caf::detached + caf::hidden>(signal_reflector)};
   std::atomic<bool> stop = false;
   // clang-format off
   auto signal_monitoring_thread = std::thread([&]()
@@ -341,6 +341,21 @@ auto main(int argc, char** argv) -> int try {
   sys.registry().erase("signal-reflector");
   signal_monitoring_joiner.trigger();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
+  if (is_server) {
+    sys.await_actors_before_shutdown(false);
+    auto actors_gone = sys.registry().await_running_count_equal(0, std::chrono::seconds{2});
+    if (not actors_gone) {
+      TENZIR_INFO(
+        "waiting 58 more seconds for leftover components to terminate");
+      actors_gone = sys.registry().await_running_count_equal(0, std::chrono::seconds{5});
+      if (not actors_gone) {
+        TENZIR_WARN("Unclean shutdown, leftover components: {}", sys.registry().named_actors());
+        return EXIT_FAILURE;
+      }
+    } else {
+      TENZIR_INFO("ALL GONE");
+    }
+  }
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;

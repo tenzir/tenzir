@@ -599,7 +599,9 @@ def tenzir_node_endpoint(test: Path, coverage: bool = False):
             if node_process:
                 try:
                     node_process.terminate()
-                    node_process.wait(timeout=5)
+                    ret = node_process.wait(timeout=5)
+                    if ret != 0:
+                        raise subprocess.SubprocessError
                 except subprocess.TimeoutExpired as e:
                     report_failure(
                         test,
@@ -607,10 +609,14 @@ def tenzir_node_endpoint(test: Path, coverage: bool = False):
                     )
                     node_process.kill()
                     node_process.wait()
+                    if node_process.stderr is not None:
+                        print(node_process.stderr.read())
                 except Exception as e:
                     report_failure(
                         test, f"└─▶ \033[31mError terminating node process: {e}"
                     )
+                    if node_process.stderr is not None:
+                        print(node_process.stderr.read())
 
 
 def run_with_node(
