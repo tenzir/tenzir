@@ -43,6 +43,8 @@ let
       libmaxminddb,
       re2,
       dpkg,
+      lz4,
+      zstd,
       rpm,
       restinio,
       llhttp,
@@ -263,6 +265,9 @@ let
 
           env = {
             POETRY_VIRTUALENVS_IN_PROJECT = 1;
+            # Needed to statisfy the ORCs custom cmake modules.
+            ZSTD_ROOT = lib.getDev zstd;
+            LZ4_ROOT = lz4;
           };
           cmakeFlags =
             [
