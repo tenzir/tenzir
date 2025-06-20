@@ -25,15 +25,15 @@
   zstd,
 }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "fluent-bit";
-  version = "3.2.3";
+  version = "4.0.3";
 
   src = fetchFromGitHub {
     owner = "fluent";
     repo = "fluent-bit";
-    tag = "v${version}";
-    hash = "sha256-5Oyw3nHlAyywF+G0UiGyi1v+jAr8eyKt/1cDT5FdJXQ=";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-hxlvidzrEE/5xzka414CerGQ/Vi2jXUnNvO/oSxrHQQ=";
   };
 
   patches = [
@@ -176,4 +176,4 @@ stdenv.mkDerivation rec {
     mainProgram = "fluent-bit";
     maintainers = with lib.maintainers; [ samrose ];
   };
-}
+})

@@ -1,6 +1,6 @@
 finalPkgs: prevPkgs:
 let
-  inherit (finalPkgs) lib;
+  inherit (prevPkgs) lib;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
   callFunction = callFunctionWith finalPkgs;
@@ -24,6 +24,7 @@ in
   ];
 
   # Customized from upstream nixpkgs.
+  apache-orc = callFunction ./overrides/apache-orc.nix { inherit (prevPkgs) apache-orc; };
   arrow-cpp = callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; };
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
     inherit (prevPkgs) aws-sdk-cpp;
@@ -36,7 +37,6 @@ in
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
-  rdkafka = callFunction ./overrides/rdkafka.nix { inherit (prevPkgs) rdkafka; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
   yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
