@@ -21,6 +21,12 @@ The regular expression flavor is Perl compatible and documented
 
 The resulting events have a single field called `data`.
 
+:::note
+If the input ends with a separator, no additional empty event will be generated.
+For example, splitting `"a|b|"` with delimiter pattern `"|"` will produce two
+events: `"a"` and `"b"`, not three events with an empty third one.
+:::
+
 ### `regex: string|blob (required)`
 
 The regular expression pattern to use as delimiter. This can be provided as a string

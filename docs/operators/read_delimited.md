@@ -18,6 +18,12 @@ simple string delimiters instead of regular expressions or standard newlines.
 
 The resulting events have a single field called `data`.
 
+:::note
+If the input ends with a separator, no additional empty event will be generated.
+For example, splitting `"a|b|"` with delimiter `"|"` will produce two events:
+`"a"` and `"b"`, not three events with an empty third one.
+:::
+
 ### `separator: string|blob (required)`
 
 The string or blob to use as delimiter. The operator will split the input whenever this
