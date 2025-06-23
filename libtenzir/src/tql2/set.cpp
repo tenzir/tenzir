@@ -15,6 +15,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/rebatch.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/type.hpp"
@@ -26,33 +27,6 @@
 #include <type_traits>
 
 namespace tenzir {
-
-namespace {
-
-auto rebatch_events(std::vector<table_slice> events)
-  -> std::vector<table_slice> {
-  if (events.size() < 2) {
-    return events;
-  }
-  auto result = std::vector<table_slice>{};
-  auto start = events.begin();
-  auto rows = start->rows();
-  const auto end = events.end();
-  for (auto it = std::next(start); it < end; ++it) {
-    rows += it->rows();
-    if (it->schema() == start->schema()
-        and rows < defaults::import::table_slice_size) {
-      continue;
-    }
-    result.push_back(concatenate({start, it}));
-    start = it;
-    rows = start->rows();
-  }
-  result.push_back(concatenate({start, end}));
-  return result;
-}
-
-} // namespace
 
 auto consume_path(std::span<const ast::field_path::segment> path, series value)
   -> series {
@@ -505,7 +479,7 @@ auto set_operator::operator()(generator<table_slice> input,
       std::ranges::stable_sort(results, std::ranges::less{},
                                &table_slice::schema);
     }
-    for (auto& result : rebatch_events(std::move(results))) {
+    for (auto& result : rebatch(std::move(results))) {
       co_yield std::move(result);
     }
   }

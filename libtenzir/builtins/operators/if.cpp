@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/rebatch.hpp"
+
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/multi_series.hpp>
 #include <tenzir/pipeline.hpp>
@@ -29,29 +31,6 @@
 namespace tenzir::plugins::if_ {
 
 namespace {
-
-/// Rebatches a set of batches of events while keeping the input order.
-auto rebatch_events(std::deque<table_slice> events) -> std::deque<table_slice> {
-  if (events.size() < 2) {
-    return events;
-  }
-  auto result = std::deque<table_slice>{};
-  auto start = events.begin();
-  auto rows = start->rows();
-  const auto end = events.end();
-  for (auto it = std::next(start); it < end; ++it) {
-    rows += it->rows();
-    if (it->schema() == start->schema()
-        and rows < defaults::import::table_slice_size) {
-      continue;
-    }
-    result.push_back(concatenate({start, it}));
-    start = it;
-    rows = start->rows();
-  }
-  result.push_back(concatenate({start, end}));
-  return result;
-}
 
 /// Splits a batch of events into two based on an array of bools. Treats null as
 /// false. The first element of the returned pair are the values for which the
@@ -447,7 +426,7 @@ private:
       pull_rp = self_->make_response_promise<table_slice>();
       return pull_rp;
     }
-    inputs = rebatch_events(std::move(inputs));
+    inputs = rebatch<std::deque>(std::move(inputs));
     auto input = std::move(inputs.front());
     inputs.pop_front();
     if (from_if_rp_.pending() and can_push_more()) {
@@ -479,7 +458,7 @@ private:
       to_endif_rp_ = self_->make_response_promise<table_slice>();
       return to_endif_rp_;
     }
-    outputs_ = rebatch_events(std::move(outputs_));
+    outputs_ = rebatch<std::deque>(std::move(outputs_));
     auto output = std::move(outputs_.front());
     outputs_.pop_front();
     if (outputs_.size() < max_queued) {

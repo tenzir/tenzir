@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include <tenzir/generator.hpp>
-
 #include <ranges>
+#include <vector>
 
 namespace tenzir {
 
@@ -24,16 +23,19 @@ struct group_result {
   difference_type end;
 };
 
-// Adapts a forward range to produce groups of consecutive elements.
+// Adapts a forward range to produce groups of consecutive elements. TODO:
+// Consider finding a better name for this function, perhaps `segment` or
+// `consecutive_groups`?
 template <std::ranges::forward_range Rng>
 auto group(Rng&& values) // NOLINT(cppcoreguidelines-missing-std-forward)
-  -> generator<group_result<Rng>> {
+  -> std::vector<group_result<Rng>> {
   using result_type = group_result<Rng>;
   using difference_type = typename result_type::difference_type;
+  auto results = std::vector<result_type>{};
   auto it = std::ranges::begin(values);
   const auto end = std::ranges::end(values);
   if (it == end) {
-    co_return;
+    return results;
   }
   auto current_begin = difference_type{0};
   auto current_pos = current_begin;
@@ -41,24 +43,25 @@ auto group(Rng&& values) // NOLINT(cppcoreguidelines-missing-std-forward)
   ++it;
   ++current_pos;
   while (it != end) {
-    auto next_value = std::forward_like<Rng>(*it);
+    auto next_value = *it;
     if (next_value != current_value) {
-      co_yield result_type{
+      results.push_back({
         .value = current_value,
         .begin = current_begin,
         .end = current_pos,
-      };
+      });
       current_value = std::move(next_value);
       current_begin = current_pos;
     }
     ++it;
     ++current_pos;
   }
-  co_yield result_type{
+  results.push_back({
     .value = current_value,
     .begin = current_begin,
     .end = current_pos,
-  };
+  });
+  return results;
 }
 
 } // namespace tenzir
