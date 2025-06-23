@@ -38,7 +38,7 @@ from "conn.log.gz" {
 publish "zeek"
 ```
 
-### Publish Suriacata events under a dynamic topic depending on their event type
+### Publish Suricata events under a dynamic topic depending on their event type
 
 ```tql
 from "eve.json" {
