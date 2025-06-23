@@ -1317,8 +1317,9 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto plaintext_url = std::string{};
-    co_yield ctrl.resolve_secrets_must_yield({make_secret_request(
+    (void)ctrl.resolve_secrets_must_yield({make_secret_request(
       "uri", args_.url, plaintext_url, ctrl.diagnostics())});
+    co_yield {};
     // Spawning the actor detached because some parts of the Arrow filesystem
     // API are blocking.
     auto impl = scope_linked{ctrl.self().spawn<caf::linked + caf::detached>(

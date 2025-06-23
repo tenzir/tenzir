@@ -29,6 +29,7 @@ struct secret_request_record {
   record value;
   struct location location;
   record_secret_request_callback callback;
+  secret_censor* censor = nullptr;
 };
 
 using secret_request_combined = variant<secret_request, secret_request_record>;
@@ -37,14 +38,16 @@ using secret_request_combined = variant<secret_request, secret_request_record>;
 /// pair in `r` on successfully resolution.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 auto make_secret_request(record r, location loc,
-                         record_secret_request_callback callback)
+                         record_secret_request_callback callback,
+                         secret_censor* censor = nullptr)
   -> secret_request_combined;
 
 /// Creates a secret request that will invoke `callback` for every (key,secret)
 /// pair in `r` on successfully resolution.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 auto make_secret_request(const located<record>& r,
-                         record_secret_request_callback callback)
+                         record_secret_request_callback callback,
+                         secret_censor* censor = nullptr)
   -> secret_request_combined;
 
 /// Creates a secret request that will set `uri`. The secret URI is validated

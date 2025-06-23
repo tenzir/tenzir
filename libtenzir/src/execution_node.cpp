@@ -380,6 +380,10 @@ struct exec_node_control_plane final : public operator_control_plane {
         [this, requested_secrets, finishers = std::move(finishers),
          final_callback]() {
           /// Finish all secrets via the respective finisher.
+          for (const auto& f : finishers) {
+            f.finish(*requested_secrets);
+          }
+          /// Finish all secrets via the respective finisher.
           bool success = true;
           for (const auto& f : finishers) {
             success &= static_cast<bool>(
@@ -1259,7 +1263,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       return result;
     };
   };
-  return std::pair {
+  return std::pair{
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),
