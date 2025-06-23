@@ -66,9 +66,8 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto uri = arrow::util::Uri{};
-    (void)ctrl.resolve_secrets_must_yield(
+    co_yield ctrl.resolve_secrets_must_yield(
       {make_uri_request(args_.uri, "gs://", uri, ctrl.diagnostics())});
-    co_yield {};
     auto opts = get_options(args_, uri);
 #if ARROW_VERSION_MAJOR < 19
     auto fs = arrow::fs::GcsFileSystem::Make(opts);
@@ -150,9 +149,8 @@ public:
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto uri = arrow::util::Uri{};
-    (void)ctrl.resolve_secrets_must_yield(
+    co_yield ctrl.resolve_secrets_must_yield(
       {make_uri_request(args_.uri, "gs://", uri, ctrl.diagnostics())});
-    co_yield {};
     auto opts = get_options(args_, uri);
 #if ARROW_VERSION_MAJOR < 19
     auto fs = arrow::fs::GcsFileSystem::Make(opts);

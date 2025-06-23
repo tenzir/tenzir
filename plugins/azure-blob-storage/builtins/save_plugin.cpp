@@ -28,9 +28,8 @@ public:
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto uri = arrow::util::Uri{};
-    (void)ctrl.resolve_secrets_must_yield(
+    co_yield ctrl.resolve_secrets_must_yield(
       {make_uri_request(uri_, "", uri, ctrl.diagnostics())});
-    co_yield {};
     auto path = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri, &path);
     if (not opts.ok()) {

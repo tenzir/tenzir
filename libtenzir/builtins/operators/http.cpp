@@ -847,8 +847,7 @@ public:
     auto url = std::string{};
     auto port = uint16_t{};
     auto req = make_secret_request("url", args_.url, url, dh);
-    std::ignore = ctrl.resolve_secrets_must_yield({std::move(req)});
-    co_yield {};
+    co_yield ctrl.resolve_secrets_must_yield({std::move(req)});
     if (url.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
       co_return;
@@ -1023,16 +1022,16 @@ public:
         auto req = secret_request{
           std::move(secret),
           loc,
-          [&, name](const resolved_secret_value& x) {
-            auto view = x.utf8_view(name, loc, dh);
-            headers.emplace(name, std::string{view});
+          [&, name](const resolved_secret_value& x) -> failure_or<void> {
+            TRY(auto str, x.utf8_view(name, loc, dh));
+            headers.emplace(name, std::string{str});
+            return {};
           },
         };
         reqs.emplace_back(std::move(req));
       }
     }
-    std::ignore = ctrl.resolve_secrets_must_yield(std::move(reqs));
-    co_yield {};
+    co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
     if (url.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
       co_return;
@@ -1625,9 +1624,8 @@ public:
           }
         }
       }
-      if (not reqs.empty()
-          and ctrl.resolve_secrets_must_yield(std::move(reqs))) {
-        co_yield {};
+      if (not reqs.empty()) {
+        co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
       }
       auto url_it = urls.begin();
       auto hdr_it = hdrs.begin();

@@ -165,10 +165,7 @@ public:
     auto url = std::string{};
     auto& dh = ctrl.diagnostics();
     auto items = make_items_wo_secrets(args_, dh);
-    /// GCC 14.2 erroneously warns that the first temporary here may used as a
-    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
-    /// name somehow circumvents this warning.
-    auto x = resolve_secrets_must_yield(
+    co_yield resolve_secrets_must_yield(
       ctrl,
       {
         make_secret_request("url", args_.url, url, dh),
@@ -177,7 +174,6 @@ public:
         make_record_param_request("header", http::request_item::header,
                                   args_.http_opts.headers, items, dh),
       });
-    co_yield std::move(x);
     if (args_.is_ftp and not url.starts_with("ftp://")
         and not url.starts_with("ftps://")) {
       url.insert(0, "ftp://");
@@ -277,10 +273,7 @@ public:
     auto url = std::string{};
     auto& dh = ctrl.diagnostics();
     auto items = make_items_wo_secrets(args_, dh);
-    /// GCC 14.2 erroneously warns that the first temporary here may used as a
-    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
-    /// name somehow circumvents this warning.
-    auto x = resolve_secrets_must_yield(
+    co_yield resolve_secrets_must_yield(
       ctrl,
       {
         make_secret_request("url", args_.url, url, dh),
@@ -289,7 +282,6 @@ public:
         make_record_param_request("header", http::request_item::header,
                                   args_.http_opts.headers, items, dh),
       });
-    co_yield std::move(x);
     if (args_.is_ftp and not url.starts_with("ftp://")
         and not url.starts_with("ftps://")) {
       url.insert(0, "ftp://");

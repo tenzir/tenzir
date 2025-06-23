@@ -11,19 +11,18 @@
 namespace tenzir {
 
 auto make_secret_request(record r, location loc,
-                         record_secret_request_callback callback,
-                         secret_censor* censor) -> secret_request_combined {
+                         record_secret_request_callback callback)
+  -> secret_request_combined {
   return secret_request_combined{std::in_place_type<secret_request_record>,
-                                 std::move(r), loc, std::move(callback),
-                                 censor};
+                                 std::move(r), loc, std::move(callback)};
 }
 
 auto make_secret_request(const located<record>& r,
-                         record_secret_request_callback callback,
-                         secret_censor* censor) -> secret_request_combined {
+                         record_secret_request_callback callback)
+  -> secret_request_combined {
   return secret_request_combined{std::in_place_type<secret_request_record>,
                                  std::move(r.inner), r.source,
-                                 std::move(callback), censor};
+                                 std::move(callback)};
 }
 
 namespace {
@@ -31,8 +30,10 @@ namespace {
 auto arrow_uri_callback(std::string prefix, arrow::util::Uri& uri,
                         diagnostic_handler& dh, location loc)
   -> secret_request_callback {
-  return [&uri, &dh, loc, prefix = std::move(prefix)](resolved_secret_value v) {
-    auto str = std::string{v.utf8_view("uri", loc, dh).unwrap()};
+  return [&uri, &dh, loc, prefix = std::move(prefix)](
+           resolved_secret_value v) -> failure_or<void> {
+    TRY(auto sv, v.utf8_view("uri", loc, dh));
+    auto str = std::string{sv};
     if (not str.starts_with(prefix)) {
       str.insert(0, prefix);
     }
@@ -41,23 +42,24 @@ auto arrow_uri_callback(std::string prefix, arrow::util::Uri& uri,
       diagnostic::error("failed to parse uri").primary(loc).emit(dh);
       return failure::promise();
     };
+    return {};
   };
 }
 
 } // namespace
 
 auto make_uri_request(secret s, location loc, std::string prefix,
-                      arrow::util::Uri& uri, diagnostic_handler& dh,
-                      secret_censor* censor) -> secret_request {
-  return secret_request{
-    s, loc, arrow_uri_callback(std::move(prefix), uri, dh, loc), censor};
+                      arrow::util::Uri& uri, diagnostic_handler& dh)
+  -> secret_request {
+  return secret_request{s, loc,
+                        arrow_uri_callback(std::move(prefix), uri, dh, loc)};
 }
 
 auto make_uri_request(const located<secret>& s, std::string prefix,
-                      arrow::util::Uri& uri, diagnostic_handler& dh,
-                      secret_censor* censor) -> secret_request {
-  return secret_request{
-    s, arrow_uri_callback(std::move(prefix), uri, dh, s.source), censor};
+                      arrow::util::Uri& uri, diagnostic_handler& dh)
+  -> secret_request {
+  return secret_request{s, arrow_uri_callback(std::move(prefix), uri, dh,
+                                              s.source)};
 }
 
 auto resolve_secrets_must_yield(

@@ -95,28 +95,19 @@ struct secret_request {
   struct location location;
   /// The callback to invoke once this secret is resolved
   secret_request_callback callback;
-  /// A censor object that gets updated with the secrets value, allowing
-  /// censorship.
-  secret_censor* censor = nullptr;
 
   /// A secret request that will invoke `callback` on successful resolution
   secret_request(tenzir::secret secret, tenzir::location loc,
-                 secret_request_callback callback,
-                 secret_censor* censor = nullptr)
-    : secret{std::move(secret)},
-      location{loc},
-      callback{std::move(callback)},
-      censor{censor} {
+                 secret_request_callback callback)
+    : secret{std::move(secret)}, location{loc}, callback{std::move(callback)} {
   }
 
   /// A secret request that will invoke `callback` on successful resolution
   secret_request(const located<tenzir::secret>& secret,
-                 secret_request_callback callback,
-                 secret_censor* censor = nullptr)
+                 secret_request_callback callback)
     : secret{secret.inner},
       location{secret.source},
-      callback{std::move(callback)},
-      censor{censor} {
+      callback{std::move(callback)} {
   }
 
   /// A secret request that will directly set `out` on successful resolution
