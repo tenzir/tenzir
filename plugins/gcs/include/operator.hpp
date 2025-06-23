@@ -66,10 +66,9 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto censor = secret_censor{};
     auto uri = arrow::util::Uri{};
     (void)ctrl.resolve_secrets_must_yield(
-      {make_uri_request(args_.uri, "gs://", uri, ctrl.diagnostics(), &censor)});
+      {make_uri_request(args_.uri, "gs://", uri, ctrl.diagnostics())});
     co_yield {};
     auto opts = get_options(args_, uri);
 #if ARROW_VERSION_MAJOR < 19
@@ -78,7 +77,7 @@ public:
     auto fs_result = arrow::fs::GcsFileSystem::Make(opts);
     if (not fs_result.ok()) {
       diagnostic::error("failed to create GCS filesystem: {}",
-                        censor.censor(fs_result))
+                        fs_result.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
@@ -88,7 +87,8 @@ public:
     auto file_info
       = fs->GetFileInfo(fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      diagnostic::error("failed to get file info: {}", censor.censor(file_info))
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
@@ -96,7 +96,7 @@ public:
     auto input_stream = fs->OpenInputStream(*file_info);
     if (not input_stream.ok()) {
       diagnostic::error("failed to open input stream: {}",
-                        censor.censor(input_stream))
+                        input_stream.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
@@ -105,7 +105,7 @@ public:
       auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
       if (not input_stream.ok()) {
         diagnostic::error("failed to read from input stream: {}",
-                          censor.censor(buffer))
+                          buffer.status().ToStringWithoutContextLines())
           .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
         co_return;
@@ -150,10 +150,9 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    auto censor = secret_censor{};
     auto uri = arrow::util::Uri{};
     (void)ctrl.resolve_secrets_must_yield(
-      {make_uri_request(args_.uri, "gs://", uri, ctrl.diagnostics(), &censor)});
+      {make_uri_request(args_.uri, "gs://", uri, ctrl.diagnostics())});
     co_yield {};
     auto opts = get_options(args_, uri);
 #if ARROW_VERSION_MAJOR < 19
@@ -162,7 +161,7 @@ public:
     auto fs_result = arrow::fs::GcsFileSystem::Make(opts);
     if (not fs_result.ok()) {
       diagnostic::error("failed to create GCS filesystem: {}",
-                        censor.censor(fs_result))
+                        fs_result.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
     }
@@ -171,7 +170,8 @@ public:
     auto file_info
       = fs->GetFileInfo(fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      diagnostic::error("failed to get file info: {}", censor.censor(file_info))
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
     }
@@ -179,20 +179,20 @@ public:
       = fs->OpenOutputStream(file_info->path(), opts.default_metadata);
     if (not output_stream.ok()) {
       diagnostic::error("failed to open output stream: {}",
-                        censor.censor(output_stream))
+                        output_stream.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
     }
-    auto stream_guard
-      = detail::scope_guard([this, &ctrl, output_stream, &censor]() noexcept {
-          auto status = output_stream.ValueUnsafe()->Close();
-          if (not output_stream.ok()) {
-            diagnostic::error("failed to close output stream: {}",
-                              censor.censor(output_stream))
-              .primary(args_.uri.source)
-              .emit(ctrl.diagnostics());
-          }
-        });
+    auto stream_guard = detail::scope_guard([this, &ctrl,
+                                             output_stream]() noexcept {
+      auto status = output_stream.ValueUnsafe()->Close();
+      if (not output_stream.ok()) {
+        diagnostic::error("failed to close output stream: {}",
+                          output_stream.status().ToStringWithoutContextLines())
+          .primary(args_.uri.source)
+          .emit(ctrl.diagnostics());
+      }
+    });
     for (auto chunk : input) {
       if (! chunk || chunk->size() == 0) {
         co_yield {};
@@ -202,7 +202,7 @@ public:
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
         diagnostic::error("failed to write to output stream: {}",
-                          censor.censor(status.ToString()))
+                          status.ToStringWithoutContextLines())
           .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
       }

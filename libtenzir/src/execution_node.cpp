@@ -130,6 +130,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   }
 
   void emit(diagnostic diag) override {
+    if (not censor.is_noop()) {
+      diag.message = censor.censor(std::move(diag.message));
+      for (auto& annotation : diag.annotations) {
+        annotation.text = censor.censor(std::move(annotation.text));
+      }
+      for (auto& note : diag.notes) {
+        note.message = censor.censor(std::move(note.message));
+      }
+    }
     TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
                  diag);
     switch (state.op->strictness()) {
@@ -149,10 +158,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     }
   }
 
+  void add_secret(resolved_secret_value v) {
+    censor.secrets.push_back(std::move(v));
+  }
+
 private:
   exec_node_state<Input, Output>& state;
   receiver_actor<diagnostic> handle = {};
   diagnostic_deduplicator deduplicator_;
+  secret_censor censor;
 };
 
 template <class Input, class Output>
@@ -242,6 +256,7 @@ struct exec_node_control_plane final : public operator_control_plane {
     class secret secret;
     secret_request_callback callback;
     location loc;
+    secret_censor* censor = nullptr;
 
     auto finish(auto) const;
 
@@ -304,6 +319,9 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
         // We append the resolved & transformed element to the final result.
         res.insert(res.end(), temp_blob.begin(), temp_blob.end());
+        if (censor) {
+          censor->secrets.emplace_back(std::move(temp_blob), true);
+        }
       }
       // Finally, we invoke the callback
       callback(resolved_secret_value{std::move(res), all_literal});
@@ -328,7 +346,7 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
       }
       finishers.emplace_back(std::move(req.secret), std::move(req.callback),
-                             req.location);
+                             req.location, req.censor);
     }
     if (requested_secrets->empty()) {
       for (const auto& f : finishers) {
@@ -351,6 +369,14 @@ struct exec_node_control_plane final : public operator_control_plane {
         requested_secrets->size(),
         [this, requested_secrets, finishers = std::move(finishers),
          final_callback = std::move(final_callback)]() {
+          /// Add all managed secrets to the diagnostic handlers censor.
+          /// This has to happen before finishing, since the finisher/callbacks
+          /// could emit diagnostics.
+          for (const auto& [_, value] : *requested_secrets) {
+            diagnostic_handler->add_secret(
+              resolved_secret_value{value.value, false});
+          }
+          /// Finish all secrets via the respective finisher.
           for (const auto& f : finishers) {
             f.finish(*requested_secrets);
           }
@@ -1216,7 +1242,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       return result;
     };
   };
-  return std::pair {
+  return std::pair{
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),

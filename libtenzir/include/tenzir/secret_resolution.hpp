@@ -64,7 +64,7 @@ private:
   bool all_literal_ = false;
 };
 
-/// A utility that censors any occurrence of (part of) a secret in a string.
+/// A utility that censors any occurrence of a secret in a string.
 /// @relates make_secret_request
 struct secret_censor {
 public:
@@ -74,9 +74,10 @@ public:
   auto censor(const arrow::Result<T>& r) const -> std::string {
     return censor(r.status());
   }
+  auto is_noop() const -> bool {
+    return secrets.empty();
+  }
 
-  size_t max_size = 3;
-  bool censor_literals = false;
   std::vector<resolved_secret_value> secrets;
 };
 
@@ -92,19 +93,28 @@ struct secret_request {
   struct location location;
   /// The callback to invoke once this secret is resolved
   secret_request_callback callback;
+  /// A censor object that gets updated with the secrets value, allowing
+  /// censorship.
+  secret_censor* censor = nullptr;
 
   /// A secret request that will invoke `callback` on successful resolution
   secret_request(tenzir::secret secret, tenzir::location loc,
-                 secret_request_callback callback)
-    : secret{std::move(secret)}, location{loc}, callback{std::move(callback)} {
+                 secret_request_callback callback,
+                 secret_censor* censor = nullptr)
+    : secret{std::move(secret)},
+      location{loc},
+      callback{std::move(callback)},
+      censor{censor} {
   }
 
   /// A secret request that will invoke `callback` on successful resolution
   secret_request(const located<tenzir::secret>& secret,
-                 secret_request_callback callback)
+                 secret_request_callback callback,
+                 secret_censor* censor = nullptr)
     : secret{secret.inner},
       location{secret.source},
-      callback{std::move(callback)} {
+      callback{std::move(callback)},
+      censor{censor} {
   }
 
   /// A secret request that will directly set `out` on successful resolution

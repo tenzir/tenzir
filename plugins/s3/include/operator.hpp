@@ -80,10 +80,9 @@ public:
   s3_loader(s3_args args) : args_{std::move(args)} {
   }
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto censor = secret_censor{};
     auto uri = arrow::util::Uri{};
     (void)ctrl.resolve_secrets_must_yield(
-      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics(), &censor)});
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
     co_yield {};
     auto opts = get_options(args_, uri);
     if (not opts) {
@@ -93,14 +92,15 @@ public:
     auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 filesystem: {}",
-                        censor.censor(fs))
+                        fs.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      diagnostic::error("failed to get file info: {}", censor.censor(file_info))
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
@@ -108,7 +108,7 @@ public:
     auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
     if (not input_stream.ok()) {
       diagnostic::error("failed to open input stream: {}",
-                        censor.censor(input_stream))
+                        input_stream.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
@@ -117,7 +117,7 @@ public:
       auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
       if (not input_stream.ok()) {
         diagnostic::error("failed to read from input stream: {}",
-                          censor.censor(buffer))
+                          buffer.status().ToStringWithoutContextLines())
           .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
         co_return;
@@ -160,10 +160,9 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    auto censor = secret_censor{};
     auto uri = arrow::util::Uri{};
     (void)ctrl.resolve_secrets_must_yield(
-      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics(), &censor)});
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
     co_yield {};
     auto opts = get_options(args_, uri);
     if (not opts) {
@@ -173,30 +172,32 @@ public:
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 "
                         "filesystem: {}",
-                        censor.censor(fs))
+                        fs.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      diagnostic::error("failed to get file info: {}", censor.censor(file_info))
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
     }
     auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
     if (not output_stream.ok()) {
       diagnostic::error("failed to open output stream: {}",
-                        censor.censor(output_stream))
+                        output_stream.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
     }
-    auto stream_guard = detail::scope_guard(
-      [this, &ctrl, output_stream, &censor]() noexcept {
-        auto status = output_stream.ValueUnsafe()->Close();
-        if (not output_stream.ok()) {
-          diagnostic::error("failed to close stream: {}", censor.censor(status))
-            .primary(args_.uri.source)
-            .emit(ctrl.diagnostics());
-        }
-      });
+    auto stream_guard
+      = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
+          auto status = output_stream.ValueUnsafe()->Close();
+          if (not output_stream.ok()) {
+            diagnostic::error("failed to close stream: {}",
+                              status.ToStringWithoutContextLines())
+              .primary(args_.uri.source)
+              .emit(ctrl.diagnostics());
+          }
+        });
     for (auto chunk : input) {
       if (! chunk || chunk->size() == 0) {
         co_yield {};
@@ -206,7 +207,7 @@ public:
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
         diagnostic::error("failed to write to stream: {}",
-                          censor.censor(status))
+                          status.ToStringWithoutContextLines())
           .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
       }

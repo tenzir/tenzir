@@ -32,17 +32,16 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto censor = secret_censor{};
     auto uri = arrow::util::Uri{};
     (void)ctrl.resolve_secrets_must_yield(
-      {make_uri_request(uri_, "", uri, ctrl.diagnostics(), &censor)});
+      {make_uri_request(uri_, "", uri, ctrl.diagnostics())});
     co_yield {};
     auto path = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri, &path);
     if (not opts.ok()) {
       diagnostic::error("failed to create Arrow Azure Blob Storage "
                         "filesystem: {}",
-                        censor.censor(opts))
+                        opts.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -50,14 +49,14 @@ public:
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow Azure Blob Storage "
                         "filesystem: {}",
-                        censor.censor(fs))
+                        fs.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(path);
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info from path {}",
-                        censor.censor(file_info))
+                        file_info.status().ToStringWithoutContextLines())
         .primary(uri_)
         .emit(ctrl.diagnostics());
       co_return;
@@ -65,7 +64,7 @@ public:
     auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
     if (not input_stream.ok()) {
       diagnostic::error("failed to open input stream: {}",
-                        censor.censor(input_stream))
+                        input_stream.status().ToStringWithoutContextLines())
         .primary(uri_)
         .emit(ctrl.diagnostics());
       co_return;
@@ -74,7 +73,7 @@ public:
       auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
       if (not input_stream.ok()) {
         diagnostic::error("failed to read from input stream: {}",
-                          censor.censor(buffer))
+                          buffer.status().ToStringWithoutContextLines())
           .primary(uri_)
           .emit(ctrl.diagnostics());
         co_return;

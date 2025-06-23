@@ -13,7 +13,6 @@ using namespace tenzir;
 using namespace std::string_view_literals;
 
 TEST(censor) {
-  constexpr static auto max_size = size_t{3};
   constexpr static auto needle_sv = "needle"sv;
   constexpr static auto noddle_sv = "noodle"sv;
 
@@ -32,18 +31,13 @@ TEST(censor) {
     false,
   };
   const auto censor = secret_censor{
-    .max_size = max_size, .secrets = {std::move(needle), std::move(noodle)}};
+    .secrets = {std::move(needle), std::move(noodle)}};
 
   REQUIRE_EQUAL(censor.censor("needle"), "***");
-  REQUIRE_EQUAL(censor.censor("need"), "***");
-  REQUIRE_EQUAL(censor.censor("eed"), "***");
-  REQUIRE_EQUAL(censor.censor("dle"), "***");
-  REQUIRE_EQUAL(censor.censor("knee"), "k***");
-  REQUIRE_EQUAL(censor.censor("dle"), "***");
+  REQUIRE_EQUAL(censor.censor("need"), "need");
   REQUIRE_EQUAL(censor.censor("haystack"), "haystack");
   REQUIRE_EQUAL(censor.censor("haystack needle haystack"),
                 "haystack *** haystack");
-  REQUIRE_EQUAL(censor.censor("ne"), "ne");
   REQUIRE_EQUAL(censor.censor("neneedle"), "ne***");
   REQUIRE_EQUAL(censor.censor("needle needle"), "*** ***");
 }

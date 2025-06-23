@@ -40,38 +40,26 @@ auto resolved_secret_value::utf8_view(std::string_view name, location loc,
 
 namespace detail {
 
-auto secret_resolved_setter_callback(resolved_secret_value& out,
-                                     secret_censor* censor) {
-  return [&out, censor](resolved_secret_value v) {
-    if (censor) {
-      censor->secrets.push_back(v);
-    }
+auto secret_resolved_setter_callback(resolved_secret_value& out) {
+  return [&out](resolved_secret_value v) {
     out = std::move(v);
   };
 }
 
 auto secret_string_setter_callback(std::string name, tenzir::location loc,
-                                   std::string& out, diagnostic_handler& dh,
-                                   secret_censor* censor)
+                                   std::string& out, diagnostic_handler& dh)
   -> secret_request_callback {
-  return [name, loc, &out, &dh, censor](resolved_secret_value v) {
+  return [name, loc, &out, &dh](resolved_secret_value v) {
     out = std::string{v.utf8_view(name, loc, dh).unwrap()};
-    if (censor) {
-      censor->secrets.push_back(std::move(v));
-    }
   };
 }
 
 auto secret_string_setter_callback(std::string name, tenzir::location loc,
                                    located<std::string>& out,
-                                   diagnostic_handler& dh,
-                                   secret_censor* censor)
+                                   diagnostic_handler& dh)
   -> secret_request_callback {
-  return [name, loc, &out, &dh, censor](resolved_secret_value v) {
+  return [name, loc, &out, &dh](resolved_secret_value v) {
     out = located{std::string{v.utf8_view(name, loc, dh).unwrap()}, loc};
-    if (censor) {
-      censor->secrets.push_back(std::move(v));
-    }
   };
 }
 
@@ -83,7 +71,8 @@ secret_request::secret_request(tenzir::secret secret, tenzir::location loc,
                                secret_censor* censor)
   : secret{std::move(secret)},
     location{loc},
-    callback{detail::secret_resolved_setter_callback(out, censor)} {
+    callback{detail::secret_resolved_setter_callback(out)},
+    censor{censor} {
 }
 
 secret_request::secret_request(const located<tenzir::secret>& secret,
@@ -91,32 +80,16 @@ secret_request::secret_request(const located<tenzir::secret>& secret,
                                secret_censor* censor)
   : secret{std::move(secret.inner)},
     location{secret.source},
-    callback{detail::secret_resolved_setter_callback(out, censor)} {
+    callback{detail::secret_resolved_setter_callback(out)},
+    censor{censor} {
 }
 
 auto secret_censor::censor(std::string text) const -> std::string {
-  TENZIR_ASSERT(max_size > 0);
   for (const auto& s : secrets) {
-    if (s.all_literal() and not censor_literals) {
-      continue;
-    }
-    /// This is a naive implementation with pretty bad complexity. The
-    /// assumption is that this is rarely used and usually only in error cases
-    /// (e.g. when censoring an arrow::Status::ToString).
     const auto v = std::string_view{
       reinterpret_cast<const char*>(s.blob().data()), s.blob().size()};
-    for (size_t length = v.size(); length >= max_size; --length) {
-      for (auto start = size_t{0}; start <= v.size() - length; ++start) {
-        auto search_start = size_t{0};
-        while (true) {
-          const auto pos = text.find(v.substr(start, length), search_start);
-          if (pos == text.npos) {
-            break;
-          }
-          text.replace(pos, length, 3, '*');
-          search_start = pos + 3;
-        }
-      }
+    for (auto p = text.find(v); p != text.npos; p = text.find(v, p)) {
+      text.replace(p, v.size(), "***");
     }
   }
   return text;
