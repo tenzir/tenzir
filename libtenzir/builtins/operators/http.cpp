@@ -495,30 +495,15 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
     });
 }
 
-auto make_metadata(const http::response& r, diagnostic_handler& dh,
-                   uint64_t len = 1, bool with_payload = true)
+auto make_metadata(const http::response& r, uint64_t len = 1)
   -> series_builder {
   auto sb = series_builder{};
   for (auto i = uint64_t{}; i < len; ++i) {
     auto rb = sb.record();
     rb.field("code", static_cast<uint64_t>(r.code()));
-    if (not r.header_fields().empty()) {
-      auto hb = rb.field("headers").record();
-      for (const auto& [k, v] : r.header_fields()) {
-        hb.field(k, v);
-      }
-    }
-    if (with_payload and not r.body().empty()) {
-      const auto& headers = r.header_fields();
-      const auto* it = std::ranges::find_if(headers, [](const auto& x) {
-        return caf::icase_equal(x.first, "content-encoding");
-      });
-      const auto encoding = it != std::ranges::end(headers) ? it->first : "";
-      if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
-        rb.field("payload", std::move(*body));
-      } else {
-        rb.field("payload", r.body());
-      }
+    auto hb = rb.field("headers").record();
+    for (const auto& [k, v] : r.header_fields()) {
+      hb.field(k, v);
     }
   }
   return sb;
@@ -527,27 +512,18 @@ auto make_metadata(const http::response& r, diagnostic_handler& dh,
 auto make_metadata(const http::request& r) -> series {
   auto sb = series_builder{};
   auto rb = sb.record();
-  if (r.header().num_fields() != 0) {
-    auto hb = rb.field("headers").record();
-    r.header().for_each_field([&](std::string_view k, std::string_view v) {
-      hb.field(k, v);
-    });
+  auto hb = rb.field("headers").record();
+  r.header().for_each_field([&](std::string_view k, std::string_view v) {
+    hb.field(k, v);
+  });
+  auto qb = rb.field("query").record();
+  for (const auto& [k, v] : r.header().query()) {
+    qb.field(k, v);
   }
-  if (not r.header().query().empty()) {
-    auto qb = rb.field("query").record();
-    for (const auto& [k, v] : r.header().query()) {
-      qb.field(k, v);
-    }
-  }
-  const auto add_field = [&](std::string_view name, std::string_view val) {
-    if (not val.empty()) {
-      rb.field(name, val);
-    }
-  };
-  add_field("path", r.header().path());
-  add_field("fragment", r.header().fragment());
-  add_field("method", to_string(r.header().method()));
-  add_field("version", r.header().version());
+  rb.field("path", r.header().path());
+  rb.field("fragment", r.header().fragment());
+  rb.field("method", to_string(r.header().method()));
+  rb.field("version", r.header().version());
   return sb.finish_assert_one_array();
 }
 
@@ -567,7 +543,7 @@ struct from_http_args {
   std::optional<located<duration>> retry_delay;
   std::optional<location> server;
   std::optional<located<record>> responses;
-  located<uint64_t> max_request_size{10 * 1024 * 1024, location::unknown};
+  std::optional<located<uint64_t>> max_request_size;
   located<bool> tls{false, location::unknown};
   std::optional<located<std::string>> keyfile;
   std::optional<located<std::string>> certfile;
@@ -587,7 +563,7 @@ struct from_http_args {
     p.named("retry_delay", retry_delay);
     p.named("server", server);
     p.named("responses", responses);
-    p.named_optional("max_request_size", max_request_size);
+    p.named("max_request_size", max_request_size);
     p.named_optional("tls", tls);
     p.named("certfile", certfile);
     p.named("keyfile", keyfile);
@@ -644,7 +620,7 @@ struct from_http_args {
     TRY(tls_logic(keyfile, "keyfile", server.has_value()));
     TRY(tls_logic(password, "password"));
     const auto check_option
-      = [&](const auto& x, bool is_server) -> failure_or<void> {
+      = [&](bool is_server, const auto& x) -> failure_or<void> {
       if (x) {
         if (is_server) {
           diagnostic::error("cannot set client options when using the server")
@@ -661,15 +637,14 @@ struct from_http_args {
       return {};
     };
     const auto check_options = [&](bool is_server, const auto&... xs) {
-      return (check_option(xs, is_server).is_success() && ...);
+      return (check_option(is_server, xs).is_success() && ...);
     };
     if (server) {
       check_options(true, method, payload, headers, paginate, paginate_delay,
-                    metadata_field, connection_timeout, max_retry_count,
-                    retry_delay);
+                    connection_timeout, max_retry_count, retry_delay);
       TRY(validate_server_opts(dh));
     } else {
-      check_options(false, responses);
+      check_options(false, responses, max_request_size);
       TRY(validate_client_opts(dh));
     }
     return {};
@@ -758,9 +733,9 @@ struct from_http_args {
       return failure::promise();
     }
     url.inner.resize(col);
-    if (max_request_size.inner == 0) {
+    if (max_request_size and max_request_size->inner == 0) {
       diagnostic::error("request size must not be zero")
-        .primary(max_request_size)
+        .primary(max_request_size->source)
         .emit(dh);
       return failure::promise();
     }
@@ -895,7 +870,8 @@ public:
           .context(args_.make_ssl_context())
           .accept(args_.port, args_.url.inner)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
-          .max_request_size(args_.max_request_size.inner)
+          .max_request_size(
+            inner(args_.max_request_size).value_or(10 * 1024 * 1024))
           .start([&](caf::async::consumer_resource<http::request> cr) {
             TENZIR_ASSERT(not pull);
             pull = std::move(cr);
@@ -1072,8 +1048,7 @@ public:
               }
               pull();
               if (args_.metadata_field) {
-                auto sb
-                  = make_metadata(r, ctrl.diagnostics(), slice.rows(), false);
+                auto sb = make_metadata(r, slice.rows());
                 slice
                   = assign(*args_.metadata_field, sb.finish_assert_one_array(),
                            slice, ctrl.diagnostics());
@@ -1477,68 +1452,67 @@ public:
         };
         const auto actor
           = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
-        std::invoke([&, &args_ = args_, r, og,
-                     actor](this const auto& pull) -> void {
-          TENZIR_DEBUG("[http] requesting slice");
-          ctrl.self()
-            .mail(atom::pull_v)
-            .request(actor, caf::infinite)
-            .then(
-              [&, r, pull, og, actor](table_slice slice) {
-                TENZIR_DEBUG("[http] pulled slice");
-                ctrl.set_waiting(false);
-                if (slice.rows() == 0) {
-                  TENZIR_DEBUG("[http] finishing subpipeline");
+        std::invoke(
+          [&, &args_ = args_, r, og, actor](this const auto& pull) -> void {
+            TENZIR_DEBUG("[http] requesting slice");
+            ctrl.self()
+              .mail(atom::pull_v)
+              .request(actor, caf::infinite)
+              .then(
+                [&, r, pull, og, actor](table_slice slice) {
+                  TENZIR_DEBUG("[http] pulled slice");
+                  ctrl.set_waiting(false);
+                  if (slice.rows() == 0) {
+                    TENZIR_DEBUG("[http] finishing subpipeline");
+                    --awaiting;
+                    return;
+                  }
+                  pull();
+                  if (args_.response_field) {
+                    auto sb = series_builder{};
+                    for (auto i = size_t{}; i < slice.rows(); ++i) {
+                      sb.data(og);
+                    }
+                    slice = assign(*args_.response_field, series{slice},
+                                   sb.finish_assert_one_slice(), dh);
+                  }
+                  if (args_.metadata_field) {
+                    auto sb = make_metadata(r, slice.rows());
+                    slice = assign(*args_.metadata_field,
+                                   sb.finish_assert_one_array(), slice,
+                                   ctrl.diagnostics());
+                  }
+                  if (auto url = next_url(args_.paginate, slice, dh)) {
+                    if (not url->starts_with("http://")
+                        and not url->starts_with("https://")) {
+                      url->insert(0, args_.tls ? "https://" : "http://");
+                    }
+                    if (args_.tls and url->starts_with("http://")) {
+                      url->insert(4, "s");
+                    }
+                    paginate_queue.push_back(std::move(
+                      http::with(ctrl.self().system())
+                        .context(args_.make_ssl_context())
+                        .connect(caf::make_uri(*url))
+                        .max_response_size(max_response_size)
+                        .connection_timeout(args_.connection_timeout.inner)
+                        .max_retry_count(args_.max_retry_count)
+                        .retry_delay(args_.retry_delay.inner)
+                        .add_header_fields(
+                          args_.make_headers(slice, dh, warned))));
+                  } else {
+                    TENZIR_DEBUG("[http] done paginating");
+                  }
+                  slices.push_back(std::move(slice));
+                },
+                [&](const caf::error&) {
                   --awaiting;
-                  return;
-                }
-                pull();
-                if (args_.response_field) {
-                  auto sb = series_builder{};
-                  for (auto i = size_t{}; i < slice.rows(); ++i) {
-                    sb.data(og);
-                  }
-                  slice = assign(*args_.response_field, series{slice},
-                                 sb.finish_assert_one_slice(), dh);
-                }
-                if (args_.metadata_field) {
-                  auto sb
-                    = make_metadata(r, ctrl.diagnostics(), slice.rows(), false);
-                  slice = assign(*args_.metadata_field,
-                                 sb.finish_assert_one_array(), slice,
-                                 ctrl.diagnostics());
-                }
-                if (auto url = next_url(args_.paginate, slice, dh)) {
-                  if (not url->starts_with("http://")
-                      and not url->starts_with("https://")) {
-                    url->insert(0, args_.tls ? "https://" : "http://");
-                  }
-                  if (args_.tls and url->starts_with("http://")) {
-                    url->insert(4, "s");
-                  }
-                  paginate_queue.push_back(std::move(
-                    http::with(ctrl.self().system())
-                      .context(args_.make_ssl_context())
-                      .connect(caf::make_uri(*url))
-                      .max_response_size(max_response_size)
-                      .connection_timeout(args_.connection_timeout.inner)
-                      .max_retry_count(args_.max_retry_count)
-                      .retry_delay(args_.retry_delay.inner)
-                      .add_header_fields(
-                        args_.make_headers(slice, dh, warned))));
-                } else {
-                  TENZIR_DEBUG("[http] done paginating");
-                }
-                slices.push_back(std::move(slice));
-              },
-              [&](const caf::error&) {
-                --awaiting;
-                ctrl.set_waiting(false);
-                diagnostic::warning("failed to parse response")
-                  .primary(args_.op)
-                  .emit(ctrl.diagnostics());
-              });
-        });
+                  ctrl.set_waiting(false);
+                  diagnostic::warning("failed to parse response")
+                    .primary(args_.op)
+                    .emit(ctrl.diagnostics());
+                });
+          });
         TENZIR_DEBUG("[http] handled response");
       };
     };
