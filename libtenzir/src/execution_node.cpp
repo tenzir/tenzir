@@ -260,7 +260,7 @@ struct exec_node_control_plane final : public operator_control_plane {
 
     auto finish(auto) const;
 
-    void finish(const request_map_t& requested) const {
+    auto finish(const request_map_t& requested) const -> failure_or<void> {
       auto res = ecc::cleansing_blob{};
       auto temp_blob = ecc::cleansing_blob{};
       // For every element in the original secret
@@ -324,17 +324,14 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
       }
       // Finally, we invoke the callback
-      callback(resolved_secret_value{std::move(res), all_literal});
+      return callback(resolved_secret_value{std::move(res), all_literal});
     }
   };
 
-  /// @param requests the requests to resolve
-  /// @param final_callback the callback to invoke after all secrets are
-  ///        resolved and their callback have been invoked
-  virtual auto
-  resolve_secrets_must_yield(std::vector<secret_request> requests,
-                             std::function<void(void)> final_callback)
-    -> bool override {
+  virtual auto resolve_secrets_must_yield(
+    std::vector<secret_request> requests, secret_censor* censor,
+    std::function<failure_or<void>(void)> final_callback)
+    -> secret_resolution_sentinel override {
     auto requested_secrets = std::make_shared<request_map_t>();
     auto finishers = std::vector<secret_finisher>{};
     for (auto& req : requests) {
@@ -346,14 +343,16 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
       }
       finishers.emplace_back(std::move(req.secret), std::move(req.callback),
-                             req.location, req.censor);
+                             req.location, censor);
     }
     if (requested_secrets->empty()) {
+      auto success = true;
       for (const auto& f : finishers) {
-        f.finish(*requested_secrets);
+        success &= static_cast<bool>(f.finish(*requested_secrets));
       }
-      final_callback();
-      return false;
+      success &= static_cast<bool>(final_callback());
+      set_waiting(not success);
+      return secret_resolution_sentinel{};
     }
     auto node_callback = [this, finishers = std::move(finishers),
                           final_callback = std::move(final_callback),
@@ -377,17 +376,28 @@ struct exec_node_control_plane final : public operator_control_plane {
               resolved_secret_value{value.value, false});
           }
           /// Finish all secrets via the respective finisher.
+          bool success = true;
           for (const auto& f : finishers) {
-            f.finish(*requested_secrets);
+            success &= static_cast<bool>(f.finish(*requested_secrets));
           }
-          final_callback();
-          set_waiting(false);
+          success &= static_cast<bool>(final_callback());
+          /// We do not want to re-schedule ourselves in the error case.
+          set_waiting(not success);
         },
         [this](std::span<diagnostic> diags) {
+          TENZIR_ASSERT(std::ranges::any_of(
+                          diags,
+                          [](const auto& severity) {
+                            return severity == severity::error;
+                          },
+                          &diagnostic::severity),
+                        "failed secret resolution must have produced at least "
+                        "one error");
           for (auto& d : diags) {
             diagnostics().emit(std::move(d));
           }
-          set_waiting(false);
+          /// We do not want to re-schedule ourselves in the error case.
+          set_waiting(true);
         });
       for (auto& [name, out] : *requested_secrets) {
         auto key_pair = ecc::generate_keypair();
@@ -433,10 +443,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     auto node = this->node();
     if (node) {
       node_callback(node);
-      return true;
+      return {};
     }
     connect_to_node(state.self, std::move(node_callback));
-    return true;
+    return {};
   }
 
   exec_node_state<Input, Output>& state;
@@ -1242,7 +1252,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       return result;
     };
   };
-  return std::pair{
+  return std::pair {
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),

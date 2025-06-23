@@ -65,19 +65,44 @@ struct operator_control_plane {
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;
 
-  static void noop_callback() {
+  static auto noop_callback() -> failure_or<void> {
+    return {};
   }
+
+  /// The return type of `resolve_secrets_must_yield`. This type ensures a user
+  /// yields it.
+  class secret_resolution_sentinel {
+  public:
+    template <concepts::one_of<std::monostate, chunk_ptr, table_slice> T>
+    explicit(false) operator T() && {
+      has_yielded_ = true;
+      return T{};
+    }
+
+    ~secret_resolution_sentinel() {
+      TENZIR_ASSERT_ALWAYS(has_yielded_);
+    }
+
+  private:
+    bool has_yielded_ = false;
+  };
 
   /// Resolves multiple secrets. The implementation in the
   /// `exec_node_control_plane` will first check the config and then try and
   /// dispatch to the platform plugin. The platform query is async, so this
   /// function will perform `set_waiting(true)`, and only re-schedule the actor
   /// after the request has been fulfilled.
-  /// If the function returns `false`, the caller is not required to `co_yield`
-  [[nodiscard]] virtual auto
-  resolve_secrets_must_yield(std::vector<secret_request> requests,
-                             std::function<void(void)> final_callback
-                             = noop_callback) -> bool
+  /// @param requests the requests to resolve
+  /// @param censor a (maybe null) pointer to a censor to add all managed
+  ///               secrets to
+  /// @param final_callback the callback to invoke after all secrets are
+  ///        resolved and their callback have been invoked
+  /// @returns a `secret_resolution_sentinel` that must be `co_yield`ed by the
+  ///          caller
+  [[nodiscard]] virtual auto resolve_secrets_must_yield(
+    std::vector<secret_request> requests, secret_censor* censor = nullptr,
+    std::function<failure_or<void>(void)> final_callback = noop_callback)
+    -> secret_resolution_sentinel
     = 0;
 
   /// Return a version of the diagnostic handler that may be passed to other

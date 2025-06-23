@@ -234,13 +234,15 @@ inline void to_property_map_or_request(const located<tenzir::record>& rec,
       continue;
     }
     if (const auto* s = try_as<secret>(value)) {
-      requests.emplace_back(
-        *s, rec.source,
-        [key, loc = rec.source, &dh, &map](resolved_secret_value v) {
-          const auto [it, inserted] = map.try_emplace(
-            key, std::string{v.utf8_view(key, loc, dh).unwrap()});
-          TENZIR_ASSERT(inserted);
-        });
+      requests.emplace_back(*s, rec.source,
+                            [key, loc = rec.source, &dh, &map](
+                              resolved_secret_value v) -> failure_or<void> {
+                              TRY(auto str, v.utf8_view(key, loc, dh));
+                              const auto [it, inserted]
+                                = map.try_emplace(key, std::string{str});
+                              TENZIR_ASSERT(inserted);
+                              return {};
+                            });
       continue;
     }
     const auto [it, inserted] = map.try_emplace(key, fmt::format("{}", value));
@@ -667,9 +669,7 @@ public:
                                fluent_bit_args, requests, ctrl.diagnostics());
     to_property_map_or_request(operator_args_.args, plugin_args, requests,
                                ctrl.diagnostics());
-    if (ctrl.resolve_secrets_must_yield(std::move(requests))) {
-      co_yield {};
-    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
     auto engine = engine::make_source(operator_args_, config_, fluent_bit_args,
                                       plugin_args, ctrl.diagnostics());
     if (not engine) {
@@ -824,9 +824,7 @@ public:
                                fluent_bit_args, requests, ctrl.diagnostics());
     to_property_map_or_request(operator_args_.args, plugin_args, requests,
                                ctrl.diagnostics());
-    if (ctrl.resolve_secrets_must_yield(std::move(requests))) {
-      co_yield {};
-    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
     auto engine = engine::make_sink(operator_args_, config_, fluent_bit_args,
                                     plugin_args, ctrl.diagnostics());
     if (not engine) {

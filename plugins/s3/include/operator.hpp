@@ -81,9 +81,8 @@ public:
   }
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto uri = arrow::util::Uri{};
-    (void)ctrl.resolve_secrets_must_yield(
+    co_yield ctrl.resolve_secrets_must_yield(
       {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
-    co_yield {};
     auto opts = get_options(args_, uri);
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
@@ -161,9 +160,8 @@ public:
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto uri = arrow::util::Uri{};
-    (void)ctrl.resolve_secrets_must_yield(
+    co_yield ctrl.resolve_secrets_must_yield(
       {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
-    co_yield {};
     auto opts = get_options(args_, uri);
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());

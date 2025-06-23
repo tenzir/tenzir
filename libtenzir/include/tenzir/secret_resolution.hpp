@@ -81,9 +81,10 @@ public:
   std::vector<resolved_secret_value> secrets;
 };
 
-using secret_request_callback = std::function<void(resolved_secret_value)>;
-using record_request_callback
-  = std::function<void(std::string_view, resolved_secret_value)>;
+/// The callback will be invoked with the resolved `value`. If the callback
+/// returns a `failure`, execution will not continue after the secret resolution.
+using secret_request_callback
+  = std::function<failure_or<void>(resolved_secret_value value)>;
 
 /// @relates `operator_control_plane::resolve_secrets`
 struct secret_request {
@@ -93,37 +94,28 @@ struct secret_request {
   struct location location;
   /// The callback to invoke once this secret is resolved
   secret_request_callback callback;
-  /// A censor object that gets updated with the secrets value, allowing
-  /// censorship.
-  secret_censor* censor = nullptr;
 
   /// A secret request that will invoke `callback` on successful resolution
   secret_request(tenzir::secret secret, tenzir::location loc,
-                 secret_request_callback callback,
-                 secret_censor* censor = nullptr)
-    : secret{std::move(secret)},
-      location{loc},
-      callback{std::move(callback)},
-      censor{censor} {
+                 secret_request_callback callback)
+    : secret{std::move(secret)}, location{loc}, callback{std::move(callback)} {
   }
 
   /// A secret request that will invoke `callback` on successful resolution
   secret_request(const located<tenzir::secret>& secret,
-                 secret_request_callback callback,
-                 secret_censor* censor = nullptr)
+                 secret_request_callback callback)
     : secret{secret.inner},
       location{secret.source},
-      callback{std::move(callback)},
-      censor{censor} {
+      callback{std::move(callback)} {
   }
 
   /// A secret request that will directly set `out` on successful resolution
   secret_request(tenzir::secret secret, tenzir::location loc,
-                 resolved_secret_value& out, secret_censor* censor = nullptr);
+                 resolved_secret_value& out);
 
   /// A secret request that will directly set `out` on successful resolution
   secret_request(const located<tenzir::secret>& secret,
-                 resolved_secret_value& out, secret_censor* censor = nullptr);
+                 resolved_secret_value& out);
 };
 
 namespace detail {
@@ -132,8 +124,7 @@ namespace detail {
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto secret_string_setter_callback(std::string name, tenzir::location loc,
-                                   std::string& out, diagnostic_handler& dh,
-                                   secret_censor* censor = nullptr)
+                                   std::string& out, diagnostic_handler& dh)
   -> secret_request_callback;
 
 /// Creates a secret_request_callback that sets `out`, if the secret is a valid
@@ -142,8 +133,7 @@ auto secret_string_setter_callback(std::string name, tenzir::location loc,
 /// @relates resolved_secret_value::utf8_view
 auto secret_string_setter_callback(std::string name, tenzir::location loc,
                                    located<std::string>& out,
-                                   diagnostic_handler& dh,
-                                   secret_censor* censor = nullptr)
+                                   diagnostic_handler& dh)
   -> secret_request_callback;
 } // namespace detail
 
@@ -152,8 +142,8 @@ auto secret_string_setter_callback(std::string name, tenzir::location loc,
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         std::string& out, diagnostic_handler& dh,
-                         secret_censor* censor = nullptr) -> secret_request;
+                         std::string& out, diagnostic_handler& dh)
+  -> secret_request;
 
 /// Creates a secret request that will set `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
@@ -161,22 +151,22 @@ auto make_secret_request(std::string name, secret s, tenzir::location loc,
 /// @relates resolved_secret_value::utf8_view
 
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         located<std::string>& out, diagnostic_handler& dh,
-                         secret_censor* censor = nullptr) -> secret_request;
+                         located<std::string>& out, diagnostic_handler& dh)
+  -> secret_request;
 
 /// Creates a secret request that will set `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto make_secret_request(std::string name, const located<secret>& s,
-                         located<std::string>& out, diagnostic_handler& dh,
-                         secret_censor* censor = nullptr) -> secret_request;
+                         located<std::string>& out, diagnostic_handler& dh)
+  -> secret_request;
 
 /// Creates a secret request that will set `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto make_secret_request(std::string name, const located<secret>& s,
-                         std::string& out, diagnostic_handler& dh,
-                         secret_censor* censor = nullptr) -> secret_request;
+                         std::string& out, diagnostic_handler& dh)
+  -> secret_request;
 } // namespace tenzir

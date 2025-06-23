@@ -91,9 +91,7 @@ public:
       requests.emplace_back(make_secret_request("authzid", *args_.authzid,
                                                 *transfer_opts.authzid, dh));
     }
-    (void)ctrl.resolve_secrets_must_yield(std::move(requests));
-    co_yield {};
-
+    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
     transfer_opts.ssl.update_cacert(ctrl);
     auto tx = transfer{transfer_opts};
     if (auto err = tx.prepare(std::move(args_.endpoint))) {

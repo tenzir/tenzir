@@ -142,10 +142,11 @@ auto make_record_param_request(std::string name,
                                diagnostic_handler& dh) {
   return make_secret_request(
     r.inner, r.source,
-    [loc = r.source, name, type, &items, &dh](std::string_view key,
-                                              resolved_secret_value value) {
-      auto sv = value.utf8_view(name, loc, dh).unwrap();
-      items.emplace_back(type, std::string{key}, std::string{sv});
+    [loc = r.source, name, type, &items, &dh](
+      std::string_view key, resolved_secret_value value) -> failure_or<void> {
+      TRY(auto str, value.utf8_view(name, loc, dh));
+      items.emplace_back(type, std::string{key}, std::string{str});
+      return {};
     });
 }
 
@@ -164,7 +165,10 @@ public:
     auto url = std::string{};
     auto& dh = ctrl.diagnostics();
     auto items = make_items_wo_secrets(args_, dh);
-    (void)resolve_secrets_must_yield(
+    /// GCC 14.2 erroneously warns that the first temporary here may used as a
+    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
+    /// name somehow circumvents this warning.
+    auto x = resolve_secrets_must_yield(
       ctrl,
       {
         make_secret_request("url", args_.url, url, dh),
@@ -173,7 +177,7 @@ public:
         make_record_param_request("header", http::request_item::header,
                                   args_.http_opts.headers, items, dh),
       });
-    co_yield {};
+    co_yield std::move(x);
     if (args_.is_ftp and not url.starts_with("ftp://")
         and not url.starts_with("ftps://")) {
       url.insert(0, "ftp://");
@@ -273,7 +277,10 @@ public:
     auto url = std::string{};
     auto& dh = ctrl.diagnostics();
     auto items = make_items_wo_secrets(args_, dh);
-    (void)resolve_secrets_must_yield(
+    /// GCC 14.2 erroneously warns that the first temporary here may used as a
+    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
+    /// name somehow circumvents this warning.
+    auto x = resolve_secrets_must_yield(
       ctrl,
       {
         make_secret_request("url", args_.url, url, dh),
@@ -282,7 +289,7 @@ public:
         make_record_param_request("header", http::request_item::header,
                                   args_.http_opts.headers, items, dh),
       });
-    co_yield {};
+    co_yield std::move(x);
     if (args_.is_ftp and not url.starts_with("ftp://")
         and not url.starts_with("ftps://")) {
       url.insert(0, "ftp://");

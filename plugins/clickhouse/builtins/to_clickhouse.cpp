@@ -58,12 +58,15 @@ public:
       .primary = args_.primary,
       .operator_location = args_.operator_location,
     };
-    (void)ctrl.resolve_secrets_must_yield({
+    /// GCC 14.2 erroneously warns that the first temporary here may used as a
+    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
+    /// name somehow circumvents this warning.
+    auto x = ctrl.resolve_secrets_must_yield({
       make_secret_request("host", args_.host, args.host, dh),
       make_secret_request("user", args_.user, args.user, dh),
       make_secret_request("password", args_.password, args.password, dh),
     });
-    co_yield {};
+    co_yield std::move(x);
     args.ssl.update_cacert(ctrl);
     auto client = easy_client::make(args, ctrl.diagnostics());
     if (not client) {

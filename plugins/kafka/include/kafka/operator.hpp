@@ -91,10 +91,11 @@ configure_or_request(const located<record>& options, kafka::configuration& cfg,
       [&](const secret& s) {
         requests.emplace_back(
           s, options.source,
-          [&cfg, &dh, loc = options.source, key](resolved_secret_value v) {
-            set_or_fail(
-              key, std::string{v.utf8_view("options." + key, loc, dh).unwrap()},
-              loc, cfg, dh);
+          [&cfg, &dh, loc = options.source,
+           key](resolved_secret_value v) -> failure_or<void> {
+            TRY(auto str, v.utf8_view("options." + key, loc, dh));
+            set_or_fail(key, std::string{str}, loc, cfg, dh);
+            return {};
           });
       },
       [](const auto&) {
@@ -167,9 +168,7 @@ public:
     {
       auto secrets
         = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
-      if (ctrl.resolve_secrets_must_yield(std::move(secrets))) {
-        co_yield {};
-      }
+      co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     // Create the consumer.
     if (auto value = cfg->get("bootstrap.servers")) {
@@ -270,9 +269,7 @@ public:
     {
       auto secrets
         = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
-      if (ctrl.resolve_secrets_must_yield(std::move(secrets))) {
-        co_yield {};
-      }
+      co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     if (auto value = cfg->get("bootstrap.servers")) {
       TENZIR_INFO("kafka connecting to broker: {}", *value);

@@ -30,8 +30,8 @@ TEST(censor) {
     },
     false,
   };
-  const auto censor = secret_censor{
-    .secrets = {std::move(needle), std::move(noodle)}};
+  const auto censor
+    = secret_censor{.secrets = {std::move(needle), std::move(noodle)}};
 
   REQUIRE_EQUAL(censor.censor("needle"), "***");
   REQUIRE_EQUAL(censor.censor("need"), "need");

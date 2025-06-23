@@ -619,10 +619,11 @@ public:
             auto req = secret_request{
               x,
               loc,
-              [=, &config, &dh](const resolved_secret_value& x) {
-                set_or_fail(config, k,
-                            std::string{x.utf8_view(k, loc, dh).unwrap()}, loc,
-                            dh);
+              [=, &config,
+               &dh](const resolved_secret_value& x) -> failure_or<void> {
+                TRY(auto str, x.utf8_view(k, loc, dh));
+                set_or_fail(config, k, std::string{str}, loc, dh);
+                return {};
               },
             };
             secret_reqs.push_back(std::move(req));
@@ -636,24 +637,24 @@ public:
     if (args_.url) {
       auto req = secret_request{
         args_.url.value(),
-        [&, loc = args_.url->source](const resolved_secret_value& val) {
-          auto view = val.utf8_view("url", loc, dh).unwrap();
-          if (auto cfg = parse_url(config, view)) {
+        [&, loc = args_.url->source](
+          const resolved_secret_value& val) -> failure_or<void> {
+          TRY(auto str, val.utf8_view("url", loc, dh));
+          if (auto cfg = parse_url(config, str)) {
             config = std::move(*cfg);
-            return;
+            return {};
           }
           diagnostic::error("failed to parse AMQP URL")
             .primary(loc)
             .hint("URL must adhere to the following format")
             .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
             .emit(dh);
+          return failure::promise();
         },
       };
       secret_reqs.push_back(std::move(req));
     }
-    if (ctrl.resolve_secrets_must_yield(std::move(secret_reqs))) {
-      co_yield {};
-    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(secret_reqs));
     auto engine = amqp_engine::make(std::move(config));
     if (not engine) {
       diagnostic::error("failed to construct AMQP engine")
@@ -770,10 +771,11 @@ public:
             auto req = secret_request{
               x,
               loc,
-              [=, &config, &dh](const resolved_secret_value& x) {
-                set_or_fail(config, k,
-                            std::string{x.utf8_view(k, loc, dh).unwrap()}, loc,
-                            dh);
+              [=, &config,
+               &dh](const resolved_secret_value& x) -> failure_or<void> {
+                TRY(auto str, x.utf8_view(k, loc, dh));
+                set_or_fail(config, k, std::string{str}, loc, dh);
+                return {};
               },
             };
             secret_reqs.push_back(std::move(req));
@@ -787,24 +789,24 @@ public:
     if (args_.url) {
       auto req = secret_request{
         args_.url.value(),
-        [&, loc = args_.url->source](const resolved_secret_value& val) {
-          auto view = val.utf8_view("url", loc, dh).unwrap();
-          if (auto cfg = parse_url(config, view)) {
+        [&, loc = args_.url->source](
+          const resolved_secret_value& val) -> failure_or<void> {
+          TRY(auto str, val.utf8_view("url", loc, dh));
+          if (auto cfg = parse_url(config, str)) {
             config = std::move(*cfg);
-            return;
+            return {};
           }
           diagnostic::error("failed to parse AMQP URL")
             .primary(loc)
             .hint("URL must adhere to the following format")
             .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
             .emit(dh);
+          return failure::promise();
         },
       };
       secret_reqs.push_back(std::move(req));
     }
-    if (ctrl.resolve_secrets_must_yield(std::move(secret_reqs))) {
-      co_yield {};
-    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(secret_reqs));
     auto engine = std::shared_ptr<amqp_engine>{};
     if (auto eng = amqp_engine::make(config)) {
       engine = std::make_shared<amqp_engine>(std::move(*eng));

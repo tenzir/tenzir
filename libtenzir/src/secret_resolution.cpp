@@ -41,16 +41,19 @@ auto resolved_secret_value::utf8_view(std::string_view name, location loc,
 namespace detail {
 
 auto secret_resolved_setter_callback(resolved_secret_value& out) {
-  return [&out](resolved_secret_value v) {
+  return [&out](resolved_secret_value v) -> failure_or<void> {
     out = std::move(v);
+    return {};
   };
 }
 
 auto secret_string_setter_callback(std::string name, tenzir::location loc,
                                    std::string& out, diagnostic_handler& dh)
   -> secret_request_callback {
-  return [name, loc, &out, &dh](resolved_secret_value v) {
-    out = std::string{v.utf8_view(name, loc, dh).unwrap()};
+  return [name, loc, &out, &dh](resolved_secret_value v) -> failure_or<void> {
+    TRY(auto str, v.utf8_view(name, loc, dh));
+    out = std::string{str};
+    return {};
   };
 }
 
@@ -58,8 +61,10 @@ auto secret_string_setter_callback(std::string name, tenzir::location loc,
                                    located<std::string>& out,
                                    diagnostic_handler& dh)
   -> secret_request_callback {
-  return [name, loc, &out, &dh](resolved_secret_value v) {
-    out = located{std::string{v.utf8_view(name, loc, dh).unwrap()}, loc};
+  return [name, loc, &out, &dh](resolved_secret_value v) -> failure_or<void> {
+    TRY(auto str, v.utf8_view(name, loc, dh));
+    out = located{std::string{str}, loc};
+    return {};
   };
 }
 
@@ -67,21 +72,17 @@ auto secret_string_setter_callback(std::string name, tenzir::location loc,
 
 /// A secret request that will invoke `callback` on successful resolution
 secret_request::secret_request(tenzir::secret secret, tenzir::location loc,
-                               resolved_secret_value& out,
-                               secret_censor* censor)
+                               resolved_secret_value& out)
   : secret{std::move(secret)},
     location{loc},
-    callback{detail::secret_resolved_setter_callback(out)},
-    censor{censor} {
+    callback{detail::secret_resolved_setter_callback(out)} {
 }
 
 secret_request::secret_request(const located<tenzir::secret>& secret,
-                               resolved_secret_value& out,
-                               secret_censor* censor)
+                               resolved_secret_value& out)
   : secret{std::move(secret.inner)},
     location{secret.source},
-    callback{detail::secret_resolved_setter_callback(out)},
-    censor{censor} {
+    callback{detail::secret_resolved_setter_callback(out)} {
 }
 
 auto secret_censor::censor(std::string text) const -> std::string {
@@ -100,32 +101,30 @@ auto secret_censor::censor(const arrow::Status& status) const -> std::string {
 }
 
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         std::string& out, diagnostic_handler& dh,
-                         secret_censor* censor) -> secret_request {
+                         std::string& out, diagnostic_handler& dh)
+  -> secret_request {
   return {s, loc,
-          detail::secret_string_setter_callback(std::move(name), loc, out, dh,
-                                                censor)};
+          detail::secret_string_setter_callback(std::move(name), loc, out, dh)};
 }
 
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         located<std::string>& out, diagnostic_handler& dh,
-                         secret_censor* censor) -> secret_request {
+                         located<std::string>& out, diagnostic_handler& dh)
+  -> secret_request {
   return {s, loc,
-          detail::secret_string_setter_callback(std::move(name), loc, out, dh,
-                                                censor)};
+          detail::secret_string_setter_callback(std::move(name), loc, out, dh)};
 }
 
 auto make_secret_request(std::string name, const located<secret>& s,
-                         located<std::string>& out, diagnostic_handler& dh,
-                         secret_censor* censor) -> secret_request {
+                         located<std::string>& out, diagnostic_handler& dh)
+  -> secret_request {
   return secret_request{s, detail::secret_string_setter_callback(
-                             std::move(name), s.source, out, dh, censor)};
+                             std::move(name), s.source, out, dh)};
 }
 
 auto make_secret_request(std::string name, const located<secret>& s,
-                         std::string& out, diagnostic_handler& dh,
-                         secret_censor* censor) -> secret_request {
+                         std::string& out, diagnostic_handler& dh)
+  -> secret_request {
   return secret_request{s, detail::secret_string_setter_callback(
-                             std::move(name), s.source, out, dh, censor)};
+                             std::move(name), s.source, out, dh)};
 }
 } // namespace tenzir
