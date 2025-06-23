@@ -1,0 +1,9 @@
+{
+  data: "START<123>dataEND",
+}
+{
+  data: "<456>moreEND",
+}
+{
+  data: "<789>final\n",
+}

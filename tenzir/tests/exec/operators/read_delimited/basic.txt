@@ -1,0 +1,9 @@
+{
+  data: "foo",
+}
+{
+  data: "bar",
+}
+{
+  data: "baz\n",
+}
