@@ -135,6 +135,7 @@ public:
     io_ctx_->stop();
     worker_.join();
     metrics_.emit();
+    retry_timer_->cancel();
   }
 
   auto make_behavior() -> tcp_bridge_actor::behavior_type {
