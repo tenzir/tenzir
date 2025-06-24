@@ -10,11 +10,11 @@ Sends and receives HTTP/1.1 requests.
 from_http url:string, [method=string, payload=string, headers=record,
           metadata_field=field, paginate=record->string,
           paginate_delay=duration, connection_timeout=duration,
-          max_retry_count=int, retry_delay=duration, responses=record,
+          max_retry_count=int, retry_delay=duration, tls=bool, certfile=string,
+          keyfile=string, password=string { … }]
+from_http url:string, server=true, [metadata_field=field, responses=record,
           max_request_size=int, tls=bool, certfile=string, keyfile=string,
           password=string { … }]
-from_http url:string, server=true, [responses=record, max_request_size=int,
-          tls=bool, certfile=string, keyfile=string, password=string { … }]
 ```
 
 ## Description
@@ -55,12 +55,18 @@ Record of headers to send with the request.
 
 Field to insert metadata into when using the parsing pipeline.
 
-The metadata has the following schema:
+The response metadata (when using the client mode) has the following schema:
 
 | Field                | Type     | Description                           |
 | :------------------- | :------- | :------------------------------------ |
 | `code`               | `uint64` | The HTTP status code of the response. |
 | `headers`            | `record` | The response headers.                 |
+
+The request metadata (when using the server mode) has the following schema:
+
+| Field                | Type     | Description                           |
+| :------------------- | :------- | :------------------------------------ |
+| `headers`            | `record` | The request headers.                  |
 | `query`              | `record` | The query parameters of the request.  |
 | `path`               | `string` | The path requested.                   |
 | `fragment`           | `string` | The URI fragment of the request.      |

@@ -7,7 +7,6 @@
     connection_timeout: "5s" @ 0..0,
     max_retry_count: 0 @ 0..0,
     retry_delay: "1s" @ 0..0,
-    tls: false @ 0..0,
-    max_request_size: 10485760 @ 0..0
+    tls: false @ 0..0
   }
 ]
