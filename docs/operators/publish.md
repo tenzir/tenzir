@@ -9,6 +9,7 @@ Publishes events to a channel with a topic.
 ```tql
 publish [topic:string]
 ```
+
 ## Description
 
 The `publish` operator publishes events at a node in a channel with the
@@ -27,12 +28,23 @@ publishes events to the topic `main`.
 
 ## Examples
 
-### Publish Zeek connection logs under the topic `zeek`
+### Publish Zeek connection logs under the fixed topic `zeek`
 
 ```tql
-load_file "conn.log"
-read_zeek_tsv
+from "conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
 publish "zeek"
+```
+
+### Publish Suricata events under a dynamic topic depending on their event type
+
+```tql
+from "eve.json" {
+  read_suricata
+}
+publish f"suricata.{event_type}"
 ```
 
 ## See Also
