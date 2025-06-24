@@ -22,6 +22,15 @@ from_http url:string, server=true, [metadata_field=field, responses=record,
 The `from_http` operator issues HTTP requests or spins up an HTTP/1.1 server on
 a given address and forwards received requests as events.
 
+:::tip[Format and Compression Inference]
+
+The `from_http` operator automatically infers the file format (such as JSON, CSV, Parquet, etc.) and compression type (such as gzip, zstd, etc.) directly from the URL's file extension, just like the generic `from` operator. This makes it easier to load data from HTTP sources without manually specifying the format or decompression step.
+
+If the format or compression cannot be determined from the URL, the operator will fall back to using the HTTP `Content-Type` and `Content-Encoding` response headers to determine how to parse and decompress the data.
+
+If neither the URL nor the HTTP headers provide enough information, you can explicitly specify the decompression and parsing steps using a pipeline argument.
+:::
+
 ### `url: string`
 
 URL to listen on or to connect to.
