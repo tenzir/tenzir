@@ -1,0 +1,6 @@
+from {
+  xs: [1, 2, 3, 1, 2, null, 4, 1, 2]
+}
+count = xs.count()
+count_distinct = xs.count_distinct()
+distinct = xs.distinct()
