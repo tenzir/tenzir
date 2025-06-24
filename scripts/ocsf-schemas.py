@@ -55,6 +55,7 @@ TypeMap = dict[str, str]
 
 log_indent = 0
 
+
 def log(msg: str):
     print(" " * log_indent + "▶", msg, file=sys.stderr, flush=True)
 
@@ -91,8 +92,12 @@ def patch_types(schema: Schema) -> None:
     schema["types"] = types
 
 
+def mangle_version(version: str) -> str:
+    return re.sub("[^0-9a-zA-Z_]", "", version.replace(".", "_").replace("-", "_"))
+
+
 def class_prefix(schema: Schema) -> str:
-    return OCSF_PREFIX + ".v" + schema["version"].replace(".", "_").replace("-", "_")
+    return OCSF_PREFIX + ".v" + mangle_version(schema["version"])
 
 
 def object_prefix(schema: Schema) -> str:
@@ -193,15 +198,18 @@ def emit_objects(writer: Writer, schema: Schema) -> None:
     _emit(writer, schema, objects=True)
 
 
-def open_schema_file(version: str):
-    version = re.sub("[^0-9a-zA-Z_-]", "", version.replace(".", "_"))
-    name = "v" + version + ".schema"
+def ocsf_schema_dir() -> Path:
     types = ROOT_DIR / "schema/types"
     if not types.is_dir():
         raise NotADirectoryError(f"expected {types} to be a directory")
     ocsf_dir = types / "ocsf"
     ocsf_dir.mkdir(exist_ok=True)
-    path = ocsf_dir / name
+    return ocsf_dir
+
+
+def open_schema_file(version: str):
+    name = "v" + mangle_version(version) + ".schema"
+    path = ocsf_schema_dir() / name
     log(f"Writing schema file {path}")
     return path.open("w")
 
@@ -245,8 +253,16 @@ def fetch_versions() -> list[str]:
     ]
 
 
+def delete_schemas() -> None:
+    directory = ocsf_schema_dir()
+    log(f"Deleting schemas in {directory}")
+    for path in directory.glob("*.schema"):
+        path.unlink()
+
+
 def main():
     versions = fetch_versions()
+    delete_schemas()
     for version in versions:
         with log_section(f"Processing version {version}"):
             schema = load_schema(version)

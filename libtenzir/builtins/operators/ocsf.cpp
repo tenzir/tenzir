@@ -274,6 +274,22 @@ private:
   profile_list profiles_;
 };
 
+auto mangle_version(std::string_view version) -> std::string {
+  auto result = std::string{};
+  result.reserve(version.size());
+  for (auto c : version) {
+    if (('0' <= c and c <= '9') or ('a' <= c and c <= 'z')
+        or ('A' <= c and c <= 'Z') or c == '_') {
+      result += c;
+    } else if (c == '.' or c == '-') {
+      result += '_';
+    } else {
+      // ignore
+    }
+  }
+  return result;
+}
+
 class ocsf_operator final : public crtp_operator<ocsf_operator> {
 public:
   ocsf_operator() = default;
@@ -442,15 +458,6 @@ public:
             .emit(ctrl.diagnostics());
           return {};
         }
-        auto schema = std::string{"_ocsf.v"};
-        for (auto c : *version) {
-          if (c == '.') {
-            schema += '_';
-          } else {
-            schema += c;
-          }
-        }
-        schema += '.';
         auto snake_case_class_name = std::string{};
         for (auto c : *class_name) {
           if (c == ' ') {
@@ -460,7 +467,8 @@ public:
               += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
           }
         }
-        schema += snake_case_class_name;
+        auto schema = fmt::format("_ocsf.v{}.{}", mangle_version(*version),
+                                  snake_case_class_name);
         auto ty = modules::get_schema(schema);
         if (not ty) {
           diagnostic::warning("could not find schema for the given event")
