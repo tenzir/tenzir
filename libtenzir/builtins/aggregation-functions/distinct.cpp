@@ -57,7 +57,8 @@ struct heterogeneous_data_equal {
 
 class distinct_instance final : public aggregation_instance {
 public:
-  explicit distinct_instance(ast::expression expr) : expr_{std::move(expr)} {
+  explicit distinct_instance(ast::expression expr, bool count_only)
+    : expr_{std::move(expr)}, count_only_{count_only} {
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
@@ -80,6 +81,9 @@ public:
   }
 
   auto get() const -> data override {
+    if (count_only_) {
+      return detail::narrow<int64_t>(distinct_.size());
+    }
     return list{distinct_.begin(), distinct_.end()};
   }
 
@@ -140,9 +144,10 @@ public:
 private:
   ast::expression expr_;
   tsl::robin_set<data> distinct_;
+  bool count_only_ = false;
 };
 
-class plugin : public virtual aggregation_plugin {
+class distinct_plugin : public virtual aggregation_plugin {
   auto name() const -> std::string override {
     return "distinct";
   };
@@ -157,7 +162,26 @@ class plugin : public virtual aggregation_plugin {
     TRY(argument_parser2::function(name())
           .positional("x", expr, "any")
           .parse(inv, ctx));
-    return std::make_unique<distinct_instance>(std::move(expr));
+    return std::make_unique<distinct_instance>(std::move(expr), false);
+  }
+};
+
+class count_distinct_plugin : public virtual aggregation_plugin {
+  auto name() const -> std::string override {
+    return "count_distinct";
+  };
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
+    return std::make_unique<distinct_instance>(std::move(expr), true);
   }
 };
 
@@ -165,4 +189,5 @@ class plugin : public virtual aggregation_plugin {
 
 } // namespace tenzir::plugins::distinct
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::distinct::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::distinct::distinct_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::distinct::count_distinct_plugin)
