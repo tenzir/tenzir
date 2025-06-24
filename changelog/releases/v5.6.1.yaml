@@ -1,0 +1,4 @@
+title: "Fixed Distinct Counts"
+description: "This release restores an aggregation function that was accidentally made unavailable in Tenzir Node v5.6.0."
+changes:
+  - beside-trend-second
