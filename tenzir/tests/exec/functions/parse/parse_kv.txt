@@ -23,6 +23,49 @@
 {
   input: "failure",
   output: {
-    failure: "",
+    failure: null,
+  },
+}
+{
+  input: "x:",
+  output: {
+    x: null,
+  },
+}
+{
+  input: "x:,y:42",
+  output: {
+    x: null,
+    y: 42,
+  },
+}
+{
+  input: "x:1,y:,z:3",
+  output: {
+    x: 1,
+    y: null,
+    z: 3,
+  },
+}
+{
+  input: "x:1,y:1,2",
+  output: {
+    x: 1,
+    y: "1,",
+  },
+}
+{
+  input: "x:1,y:1,2,z:3",
+  output: {
+    x: 1,
+    y: "1,2",
+    z: 3,
+  },
+}
+{
+  input: "x:,y:\"\"",
+  output: {
+    x: null,
+    y: "",
   },
 }

@@ -27,7 +27,8 @@ Afterwards, the extracted fields are split into their key and value by
 `r":\s*"` could be used to split `foo: bar` into the key `foo` and its value
 `bar`, and similarly `baz: 42` into `baz` and `42`. The result would thus be
 `{"foo": "bar", "baz": 42}`. If the regex matches multiple substrings, only the
-first match is used.
+first match is used. If no match is found, the "field" is considered an extension
+of the previous fields value.
 
 The supported regular expression syntax is
 [RE2](https://github.com/google/re2/wiki/Syntax). In particular, this means that
@@ -105,6 +106,22 @@ output = input.parse_kv(field_split=r"\s*,\s*", value_split=r"\s*:\s*")
 }
 ```
 
+### Fields without a `value_split`
+
+```tql
+from  { input: "x=1 y=2 z=3 4 5 a=6" }
+this = { ...input.parse_kv() }
+```
+```tql
+{
+  x: 1,
+  y: 2,
+  z: "3 4 5",
+  a: 6,
+}
+```
+
 # See Also
 
-[`read_kv`](/reference/operators/read_kv)
+[`read_kv`](/reference/operators/read_kv),
+[`print_kv`](/reference/functions/print_kv)
