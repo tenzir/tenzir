@@ -6,8 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/secret_resolution_utilities.hpp"
-
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/azurefs.h>

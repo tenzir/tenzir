@@ -6,17 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/plugin.hpp"
-
-#include "tenzir/concepts.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
+#include <tenzir/concepts.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <caf/expected.hpp>
 

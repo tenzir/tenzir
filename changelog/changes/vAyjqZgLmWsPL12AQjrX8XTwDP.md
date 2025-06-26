@@ -6,7 +6,7 @@ pr: [5065,5197]
 ---
 
 Tenzir now features a new first class type: `secret`. As the name suggests, this
-type contains a secret value that cannot accessed by a user:
+type contains a secret value that cannot be accessed by a user:
 
 ```tql
 from { s: secret("my-secret") }

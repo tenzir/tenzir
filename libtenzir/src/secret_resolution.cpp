@@ -86,11 +86,43 @@ secret_request::secret_request(const located<tenzir::secret>& secret,
 }
 
 auto secret_censor::censor(std::string text) const -> std::string {
+  constexpr static auto replacement = std::string_view{"***"};
+  auto single_star = false;
+  auto double_star = false;
   for (const auto& s : secrets) {
-    const auto v = std::string_view{
-      reinterpret_cast<const char*>(s.blob().data()), s.blob().size()};
-    for (auto p = text.find(v); p != text.npos; p = text.find(v, p)) {
-      text.replace(p, v.size(), "***");
+    const auto v
+      = std::string_view{reinterpret_cast<const char*>(s.data()), s.size()};
+    if (v.empty()) {
+      continue;
+    }
+    if (v == "*") {
+      single_star = true;
+      continue;
+    }
+    if (v == "**") {
+      double_star = true;
+      continue;
+    }
+    if (v == "***") {
+      continue;
+    }
+    for (auto p = text.find(v); p < text.size(); p = text.find(v, p)) {
+      text.replace(p, v.size(), replacement);
+      p += replacement.size();
+    }
+  }
+  if (single_star or double_star) {
+    for (auto p = text.find('*'); p < text.size(); p = text.find('*', p)) {
+      const auto is_replacement
+        = std::string_view{text}.substr(p, 3) == replacement;
+      if (is_replacement) {
+        p += replacement.size();
+        continue;
+      }
+      const auto replace_two
+        = double_star and p < text.size() - 1 and text[p + 1] == '*';
+      text.replace(p, 1 + replace_two, replacement);
+      p += replacement.size();
     }
   }
   return text;

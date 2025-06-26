@@ -64,7 +64,7 @@ auto make_uri_request(const located<secret>& s, std::string prefix,
 
 auto resolve_secrets_must_yield(
   operator_control_plane& ctrl, std::vector<secret_request_combined> requests,
-  secret_censor* censor, std::function<failure_or<void>(void)> final_callback)
+  operator_control_plane::final_callback_t final_callback)
   -> operator_control_plane::secret_resolution_sentinel {
   auto translated_requests = std::vector<secret_request>{};
   translated_requests.reserve(requests.size());
@@ -100,7 +100,7 @@ auto resolve_secrets_must_yield(
       handle_value(k, v);
     }
   }
-  return ctrl.resolve_secrets_must_yield(std::move(translated_requests), censor,
+  return ctrl.resolve_secrets_must_yield(std::move(translated_requests),
                                          std::move(final_callback));
 }
 } // namespace tenzir

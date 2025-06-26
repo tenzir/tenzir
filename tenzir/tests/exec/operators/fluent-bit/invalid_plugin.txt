@@ -1,7 +1,7 @@
-error: failed to setup Fluent Bit `does-not-exist-2` output plugin 
- --> exec/operators/fluent-bit/invalid_plugin.tql:4:15
+error: failed to setup Fluent Bit `does-not-exist` input plugin 
+ --> exec/operators/fluent-bit/invalid_plugin.tql:3:17
   |
-4 | to_fluent_bit "does-not-exist-2"
-  |               ^^^^^^^^^^^^^^^^^^ 
+3 | from_fluent_bit "does-not-exist"
+  |                 ^^^^^^^^^^^^^^^^ 
   |
   = note: error code `-1`

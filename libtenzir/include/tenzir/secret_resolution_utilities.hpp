@@ -65,8 +65,7 @@ auto make_uri_request(const located<secret>& s, std::string prefix,
 /// @relates operator_control_plane::resolve_secrets_must_yield
 auto resolve_secrets_must_yield(
   operator_control_plane& ctrl, std::vector<secret_request_combined> requests,
-  secret_censor* censor = nullptr,
-  std::function<failure_or<void>(void)> final_callback
-  = operator_control_plane::noop_callback)
+  operator_control_plane::final_callback_t final_callback
+  = operator_control_plane::noop_final_callback)
   -> operator_control_plane::secret_resolution_sentinel;
 } // namespace tenzir

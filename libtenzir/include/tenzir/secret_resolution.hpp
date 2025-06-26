@@ -16,6 +16,7 @@
 #include <arrow/type_fwd.h>
 
 #include <string_view>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -78,7 +79,7 @@ public:
     return secrets.empty();
   }
 
-  std::vector<resolved_secret_value> secrets;
+  std::set<ecc::cleansing_blob> secrets;
 };
 
 /// The callback will be invoked with the resolved `value`. If the callback
