@@ -43,29 +43,6 @@ auto validate_options(const located<record>& r, diagnostic_handler& dh)
   return {};
 }
 
-// auto validate_options(const located<record>& r, diagnostic_handler& dh)
-//   -> failure_or<void> {
-//   for (const auto& [key, value] : r.inner) {
-//     auto f = [&]<typename T>(const T&) -> failure_or<void> {
-//       if constexpr (concepts::arithmetic<T> or std::same_as<T, std::string>
-//                     or std::same_as<T, secret>) {
-//         return {};
-//       } else if constexpr (std::same_as<T, tenzir::pattern>) {
-//         TENZIR_UNREACHABLE();
-//       } else {
-//         diagnostic::error("options must be a record `{ "
-//                           "string: number|string }`")
-//           .primary(r.source, "key `{}` is `{}", key,
-//                    type_kind{tag_v<data_to_type_t<T>>})
-//           .emit(dh);
-//         return failure::promise();
-//       }
-//     };
-//     TRY(match(value, f))
-//   }
-//   return {};
-// }
-
 class load_plugin final : public virtual operator_plugin2<kafka_loader> {
 public:
   auto initialize(const record& unused_plugin_config,

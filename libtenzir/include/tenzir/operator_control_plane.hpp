@@ -65,12 +65,14 @@ struct operator_control_plane {
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;
 
-  static auto noop_callback() -> failure_or<void> {
+  static auto noop_final_callback(bool /*success*/) -> failure_or<void> {
     return {};
   }
 
+  using final_callback_t = std::function<failure_or<void>(bool success)>;
+
   /// The return type of `resolve_secrets_must_yield`. This type ensures a user
-  /// yields it.
+  /// yields it by ensuring the conversion operator is called at least once.
   class secret_resolution_sentinel {
   public:
     template <concepts::one_of<std::monostate, chunk_ptr, table_slice> T>
@@ -78,6 +80,15 @@ struct operator_control_plane {
       has_yielded_ = true;
       return T{};
     }
+
+    secret_resolution_sentinel() = default;
+
+    secret_resolution_sentinel(const secret_resolution_sentinel&) = delete;
+    secret_resolution_sentinel(secret_resolution_sentinel&&) = delete;
+    secret_resolution_sentinel& operator=(const secret_resolution_sentinel&)
+      = delete;
+    secret_resolution_sentinel& operator=(secret_resolution_sentinel&&)
+      = delete;
 
     ~secret_resolution_sentinel() {
       TENZIR_ASSERT_ALWAYS(has_yielded_);
@@ -91,17 +102,19 @@ struct operator_control_plane {
   /// `exec_node_control_plane` will first check the config and then try and
   /// dispatch to the platform plugin. The platform query is async, so this
   /// function will perform `set_waiting(true)`, and only re-schedule the actor
-  /// after the request has been fulfilled.
+  /// after the request has been successfully fulfilled.
   /// @param requests the requests to resolve
-  /// @param censor a (maybe null) pointer to a censor to add all managed
-  ///               secrets to
   /// @param final_callback the callback to invoke after all secrets are
-  ///        resolved and their callback have been invoked
+  ///        resolved and their callback have been invoked. The `bool` parameter
+  ///        will indicate whether resolution was successful so far.
+  ///        It is undefined behaviour to do `set_waiting(false)` if resolution
+  ///        failed.
   /// @returns a `secret_resolution_sentinel` that must be `co_yield`ed by the
   ///          caller
-  [[nodiscard]] virtual auto resolve_secrets_must_yield(
-    std::vector<secret_request> requests, secret_censor* censor = nullptr,
-    std::function<failure_or<void>(void)> final_callback = noop_callback)
+  [[nodiscard]] virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request> requests,
+                             final_callback_t final_callback
+                             = noop_final_callback)
     -> secret_resolution_sentinel
     = 0;
 

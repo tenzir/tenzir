@@ -90,8 +90,8 @@ public:
   }
 
   virtual auto
-  resolve_secrets_must_yield(std::vector<secret_request>, secret_censor*,
-                             std::function<failure_or<void>(void)>)
+  resolve_secrets_must_yield(std::vector<secret_request>,
+                             operator_control_plane::final_callback_t)
     -> secret_resolution_sentinel override {
     TENZIR_UNIMPLEMENTED();
   }

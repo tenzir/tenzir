@@ -87,10 +87,12 @@ secret_request::secret_request(const located<tenzir::secret>& secret,
 
 auto secret_censor::censor(std::string text) const -> std::string {
   for (const auto& s : secrets) {
-    const auto v = std::string_view{
-      reinterpret_cast<const char*>(s.blob().data()), s.blob().size()};
+    const auto v
+      = std::string_view{reinterpret_cast<const char*>(s.data()), s.size()};
     for (auto p = text.find(v); p != text.npos; p = text.find(v, p)) {
-      text.replace(p, v.size(), "***");
+      constexpr static auto replacement = std::string_view{"***"};
+      text.replace(p, v.size(), replacement);
+      p += replacement.size();
     }
   }
   return text;

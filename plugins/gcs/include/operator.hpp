@@ -6,12 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/secret_resolution_utilities.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/gcsfs.h>

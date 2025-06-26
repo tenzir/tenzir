@@ -158,8 +158,8 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     }
   }
 
-  void add_secret(resolved_secret_value v) {
-    censor.secrets.push_back(std::move(v));
+  void add_to_censor(ecc::cleansing_blob v) {
+    censor.secrets.emplace(std::move(v));
   }
 
 private:
@@ -256,11 +256,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     class secret secret;
     secret_request_callback callback;
     location loc;
-    secret_censor* censor = nullptr;
 
-    auto finish(auto) const;
-
-    auto finish(const request_map_t& requested) const -> failure_or<void> {
+    auto finish(const request_map_t& requested,
+                exec_node_diagnostic_handler<Input, Output>& dh) const
+      -> failure_or<void> {
       auto res = ecc::cleansing_blob{};
       auto temp_blob = ecc::cleansing_blob{};
       // For every element in the original secret
@@ -286,15 +285,21 @@ struct exec_node_control_plane final : public operator_control_plane {
         if (not ops.empty()) {
           for (const auto& op : detail::split(ops, ";")) {
             if (op == "decode_base64") {
-              auto decoded = detail::base64::decode(std::string_view{
+              auto decoded = detail::base64::try_decode(std::string_view{
                 reinterpret_cast<const char*>(temp_blob.data()),
                 reinterpret_cast<const char*>(temp_blob.data()
                                               + temp_blob.size()),
               });
+              if (not decoded) {
+                diagnostic::error("failed to `decode_base64` secret value")
+                  .primary(loc)
+                  .emit(dh);
+                return failure::promise();
+              }
               temp_blob.assign(
-                reinterpret_cast<const std::byte*>(decoded.data()),
-                reinterpret_cast<const std::byte*>(decoded.data()
-                                                   + decoded.size()));
+                reinterpret_cast<const std::byte*>(decoded->data()),
+                reinterpret_cast<const std::byte*>(decoded->data()
+                                                   + decoded->size()));
               continue;
             }
             if (op == "encode_base64") {
@@ -319,8 +324,9 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
         // We append the resolved & transformed element to the final result.
         res.insert(res.end(), temp_blob.begin(), temp_blob.end());
-        if (censor) {
-          censor->secrets.emplace_back(std::move(temp_blob), true);
+        // Add the resolved part to the censor
+        if (not is_literal) {
+          dh.add_to_censor(std::move(temp_blob));
         }
       }
       // Finally, we invoke the callback
@@ -328,9 +334,8 @@ struct exec_node_control_plane final : public operator_control_plane {
     }
   };
 
-  virtual auto resolve_secrets_must_yield(
-    std::vector<secret_request> requests, secret_censor* censor,
-    std::function<failure_or<void>(void)> final_callback)
+  auto resolve_secrets_must_yield(std::vector<secret_request> requests,
+                                  final_callback_t final_callback)
     -> secret_resolution_sentinel override {
     auto requested_secrets = std::make_shared<request_map_t>();
     auto finishers = std::vector<secret_finisher>{};
@@ -343,15 +348,20 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
       }
       finishers.emplace_back(std::move(req.secret), std::move(req.callback),
-                             req.location, censor);
+                             req.location);
     }
     if (requested_secrets->empty()) {
+      /// Finish all secrets via the respective finisher.
       auto success = true;
       for (const auto& f : finishers) {
-        success &= static_cast<bool>(f.finish(*requested_secrets));
+        success &= static_cast<bool>(
+          f.finish(*requested_secrets, *diagnostic_handler));
       }
-      success &= static_cast<bool>(final_callback());
-      set_waiting(not success);
+      success &= static_cast<bool>(final_callback(true));
+      // We want to avoid re-scheduling in the error case, so we set_waiting
+      if (not success) {
+        set_waiting(true);
+      }
       return secret_resolution_sentinel{};
     }
     auto node_callback = [this, finishers = std::move(finishers),
@@ -362,29 +372,26 @@ struct exec_node_control_plane final : public operator_control_plane {
         diagnostic::error("no Tenzir Node to resolve secrets")
           .primary(finishers.front().loc)
           .emit(diagnostics());
+        std::ignore = final_callback(false);
         return;
       }
       auto fan = detail::make_fanout_counter_with_error<diagnostic>(
         requested_secrets->size(),
         [this, requested_secrets, finishers = std::move(finishers),
-         final_callback = std::move(final_callback)]() {
-          /// Add all managed secrets to the diagnostic handlers censor.
-          /// This has to happen before finishing, since the finisher/callbacks
-          /// could emit diagnostics.
-          for (const auto& [_, value] : *requested_secrets) {
-            diagnostic_handler->add_secret(
-              resolved_secret_value{value.value, false});
-          }
+         final_callback]() {
           /// Finish all secrets via the respective finisher.
           bool success = true;
           for (const auto& f : finishers) {
-            success &= static_cast<bool>(f.finish(*requested_secrets));
+            success &= static_cast<bool>(
+              f.finish(*requested_secrets, *diagnostic_handler));
           }
-          success &= static_cast<bool>(final_callback());
+          success &= static_cast<bool>(final_callback(success));
           /// We do not want to re-schedule ourselves in the error case.
-          set_waiting(not success);
+          if (success) {
+            set_waiting(false);
+          }
         },
-        [this](std::span<diagnostic> diags) {
+        [this, final_callback](std::span<diagnostic> diags) {
           TENZIR_ASSERT(std::ranges::any_of(
                           diags,
                           [](const auto& severity) {
@@ -397,7 +404,7 @@ struct exec_node_control_plane final : public operator_control_plane {
             diagnostics().emit(std::move(d));
           }
           /// We do not want to re-schedule ourselves in the error case.
-          set_waiting(true);
+          std::ignore = final_callback(false);
         });
       for (auto& [name, out] : *requested_secrets) {
         auto key_pair = ecc::generate_keypair();
