@@ -7,18 +7,36 @@ example: 'save_tcp "0.0.0.0:8090", tls=true'
 Saves bytes to a TCP or TLS connection.
 
 ```tql
-save_tcp endpoint:string, [tls=bool, cacert=string, certifle=string,
+save_tcp endpoint:string, [retry_delay=duration, max_retry_count=int,
+                           tls=bool, cacert=string, certifle=string,
                            keyfile=string, skip_peer_verification=bool]
 ```
 
 ## Description
 
-Saves bytes to the given endpoint via TCP or TLS.
+Saves bytes to the given endpoint via TCP or TLS. Attempts to reconnect
+automatically for `max_retry_count` in case of recoverable connection
+errors.
+
+:::note
+Due to the nature of TCP a disconnect can still lead to lost and or incomplete
+events on the receiving end.
+:::
 
 ### `endpoint: string`
 
 The endpoint to which the server will connect. Must be of the form
-`[tcp://]<hostname>:<port>`.
+`[tcp://]<hostname>:<port>`. You can also use an IANA service name instead
+of a numeric port.
+
+### `retry_delay = duration (optional)`
+
+The amount of time to wait before attempting to reconnect in case a connection
+attempt fails and the error is deemed recoverable. Defaults to `30s`.
+
+### `max_retry_count = int (optional)
+The number of retries to attempt in case of connection errors before
+transitioning into the error state. Defaults to `10`.
 
 import TLSOptions from '../../.../../../../partials/operators/TLSOptions.mdx';
 
