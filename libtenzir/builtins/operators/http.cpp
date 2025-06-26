@@ -11,6 +11,8 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/curl.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/operator_control_plane.hpp"
@@ -62,9 +64,9 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
   });
 };
 
-auto try_decompress_payload(const std::string_view encoding,
-                            const std::span<const std::byte> payload,
-                            diagnostic_handler& dh) -> std::optional<blob> {
+auto try_decompress_body(const std::string_view encoding,
+                         const std::span<const std::byte> body,
+                         diagnostic_handler& dh) -> std::optional<blob> {
   if (encoding.empty()) {
     return std::nullopt;
   }
@@ -78,7 +80,7 @@ auto try_decompress_payload(const std::string_view encoding,
     return std::nullopt;
   }
   auto out = blob{};
-  out.resize(payload.size_bytes() * 2);
+  out.resize(body.size_bytes() * 2);
   const auto codec = arrow::util::Codec::Create(
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   TENZIR_ASSERT(codec.ok());
@@ -88,16 +90,16 @@ auto try_decompress_payload(const std::string_view encoding,
   const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
   auto written = size_t{};
   auto read = size_t{};
-  while (read != payload.size_bytes()) {
+  while (read != body.size_bytes()) {
     const auto result = decompressor->Decompress(
-      detail::narrow<int64_t>(payload.size_bytes() - read),
-      reinterpret_cast<const uint8_t*>(payload.data() + read),
+      detail::narrow<int64_t>(body.size_bytes() - read),
+      reinterpret_cast<const uint8_t*>(body.data() + read),
       detail::narrow<int64_t>(out.capacity() - written),
       reinterpret_cast<uint8_t*>(out.data() + written));
     if (not result.ok()) {
       diagnostic::warning("failed to decompress: {}",
                           result.status().ToString())
-        .note("emitting compressed payload")
+        .note("emitting compressed body")
         .emit(dh);
       return std::nullopt;
     }
@@ -122,7 +124,7 @@ auto try_decompress_payload(const std::string_view encoding,
       if (not result.ok()) {
         diagnostic::warning("failed to reset decompressor: {}",
                             result.ToString())
-          .note("emitting compressed payload")
+          .note("emitting compressed body")
           .emit(dh);
         return std::nullopt;
       }
@@ -623,7 +625,8 @@ struct from_http_args {
   std::optional<expression> filter;
   located<std::string> url;
   std::optional<located<std::string>> method;
-  std::optional<located<std::string>> payload;
+  std::optional<located<data>> body;
+  std::optional<located<std::string>> encode;
   std::optional<located<record>> headers;
   std::optional<ast::field_path> metadata_field;
   std::optional<ast::lambda_expr> paginate;
@@ -643,7 +646,8 @@ struct from_http_args {
   auto add_to(argument_parser2& p) {
     p.positional("url", url);
     p.named("method", method);
-    p.named("payload", payload);
+    p.named("body|payload", body);
+    p.named("encode", encode);
     p.named("headers", headers);
     p.named("metadata_field", metadata_field);
     p.named("paginate", paginate, "record=>string");
@@ -730,8 +734,9 @@ struct from_http_args {
       return (check_option(is_server, xs).is_success() && ...);
     };
     if (server) {
-      check_options(true, method, payload, headers, paginate, paginate_delay,
-                    connection_timeout, max_retry_count, retry_delay);
+      check_options(true, method, body, encode, headers, paginate,
+                    paginate_delay, connection_timeout, max_retry_count,
+                    retry_delay);
       TRY(validate_server_opts(dh));
     } else {
       check_options(false, responses, max_request_size);
@@ -749,6 +754,34 @@ struct from_http_args {
             .emit(dh);
           return failure::promise();
         }
+      }
+    }
+    if (body) {
+      TRY(match(
+        body->inner,
+        [](const concepts::one_of<blob, std::string, record> auto&)
+          -> failure_or<void> {
+          return {};
+        },
+        [&](const auto&) -> failure_or<void> {
+          diagnostic::error("`body` must be `blob`, `record` or `string`")
+            .primary(body->source)
+            .emit(dh);
+          return failure::promise();
+        }));
+    }
+    if (encode) {
+      if (not body) {
+        diagnostic::error("encoding specified without a `body`")
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (encode->inner != "form") {
+        diagnostic::error("unsupported encoding: `{}`", encode->inner)
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
       }
     }
     if (method and method->inner.empty()) {
@@ -885,7 +918,7 @@ struct from_http_args {
 
   auto make_method() const -> std::optional<http::method> {
     if (not method) {
-      return payload ? http::method::post : http::method::get;
+      return body ? http::method::post : http::method::get;
     }
     auto m = http::method{};
     if (http::from_string(method->inner, m)) {
@@ -894,14 +927,24 @@ struct from_http_args {
     return std::nullopt;
   }
 
-  auto make_headers() const -> std::unordered_map<std::string, std::string> {
-    if (not headers) {
-      return {};
-    }
+  auto make_headers(bool insert_content_type) const
+    -> std::unordered_map<std::string, std::string> {
     auto hs = std::unordered_map<std::string, std::string>{};
-    for (const auto& [k, v] : headers->inner) {
-      hs.emplace(k, as<std::string>(v));
+    if (insert_content_type and body and is<record>(body->inner)) {
+      hs.emplace("Content-Type", encode and encode->inner == "form"
+                                   ? "application/x-www-form-urlencoded"
+                                   : "application/json");
     }
+    if (headers) {
+      for (const auto& [k, v] : headers->inner) {
+        if (caf::icase_equal(k, "content-type")) {
+          hs.insert_or_assign("Content-Type", as<std::string>(v));
+          continue;
+        }
+        hs.emplace(k, as<std::string>(v));
+      }
+    }
+    TENZIR_INFO("headers: {}", hs);
     return hs;
   }
 
@@ -928,7 +971,8 @@ struct from_http_args {
     return f.object(x).fields(
       f.field("op", x.op), f.field("port", x.port), f.field("filter", x.filter),
       f.field("url", x.url), f.field("method", x.method),
-      f.field("payload", x.payload), f.field("headers", x.headers),
+      f.field("body", x.body), f.field("encode", x.encode),
+      f.field("headers", x.headers),
       f.field("metadata_field", x.metadata_field),
       f.field("paginate", x.paginate),
       f.field("paginate_delay", x.paginate_delay),
@@ -996,7 +1040,7 @@ public:
           return;
         }
         const auto make_chunk = [&] {
-          if (auto body = try_decompress_payload(
+          if (auto body = try_decompress_body(
                 r.header().field("content-encoding"), r.body(), dh)) {
             return chunk::make(std::move(*body));
           }
@@ -1114,7 +1158,7 @@ public:
         const auto encoding
           = eit != std::ranges::end(headers) ? eit->first : "";
         const auto make_chunk = [&] {
-          if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
+          if (auto body = try_decompress_body(encoding, r.body(), dh)) {
             return chunk::make(std::move(*body));
           }
           return chunk::copy(r.body());
@@ -1170,8 +1214,8 @@ public:
                           .connection_timeout(args_.connection_timeout->inner)
                           .max_retry_count(args_.max_retry_count->inner)
                           .retry_delay(args_.retry_delay->inner)
-                          .add_header_fields(args_.make_headers())),
-                      *uri);
+                          .add_header_fields(args_.make_headers(false))),
+                      std::move(*uri));
                   } else {
                     TENZIR_DEBUG("[http] done paginating");
                   }
@@ -1192,6 +1236,35 @@ public:
         .primary(args_.op)
         .emit(ctrl.diagnostics());
     }
+    const auto body = [&] {
+      if (not args_.body) {
+        return std::string{};
+      }
+      return match(
+        args_.body->inner,
+        [](const blob& x) {
+          return std::string{
+            reinterpret_cast<const char*>(x.data()),
+            x.size(),
+          };
+        },
+        [](const std::string& x) {
+          return x;
+        },
+        [this](const record& x) {
+          if (args_.encode and args_.encode->inner == "form") {
+            return curl::escape(flatten(x));
+          }
+          auto p = json_printer{{}};
+          auto buf = std::string{};
+          auto it = std::back_inserter(buf);
+          p.print(it, x);
+          return buf;
+        },
+        [](const auto&) -> std::string {
+          TENZIR_UNREACHABLE();
+        });
+    }();
     http::with(ctrl.self().system())
       .context(args_.make_ssl_context(*uri))
       .connect(*uri)
@@ -1199,8 +1272,8 @@ public:
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
       .retry_delay(args_.retry_delay->inner)
-      .add_header_fields(args_.make_headers())
-      .request(args_.make_method().value(), inner(args_.payload).value_or(""))
+      .add_header_fields(args_.make_headers(true))
+      .request(args_.make_method().value(), body)
       .or_else([&](const caf::error& e) {
         diagnostic::error("failed to make http request: {}", e)
           .primary(args_.op)
@@ -1323,7 +1396,7 @@ struct http_args {
   tenzir::location op;
   ast::expression url;
   std::optional<ast::expression> method;
-  std::optional<ast::expression> payload;
+  std::optional<ast::expression> body;
   std::optional<ast::expression> headers;
   std::optional<ast::field_path> response_field;
   std::optional<ast::field_path> metadata_field;
@@ -1343,7 +1416,7 @@ struct http_args {
   auto add_to(argument_parser2& p) {
     p.positional("url", url, "string");
     p.named("method", method, "string");
-    p.named("payload", payload, "string");
+    p.named("body|payload", body, "string");
     p.named("headers", headers, "record");
     p.named("response_field", response_field);
     p.named("metadata_field", metadata_field);
@@ -1461,7 +1534,7 @@ struct http_args {
   auto make_method(const std::string_view method) const
     -> std::optional<http::method> {
     if (method.empty()) {
-      if (not this->method and payload) {
+      if (not this->method and body) {
         return http::method::post;
       }
       return http::method::get;
@@ -1486,7 +1559,7 @@ struct http_args {
   friend auto inspect(auto& f, http_args& x) -> bool {
     return f.object(x).fields(
       f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
-      f.field("payload", x.payload), f.field("headers", x.headers),
+      f.field("body", x.body), f.field("headers", x.headers),
       f.field("tls", x.tls), f.field("certfile", x.certfile),
       f.field("keyfile", x.keyfile), f.field("password", x.password),
       f.field("metadata_field", x.metadata_field),
@@ -1548,7 +1621,7 @@ public:
         });
         const auto encoding = it != std::ranges::end(headers) ? it->first : "";
         const auto make_chunk = [&] {
-          if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
+          if (auto body = try_decompress_body(encoding, r.body(), dh)) {
             return chunk::make(std::move(*body));
           }
           return chunk::copy(r.body());
@@ -1637,11 +1710,11 @@ public:
       }
       auto urls = eval_string(args_.url, slice, dh);
       auto methods = eval_optional_string(args_.method, slice, dh);
-      auto payloads = eval_optional_string(args_.payload, slice, dh);
+      auto bodies = eval_optional_string(args_.body, slice, dh);
       for (auto row : slice.values()) {
         auto url = std::string{urls.next().value()};
         const auto method = methods.next().value();
-        const auto payload = payloads.next().value();
+        const auto body = bodies.next().value();
         if (url.empty()) {
           diagnostic::warning("`url` must not be empty")
             .primary(args_.url)
@@ -1677,7 +1750,7 @@ public:
           .max_retry_count(args_.max_retry_count)
           .retry_delay(args_.retry_delay.inner)
           .add_header_fields(args_.make_headers(slice, dh, warned))
-          .request(*m, payload)
+          .request(*m, body)
           .or_else([&](const caf::error& e) {
             diagnostic::error("failed to make http request: {}", e)
               .primary(args_.op)
