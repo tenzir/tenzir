@@ -26,6 +26,35 @@ constexpr auto stringify = detail::overload{
   },
 };
 
+auto check_sasl_mechanism(const located<record>& options,
+                          diagnostic_handler& dh) -> failure_or<void> {
+  const auto it = options.inner.find("sasl.mechanism");
+  if (it != options.inner.end()) {
+    const auto* mechanism = try_as<std::string>(it->second);
+    if (mechanism && *mechanism != "OAUTHBEARER") {
+      diagnostic::error("conflicting `sasl.mechanism`: `{}` "
+                        "`but `aws_iam` requires `OAUTHBEARER`",
+                        *mechanism)
+        .primary(options)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  const auto it_ms = options.inner.find("sasl.mechanisms");
+  if (it_ms != options.inner.end()) {
+    const auto* mechanisms = try_as<std::string>(it_ms->second);
+    if (mechanisms && *mechanisms != "OAUTHBEARER") {
+      diagnostic::error("conflicting `sasl.mechanisms`: `{}` "
+                        "but `aws_iam` requires `OAUTHBEARER`",
+                        *mechanisms)
+        .primary(options)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
+}
+
 class load_plugin final : public virtual operator_plugin2<kafka_loader> {
 public:
   auto initialize(const record& unused_plugin_config,
@@ -48,16 +77,16 @@ public:
       if (kafka_config_ptr == plugin_config->end()) {
         return;
       }
-      auto kafka_config = try_as<record>(&kafka_config_ptr->second);
+      const auto* kafka_config = try_as<record>(&kafka_config_ptr->second);
       if (not kafka_config or kafka_config->empty()) {
         return;
       }
       config_ = flatten(*kafka_config);
     }();
-    if (!config_.contains("bootstrap.servers")) {
+    if (not config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
-    if (!config_.contains("client.id")) {
+    if (not config_.contains("client.id")) {
       config_["client.id"] = "tenzir";
     }
     return caf::none;
@@ -78,6 +107,11 @@ public:
           .named("options", options)
           .parse(inv, ctx));
     if (iam_opts) {
+      if (options) {
+        TRY(check_sasl_mechanism(*options, ctx));
+        args.options.inner.emplace_back("sasl.mechanism", "OAUTHBEARER");
+      }
+      TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       TRY(args.aws, configuration::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
     }
@@ -159,16 +193,16 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
       if (kafka_config_ptr == plugin_config->end()) {
         return;
       }
-      const auto kafka_config = try_as<record>(&kafka_config_ptr->second);
+      const auto* kafka_config = try_as<record>(&kafka_config_ptr->second);
       if (not kafka_config or kafka_config->empty()) {
         return;
       }
       config_ = flatten(*kafka_config);
     }();
-    if (!config_.contains("bootstrap.servers")) {
+    if (not config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
-    if (!config_.contains("client.id")) {
+    if (not config_.contains("client.id")) {
       config_["client.id"] = "tenzir";
     }
     return caf::none;
@@ -188,6 +222,11 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
           .named("options", options)
           .parse(inv, ctx));
     if (iam_opts) {
+      if (options) {
+        TRY(check_sasl_mechanism(*options, ctx));
+        args.options.inner.emplace_back("sasl.mechanism", "OAUTHBEARER");
+      }
+      TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       TRY(args.aws, configuration::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
     }
