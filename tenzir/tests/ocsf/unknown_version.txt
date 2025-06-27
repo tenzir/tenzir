@@ -1,7 +1,7 @@
-warning: could not find schema for the given event
+warning: dropping events with unknown OCSF version
  --> ocsf/unknown_version.tql:2:1
   |
 2 | ocsf::apply
   | ~~~~~~~~~~~ 
   |
-  = note: tried to find version "0.0.0" for class "Network Activity"
+  = note: found "0.0.0"

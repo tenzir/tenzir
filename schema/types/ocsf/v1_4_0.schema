@@ -450,7 +450,7 @@ type _ocsf.v1_4_0.object.process = record{
 }
 
 // The Windows Service object describes a Windows service.
-type _ocsf.v1_4_0.object.win__win_service = record{
+type _ocsf.v1_4_0.object.win_service = record{
   cmd_line: string #recommended,
   labels: list<string> #optional,
   load_order_group: string #recommended #extension=win,
@@ -468,7 +468,7 @@ type _ocsf.v1_4_0.object.win__win_service = record{
   tags: list<_ocsf.v1_4_0.object.key_value_object> #optional,
   uid: string #recommended,
   version: string #recommended,
-}
+} #extension=win
 
 // The Time Span object represents different time period durations. If a
 // timespan is fractional, i.e. crosses one period, e.g. a week and 3 days, more
@@ -686,13 +686,13 @@ type _ocsf.v1_4_0.object.ticket = record{
 }
 
 // The registry key object describes a Windows registry key.
-type _ocsf.v1_4_0.object.win__reg_key = record{
+type _ocsf.v1_4_0.object.reg_key = record{
   is_system: bool #optional,
   modified_time: time #optional,
   modified_time_dt: time #optional #profile=datetime,
   path: string #required,
   security_descriptor: string #optional,
-}
+} #extension=win
 
 // The DCE/RPC, or Distributed Computing Environment/Remote Procedure Call,
 // object describes the remote procedure call system for distributed computing
@@ -769,14 +769,14 @@ type _ocsf.v1_4_0.object.evidences = record{
   job: _ocsf.v1_4_0.object.job #recommended,
   process: _ocsf.v1_4_0.object.process #recommended,
   query: _ocsf.v1_4_0.object.dns_query #recommended,
-  reg_key: _ocsf.v1_4_0.object.win__reg_key #recommended #extension=win,
-  reg_value: _ocsf.v1_4_0.object.win__reg_value #recommended #extension=win,
+  reg_key: _ocsf.v1_4_0.object.reg_key #recommended #extension=win,
+  reg_value: _ocsf.v1_4_0.object.reg_value #recommended #extension=win,
   script: _ocsf.v1_4_0.object.script #recommended,
   src_endpoint: _ocsf.v1_4_0.object.network_endpoint #recommended,
   tls: _ocsf.v1_4_0.object.tls #recommended,
   url: _ocsf.v1_4_0.object.url #recommended,
   user: _ocsf.v1_4_0.object.user #recommended,
-  win_service: _ocsf.v1_4_0.object.win__win_service #recommended #extension=win,
+  win_service: _ocsf.v1_4_0.object.win_service #recommended #extension=win,
 }
 
 // The query info object holds information related to data access within a
@@ -1658,7 +1658,7 @@ type _ocsf.v1_4_0.object.rpc_interface = record{
 }
 
 // The registry value object describes a Windows registry value.
-type _ocsf.v1_4_0.object.win__reg_value = record{
+type _ocsf.v1_4_0.object.reg_value = record{
   data: string #print_json #optional,
   is_default: bool #optional,
   is_system: bool #optional,
@@ -1668,7 +1668,7 @@ type _ocsf.v1_4_0.object.win__reg_value = record{
   path: string #required,
   type: string #optional,
   type_id: int64 #recommended,
-}
+} #extension=win
 
 // The Managed Entity object describes the type and version of an entity, such
 // as a user, device, or policy.  For types in the <code>type_id</code> enum
@@ -1886,7 +1886,7 @@ type _ocsf.v1_4_0.object.osint = record{
 
 // The Windows resource object describes a resource object managed by Windows,
 // such as mutant or timer.
-type _ocsf.v1_4_0.object.win__win_resource = record{
+type _ocsf.v1_4_0.object.win_resource = record{
   data: string #print_json #optional,
   data_classification: _ocsf.v1_4_0.object.data_classification #recommended #profile=data_classification,
   data_classifications: list<_ocsf.v1_4_0.object.data_classification> #recommended #profile=data_classification,
@@ -1898,7 +1898,7 @@ type _ocsf.v1_4_0.object.win__win_resource = record{
   type: string #optional,
   type_id: int64 #required,
   uid: string #recommended,
-}
+} #extension=win
 
 // The Kernel Resource object provides information about a specific kernel
 // resource, including its name and type. It describes essential attributes
@@ -2241,7 +2241,7 @@ type _ocsf.v1_4_0.object.startup_item = record{
   start_type_id: int64 #required,
   type: string #optional,
   type_id: int64 #recommended,
-  win_service: _ocsf.v1_4_0.object.win__win_service #optional #extension=win,
+  win_service: _ocsf.v1_4_0.object.win_service #optional #extension=win,
 }
 
 // The network proxy endpoint object describes a proxy server, which acts as an
@@ -2455,7 +2455,7 @@ type _ocsf.v1_4_0.process_query = record{
 
 // Registry Key Activity events report when a process performs an action on a
 // Windows registry key.
-type _ocsf.v1_4_0.win__registry_key_activity = record{
+type _ocsf.v1_4_0.registry_key_activity = record{
   access_mask: int64 #recommended,
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
@@ -2491,9 +2491,9 @@ type _ocsf.v1_4_0.win__registry_key_activity = record{
   open_mask: int64 #recommended,
   osint: list<_ocsf.v1_4_0.object.osint> #required #profile=osint,
   policy: _ocsf.v1_4_0.object.policy #optional #profile=security_control,
-  prev_reg_key: _ocsf.v1_4_0.object.win__reg_key #recommended #extension=win,
+  prev_reg_key: _ocsf.v1_4_0.object.reg_key #recommended #extension=win,
   raw_data: string #optional,
-  reg_key: _ocsf.v1_4_0.object.win__reg_key #required #extension=win,
+  reg_key: _ocsf.v1_4_0.object.reg_key #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -2512,7 +2512,7 @@ type _ocsf.v1_4_0.win__registry_key_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Group Management events report management updates to a group, including
 // updates to membership and permissions.
@@ -3057,7 +3057,7 @@ type _ocsf.v1_4_0.http_activity = record{
 
 // Registry Value Activity events reports when a process performs an action on a
 // Windows registry value.
-type _ocsf.v1_4_0.win__registry_value_activity = record{
+type _ocsf.v1_4_0.registry_value_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -3090,9 +3090,9 @@ type _ocsf.v1_4_0.win__registry_value_activity = record{
   observables: list<_ocsf.v1_4_0.object.observable> #recommended,
   osint: list<_ocsf.v1_4_0.object.osint> #required #profile=osint,
   policy: _ocsf.v1_4_0.object.policy #optional #profile=security_control,
-  prev_reg_value: _ocsf.v1_4_0.object.win__reg_value #optional #extension=win,
+  prev_reg_value: _ocsf.v1_4_0.object.reg_value #optional #extension=win,
   raw_data: string #optional,
-  reg_value: _ocsf.v1_4_0.object.win__reg_value #required #extension=win,
+  reg_value: _ocsf.v1_4_0.object.reg_value #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -3111,7 +3111,7 @@ type _ocsf.v1_4_0.win__registry_value_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Network Activity events report network connection and traffic activity.
 type _ocsf.v1_4_0.network_activity = record{
@@ -3399,7 +3399,7 @@ type _ocsf.v1_4_0.drone_flights_activity = record{
 
 // Windows Resource Activity events report when a process accesses a Windows
 // managed resource object, successful or otherwise.
-type _ocsf.v1_4_0.win__windows_resource_activity = record{
+type _ocsf.v1_4_0.windows_resource_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -3451,8 +3451,8 @@ type _ocsf.v1_4_0.win__windows_resource_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-  win_resource: _ocsf.v1_4_0.object.win__win_resource #required #extension=win,
-}
+  win_resource: _ocsf.v1_4_0.object.win_resource #required #extension=win,
+} #extension=win
 
 // Networks Query events report information about network adapters.
 type _ocsf.v1_4_0.networks_query = record{
@@ -3691,7 +3691,7 @@ type _ocsf.v1_4_0.network_connection_query = record{
 
 // Registry Key Query events report information about discovered Windows
 // registry keys.
-type _ocsf.v1_4_0.win__registry_key_query = record{
+type _ocsf.v1_4_0.registry_key_query = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -3728,7 +3728,7 @@ type _ocsf.v1_4_0.win__registry_key_query = record{
   query_result: string #recommended,
   query_result_id: int64 #required,
   raw_data: string #optional,
-  reg_key: _ocsf.v1_4_0.object.win__reg_key #required #extension=win,
+  reg_key: _ocsf.v1_4_0.object.reg_key #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -3747,7 +3747,7 @@ type _ocsf.v1_4_0.win__registry_key_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Security Finding events describe findings, detections, anomalies, alerts
 // and/or actions performed by security products
@@ -6327,7 +6327,7 @@ type _ocsf.v1_4_0.job_query = record{
 
 // Windows Service Activity events report when a process interacts with the
 // Service Control Manager.
-type _ocsf.v1_4_0.win__windows_service_activity = record{
+type _ocsf.v1_4_0.windows_service_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -6379,11 +6379,11 @@ type _ocsf.v1_4_0.win__windows_service_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-  win_service: _ocsf.v1_4_0.object.win__win_service #required #extension=win,
-}
+  win_service: _ocsf.v1_4_0.object.win_service #required #extension=win,
+} #extension=win
 
 // Prefetch Query events report information about Windows prefetch files.
-type _ocsf.v1_4_0.win__prefetch_query = record{
+type _ocsf.v1_4_0.prefetch_query = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -6442,7 +6442,7 @@ type _ocsf.v1_4_0.win__prefetch_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Folder Query events report information about folders that are present on the
 // system.
@@ -6628,7 +6628,7 @@ type _ocsf.v1_4_0.service_query = record{
 
 // Registry Value Query events report information about discovered Windows
 // registry values.
-type _ocsf.v1_4_0.win__registry_value_query = record{
+type _ocsf.v1_4_0.registry_value_query = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -6665,7 +6665,7 @@ type _ocsf.v1_4_0.win__registry_value_query = record{
   query_result: string #recommended,
   query_result_id: int64 #required,
   raw_data: string #optional,
-  reg_value: _ocsf.v1_4_0.object.win__reg_value #required #extension=win,
+  reg_value: _ocsf.v1_4_0.object.reg_value #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -6684,7 +6684,7 @@ type _ocsf.v1_4_0.win__registry_value_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Process Activity events report when a process launches, injects, opens or
 // terminates another process, successful or otherwise.

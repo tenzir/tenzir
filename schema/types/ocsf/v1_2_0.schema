@@ -1437,7 +1437,7 @@ type _ocsf.v1_2_0.object.response = record{
 }
 
 // The registry value object describes a Windows registry value.
-type _ocsf.v1_2_0.object.win__reg_value = record{
+type _ocsf.v1_2_0.object.reg_value = record{
   data: string #print_json #optional,
   is_default: bool #optional,
   is_system: bool #optional,
@@ -1447,7 +1447,7 @@ type _ocsf.v1_2_0.object.win__reg_value = record{
   path: string #required,
   type: string #optional,
   type_id: int64 #recommended,
-}
+} #extension=win
 
 // The API, or Application Programming Interface, object represents  information
 // pertaining to an API request and response.
@@ -1493,7 +1493,7 @@ type _ocsf.v1_2_0.object.endpoint = record{
 
 // The Windows resource object describes a resource object managed by Windows,
 // such as mutant or timer.
-type _ocsf.v1_2_0.object.win__win_resource = record{
+type _ocsf.v1_2_0.object.win_resource = record{
   data: string #print_json #optional,
   data_classification: _ocsf.v1_2_0.object.data_classification #recommended #profile=data_classification,
   details: string #optional,
@@ -1503,7 +1503,7 @@ type _ocsf.v1_2_0.object.win__win_resource = record{
   type: string #optional,
   type_id: int64 #required,
   uid: string #optional,
-}
+} #extension=win
 
 // The Analytic object contains details about the analytic technique used to
 // analyze and derive insights from the data or information that led to the
@@ -1586,13 +1586,13 @@ type _ocsf.v1_2_0.object.cloud = record{
 // The registry key object describes a Windows registry key. Defined by D3FEND
 // <a target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:WindowsReg
 // istryKey/'>d3f:WindowsRegistryKey</a>.
-type _ocsf.v1_2_0.object.win__reg_key = record{
+type _ocsf.v1_2_0.object.reg_key = record{
   is_system: bool #optional,
   modified_time: time #optional,
   modified_time_dt: time #optional #profile=datetime,
   path: string #required,
   security_descriptor: string #optional,
-}
+} #extension=win
 
 // The Email object describes the email metadata such as sender, recipients, and
 // direction. Defined by D3FEND <a target='_blank'
@@ -2212,7 +2212,7 @@ type _ocsf.v1_2_0.peripheral_device_query = record{
 
 // Registry Value Query events report information about discovered Windows
 // registry values.
-type _ocsf.v1_2_0.win__registry_value_query = record{
+type _ocsf.v1_2_0.registry_value_query = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_2_0.object.actor #optional #profile=host,
@@ -2235,7 +2235,7 @@ type _ocsf.v1_2_0.win__registry_value_query = record{
   query_result: string #recommended,
   query_result_id: int64 #required,
   raw_data: string #optional,
-  reg_value: _ocsf.v1_2_0.object.win__reg_value #required #extension=win,
+  reg_value: _ocsf.v1_2_0.object.reg_value #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
@@ -2250,7 +2250,7 @@ type _ocsf.v1_2_0.win__registry_value_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Datastore events describe general activities (Read, Update, Query, Delete,
 // etc.) which affect datastores or data within those datastores, e.g. (AWS RDS,
@@ -2620,7 +2620,7 @@ type _ocsf.v1_2_0.file_system_activity = record{
 }
 
 // Prefetch Query events report information about Windows prefetch files.
-type _ocsf.v1_2_0.win__prefetch_query = record{
+type _ocsf.v1_2_0.prefetch_query = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_2_0.object.actor #optional #profile=host,
@@ -2661,11 +2661,11 @@ type _ocsf.v1_2_0.win__prefetch_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Registry Value Activity events reports when a process performs an action on a
 // Windows registry value.
-type _ocsf.v1_2_0.win__registry_value_activity = record{
+type _ocsf.v1_2_0.registry_value_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #required #profile=security_control,
   activity_id: int64 #required,
@@ -2692,9 +2692,9 @@ type _ocsf.v1_2_0.win__registry_value_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_2_0.object.metadata #required,
   observables: list<_ocsf.v1_2_0.object.observable> #recommended,
-  prev_reg_value: _ocsf.v1_2_0.object.win__reg_value #optional #extension=win,
+  prev_reg_value: _ocsf.v1_2_0.object.reg_value #optional #extension=win,
   raw_data: string #optional,
-  reg_value: _ocsf.v1_2_0.object.win__reg_value #required #extension=win,
+  reg_value: _ocsf.v1_2_0.object.reg_value #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
@@ -2709,7 +2709,7 @@ type _ocsf.v1_2_0.win__registry_value_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Kernel Extension events report when a driver/extension is loaded or unloaded
 // into the kernel
@@ -2956,7 +2956,7 @@ type _ocsf.v1_2_0.dhcp_activity = record{
 
 // Windows Resource Activity events report when a process accesses a Windows
 // managed resource object, successful or otherwise.
-type _ocsf.v1_2_0.win__windows_resource_activity = record{
+type _ocsf.v1_2_0.windows_resource_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #required #profile=security_control,
   activity_id: int64 #required,
@@ -2998,8 +2998,8 @@ type _ocsf.v1_2_0.win__windows_resource_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-  win_resource: _ocsf.v1_2_0.object.win__win_resource #required #extension=win,
-}
+  win_resource: _ocsf.v1_2_0.object.win_resource #required #extension=win,
+} #extension=win
 
 // File Transfer Protocol (FTP) Activity events report file transfers between a
 // server and a client as seen on the network.
@@ -3407,7 +3407,7 @@ type _ocsf.v1_2_0.admin_group_query = record{
 
 // Registry Key Query events report information about discovered Windows
 // registry keys.
-type _ocsf.v1_2_0.win__registry_key_query = record{
+type _ocsf.v1_2_0.registry_key_query = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_2_0.object.actor #optional #profile=host,
@@ -3430,7 +3430,7 @@ type _ocsf.v1_2_0.win__registry_key_query = record{
   query_result: string #recommended,
   query_result_id: int64 #required,
   raw_data: string #optional,
-  reg_key: _ocsf.v1_2_0.object.win__reg_key #required #extension=win,
+  reg_key: _ocsf.v1_2_0.object.reg_key #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
@@ -3445,7 +3445,7 @@ type _ocsf.v1_2_0.win__registry_key_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // File Hosting Activity events report the actions taken by file management
 // applications, including file sharing servers like Sharepoint and services
@@ -3493,7 +3493,7 @@ type _ocsf.v1_2_0.file_hosting_activity = record{
 
 // Registry Key Activity events report when a process performs an action on a
 // Windows registry key.
-type _ocsf.v1_2_0.win__registry_key_activity = record{
+type _ocsf.v1_2_0.registry_key_activity = record{
   access_mask: int64 #recommended,
   action: string #optional #profile=security_control,
   action_id: int64 #required #profile=security_control,
@@ -3523,9 +3523,9 @@ type _ocsf.v1_2_0.win__registry_key_activity = record{
   metadata: _ocsf.v1_2_0.object.metadata #required,
   observables: list<_ocsf.v1_2_0.object.observable> #recommended,
   open_mask: int64 #recommended,
-  prev_reg_key: _ocsf.v1_2_0.object.win__reg_key #recommended #extension=win,
+  prev_reg_key: _ocsf.v1_2_0.object.reg_key #recommended #extension=win,
   raw_data: string #optional,
-  reg_key: _ocsf.v1_2_0.object.win__reg_key #required #extension=win,
+  reg_key: _ocsf.v1_2_0.object.reg_key #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
@@ -3540,7 +3540,7 @@ type _ocsf.v1_2_0.win__registry_key_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Device Config State events report device configuration data and CIS Benchmark
 // results.

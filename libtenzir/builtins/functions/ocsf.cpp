@@ -21,7 +21,7 @@ namespace {
 template <class In, class Out>
 class generic_mapping_plugin final : public function_plugin {
 public:
-  using function = std::function<auto(In)->std::optional<Out>>;
+  using function = std::function<auto(ocsf_version, In)->std::optional<Out>>;
 
   generic_mapping_plugin(std::string name, std::string input_meta,
                          function function, std::string warning_text)
@@ -73,7 +73,10 @@ public:
                     continue;
                   }
                 }
-                auto out = function_(in);
+                // TODO: Because the some of the values depend on the OCSF
+                // version, this function should actually also require the
+                // desired OCSF version as an argument.
+                auto out = function_(ocsf_version::v1_5_0, in);
                 if (out) {
                   check(b.Append(*out));
                 } else {

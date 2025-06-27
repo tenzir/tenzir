@@ -13,11 +13,13 @@ ocsf::apply
 ## Description
 
 The `ocsf::apply` operator casts incoming events to the type associated with
-their OCSF event class. The resulting type is determined based on three fields:
-`metadata.version`, `metadata.profiles` and `class_uid`. Tenzir supports all
-OCSF versions (including `-dev` versions), all profiles and all event classes.
+their OCSF event class. The resulting type is determined based on four fields:
+`metadata.version`, `metadata.profiles`, `metadata.extensions` and `class_uid`.
 Events that share the same values for those fields will be cast to the same
-type.
+type. Tenzir supports all OCSF versions (including `-dev` versions), all
+profiles and all event classes. Extensions are at the moment limited to those
+that are versioned together with OCSF, which includes the `win` and `linux`
+extensions.
 
 To this end, the operator performs the following steps:
 - Add optional fields that are not present in the original event with a `null` value
@@ -32,12 +34,6 @@ infinite recursion are currently left out. We plan to support recursion up to a
 certain depth in the future. Furthermore, this operator will likely be extended
 with additional features, such as the ability to drop all optional fields, or to
 automatically assign OCSF enumerations based on their sibling ID.
-
-:::note
-The operator does not support OCSF extensions yet. Fields coming from extensions
-will be dropped. We plan to add support for extensions with detection based on
-`metadata.extensions` in the future.
-:::
 
 ## Examples
 
