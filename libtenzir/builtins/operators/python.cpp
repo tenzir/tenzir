@@ -165,15 +165,17 @@ auto drain_pipe(bp::ipstream& pipe) -> std::string {
   return result;
 }
 
+using code_or_path_t = located<std::variant<std::filesystem::path, secret>>;
+
 class python_operator final : public crtp_operator<python_operator> {
 public:
   python_operator() = default;
 
   explicit python_operator(struct config config, std::string requirements,
-                           std::variant<std::filesystem::path, std::string> code)
+                           code_or_path_t code_or_path)
     : config_{std::move(config)},
       requirements_{std::move(requirements)},
-      code_{std::move(code)} {
+      code_{std::move(code_or_path)} {
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
@@ -211,30 +213,23 @@ public:
       // when many charts were using the Python operator.
       co_yield {};
       // Get the code to be executed.
-      auto maybe_code = std::visit(
-        detail::overload{
-          [](std::filesystem::path path) -> caf::expected<std::string> {
-            auto code_chunk = chunk::make_empty();
-            if (auto err = read(path, code_chunk)) {
-              return diagnostic::error(err)
-                .note("failed to read code from file")
-                .to_error();
-            }
-            return std::string{
-              reinterpret_cast<const char*>(code_chunk->data()),
-              code_chunk->size()};
-          },
-          [](std::string inline_code) -> caf::expected<std::string> {
-            return inline_code;
-          }},
-        code_);
-      if (! maybe_code) {
-        diagnostic::error(maybe_code.error())
-          .note("failed to obtain code")
-          .emit(ctrl.diagnostics());
-        co_return;
+      auto code = std::string{};
+      if (auto* path = try_as<std::filesystem::path>(code_.inner)) {
+        auto code_chunk = chunk::make_empty();
+        if (auto err = read(*path, code_chunk)) {
+          diagnostic::error(err)
+            .note("failed to read code from file")
+            .emit(ctrl.diagnostics());
+        }
+        code = std::string{reinterpret_cast<const char*>(code_chunk->data()),
+                           code_chunk->size()};
+      } else if (auto* secret = try_as<class secret>(code_.inner)) {
+        co_yield ctrl.resolve_secrets_must_yield({make_secret_request(
+          "code", *secret, code_.source, code, ctrl.diagnostics())});
+      } else {
+        TENZIR_UNREACHABLE();
       }
-      auto code = detail::strip_leading_indentation(std::string{*maybe_code});
+      code = detail::strip_leading_indentation(std::move(code));
       // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
@@ -511,15 +506,21 @@ public:
 private:
   config config_ = {};
   std::string requirements_ = {};
-  std::variant<std::filesystem::path, std::string> code_ = {};
+  code_or_path_t code_ = {};
 };
 
-class plugin final : public virtual operator_plugin<python_operator>,
-                     public virtual operator_factory_plugin {
+constexpr std::string_view allow_secret_config_option
+  = "tenzir.allow-secrets-in-escape-hatches";
+
+class plugin final : public virtual operator_factory_plugin {
 public:
+  auto name() const -> std::string override {
+    return "python";
+  }
+
   struct config config = {};
 
-  auto initialize(const record& plugin_config, const record& /*global_config*/)
+  auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
@@ -531,57 +532,34 @@ public:
         = get_if<std::string>(&plugin_config, "implicit-requirements")) {
       config.implicit_requirements = *implicit_requirements;
     }
+    const auto v = try_get_or(global_config, allow_secret_config_option, false);
+    if (not v) {
+      return diagnostic::error("`{}` must be a boolean",
+                               allow_secret_config_option)
+        .to_error();
+    }
+    allow_secrets_ = *v;
     return {};
-  }
-
-  auto signature() const -> operator_signature override {
-    return {
-      .transformation = true,
-    };
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::optional<located<std::string>>{};
-    auto requirements = std::string{};
-    auto filename = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"python", "https://docs.tenzir.com/"
-                                            "operators/python"};
-    parser.add("-r,--requirements", requirements, "<requirements>");
-    parser.add("-f,--file", filename, "<filename>");
-    parser.add(command, "<command>");
-    parser.parse(p);
-    if (! filename && ! command) {
-      diagnostic::error("must have either the `--file` argument or inline code")
-        .throw_();
-    }
-    if (filename && command) {
-      diagnostic::error(
-        "cannot have `--file` argument together with inline code")
-        .primary(filename->source)
-        .primary(command->source)
-        .throw_();
-    }
-    auto code = std::variant<std::filesystem::path, std::string>{};
-    if (command.has_value()) {
-      code = command->inner;
-    } else {
-      code = std::filesystem::path{filename->inner};
-    }
-    return std::make_unique<python_operator>(config, std::move(requirements),
-                                             std::move(code));
   }
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto requirements = std::optional<std::string>{};
-    auto code = std::optional<located<std::string>>{};
+    auto code = std::optional<located<secret>>{};
     auto path = std::optional<located<std::string>>{};
-    auto code_or_path = std::variant<std::filesystem::path, std::string>{};
     auto parser = argument_parser2::operator_("python")
                     .positional("code", code)
                     .named("file", path)
                     .named("requirements", requirements);
     TRY(parser.parse(inv, ctx));
+    if (not allow_secrets_ and code and not code->inner.is_all_literal()) {
+      diagnostic::error("secrets may not be used in the `python` operator")
+        .primary(*code)
+        .hint("allow secrets using the config option `{}`",
+              allow_secret_config_option)
+        .emit(ctx);
+      return failure::promise();
+    }
     if (not path && not code) {
       diagnostic::error("must have either the `file` argument or inline code")
         .primary(inv.self)
@@ -599,10 +577,13 @@ public:
         .emit(ctx);
       return failure::promise();
     }
+    auto code_or_path = code_or_path_t{};
     if (code) {
-      code_or_path = code->inner;
+      code_or_path.inner = std::move(code->inner);
+      code_or_path.source = code->source;
     } else {
-      code_or_path = std::filesystem::path{path->inner};
+      code_or_path.inner = std::filesystem::path{path->inner};
+      code_or_path.source = path->source;
     }
     if (not requirements) {
       requirements = "";
@@ -610,6 +591,9 @@ public:
     return std::make_unique<python_operator>(config, std::move(*requirements),
                                              std::move(code_or_path));
   }
+
+private:
+  bool allow_secrets_ = false;
 };
 
 } // namespace

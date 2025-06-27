@@ -18,15 +18,15 @@ class clickhouse_sink_operator final
 public:
   clickhouse_sink_operator() = default;
 
-  clickhouse_sink_operator(arguments args) : args_{std::move(args)} {
+  clickhouse_sink_operator(operator_arguments args) : args_{std::move(args)} {
   }
 
   friend auto inspect(auto& f, clickhouse_sink_operator& x) -> bool {
     return f.apply(x.args_);
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -46,11 +46,30 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
-    auto args = args_;
+    auto& dh = ctrl.diagnostics();
+    auto args = easy_client::arguments{
+      .host = "",
+      .port = args_.port,
+      .user = "",
+      .password = "",
+      .ssl = args_.ssl,
+      .table = args_.table,
+      .mode = args_.mode,
+      .primary = args_.primary,
+      .operator_location = args_.operator_location,
+    };
+    /// GCC 14.2 erroneously warns that the first temporary here may used as a
+    /// dangling pointer at the end/suspension of the coroutine. Giving `x` a
+    /// name somehow circumvents this warning.
+    auto x = ctrl.resolve_secrets_must_yield({
+      make_secret_request("host", args_.host, args.host, dh),
+      make_secret_request("user", args_.user, args.user, dh),
+      make_secret_request("password", args_.password, args.password, dh),
+    });
+    co_yield std::move(x);
     args.ssl.update_cacert(ctrl);
     auto client = easy_client::make(args, ctrl.diagnostics());
     if (not client) {
-      co_yield {};
       co_return;
     }
     for (auto&& slice : input) {
@@ -77,14 +96,14 @@ public:
   }
 
 private:
-  arguments args_;
+  operator_arguments args_;
 };
 
 class to_clickhouse final : public operator_plugin2<clickhouse_sink_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    TRY(auto args, arguments::try_parse(name(), inv, ctx));
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(auto args, operator_arguments::try_parse(name(), inv, ctx));
     return std::make_unique<clickhouse_sink_operator>(std::move(args));
   }
 };

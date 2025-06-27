@@ -89,8 +89,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
-  virtual auto resolve_secrets_must_yield(std::vector<secret_request>)
-    -> void override {
+  virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request>,
+                             operator_control_plane::final_callback_t)
+    -> secret_resolution_sentinel override {
     TENZIR_UNIMPLEMENTED();
   }
 

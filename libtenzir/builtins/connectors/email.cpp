@@ -29,6 +29,10 @@ struct saver_args {
   std::optional<std::string> from;
   std::optional<std::string> subject;
   transfer_options transfer_opts;
+  std::optional<located<secret>> username;
+  std::optional<located<secret>> password;
+  std::optional<located<secret>> authzid;
+
   bool mime;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
@@ -36,7 +40,8 @@ struct saver_args {
       .pretty_name("tenzir.plugins.email.saver_args")
       .fields(f.field("endpoint", x.endpoint), f.field("to", x.to),
               f.field("from", x.from), f.field("subject", x.subject),
-              f.field("mime", x.mime));
+              f.field("username", x.username), f.field("password", x.password),
+              f.field("authzid", x.authzid), f.field("mime", x.mime));
   }
 };
 
@@ -68,8 +73,25 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    co_yield {};
+    auto& dh = ctrl.diagnostics();
     auto transfer_opts = args_.transfer_opts;
+    auto requests = std::vector<secret_request>{};
+    if (args_.username) {
+      transfer_opts.username.emplace();
+      requests.emplace_back(make_secret_request("username", *args_.username,
+                                                *transfer_opts.username, dh));
+    }
+    if (args_.password) {
+      transfer_opts.password.emplace();
+      requests.emplace_back(make_secret_request("password", *args_.password,
+                                                *transfer_opts.password, dh));
+    }
+    if (args_.authzid) {
+      transfer_opts.authzid.emplace();
+      requests.emplace_back(make_secret_request("authzid", *args_.authzid,
+                                                *transfer_opts.authzid, dh));
+    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
     transfer_opts.ssl.update_cacert(ctrl);
     auto tx = transfer{transfer_opts};
     if (auto err = tx.prepare(std::move(args_.endpoint))) {
@@ -199,9 +221,9 @@ class save_plugin final : public virtual operator_plugin2<saver> {
     parser.named("endpoint", endpoint);
     parser.named("from", args.from);
     parser.named("subject", args.subject);
-    parser.named("username", args.transfer_opts.username);
-    parser.named("password", args.transfer_opts.password);
-    parser.named("authzid", args.transfer_opts.authzid);
+    parser.named("username", args.username);
+    parser.named("password", args.password);
+    parser.named("authzid", args.authzid);
     parser.named("authorization", args.transfer_opts.authorization);
     args.transfer_opts.ssl.add_tls_options(parser);
     parser.named("mime", args.mime);

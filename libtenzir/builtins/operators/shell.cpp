@@ -189,21 +189,22 @@ class shell_operator final : public crtp_operator<shell_operator> {
 public:
   shell_operator() = default;
 
-  explicit shell_operator(std::string command) : command_{std::move(command)} {
+  explicit shell_operator(located<secret> command)
+    : command_{std::move(command)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto command = std::string{};
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_secret_request("command", command_, command, ctrl.diagnostics())});
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
-    auto child = child::make(command_, mode);
+    auto child = child::make(command, mode);
     if (! child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
       co_return;
     }
-    // We yield once because reading below is blocking, but we want to
-    // directly signal that our initialization is complete.
-    co_yield {};
     auto buffer = std::vector<char>(block_size);
     while (true) {
       auto bytes_read = child->read(as_writeable_bytes(buffer));
@@ -231,8 +232,11 @@ public:
 
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto command = std::string{};
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_secret_request("command", command_, command, ctrl.diagnostics())});
     // TODO: Handle exceptions from `boost::process`.
-    auto child = child::make(command_, stdin_mode::pipe);
+    auto child = child::make(command, stdin_mode::pipe);
     if (! child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
@@ -364,36 +368,49 @@ public:
   }
 
 private:
-  std::string command_;
+  located<secret> command_;
 };
 
-class plugin final : public virtual operator_plugin<shell_operator>,
-                     public virtual operator_factory_plugin {
+constexpr std::string_view allow_secret_config_option
+  = "tenzir.allow-secrets-in-escape-hatches";
+
+class plugin final : public virtual operator_factory_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-    };
+  auto name() const -> std::string override {
+    return "shell";
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::string{};
-    auto parser = argument_parser{"shell", "https://docs.tenzir.com/"
-                                           "operators/shell"};
-    parser.add(command, "<command>");
-    parser.parse(p);
-    return std::make_unique<shell_operator>(std::move(command));
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
+    const auto v = try_get_or(global_config, allow_secret_config_option, false);
+    if (not v) {
+      return diagnostic::error("`{}` must be a boolean",
+                               allow_secret_config_option)
+        .to_error();
+    }
+    allow_secrets_ = *v;
+    return {};
   }
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto command = located<std::string>{};
+    auto command = located<secret>{};
     auto parser
       = argument_parser2::operator_("shell").positional("cmd", command);
     TRY(parser.parse(inv, ctx));
-    return std::make_unique<shell_operator>(std::move(command).inner);
+    if (not allow_secrets_ and not command.inner.is_all_literal()) {
+      diagnostic::error("secrets may not be used in the `shell` operator")
+        .primary(command)
+        .hint("allow secrets using the config option `{}`",
+              allow_secret_config_option)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<shell_operator>(std::move(command));
   }
+
+private:
+  bool allow_secrets_ = false;
 };
 
 } // namespace

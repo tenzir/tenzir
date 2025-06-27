@@ -12,6 +12,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
@@ -39,7 +40,7 @@ struct s3_config {
 
 struct s3_args {
   bool anonymous = {};
-  located<std::string> uri = {};
+  located<secret> uri = {};
   std::optional<s3_config> config = {};
 
   template <class Inspector>
@@ -50,8 +51,9 @@ struct s3_args {
   }
 };
 
-auto get_options(const s3_args& args) -> caf::expected<arrow::fs::S3Options> {
-  auto opts = arrow::fs::S3Options::FromUri(args.uri.inner);
+auto get_options(const s3_args& args, const arrow::util::Uri& uri)
+  -> caf::expected<arrow::fs::S3Options> {
+  auto opts = arrow::fs::S3Options::FromUri(uri);
   if (not opts.ok()) {
     return diagnostic::error("failed to parse S3 options: {}",
                              opts.status().ToString())
@@ -78,17 +80,10 @@ public:
   s3_loader(s3_args args) : args_{std::move(args)} {
   }
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    co_yield {};
     auto uri = arrow::util::Uri{};
-    const auto parse_result = uri.Parse(args_.uri.inner);
-    if (not parse_result.ok()) {
-      diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,
-                        parse_result.ToString())
-        .primary(args_.uri.source)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    auto opts = get_options(args_);
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
+    auto opts = get_options(args_, uri);
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
       co_return;
@@ -96,25 +91,23 @@ public:
     auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 filesystem: {}",
-                        fs.status().ToString())
+                        fs.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      diagnostic::error("failed to get file info for URI "
-                        "`{}`: {}",
-                        args_.uri.inner, file_info.status().ToString())
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
     if (not input_stream.ok()) {
-      diagnostic::error("failed to open input stream for URI "
-                        "`{}`: {}",
-                        args_.uri.inner, input_stream.status().ToString())
+      diagnostic::error("failed to open input stream: {}",
+                        input_stream.status().ToStringWithoutContextLines())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
       co_return;
@@ -122,9 +115,8 @@ public:
     while (not input_stream.ValueUnsafe()->closed()) {
       auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
       if (not input_stream.ok()) {
-        diagnostic::error("failed to read from input stream for URI "
-                          "`{}`: {}",
-                          args_.uri.inner, buffer.status().ToString())
+        diagnostic::error("failed to read from input stream: {}",
+                          buffer.status().ToStringWithoutContextLines())
           .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
         co_return;
@@ -167,15 +159,10 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    co_yield {};
     auto uri = arrow::util::Uri{};
-    const auto parse_result = uri.Parse(args_.uri.inner);
-    if (not parse_result.ok()) {
-      diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,
-                        parse_result.ToString())
-        .emit(ctrl.diagnostics());
-    }
-    auto opts = get_options(args_);
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
+    auto opts = get_options(args_, uri);
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
     }
@@ -183,30 +170,29 @@ public:
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 "
                         "filesystem: {}",
-                        fs.status().ToString())
+                        fs.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      diagnostic::error("failed to get file info from path "
-                        "`{}`: {}",
-                        args_.uri.inner, file_info.status().ToString())
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
     }
     auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
     if (not output_stream.ok()) {
-      diagnostic::error("failed to open output stream for URI "
-                        "`{}`: {}",
-                        args_.uri.inner, output_stream.status().ToString())
+      diagnostic::error("failed to open output stream: {}",
+                        output_stream.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
     }
     auto stream_guard
       = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
           if (not output_stream.ok()) {
-            diagnostic::error("{}", status.ToString())
-              .note("failed to close stream for URI `{}`", args_.uri.inner)
+            diagnostic::error("failed to close stream: {}",
+                              status.ToStringWithoutContextLines())
+              .primary(args_.uri.source)
               .emit(ctrl.diagnostics());
           }
         });
@@ -218,8 +204,9 @@ public:
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
-        diagnostic::error("{}", status.ToString())
-          .note("failed to write to stream for URI `{}`", args_.uri.inner)
+        diagnostic::error("failed to write to stream: {}",
+                          status.ToStringWithoutContextLines())
+          .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
       }
     }

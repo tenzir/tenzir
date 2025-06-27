@@ -26,8 +26,7 @@ public:
   auto operator()(generator<table_slice>, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto result = resolved_secret_value{};
-    ctrl.resolve_secret_must_yield(secret_, result);
-    co_yield {};
+    co_yield ctrl.resolve_secrets_must_yield({{secret_, result}});
     const auto s = result.blob();
     auto e = std::span<const std::byte>{};
     if (const auto* b = try_as<blob>(expected_.inner)) {

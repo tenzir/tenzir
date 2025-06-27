@@ -15,6 +15,46 @@
 
 namespace tenzir {
 
+auto to_string(data_view v, location loc, diagnostic_handler& dh)
+  -> std::optional<std::string> {
+  using ret_t = std::optional<std::string>;
+  const auto f = detail::overload{
+    [](view<caf::none_t>) -> ret_t {
+      return std::nullopt;
+    },
+    [loc, &dh](view<blob> b) -> ret_t {
+      const auto* begin = reinterpret_cast<const uint8_t*>(b.data());
+      const auto size = detail::narrow<int>(b.size());
+      if (arrow::util::ValidateUTF8(begin, size)) {
+        return std::string{
+          reinterpret_cast<const char*>(b.data()),
+          reinterpret_cast<const char*>(b.data()) + b.size(),
+        };
+      }
+      diagnostic::warning("expected `blob` to contain valid UTF-8 data")
+        .primary(loc)
+        .emit(dh);
+      return std::nullopt;
+    },
+    [](const view<std::string>& s) -> ret_t {
+      return std::string{s};
+    },
+    [](const auto& v) -> ret_t {
+      static const auto opts = json_printer_options{
+        .tql = true,
+        .oneline = true,
+        .trailing_commas = false,
+      };
+      static const auto printer = json_printer{opts};
+      auto res = std::string{};
+      auto it = std::back_inserter(res);
+      printer.print(it, v);
+      return res;
+    },
+  };
+  return match(v, f);
+}
+
 auto to_string(multi_series ms, location loc, diagnostic_handler& dh)
   -> basic_series<string_type> {
   auto b = arrow::StringBuilder{};

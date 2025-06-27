@@ -130,6 +130,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   }
 
   void emit(diagnostic diag) override {
+    if (not censor.is_noop()) {
+      diag.message = censor.censor(std::move(diag.message));
+      for (auto& annotation : diag.annotations) {
+        annotation.text = censor.censor(std::move(annotation.text));
+      }
+      for (auto& note : diag.notes) {
+        note.message = censor.censor(std::move(note.message));
+      }
+    }
     TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
                  diag);
     switch (state.op->strictness()) {
@@ -149,10 +158,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     }
   }
 
+  void add_to_censor(ecc::cleansing_blob v) {
+    censor.secrets.emplace(std::move(v));
+  }
+
 private:
   exec_node_state<Input, Output>& state;
   receiver_actor<diagnostic> handle = {};
   diagnostic_deduplicator deduplicator_;
+  secret_censor censor;
 };
 
 template <class Input, class Output>
@@ -228,8 +242,8 @@ struct exec_node_control_plane final : public operator_control_plane {
   }
 
   struct located_resolved_secret {
-    ecc::cleansing_blob value;
     location loc;
+    ecc::cleansing_blob value;
 
     located_resolved_secret(location loc) : loc{loc} {
     }
@@ -240,17 +254,21 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   struct secret_finisher {
     class secret secret;
-    resolved_secret_value& out;
+    secret_request_callback callback;
     location loc;
 
-    void finish(const request_map_t& requested) const {
+    auto finish(const request_map_t& requested,
+                exec_node_diagnostic_handler<Input, Output>& dh) const
+      -> failure_or<void> {
       auto res = ecc::cleansing_blob{};
       auto temp_blob = ecc::cleansing_blob{};
       // For every element in the original secret
+      bool all_literal = true;
       for (const auto& e : *secret.buffer->elements()) {
         const auto name = e->name()->string_view();
         const auto ops = e->operations()->string_view();
         const auto is_literal = e->is_literal();
+        all_literal |= is_literal;
         if (is_literal) {
           // If it is a literal secret, we copy its name into a temporary blob.
           temp_blob.assign(
@@ -267,15 +285,21 @@ struct exec_node_control_plane final : public operator_control_plane {
         if (not ops.empty()) {
           for (const auto& op : detail::split(ops, ";")) {
             if (op == "decode_base64") {
-              auto decoded = detail::base64::decode(std::string_view{
+              auto decoded = detail::base64::try_decode(std::string_view{
                 reinterpret_cast<const char*>(temp_blob.data()),
                 reinterpret_cast<const char*>(temp_blob.data()
                                               + temp_blob.size()),
               });
+              if (not decoded) {
+                diagnostic::error("failed to `decode_base64` secret value")
+                  .primary(loc)
+                  .emit(dh);
+                return failure::promise();
+              }
               temp_blob.assign(
-                reinterpret_cast<const std::byte*>(decoded.data()),
-                reinterpret_cast<const std::byte*>(decoded.data()
-                                                   + decoded.size()));
+                reinterpret_cast<const std::byte*>(decoded->data()),
+                reinterpret_cast<const std::byte*>(decoded->data()
+                                                   + decoded->size()));
               continue;
             }
             if (op == "encode_base64") {
@@ -300,15 +324,19 @@ struct exec_node_control_plane final : public operator_control_plane {
         }
         // We append the resolved & transformed element to the final result.
         res.insert(res.end(), temp_blob.begin(), temp_blob.end());
+        // Add the resolved part to the censor
+        if (not is_literal) {
+          dh.add_to_censor(std::move(temp_blob));
+        }
       }
-      // Finally, we make the result available to the original requests
-      // out-parameter.
-      out = resolved_secret_value{std::move(res)};
+      // Finally, we invoke the callback
+      return callback(resolved_secret_value{std::move(res), all_literal});
     }
   };
 
-  virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
-    -> void override {
+  auto resolve_secrets_must_yield(std::vector<secret_request> requests,
+                                  final_callback_t final_callback)
+    -> secret_resolution_sentinel override {
     auto requested_secrets = std::make_shared<request_map_t>();
     auto finishers = std::vector<secret_finisher>{};
     for (auto& req : requests) {
@@ -316,41 +344,67 @@ struct exec_node_control_plane final : public operator_control_plane {
         const auto name = element->name()->string_view();
         const auto is_literal = element->is_literal();
         if (not is_literal) {
-          requested_secrets->try_emplace(std::string{name}, req.loc);
+          requested_secrets->try_emplace(std::string{name}, req.location);
         }
       }
-      finishers.emplace_back(std::move(req.secret), req.out, req.loc);
+      finishers.emplace_back(std::move(req.secret), std::move(req.callback),
+                             req.location);
     }
     if (requested_secrets->empty()) {
+      /// Finish all secrets via the respective finisher.
+      auto success = true;
       for (const auto& f : finishers) {
-        f.finish(*requested_secrets);
+        success &= static_cast<bool>(
+          f.finish(*requested_secrets, *diagnostic_handler));
       }
-      return;
+      success &= static_cast<bool>(final_callback(true));
+      // We want to avoid re-scheduling in the error case, so we set_waiting
+      if (not success) {
+        set_waiting(true);
+      }
+      return secret_resolution_sentinel{};
     }
-    auto callback = [this, finishers = std::move(finishers),
-                     requested_secrets = std::move(requested_secrets)](
-                      caf::expected<node_actor> maybe_actor) {
+    auto node_callback = [this, finishers = std::move(finishers),
+                          final_callback = std::move(final_callback),
+                          requested_secrets = std::move(requested_secrets)](
+                           caf::expected<node_actor> maybe_actor) {
       if (not maybe_actor) {
         diagnostic::error("no Tenzir Node to resolve secrets")
           .primary(finishers.front().loc)
           .emit(diagnostics());
+        std::ignore = final_callback(false);
         return;
       }
-      // FIXME: Is this actually threadsafe the way we use it? The counter
-      // itself certainly is not.
       auto fan = detail::make_fanout_counter_with_error<diagnostic>(
         requested_secrets->size(),
-        [this, requested_secrets, finishers = std::move(finishers)]() {
+        [this, requested_secrets, finishers = std::move(finishers),
+         final_callback]() {
+          /// Finish all secrets via the respective finisher.
+          bool success = true;
           for (const auto& f : finishers) {
-            f.finish(*requested_secrets);
+            success &= static_cast<bool>(
+              f.finish(*requested_secrets, *diagnostic_handler));
           }
-          set_waiting(false);
+          success &= static_cast<bool>(final_callback(success));
+          /// We do not want to re-schedule ourselves in the error case.
+          if (success) {
+            set_waiting(false);
+          }
         },
-        [this](std::span<diagnostic> diags) {
+        [this, final_callback](std::span<diagnostic> diags) {
+          TENZIR_ASSERT(std::ranges::any_of(
+                          diags,
+                          [](const auto& severity) {
+                            return severity == severity::error;
+                          },
+                          &diagnostic::severity),
+                        "failed secret resolution must have produced at least "
+                        "one error");
           for (auto& d : diags) {
             diagnostics().emit(std::move(d));
           }
-          set_waiting(false);
+          /// We do not want to re-schedule ourselves in the error case.
+          std::ignore = final_callback(false);
         });
       for (auto& [name, out] : *requested_secrets) {
         auto key_pair = ecc::generate_keypair();
@@ -395,10 +449,11 @@ struct exec_node_control_plane final : public operator_control_plane {
     set_waiting(true);
     auto node = this->node();
     if (node) {
-      callback(node);
-      return;
+      node_callback(node);
+      return {};
     }
-    connect_to_node(state.self, std::move(callback));
+    connect_to_node(state.self, std::move(node_callback));
+    return {};
   }
 
   exec_node_state<Input, Output>& state;

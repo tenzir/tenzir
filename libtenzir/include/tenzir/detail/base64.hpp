@@ -82,11 +82,6 @@ std::string encode(R&& range) {
 // @see decoded_size
 std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len);
 
-/// Decodes a Base64-encoded string.
-/// @param str The string to decode.
-/// @returns The decoded bytes of *str*.
-std::string decode(std::string_view str);
-
 /// Tries to decode a Base64-encoded string. Returns `std::nullopt` if the input
 /// string is not valid.
 template <class T = std::string>
