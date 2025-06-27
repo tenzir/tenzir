@@ -346,26 +346,29 @@ auto main(int argc, char** argv) -> int try {
     sys.registry().erase("signal-reflector");
     pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
     sys.await_actors_before_shutdown(false);
-    auto actors_gone = sys.registry().await_running_count_equal(0, std::chrono::seconds{2});
-    if (not actors_gone) {
-      std::unordered_map<std::string, int64_t> zombies = {};
-      auto collector = [&](const caf::telemetry::metric_family* /*family*/,
-                           const caf::telemetry::metric* instance,
-                           const caf::telemetry::int_gauge* wrapped) {
-        if (wrapped->value() != 0) {
-          zombies[std::string{instance->labels()[0].value()}]
-            = wrapped->value();
-        }
-      };
-      sys.base_metrics().running_actors_by_name->collect(collector);
-      TENZIR_INFO(
-        "waiting 10 more seconds for leftover components to terminate: {}", zombies);
-      actors_gone = sys.registry().await_running_count_equal(0, std::chrono::seconds{10});
-      if (not actors_gone) {
-        zombies.clear();
-        sys.base_metrics().running_actors_by_name->collect(collector);
-        TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
+    auto actors_gone
+      = sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    std::unordered_map<std::string, int64_t> zombies = {};
+    auto collector = [&](const caf::telemetry::metric_family* /*family*/,
+                         const caf::telemetry::metric* instance,
+                         const caf::telemetry::int_gauge* wrapped) {
+      if (wrapped->value() != 0) {
+        zombies[std::string{instance->labels()[0].value()}] = wrapped->value();
       }
+    };
+    for (int cnt = 10; cnt > 0 and not actors_gone; cnt--) {
+      zombies.clear();
+      sys.base_metrics().running_actors_by_name->collect(collector);
+      TENZIR_INFO("waiting {} more seconds for leftover components to "
+                  "terminate: {}",
+                  cnt, zombies);
+      actors_gone
+        = sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    }
+    if (not actors_gone) {
+      zombies.clear();
+      sys.base_metrics().running_actors_by_name->collect(collector);
+      TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
     }
   } else {
     if (auto result = run(*invocation, sys, root_factory); not result) {
