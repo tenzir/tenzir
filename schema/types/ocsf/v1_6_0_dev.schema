@@ -59,8 +59,8 @@ type _ocsf.v1_6_0_dev.object.evidences = record{
   name: string #optional,
   process: _ocsf.v1_6_0_dev.object.process #recommended,
   query: _ocsf.v1_6_0_dev.object.dns_query #recommended,
-  reg_key: _ocsf.v1_6_0_dev.object.win__reg_key #recommended #extension=win,
-  reg_value: _ocsf.v1_6_0_dev.object.win__reg_value #recommended #extension=win,
+  reg_key: _ocsf.v1_6_0_dev.object.reg_key #recommended #extension=win,
+  reg_value: _ocsf.v1_6_0_dev.object.reg_value #recommended #extension=win,
   resources: list<_ocsf.v1_6_0_dev.object.resource_details> #recommended,
   script: _ocsf.v1_6_0_dev.object.script #recommended,
   src_endpoint: _ocsf.v1_6_0_dev.object.network_endpoint #recommended,
@@ -70,7 +70,7 @@ type _ocsf.v1_6_0_dev.object.evidences = record{
   user: _ocsf.v1_6_0_dev.object.user #recommended,
   verdict: string #optional,
   verdict_id: int64 #optional,
-  win_service: _ocsf.v1_6_0_dev.object.win__win_service #recommended #extension=win,
+  win_service: _ocsf.v1_6_0_dev.object.win_service #recommended #extension=win,
 }
 
 // The peripheral device object describes the identity, vendor and model of a
@@ -85,13 +85,13 @@ type _ocsf.v1_6_0_dev.object.peripheral_device = record{
 }
 
 // The registry key object describes a Windows registry key.
-type _ocsf.v1_6_0_dev.object.win__reg_key = record{
+type _ocsf.v1_6_0_dev.object.reg_key = record{
   is_system: bool #optional,
   modified_time: time #optional,
   modified_time_dt: time #optional #profile=datetime,
   path: string #required,
   security_descriptor: string #optional,
-}
+} #extension=win
 
 // The Service object describes characteristics of a service, <code> e.g. AWS
 // EC2. </code>
@@ -461,7 +461,7 @@ type _ocsf.v1_6_0_dev.object.device = record{
 }
 
 // The registry value object describes a Windows registry value.
-type _ocsf.v1_6_0_dev.object.win__reg_value = record{
+type _ocsf.v1_6_0_dev.object.reg_value = record{
   data: string #print_json #optional,
   is_default: bool #optional,
   is_system: bool #optional,
@@ -471,7 +471,7 @@ type _ocsf.v1_6_0_dev.object.win__reg_value = record{
   path: string #required,
   type: string #optional,
   type_id: int64 #recommended,
-}
+} #extension=win
 
 // The observable object is a pivot element that contains related information
 // found in many places in the event.
@@ -1184,7 +1184,7 @@ type _ocsf.v1_6_0_dev.object.metadata = record{
 }
 
 // The Windows Service object describes a Windows service.
-type _ocsf.v1_6_0_dev.object.win__win_service = record{
+type _ocsf.v1_6_0_dev.object.win_service = record{
   cmd_line: string #recommended,
   labels: list<string> #optional,
   load_order_group: string #recommended #extension=win,
@@ -1202,7 +1202,7 @@ type _ocsf.v1_6_0_dev.object.win__win_service = record{
   tags: list<_ocsf.v1_6_0_dev.object.key_value_object> #optional,
   uid: string #recommended,
   version: string #recommended,
-}
+} #extension=win
 
 // The MITRE Technique object describes the ATT&CK® or ATLAS™ Technique ID
 // and/or name associated to an attack.
@@ -1561,7 +1561,7 @@ type _ocsf.v1_6_0_dev.object.startup_item = record{
   start_type_id: int64 #required,
   type: string #optional,
   type_id: int64 #recommended,
-  win_service: _ocsf.v1_6_0_dev.object.win__win_service #optional #extension=win,
+  win_service: _ocsf.v1_6_0_dev.object.win_service #optional #extension=win,
 }
 
 // The databucket object is a basic container that holds data, typically
@@ -2197,7 +2197,7 @@ type _ocsf.v1_6_0_dev.object.kernel = record{
 
 // The Windows resource object describes a resource object managed by Windows,
 // such as mutant or timer.
-type _ocsf.v1_6_0_dev.object.win__win_resource = record{
+type _ocsf.v1_6_0_dev.object.win_resource = record{
   created_time: time #optional,
   created_time_dt: time #optional #profile=datetime,
   data: string #print_json #optional,
@@ -2214,7 +2214,7 @@ type _ocsf.v1_6_0_dev.object.win__win_resource = record{
   type_id: int64 #required,
   uid: string #recommended,
   uid_alt: string #optional,
-}
+} #extension=win
 
 // Campaign represent organized efforts by threat actors to achieve malicious
 // objectives over a period, often characterized by shared tactics, techniques,
@@ -2323,8 +2323,8 @@ type _ocsf.v1_6_0_dev.object.query_evidence = record{
   process: _ocsf.v1_6_0_dev.object.process #recommended,
   query_type: string #optional,
   query_type_id: int64 #required,
-  reg_key: _ocsf.v1_6_0_dev.object.win__reg_key #recommended #extension=win,
-  reg_value: _ocsf.v1_6_0_dev.object.win__reg_value #recommended #extension=win,
+  reg_key: _ocsf.v1_6_0_dev.object.reg_key #recommended #extension=win,
+  reg_value: _ocsf.v1_6_0_dev.object.reg_value #recommended #extension=win,
   service: _ocsf.v1_6_0_dev.object.service #recommended,
   session: _ocsf.v1_6_0_dev.object.session #recommended,
   startup_item: _ocsf.v1_6_0_dev.object.startup_item #recommended,
@@ -3037,7 +3037,7 @@ type _ocsf.v1_6_0_dev.event_log_activity = record{
 }
 
 // Prefetch Query events report information about Windows prefetch files.
-type _ocsf.v1_6_0_dev.win__prefetch_query = record{
+type _ocsf.v1_6_0_dev.prefetch_query = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -3098,7 +3098,7 @@ type _ocsf.v1_6_0_dev.win__prefetch_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Account Change events report when specific user account management tasks are
 // performed, such as a user/role being created, changed, deleted, renamed,
@@ -3638,7 +3638,7 @@ type _ocsf.v1_6_0_dev.smb_activity = record{
 
 // Windows Resource Activity events report when a process accesses a Windows
 // managed resource object, successful or otherwise.
-type _ocsf.v1_6_0_dev.win__windows_resource_activity = record{
+type _ocsf.v1_6_0_dev.windows_resource_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -3692,8 +3692,8 @@ type _ocsf.v1_6_0_dev.win__windows_resource_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-  win_resource: _ocsf.v1_6_0_dev.object.win__win_resource #required #extension=win,
-}
+  win_resource: _ocsf.v1_6_0_dev.object.win_resource #required #extension=win,
+} #extension=win
 
 // Module  Activity events report when a process loads or unloads the
 // <code>module</code>.
@@ -4422,7 +4422,7 @@ type _ocsf.v1_6_0_dev.device_config_state = record{
 
 // Registry Value Query events report information about discovered Windows
 // registry values.
-type _ocsf.v1_6_0_dev.win__registry_value_query = record{
+type _ocsf.v1_6_0_dev.registry_value_query = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -4461,7 +4461,7 @@ type _ocsf.v1_6_0_dev.win__registry_value_query = record{
   query_result_id: int64 #required,
   raw_data: string #optional,
   raw_data_size: int64 #optional,
-  reg_value: _ocsf.v1_6_0_dev.object.win__reg_value #required #extension=win,
+  reg_value: _ocsf.v1_6_0_dev.object.reg_value #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -4480,7 +4480,7 @@ type _ocsf.v1_6_0_dev.win__registry_value_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Datastore events describe general activities (Read, Update, Query, Delete,
 // etc.) which affect datastores or data within those datastores, e.g. (AWS RDS,
@@ -4754,7 +4754,7 @@ type _ocsf.v1_6_0_dev.live_evidence_info = record{
 
 // Registry Key Activity events report when a process performs an action on a
 // Windows registry key.
-type _ocsf.v1_6_0_dev.win__registry_key_activity = record{
+type _ocsf.v1_6_0_dev.registry_key_activity = record{
   access_mask: int64 #recommended,
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
@@ -4791,10 +4791,10 @@ type _ocsf.v1_6_0_dev.win__registry_key_activity = record{
   open_mask: int64 #recommended,
   osint: list<_ocsf.v1_6_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_6_0_dev.object.policy #optional #profile=security_control,
-  prev_reg_key: _ocsf.v1_6_0_dev.object.win__reg_key #recommended #extension=win,
+  prev_reg_key: _ocsf.v1_6_0_dev.object.reg_key #recommended #extension=win,
   raw_data: string #optional,
   raw_data_size: int64 #optional,
-  reg_key: _ocsf.v1_6_0_dev.object.win__reg_key #required #extension=win,
+  reg_key: _ocsf.v1_6_0_dev.object.reg_key #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -4813,7 +4813,7 @@ type _ocsf.v1_6_0_dev.win__registry_key_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // HTTP Activity events report HTTP connection and traffic information.
 type _ocsf.v1_6_0_dev.http_activity = record{
@@ -5402,7 +5402,7 @@ type _ocsf.v1_6_0_dev.base_event = record{
 
 // Registry Value Activity events reports when a process performs an action on a
 // Windows registry value.
-type _ocsf.v1_6_0_dev.win__registry_value_activity = record{
+type _ocsf.v1_6_0_dev.registry_value_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -5436,10 +5436,10 @@ type _ocsf.v1_6_0_dev.win__registry_value_activity = record{
   observables: list<_ocsf.v1_6_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_6_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_6_0_dev.object.policy #optional #profile=security_control,
-  prev_reg_value: _ocsf.v1_6_0_dev.object.win__reg_value #optional #extension=win,
+  prev_reg_value: _ocsf.v1_6_0_dev.object.reg_value #optional #extension=win,
   raw_data: string #optional,
   raw_data_size: int64 #optional,
-  reg_value: _ocsf.v1_6_0_dev.object.win__reg_value #required #extension=win,
+  reg_value: _ocsf.v1_6_0_dev.object.reg_value #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -5458,7 +5458,7 @@ type _ocsf.v1_6_0_dev.win__registry_value_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // DHCP Activity events report MAC to IP assignment via DHCP from a client or
 // server.
@@ -5835,7 +5835,7 @@ type _ocsf.v1_6_0_dev.network_connection_query = record{
 
 // Registry Key Query events report information about discovered Windows
 // registry keys.
-type _ocsf.v1_6_0_dev.win__registry_key_query = record{
+type _ocsf.v1_6_0_dev.registry_key_query = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -5874,7 +5874,7 @@ type _ocsf.v1_6_0_dev.win__registry_key_query = record{
   query_result_id: int64 #required,
   raw_data: string #optional,
   raw_data_size: int64 #optional,
-  reg_key: _ocsf.v1_6_0_dev.object.win__reg_key #required #extension=win,
+  reg_key: _ocsf.v1_6_0_dev.object.reg_key #required #extension=win,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control,
@@ -5893,7 +5893,7 @@ type _ocsf.v1_6_0_dev.win__registry_key_query = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Software Inventory Info events report device software inventory data that is
 // either logged or proactively collected. For example, when collecting device
@@ -6742,7 +6742,7 @@ type _ocsf.v1_6_0_dev.operating_system_patch_state = record{
 
 // Windows Service Activity events report when a process interacts with the
 // Service Control Manager.
-type _ocsf.v1_6_0_dev.win__windows_service_activity = record{
+type _ocsf.v1_6_0_dev.windows_service_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control,
   activity_id: int64 #required,
@@ -6796,8 +6796,8 @@ type _ocsf.v1_6_0_dev.win__windows_service_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-  win_service: _ocsf.v1_6_0_dev.object.win__win_service #required #extension=win,
-}
+  win_service: _ocsf.v1_6_0_dev.object.win_service #required #extension=win,
+} #extension=win
 
 // SSH Activity events report remote client connections to a server using the
 // Secure Shell (SSH) Protocol.

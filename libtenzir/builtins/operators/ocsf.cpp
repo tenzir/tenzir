@@ -16,18 +16,18 @@
 namespace tenzir::plugins::ocsf {
 namespace {
 
-class profile_list {
+class string_list {
 public:
-  profile_list() = default;
+  string_list() = default;
 
-  profile_list(const arrow::StringArray* array, int64_t begin, int64_t length)
+  string_list(const arrow::StringArray* array, int64_t begin, int64_t length)
     : array_{array}, begin_{begin}, length_{length} {
     if (length > 0) {
       TENZIR_ASSERT(array_);
     }
   }
 
-  auto operator==(const profile_list& other) const -> bool {
+  auto operator==(const string_list& other) const -> bool {
     if (length_ != other.length_) {
       return false;
     }
@@ -55,10 +55,30 @@ private:
   int64_t length_{0};
 };
 
+/// Returns a callable `int64_t -> string_list` for the given array.
+auto make_string_list_function(std::shared_ptr<arrow::ListArray> list) -> auto {
+  if (list) {
+    TENZIR_ASSERT(is<arrow::StringArray>(*list->values()));
+  }
+  return [list = std::move(list)](int64_t i) {
+    if (not list or list->IsNull(i)) {
+      return string_list{};
+    }
+    auto offset = list->value_offset(i);
+    auto length = list->value_length(i);
+    return string_list{
+      static_cast<arrow::StringArray*>(&*list->values()),
+      offset,
+      length,
+    };
+  };
+}
+
 class caster {
 public:
-  explicit caster(location self, diagnostic_handler& dh, profile_list profiles)
-    : self_{self}, dh_{dh}, profiles_{profiles} {
+  explicit caster(location self, diagnostic_handler& dh, string_list profiles,
+                  string_list extensions)
+    : self_{self}, dh_{dh}, profiles_{profiles}, extensions_{extensions} {
   }
 
   auto cast(const table_slice& slice, const type& ty, std::string_view name)
@@ -84,11 +104,9 @@ private:
   auto cast_type(const record_type& ty) -> record_type {
     auto fields = std::vector<record_type::field_view>{};
     for (auto [field_name, field_ty] : ty.fields()) {
-      auto profile = field_ty.attribute("profile");
-      if (profile and not profiles_.contains(*profile)) {
-        continue;
+      if (is_enabled(field_ty)) {
+        fields.emplace_back(field_name, cast_type(field_ty));
       }
-      fields.emplace_back(field_name, cast_type(field_ty));
     }
     return record_type{fields};
   }
@@ -170,13 +188,26 @@ private:
               array.null_bitmap(), array.data()->null_count))};
   }
 
+  auto is_profile_enabled(const type& ty) -> bool {
+    auto profile = ty.attribute("profile");
+    return not profile or profiles_.contains(*profile);
+  }
+
+  auto is_extension_enabled(const type& ty) -> bool {
+    auto extension = ty.attribute("extension");
+    return not extension or extensions_.contains(*extension);
+  }
+
+  auto is_enabled(const type& ty) -> bool {
+    return is_profile_enabled(ty) and is_extension_enabled(ty);
+  }
+
   auto cast(const arrow::StructArray& array, const record_type& ty,
             std::string_view path) -> basic_series<record_type> {
     auto fields = std::vector<record_type::field_view>{};
     auto field_arrays = arrow::ArrayVector{};
     for (auto&& field : ty.fields()) {
-      auto profile = field.type.attribute("profile");
-      if (profile and not profiles_.contains(*profile)) {
+      if (not is_enabled(field.type)) {
         continue;
       }
       auto field_array = array.GetFieldByName(std::string{field.name});
@@ -212,6 +243,14 @@ private:
           diagnostic::warning("dropping `{}` because profile `{}` is not "
                               "enabled",
                               field_path, *profile)
+            .primary(self_)
+            .emit(dh_);
+        }
+        auto extension = field_type.attribute("extension");
+        if (extension and not extensions_.contains(*extension)) {
+          diagnostic::warning("dropping `{}` because extension `{}` is not "
+                              "enabled",
+                              field_path, *extension)
             .primary(self_)
             .emit(dh_);
         }
@@ -271,12 +310,14 @@ private:
 
   location self_;
   diagnostic_handler& dh_;
-  profile_list profiles_;
+  string_list profiles_;
+  string_list extensions_;
 };
 
 auto mangle_version(std::string_view version) -> std::string {
   auto result = std::string{};
-  result.reserve(version.size());
+  result.reserve(1 + version.size());
+  result += 'v';
   for (auto c : version) {
     if (('0' <= c and c <= '9') or ('a' <= c and c <= 'z')
         or ('A' <= c and c <= 'Z') or c == '_') {
@@ -362,31 +403,16 @@ public:
         co_yield {};
         continue;
       }
-      // Now something for the optional set of profiles in `metadata.profile`.
-      auto make_profiles_at = [](std::shared_ptr<arrow::ListArray> list) {
-        return [list = std::move(list)](int64_t i) {
-          if (not list or list->IsNull(i)) {
-            return profile_list{};
-          }
-          auto offset = list->value_offset(i);
-          auto length = list->value_length(i);
-          return profile_list{
-            static_cast<arrow::StringArray*>(&*list->values()),
-            offset,
-            length,
-          };
-        };
-      };
       auto profiles_at = std::invoke([&]() {
         auto profiles_index
           = metadata_array->struct_type()->GetFieldIndex("profiles");
         if (profiles_index == -1) {
-          return make_profiles_at(nullptr);
+          return make_string_list_function(nullptr);
         }
         auto profiles_array
           = check(metadata_array->GetFlattenedField(profiles_index));
         if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
-          return make_profiles_at(nullptr);
+          return make_string_list_function(nullptr);
         };
         auto profiles_lists = std::dynamic_pointer_cast<arrow::ListArray>(
           std::move(profiles_array));
@@ -395,24 +421,24 @@ public:
                               "`metadata.profiles` is not a list")
             .primary(self_)
             .emit(ctrl.diagnostics());
-          return make_profiles_at(nullptr);
+          return make_string_list_function(nullptr);
         }
         if (dynamic_cast<arrow::NullArray*>(&*profiles_lists->values())) {
-          return make_profiles_at(nullptr);
+          return make_string_list_function(nullptr);
         }
         if (not dynamic_cast<arrow::StringArray*>(&*profiles_lists->values())) {
           diagnostic::warning("ignoring profiles for events where "
                               "`metadata.profiles` is not a list of strings")
             .primary(self_)
             .emit(ctrl.diagnostics());
-          return make_profiles_at(nullptr);
+          return make_string_list_function(nullptr);
         }
         // Optimize the case where we know that all lists are trivially empty.
         if (profiles_lists->value_offset(0)
             == profiles_lists->value_offset(profiles_lists->length())) {
-          return make_profiles_at(nullptr);
+          return make_string_list_function(nullptr);
         }
-        return make_profiles_at(profiles_lists);
+        return make_string_list_function(profiles_lists);
       });
       if (not class_array) {
         diagnostic::warning(
@@ -422,25 +448,96 @@ public:
         co_yield {};
         continue;
       }
+      auto extensions_at = std::invoke([&] {
+        auto extensions_index
+          = metadata_array->struct_type()->GetFieldIndex("extensions");
+        if (extensions_index == -1) {
+          return make_string_list_function(nullptr);
+        }
+        auto extensions_array
+          = check(metadata_array->GetFlattenedField(extensions_index));
+        if (dynamic_cast<arrow::NullArray*>(&*extensions_array)) {
+          return make_string_list_function(nullptr);
+        };
+        auto extensions_lists = std::dynamic_pointer_cast<arrow::ListArray>(
+          std::move(extensions_array));
+        if (not extensions_lists) {
+          diagnostic::warning("ignoring extensions for events where "
+                              "`metadata.extensions` is not a list")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return make_string_list_function(nullptr);
+        }
+        if (dynamic_cast<arrow::NullArray*>(&*extensions_lists->values())) {
+          return make_string_list_function(nullptr);
+        }
+        auto extensions_structs
+          = dynamic_cast<arrow::StructArray*>(&*extensions_lists->values());
+        if (not extensions_structs) {
+          diagnostic::warning("ignoring extensions for events where "
+                              "`metadata.extensions` is not a list of records")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return make_string_list_function(nullptr);
+        }
+        auto name_index
+          = extensions_structs->struct_type()->GetFieldIndex("name");
+        if (name_index == -1) {
+          diagnostic::warning("ignoring extensions for events where "
+                              "`metadata.extensions[].name` does not exist")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return make_string_list_function(nullptr);
+        }
+        auto name_array
+          = check(extensions_structs->GetFlattenedField(name_index));
+        if (not dynamic_cast<arrow::StringArray*>(&*name_array)) {
+          diagnostic::warning("ignoring extensions for events where "
+                              "`metadata.extensions[].name` is not a string")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return make_string_list_function(nullptr);
+        }
+        auto name_lists = std::make_shared<arrow::ListArray>(
+          arrow::list(name_array->type()), extensions_lists->length(),
+          extensions_lists->value_offsets(), std::move(name_array),
+          extensions_lists->null_bitmap(), extensions_lists->data()->null_count,
+          extensions_lists->offset());
+        check(name_lists->ValidateFull());
+        return make_string_list_function(std::move(name_lists));
+      });
       // Figure out longest slices that share:
       // - metadata.version
       // - metadata.profiles
       // - class_uid
-      // TODO: Could do the same for extensions here. We should then simply use
-      // `metadata.extensions[].name` the name for them because we would only
-      // support extensions that are served by the OCSF schema server, and those
-      // have a non-conflicting name and are versioned together with OCSF, so
-      // there is no need to take their ID and version into account.
+      // - metadata.extensions[].name
+      // Since we only support extensions that are served by the OCSF server for
+      // the corresponding version, we know that they have a non-conflicting
+      // name and there is no need to take their version into account (although
+      // we could check for consistency with the event).
       auto begin = int64_t{0};
       auto end = begin;
+      // TODO: If any of these attributes is changing with a high-frequency in
+      // the input stream, this operator will produce very small batches. This
+      // could be fixed by reordering events if needed.
       auto version = view_at(*version_array, begin);
       auto id = view_at(*class_array, begin);
       auto profiles = profiles_at(begin);
+      auto extensions = extensions_at(begin);
       auto process = [&]() -> table_slice {
         if (not version) {
           diagnostic::warning(
             "dropping events where `metadata.version` is null")
             .primary(self_)
+            .emit(ctrl.diagnostics());
+          return {};
+        }
+        auto parsed_version = parse_ocsf_version(*version);
+        if (not parsed_version) {
+          diagnostic::warning("dropping events with unknown OCSF version",
+                              *version)
+            .primary(self_)
+            .note("found {:?}", *version)
             .emit(ctrl.diagnostics());
           return {};
         }
@@ -450,7 +547,7 @@ public:
             .emit(ctrl.diagnostics());
           return {};
         }
-        auto class_name = ocsf_class_name(*id);
+        auto class_name = ocsf_class_name(*parsed_version, *id);
         if (not class_name) {
           diagnostic::warning("dropping events where `class_uid` is unknown")
             .primary(self_)
@@ -467,7 +564,7 @@ public:
               += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
           }
         }
-        auto schema = fmt::format("_ocsf.v{}.{}", mangle_version(*version),
+        auto schema = fmt::format("_ocsf.{}.{}", mangle_version(*version),
                                   snake_case_class_name);
         auto ty = modules::get_schema(schema);
         if (not ty) {
@@ -478,17 +575,28 @@ public:
             .emit(ctrl.diagnostics());
           return {};
         }
+        auto extension = ty->attribute("extension");
+        if (extension and not extensions.contains(*extension)) {
+          diagnostic::warning("dropping event for class {:?} because extension "
+                              "{:?} is not enabled",
+                              *class_name, *extension)
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return {};
+        }
         auto type_name = "ocsf." + snake_case_class_name;
-        auto result = caster{self_, ctrl.diagnostics(), profiles}.cast(
-          subslice(slice, begin, end), *ty, type_name);
+        auto result
+          = caster{self_, ctrl.diagnostics(), profiles, extensions}.cast(
+            subslice(slice, begin, end), *ty, type_name);
         return result;
       };
       for (; end < class_array->length(); ++end) {
         auto next_version = view_at(*version_array, end);
         auto next_id = view_at(*class_array, end);
         auto next_profiles = profiles_at(end);
+        auto next_extensions = extensions_at(end);
         if (next_version == version and next_id == id
-            and next_profiles == profiles) {
+            and next_profiles == profiles and extensions == next_extensions) {
           continue;
         }
         co_yield process();
@@ -496,6 +604,7 @@ public:
         version = next_version;
         id = next_id;
         profiles = next_profiles;
+        extensions = next_extensions;
       }
       co_yield process();
     }

@@ -596,13 +596,13 @@ type _ocsf.v1_0_0.object.user = record{
 // The registry key object describes a Windows registry key. Defined by D3FEND
 // <a target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:WindowsReg
 // istryKey/'>d3f:WindowsRegistryKey</a>.
-type _ocsf.v1_0_0.object.win__registry_key = record{
+type _ocsf.v1_0_0.object.registry_key = record{
   is_system: bool #optional,
   modified_time: time #optional,
   modified_time_dt: time #optional #profile=datetime,
   path: string #required,
   security_descriptor: string #optional,
-}
+} #extension=win
 
 // The Kill Chain object represents a single phase of a cyber attack, including
 // the initial reconnaissance and planning stages up to the final objective of
@@ -845,7 +845,7 @@ type _ocsf.v1_0_0.object.vulnerability = record{
 }
 
 // The registry value object describes a Windows registry value.
-type _ocsf.v1_0_0.object.win__registry_value = record{
+type _ocsf.v1_0_0.object.registry_value = record{
   data: string #print_json #optional,
   is_default: bool #optional,
   is_system: bool #optional,
@@ -855,7 +855,7 @@ type _ocsf.v1_0_0.object.win__registry_value = record{
   path: string #required,
   type: string #optional,
   type_id: int64 #recommended,
-}
+} #extension=win
 
 // The Feature object provides information about the software product feature
 // that generated a specific event. It encompasses details related to the
@@ -1056,7 +1056,7 @@ type _ocsf.v1_0_0.object.endpoint = record{
 
 // The Windows resource object describes a resource object managed by Windows,
 // such as mutant or timer.
-type _ocsf.v1_0_0.object.win__win_resource = record{
+type _ocsf.v1_0_0.object.win_resource = record{
   data: string #print_json #optional,
   details: string #optional,
   labels: list<string> #optional,
@@ -1065,7 +1065,7 @@ type _ocsf.v1_0_0.object.win__win_resource = record{
   type: string #optional,
   type_id: int64 #required,
   uid: string #optional,
-}
+} #extension=win
 
 // The Device Hardware Information object contains details and specifications of
 // the physical components that make up a device. This information provides an
@@ -1149,7 +1149,7 @@ type _ocsf.v1_0_0.object.attack = record{
 
 // Registry Key Activity events report when a process performs an action on a
 // Windows registry key.
-type _ocsf.v1_0_0.win__registry_key_activity = record{
+type _ocsf.v1_0_0.registry_key_activity = record{
   access_mask: int64 #optional,
   activity_id: int64 #required,
   activity_name: string #optional,
@@ -1175,9 +1175,9 @@ type _ocsf.v1_0_0.win__registry_key_activity = record{
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
   open_mask: int64 #optional,
-  prev_reg_key: _ocsf.v1_0_0.object.win__registry_key #optional #extension=win,
+  prev_reg_key: _ocsf.v1_0_0.object.registry_key #optional #extension=win,
   raw_data: string #optional,
-  reg_key: _ocsf.v1_0_0.object.win__registry_key #required #extension=win,
+  reg_key: _ocsf.v1_0_0.object.registry_key #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
@@ -1192,7 +1192,7 @@ type _ocsf.v1_0_0.win__registry_key_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // The base event is a generic and concrete event. It also defines a set of
 // attributes available in most event classes. As a generic event that does not
@@ -2023,7 +2023,7 @@ type _ocsf.v1_0_0.group_management = record{
 
 // Windows Resource Activity events report when a process accesses a Windows
 // managed resource object, successful or otherwise.
-type _ocsf.v1_0_0.win__windows_resource_activity = record{
+type _ocsf.v1_0_0.windows_resource_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
@@ -2061,12 +2061,12 @@ type _ocsf.v1_0_0.win__windows_resource_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-  win_resource: _ocsf.v1_0_0.object.win__win_resource #required #extension=win,
-}
+  win_resource: _ocsf.v1_0_0.object.win_resource #required #extension=win,
+} #extension=win
 
 // Registry Value Activity events reports when a process performs an action on a
 // Windows registry value.
-type _ocsf.v1_0_0.win__registry_value_activity = record{
+type _ocsf.v1_0_0.registry_value_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
@@ -2089,9 +2089,9 @@ type _ocsf.v1_0_0.win__registry_value_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
-  prev_reg_value: _ocsf.v1_0_0.object.win__registry_value #optional #extension=win,
+  prev_reg_value: _ocsf.v1_0_0.object.registry_value #optional #extension=win,
   raw_data: string #optional,
-  reg_value: _ocsf.v1_0_0.object.win__registry_value #required #extension=win,
+  reg_value: _ocsf.v1_0_0.object.registry_value #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
@@ -2106,7 +2106,7 @@ type _ocsf.v1_0_0.win__registry_value_activity = record{
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional #nullify_empty_records,
-}
+} #extension=win
 
 // Scheduled Job Activity events report activities related to scheduled jobs or
 // tasks.
