@@ -886,29 +886,39 @@ public:
     // Handle potential conflicts between glob patterns and URL query parameters
     auto path = std::string{};
     auto fs_uri = expanded;
-    // For URLs with schemes, separate the path from query parameters to avoid
-    // conflicts with glob patterns containing '?'
+    auto query_params = std::string{};
+    // For URLs with schemes, use proper URI parsing to separate path from query
+    // parameters
     if (expanded.contains("://")) {
-      auto query_pos = expanded.find('?');
-      if (query_pos != std::string::npos) {
-        // Check if this looks like a query parameter (has '=' after '?')
-        auto equals_pos = expanded.find('=', query_pos);
-        if (equals_pos != std::string::npos) {
-          // This appears to be a URL with query parameters
-          // We'll need to handle this carefully to avoid glob conflicts
-          fs_uri = expanded.substr(0, query_pos);
-          // Note: The query parameters are stripped for filesystem operations
-          // This may need adjustment based on specific filesystem requirements
+      auto parse_result = boost::urls::parse_uri(expanded);
+      if (parse_result) {
+        auto& url = *parse_result;
+        // Reconstruct URI without query parameters for filesystem operations
+        auto port_str
+          = url.port().empty() ? "" : fmt::format(":{}", url.port());
+        fs_uri = fmt::format("{}://{}{}{}", url.scheme(), url.encoded_host(),
+                             port_str, url.encoded_path());
+        // Preserve query parameters for potential reattachment if needed by
+        // filesystem (e.g., S3 endpoint_override)
+        if (url.has_query()) {
+          query_params = fmt::format("?{}", url.encoded_query());
         }
       }
     }
     auto fs = arrow::fs::FileSystemFromUriOrPath(fs_uri, &path);
     if (not fs.ok()) {
-      diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
-        .primary(args_.url)
-        .emit(*dh_);
-      self->quit(ec::silent);
-      return;
+      // If initial filesystem creation fails and we have query parameters,
+      // try again with the original URI in case they're needed
+      if (not query_params.empty() && fs_uri != expanded) {
+        fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
+      }
+      if (not fs.ok()) {
+        diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
+          .primary(args_.url)
+          .emit(*dh_);
+        self->quit(ec::silent);
+        return;
+      }
     }
     fs_ = fs.MoveValueUnsafe();
     glob_ = parse_glob(path);
@@ -1215,8 +1225,9 @@ private:
             // If new_path has a trailing slash, append the original file name
             if (not new_path.empty() && new_path.back() == '/') {
               auto path_obj = std::filesystem::path(path);
-              auto filename = path_obj.filename().string();
-              final_path = new_path + filename;
+              auto filename = path_obj.filename();
+              final_path
+                = (std::filesystem::path(new_path) / filename).string();
             }
             // Create any intermediate directories required for writing to
             // final_path
