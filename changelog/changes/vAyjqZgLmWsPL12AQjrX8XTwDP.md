@@ -18,10 +18,7 @@ from { s: secret("my-secret") }
 ```
 
 A secret is created by the `secret` function, which changes its behavior with this
-release. If you want to retain the old behavior of the function returning a plaintext
-`string`, you can enable the configuration option `tenzir.legacy-secret-model`.
-In this mode, the `secret` function can only resolve secrets from the Tenzir Node's
-configuration file and not access any external secret store.
+release.
 
 Operators now accept secrets where appropriate, most notably for username and
 password arguments, but also for URLs:
@@ -38,3 +35,8 @@ with just a string literal:
 ```tql
 to_splunk "https://localhost:8088", hec_token="my-plaintext-token"
 ```
+
+Along with this feature in the Tenzir Node, we introduced secret stores to the
+Tenzir Platform. You can now centrally manage secrets in the platform, which
+will usable by all nodes within the workspace. Read more about this in the
+release notes for the Tenzir Platform and our Explanations page on secrets.
