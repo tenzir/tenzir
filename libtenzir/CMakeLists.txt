@@ -100,16 +100,20 @@ else ()
               Azure::azure-storage-files-datalake)
 endif ()
 
-# -- boost --------------------------------------------------------------------
+# -- boost ---------------------------------------------------------------------
 
 find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 
-# -- re2 ----------------------------------------------------------------------
+# -- re2 -----------------------------------------------------------------------
 
 find_package(re2 REQUIRED)
 provide_find_module(re2)
 
-# -- libmaxminddb -------------------------------------------------------------
+# -- reproc --------------------------------------------------------------------
+
+find_package(reproc++ REQUIRED)
+
+# -- libmaxminddb --------------------------------------------------------------
 
 find_package(libmaxminddb REQUIRED)
 provide_find_module(libmaxminddb)
@@ -381,6 +385,11 @@ dependency_summary("Boost" Boost::headers "Dependencies")
 target_link_libraries(libtenzir PUBLIC re2::re2)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
+
+# Link against reproc.
+target_link_libraries(libtenzir PUBLIC reproc++)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
+dependency_summary("reproc++" reproc+++ "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)

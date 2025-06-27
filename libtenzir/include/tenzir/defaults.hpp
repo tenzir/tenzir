@@ -283,4 +283,7 @@ inline constexpr auto metrics_interval = std::chrono::seconds{1};
 inline constexpr auto packaged_pipeline_restart_on_error
   = std::chrono::minutes{1};
 
+/// Wether to disable forked pipelines.
+inline constexpr bool disable_forked_pipelines = false;
+
 } // namespace tenzir::defaults

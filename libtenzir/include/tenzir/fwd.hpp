@@ -222,6 +222,7 @@ struct data_point;
 struct diagnostic;
 struct disjunction;
 struct encrypted_secret_value;
+struct endpoint;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
@@ -460,6 +461,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::diagnostic))
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
+  TENZIR_ADD_TYPE_ID((tenzir::endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::ewah_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))

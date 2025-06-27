@@ -383,6 +383,7 @@ RUN --mount=target=/ccache,type=cache \apt-get update && \
       librabbitmq4 \
       librdkafka++1 \
       libre2-11 \
+      libreproc++14 \
       libspdlog1.15 \
       libunwind8 \
       libxxhash-dev \

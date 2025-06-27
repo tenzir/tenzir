@@ -102,6 +102,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_atoms, caf::id_block::tenzir_types::end)
 
   // Actor role atoms.
   TENZIR_ADD_ATOM(importer, "importer")
+  TENZIR_ADD_ATOM(shell, "shell")
   TENZIR_ADD_ATOM(sink, "sink")
   TENZIR_ADD_ATOM(worker, "worker")
 

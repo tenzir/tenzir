@@ -18,6 +18,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/disk_monitor.hpp"
@@ -35,6 +36,8 @@
 #include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
+#include <boost/asio/execution_context.hpp>
+#include <boost/process/v2/environment.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
@@ -45,6 +48,7 @@
 #include <chrono>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 namespace tenzir {
 
@@ -330,6 +334,92 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
 
 } // namespace
 
+auto node_state::create_pipeline_shell() -> void {
+  TENZIR_ASSERT(endpoint.has_value());
+  static const auto tenzir_ctl
+    = detail::objectpath()->parent_path().parent_path() / "bin" / "tenzir-ctl";
+  auto proc = reproc::process{};
+  auto options = reproc::options{};
+  // clang-format off
+  reproc::stop_actions proc_stop = {
+    .first = {.action = reproc::stop::terminate,
+              .timeout = reproc::milliseconds(10)},
+    .second = {.action = reproc::stop::kill,
+               .timeout = reproc::milliseconds(0)},
+    .third = {},
+  };
+  // clang-format on
+  options.stop = proc_stop;
+  auto args = std::vector<std::string>{
+    tenzir_ctl,
+    "--console-verbosity=quiet",
+    "pipeline_shell",
+    fmt::to_string(*endpoint),
+    fmt::to_string(child_id),
+  };
+  if (auto err = proc.start(args, options)) {
+    TENZIR_WARN("Failed to start child process: {}", err);
+    return;
+  }
+  creating_pipeline_shells.emplace(child_id, std::move(proc));
+  child_id++;
+}
+
+auto node_state::monitor_shell_for_pipe(caf::strong_actor_ptr client,
+                                        reproc::process proc) -> void {
+  auto addr = client->address();
+  owned_shells.emplace(addr, std::move(proc));
+  self->monitor(client, [this, addr](const caf::error&) {
+    auto& ps = owned_shells;
+    const auto it = ps.find(addr);
+    if (it == ps.end()) {
+      return;
+    }
+    TENZIR_ASSERT(it != ps.end(),
+                  "child terminator got down from unknown client");
+    if (auto err = it->second.terminate()) {
+      TENZIR_WARN("failed to terminate subprocess: {}", err);
+    }
+    ps.erase(it);
+  });
+}
+
+auto node_state::connect_pipeline_shell(uint32_t child_id,
+                                        pipeline_shell_actor handle)
+  -> caf::result<void> {
+  auto it = creating_pipeline_shells.find(child_id);
+  TENZIR_ASSERT(it != creating_pipeline_shells.end());
+  auto proc = std::move(it->second);
+  creating_pipeline_shells.erase(it);
+  if (shell_response_promises.empty()) {
+    created_pipeline_shells.emplace_back(std::move(proc), std::move(handle));
+    return {};
+  }
+  auto promise = shell_response_promises.front();
+  shell_response_promises.pop_front();
+  auto client = promise.source();
+  promise.deliver(std::move(handle));
+  monitor_shell_for_pipe(client, std::move(proc));
+  return {};
+}
+
+auto node_state::get_pipeline_shell() -> caf::result<pipeline_shell_actor> {
+  self->schedule_fn([this]() {
+    create_pipeline_shell();
+  });
+  if (not created_pipeline_shells.empty()) {
+    auto [proc, shell] = std::move(created_pipeline_shells.front());
+    created_pipeline_shells.pop_front();
+    auto client = self->current_sender();
+    monitor_shell_for_pipe(client, std::move(proc));
+    return shell;
+  }
+  // empty
+  auto rp = self->make_response_promise<pipeline_shell_actor>();
+  shell_response_promises.push_back(rp);
+  return rp;
+}
+
 auto node_state::get_endpoint_handler(const http_request_description& desc)
   -> const handler_and_endpoint& {
   static const auto empty_response = handler_and_endpoint{};
@@ -356,9 +446,11 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 }
 
 auto node(node_actor::stateful_pointer<node_state> self,
-          std::filesystem::path dir) -> node_actor::behavior_type {
+          std::filesystem::path dir, bool disable_pipeline_subprocesses)
+  -> node_actor::behavior_type {
   self->state().self = self;
   self->state().dir = std::move(dir);
+  self->state().disable_pipeline_subprocesses = disable_pipeline_subprocesses;
   self->set_exception_handler([=](std::exception_ptr& ptr) -> caf::error {
     try {
       std::rethrow_exception(ptr);
@@ -578,6 +670,14 @@ auto node(node_actor::stateful_pointer<node_state> self,
           self->send_exit(handle, msg.reason);
         }
       }
+      // Tell pipeline executors that are waiting for pipeline shells that we
+      // are shutting down. This should not be treated as an error in the
+      // pipeline itself.
+      auto& ps = self->state().shell_response_promises;
+      for (auto& p : ps) {
+        p.deliver(caf::make_error(ec::silent));
+      }
+      ps.clear();
       auto& registry = self->state().registry;
       // Core components are terminated in a second stage, we remove them from
       // the registry upfront and deal with them later.
@@ -634,11 +734,38 @@ auto node(node_actor::stateful_pointer<node_state> self,
             core_shutdown_sequence();
           });
     },
+    [self](atom::set, endpoint endpoint) {
+      TENZIR_ASSERT(endpoint.port != 0);
+      self->state().endpoint = std::move(endpoint);
+      if (not self->state().disable_pipeline_subprocesses) {
+        for (int i = 0; i < 5; i++) {
+          self->state().create_pipeline_shell();
+        }
+      }
+    },
+    [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
+      if (self->state().disable_pipeline_subprocesses) {
+        return pipeline_shell_actor{};
+      }
+      if (not self->state().endpoint) {
+        return self->mail(atom::spawn_v, atom::shell_v)
+          .delegate(static_cast<node_actor>(self));
+      }
+      return self->state().get_pipeline_shell();
+    },
+    [self](atom::connect, atom::shell, uint32_t child_id,
+           pipeline_shell_actor handle) -> caf::result<void> {
+      if (self->state().tearing_down) {
+        // Just ignore.
+        return ec::no_error;
+      }
+      return self->state().connect_pipeline_shell(child_id, std::move(handle));
+    },
     [self](atom::resolve, std::string name,
            std::string public_key) -> caf::result<secret_resolution_result> {
       const auto& cfg = content(self->system().config());
       const auto key = fmt::format("tenzir.secrets.{}", name);
-      const auto value = caf::get_if(&cfg, key);
+      const auto* value = caf::get_if(&cfg, key);
       if (value) {
         auto value_string = caf::get_as<std::string>(*value);
         if (not value_string) {
