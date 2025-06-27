@@ -31,6 +31,7 @@
 #include <caf/actor_system.hpp>
 #include <caf/anon_mail.hpp>
 #include <caf/fwd.hpp>
+#include <caf/telemetry/metric_family_impl.hpp>
 #include <sys/resource.h>
 
 #include <csignal>
@@ -66,9 +67,13 @@ auto main(int argc, char** argv) -> int try {
     fmt::print(stderr, "failed to set signal handler for SIGABRT\n");
     return EXIT_FAILURE;
   }
+  // Tweak CAF parameters in case we're running a client command.
+  const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
   auto sigset = termsigset();
-  pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
+  if (is_server) {
+    pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
+  }
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
@@ -108,8 +113,6 @@ auto main(int argc, char** argv) -> int try {
   // From here on, options from the command line can be used.
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
-  // Tweak CAF parameters in case we're running a client command.
-  const auto is_server = is_server_from_app_path(argv[0]);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (not log_context) {
@@ -300,47 +303,79 @@ auto main(int argc, char** argv) -> int try {
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
   auto sys = caf::actor_system{cfg};
-  // The reflector scope variable cleans up the reflector on destruction.
-  scope_linked<signal_reflector_actor> reflector{
-    sys.spawn<caf::detached>(signal_reflector)};
-  std::atomic<bool> stop = false;
-  // clang-format off
-  auto signal_monitoring_thread = std::thread([&]()
-#if TENZIR_GCC
-      // Workaround for an ASAN bug that only occurs with GCC.
-      // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
-      __attribute__((no_sanitize_address))
-#endif
-      {
-        int signum = 0;
-        sigwait(&sigset, &signum);
-        TENZIR_DEBUG("received signal {}", signum);
-        if (!stop) {
-          caf::anon_mail(atom::internal_v, atom::signal_v, signum)
-            .urgent().send(reflector.get());
-        }
-      });
-  auto signal_monitoring_joiner = detail::scope_guard{[&]() noexcept {
-    stop = true;
-    if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
-      TENZIR_ERROR("failed to cancel signal monitoring thread");
-    }
-    signal_monitoring_thread.join();
-  }};
-  // clang-format on
-  // Put it into the actor registry so any actor can communicate with it.
-  sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
-  if (auto result = run(*invocation, sys, root_factory); not result) {
-    run_error = std::move(result.error());
+  if (is_server) {
+    // The reflector scope variable cleans up the reflector on destruction.
+    scope_linked<signal_reflector_actor> reflector{
+      sys.spawn<caf::detached + caf::hidden>(signal_reflector)};
+    std::atomic<bool> stop = false;
+    // clang-format off
+    auto signal_monitoring_thread = std::thread([&]()
+#if TENZIR_GCC
+        // Workaround for an ASAN bug that only occurs with GCC.
+        // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
+        __attribute__((no_sanitize_address))
+#endif
+        {
+          int signum = 0;
+          sigwait(&sigset, &signum);
+          TENZIR_DEBUG("received signal {}", signum);
+          if (!stop) {
+            caf::anon_mail(atom::internal_v, atom::signal_v, signum)
+              .urgent().send(reflector.get());
+          }
+        });
+    auto signal_monitoring_joiner = detail::scope_guard{[&]() noexcept {
+      stop = true;
+      if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
+        TENZIR_ERROR("failed to cancel signal monitoring thread");
+      }
+      signal_monitoring_thread.join();
+    }};
+    // clang-format on
+    // Put it into the actor registry so any actor can communicate with it.
+    sys.registry().put("signal-reflector", reflector.get());
+    if (auto result = run(*invocation, sys, root_factory); not result) {
+      run_error = std::move(result.error());
+    } else {
+      caf::message_handler{[&](caf::error& err) {
+        run_error = std::move(err);
+      }}(*result);
+    }
+    signal_monitoring_joiner.trigger();
+    sys.registry().erase("signal-reflector");
+    pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
+    sys.await_actors_before_shutdown(false);
+    auto actors_gone = sys.registry().await_running_count_equal(0, std::chrono::seconds{2});
+    if (not actors_gone) {
+      std::unordered_map<std::string, int64_t> zombies = {};
+      auto collector = [&](const caf::telemetry::metric_family* /*family*/,
+                           const caf::telemetry::metric* instance,
+                           const caf::telemetry::int_gauge* wrapped) {
+        if (wrapped->value() != 0) {
+          zombies[std::string{instance->labels()[0].value()}]
+            = wrapped->value();
+        }
+      };
+      sys.base_metrics().running_actors_by_name->collect(collector);
+      TENZIR_INFO(
+        "waiting 10 more seconds for leftover components to terminate: {}", zombies);
+      actors_gone = sys.registry().await_running_count_equal(0, std::chrono::seconds{10});
+      if (not actors_gone) {
+        zombies.clear();
+        sys.base_metrics().running_actors_by_name->collect(collector);
+        TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
+      }
+    }
   } else {
-    caf::message_handler{[&](caf::error& err) {
-      run_error = std::move(err);
-    }}(*result);
+    if (auto result = run(*invocation, sys, root_factory); not result) {
+      run_error = std::move(result.error());
+    } else {
+      caf::message_handler{[&](caf::error& err) {
+        run_error = std::move(err);
+      }}(*result);
+    }
   }
-  sys.registry().erase("signal-reflector");
-  signal_monitoring_joiner.trigger();
-  pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
