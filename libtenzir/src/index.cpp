@@ -1551,12 +1551,28 @@ index(index_actor::stateful_pointer<index_state> self,
         = self->state().transformer_partition_path_template();
       auto partition_synopsis_path_template
         = self->state().transformer_partition_synopsis_path_template();
+      /// Yummy. Partitioned Foam. :)
       partition_transformer_actor partition_transfomer
         = self->spawn(partition_transformer, store_id,
                       self->state().synopsis_opts, self->state().index_opts,
                       self->state().catalog, self->state().filesystem, pipe,
                       std::move(partition_path_template),
                       std::move(partition_synopsis_path_template));
+      /// Monitor the actor to remove it from the collection of active
+      /// transformers.
+      auto partition_transformer_addr = partition_transfomer->address();
+      auto partition_completion_disposable = self->monitor(
+        partition_transfomer,
+        [self, partition_transformer_addr](const caf::error&) {
+          const auto it = self->state().active_transformers.find(
+            partition_transformer_addr);
+          TENZIR_ASSERT(it != self->state().active_transformers.end());
+          self->state().active_transformers.erase(it);
+        });
+      const auto [_, inserted] = self->state().active_transformers.try_emplace(
+        std::move(partition_transformer_addr),
+        std::move(partition_completion_disposable));
+      TENZIR_ASSERT(inserted);
       // match_everything == '"" in #schema'
       static const auto match_everything
         = tenzir::predicate{meta_extractor{meta_extractor::schema},
@@ -1768,21 +1784,30 @@ index(index_actor::stateful_pointer<index_state> self,
       for (auto&& [rp, _] : std::exchange(self->state().delayed_queries, {})) {
         rp.deliver(msg.reason);
       }
+      auto perform_shutdown = [self](auto reason) {
+        auto dependents = std::vector<caf::actor>{};
+        dependents.reserve(self->state().active_transformers.size());
+        for (auto& [act, disp] : self->state().active_transformers) {
+          disp.dispose();
+          dependents.push_back(caf::actor_cast<caf::actor>(act));
+        }
+        shutdown<policy::parallel>(self, std::move(dependents), reason);
+      };
       self->state().shutting_down = true;
       self->mail(atom::flush_v)
         .request(static_cast<index_actor>(self), std::chrono::minutes{10})
         .then(
-          [self]() {
-            self->quit();
+          [perform_shutdown, reason = msg.reason]() {
+            perform_shutdown(reason);
           },
-          [self](caf::error& err) {
+          [perform_shutdown](caf::error& err) {
             auto diag
               = diagnostic::error(std::move(err)).note("while shutting down");
             if (err == caf::sec::request_timeout) {
               diag
                 = std::move(diag).note("shutdown timeout: risk of data loss!");
             }
-            self->quit(std::move(diag).to_error());
+            perform_shutdown(std::move(diag).to_error());
           });
     },
   };
