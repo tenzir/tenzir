@@ -883,17 +883,42 @@ public:
       // Arrow doesn't allow relative paths, so we make it absolute.
       expanded = std::filesystem::weakly_canonical(expanded);
     }
-    // TODO: Arrow removes trailing slashes here. Do we need them?
-    // TODO: Once we allow `?` in globs (which is currently not supported), we
-    // run into trouble here because of `s3://bucket/a?.b?endpoint_override=`.
+    // Handle potential conflicts between glob patterns and URL query parameters
     auto path = std::string{};
-    auto fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
+    auto fs_uri = expanded;
+    auto query_params = std::string{};
+    // For URLs with schemes, use proper URI parsing to separate path from query
+    // parameters
+    if (expanded.contains("://")) {
+      auto parse_result = boost::urls::parse_uri(expanded);
+      if (parse_result) {
+        auto& url = *parse_result;
+        // Reconstruct URI without query parameters for filesystem operations
+        auto port_str
+          = url.port().empty() ? "" : fmt::format(":{}", url.port());
+        fs_uri = fmt::format("{}://{}{}{}", url.scheme(), url.encoded_host(),
+                             port_str, url.encoded_path());
+        // Preserve query parameters for potential reattachment if needed by
+        // filesystem (e.g., S3 endpoint_override)
+        if (url.has_query()) {
+          query_params = fmt::format("?{}", url.encoded_query());
+        }
+      }
+    }
+    auto fs = arrow::fs::FileSystemFromUriOrPath(fs_uri, &path);
     if (not fs.ok()) {
-      diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
-        .primary(args_.url)
-        .emit(*dh_);
-      self->quit(ec::silent);
-      return;
+      // If initial filesystem creation fails and we have query parameters,
+      // try again with the original URI in case they're needed
+      if (not query_params.empty() && fs_uri != expanded) {
+        fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
+      }
+      if (not fs.ok()) {
+        diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
+          .primary(args_.url)
+          .emit(*dh_);
+        self->quit(ec::silent);
+        return;
+      }
     }
     fs_ = fs.MoveValueUnsafe();
     glob_ = parse_glob(path);
@@ -902,7 +927,12 @@ public:
         if (auto prefix = try_as<std::string>(glob_[0])) {
           // Use the whole path if we don't do any actual globbing.
           if (glob_.size() == 1) {
-            return *prefix;
+            auto result = *prefix;
+            // Preserve trailing slash semantics if present in original path
+            if (expanded.ends_with('/') && not result.ends_with('/')) {
+              result += '/';
+            }
+            return result;
           }
           // Otherwise use the last directory before the globbing starts.
           auto slash = prefix->rfind("/");
@@ -1130,7 +1160,7 @@ private:
     // We already checked the output type after parsing.
     auto output_type = pipe->infer_type<chunk_ptr>();
     TENZIR_ASSERT(output_type);
-    TENZIR_ASSERT(output_type->is<table_slice>());
+    TENZIR_ASSERT((output_type->is_any<void, table_slice>()));
     add_actor_callback(
       self_, fs_->OpenInputStreamAsync(file),
       [this, pipe = std::move(*pipe), path = file.path()](
@@ -1154,11 +1184,13 @@ private:
                                std::move(*stream));
     auto weak = caf::weak_actor_ptr{source->ctrl()};
     pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
-    pipe.append(std::make_unique<from_file_sink>(
-      self_, order_,
-      args_.path_field ? std::optional{std::pair{*args_.path_field, path}}
-                       : std::nullopt));
-    pipe = pipe.optimize_if_closed();
+    if (not pipe.is_closed()) {
+      pipe.append(std::make_unique<from_file_sink>(
+        self_, order_,
+        args_.path_field ? std::optional{std::pair{*args_.path_field, path}}
+                         : std::nullopt));
+      pipe = pipe.optimize_if_closed();
+    }
     auto executor
       = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
                      self_, node_, false, is_hidden_);
@@ -1189,14 +1221,36 @@ private:
         match(
           eval(*args_.rename, path, *dh_),
           [&](const std::string& new_path) {
-            // TODO:
-            // - If new_path has a trailing slash, append the original file name.
-            // - Create any intermediate directories required for writing to
-            // new_path.
-            auto status = fs_->Move(path, new_path);
+            std::string final_path = new_path;
+            // If new_path has a trailing slash, append the original file name
+            if (not new_path.empty() && new_path.back() == '/') {
+              auto path_obj = std::filesystem::path(path);
+              auto filename = path_obj.filename();
+              final_path
+                = (std::filesystem::path(new_path) / filename).string();
+            }
+            // Create any intermediate directories required for writing to
+            // final_path
+            auto final_path_obj = std::filesystem::path(final_path);
+            auto parent_path = final_path_obj.parent_path();
+            if (not parent_path.empty() && parent_path != ".") {
+              auto create_status
+                = fs_->CreateDir(parent_path.string(), /*recursive=*/true);
+              if (not create_status.ok()) {
+                diagnostic::warning("failed to create intermediate "
+                                    "directories "
+                                    "for `{}`",
+                                    final_path)
+                  .primary(*args_.rename)
+                  .note(create_status.ToStringWithoutContextLines())
+                  .emit(*dh_);
+                return;
+              }
+            }
+            auto status = fs_->Move(path, final_path);
             if (not status.ok()) {
               diagnostic::warning("failed to rename `{}` to `{}`", path,
-                                  new_path)
+                                  final_path)
                 .primary(*args_.rename)
                 .note(status.ToStringWithoutContextLines())
                 .emit(*dh_);
@@ -1375,6 +1429,7 @@ public:
       .named("path_field", args.path_field)
       .positional("{ … }", args.pipe);
     TRY(parser.parse(inv, ctx));
+    auto result = std::make_unique<pipeline>();
     if (args.pipe) {
       auto output_type = args.pipe->inner.infer_type<chunk_ptr>();
       if (not output_type) {
@@ -1384,12 +1439,19 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-      if (output_type->is_not<table_slice>()) {
-        diagnostic::error("pipeline must return events")
+      if (not output_type->is_any<void, table_slice>()) {
+        diagnostic::error("pipeline must return events or void")
           .primary(*args.pipe)
           .docs(parser.docs())
           .emit(ctx);
         return failure::promise();
+      }
+      if (output_type->is<void>()) {
+        const auto* discard_op
+          = plugins::find<operator_factory_plugin>("discard");
+        TENZIR_ASSERT(discard_op);
+        TRY(auto discard_pipe, discard_op->make({inv.self, {}}, ctx));
+        result->append(std::move(discard_pipe));
       }
     }
     if (args.remove.inner and args.rename) {
@@ -1400,7 +1462,8 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    return std::make_unique<from_file>(std::move(args));
+    result->prepend(std::make_unique<from_file>(std::move(args)));
+    return result;
   }
 };
 
