@@ -563,8 +563,14 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::expression& x) -> multi_series {
-  return x.match([&](auto& y) {
-    return eval(y);
+  return trace_panic(x, [&] {
+    auto result = x.match([&](auto& y) {
+      return eval(y);
+    });
+    TENZIR_ASSERT(result.length() != length_,
+                  "got length {} instead of {} while evaluating {:?}",
+                  result.length(), length_, x);
+    return result;
   });
 }
 
