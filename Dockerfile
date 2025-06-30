@@ -596,7 +596,7 @@ USER tenzir:tenzir
 FROM tenzir-ce-untested AS tenzir-ce-integration
 
 COPY tenzir/tests/ ./tests
-RUN ./tests/run.py && echo "success" > /tmp/tenzir-integration-result
+RUN ./tests/run.py -j $(nproc) ./tests && echo "success" > /tmp/tenzir-integration-result
 
 # -- tenzir-ce -----------------------------------------------------------------
 
