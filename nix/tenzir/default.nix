@@ -38,6 +38,7 @@ let
       rabbitmq-c,
       yara,
       rdkafka,
+      reproc,
       cppzmq,
       libmaxminddb,
       re2,
@@ -218,6 +219,7 @@ let
               libunwind
               rabbitmq-c
               rdkafka
+              reproc
               cppzmq
               restinio
               (restinio.override {
