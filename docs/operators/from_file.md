@@ -55,6 +55,10 @@ the original path as an argument and must return the new path.
 
 If the target path already exists, the operator will overwrite the file.
 
+The operator automatically creates any intermediate directories required for the
+target path. If the target path ends with a trailing slash (`/`), the original
+filename will be automatically appended to create the final path.
+
 ### `path_field = field (optional)`
 
 This makes the operator insert the path to the file where an event originated
@@ -88,6 +92,13 @@ from_file "/data/**.json" {
 
 ```tql
 from_file "s3://my-bucket/**", watch=true, remove=true
+```
+
+### Move files to a directory, preserving filenames
+
+```tql
+// The trailing slash automatically appends the original filename
+from_file "/input/*.json", rename=path => "/output/"
 ```
 
 ## See Also
