@@ -14,22 +14,27 @@ assert invariant:bool
 
 The `assert` operator asserts that `invariant` is `true` for events. In case an
 event does not satisfy the invariant, it is dropped and a warning is emitted.
-The only difference between `assert` and `where` is that latter does not emit
-such a warning.
+
+:::tip[Consider using `where` instead]
+If you only want to filter events, use `where` instead of `assert`. The `where`
+operator does not emit a warning when the expression evaluates to false, hence
+it is more suitable for normal filtering purposes. It is also much faster than
+`assert` in some situations due to optimizations such as predicate pushdown.
+:::
 
 ## Examples
 
-### Make sure that all events satisfy `x > 2`
+### Make sure that `x != 2`
 
 ```tql
-from {x: 1}, {x: 2}, {x: 1}
-assert x > 2
+from {x: 1}, {x: 2}, {x: 3}
+assert x != 2
 ```
 
 ```tql
 {x: 1}
 // warning: assertion failure
-{x: 1}
+{x: 3}
 ```
 
 ### Check that a topic only contains certain events
