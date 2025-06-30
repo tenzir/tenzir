@@ -284,6 +284,11 @@ inline constexpr auto packaged_pipeline_restart_on_error
   = std::chrono::minutes{1};
 
 /// Wether to disable forked pipelines.
-inline constexpr bool disable_forked_pipelines = false;
+inline constexpr bool disable_forked_pipelines =
+#if TENZIR_LINUX
+  false;
+#else
+  true;
+#endif
 
 } // namespace tenzir::defaults
