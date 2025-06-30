@@ -883,42 +883,17 @@ public:
       // Arrow doesn't allow relative paths, so we make it absolute.
       expanded = std::filesystem::weakly_canonical(expanded);
     }
-    // Handle potential conflicts between glob patterns and URL query parameters
+    // TODO: Arrow removes trailing slashes here. Do we need them?
+    // TODO: Once we allow `?` in globs (which is currently not supported), we
+    // run into trouble here because of `s3://bucket/a?.b?endpoint_override=`.
     auto path = std::string{};
-    auto fs_uri = expanded;
-    auto query_params = std::string{};
-    // For URLs with schemes, use proper URI parsing to separate path from query
-    // parameters
-    if (expanded.contains("://")) {
-      auto parse_result = boost::urls::parse_uri(expanded);
-      if (parse_result) {
-        auto& url = *parse_result;
-        // Reconstruct URI without query parameters for filesystem operations
-        auto port_str
-          = url.port().empty() ? "" : fmt::format(":{}", url.port());
-        fs_uri = fmt::format("{}://{}{}{}", url.scheme(), url.encoded_host(),
-                             port_str, url.encoded_path());
-        // Preserve query parameters for potential reattachment if needed by
-        // filesystem (e.g., S3 endpoint_override)
-        if (url.has_query()) {
-          query_params = fmt::format("?{}", url.encoded_query());
-        }
-      }
-    }
-    auto fs = arrow::fs::FileSystemFromUriOrPath(fs_uri, &path);
+    auto fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
     if (not fs.ok()) {
-      // If initial filesystem creation fails and we have query parameters,
-      // try again with the original URI in case they're needed
-      if (not query_params.empty() && fs_uri != expanded) {
-        fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
-      }
-      if (not fs.ok()) {
-        diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
-          .primary(args_.url)
-          .emit(*dh_);
-        self->quit(ec::silent);
-        return;
-      }
+      diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
+        .primary(args_.url)
+        .emit(*dh_);
+      self->quit(ec::silent);
+      return;
     }
     fs_ = fs.MoveValueUnsafe();
     glob_ = parse_glob(path);

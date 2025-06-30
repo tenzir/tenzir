@@ -12,6 +12,7 @@ per file would not work:
 ```tql
 from_file "./*.csv" {
   read_csv
+  write_ndjson
   save_tcp "localhost:8080"
 }
 ```

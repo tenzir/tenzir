@@ -16,7 +16,7 @@ parent directories (`/new`, `/new/deep`, `/new/deep/directory`,
 `/new/deep/directory/structure`) will be created automatically.
 
 ```tql
-from_file "/data/*.json", rename=path => f"/processed/by-date/2024/01/{path.split("/").last()}"
+from_file "/data/*.json", rename=path => f"/processed/by-date/2024/01/{path.file_name()}"
 ```
 
 **Trailing slash handling**: When the rename target ends with a trailing slash,
@@ -32,5 +32,5 @@ Previously, you would have needed to manually extract and append the filename:
 
 ```tql
 // Old approach - no longer necessary
-from_file "/input/*.json", rename=path => f"/output/{path.split("/").last()}"
+from_file "/input/*.json", rename=path => f"/output/{path.file_name()}"
 ```

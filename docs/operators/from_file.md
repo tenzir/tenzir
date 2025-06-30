@@ -94,17 +94,11 @@ from_file "/data/**.json" {
 from_file "s3://my-bucket/**", watch=true, remove=true
 ```
 
-### Move files to organized directory structure
-
-```tql
-from_file "/input/*.json", rename=path => f"/processed/by-date/2024/01/{path.split("/").last()}"
-```
-
 ### Move files to a directory, preserving filenames
 
 ```tql
 // The trailing slash automatically appends the original filename
-from_file "/input/*.json", rename=path => f"/output/{path.split("/").last()}"
+from_file "/input/*.json", rename=path => "/output/"
 ```
 
 ## See Also
