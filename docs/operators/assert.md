@@ -17,13 +17,14 @@ event does not satisfy the invariant, it is dropped and a warning is emitted.
 
 :::tip[Consider using `where` instead]
 If you only want to filter events, use `where` instead of `assert`. The `where`
-operator does not emit a warning when the expression evaluates to false, so it
-is more suitable for normal filtering purposes.
+operator does not emit a warning when the expression evaluates to false, hence
+it is more suitable for normal filtering purposes. It is also much faster than
+`assert` in some situations due to optimizations such as predicate pushdown.
 :::
 
 ## Examples
 
-### Make sure that all events satisfy `x > 2`
+### Make sure that `x != 2`
 
 ```tql
 from {x: 1}, {x: 2}, {x: 3}
