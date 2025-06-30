@@ -1,0 +1,2 @@
+from {class_uid: 4001, metadata: {version: "1.5.0"}, unmapped: {foo: 42}}
+ocsf::apply print_json=false

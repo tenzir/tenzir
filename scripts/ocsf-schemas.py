@@ -166,7 +166,7 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                 type_name = attr_def["object_type"]
                 # Special-case the "Object" type to use a JSON string instead.
                 if type_name == "object":
-                    resolved = "string #print_json"
+                    resolved = "string #print_json #must_be_record"
                 else:
                     # Ignore the extension written before the slash.
                     slash = type_name.find("/")

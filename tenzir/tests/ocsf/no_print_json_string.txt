@@ -57,6 +57,12 @@
   traffic: null,
   type_name: null,
   type_uid: null,
-  unmapped: "42",
+  unmapped: null,
   url: null,
 }
+warning: expected type `record` for `unmapped`, but got `string`
+ --> ocsf/no_print_json_string.tql:2:1
+  |
+2 | ocsf::apply print_json=false
+  | ~~~~~~~~~~~ 
+  |

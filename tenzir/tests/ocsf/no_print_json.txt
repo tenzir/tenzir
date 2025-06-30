@@ -57,6 +57,8 @@
   traffic: null,
   type_name: null,
   type_uid: null,
-  unmapped: "{\"x\": 42}",
+  unmapped: {
+    foo: 42,
+  },
   url: null,
 }

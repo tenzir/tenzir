@@ -11,6 +11,7 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/offset.hpp"
+#include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/array.h>
@@ -81,6 +82,14 @@ struct basic_series {
         = std::static_pointer_cast<type_to_arrow_array_t<Other>>(array);
       return basic_series<Other>{*other_type, std::move(other_array)};
     }
+  }
+
+  auto field(std::string_view name) -> std::optional<series>
+    requires(std::same_as<Type, record_type>)
+  {
+    TRY(auto index, type.resolve_field(name));
+    return series{type.field(index).type,
+                  array->field(detail::narrow<int>(index))};
   }
 
   auto length() const -> int64_t {
