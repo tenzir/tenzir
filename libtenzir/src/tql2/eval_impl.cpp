@@ -524,7 +524,7 @@ auto evaluator::eval(const ast::constant& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::format_expr& x) -> multi_series {
-  auto cols = std::vector<variant<std::string, basic_series<string_type>>>{};
+  auto cols = std::vector<variant<std::string, multi_series>>{};
   cols.reserve(x.segments.size());
   for (auto& s : x.segments) {
     match(
@@ -533,31 +533,107 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
         cols.emplace_back(s);
       },
       [&](const ast::format_expr::replacement& r) {
-        auto arr = cols.emplace_back(
-          to_string(eval(r.expr), r.expr.get_location(), ctx_));
+        auto ms = eval(r.expr);
+        for (auto& part : ms) {
+          part = resolve_enumerations(std::move(part));
+        }
+        cols.emplace_back(std::move(ms));
       });
   }
-  auto b = type_to_arrow_builder_t<string_type>{};
-  check(b.Reserve(length_));
-  auto row_text = std::string{};
-  for (auto i = int64_t{0}; i < length_; ++i) {
-    for (auto& c : cols) {
-      if (auto* s = try_as<std::string>(c)) {
-        row_text.append(*s);
-      } else {
-        auto& string_series = as<basic_series<string_type>>(c);
-        auto v = view_at(*string_series.array, i);
-        if (v) {
-          row_text.append(*v);
-        } else {
-          row_text.append("null");
+  auto res = multi_series{};
+  auto current_builder = std::variant<type_to_arrow_builder_t<string_type>,
+                                      type_to_arrow_builder_t<secret_type>>{};
+  const auto append_builder_to_result = detail::overload{
+    [&res](type_to_arrow_builder_t<string_type>& b) {
+      res.append(series{string_type{}, finish(b)});
+    },
+    [&res](type_to_arrow_builder_t<secret_type>& b) {
+      res.append(series{secret_type{}, finish(b)});
+    },
+  };
+  const auto append_row_to_builder = detail::overload{
+    [&current_builder, &append_builder_to_result](const std::string& str) {
+      if (auto* str_builder
+          = try_as<type_to_arrow_builder_t<string_type>>(current_builder)) {
+        check(append_builder(string_type{}, *str_builder, str));
+      } else if (auto* sec_builder
+                 = try_as<type_to_arrow_builder_t<secret_type>>(
+                   current_builder)) {
+        if (sec_builder->length() > 0) {
+          append_builder_to_result(*sec_builder);
         }
+        auto& new_builder
+          = current_builder.emplace<type_to_arrow_builder_t<string_type>>();
+        check(append_builder(string_type{}, new_builder, str));
       }
+    },
+    [&current_builder, &append_builder_to_result](const secret& sec) {
+      if (auto* sec_builder
+          = try_as<type_to_arrow_builder_t<secret_type>>(current_builder)) {
+        check(append_builder(secret_type{}, *sec_builder, sec));
+      } else if (auto* str_builder
+                 = try_as<type_to_arrow_builder_t<string_type>>(
+                   current_builder)) {
+        if (str_builder->length() > 0) {
+          append_builder_to_result(*str_builder);
+        }
+        auto& new_builder
+          = current_builder.emplace<type_to_arrow_builder_t<secret_type>>();
+        check(append_builder(secret_type{}, new_builder, sec));
+      }
+    },
+  };
+  for (auto i = int64_t{0}; i < length_; ++i) {
+    auto row = std::variant<std::string, secret>{};
+    const auto add_column_to_row = detail::overload{
+      [&row](const std::string_view& str) {
+        if (auto* str_row = try_as<std::string>(row)) {
+          str_row->append(str);
+        } else if (auto* sec_row = try_as<secret>(row)) {
+          *sec_row = sec_row->with_appended(str);
+        } else {
+          TENZIR_UNREACHABLE();
+        }
+      },
+      [&row](const secret_view& sec) {
+        if (auto* str_row = try_as<std::string>(row)) {
+          if (str_row->empty()) {
+            row = materialize(sec);
+          } else {
+            row = secret::make_literal(*str_row).with_appended(sec);
+          }
+        } else if (auto* sec_row = try_as<secret>(row)) {
+          *sec_row = sec_row->with_appended(sec);
+        } else {
+          TENZIR_UNREACHABLE();
+        }
+      },
+    };
+    for (auto& c : cols) {
+      match(
+        c,
+        [&add_column_to_row](const std::string& s) {
+          add_column_to_row(s);
+        },
+        [this, &add_column_to_row, i](const multi_series& ms) {
+          const auto v = ms.value_at(i);
+          if (auto* sec = try_as<view<secret>>(v)) {
+            add_column_to_row(*sec);
+          } else {
+            auto str = to_string(v, location::unknown, ctx_);
+            if (str) {
+              add_column_to_row(*str);
+            } else {
+              add_column_to_row("null");
+            }
+          }
+        });
     }
-    check(b.Append(row_text));
-    row_text.clear();
+    match(row, append_row_to_builder);
+    row.emplace<std::string>();
   }
-  return series{string_type{}, finish(b)};
+  match(current_builder, append_builder_to_result);
+  return res;
 }
 
 auto evaluator::eval(const ast::expression& x) -> multi_series {

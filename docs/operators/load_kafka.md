@@ -70,8 +70,8 @@ The `load_kafka` operator passes the key-value pairs directly to
 [librdkafka][librdkafka]. Consult the list of available [configuration
 options][librdkafka-options] to configure Kafka according to your needs.
 
-We recommand factoring these options into the plugin-specific `kafka.yaml` so
-that they are indpendent of the `load_kafka` arguments.
+We recommend factoring these options into the plugin-specific `kafka.yaml` so
+that they are independent of the `load_kafka` arguments.
 
 ### `aws_iam = record (optional)`
 

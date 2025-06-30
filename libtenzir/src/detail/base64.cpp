@@ -91,12 +91,4 @@ std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len) {
           in - reinterpret_cast<unsigned char const*>(src)};
 }
 
-std::string decode(std::string_view str) {
-  std::string result;
-  result.resize(decoded_size(str.size()));
-  auto [written, read] = decode(result.data(), str.data(), str.size());
-  result.resize(written);
-  return result;
-}
-
 } // namespace tenzir::detail::base64

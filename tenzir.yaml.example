@@ -384,7 +384,6 @@ tenzir:
   secrets:
     # my-secret-name: my-secret-value
 
-
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may
 # be in conflict with Tenzir options, and are only listed here for completeness.

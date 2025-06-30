@@ -30,7 +30,7 @@ public:
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     const auto v
-      = try_get_or(global_config, "tenzir.legacy-secret-model", true);
+      = try_get_or(global_config, "tenzir.legacy-secret-model", false);
     if (not v) {
       return diagnostic::error("`tenzir.legacy-secret-model` must be a boolean")
         .to_error();
@@ -146,7 +146,7 @@ public:
   }
 
 private:
-  bool legacy_ = true;
+  bool legacy_ = false;
   detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
 };
 

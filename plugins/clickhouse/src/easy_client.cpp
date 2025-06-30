@@ -20,9 +20,10 @@ using namespace std::string_view_literals;
 
 namespace tenzir::plugins::clickhouse {
 
-auto easy_client::make(arguments args,
-                       diagnostic_handler& dh) -> std::unique_ptr<easy_client> {
-  auto client = std::make_unique<easy_client>(std::move(args), dh);
+auto easy_client::make(arguments args, diagnostic_handler& dh)
+  -> std::unique_ptr<easy_client> {
+  auto client
+    = std::make_unique<easy_client>(std::move(args), dh, ctor_token{});
   /// Note that technically, we have a ToCToU bug here. The table could be
   /// created or deleted in between this, the `get` call below and the potential
   /// creation in `insert`.

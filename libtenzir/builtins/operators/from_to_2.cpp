@@ -845,7 +845,7 @@ struct file_hasher {
 using file_set = boost::unordered_set<arrow::fs::FileInfo, file_hasher>;
 
 struct from_file_args {
-  located<std::string> url;
+  located<secret> url;
   bool watch{false};
   located<bool> remove{false, location::unknown};
   std::optional<ast::lambda_expr> rename;
@@ -864,8 +864,9 @@ struct from_file_args {
 class from_file_impl {
 public:
   from_file_impl(from_file_actor::pointer self, from_file_args args,
-                 event_order order, std::unique_ptr<diagnostic_handler> dh,
-                 std::string definition, node_actor node, bool is_hidden,
+                 std::string plaintext_url, event_order order,
+                 std::unique_ptr<diagnostic_handler> dh, std::string definition,
+                 node_actor node, bool is_hidden,
                  metrics_receiver_actor metrics_receiver,
                  uint64_t operator_index)
     : self_{self},
@@ -878,7 +879,7 @@ public:
       operator_index_{operator_index},
       metrics_receiver_{std::move(metrics_receiver)} {
     TENZIR_ASSERT(dh_);
-    auto expanded = expand_home(args_.url.inner);
+    auto expanded = expand_home(plaintext_url);
     if (not expanded.contains("://")) {
       // Arrow doesn't allow relative paths, so we make it absolute.
       expanded = std::filesystem::weakly_canonical(expanded);
@@ -1344,10 +1345,14 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    auto plaintext_url = std::string{};
+    co_yield ctrl.resolve_secrets_must_yield({make_secret_request(
+      "uri", args_.url, plaintext_url, ctrl.diagnostics())});
     // Spawning the actor detached because some parts of the Arrow filesystem
     // API are blocking.
     auto impl = scope_linked{ctrl.self().spawn<caf::linked + caf::detached>(
-      caf::actor_from_state<from_file_impl>, args_, order_,
+      caf::actor_from_state<from_file_impl>, args_, std::move(plaintext_url),
+      order_,
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
       std::string{ctrl.definition()}, ctrl.node(), ctrl.is_hidden(),
       ctrl.metrics_receiver(), ctrl.operator_index())};

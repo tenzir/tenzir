@@ -133,8 +133,9 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
-  virtual auto resolve_secrets_must_yield(std::vector<secret_request>)
-    -> void override {
+  virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request>, final_callback_t)
+    -> secret_resolution_sentinel override {
     TENZIR_UNIMPLEMENTED();
   }
 

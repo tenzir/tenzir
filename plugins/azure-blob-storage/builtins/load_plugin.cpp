@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/azurefs.h>
@@ -26,17 +27,19 @@ class load_abs_operator final : public crtp_operator<load_abs_operator> {
 public:
   load_abs_operator() = default;
 
-  explicit load_abs_operator(located<std::string> uri) : uri_{std::move(uri)} {
+  explicit load_abs_operator(located<secret> uri) : uri_{std::move(uri)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    co_yield {};
+    auto uri = arrow::util::Uri{};
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_uri_request(uri_, "", uri, ctrl.diagnostics())});
     auto path = std::string{};
-    auto opts = arrow::fs::AzureOptions::FromUri(uri_.inner, &path);
+    auto opts = arrow::fs::AzureOptions::FromUri(uri, &path);
     if (not opts.ok()) {
       diagnostic::error("failed to create Arrow Azure Blob Storage "
                         "filesystem: {}",
-                        opts.status().ToString())
+                        opts.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -44,14 +47,14 @@ public:
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow Azure Blob Storage "
                         "filesystem: {}",
-                        fs.status().ToString())
+                        fs.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(path);
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info from path {}",
-                        file_info.status().ToString())
+                        file_info.status().ToStringWithoutContextLines())
         .primary(uri_)
         .emit(ctrl.diagnostics());
       co_return;
@@ -59,7 +62,7 @@ public:
     auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
     if (not input_stream.ok()) {
       diagnostic::error("failed to open input stream: {}",
-                        input_stream.status().ToString())
+                        input_stream.status().ToStringWithoutContextLines())
         .primary(uri_)
         .emit(ctrl.diagnostics());
       co_return;
@@ -68,7 +71,7 @@ public:
       auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
       if (not input_stream.ok()) {
         diagnostic::error("failed to read from input stream: {}",
-                          buffer.status().ToString())
+                          buffer.status().ToStringWithoutContextLines())
           .primary(uri_)
           .emit(ctrl.diagnostics());
         co_return;
@@ -92,8 +95,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -103,14 +106,14 @@ public:
   }
 
 private:
-  located<std::string> uri_;
+  located<secret> uri_;
 };
 
 class load_abs_plugin final : public operator_plugin2<load_abs_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto uri = located<std::string>{};
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto uri = located<secret>{};
     TRY(argument_parser2::operator_("load_azure_blob_storage")
           .named("uri", uri)
           .parse(inv, ctx));

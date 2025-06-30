@@ -14,7 +14,7 @@ namespace tenzir::plugins::fluentbit {
 
 namespace {
 
-auto tls_to_fluentbit(const ssl_options& ssl, property_map& properties,
+auto tls_to_fluentbit(const ssl_options& ssl, record& properties,
                       diagnostic_handler& dh) -> failure_or<void> {
   const auto set = [&](std::string key, std::string tenzir_option_name,
                        std::string value, location loc) -> failure_or<void> {
@@ -78,23 +78,16 @@ public:
     std::optional<tenzir::record> fluentbit_options;
     auto ssl = ssl_options{};
     ssl.tls = located{false, location::unknown};
-    parser.positional("plugin", plugin)
-      .named("options", plugin_options)
-      .named("fluent_bit_options", fluentbit_options);
+    auto args = operator_args{};
+    parser.positional("plugin", args.plugin)
+      .named_optional("options", args.args)
+      .named_optional("fluent_bit_options", args.service_properties);
     ssl.add_tls_options(parser);
     auto opt_parser = multi_series_builder_argument_parser{};
     opt_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
     TRY(ssl.validate(ctx));
-    // TODO: Improve TLS option validation, right now a pipeline like
-    // `from_fluent_bit "elasticsearch", tls=true` will just fail with a
-    // generic "failed to start engine" error.
-    auto args = operator_args{
-      .plugin = std::move(plugin),
-      .service_properties = to_property_map(fluentbit_options),
-      .args = to_property_map(plugin_options),
-    };
-    TRY(tls_to_fluentbit(ssl, args.args, ctx));
+    TRY(tls_to_fluentbit(ssl, args.args.inner, ctx));
     TRY(auto builder_options, opt_parser.get_options(ctx.dh()));
     builder_options.settings.default_schema_name
       = fmt::format("fluent_bit.{}", args.plugin.inner);
@@ -144,17 +137,13 @@ public:
     std::optional<tenzir::record> fluentbit_options;
     auto ssl = ssl_options{};
     ssl.tls = located{false, location::unknown};
-    parser.positional("plugin", plugin)
-      .named("options", plugin_options)
-      .named("fluent_bit_options", fluentbit_options);
+    auto args = operator_args{};
+    parser.positional("plugin", args.plugin)
+      .named_optional("options", args.args)
+      .named_optional("fluent_bit_options", args.service_properties);
     TRY(parser.parse(inv, ctx));
     TRY(ssl.validate(ctx));
-    auto args = operator_args{
-      .plugin = std::move(plugin),
-      .service_properties = to_property_map(fluentbit_options),
-      .args = to_property_map(plugin_options),
-    };
-    TRY(tls_to_fluentbit(ssl, args.args, ctx));
+    TRY(tls_to_fluentbit(ssl, args.args.inner, ctx));
     return std::make_unique<fluent_bit_sink_operator>(std::move(args), config_);
   }
 

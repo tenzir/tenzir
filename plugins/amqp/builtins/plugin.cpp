@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/plugin.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
+#include <tenzir/concepts.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <caf/expected.hpp>
 
@@ -36,18 +36,6 @@ namespace tenzir::plugins::amqp {
 
 namespace {
 
-constexpr auto stringify = detail::overload{
-  [](const concepts::arithmetic auto& value) -> std::optional<std::string> {
-    return fmt::to_string(value);
-  },
-  [](std::string value) -> std::optional<std::string> {
-    return value;
-  },
-  [](const auto&) -> std::optional<std::string> {
-    return std::nullopt;
-  },
-};
-
 template <class Operator, class Args>
 class plugin : public virtual operator_plugin2<Operator> {
   auto initialize(const record& unused_plugin_config,
@@ -68,18 +56,17 @@ class plugin : public virtual operator_plugin2<Operator> {
     return caf::none;
   }
 
-  auto make(operator_factory_plugin::invocation inv,
-            session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = Args{};
     args.op = inv.self.get_location();
     auto channel = std::optional<located<uint64_t>>{};
-    auto options = std::optional<located<record>>{};
     auto parser = argument_parser2::operator_(this->name());
     parser.positional("url", args.url);
     parser.named("channel", channel);
     parser.named("exchange", args.exchange);
     parser.named("routing_key", args.routing_key);
-    parser.named("options", options);
+    parser.named("options", args.options);
     if constexpr (std::is_same_v<Args, loader_args>) {
       parser.named("queue", args.queue);
       parser.named("passive", args.passive);
@@ -99,42 +86,25 @@ class plugin : public virtual operator_plugin2<Operator> {
       args.channel
         = {detail::narrow<uint16_t>(channel->inner), channel->source};
     }
-    if (args.url) {
-      if (auto cfg = parse_url(config_, args.url->inner)) {
-        config = std::move(*cfg);
-      } else {
-        diagnostic::error("failed to parse AMQP URL")
-          .primary(args.url->source)
-          .hint("URL must adhere to the following format")
-          .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
-    if (options) {
-      // For all string keys, we don't attempt automatic conversion.
-      const auto strings = std::set<std::string>{
-        "hostname", "vhost", "sasl_method", "username", "password"};
-      for (auto& [k, v] : options->inner) {
-        if (auto str = match(v, stringify)) {
-          if (strings.contains(k)) {
-            config[k] = std::move(str).value();
-          } else if (auto x = from_yaml(str.value())) {
-            config[k] = std::move(*x);
-          } else {
-            diagnostic::error("failed to parse value in key-value pair")
-              .primary(options->source)
-              .note("value: {}", v)
+    if (args.options) {
+      for (const auto& [k, v] : args.options->inner) {
+        auto result = match(
+          v,
+          [](const concepts::arithmetic auto&) -> failure_or<void> {
+            return {};
+          },
+          [](const concepts::one_of<std::string, secret> auto&)
+            -> failure_or<void> {
+            return {};
+          },
+          [&](const auto&) -> failure_or<void> {
+            diagnostic::error(
+              "expected type `number`, `bool` or `string` for option")
+              .primary(args.options->source)
               .emit(ctx);
             return failure::promise();
-          }
-          continue;
-        }
-        diagnostic::error(
-          "expected type `number`, `bool` or `string` for option")
-          .primary(options->source)
-          .emit(ctx);
-        return failure::promise();
+          });
+        TRY(result);
       }
     }
     return std::make_unique<Operator>(std::move(args), std::move(config));

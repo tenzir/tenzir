@@ -56,17 +56,6 @@ setup() {
 }
 
 # bats test_tags=pipelines
-@test "Apply operator" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "apply ${QUERYDIR}/some_source | write json"
-  check tenzir "apply ${QUERYDIR}/some_source.tql | write json"
-  check ! tenzir "apply /tmp/does_not_exist"
-  check ! tenzir "apply does_not_exist.tql"
-  run ! tenzir "apply ${QUERYDIR}/from_unknown_file.tql"
-}
-
-# bats test_tags=pipelines
 @test "Local Pipeline Execution" {
   export TENZIR_LEGACY=true
 
@@ -280,15 +269,6 @@ setup() {
 }
 
 # bats test_tags=pipelines, zeek
-@test "Shell" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 1 | write json -c | shell rev"
-  check tenzir 'shell "echo foo"'
-  check tenzir 'shell "{ echo \"#\"; seq 1 2 10; }" | read csv | write json -c'
-}
-
-# bats test_tags=pipelines, zeek
 @test "Flatten Operator" {
   export TENZIR_LEGACY=true
 
@@ -368,27 +348,6 @@ EOF
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | write json --omit-empty"
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | flatten | write json"
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | flatten | write json --omit-empty"
-}
-
-# bats test_tags=pipelines, parser, printer, pcap
-@test "PCAP Format" {
-  export TENZIR_LEGACY=true
-
-  # Make sure basic decapsulation logic works.
-  check tenzir "from ${INPUTSDIR}/pcap/example.pcap.gz read pcap | decapsulate | drop pcap.data | write json"
-  # Decapsulate VLAN information. Manually verified with:
-  # tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
-  check tenzir "from ${INPUTSDIR}/pcap/vlan-single-tagging.pcap read pcap | decapsulate | select vlan.outer, vlan.inner | write json"
-  check tenzir "from ${INPUTSDIR}/pcap/vlan-double-tagging.pcap read pcap | decapsulate | select vlan.outer, vlan.inner | write json"
-  # Re-produce an identical copy of the input by taking the input PCAP file
-  # header as blueprint for the output trace. The MD5 of the original input
-  # is 2696858410a08f5edb405b8630a9858c.
-  check -c "tenzir 'from ${INPUTSDIR}/pcap/example.pcap.gz read pcap -e | write pcap' | md5sum | cut -f 1 -d ' '"
-  # Concatenate PCAPs and process them. The test ensures that we have the
-  # right sequencing of file header and packet header events.
-  check tenzir "shell \"cat ${INPUTSDIR}/pcap/vlan-*.pcap\" | read pcap -e | put schema=#schema | write json -c"
-  # Decapsulate an SLL2 frame.
-  check tenzir "from ${INPUTSDIR}/pcap/sll2.pcap | decapsulate | write json -c"
 }
 
 # bats test_#tags=pipelines

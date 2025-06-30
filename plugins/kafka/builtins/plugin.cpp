@@ -14,17 +14,34 @@
 namespace tenzir::plugins::kafka {
 namespace {
 
-constexpr auto stringify = detail::overload{
-  [](const concepts::arithmetic auto& value) -> std::optional<std::string> {
-    return fmt::to_string(value);
-  },
-  [](std::string value) -> std::optional<std::string> {
-    return value;
-  },
-  [](const auto&) -> std::optional<std::string> {
-    return std::nullopt;
-  },
-};
+auto validate_options(const located<record>& r, diagnostic_handler& dh)
+  -> failure_or<void> {
+  for (const auto& [key, value] : r.inner) {
+    auto f = detail::overload{
+      [](const concepts::arithmetic auto&) -> failure_or<void> {
+        return {};
+      },
+      [](const std::string&) -> failure_or<void> {
+        return {};
+      },
+      [](const secret&) -> failure_or<void> {
+        return {};
+      },
+      [](const tenzir::pattern&) -> failure_or<void> {
+        TENZIR_UNREACHABLE();
+      },
+      [&]<typename T>(const T&) -> failure_or<void> {
+        diagnostic::error("options must be a record `{{ "
+                          "string: number|string }}`")
+          .primary(r.source, "key `{}` is `{}", key,
+                   type_kind{tag_v<data_to_type_t<T>>})
+          .emit(dh);
+        return failure::promise();
+      }};
+    TRY(match(value, f))
+  }
+  return {};
+}
 
 class load_plugin final : public virtual operator_plugin2<kafka_loader> {
 public:
@@ -67,7 +84,6 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto offset = std::optional<ast::expression>{};
-    auto options = std::optional<located<record>>{};
     auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .positional("topic", args.topic)
@@ -75,7 +91,7 @@ public:
           .named("exit", args.exit)
           .named("offset", offset, "string|int")
           .named("aws_iam", iam_opts)
-          .named("options", options)
+          .named_optional("options", args.options)
           .parse(inv, ctx));
     if (iam_opts) {
       TRY(args.aws, configuration::aws_iam_options::from_record(
@@ -110,19 +126,7 @@ public:
       }
       args.offset = located{std::move(result).value(), offset->get_location()};
     }
-    if (options) {
-      for (auto& [k, v] : options->inner) {
-        if (auto str = tenzir::match(v, stringify)) {
-          args.options.inner.emplace_back(k, std::move(str).value());
-          continue;
-        }
-        diagnostic::error(
-          "expected type `number`, `bool` or `string` for option")
-          .primary(options->source)
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
+    TRY(validate_options(args.options, ctx));
     return std::make_unique<kafka_loader>(std::move(args), config_);
   }
 
@@ -178,14 +182,13 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto ts = std::optional<located<time>>{};
-    auto options = std::optional<located<record>>{};
     auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .positional("topic", args.topic)
           .named("key", args.key)
           .named("timestamp", ts)
           .named("aws_iam", iam_opts)
-          .named("options", options)
+          .named_optional("options", args.options)
           .parse(inv, ctx));
     if (iam_opts) {
       TRY(args.aws, configuration::aws_iam_options::from_record(
@@ -195,19 +198,7 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
     if (ts) {
       args.timestamp = located{fmt::to_string(ts->inner), ts->source};
     }
-    if (options) {
-      for (auto& [k, v] : options->inner) {
-        if (auto str = tenzir::match(v, stringify)) {
-          args.options.inner.emplace_back(k, std::move(str).value());
-          continue;
-        }
-        diagnostic::error(
-          "expected type `number`, `bool` or `string` for option")
-          .primary(options->source)
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
+    TRY(validate_options(args.options, ctx));
     return std::make_unique<kafka_saver>(std::move(args), config_);
   }
 

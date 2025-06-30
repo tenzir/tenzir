@@ -25,9 +25,6 @@ struct load_gcs : public operator_plugin2<gcs_loader> {
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
           .parse(inv, ctx));
-    if (not args.uri.inner.starts_with("gs://")) {
-      args.uri.inner = fmt::format("gs://{}", args.uri.inner);
-    }
     return std::make_unique<gcs_loader>(std::move(args));
   }
 
@@ -46,9 +43,6 @@ struct save_gcs : public operator_plugin2<gcs_saver> {
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
           .parse(inv, ctx));
-    if (not args.uri.inner.starts_with("gs://")) {
-      args.uri.inner = fmt::format("gs://{}", args.uri.inner);
-    }
     return std::make_unique<gcs_saver>(std::move(args));
   }
 
