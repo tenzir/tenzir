@@ -371,24 +371,13 @@ private:
   located<secret> command_;
 };
 
-constexpr std::string_view allow_secret_config_option
-  = "tenzir.allow-secrets-in-escape-hatches";
-
 class plugin final : public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
     return "shell";
   }
 
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
-    const auto v = try_get_or(global_config, allow_secret_config_option, false);
-    if (not v) {
-      return diagnostic::error("`{}` must be a boolean",
-                               allow_secret_config_option)
-        .to_error();
-    }
-    allow_secrets_ = *v;
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -398,19 +387,8 @@ public:
     auto parser
       = argument_parser2::operator_("shell").positional("cmd", command);
     TRY(parser.parse(inv, ctx));
-    if (not allow_secrets_ and not command.inner.is_all_literal()) {
-      diagnostic::error("secrets may not be used in the `shell` operator")
-        .primary(command)
-        .hint("allow secrets using the config option `{}`",
-              allow_secret_config_option)
-        .emit(ctx);
-      return failure::promise();
-    }
     return std::make_unique<shell_operator>(std::move(command));
   }
-
-private:
-  bool allow_secrets_ = false;
 };
 
 } // namespace

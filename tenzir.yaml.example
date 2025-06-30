@@ -380,10 +380,6 @@ tenzir:
   # disabled by default.
   enable-assert-secret-operator: false
 
-  # Enables the usage of secrets in escape hatches, such as the `python` and
-  # `shell` operator
-  allow-secrets-in-escape-hatches: false
-
   # Local secrets, defined as key - value pairs. The values must be strings
   secrets:
     # my-secret-name: my-secret-value

@@ -24,6 +24,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -509,9 +510,6 @@ private:
   code_or_path_t code_ = {};
 };
 
-constexpr std::string_view allow_secret_config_option
-  = "tenzir.allow-secrets-in-escape-hatches";
-
 class plugin final : public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
@@ -520,7 +518,7 @@ public:
 
   struct config config = {};
 
-  auto initialize(const record& plugin_config, const record& global_config)
+  auto initialize(const record& plugin_config, const record&)
     -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
@@ -532,13 +530,6 @@ public:
         = get_if<std::string>(&plugin_config, "implicit-requirements")) {
       config.implicit_requirements = *implicit_requirements;
     }
-    const auto v = try_get_or(global_config, allow_secret_config_option, false);
-    if (not v) {
-      return diagnostic::error("`{}` must be a boolean",
-                               allow_secret_config_option)
-        .to_error();
-    }
-    allow_secrets_ = *v;
     return {};
   }
 
@@ -552,14 +543,6 @@ public:
                     .named("file", path)
                     .named("requirements", requirements);
     TRY(parser.parse(inv, ctx));
-    if (not allow_secrets_ and code and not code->inner.is_all_literal()) {
-      diagnostic::error("secrets may not be used in the `python` operator")
-        .primary(*code)
-        .hint("allow secrets using the config option `{}`",
-              allow_secret_config_option)
-        .emit(ctx);
-      return failure::promise();
-    }
     if (not path && not code) {
       diagnostic::error("must have either the `file` argument or inline code")
         .primary(inv.self)
@@ -591,9 +574,6 @@ public:
     return std::make_unique<python_operator>(config, std::move(*requirements),
                                              std::move(code_or_path));
   }
-
-private:
-  bool allow_secrets_ = false;
 };
 
 } // namespace
