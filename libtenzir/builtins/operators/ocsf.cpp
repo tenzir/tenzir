@@ -169,8 +169,7 @@ private:
                                    result_ty.to_arrow_type(), input.length()))};
       }
       if (not preserve_variants_) {
-        return series{string_type{},
-                      print_json(*input.array, nullify_empty_records)};
+        return print_json(input, nullify_empty_records);
       }
       if (nullify_empty_records) {
         if (auto record_ty = try_as<record_type>(input.type)) {
@@ -317,25 +316,25 @@ private:
                               arrow_fields, field_arrays)};
   }
 
-  auto print_json(const arrow::Array& array, bool nullify_empty_records)
-    -> std::shared_ptr<arrow::StringArray> {
-    if (is<arrow::StringArray>(array)) {
+  auto print_json(series input, bool nullify_empty_records)
+    -> basic_series<string_type> {
+    if (auto strings = input.as<string_type>()) {
       // Keep strings as they are (assuming they are already JSON).
-      return std::make_shared<arrow::StringArray>(array.data());
+      return std::move(*strings);
     }
     auto builder = arrow::StringBuilder{};
     if (nullify_empty_records) {
-      if (auto struct_array = dynamic_cast<const arrow::StructArray*>(&array)) {
-        if (struct_array->num_fields() == 0) {
-          check(builder.AppendNulls(array.length()));
-          return finish(builder);
+      if (auto record_ty = try_as<record_type>(input.type)) {
+        if (record_ty->num_fields() == 0) {
+          check(builder.AppendNulls(input.length()));
+          return {string_type{}, finish(builder)};
         }
       }
     }
-    // TODO: Resolve enumerations?
+    input = resolve_enumerations(std::move(input));
     auto printer = json_printer{{.style = no_style(), .oneline = true}};
     auto buffer = std::string{};
-    match(array, [&](const auto& array) {
+    match(*input.array, [&](const auto& array) {
       for (auto value : values3(array)) {
         if (not value) {
           // Preserve nulls instead of rendering them as a string.
@@ -349,7 +348,7 @@ private:
         buffer.clear();
       }
     });
-    return finish(builder);
+    return {string_type{}, finish(builder)};
   }
 
   location self_;
