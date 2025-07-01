@@ -57,6 +57,12 @@
   traffic: null,
   type_name: null,
   type_uid: null,
-  unmapped: "42",
+  unmapped: null,
   url: null,
 }
+warning: expected type `record` for `unmapped`, but got `int64`
+ --> ocsf/wrong_type_unmapped.tql:2:1
+  |
+2 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |

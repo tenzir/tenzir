@@ -491,7 +491,7 @@ type _ocsf.v1_5_0.object.process = record{
   uid: string #recommended,
   user: _ocsf.v1_5_0.object.user #recommended,
   working_directory: string #optional,
-  xattributes: string #print_json #optional,
+  xattributes: string #print_json #must_be_record #optional,
 }
 
 // The Response Elements object describes characteristics of an API response.
@@ -741,7 +741,7 @@ type _ocsf.v1_5_0.object.file = record{
   url: _ocsf.v1_5_0.object.url #optional,
   version: string #optional,
   volume: string #optional,
-  xattributes: string #print_json #optional,
+  xattributes: string #print_json #must_be_record #optional,
 }
 
 // The Data Classification object includes information about data classification
@@ -2743,7 +2743,7 @@ type _ocsf.v1_5_0.service_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // User Session Query events report information about existing user sessions.
@@ -2804,7 +2804,7 @@ type _ocsf.v1_5_0.user_session_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Network Activity events report network connection and traffic activity.
@@ -2876,7 +2876,7 @@ type _ocsf.v1_5_0.network_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   url: _ocsf.v1_5_0.object.url #recommended,
 }
 
@@ -2964,7 +2964,7 @@ type _ocsf.v1_5_0.application_security_posture_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vendor_attributes: _ocsf.v1_5_0.object.vendor_attributes #optional,
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident,
@@ -3033,7 +3033,7 @@ type _ocsf.v1_5_0.event_log_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Prefetch Query events report information about Windows prefetch files.
@@ -3097,7 +3097,7 @@ type _ocsf.v1_5_0.prefetch_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 } #extension=win
 
 // Account Change events report when specific user account management tasks are
@@ -3160,7 +3160,7 @@ type _ocsf.v1_5_0.account_change = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #required,
   user_result: _ocsf.v1_5_0.object.user #recommended,
 }
@@ -3224,7 +3224,7 @@ type _ocsf.v1_5_0.module_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Kernel Object Query events report information about discovered kernel
@@ -3286,7 +3286,7 @@ type _ocsf.v1_5_0.kernel_object_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Drone Flights Activity events report the activity of Unmanned Aerial Systems
@@ -3364,7 +3364,7 @@ type _ocsf.v1_5_0.drone_flights_activity = record{
   unmanned_aerial_system: _ocsf.v1_5_0.object.unmanned_aerial_system #required,
   unmanned_system_operating_area: _ocsf.v1_5_0.object.unmanned_system_operating_area #recommended,
   unmanned_system_operator: _ocsf.v1_5_0.object.user #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Process Activity events report when a process launches, injects, opens or
@@ -3429,7 +3429,7 @@ type _ocsf.v1_5_0.process_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Kernel Activity events report when an process creates, reads, or deletes a
@@ -3488,7 +3488,7 @@ type _ocsf.v1_5_0.kernel_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Process Query events report information about running processes.
@@ -3549,7 +3549,7 @@ type _ocsf.v1_5_0.process_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Server Message Block (SMB) Protocol Activity events report client/server
@@ -3633,7 +3633,7 @@ type _ocsf.v1_5_0.smb_activity = record{
   tree_uid: string #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Windows Resource Activity events report when a process accesses a Windows
@@ -3691,7 +3691,7 @@ type _ocsf.v1_5_0.windows_resource_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   win_resource: _ocsf.v1_5_0.object.win_resource #required #extension=win,
 } #extension=win
 
@@ -3751,7 +3751,7 @@ type _ocsf.v1_5_0.module_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Process Remediation Activity events report on attempts at remediating
@@ -3817,7 +3817,7 @@ type _ocsf.v1_5_0.process_remediation_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Networks Query events report information about network adapters.
@@ -3878,7 +3878,7 @@ type _ocsf.v1_5_0.networks_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // The Vulnerability Finding event is a notification about weakness in an
@@ -3959,7 +3959,7 @@ type _ocsf.v1_5_0.vulnerability_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vendor_attributes: _ocsf.v1_5_0.object.vendor_attributes #optional,
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident,
@@ -4021,7 +4021,7 @@ type _ocsf.v1_5_0.script_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Startup Item Query events report information about discovered items, e.g.,
@@ -4083,7 +4083,7 @@ type _ocsf.v1_5_0.startup_item_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Remote Desktop Protocol (RDP) Activity events report remote client
@@ -4165,7 +4165,7 @@ type _ocsf.v1_5_0.rdp_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Device Inventory Info events report device inventory data that is either
@@ -4224,7 +4224,7 @@ type _ocsf.v1_5_0.device_inventory_info = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Job Query events report information about scheduled jobs.
@@ -4285,7 +4285,7 @@ type _ocsf.v1_5_0.job_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Web Resources Activity events describe actions executed on a set of Web
@@ -4354,7 +4354,7 @@ type _ocsf.v1_5_0.web_resources_activity = record{
   tls: _ocsf.v1_5_0.object.tls #optional,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   web_resources: list<_ocsf.v1_5_0.object.web_resource> #required,
   web_resources_result: list<_ocsf.v1_5_0.object.web_resource> #recommended,
 }
@@ -4416,7 +4416,7 @@ type _ocsf.v1_5_0.device_config_state = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Registry Value Query events report information about discovered Windows
@@ -4478,7 +4478,7 @@ type _ocsf.v1_5_0.registry_value_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 } #extension=win
 
 // Datastore events describe general activities (Read, Update, Query, Delete,
@@ -4547,7 +4547,7 @@ type _ocsf.v1_5_0.datastore_activity = record{
   type_id: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Network File Activity events report file activities traversing the network,
@@ -4623,7 +4623,7 @@ type _ocsf.v1_5_0.network_file_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Scheduled Job Activity events report activities related to scheduled jobs or
@@ -4682,7 +4682,7 @@ type _ocsf.v1_5_0.scheduled_job_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Data collected directly from devices that represents forensic information
@@ -4748,7 +4748,7 @@ type _ocsf.v1_5_0.live_evidence_info = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Registry Key Activity events report when a process performs an action on a
@@ -4811,7 +4811,7 @@ type _ocsf.v1_5_0.registry_key_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 } #extension=win
 
 // HTTP Activity events report HTTP connection and traffic information.
@@ -4889,7 +4889,7 @@ type _ocsf.v1_5_0.http_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Device Config State Change events report state changes that impact the
@@ -4955,7 +4955,7 @@ type _ocsf.v1_5_0.device_config_state_change = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // File Remediation Activity events report on attempts at remediating files. It
@@ -5020,7 +5020,7 @@ type _ocsf.v1_5_0.file_remediation_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Cloud Resources Inventory Info events report cloud asset inventory data. This
@@ -5089,7 +5089,7 @@ type _ocsf.v1_5_0.cloud_resources_inventory_info = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // API events describe general CRUD (Create, Read, Update, Delete) API
@@ -5153,7 +5153,7 @@ type _ocsf.v1_5_0.api_activity = record{
   trace: _ocsf.v1_5_0.object.trace #recommended #profile=trace,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Kernel Extension events report when a driver/extension is loaded or unloaded
@@ -5212,7 +5212,7 @@ type _ocsf.v1_5_0.kernel_extension_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // File System Activity events report when a process performs an action on a
@@ -5277,7 +5277,7 @@ type _ocsf.v1_5_0.file_system_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Application Lifecycle events report installation, removal, start, stop of an
@@ -5336,7 +5336,7 @@ type _ocsf.v1_5_0.application_lifecycle = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // The base event is a generic and concrete event. It also defines a set of
@@ -5396,7 +5396,7 @@ type _ocsf.v1_5_0.base_event = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Registry Value Activity events reports when a process performs an action on a
@@ -5456,7 +5456,7 @@ type _ocsf.v1_5_0.registry_value_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 } #extension=win
 
 // DHCP Activity events report MAC to IP assignment via DHCP from a client or
@@ -5533,7 +5533,7 @@ type _ocsf.v1_5_0.dhcp_activity = record{
   transaction_uid: string #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Compliance Finding events describe results of evaluations performed against
@@ -5617,7 +5617,7 @@ type _ocsf.v1_5_0.compliance_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vendor_attributes: _ocsf.v1_5_0.object.vendor_attributes #optional,
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident,
@@ -5700,7 +5700,7 @@ type _ocsf.v1_5_0.authentication = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #required,
 }
 
@@ -5763,7 +5763,7 @@ type _ocsf.v1_5_0.user_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #required,
 }
 
@@ -5829,7 +5829,7 @@ type _ocsf.v1_5_0.network_connection_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Registry Key Query events report information about discovered Windows
@@ -5891,7 +5891,7 @@ type _ocsf.v1_5_0.registry_key_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 } #extension=win
 
 // Software Inventory Info events report device software inventory data that is
@@ -5953,7 +5953,7 @@ type _ocsf.v1_5_0.software_inventory_info = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // DNS Activity events report DNS queries and answers as seen on the network.
@@ -6033,7 +6033,7 @@ type _ocsf.v1_5_0.dns_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #optional,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // File Query events report information about files that are present on the
@@ -6095,7 +6095,7 @@ type _ocsf.v1_5_0.file_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // User Access Management events report management updates to a user's
@@ -6159,7 +6159,7 @@ type _ocsf.v1_5_0.user_access_management = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #required,
 }
 
@@ -6225,7 +6225,7 @@ type _ocsf.v1_5_0.authorize_session = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #required,
 }
 
@@ -6289,7 +6289,7 @@ type _ocsf.v1_5_0.remediation_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Tunnel Activity events report secure tunnel establishment (such as VPN),
@@ -6367,7 +6367,7 @@ type _ocsf.v1_5_0.tunnel_activity = record{
   tunnel_type_id: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #recommended,
 }
 
@@ -6435,7 +6435,7 @@ type _ocsf.v1_5_0.entity_management = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // A Data Security Finding describes detections or alerts generated by various
@@ -6526,7 +6526,7 @@ type _ocsf.v1_5_0.data_security_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vendor_attributes: _ocsf.v1_5_0.object.vendor_attributes #optional,
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident,
@@ -6590,7 +6590,7 @@ type _ocsf.v1_5_0.admin_group_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   users: list<_ocsf.v1_5_0.object.user> #recommended,
 }
 
@@ -6673,7 +6673,7 @@ type _ocsf.v1_5_0.detection_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vendor_attributes: _ocsf.v1_5_0.object.vendor_attributes #optional,
   verdict: string #recommended #profile=incident,
   verdict_id: int64 #recommended #profile=incident,
@@ -6736,7 +6736,7 @@ type _ocsf.v1_5_0.operating_system_patch_state = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Windows Service Activity events report when a process interacts with the
@@ -6794,7 +6794,7 @@ type _ocsf.v1_5_0.windows_service_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   win_service: _ocsf.v1_5_0.object.win_service #required #extension=win,
 } #extension=win
 
@@ -6874,7 +6874,7 @@ type _ocsf.v1_5_0.ssh_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Email URL Activity events report URLs within an email.
@@ -6932,7 +6932,7 @@ type _ocsf.v1_5_0.email_url_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   url: _ocsf.v1_5_0.object.url #required,
 }
 
@@ -6992,7 +6992,7 @@ type _ocsf.v1_5_0.user_inventory_info = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #required,
 }
 
@@ -7059,7 +7059,7 @@ type _ocsf.v1_5_0.network_remediation_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Scan events report the start, completion, and results of a scan job. The scan
@@ -7131,7 +7131,7 @@ type _ocsf.v1_5_0.scan_activity = record{
   total: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Security Finding events describe findings, detections, anomalies, alerts
@@ -7204,7 +7204,7 @@ type _ocsf.v1_5_0.security_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vulnerabilities: list<_ocsf.v1_5_0.object.vulnerability> #optional,
 }
 
@@ -7284,7 +7284,7 @@ type _ocsf.v1_5_0.ntp_activity = record{
   traffic: _ocsf.v1_5_0.object.network_traffic #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   version: string #required,
 }
 
@@ -7360,7 +7360,7 @@ type _ocsf.v1_5_0.incident_finding = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   vendor_attributes: _ocsf.v1_5_0.object.vendor_attributes #optional,
   verdict: string #recommended,
   verdict_id: int64 #recommended,
@@ -7427,7 +7427,7 @@ type _ocsf.v1_5_0.group_management = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_5_0.object.user #recommended,
 }
 
@@ -7500,7 +7500,7 @@ type _ocsf.v1_5_0.file_hosting_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // OSINT Inventory Info events report open source intelligence or threat
@@ -7562,7 +7562,7 @@ type _ocsf.v1_5_0.osint_inventory_info = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // File Transfer Protocol (FTP) Activity events report file transfers between a
@@ -7642,7 +7642,7 @@ type _ocsf.v1_5_0.ftp_activity = record{
   type: string #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Folder Query events report information about folders that are present on the
@@ -7704,7 +7704,7 @@ type _ocsf.v1_5_0.folder_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Peripheral Device Query events report information about peripheral devices.
@@ -7765,7 +7765,7 @@ type _ocsf.v1_5_0.peripheral_device_query = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Web Resource Access Activity events describe successful/failed attempts to
@@ -7834,7 +7834,7 @@ type _ocsf.v1_5_0.web_resource_access_activity = record{
   tls: _ocsf.v1_5_0.object.tls #optional,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
   web_resources: list<_ocsf.v1_5_0.object.web_resource> #required,
 }
 
@@ -7894,7 +7894,7 @@ type _ocsf.v1_5_0.email_file_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Memory Activity events report when a process has memory allocated,
@@ -7958,7 +7958,7 @@ type _ocsf.v1_5_0.memory_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Airborne Broadcast Activity events report the activity of any aircraft or
@@ -8035,7 +8035,7 @@ type _ocsf.v1_5_0.airborne_broadcast_activity = record{
   unmanned_aerial_system: _ocsf.v1_5_0.object.unmanned_aerial_system #required,
   unmanned_system_operating_area: _ocsf.v1_5_0.object.unmanned_system_operating_area #recommended,
   unmanned_system_operator: _ocsf.v1_5_0.object.user #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Email Activity events report SMTP protocol and email activities including
@@ -8106,7 +8106,7 @@ type _ocsf.v1_5_0.email_activity = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }
 
 // Application Error events describe issues with an applications. The error
@@ -8170,5 +8170,5 @@ type _ocsf.v1_5_0.application_error = record{
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
-  unmapped: string #print_json #optional #nullify_empty_records,
+  unmapped: string #print_json #must_be_record #optional #nullify_empty_records,
 }

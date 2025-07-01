@@ -76,21 +76,28 @@ auto make_string_list_function(std::shared_ptr<arrow::ListArray> list) -> auto {
 
 class caster {
 public:
-  explicit caster(location self, diagnostic_handler& dh, string_list profiles,
-                  string_list extensions)
-    : self_{self}, dh_{dh}, profiles_{profiles}, extensions_{extensions} {
+  caster(location self, diagnostic_handler& dh, string_list profiles,
+         string_list extensions, bool preserve_variants)
+    : self_{self},
+      dh_{dh},
+      profiles_{profiles},
+      extensions_{extensions},
+      preserve_variants_{preserve_variants} {
   }
 
   auto cast(const table_slice& slice, const type& ty, std::string_view name)
     -> table_slice {
     auto array = check(to_record_batch(slice)->ToStructArray());
     TENZIR_ASSERT(array);
-    auto result = cast(*array, as<record_type>(ty), "");
+    auto result
+      = cast(series{slice.schema(),
+                    std::static_pointer_cast<arrow::Array>(std::move(array))},
+             ty, "");
     auto schema = type{name, result.type};
     auto arrow_schema = schema.to_arrow_schema();
     return table_slice{
       arrow::RecordBatch::Make(std::move(arrow_schema), result.length(),
-                               result.array->fields()),
+                               as<arrow::StructArray>(*result.array).fields()),
       std::move(schema),
     };
   }
@@ -124,31 +131,65 @@ private:
   }
 
   auto cast_type(const type& ty) -> type {
+    if (ty.attribute("print_json")) {
+      if (not preserve_variants_) {
+        return type{string_type{}};
+      }
+      // We don't know the actual type, so we just use `null`.
+      return type{null_type{}};
+    }
     return match(ty, [&](const auto& ty) {
       return type{cast_type(ty)};
     });
   }
 
   template <basic_type Type>
-  auto cast(const type_to_arrow_array_t<Type>& array, const Type&,
-            std::string_view path) -> basic_series<Type> {
+  auto cast(basic_series<Type> input, const Type&, std::string_view path)
+    -> basic_series<Type> {
     (void)path;
-    return {Type{},
-            std::make_shared<type_to_arrow_array_t<Type>>(array.data())};
+    return input;
   }
 
-  auto cast(const arrow::Array& array, const type& ty, std::string_view path)
-    -> series {
-    if (is<string_type>(ty) and ty.attribute("print_json")) {
-      return series{
-        string_type{},
-        print_json(array, ty.attribute("nullify_empty_records").has_value())};
+  auto cast(series input, const type& ty, std::string_view path) -> series {
+    auto nullify_empty_records
+      = ty.attribute("nullify_empty_records").has_value();
+    if (ty.attribute("print_json")) {
+      TENZIR_ASSERT(is<string_type>(ty));
+      if (ty.attribute("must_be_record")
+          and not input.type.kind().is_any<null_type, record_type>()
+          // Strings are also allowed so that `ocsf::apply` is idempotent.
+          and (preserve_variants_ or not input.type.kind().is<string_type>())) {
+        diagnostic::warning("expected type `record` for `{}`, but got `{}`",
+                            path, input.type.kind())
+          .primary(self_)
+          .emit(dh_);
+        auto result_ty
+          = preserve_variants_ ? type{null_type{}} : type{string_type{}};
+        return series{result_ty, check(arrow::MakeArrayOfNull(
+                                   result_ty.to_arrow_type(), input.length()))};
+      }
+      if (not preserve_variants_) {
+        return print_json(input, nullify_empty_records);
+      }
+      if (nullify_empty_records) {
+        if (auto record_ty = try_as<record_type>(input.type)) {
+          if (record_ty->num_fields() == 0) {
+            return series::null(record_type{}, input.length());
+          }
+        }
+      }
+      return input;
     }
     auto result = match(
-      std::tie(array, ty),
-      [&]<class Type>(const type_to_arrow_array_t<Type>& array,
+      std::tie(*input.array, ty),
+      [&]<class Type>(const type_to_arrow_array_t<Type>&,
                       const Type& ty) -> series {
-        return cast(array, ty, path);
+        return cast(
+          basic_series<Type>{
+            as<Type>(input.type),
+            std::static_pointer_cast<type_to_arrow_array_t<Type>>(input.array),
+          },
+          ty, path);
       },
       [&]<class Array, class Type>(const Array& array, const Type& ty) -> series
         requires(not std::same_as<Array, type_to_arrow_array_t<Type>>)
@@ -168,24 +209,25 @@ private:
     return result;
   }
 
-  auto cast(const enumeration_type::array_type&, const enumeration_type&,
+  auto cast(basic_series<enumeration_type>, const enumeration_type&,
             std::string_view) -> basic_series<enumeration_type> {
     TENZIR_UNREACHABLE();
   }
 
-  auto cast(const arrow::MapArray&, const map_type&, std::string_view)
+  auto cast(basic_series<map_type>, const map_type&, std::string_view)
     -> basic_series<map_type> {
     TENZIR_UNREACHABLE();
   }
 
-  auto cast(const arrow::ListArray& array, const list_type& ty,
+  auto cast(basic_series<list_type> input, const list_type& ty,
             std::string_view path) -> basic_series<list_type> {
-    auto values
-      = cast(*array.values(), ty.value_type(), std::string{path} + "[]");
+    auto values = cast(series{input.type.value_type(), input.array->values()},
+                       ty.value_type(), std::string{path} + "[]");
     return {list_type{values.type},
             check(arrow::ListArray::FromArrays(
-              *array.offsets(), *values.array, arrow::default_memory_pool(),
-              array.null_bitmap(), array.data()->null_count))};
+              *input.array->offsets(), *values.array,
+              arrow::default_memory_pool(), input.array->null_bitmap(),
+              input.array->data()->null_count))};
   }
 
   auto is_profile_enabled(const type& ty) -> bool {
@@ -202,7 +244,7 @@ private:
     return is_profile_enabled(ty) and is_extension_enabled(ty);
   }
 
-  auto cast(const arrow::StructArray& array, const record_type& ty,
+  auto cast(basic_series<record_type> input, const record_type& ty,
             std::string_view path) -> basic_series<record_type> {
     auto fields = std::vector<record_type::field_view>{};
     auto field_arrays = arrow::ArrayVector{};
@@ -210,13 +252,13 @@ private:
       if (not is_enabled(field.type)) {
         continue;
       }
-      auto field_array = array.GetFieldByName(std::string{field.name});
-      if (not field_array) {
+      auto field_series = input.field(field.name);
+      if (not field_series) {
         // No warning if the a target field does not exist.
         auto cast_ty = cast_type(field.type);
         fields.emplace_back(field.name, cast_ty);
-        field_arrays.push_back(check(
-          arrow::MakeArrayOfNull(cast_ty.to_arrow_type(), array.length())));
+        field_arrays.push_back(check(arrow::MakeArrayOfNull(
+          cast_ty.to_arrow_type(), input.array->length())));
         continue;
       }
       auto field_path = std::string{path};
@@ -224,11 +266,11 @@ private:
         field_path += '.';
       }
       field_path += field.name;
-      auto casted = cast(*field_array, field.type, field_path);
+      auto casted = cast(std::move(*field_series), field.type, field_path);
       field_arrays.push_back(std::move(casted.array));
       fields.emplace_back(field.name, std::move(casted.type));
     }
-    for (auto& field : array.struct_type()->fields()) {
+    for (auto& field : input.array->struct_type()->fields()) {
       // Warn for fields that do not exist in the target type.
       auto field_path = std::string{path};
       if (not field_path.empty()) {
@@ -270,28 +312,29 @@ private:
       arrow_fields.push_back(field.type.to_arrow_field(field.name));
     }
     return {record_type{fields},
-            make_struct_array(array.length(), array.null_bitmap(), arrow_fields,
-                              field_arrays)};
+            make_struct_array(input.length(), input.array->null_bitmap(),
+                              arrow_fields, field_arrays)};
   }
 
-  auto print_json(const arrow::Array& array, bool nullify_empty_records)
-    -> std::shared_ptr<arrow::StringArray> {
-    if (is<arrow::StringArray>(array)) {
+  auto print_json(series input, bool nullify_empty_records)
+    -> basic_series<string_type> {
+    if (auto strings = input.as<string_type>()) {
       // Keep strings as they are (assuming they are already JSON).
-      return std::make_shared<arrow::StringArray>(array.data());
+      return std::move(*strings);
     }
     auto builder = arrow::StringBuilder{};
     if (nullify_empty_records) {
-      if (auto struct_array = dynamic_cast<const arrow::StructArray*>(&array)) {
-        if (struct_array->num_fields() == 0) {
-          check(builder.AppendNulls(array.length()));
-          return finish(builder);
+      if (auto record_ty = try_as<record_type>(input.type)) {
+        if (record_ty->num_fields() == 0) {
+          check(builder.AppendNulls(input.length()));
+          return {string_type{}, finish(builder)};
         }
       }
     }
+    input = resolve_enumerations(std::move(input));
     auto printer = json_printer{{.style = no_style(), .oneline = true}};
     auto buffer = std::string{};
-    match(array, [&](const auto& array) {
+    match(*input.array, [&](const auto& array) {
       for (auto value : values3(array)) {
         if (not value) {
           // Preserve nulls instead of rendering them as a string.
@@ -305,13 +348,14 @@ private:
         buffer.clear();
       }
     });
-    return finish(builder);
+    return {string_type{}, finish(builder)};
   }
 
   location self_;
   diagnostic_handler& dh_;
   string_list profiles_;
   string_list extensions_;
+  bool preserve_variants_;
 };
 
 auto mangle_version(std::string_view version) -> std::string {
@@ -335,7 +379,8 @@ class ocsf_operator final : public crtp_operator<ocsf_operator> {
 public:
   ocsf_operator() = default;
 
-  explicit ocsf_operator(struct location self) : self_{self} {
+  ocsf_operator(struct location self, bool preserve_variants)
+    : self_{self}, preserve_variants_{preserve_variants} {
   }
 
   auto
@@ -585,9 +630,9 @@ public:
           return {};
         }
         auto type_name = "ocsf." + snake_case_class_name;
-        auto result
-          = caster{self_, ctrl.diagnostics(), profiles, extensions}.cast(
-            subslice(slice, begin, end), *ty, type_name);
+        auto result = caster{self_, ctrl.diagnostics(), profiles, extensions,
+                             preserve_variants_}
+                        .cast(subslice(slice, begin, end), *ty, type_name);
         return result;
       };
       for (; end < class_array->length(); ++end) {
@@ -620,19 +665,27 @@ public:
   }
 
   friend auto inspect(auto& f, ocsf_operator& x) -> bool {
-    return f.apply(x.self_);
+    return f.object(x).fields(f.field("self", x.self_),
+                              f.field("preserve_variants",
+                                      x.preserve_variants_));
   }
 
 private:
   struct location self_;
+  bool preserve_variants_{};
 };
 
 class ocsf_plugin final : public operator_plugin2<ocsf_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    argument_parser2::operator_(name()).parse(inv, ctx).ignore();
-    return std::make_unique<ocsf_operator>(inv.self.get_location());
+    auto preserve_variants = false;
+    argument_parser2::operator_(name())
+      .named("preserve_variants", preserve_variants)
+      .parse(inv, ctx)
+      .ignore();
+    return std::make_unique<ocsf_operator>(inv.self.get_location(),
+                                           preserve_variants);
   }
 };
 
