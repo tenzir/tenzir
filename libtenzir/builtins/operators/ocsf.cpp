@@ -151,6 +151,8 @@ private:
   }
 
   auto cast(series input, const type& ty, std::string_view path) -> series {
+    auto nullify_empty_records
+      = ty.attribute("nullify_empty_records").has_value();
     if (ty.attribute("print_json")) {
       TENZIR_ASSERT(is<string_type>(ty));
       if (ty.attribute("must_be_record")
@@ -167,14 +169,16 @@ private:
                                    result_ty.to_arrow_type(), input.length()))};
       }
       if (print_json_) {
-        return series{
-          string_type{},
-          print_json(*input.array,
-                     ty.attribute("nullify_empty_records").has_value())};
+        return series{string_type{},
+                      print_json(*input.array, nullify_empty_records)};
       }
-      // Otherwise, we just return the data exactly as we received it, without
-      // any further casting.
-      // TODO: Should we also nullify empty records here?
+      if (nullify_empty_records) {
+        if (auto record_ty = try_as<record_type>(input.type)) {
+          if (record_ty->num_fields() == 0) {
+            return series::null(record_type{}, input.length());
+          }
+        }
+      }
       return input;
     }
     auto result = match(
