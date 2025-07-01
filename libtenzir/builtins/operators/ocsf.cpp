@@ -77,12 +77,12 @@ auto make_string_list_function(std::shared_ptr<arrow::ListArray> list) -> auto {
 class caster {
 public:
   caster(location self, diagnostic_handler& dh, string_list profiles,
-         string_list extensions, bool print_json)
+         string_list extensions, bool preserve_variants)
     : self_{self},
       dh_{dh},
       profiles_{profiles},
       extensions_{extensions},
-      print_json_{print_json} {
+      preserve_variants_{preserve_variants} {
   }
 
   auto cast(const table_slice& slice, const type& ty, std::string_view name)
@@ -132,7 +132,7 @@ private:
 
   auto cast_type(const type& ty) -> type {
     if (ty.attribute("print_json")) {
-      if (print_json_) {
+      if (not preserve_variants_) {
         return type{string_type{}};
       }
       // We don't know the actual type, so we just use `null`.
@@ -156,19 +156,19 @@ private:
     if (ty.attribute("print_json")) {
       TENZIR_ASSERT(is<string_type>(ty));
       if (ty.attribute("must_be_record")
-          and not(
-            input.type.kind().is_any<null_type, record_type>()
-            // Strings are also allowed so that `ocsf::apply` is idempotent.
-            or (print_json_ and input.type.kind().is<string_type>()))) {
+          and not input.type.kind().is_any<null_type, record_type>()
+          // Strings are also allowed so that `ocsf::apply` is idempotent.
+          and (preserve_variants_ or not input.type.kind().is<string_type>())) {
         diagnostic::warning("expected type `record` for `{}`, but got `{}`",
                             path, input.type.kind())
           .primary(self_)
           .emit(dh_);
-        auto result_ty = print_json_ ? type{string_type{}} : type{null_type{}};
+        auto result_ty
+          = preserve_variants_ ? type{null_type{}} : type{string_type{}};
         return series{result_ty, check(arrow::MakeArrayOfNull(
                                    result_ty.to_arrow_type(), input.length()))};
       }
-      if (print_json_) {
+      if (not preserve_variants_) {
         return series{string_type{},
                       print_json(*input.array, nullify_empty_records)};
       }
@@ -356,7 +356,7 @@ private:
   diagnostic_handler& dh_;
   string_list profiles_;
   string_list extensions_;
-  bool print_json_;
+  bool preserve_variants_;
 };
 
 auto mangle_version(std::string_view version) -> std::string {
@@ -380,8 +380,8 @@ class ocsf_operator final : public crtp_operator<ocsf_operator> {
 public:
   ocsf_operator() = default;
 
-  ocsf_operator(struct location self, bool print_json)
-    : self_{self}, print_json_{print_json} {
+  ocsf_operator(struct location self, bool preserve_variants)
+    : self_{self}, preserve_variants_{preserve_variants} {
   }
 
   auto
@@ -631,9 +631,9 @@ public:
           return {};
         }
         auto type_name = "ocsf." + snake_case_class_name;
-        auto result
-          = caster{self_, ctrl.diagnostics(), profiles, extensions, print_json_}
-              .cast(subslice(slice, begin, end), *ty, type_name);
+        auto result = caster{self_, ctrl.diagnostics(), profiles, extensions,
+                             preserve_variants_}
+                        .cast(subslice(slice, begin, end), *ty, type_name);
         return result;
       };
       for (; end < class_array->length(); ++end) {
@@ -667,24 +667,26 @@ public:
 
   friend auto inspect(auto& f, ocsf_operator& x) -> bool {
     return f.object(x).fields(f.field("self", x.self_),
-                              f.field("print_json", x.print_json_));
+                              f.field("preserve_variants",
+                                      x.preserve_variants_));
   }
 
 private:
   struct location self_;
-  bool print_json_{};
+  bool preserve_variants_{};
 };
 
 class ocsf_plugin final : public operator_plugin2<ocsf_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto print_json = true;
+    auto preserve_variants = false;
     argument_parser2::operator_(name())
-      .named("print_json", print_json)
+      .named("preserve_variants", preserve_variants)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<ocsf_operator>(inv.self.get_location(), print_json);
+    return std::make_unique<ocsf_operator>(inv.self.get_location(),
+                                           preserve_variants);
   }
 };
 
