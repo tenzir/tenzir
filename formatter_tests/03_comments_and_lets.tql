@@ -1,0 +1,2 @@
+/* Load data */let $threshold=100//critical value
+from "events.json"|/* Filter important events */where severity=="high"and value>$threshold|head 50
