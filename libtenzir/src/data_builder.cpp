@@ -683,216 +683,94 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
   if (not is_alive()) {
     return;
   }
-  // TODO this should probably be a double visit on `data_` and `*seed`
-  // The double visit currently cant be done easily, because its std::variant &
-  // caf::variant. (`data_`vs `tenzir::type`).
-  // Below is a nice implementation that I wrote before realizing
-  // that I really dont want to deal with turning the `data_` member into a
-  // caf::variant. Once we update CAF, this will be easy to replace.
-  // Be aware that this double visit may be out of date with the behaviour
-  // below:
-  // * its at the very least not warning for double -> int conversions that
-  // loose precision const auto visitor2 = detail::overload{
-  //   // fallback
-  //   [&rb,seed]<non_structured_data_type T, typename S>(const T&, const S& s)
-  //   {
-  //     rb.emit_mismatch_warning( type{data_to_type_t<T>{}}, *seed );
-  //   },
-  //   // generic fallback
-  //   []( const auto&, const auto& ){
-  //     /* noop */
-  //   },
-  //   // null -> anything
-  //   [](const caf::none_t&, const auto&) {
-  //     /* noop */
-  //   },
-  //   // numeric -> double
-  //   [this]<numeric_data_type T>(const T& value, const double_type&) {
-  //     data(static_cast<double>(value));
-  //   },
-  //   // int -> uint
-  //   [this](const int64_t value, const uint64_type&) {
-  //     if (value < 0) {
-  //       null();
-  //     } else {
-  //       data(static_cast<uint64_t>(value));
-  //     }
-  //   },
-  //   // uint -> int
-  //   [this](const uint64_t& value, const int64_type&) {
-  //     if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-  //     {
-  //       null();
-  //     } else {
-  //       data(static_cast<int64_t>(value));
-  //     }
-  //   },
-  //   // numeric -> duration
-  //   [this,seed]<numeric_data_type T>(const T& value, const duration_type&) {
-  //     auto unit = seed->attribute("unit").value_or("s");
-  //     auto res = cast_value(data_to_type_t<T>{}, value, duration_type{},
-  //     unit); if (res) {
-  //       data(*res);
-  //       return;
-  //     }
-  //   },
-  //   // numeric -> time
-  //   [this, seed, &rb]<numeric_data_type T>(const T& value, const time_type&)
-  //   {
-  //     auto unit = seed->attribute("unit");
-  //     if (not unit) {
-  //       rb.emit_or_throw(
-  //         diagnostic::warning("could not parse value as `{}`", time_type{})
-  //           .note("the read value as a number, but the schema does not "
-  //                 "specify a unit"));
-  //       return;
-  //     }
-  //     auto res = cast_value(data_to_type_t<T>{}, value, duration_type{},
-  //     *unit); if (res) {
-  //       data(time{} + *res);
-  //       return;
-  //     }
-  //   },
-  //   // anything -> string
-  //   [this]<fmt_formattable T>(const T& value, const string_type&) {
-  //     data(fmt::format("{}", value));
-  //   },
-  // };
-  // caf::visit( visitor2, data_, *seed );
-  const auto visitor = detail::overload{
-    [](const auto&) {
-      /* noop */
-    },
-    [](const caf::none_t&) {
-      /* noop */
-    },
-    [&rb, seed, this]<non_structured_data_type T>(const T& v) {
-      constexpr static auto type_idx
-        = detail::tl_index_of<field_type_list, T>::value;
-      const auto seed_idx = seed->type_index();
-      if (type_idx == seed_idx) {
-        return;
-      }
-      if constexpr (is_numeric(type_idx)) {
-        // numeric conversion if possible
-        if (is_numeric(seed_idx)) {
-          switch (seed_idx) {
-            case detail::tl_index_of<field_type_list, int64_t>::value: {
-              if constexpr (std::same_as<uint64_t, T>) {
-                if (v > static_cast<uint64_t>(
-                      std::numeric_limits<int64_t>::max())) {
-                  null();
-                  rb.emit_or_throw(diagnostic::warning("value is out of range "
-                                                       "for expected type")
-                                     .note("value `{}` does not fit into `{}`",
-                                           v, seed->kind()));
-                  return;
-                }
-              } else if constexpr (std::same_as<double, T>) {
-                if (static_cast<double>(static_cast<int64_t>(v)) == v) {
-                  rb.emit_or_throw(diagnostic::warning("fractional value where "
-                                                       "integral was expected")
-                                     .note("value `{}` looses precision when "
-                                           "converted to `{}`",
-                                           v, seed->kind()));
-                }
-              }
-              data(static_cast<int64_t>(v));
-              return;
-            }
-            case detail::tl_index_of<field_type_list, uint64_t>::value: {
-              if (v < 0) {
-                null();
-                rb.emit_or_throw(diagnostic::warning("value is out of range "
-                                                     "for expected type")
-                                   .note("value `{}` does not fit into `{}`", v,
-                                         seed->kind()));
-                return;
-              }
-              if constexpr (std::same_as<double, T>) {
-                if (static_cast<double>(static_cast<int64_t>(v)) == v) {
-                  rb.emit_or_throw(diagnostic::warning("fractional value where "
-                                                       "integral was expected")
-                                     .note("value `{}` looses precision when "
-                                           "converted to `{}`",
-                                           v, seed->kind()));
-                }
-              }
-              data(static_cast<uint64_t>(v));
-              return;
-            }
-            case detail::tl_index_of<field_type_list, double>::value: {
-              data(static_cast<double>(v));
-              return;
-            }
-            case detail::tl_index_of<field_type_list, enumeration>::value: {
-              if (v < 0
-                  or v > static_cast<T>(
-                       std::numeric_limits<enumeration>::max())) {
-                rb.emit_or_throw(diagnostic::warning("value is out of range "
-                                                     "for expected type")
-                                   .note("value `{}` does not fit into `{}`", v,
-                                         seed->kind()));
-                null();
-                return;
-              }
-              auto enum_t = try_as<enumeration_type>(seed);
-              TENZIR_ASSERT(enum_t);
-              if (enum_t->field(static_cast<uint32_t>(v)).empty()) {
-                null();
-                rb.emit_or_throw(
-                  diagnostic::warning("unknown integral enumeration value")
-                    .note("value `{}` is not defined for `{}`", v, *enum_t));
-              }
-              data(static_cast<enumeration>(v));
-              return;
-            }
-            default:
-              TENZIR_UNREACHABLE();
-          }
-        } else if (seed_idx
-                   == detail::tl_index_of<field_type_list, duration>::value) {
-          auto unit = seed->attribute("unit").value_or("s");
-          auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, unit);
-          if (res) {
-            data(*res);
-            return;
-          }
-        } else if (seed_idx
-                   == detail::tl_index_of<field_type_list, time>::value) {
-          auto unit = seed->attribute("unit");
-          if (not unit) {
-            rb.emit_or_throw(
-              diagnostic::warning("could not parse value as `{}`", time_type{})
-                .note("the read value as a number, but the schema does not "
-                      "specify a unit"));
-            return;
-          }
-          auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, *unit);
-          if (res) {
-            data(time{} + *res);
-            return;
-          }
-        }
-      } else if (seed_idx == type_index_string) {
-        // stringify if possible
-        if constexpr (fmt::is_formattable<T>{}) {
-          data(fmt::format("{}", v));
-          return;
-        }
-      }
-      // TODO this happens in our intentionally "broken" zeek.json event in the
-      // test input, where we have field `id : 0`, whereas the schema expects
-      // `id : zeek.conn_id` The resulting issue is that a protected/preparsed
-      // series_builder will reject the value. This could be resolved by
-      // not preparing any builders in the `multi_series_builder` and instead
-      // ensuring that all fields top level are written (as null) on commit.
-      // This is a non-trivial effort though and should be considered as a
-      // follow-up to precise parsing.
+  // This is matching on (current_value, desired_tenzir_type)
+  const auto visitor2 = detail::overload{
+    // fallback
+    [&rb, seed]<non_structured_data_type T, typename S>(const T&, const S&) {
       rb.emit_mismatch_warning(type{data_to_type_t<T>{}}, *seed);
     },
-  };
-  std::visit(visitor, data_);
+    // generic fallback
+    [](const auto&, const auto&) {
+      /* noop */
+    },
+    // null -> anything
+    [](const caf::none_t&, const auto&) {
+      /* noop */
+    },
+    // numeric -> double
+    [this]<concepts::one_of<int64_t, uint64_t> T>(const T& value,
+                                                  const double_type&) {
+      data(static_cast<double>(value));
+    },
+    // int -> uint
+    [this](const int64_t value, const uint64_type&) {
+      if (value < 0) {
+        null();
+      } else {
+        data(static_cast<uint64_t>(value));
+      }
+    },
+    // uint -> int
+    [this](const uint64_t& value, const int64_type&) {
+      if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        null();
+      } else {
+        data(static_cast<int64_t>(value));
+      }
+    },
+    // integral -> enumeration
+    [this, &rb]<concepts::one_of<uint64_t, int64_t> T>(
+      const T& value, const enumeration_type& t) {
+      if (value < 0
+          or value > static_cast<T>(std::numeric_limits<enumeration>::max())) {
+        rb.emit_or_throw(diagnostic::warning("value is out of range "
+                                             "for expected type")
+                           .note("value `{}` does not fit into `{}`", value,
+                                 type_kind::of<enumeration_type>));
+        null();
+        return;
+      }
+      if (t.field(static_cast<uint32_t>(value)).empty()) {
+        null();
+        rb.emit_or_throw(
+          diagnostic::warning("unknown integral enumeration value")
+            .note("value `{}` is not defined for `{}`", value, t));
+      }
+      data(static_cast<enumeration>(value));
+    },
+    // numeric -> duration
+    [this, seed]<numeric_data_type T>(const T& value, const duration_type&) {
+      auto unit = seed->attribute("unit").value_or("s");
+      auto res = cast_value(data_to_type_t<T>{}, value, duration_type{}, unit);
+      if (res) {
+        data(*res);
+        return;
+      }
+    },
+    // numeric -> time
+    [this, seed, &rb]<numeric_data_type T>(const T& value, const time_type&) {
+      auto unit = seed->attribute("unit");
+      if (not unit) {
+        rb.emit_or_throw(
+          diagnostic::warning("could not parse value as `{}`", time_type{})
+            .note("the read value as a number, but the schema does not "
+                  "specify a unit"));
+        return;
+      }
+      auto res = cast_value(data_to_type_t<T>{}, value, duration_type{}, *unit);
+      if (res) {
+        data(time{} + *res);
+        return;
+      }
+    },
+    // anything -> string
+    [this]<typename T>(const T& value, const string_type&)
+      requires(fmt::is_formattable<T>::value)
+    {
+      data(fmt::format("{}", value));
+    },
+    };
+  match(std::forward_as_tuple(data_, *seed), visitor2);
 }
 
 auto node_object::append_to_signature(signature_type& sig,
