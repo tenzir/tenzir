@@ -52,7 +52,7 @@ auto configuration::aws_iam_options::from_record(located<record> config,
   const auto assign_non_empty_string
     = [&](std::string_view key, auto&& x) -> failure_or<void> {
     if (auto it = config.inner.find(key); it != config.inner.end()) {
-      auto extracted = try_as<std::string>(it->second.get_data());
+      auto* extracted = try_as<std::string>(it->second.get_data());
       if (not extracted) {
         diagnostic::error("'{}' must be a `string`", key)
           .primary(config)
@@ -81,24 +81,24 @@ auto configuration::aws_iam_options::from_record(located<record> config,
 auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   RdKafka::Handle* handle, const std::string&) -> void {
   const auto valid_for = std::chrono::seconds{900};
-  auto url = Aws::Http::URI{
+  const auto url = Aws::Http::URI{
     fmt::format("https://kafka.{}.amazonaws.com/", options_.region),
   };
   auto request = Aws::Http::Standard::StandardHttpRequest{
-    std::move(url),
+    url,
     Aws::Http::HttpMethod::HTTP_GET,
   };
   auto provider = std::invoke(
     [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
       if (options_.role) {
-        TENZIR_VERBOSE("Refreshing IAM Credentials for {}, {}, {}",
+        TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
                        options_.region, options_.role.value(), valid_for);
         return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
           options_.role.value(),
           options_.session_name.value_or("tenzir-session"),
           options_.ext_id.value_or(""));
       }
-      TENZIR_VERBOSE("Using the default credential chain");
+      TENZIR_VERBOSE("[kafka iam] using the default credential chain");
       return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
     });
   if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
@@ -128,10 +128,11 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   // https://github.com/aws/aws-msk-iam-sasl-signer-python/blob/84fb289b256c8551183cb006b68a6e757d7cb467/aws_msk_iam_sasl_signer/MSKAuthTokenProvider.py#L238-L240
   boost::replace_all(encoded, "+", "-");
   boost::replace_all(encoded, "/", "_");
-  std::string errstr;
+  auto errstr = std::string{};
   // TODO: Maybe use the credential expiration time instead?
   const auto expiration = duration_cast<std::chrono::milliseconds>(
     (time::clock::now() + valid_for).time_since_epoch());
+  TENZIR_VERBOSE("[kafka iam] setting token");
   handle->oauthbearer_set_token(encoded, expiration.count(), "Tenzir", {},
                                 errstr);
   if (not errstr.empty()) {
@@ -236,7 +237,7 @@ auto configuration::rebalancer::rebalance_cb(
       }
     }
     if (consumer->rebalance_protocol() == "COOPERATIVE") {
-      if (auto err = consumer->incremental_assign(partitions)) {
+      if (auto* err = consumer->incremental_assign(partitions)) {
         TENZIR_ERROR("failed to assign incrementally: {}", err->str());
         delete err;
       };
@@ -250,7 +251,7 @@ auto configuration::rebalancer::rebalance_cb(
     // Application may commit offsets manually here
     // if auto.commit.enable=false
     if (consumer->rebalance_protocol() == "COOPERATIVE") {
-      if (auto err = consumer->incremental_unassign(partitions)) {
+      if (auto* err = consumer->incremental_unassign(partitions)) {
         TENZIR_ERROR("failed to unassign incrementally: {}", err->str());
         delete err;
       };
