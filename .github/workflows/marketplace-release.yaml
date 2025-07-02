@@ -25,6 +25,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive libtenzir
+          git submodule update --init --recursive plugins
+          git submodule update --init --recursive tenzir
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
