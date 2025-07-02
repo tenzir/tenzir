@@ -7,3 +7,4 @@
   ],
 }
 warning: json parser: type mismatch between list elements
+ = note: field `y`

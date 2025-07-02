@@ -70,8 +70,9 @@ auto record_generator::field(std::string_view name) -> object_generator {
   return exact_field(name);
 }
 
-auto record_generator::unflattened_field(
-  std::string_view key, std::string_view unflatten) -> object_generator {
+auto record_generator::unflattened_field(std::string_view key,
+                                         std::string_view unflatten)
+  -> object_generator {
   if (not msb_) {
     return object_generator{};
   }
@@ -130,7 +131,8 @@ auto object_generator::data_unparsed(std::string_view s) -> void {
       if (msb_->settings_.raw) {
         store_raw_or_null(b, msb_->dh_, s);
       } else {
-        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto res = msb_->builder_raw_.parser_(s, nullptr,
+                                              value_path{}.field("<unknown>"));
         auto& [value, diag] = res;
         if (value) {
           if (not b.try_data(*value)) {
@@ -162,7 +164,8 @@ auto object_generator::data_unparsed(std::string s) -> void {
       if (msb_->settings_.raw) {
         store_raw_or_null(b, msb_->dh_, s);
       } else {
-        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto res = msb_->builder_raw_.parser_(s, nullptr,
+                                              value_path{}.field("<unknown>"));
         auto& [value, diag] = res;
         if (value) {
           if (not b.try_data(*value)) {
@@ -293,7 +296,8 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
       if (msb_->settings_.raw) {
         store_raw_or_null(b, msb_->dh_, s);
       } else {
-        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto res = msb_->builder_raw_.parser_(s, nullptr,
+                                              value_path{}.field("<unknown>"));
         auto& [value, diag] = res;
         if (value) {
           if (not b.try_data(*value)) {
@@ -325,7 +329,8 @@ auto list_generator::data_unparsed(std::string s) -> void {
       if (msb_->settings_.raw) {
         store_raw_or_null(b, msb_->dh_, s);
       } else {
-        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto res = msb_->builder_raw_.parser_(s, nullptr,
+                                              value_path{}.field("<unknown>"));
         auto& [value, diag] = res;
         if (value) {
           if (not b.try_data(*value)) {
@@ -397,8 +402,8 @@ auto list_generator::writable() -> bool {
   return msb_;
 }
 
-auto series_to_table_slice(series array,
-                           std::string_view fallback_name) -> table_slice {
+auto series_to_table_slice(series array, std::string_view fallback_name)
+  -> table_slice {
   TENZIR_ASSERT(is<record_type>(array.type));
   TENZIR_ASSERT(array.length() > 0);
   if (array.type.name().empty()) {
@@ -513,7 +518,8 @@ auto multi_series_builder::data(tenzir::data value) -> void {
 
 auto multi_series_builder::data_unparsed(std::string text) -> void {
   if (uses_merging_builder()) {
-    auto res = builder_raw_.parser_(text, nullptr);
+    auto res
+      = builder_raw_.parser_(text, nullptr, value_path{}.field("<unknown>"));
     auto& [value, diag] = res;
     if (diag) {
       dh_.get().emit(std::move(*diag));
