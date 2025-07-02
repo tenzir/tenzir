@@ -8,22 +8,23 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: 'Version tag to publish'
+        description: 'Tenzir Node Version to publish'
         required: true
         type: string
 
 jobs:
   marketplace-release:
-    name: Build and Push Marketplace Image
+    name: Build and Push AWS Marketplace Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Checkout repository
+      - name: Checkout repository at version tag
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
 
       - name: Checkout submodules
         run: |
