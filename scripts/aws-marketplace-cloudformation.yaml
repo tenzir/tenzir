@@ -1,0 +1,516 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Deploy a Docker container from AWS Marketplace using ECS Fargate'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Tenzir configuration"
+        Parameters:
+          - TenzirToken
+          - PlatformAPIEndpoint
+      - Label:
+          default: "Container configuration"
+        Parameters:
+          - MarketplaceImageURL
+          - ContainerName
+          - FargateCPU
+          - FargateMemory
+      - Label:
+          default: "Infrastructure configuration"
+        Parameters:
+          - Environment
+          - VpcCidr
+      - Label:
+          default: "Advanced configuration"
+        Parameters:
+          - CreateECSServiceLinkedRole
+          - TaskRole
+    ParameterLabels:
+      TenzirToken:
+        default: "Tenzir Token"
+      PlatformAPIEndpoint:
+        default: "Tenzir Gateway Endpoint URL"
+      MarketplaceImageURL:
+        default: "Container image URL"
+      ContainerName:
+        default: "Container name"
+      FargateCPU:
+        default: "Fargate CPU units"
+      FargateMemory:
+        default: "Fargate memory allocation"
+      Environment:
+        default: "Environment name"
+      VpcCidr:
+        default: "VPC CIDR block"
+      CreateECSServiceLinkedRole:
+        default: "Create ECS service linked role"
+      TaskRole:
+        default: "Task Role ARN"
+
+Parameters:
+  TenzirToken:
+    Type: String
+    Description: 'Tenzir Token for the Tenzir Platform'
+    NoEcho: true
+  
+  PlatformAPIEndpoint:
+    Type: String
+    Description: 'Tenzir Gateway Endpoint URL'
+    Default: 'wss://ws.tenzir.app/production'
+  
+  MarketplaceImageURL:
+    Type: String
+    Description: 'Full URL to the marketplace container image (e.g., 709825985650.dkr.ecr.us-east-1.amazonaws.com/vendor/product:version)'
+    Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:v0.00.0'
+  
+  ContainerName:
+    Type: String
+    Description: 'Name for the container'
+    Default: 'tenzir-node'
+    MinLength: 1
+    MaxLength: 255
+  
+  FargateCPU:
+    Type: Number
+    Description: 'CPU units for the Fargate task'
+    Default: 8192
+    AllowedValues: [256, 512, 1024, 2048, 4096, 8192]
+  
+  FargateMemory:
+    Type: Number
+    Description: 'Memory (MB) for the Fargate task'
+    Default: 32768
+    AllowedValues: [512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 16384, 30720, 32768]
+  
+  Environment:
+    Type: String
+    Description: 'Environment name for tagging'
+    Default: 'demo'
+  
+  VpcCidr:
+    Type: String
+    Description: 'CIDR block for the VPC'
+    Default: '10.0.0.0/16'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+  
+  CreateECSServiceLinkedRole:
+    Type: String
+    Description: 'Set to true if this is the first time using ECS in this account'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  
+  TaskRole:
+    Type: String
+    Description: 'Optional ARN of an existing IAM role to use as the task role. If not provided, a default role with S3 read permissions will be created.'
+    Default: ''
+
+Conditions:
+  ShouldCreateServiceLinkedRole: !Equals [!Ref CreateECSServiceLinkedRole, 'true']
+  CreateDefaultTaskRole: !Equals [!Ref TaskRole, '']
+
+Resources:
+  # ECS Service Linked Role (only created if needed)
+  ECSServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Condition: ShouldCreateServiceLinkedRole
+    Properties:
+      AWSServiceName: ecs.amazonaws.com
+      Description: 'Service linked role for Amazon ECS'
+
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Public Subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-rt'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Default Route to Internet Gateway
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate Route Table with Public Subnet 1
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  # Associate Route Table with Public Subnet 2
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Security Group for Container
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-container-sg'
+      GroupDescription: 'Security group for marketplace container'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-container-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group Ingress Rule (separate resource to avoid circular dependency)
+  ContainerSecurityGroupIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ContainerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref ContainerSecurityGroup
+      Description: 'NFS traffic for EFS'
+
+  # EFS File System
+  EFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-efs'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EFS Mount Target 1
+  EFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroups:
+        - !Ref ContainerSecurityGroup
+
+  # EFS Mount Target 2
+  EFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ContainerSecurityGroup
+
+  # EFS Access Point
+  EFSAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: 1000
+        Gid: 1000
+      RootDirectory:
+        Path: '/tenzir'
+        CreationInfo:
+          OwnerUid: 1000
+          OwnerGid: 1000
+          Permissions: 755
+      AccessPointTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-efs-access-point'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}-cluster'
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-cluster'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}'
+      RetentionInDays: 14
+
+  # IAM Role for ECS Task Execution
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-execution-role'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for ECS Task (created only if TaskRole parameter is not provided)
+  DefaultTaskRole:
+    Type: AWS::IAM::Role
+    Condition: CreateDefaultTaskRole
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-task-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ContainerTaskPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                  - elasticfilesystem:ClientRootAccess
+                Resource: !Sub 'arn:aws:efs:${AWS::Region}:${AWS::AccountId}:file-system/${EFSFileSystem}'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-task-role'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}-task'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref FargateCPU
+      Memory: !Ref FargateMemory
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      TaskRoleArn: !If 
+        - CreateDefaultTaskRole
+        - !Ref DefaultTaskRole
+        - !Ref TaskRole
+      ContainerDefinitions:
+        - Name: !Ref ContainerName
+          Image: !Ref MarketplaceImageURL
+          Environment:
+            - Name: TENZIR_TOKEN
+              Value: !Ref TenzirToken
+            - Name: TENZIR_PLATFORM_CONTROL_ENDPOINT
+              Value: !Ref PlatformAPIEndpoint
+          MountPoints:
+            - SourceVolume: efs-volume
+              ContainerPath: /var/lib/tenzir
+              ReadOnly: false
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Essential: true
+      Volumes:
+        - Name: efs-volume
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref EFSFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref EFSAccessPoint
+              IAM: ENABLED
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-task'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - PublicSubnet1RouteTableAssociation
+      - PublicSubnet2RouteTableAssociation
+      - EFSMountTarget1
+      - EFSMountTarget2
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}-service'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          AssignPublicIp: ENABLED
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-service'
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  ClusterName:
+    Description: 'Name of the ECS cluster'
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+
+  ServiceName:
+    Description: 'Name of the ECS service'
+    Value: !Ref ECSService
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceName'
+
+  VPCId:
+    Description: 'ID of the VPC'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  PublicSubnet1Id:
+    Description: 'ID of public subnet 1'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1Id'
+
+  PublicSubnet2Id:
+    Description: 'ID of public subnet 2'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
+
+  SecurityGroupId:
+    Description: 'ID of the container security group'
+    Value: !Ref ContainerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  TaskDefinitionArn:
+    Description: 'ARN of the ECS task definition'
+    Value: !Ref TaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-TaskDefinitionArn'
+
+  EFSFileSystemId:
+    Description: 'ID of the EFS file system'
+    Value: !Ref EFSFileSystem
+    Export:
+      Name: !Sub '${AWS::StackName}-EFSFileSystemId'
+
+  EFSAccessPointId:
+    Description: 'ID of the EFS access point'
+    Value: !Ref EFSAccessPoint
+    Export:
+      Name: !Sub '${AWS::StackName}-EFSAccessPointId'
