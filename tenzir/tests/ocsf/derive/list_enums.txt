@@ -1,0 +1,19 @@
+{
+  activity_id: 1,
+  activity_name: "Create",
+  class_name: "File System Activity",
+  class_uid: 1001,
+  metadata: {
+    version: "1.5.0",
+  },
+  files: [
+    {
+      name: "file1.txt",
+      confidentiality_id: 1,
+    },
+    {
+      name: "file2.txt",
+      confidentiality_id: 2,
+    },
+  ],
+}

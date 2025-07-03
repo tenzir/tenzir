@@ -60,16 +60,7 @@ class variant_traits;
 
 template <class T>
 concept has_variant_traits
-  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>
-    and requires(const std::remove_cvref_t<T>& v) {
-          {
-            variant_traits<std::remove_cvref_t<T>>::count
-          } -> std::same_as<const std::size_t&>;
-          {
-            variant_traits<std::remove_cvref_t<T>>::index(v)
-          } -> std::same_as<std::size_t>;
-          variant_traits<std::remove_cvref_t<T>>::template get<0>(v);
-        };
+  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>;
 
 namespace detail {
 
@@ -146,15 +137,18 @@ class variant_traits<std::reference_wrapper<T>>
 static_assert(has_variant_traits<std::reference_wrapper<std::variant<int>>>);
 
 namespace detail {
+
 /// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
 template <size_t I, has_variant_traits V>
 constexpr auto variant_get(V&& v) -> decltype(auto) {
-  static_assert(
-    std::is_reference_v<
-      decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(v))>);
-  // We call `as_mutable` here because `forward_like` never removes `const`.
-  return std::forward_like<V>(
-    as_mutable(variant_traits<std::remove_cvref_t<V>>::template get<I>(v)));
+  if constexpr (std::is_reference_v<decltype(variant_traits<std::remove_cvref_t<
+                                               V>>::template get<I>(v))>) {
+    // We call `as_mutable` here because `forward_like` never removes `const`.
+    return std::forward_like<V>(
+      as_mutable(variant_traits<std::remove_cvref_t<V>>::template get<I>(v)));
+  } else {
+    return variant_traits<std::remove_cvref_t<V>>::template get<I>(v);
+  }
 }
 
 template <has_variant_traits V, size_t I>
@@ -360,8 +354,12 @@ auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   if (current_index != alternative_index) {
     return nullptr;
   }
+  // TODO: Otherwise, this should probably return `std::optional`.
+  static_assert(
+    std::is_reference_v<decltype(detail::variant_get<alternative_index>(v))>);
   return &detail::variant_get<alternative_index>(v);
 };
+
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V* v) -> std::remove_reference_t<forward_like_t<V, T>>* {

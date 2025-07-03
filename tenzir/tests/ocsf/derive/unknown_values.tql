@@ -1,0 +1,11 @@
+// Test unknown enum values
+// This test verifies that the derive operator handles unknown enum values gracefully
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 999,  // Unknown enum value - should generate warning
+}
+ocsf::derive

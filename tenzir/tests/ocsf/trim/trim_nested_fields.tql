@@ -1,0 +1,22 @@
+from {
+  metadata: {
+    version: "1.5.0",
+    log_name: "test.log",
+    log_level: "INFO",
+  },
+  class_uid: 4001,
+  activity_id: 1,
+  severity_id: 1,
+  time: 1640995200000000,
+  type_uid: 400101,
+  dst_endpoint: {
+    hostname: "example.com",
+    port: 443,
+    ip: "192.168.1.1",
+  },
+  connection_info: {
+    protocol_name: "TCP",
+    direction: "outbound",
+  },
+}
+ocsf::trim
