@@ -8,6 +8,7 @@
 
 #include "tenzir/ocsf.hpp"
 
+#include "tenzir/collect.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -375,11 +376,182 @@ auto mangle_version(std::string_view version) -> std::string {
   return result;
 }
 
-class ocsf_operator final : public crtp_operator<ocsf_operator> {
-public:
-  ocsf_operator() = default;
+auto make_list_series(const series& values, const arrow::ListArray& origin)
+  -> basic_series<list_type> {
+  // TODO
+  TENZIR_ASSERT(origin.value_offset(origin.length()) == values.length());
+  return {
+    list_type{values.type},
+    check(arrow::ListArray::FromArrays(
+      *origin.offsets(), *values.array, arrow::default_memory_pool(),
+      origin.null_bitmap(), origin.data()->null_count)),
+  };
+}
 
-  ocsf_operator(struct location self, bool preserve_variants)
+class trimmer {
+public:
+  trimmer(bool optional, bool recommended)
+    : optional_{optional}, recommended_{recommended} {
+  }
+
+  auto trim(const table_slice& slice, const type& ty) -> table_slice {
+    auto result = trim(series{slice}, ty);
+    auto arrow_schema = result.type.to_arrow_schema();
+    return table_slice{
+      arrow::RecordBatch::Make(arrow_schema, result.length(),
+                               as<arrow::StructArray>(*result.array).fields()),
+      std::move(result.type),
+    };
+  }
+
+private:
+  template <class Type>
+    requires(basic_type<Type> or std::same_as<Type, enumeration_type>)
+  auto trim(basic_series<Type> input, const Type& ty) -> basic_series<Type> {
+    (void)ty;
+    return input;
+  }
+
+  auto trim(basic_series<map_type> input, const map_type& ty)
+    -> basic_series<map_type> {
+    (void)input, (void)ty;
+    TENZIR_UNREACHABLE();
+  }
+
+  auto trim(basic_series<list_type> input, const list_type& ty)
+    -> basic_series<list_type> {
+    auto values = trim(series{input.type.value_type(), input.array->values()},
+                       ty.value_type());
+    return make_list_series(values, *input.array);
+  }
+
+  auto trim(series input, const type& ty) -> series {
+    if (ty.attribute("print_json")) {
+      // Do not attempt trimming in variant fields.
+      return input;
+    }
+    auto name = ty.name();
+    auto attributes = collect(ty.attributes());
+    return match(
+      std::tie(input, ty),
+      [&]<class Type>(basic_series<Type> input, const Type& ty) -> series {
+        auto result = trim(std::move(input), ty);
+        return series{
+          type{name, result.type, std::move(attributes)},
+          std::move(result.array),
+        };
+      },
+      [&]<class Actual, class Expected>(basic_series<Actual>,
+                                        const Expected&) -> series {
+        // TODO: Figure out what to do in this case.
+        return input;
+      });
+  }
+
+  auto trim(basic_series<record_type> input, const record_type& ty)
+    -> basic_series<record_type> {
+    auto fields = std::vector<series_field>{};
+    for (auto&& field : input.fields()) {
+      auto field_ty = ty.field(field.name);
+      if (not field_ty) {
+        // TODO: Field does not exist according to OCSF.
+        continue;
+      }
+      if (should_drop(*field_ty)) {
+        continue;
+      }
+      fields.emplace_back(field.name, trim(std::move(field.data), *field_ty));
+    }
+    return make_record_series(fields, *input.array);
+  }
+
+  auto should_drop(const type& ty) const -> bool {
+    if (optional_ and ty.attribute("optional")) {
+      return true;
+    }
+    if (recommended_ and ty.attribute("recommended")) {
+      return true;
+    }
+    return false;
+  }
+
+  bool optional_{};
+  bool recommended_{};
+};
+
+class trim_operator final : public crtp_operator<trim_operator> {
+public:
+  trim_operator() = default;
+
+  trim_operator(bool optional, bool recommended)
+    : optional_{optional}, recommended_{recommended} {
+  }
+
+  auto name() const -> std::string override {
+    return "ocsf::trim";
+  }
+
+  auto operator()(generator<table_slice> input) const
+    -> generator<table_slice> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      co_yield trimmer{optional_, recommended_}.trim(
+        slice, modules::get_schema("_ocsf.v1_5_0.network_activity").value());
+    }
+  }
+
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, trim_operator& x) -> bool {
+    return f.object(x).fields();
+  }
+
+private:
+  bool optional_{};
+  bool recommended_{};
+};
+
+class derive_operator final : public crtp_operator<derive_operator> {
+public:
+  derive_operator() = default;
+
+  auto name() const -> std::string override {
+    return "ocsf::derive";
+  }
+
+  auto operator()(generator<table_slice> input) const
+    -> generator<table_slice> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      basic_series<record_type>{slice};
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, derive_operator& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class apply_operator final : public crtp_operator<apply_operator> {
+public:
+  apply_operator() = default;
+
+  apply_operator(struct location self, bool preserve_variants)
     : self_{self}, preserve_variants_{preserve_variants} {
   }
 
@@ -664,7 +836,7 @@ public:
     return "ocsf::apply";
   }
 
-  friend auto inspect(auto& f, ocsf_operator& x) -> bool {
+  friend auto inspect(auto& f, apply_operator& x) -> bool {
     return f.object(x).fields(f.field("self", x.self_),
                               f.field("preserve_variants",
                                       x.preserve_variants_));
@@ -675,7 +847,7 @@ private:
   bool preserve_variants_{};
 };
 
-class ocsf_plugin final : public operator_plugin2<ocsf_operator> {
+class apply_plugin final : public operator_plugin2<apply_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -684,12 +856,38 @@ public:
       .named("preserve_variants", preserve_variants)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<ocsf_operator>(inv.self.get_location(),
-                                           preserve_variants);
+    return std::make_unique<apply_operator>(inv.self.get_location(),
+                                            preserve_variants);
+  }
+};
+
+class trim_plugin final : public operator_plugin2<trim_operator> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto optional = true;
+    auto recommended = false;
+    argument_parser2::operator_(name())
+      .named("optional", optional)
+      .named("recommended", recommended)
+      .parse(inv, ctx)
+      .ignore();
+    return std::make_unique<trim_operator>(optional, recommended);
+  }
+};
+
+class derive_plugin final : public operator_plugin2<derive_operator> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_(name()).parse(inv, ctx).ignore();
+    return std::make_unique<derive_operator>();
   }
 };
 
 } // namespace
 } // namespace tenzir::plugins::ocsf
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::ocsf_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::apply_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)

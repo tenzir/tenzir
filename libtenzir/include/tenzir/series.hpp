@@ -22,6 +22,8 @@
 
 namespace tenzir {
 
+struct series_field;
+
 template <class Type>
 struct basic_series {
   basic_series() = default;
@@ -40,7 +42,7 @@ struct basic_series {
 
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, record_type>)
-    : type{as<record_type>(slice.schema())},
+    : type{tenzir::as<record_type>(slice.schema())},
       array{check(to_record_batch(slice)->ToStructArray())} {
   }
 
@@ -58,6 +60,7 @@ struct basic_series {
 
   basic_series(class type type,
                std::shared_ptr<type_to_arrow_array_t<class type>> array)
+    requires(std::same_as<Type, class type>)
     : type{std::move(type)}, array{std::move(array)} {
     TENZIR_ASSERT_EXPENSIVE(not this->array
                             or this->type.to_arrow_type()->id()
@@ -84,13 +87,11 @@ struct basic_series {
     }
   }
 
-  auto field(std::string_view name) -> std::optional<series>
-    requires(std::same_as<Type, record_type>)
-  {
-    TRY(auto index, type.resolve_field(name));
-    return series{type.field(index).type,
-                  array->field(detail::narrow<int>(index))};
-  }
+  auto field(std::string_view name) const -> std::optional<series>
+    requires(std::same_as<Type, record_type>);
+
+  auto fields() const -> generator<series_field>
+    requires(std::same_as<Type, record_type>);
 
   auto length() const -> int64_t {
     return array ? array->length() : 0;
@@ -158,9 +159,11 @@ struct basic_series {
 
   [[nodiscard]] auto slice(int64_t begin, int64_t end) const
     -> basic_series<Type> {
-    auto sliced = array->SliceSafe(begin, end - begin);
-    TENZIR_ASSERT(sliced.ok());
-    return {type, sliced.MoveValueUnsafe()};
+    auto sliced = check(array->SliceSafe(begin, end - begin));
+    return {
+      type,
+      std::static_pointer_cast<type_to_arrow_array_t<Type>>(std::move(sliced)),
+    };
   }
 
   Type type;
@@ -170,6 +173,36 @@ struct basic_series {
 /// A series represents a contiguous representation of nullable data of the same
 /// type, e.g., a column in a table slice.
 using series = basic_series<type>;
+
+template <>
+class variant_traits<series> {
+public:
+  static constexpr auto count = variant_traits<type>::count;
+
+  static auto index(const series& x) -> size_t {
+    return variant_traits<type>::index(x.type);
+  }
+
+  template <size_t I>
+  static auto get(const series& x) -> decltype(auto) {
+    auto ty = variant_traits<type>::get<I>(x.type);
+    using Type = decltype(ty);
+    // TODO
+    auto& hack = *x.array;
+    TENZIR_ASSERT(typeid(type_to_arrow_array_t<Type>) == typeid(hack));
+    auto array = std::static_pointer_cast<type_to_arrow_array_t<Type>>(x.array);
+    return basic_series<Type>{std::move(ty), std::move(array)};
+  }
+};
+
+struct series_field {
+  std::string_view name;
+  series data;
+};
+
+auto make_record_series(std::span<const series_field> fields,
+                        const arrow::StructArray& null_provider)
+  -> basic_series<record_type>;
 
 /// @related flatten
 struct flatten_series_result {
