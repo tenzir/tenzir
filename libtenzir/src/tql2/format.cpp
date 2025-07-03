@@ -12,6 +12,7 @@
 #include "tenzir/variant.hpp"
 
 #include <fmt/core.h>
+#include <set>
 
 namespace tenzir {
 
@@ -84,17 +85,10 @@ public:
 
   void visit(ast::invocation& x) {
     visit(x.op);
-    if (x.op.path.size() == 1 && x.op.path[0].name == "export") {
-      // Do nothing, no parentheses for 'export' command
-    } else {
-      result_ += "(";
-      for (auto it = x.args.begin(); it != x.args.end(); ++it) {
-        visit(*it);
-        if (std::next(it) != x.args.end()) {
-          result_ += ", ";
-        }
-      }
-      result_ += ")";
+    // TQL operators don't use parentheses - arguments are separated by whitespace
+    for (auto it = x.args.begin(); it != x.args.end(); ++it) {
+      result_ += " ";
+      visit(*it);
     }
   }
 
@@ -213,7 +207,19 @@ public:
   }
 
   void visit(ast::function_call& x) {
-    if (x.method && !x.args.empty()) {
+    // Check if this is a TQL function that should be formatted with parentheses
+    if (is_tql_function(x.fn)) {
+      // Format as TQL function: function(args)
+      visit(x.fn);
+      result_ += "(";
+      for (auto it = x.args.begin(); it != x.args.end(); ++it) {
+        if (it != x.args.begin()) {
+          result_ += ", ";
+        }
+        visit(*it);
+      }
+      result_ += ")";
+    } else if (x.method && !x.args.empty()) {
       // Format as method call: object.method(remaining_args)
       visit(x.args[0]);
       result_ += ".";
@@ -227,16 +233,12 @@ public:
       }
       result_ += ")";
     } else {
-      // Format as regular function call: function(args)
+      // Format as TQL operator: operator args (no parentheses)
       visit(x.fn);
-      result_ += "(";
       for (auto it = x.args.begin(); it != x.args.end(); ++it) {
-        if (it != x.args.begin()) {
-          result_ += ", ";
-        }
+        result_ += " ";
         visit(*it);
       }
-      result_ += ")";
     }
   }
 
@@ -408,6 +410,79 @@ private:
     for (int i = 0; i < indent_; ++i) {
       result_ += " ";
     }
+  }
+
+  // Helper function to check if a function call is actually a TQL function
+  bool is_tql_function(const ast::entity& fn) {
+    // Check if this is a simple identifier (not a complex expression)
+    if (fn.path.size() == 1) {
+      static const std::set<std::string> tql_functions = {
+        // Math functions
+        "abs", "ceil", "floor", "round", "sqrt", "max", "min", "sum", "mean",
+        "median", "mode", "stddev", "variance", "quantile",
+        
+        // String functions
+        "capitalize", "to_lower", "to_upper", "to_title", "trim", "trim_start",
+        "trim_end", "starts_with", "ends_with", "length", "length_chars",
+        "length_bytes", "split", "split_regex", "join", "replace", "replace_regex",
+        "is_alnum", "is_alpha", "is_lower", "is_numeric", "is_printable",
+        "is_title", "is_upper", "match_regex",
+        
+        // Collection functions
+        "all", "any", "append", "prepend", "first", "last", "slice", "sort",
+        "reverse", "flatten", "unflatten", "distinct", "collect", "map", "get",
+        "has", "keys", "merge", "zip", "value_counts",
+        
+        // Type conversion functions
+        "float", "int", "uint", "string", "ip", "subnet", "time", "duration",
+        "type_id", "type_of",
+        
+        // Time functions
+        "now", "from_epoch", "since_epoch", "format_time", "parse_time",
+        "day", "month", "year", "hour", "minute", "second",
+        "days", "hours", "minutes", "seconds", "milliseconds", "microseconds",
+        "nanoseconds", "weeks", "months", "years",
+        "count_days", "count_hours", "count_minutes", "count_seconds",
+        "count_milliseconds", "count_microseconds", "count_nanoseconds",
+        "count_weeks", "count_months", "count_years",
+        
+        // Network functions
+        "network", "is_v4", "is_v6", "community_id", "encrypt_cryptopan",
+        
+        // Encoding functions
+        "encode_base64", "decode_base64", "encode_hex", "decode_hex",
+        "encode_url", "decode_url",
+        
+        // Hash functions
+        "hash_md5", "hash_sha1", "hash_sha224", "hash_sha256", "hash_sha384",
+        "hash_sha512", "hash_xxh3",
+        
+        // Bit functions
+        "bit_and", "bit_or", "bit_xor", "bit_not", "shift_left", "shift_right",
+        
+        // File functions
+        "file_name", "file_contents", "parent_dir",
+        
+        // Parse functions
+        "parse_json", "parse_csv", "parse_tsv", "parse_ssv", "parse_xsv",
+        "parse_yaml", "parse_kv", "parse_grok", "parse_cef", "parse_leef",
+        "parse_syslog",
+        
+        // Print functions
+        "print_json", "print_csv", "print_tsv", "print_ssv", "print_xsv",
+        "print_yaml", "print_kv", "print_cef", "print_leef", "print_ndjson",
+        
+        // Other functions
+        "count", "count_if", "count_distinct", "random", "entropy", "secret",
+        "config", "env", "decapsulate", "otherwise", "where",
+        
+        // OCSF functions
+        "category_name", "category_uid", "class_name", "class_uid",
+        "type_name", "type_uid"
+      };
+      return tql_functions.find(fn.path[0].name) != tql_functions.end();
+    }
+    return false;
   }
 
   std::string result_;

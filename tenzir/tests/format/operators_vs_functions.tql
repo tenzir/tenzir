@@ -2,61 +2,61 @@
 from {x: 1, y: 2}
 where x > count()
 select x, y = now()
-summarize total = sum(x), avg_val = avg(y)
+summarize total = sum(x), avg_val = mean(y)
 put result = parse_json(data)
-extend computed = hash(x)
+extend computed = hash_md5(x)
 replace timestamp = now()
-where field == upper(value)
-select processed = lower(text)
-group by hash(id)
+where field == to_upper(value)
+select processed = to_lower(text)
+group by hash_sha256(id)
 sort by sqrt(x)
 head max(10, count())
 tail min(5, count())
 slice 0:max(10, count())
-drop keys()
+drop computed_field
 rename old_name = new_name
 put json_data = parse_json(raw_data)
 extend parsed = parse_csv(csv_string)
 replace cleaned = trim(dirty_text)
 where type_id(this) == "string"
-select formatted = format("{}", value)
+select formatted = string(value)
 summarize result = count(), first_val = first(x), last_val = last(y)
 group by type_id(this)
 sort by length(name)
-deduplicate hash(content)
+deduplicate computed_field
 enumerate with_index
-batch size()
-throttle rate()
-sample probability()
-delay duration()
-measure time()
-taste limit()
-unique field()
-reverse order()
-flatten separator()
-unflatten separator()
-fields list()
-schemas available()
-version info()
-plugins list()
-api endpoints()
-show details()
-print format()
-serve port()
-files list()
-processes running()
-sockets open()
-chart type()
-ocsf transform()
-python script()
-shell command()
-timeshift duration()
-parse format()
-compress algorithm()
-decompress algorithm()
-load_balance strategy()
-repeat times()
-fork branches()
-cache size()
-buffer limit()
-assert condition()
+batch 100
+throttle 10/sec
+sample 0.1
+delay 5s
+measure performance
+taste 100
+unique computed_field
+reverse order
+flatten nested_data
+unflatten flat_data
+fields available
+schemas current
+version info
+plugins loaded
+api status
+show results
+print output
+serve data
+files available
+processes running
+sockets open
+chart visualization
+ocsf transform
+python execute
+shell run
+timeshift @import_time + 1h
+parse csv
+compress gzip
+decompress gzip
+load_balance round_robin
+repeat 3
+fork parallel
+cache results
+buffer 1000
+assert x > 0
