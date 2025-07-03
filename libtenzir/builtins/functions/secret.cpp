@@ -12,6 +12,7 @@
 #include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/view3.hpp>
 
 namespace tenzir::plugins::secrets {
 
@@ -150,8 +151,87 @@ private:
   detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
 };
 
+class dump_repr final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "_dump_repr";
+  }
+
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
+  static auto dump_repr_impl(const tenzir::secret_view& s) -> std::string {
+    const auto f = detail::overload{
+      [&](const fbs::data::SecretLiteral& x) -> std::string {
+        return fmt::format("lit({})", x.value()->string_view());
+      },
+      [&](const fbs::data::SecretName& x) -> std::string {
+        return fmt::format("name({})", x.value()->string_view());
+      },
+      [&](this const auto& self,
+          const fbs::data::SecretConcatenation& x) -> std::string {
+        auto res = std::string{};
+        res += fmt::format("concat(");
+        for (const auto* e : *x.secrets()) {
+          res += match(*e, self);
+          res += fmt::format(",");
+        }
+        res += fmt::format(")");
+        return res;
+      },
+      [&](this const auto& self,
+          const fbs::data::SecretTransformed& x) -> std::string {
+        auto res = std::string{};
+        res += fmt::format("trafo(");
+        res += match(*x.secret(), self);
+        res += fmt::format(
+          ",{})", fbs::data::EnumNameSecretTransformations(x.transformation()));
+        return res;
+      },
+    };
+    return match(s, f);
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("s", expr, "secret")
+          .parse(inv, ctx));
+    return function_use::make([expr](evaluator eval, session ctx) -> series {
+      auto b = arrow::StringBuilder{};
+      for (auto& value : eval(expr)) {
+        auto f = detail::overload{
+          [&](const secret_type::array_type& array) {
+            for (auto v : values3(array)) {
+              if (not v) {
+                check(b.AppendNull());
+                continue;
+              }
+              check(b.Append(dump_repr_impl(*v)));
+            }
+          },
+          [&](const arrow::NullArray&) {
+            check(b.AppendNulls(eval.length()));
+          },
+          [&](const auto&) {
+            diagnostic::warning("expected `secret`, got `{}`",
+                                value.type.kind())
+              .primary(expr)
+              .emit(ctx);
+          },
+        };
+        match(*value.array, f);
+      }
+      return series{string_type{}, finish(b)};
+    });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::secrets
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::secret)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::dump_repr)

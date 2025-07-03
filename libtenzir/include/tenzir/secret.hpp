@@ -11,6 +11,7 @@
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/fbs/data.hpp"
 #include "tenzir/flatbuffer.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <fmt/format.h>
 
@@ -24,6 +25,16 @@ namespace detail::secrets {
 using owning_root_fbs_buffer = flatbuffer<fbs::data::Secret>;
 using owning_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
 using viewing_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
+
+using secret_offset_t = flatbuffers::Offset<fbs::data::Secret>;
+/// Copies the secret `s` into the builder `fbb`, returning the offset
+auto copy(flatbuffers::FlatBufferBuilder& fbb, const fbs::data::Secret& s)
+  -> secret_offset_t;
+
+auto deref(const auto* ptr) -> decltype(auto) {
+  TENZIR_ASSERT_EXPENSIVE(ptr);
+  return *ptr;
+}
 
 /// The implementation of the secret/secret_view types.
 /// The actual value can be obtained using
@@ -64,6 +75,10 @@ public:
   auto with_appended(std::string_view literal) const -> secret;
   /// Creates a new secret with the contents of `other` appended to it.
   auto with_appended(const secret_common<viewing_fbs_buffer>& other) const
+    -> secret;
+  /// Creates a new secret with `operation` applied to it. Handles `f⁻¹(f(x))`
+  /// by dropping the identity operation.
+  auto with_operation(fbs::data::SecretTransformations operation) const
     -> secret;
 
   FlatbufferType buffer;
@@ -116,11 +131,9 @@ public:
   friend class secret_view;
   using impl::impl;
 
-  secret(std::string_view name, std::string_view operations, bool is_literal);
-
   static auto make_literal(std::string_view value) -> secret;
-  static auto make_managed(std::string_view value) -> secret;
-  static auto from_fb(const fbs::data::Secret*) -> secret;
+  static auto make_managed(std::string_view name) -> secret;
+  static auto from_fb(const fbs::data::Secret& fb) -> secret;
 };
 
 /// @relates detail::secrets::secret_common
@@ -213,4 +226,83 @@ template <>
 struct printer_registry<secret_view> {
   using type = secret_printer<secret_view>;
 };
+
+template <>
+class variant_traits<fbs::data::Secret> {
+public:
+  /// We intentionally ignore/hide the special `NONE`/`0` state here. None of
+  /// our code will ever produce it.
+  static constexpr size_t count
+    = std::to_underlying(fbs::data::SecretUnion::MAX);
+
+  static constexpr auto index(const fbs::data::Secret& x) -> size_t {
+    const auto i = x.data_type();
+    TENZIR_ASSERT(i != fbs::data::SecretUnion::NONE);
+    return std::to_underlying(i) - 1;
+  }
+
+  template <size_t I>
+  static constexpr auto get(const fbs::data::Secret& x) -> decltype(auto) {
+    using enum fbs::data::SecretUnion;
+    constexpr static auto i = static_cast<fbs::data::SecretUnion>(I + 1);
+    if constexpr (i == literal) {
+      auto* ptr = x.data_as_literal();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else if constexpr (i == name) {
+      auto* ptr = x.data_as_name();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else if constexpr (i == concatenation) {
+      auto* ptr = x.data_as_concatenation();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else if constexpr (i == transformed) {
+      auto* ptr = x.data_as_transformed();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else {
+      static_assert(detail::always_false_v<std::integral_constant<size_t, I>>,
+                    "Unimplemented secret union alternative");
+    }
+  }
+};
+
+template <>
+class variant_traits<secret> {
+  using base = variant_traits<fbs::data::Secret>;
+
+public:
+  static constexpr auto count = base::count;
+
+  static constexpr auto index(const secret& x) -> size_t {
+    return base::index(*x.buffer);
+  }
+
+  template <size_t I>
+  static constexpr auto get(const secret& x) -> decltype(auto) {
+    return base::get<I>(*x.buffer);
+  }
+};
+
+static_assert(has_variant_traits<secret>);
+
+template <>
+class variant_traits<secret_view> {
+  using base = variant_traits<fbs::data::Secret>;
+
+public:
+  static constexpr auto count = base::count;
+
+  static constexpr auto index(const secret_view& x) -> size_t {
+    return base::index(*x.buffer);
+  }
+
+  template <size_t I>
+  static constexpr auto get(const secret_view& x) -> decltype(auto) {
+    return base::get<I>(*x.buffer);
+  }
+};
+static_assert(has_variant_traits<secret_view>);
+
 } // namespace tenzir

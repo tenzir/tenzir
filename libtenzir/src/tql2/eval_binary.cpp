@@ -105,7 +105,7 @@ struct BinOpKernel<ast::binary_op::add, secret_type, secret_type> {
   using result = secret;
   static auto evaluate(secret_view l, secret_view r)
     -> std::variant<result, const char*> {
-    return secret{l.with_appended(r)};
+    return l.with_appended(r);
   }
 };
 
@@ -114,7 +114,7 @@ struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
   using result = secret;
   static auto evaluate(view<std::string> l, secret_view r)
     -> std::variant<result, const char*> {
-    return secret{r.with_prepended(l)};
+    return r.with_prepended(l);
   }
 };
 
@@ -123,7 +123,7 @@ struct BinOpKernel<ast::binary_op::add, secret_type, string_type> {
   using result = secret;
   static auto evaluate(secret_view l, view<std::string> r)
     -> std::variant<result, const char*> {
-    return secret{l.with_appended(r)};
+    return l.with_appended(r);
   }
 };
 
@@ -329,6 +329,10 @@ struct BinOpKernel<Op, L, R> {
 
   static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
     -> std::variant<result, const char*> {
+    if constexpr (std::same_as<secret_type, L>
+                  or std::same_as<secret_type, R>) {
+      return "`secret` cannot be compared";
+    }
     using enum ast::binary_op;
     if constexpr (Op == eq) {
       return l == r;

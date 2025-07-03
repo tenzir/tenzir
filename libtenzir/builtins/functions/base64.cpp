@@ -19,6 +19,15 @@ namespace tenzir::plugins::base64 {
 TENZIR_ENUM(mode, encode_base64, decode_base64);
 namespace {
 
+consteval auto translate(mode m) -> fbs::data::SecretTransformations {
+  switch (m) {
+    case mode::encode_base64:
+      return fbs::data::SecretTransformations::encode_base64;
+    case mode::decode_base64:
+      return fbs::data::SecretTransformations::decode_base64;
+  }
+}
+
 template <mode Mode>
 class plugin final : public function_plugin {
   using Type
@@ -78,26 +87,8 @@ class plugin final : public function_plugin {
                 check(b.AppendNull());
                 continue;
               }
-              if (s->buffer->elements()->size() > 1) {
-                diagnostic::warning("`{}` of compound secret expressions is "
-                                    "not supported",
-                                    to_string(Mode))
-                  .primary(expr)
-                  .emit(ctx);
-                check(b.AppendNull());
-                continue;
-              }
-              const auto e = *s->buffer->elements()->begin();
-              TENZIR_ASSERT(e);
-              auto ops = e->operations()->str();
-              ops += to_string(Mode);
-              ops += ";";
               check(append_builder(secret_type{}, b,
-                                   secret{
-                                     e->name()->string_view(),
-                                     ops,
-                                     e->is_literal(),
-                                   }));
+                                   s->with_operation(translate(Mode))));
             }
             return series{secret_type{}, finish(b)};
           },

@@ -37,10 +37,10 @@ public:
         reinterpret_cast<const std::byte*>(s->data() + s->size()),
       };
     }
-    if (not std::equal(s.begin(), s.end(), e.begin())) {
+    if (not std::ranges::equal(s, e)) {
       diagnostic::error("secret does not match expected value")
-        .primary(secret_)
-        .primary(expected_)
+        .primary(secret_, "['{}']", fmt::join(s, "', '"))
+        .primary(expected_, "['{}']", fmt::join(e, "', '"))
         .emit(ctrl.diagnostics());
       co_return;
     }
