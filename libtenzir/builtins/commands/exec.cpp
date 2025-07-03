@@ -65,6 +65,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   }
   cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
+  cfg.dump_formatted = caf::get_or(inv.options, "tenzir.exec.dump-formatted", false);
   cfg.dump_ir = caf::get_or(inv.options, "tenzir.exec.dump-ir", false);
   cfg.dump_inst_ir
     = caf::get_or(inv.options, "tenzir.exec.dump-inst-ir", false);
@@ -152,6 +153,8 @@ public:
                    "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
+        .add<bool>("dump-formatted",
+                   "print the formatted TQL code and then exit")
         .add<bool>("dump-ir",
                    "print a textual description of the IR and then exit")
         .add<bool>("dump-inst-ir", "print a textual description of the "

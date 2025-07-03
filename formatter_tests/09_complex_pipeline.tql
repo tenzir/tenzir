@@ -1,0 +1,1 @@
+/* Multi-stage analysis */let $threshold=1000|from "network_logs.json"|where bytes>$threshold and protocol=="tcp"|summarize total_bytes=sum(bytes),connection_count=count()|sort -total_bytes|head 20

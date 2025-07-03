@@ -1,0 +1,1 @@
+event_data={metadata:{source:"security_scanner",version:2.1,timestamp:now()},payload:{alerts:[{severity:"high",message:"Suspicious activity"},{severity:"medium",message:"Rate limit exceeded"}],summary:{total_alerts:2,processed_at:now()}}}

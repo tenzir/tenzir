@@ -1,0 +1,1 @@
+event={timestamp:now(),user:{name:"Alice",age:30},tags:["admin","user"]}|if score>100{priority=1}else{priority=3}

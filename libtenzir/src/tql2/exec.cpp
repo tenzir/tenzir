@@ -20,6 +20,7 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/formatter.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -390,6 +391,12 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
     auto tokens = tokenize_permissive(source);
     if (cfg.dump_tokens) {
       return dump_tokens(tokens, source);
+    }
+    if (cfg.dump_formatted) {
+      auto config = format_config{};
+      auto formatted = format_tokens(tokens, source, config);
+      fmt::print("{}\n", formatted);
+      return not ctx.has_failure();
     }
     TRY(verify_tokens(tokens, ctx));
     TRY(auto parsed, parse(tokens, source, ctx));
