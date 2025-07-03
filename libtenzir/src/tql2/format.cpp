@@ -12,6 +12,7 @@
 #include "tenzir/variant.hpp"
 
 #include <fmt/core.h>
+
 #include <set>
 
 namespace tenzir {
@@ -58,7 +59,9 @@ private:
       result += "[";
       for (auto it = xs.begin(); it != xs.end(); ++it) {
         auto f = data_formatter{result};
-        it->get_data().match([&](const auto& v) { return f(v); });
+        it->get_data().match([&](const auto& v) {
+          return f(v);
+        });
         if (std::next(it) != xs.end()) {
           result += ", ";
         }
@@ -84,11 +87,26 @@ public:
   }
 
   void visit(ast::invocation& x) {
-    visit(x.op);
-    // TQL operators don't use parentheses - arguments are separated by whitespace
-    for (auto it = x.args.begin(); it != x.args.end(); ++it) {
-      result_ += " ";
-      visit(*it);
+    // Check if this invocation is actually a function that should have
+    // parentheses
+    if (is_tql_function(x.op)) {
+      // Format as function with parentheses
+      visit(x.op);
+      result_ += "(";
+      for (auto it = x.args.begin(); it != x.args.end(); ++it) {
+        if (it != x.args.begin()) {
+          result_ += ", ";
+        }
+        visit(*it);
+      }
+      result_ += ")";
+    } else {
+      // Format as operator without parentheses
+      visit(x.op);
+      for (auto it = x.args.begin(); it != x.args.end(); ++it) {
+        result_ += " ";
+        visit(*it);
+      }
     }
   }
 
@@ -171,26 +189,56 @@ public:
   void visit(ast::binary_expr& x) {
     visit(x.left);
     result_ += " ";
-    
+
     // Map binary operators to their symbols
     switch (x.op.inner) {
-      case ast::binary_op::add: result_ += "+"; break;
-      case ast::binary_op::sub: result_ += "-"; break;
-      case ast::binary_op::mul: result_ += "*"; break;
-      case ast::binary_op::div: result_ += "/"; break;
-      case ast::binary_op::eq: result_ += "=="; break;
-      case ast::binary_op::neq: result_ += "!="; break;
-      case ast::binary_op::gt: result_ += ">"; break;
-      case ast::binary_op::geq: result_ += ">="; break;
-      case ast::binary_op::lt: result_ += "<"; break;
-      case ast::binary_op::leq: result_ += "<="; break;
-      case ast::binary_op::and_: result_ += "and"; break;
-      case ast::binary_op::or_: result_ += "or"; break;
-      case ast::binary_op::in: result_ += "in"; break;
-      case ast::binary_op::if_: result_ += "if"; break;
-      case ast::binary_op::else_: result_ += "else"; break;
+      case ast::binary_op::add:
+        result_ += "+";
+        break;
+      case ast::binary_op::sub:
+        result_ += "-";
+        break;
+      case ast::binary_op::mul:
+        result_ += "*";
+        break;
+      case ast::binary_op::div:
+        result_ += "/";
+        break;
+      case ast::binary_op::eq:
+        result_ += "==";
+        break;
+      case ast::binary_op::neq:
+        result_ += "!=";
+        break;
+      case ast::binary_op::gt:
+        result_ += ">";
+        break;
+      case ast::binary_op::geq:
+        result_ += ">=";
+        break;
+      case ast::binary_op::lt:
+        result_ += "<";
+        break;
+      case ast::binary_op::leq:
+        result_ += "<=";
+        break;
+      case ast::binary_op::and_:
+        result_ += "and";
+        break;
+      case ast::binary_op::or_:
+        result_ += "or";
+        break;
+      case ast::binary_op::in:
+        result_ += "in";
+        break;
+      case ast::binary_op::if_:
+        result_ += "if";
+        break;
+      case ast::binary_op::else_:
+        result_ += "else";
+        break;
     }
-    
+
     result_ += " ";
     visit(x.right);
   }
@@ -198,10 +246,18 @@ public:
   void visit(ast::unary_expr& x) {
     // Map unary operators to their symbols
     switch (x.op.inner) {
-      case ast::unary_op::pos: result_ += "+"; break;
-      case ast::unary_op::neg: result_ += "-"; break;
-      case ast::unary_op::not_: result_ += "not "; break;
-      case ast::unary_op::move: result_ += "move "; break;
+      case ast::unary_op::pos:
+        result_ += "+";
+        break;
+      case ast::unary_op::neg:
+        result_ += "-";
+        break;
+      case ast::unary_op::not_:
+        result_ += "not ";
+        break;
+      case ast::unary_op::move:
+        result_ += "move ";
+        break;
     }
     visit(x.expr);
   }
@@ -219,7 +275,7 @@ public:
         visit(*it);
       }
       result_ += ")";
-    } else if (x.method && !x.args.empty()) {
+    } else if (x.method && ! x.args.empty()) {
       // Format as method call: object.method(remaining_args)
       visit(x.args[0]);
       result_ += ".";
@@ -264,23 +320,29 @@ public:
     x.match(
       [&](ast::constant& c) {
         auto f = data_formatter{result_};
-        c.value.match([&](const auto& v) { return f(v); });
+        c.value.match([&](const auto& v) {
+          return f(v);
+        });
       },
-      [&](auto& y) { visit(y); });
+      [&](auto& y) {
+        visit(y);
+      });
   }
 
   void visit(ast::selector& x) {
-    x.match([&](auto& y) { visit(y); });
+    x.match([&](auto& y) {
+      visit(y);
+    });
   }
 
   void visit(ast::field_path& x) {
     if (x.has_this()) {
       result_ += "this";
     }
-    
-    bool first = !x.has_this();
+
+    bool first = ! x.has_this();
     for (const auto& segment : x.path()) {
-      if (!first) {
+      if (! first) {
         result_ += ".";
         if (segment.has_question_mark) {
           result_ += "?";
@@ -339,7 +401,9 @@ public:
 
   void visit(ast::constant& x) {
     auto f = data_formatter{result_};
-    x.value.match([&](const auto& v) { return f(v); });
+    x.value.match([&](const auto& v) {
+      return f(v);
+    });
   }
 
   void visit(ast::format_expr& x) {
@@ -383,7 +447,8 @@ public:
     visit(x.expr);
     result_ += " {\n";
     for (auto it = x.arms.begin(); it != x.arms.end(); ++it) {
-      for (auto filter_it = it->filter.begin(); filter_it != it->filter.end(); ++filter_it) {
+      for (auto filter_it = it->filter.begin(); filter_it != it->filter.end();
+           ++filter_it) {
         if (filter_it != it->filter.begin()) {
           result_ += ", ";
         }
@@ -416,70 +481,81 @@ private:
   bool is_tql_function(const ast::entity& fn) {
     // Check if this is a simple identifier (not a complex expression)
     if (fn.path.size() == 1) {
-      static const std::set<std::string> tql_functions = {
-        // Math functions
-        "abs", "ceil", "floor", "round", "sqrt", "max", "min", "sum", "mean",
-        "median", "mode", "stddev", "variance", "quantile",
-        
-        // String functions
-        "capitalize", "to_lower", "to_upper", "to_title", "trim", "trim_start",
-        "trim_end", "starts_with", "ends_with", "length", "length_chars",
-        "length_bytes", "split", "split_regex", "join", "replace", "replace_regex",
-        "is_alnum", "is_alpha", "is_lower", "is_numeric", "is_printable",
-        "is_title", "is_upper", "match_regex",
-        
-        // Collection functions
-        "all", "any", "append", "prepend", "first", "last", "slice", "sort",
-        "reverse", "flatten", "unflatten", "distinct", "collect", "map", "get",
-        "has", "keys", "merge", "zip", "value_counts",
-        
-        // Type conversion functions
-        "float", "int", "uint", "string", "ip", "subnet", "time", "duration",
-        "type_id", "type_of",
-        
-        // Time functions
-        "now", "from_epoch", "since_epoch", "format_time", "parse_time",
-        "day", "month", "year", "hour", "minute", "second",
-        "days", "hours", "minutes", "seconds", "milliseconds", "microseconds",
-        "nanoseconds", "weeks", "months", "years",
-        "count_days", "count_hours", "count_minutes", "count_seconds",
-        "count_milliseconds", "count_microseconds", "count_nanoseconds",
-        "count_weeks", "count_months", "count_years",
-        
-        // Network functions
-        "network", "is_v4", "is_v6", "community_id", "encrypt_cryptopan",
-        
-        // Encoding functions
-        "encode_base64", "decode_base64", "encode_hex", "decode_hex",
-        "encode_url", "decode_url",
-        
-        // Hash functions
-        "hash_md5", "hash_sha1", "hash_sha224", "hash_sha256", "hash_sha384",
-        "hash_sha512", "hash_xxh3",
-        
-        // Bit functions
-        "bit_and", "bit_or", "bit_xor", "bit_not", "shift_left", "shift_right",
-        
-        // File functions
-        "file_name", "file_contents", "parent_dir",
-        
-        // Parse functions
-        "parse_json", "parse_csv", "parse_tsv", "parse_ssv", "parse_xsv",
-        "parse_yaml", "parse_kv", "parse_grok", "parse_cef", "parse_leef",
-        "parse_syslog",
-        
-        // Print functions
-        "print_json", "print_csv", "print_tsv", "print_ssv", "print_xsv",
-        "print_yaml", "print_kv", "print_cef", "print_leef", "print_ndjson",
-        
-        // Other functions
-        "count", "count_if", "count_distinct", "random", "entropy", "secret",
-        "config", "env", "decapsulate", "otherwise", "where",
-        
-        // OCSF functions
-        "category_name", "category_uid", "class_name", "class_uid",
-        "type_name", "type_uid"
-      };
+      // Functions that should have parentheses - based on official Tenzir docs
+      // Excludes functions that are primarily used as operators (where, sort,
+      // reverse)
+      static const std::set<std::string> tql_functions
+        = {// Math functions
+           "abs", "ceil", "floor", "random", "round", "sqrt",
+
+           // Aggregation functions
+           "all", "any", "collect", "count", "count_distinct", "count_if",
+           "distinct", "entropy", "first", "last", "max", "mean", "median",
+           "min", "mode", "quantile", "stddev", "sum", "value_counts",
+           "variance",
+
+           // List/collection functions (excluding sort, reverse which are
+           // operators)
+           "append", "concatenate", "get", "length", "map", "prepend", "zip",
+
+           // String functions (excluding reverse which is operator)
+           "capitalize", "ends_with", "is_alnum", "is_alpha", "is_lower",
+           "is_numeric", "is_printable", "is_title", "is_upper", "join",
+           "length_bytes", "length_chars", "match_regex", "replace",
+           "replace_regex", "slice", "split", "split_regex", "starts_with",
+           "to_lower", "to_title", "to_upper", "trim", "trim_end", "trim_start",
+
+           // Network functions
+           "community_id", "decapsulate", "encrypt_cryptopan", "is_v4", "is_v6",
+           "network",
+
+           // System/env functions
+           "config", "env", "secret",
+
+           // Time functions
+           "count_days", "count_hours", "count_microseconds",
+           "count_milliseconds", "count_minutes", "count_months",
+           "count_nanoseconds", "count_seconds", "count_weeks", "count_years",
+           "day", "days", "format_time", "from_epoch", "hour", "hours",
+           "microseconds", "milliseconds", "minute", "minutes", "month",
+           "months", "nanoseconds", "now", "parse_time", "second", "seconds",
+           "since_epoch", "time", "weeks", "year", "years",
+
+           // Type conversion functions
+           "duration", "float", "int", "ip", "string", "subnet", "uint",
+
+           // Encoding functions
+           "decode_base64", "decode_hex", "decode_url", "encode_base64",
+           "encode_hex", "encode_url",
+
+           // File functions
+           "file_contents", "file_name", "parent_dir",
+
+           // Data structure functions
+           "flatten", "unflatten", "has", "keys", "merge",
+
+           // Hash functions
+           "hash_md5", "hash_sha1", "hash_sha224", "hash_sha256", "hash_sha384",
+           "hash_sha512", "hash_xxh3",
+
+           // Bit functions
+           "bit_and", "bit_not", "bit_or", "bit_xor", "shift_left",
+           "shift_right",
+
+           // Parsing functions
+           "parse_cef", "parse_csv", "parse_grok", "parse_json", "parse_kv",
+           "parse_leef", "parse_ssv", "parse_syslog", "parse_tsv", "parse_xsv",
+           "parse_yaml",
+
+           // Printing functions
+           "print_cef", "print_csv", "print_json", "print_kv", "print_leef",
+           "print_ndjson", "print_ssv", "print_tsv", "print_xsv", "print_yaml",
+
+           // Type introspection
+           "type_id", "type_of",
+
+           // Method helpers
+           "otherwise"};
       return tql_functions.find(fn.path[0].name) != tql_functions.end();
     }
     return false;

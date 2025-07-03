@@ -3,60 +3,51 @@ from {x: 1, y: 2}
 where x > count()
 select x, y = now()
 summarize total = sum(x), avg_val = mean(y)
-put result = parse_json(data)
-extend computed = hash_md5(x)
-replace timestamp = now()
+select result = parse_json(data)
+select computed = hash_md5(x)
+select timestamp = now()
 where field == to_upper(value)
 select processed = to_lower(text)
-group x
-sort by sqrt(x)
+summarize by x
 head max(10, count())
 tail min(5, count())
-slice 0:max(10, count())
 drop computed_field
-rename old_name = new_name
-put json_data = parse_json(raw_data)
-extend parsed = parse_csv(csv_string)
-replace cleaned = trim(dirty_text)
+select old_name = new_name
+select json_data = parse_json(raw_data)
+select parsed = parse_csv(csv_string)
+select cleaned = trim(dirty_text)
 where type_id(this) == "string"
 select formatted = string(value)
 summarize result = count(), first_val = first(x), last_val = last(y)
-group by type_id(this)
-sort by length(name)
+summarize by type_id(this)
 deduplicate computed_field
 enumerate with_index
 batch 100
 throttle 10/sec
 sample 0.1
 delay 5s
-measure performance
+measure
 taste 100
-unique computed_field
-reverse order
-flatten nested_data
-unflatten flat_data
-fields available
-schemas current
-version info
-plugins loaded
-api status
-show results
-print output
+deduplicate computed_field
+reverse
+select nested_data = flatten(this)
+select flat_data = unflatten(this)
+fields
+schemas
+version
+plugins
+api "/status"
 serve data
-files available
-processes running
-sockets open
-chart visualization
-ocsf transform
-python execute
-shell run
+files
+processes
+sockets
+python "self.x = self.y"
+shell "echo hello"
 timeshift @import_time + 1h
-parse csv
-compress gzip
-decompress gzip
-load_balance round_robin
+decompress "gzip"
+load_balance 
 repeat 3
-fork parallel
+fork
 cache results
 buffer 1000
 assert x > 0

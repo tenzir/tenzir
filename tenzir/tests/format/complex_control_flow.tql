@@ -1,1 +1,0 @@
-let$x=1|if$x==1{let$y=2|where foo==$y}else{where bar==3}|match status{"active"=>{select active_count=count()}"inactive"=>{select inactive_count=count()}}
