@@ -7,12 +7,15 @@ let
 in
 {
   # Extra Packages.
+  ai-sdk-cpp = prevPkgs.callPackage ./ai-sdk-cpp { };
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
   arrow-adbc-go = prevPkgs.callPackage ./arrow-adbc-go { };
   azure-sdk-for-cpp = prevPkgs.callPackage ./azure-sdk-for-cpp { };
   bats-tenzir = prevPkgs.callPackage ./bats-tenzir { };
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
+  concurrentqueue = prevPkgs.callPackage ./concurrentqueue { };
   fluent-bit = prevPkgs.callPackage ./fluent-bit { };
+  httplib =  prevPkgs.callPackage ./httplib { };
   pfs = prevPkgs.callPackage ./pfs { };
   speeve = prevPkgs.callPackage ./speeve { };
   uv-bin = prevPkgs.callPackage ./uv-binary { };
