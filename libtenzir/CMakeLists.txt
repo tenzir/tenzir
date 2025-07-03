@@ -457,7 +457,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   else ()
     dependency_summary("ai-sdk-cpp" ai-sdk-cpp "Dependencies")
   endif ()
-  target_link_libraries(libtenzir PRIVATE ai::sdk)
+  target_link_libraries(libtenzir PRIVATE ai::ai-sdk-cpp)
 endif ()
 
 unset(_tenzir_bundled_pfs)

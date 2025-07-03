@@ -16,6 +16,7 @@ let
       caf,
       curl,
       libpcap,
+      ai-sdk-cpp,
       arrow-cpp,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
@@ -213,6 +214,7 @@ let
           propagatedNativeBuildInputs = [ pkg-config ];
           buildInputs =
             [
+              ai-sdk-cpp
               aws-sdk-cpp-tenzir
               libbacktrace
               clickhouse-cpp
