@@ -1,0 +1,20 @@
+// test: format - Edge cases for function vs operator distinction
+
+// These should get parentheses (functions)
+count()
+hash_md5(data)
+sum(values)
+length(text)
+
+// These should NOT get parentheses (operators) 
+where field > 0
+select x, y
+head 10
+sort data
+
+// Mixed in pipeline
+export | count() | where x > 0 | hash_md5(result)
+
+// Functions that also exist as operators (tricky cases)
+reverse data   // operator context - no parens
+sort values    // operator context - no parens

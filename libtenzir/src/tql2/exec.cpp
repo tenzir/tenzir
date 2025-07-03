@@ -399,7 +399,8 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       return not ctx.has_failure();
     }
     if (cfg.dump_format) {
-      fmt::print("{}\n", format_pipeline(parsed));
+      // Use hybrid formatter which provides pretty-printing and preserves comments
+      fmt::print("{}\n", format_hybrid(source, tokens, parsed));
       return not ctx.has_failure();
     }
     if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir

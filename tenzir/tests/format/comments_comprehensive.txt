@@ -1,0 +1,30 @@
+// test: format
+
+/* Block comment at start */
+export
+
+// Line comment before function
+count()
+
+/* Multi-line
+   block comment */
+hash_md5(data)
+
+parse_json(/* inline block comment */ data)
+
+/* Block comment with // line comment inside */
+where field > 0
+
+// Line comment with /* block comment markers inside */
+select x
+
+/*
+ * Structured block comment
+ * with asterisks
+ */
+sum(values)
+
+/* Block comment with complex content */
+length(field)
+
+// Final line comment

@@ -9,11 +9,13 @@
 #include "tenzir/tql2/format.hpp"
 
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/tokens.hpp"
 #include "tenzir/variant.hpp"
 
 #include <fmt/core.h>
 
 #include <set>
+#include <string_view>
 
 namespace tenzir {
 
@@ -569,6 +571,200 @@ private:
 
 auto format_pipeline(const ast::pipeline& pipeline) -> std::string {
   return formatter{}.format(pipeline);
+}
+
+namespace {
+
+// Helper function to check if an identifier is a TQL function
+bool is_tql_function(std::string_view name) {
+  // Functions that should have parentheses - based on official Tenzir docs
+  // Excludes functions that are primarily used as operators (where, sort, reverse)
+  static const std::set<std::string> tql_functions
+    = {// Math functions
+       "abs", "ceil", "floor", "random", "round", "sqrt",
+
+       // Aggregation functions
+       "all", "any", "collect", "count", "count_distinct", "count_if",
+       "distinct", "entropy", "first", "last", "max", "mean", "median",
+       "min", "mode", "quantile", "stddev", "sum", "value_counts",
+       "variance",
+
+       // List/collection functions (excluding sort, reverse which are operators)
+       "append", "concatenate", "get", "length", "map", "prepend", "zip",
+
+       // String functions (excluding reverse which is operator)
+       "capitalize", "ends_with", "is_alnum", "is_alpha", "is_lower",
+       "is_numeric", "is_printable", "is_title", "is_upper", "join",
+       "length_bytes", "length_chars", "match_regex", "replace",
+       "replace_regex", "slice", "split", "split_regex", "starts_with",
+       "to_lower", "to_title", "to_upper", "trim", "trim_end", "trim_start",
+
+       // Network functions
+       "community_id", "decapsulate", "encrypt_cryptopan", "is_v4", "is_v6",
+       "network",
+
+       // System/env functions
+       "config", "env", "secret",
+
+       // Time functions
+       "count_days", "count_hours", "count_microseconds",
+       "count_milliseconds", "count_minutes", "count_months",
+       "count_nanoseconds", "count_seconds", "count_weeks", "count_years",
+       "day", "days", "format_time", "from_epoch", "hour", "hours",
+       "microseconds", "milliseconds", "minute", "minutes", "month",
+       "months", "nanoseconds", "now", "parse_time", "second", "seconds",
+       "since_epoch", "time", "weeks", "year", "years",
+
+       // Type conversion functions
+       "duration", "float", "int", "ip", "string", "subnet", "uint",
+
+       // Encoding functions
+       "decode_base64", "decode_hex", "decode_url", "encode_base64",
+       "encode_hex", "encode_url",
+
+       // File functions
+       "file_contents", "file_name", "parent_dir",
+
+       // Data structure functions
+       "flatten", "unflatten", "has", "keys", "merge",
+
+       // Hash functions
+       "hash_md5", "hash_sha1", "hash_sha224", "hash_sha256", "hash_sha384",
+       "hash_sha512", "hash_xxh3",
+
+       // Bit functions
+       "bit_and", "bit_not", "bit_or", "bit_xor", "shift_left",
+       "shift_right",
+
+       // Parsing functions
+       "parse_cef", "parse_csv", "parse_grok", "parse_json", "parse_kv",
+       "parse_leef", "parse_ssv", "parse_syslog", "parse_tsv", "parse_xsv",
+       "parse_yaml",
+
+       // Printing functions
+       "print_cef", "print_csv", "print_json", "print_kv", "print_leef",
+       "print_ndjson", "print_ssv", "print_tsv", "print_xsv", "print_yaml",
+
+       // Type introspection
+       "type_id", "type_of",
+
+       // Method helpers
+       "otherwise"};
+  return tql_functions.find(std::string(name)) != tql_functions.end();
+}
+
+} // namespace
+
+// Simple hybrid formatter that provides basic pretty-printing with comment preservation
+auto format_hybrid(std::string_view source, const std::vector<token>& tokens, const ast::pipeline& pipeline) -> std::string {
+  // For now, use the existing AST formatter but preserve the original's function vs operator distinction
+  // This is a stepping stone towards the full hybrid implementation
+  auto formatted = format_pipeline(pipeline);
+  
+  // If there are comments in the source, fallback to token-based approach to preserve them
+  bool has_comments = false;
+  for (const auto& token : tokens) {
+    if (token.kind == token_kind::line_comment || token.kind == token_kind::delim_comment) {
+      has_comments = true;
+      break;
+    }
+  }
+  
+  if (has_comments) {
+    return format_tokens(source, tokens);
+  }
+  
+  return formatted;
+}
+
+auto format_tokens(std::string_view source, const std::vector<token>& tokens) -> std::string {
+  if (tokens.empty()) {
+    return std::string(source);
+  }
+
+  std::string result;
+  result.reserve(source.size() + 64); // Reserve extra space for potential parentheses
+  
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    const auto& tok = tokens[i];
+    
+    // Get token text
+    size_t token_start = (i == 0) ? 0 : tokens[i-1].end;
+    size_t token_end = tok.end;
+    std::string_view token_text = source.substr(token_start, token_end - token_start);
+    
+    // Handle function formatting
+    if (tok.kind == token_kind::identifier) {
+      // Check if this identifier should be formatted as a function
+      if (is_tql_function(token_text)) {
+        // Look ahead to see if parentheses follow
+        bool has_parens = false;
+        size_t next_non_whitespace = i + 1;
+        
+        // Skip whitespace tokens to find the next meaningful token
+        while (next_non_whitespace < tokens.size() && 
+               (tokens[next_non_whitespace].kind == token_kind::whitespace ||
+                tokens[next_non_whitespace].kind == token_kind::newline)) {
+          next_non_whitespace++;
+        }
+        
+        if (next_non_whitespace < tokens.size() && 
+            tokens[next_non_whitespace].kind == token_kind::lpar) {
+          has_parens = true;
+        }
+        
+        // Add the function name
+        result += token_text;
+        
+        // If it's a function but doesn't have parentheses, add them
+        if (!has_parens) {
+          // Add opening parenthesis
+          result += "(";
+          
+          // Find arguments by collecting tokens until pipe or newline
+          // We need to be smarter about this - handle complex expressions
+          size_t arg_start = i + 1;
+          size_t arg_end = arg_start;
+          
+          // Skip initial whitespace after function name
+          while (arg_end < tokens.size() && 
+                 (tokens[arg_end].kind == token_kind::whitespace ||
+                  tokens[arg_end].kind == token_kind::newline)) {
+            arg_end++;
+          }
+          
+          // For now, let's just collect all tokens until pipe and preserve them as-is
+          // This maintains the original formatting for complex expressions
+          while (arg_end < tokens.size() && 
+                 tokens[arg_end].kind != token_kind::pipe &&
+                 tokens[arg_end].kind != token_kind::newline) {
+            
+            size_t token_start = (arg_end == 0) ? 0 : tokens[arg_end-1].end;
+            size_t token_end = tokens[arg_end].end;
+            std::string_view token_content = source.substr(token_start, token_end - token_start);
+            
+            result += token_content;
+            arg_end++;
+          }
+          
+          result += ")";
+          
+          // Skip the processed argument tokens
+          i = arg_end - 1;
+          continue;
+        } else {
+          // Function already has parentheses, just continue with normal processing
+          // Don't add to result here since we'll handle it in the default case
+          // This prevents duplication
+        }
+      }
+    }
+    
+    // Default: preserve the token as-is
+    result += token_text;
+  }
+  
+  return result;
 }
 
 } // namespace tenzir

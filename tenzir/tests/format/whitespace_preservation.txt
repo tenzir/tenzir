@@ -1,0 +1,14 @@
+// test: format - Test whitespace preservation
+
+export   // Extra spaces after operator
+
+
+count()    // Extra spaces and blank lines above
+
+
+
+hash_md5(   data   )  // Spaces in function args
+
+where    field   >   0   // Multiple spaces between tokens
+
+select      x,      y     // Spaces in lists

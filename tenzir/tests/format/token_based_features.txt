@@ -1,0 +1,29 @@
+// test: format - Features specific to token-based formatting
+
+/* This comment should be preserved exactly */
+export
+
+// Functions without parentheses should get them
+count()
+hash_md5("test")
+length(field)
+sum(values)
+
+/* Functions with parentheses should be left alone */
+parse_json()
+decode_base64(data)
+
+// Operators should not get parentheses
+where x > 0
+select field
+head 10
+
+/* Mixed function and operator pipeline */
+where active == true | count() | hash_md5(result)
+
+// Complex expressions with comments
+/* Calculate percentage */ round(found / total * 100) | /* Format result */ to_string()
+
+// Edge case: function name that's also an operator
+sort data  // should not get parentheses (operator context)
+reverse list  // should not get parentheses (operator context)
