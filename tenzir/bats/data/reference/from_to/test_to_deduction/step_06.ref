@@ -11,7 +11,7 @@
     is_ftp: false,
     url: {
       buffer: {
-        chunk: <chunk:size:100>,
+        chunk: <chunk:size:76>,
         table-offset: 12
       }
     } @ 3..33,

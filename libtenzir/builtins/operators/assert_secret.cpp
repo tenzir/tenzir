@@ -39,8 +39,8 @@ public:
     }
     if (not std::equal(s.begin(), s.end(), e.begin())) {
       diagnostic::error("secret does not match expected value")
-        .primary(secret_)
-        .primary(expected_)
+        .primary(secret_, "['{}']", fmt::join(s, "', '"))
+        .primary(expected_, "['{}']", fmt::join(e, "', '"))
         .emit(ctrl.diagnostics());
       co_return;
     }

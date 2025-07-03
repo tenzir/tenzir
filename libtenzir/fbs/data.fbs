@@ -76,14 +76,35 @@ table Record {
   fields: [RecordField] (required);
 }
 
-table StructuredSecretElement {
-  name: string (required);
-  operations: string (required);
-  is_literal: bool;
+table SecretLiteral {
+  value: string (required);
+}
+
+table SecretName {
+  value: string (required);
+}
+
+table SecretConcatenation {
+  secrets: [Secret] (required);
+}
+
+enum SecretTransformations : uint8 {
+  encode_base64, decode_base64,
+}
+table SecretTransformed {
+  secret: Secret (required);
+  transformation: SecretTransformations;
+}
+
+union SecretUnion {
+  literal: SecretLiteral,
+  name: SecretName,
+  concatenation: SecretConcatenation,
+  transformed: SecretTransformed,
 }
 
 table Secret {
-  elements: [StructuredSecretElement] (required);
+  data: SecretUnion (required);
 }
 
 /// The sum data of all possible types.

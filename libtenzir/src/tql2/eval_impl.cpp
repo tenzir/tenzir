@@ -613,24 +613,28 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
       match(
         c,
         [&add_column_to_row](const std::string& s) {
-          add_column_to_row(s);
+          return add_column_to_row(s);
         },
         [this, &add_column_to_row, i](const multi_series& ms) {
           const auto v = ms.value_at(i);
           if (auto* sec = try_as<view<secret>>(v)) {
-            add_column_to_row(*sec);
+            return add_column_to_row(*sec);
           } else {
             auto str = to_string(v, location::unknown, ctx_);
             if (str) {
-              add_column_to_row(*str);
+              return add_column_to_row(*str);
             } else {
-              add_column_to_row("null");
+              return add_column_to_row("null");
             }
           }
         });
     }
     match(row, append_row_to_builder);
-    row.emplace<std::string>();
+    if (auto* str = try_as<std::string>(row)) {
+      str->clear();
+    } else {
+      row.emplace<std::string>();
+    }
   }
   match(current_builder, append_builder_to_result);
   return res;

@@ -3,7 +3,7 @@
     op: 0..4,
     url: {
       buffer: {
-        chunk: <chunk:size:108>,
+        chunk: <chunk:size:84>,
         table-offset: 12
       }
     } @ 5..43,
