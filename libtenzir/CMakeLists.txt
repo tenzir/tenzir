@@ -439,26 +439,24 @@ endif ()
 target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
 unset(_tenzir_bundled_ai_sdk_cpp)
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  option(TENZIR_ENABLE_BUNDLED_ai_sdk_cpp "Use the ai-sdk-cpp submodule" ON)
-  add_feature_info("TENZIR_ENABLE_BUNDLED_ai_sdk_cpp" TENZIR_ENABLE_BUNDLED_ai_sdk_cpp
-                   "use the ai-sdk-cpp submodule.")
-  if (NOT TENZIR_ENABLE_BUNDLED_ai_sdk_cpp)
-    find_package(ai-sdk-cpp CONFIG)
-  endif ()
-  if (NOT ai-sdk-cpp_FOUND)
-    if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/ai-sdk-cpp/CMakeLists.txt")
-      message(FATAL_ERROR "ai-sdk-cpp library not found, either use -Dai-sdk-cpp_DIR=... or"
-                          " initialize the libtenzir/aux/ai-sdk-cpp submodule")
-    endif ()
-    add_subdirectory(aux/ai-sdk-cpp)
-    dependency_summary("ai-sdk-cpp" "${CMAKE_CURRENT_SOURCE_DIR}/aux/ai-sdk-cpp"
-                       "Dependencies")
-  else ()
-    dependency_summary("ai-sdk-cpp" ai-sdk-cpp "Dependencies")
-  endif ()
-  target_link_libraries(libtenzir PRIVATE ai::ai-sdk-cpp)
+option(TENZIR_ENABLE_BUNDLED_ai_sdk_cpp "Use the ai-sdk-cpp submodule" ON)
+add_feature_info("TENZIR_ENABLE_BUNDLED_ai_sdk_cpp" TENZIR_ENABLE_BUNDLED_ai_sdk_cpp
+                 "use the ai-sdk-cpp submodule.")
+if (NOT TENZIR_ENABLE_BUNDLED_ai_sdk_cpp)
+  find_package(ai-sdk-cpp CONFIG)
 endif ()
+if (NOT ai-sdk-cpp_FOUND)
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/ai-sdk-cpp/CMakeLists.txt")
+    message(FATAL_ERROR "ai-sdk-cpp library not found, either use -Dai-sdk-cpp_DIR=... or"
+                        " initialize the libtenzir/aux/ai-sdk-cpp submodule")
+  endif ()
+  add_subdirectory(aux/ai-sdk-cpp)
+  dependency_summary("ai-sdk-cpp" "${CMAKE_CURRENT_SOURCE_DIR}/aux/ai-sdk-cpp"
+                     "Dependencies")
+else ()
+  dependency_summary("ai-sdk-cpp" ai-sdk-cpp "Dependencies")
+endif ()
+target_link_libraries(libtenzir_builtins PRIVATE ai::sdk)
 
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
