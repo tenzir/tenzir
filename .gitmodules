@@ -39,6 +39,6 @@
 	path = plugins/clickhouse/aux/clickhouse-cpp
 	url = https://github.com/ClickHouse/clickhouse-cpp
 	shallow = true
-[submodule "libtenzir/aux/ai-sdk-cpp"]
-	path = libtenzir/aux/ai-sdk-cpp
+[submodule "plugins/ai/aux/ai-sdk-cpp"]
+	path = plugins/ai/aux/ai-sdk-cpp
 	url = https://github.com/ClickHouse/ai-sdk-cpp
