@@ -8,7 +8,7 @@ extend computed = hash_md5(x)
 replace timestamp = now()
 where field == to_upper(value)
 select processed = to_lower(text)
-group by hash_sha256(id)
+group x
 sort by sqrt(x)
 head max(10, count())
 tail min(5, count())

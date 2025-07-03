@@ -43,8 +43,4 @@ metadata_time = @import_time
 optional_field = record.field?
 
 // Test complex chained expressions
-result = data
-  .where(x => x.score > 50)
-  .map(x => {...x, normalized: x.score / 100})
-  .sort()
-  .slice(0, 10)
+result = data.where(x => x.score > 50).map(x => {...x, normalized: x.score / 100}).sort().slice(0, 10)

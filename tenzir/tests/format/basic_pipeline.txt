@@ -1,3 +1,5 @@
-from {x: 1}
+from {
+  x: 1,
+}
 where x > 0
 select x

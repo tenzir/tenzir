@@ -1,0 +1,9 @@
+// Test TQL functions vs operators
+from {x: 1, y: 2}
+where x > 0
+select x, computed = count()
+put result = parse_json(data)
+extend hash_val = hash_md5(x)
+group by x
+sort by sqrt(x)
+head max(10, count())

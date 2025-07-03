@@ -8,7 +8,7 @@ replace computed = func1(func2(value))
 where condition and another_condition
 select result = x if condition else fallback
 summarize count = count(), sum = sum(x), avg = avg(y)
-group by field1, field2
+group field1
 sort by field1 asc, field2 desc
 head 10
 tail 5

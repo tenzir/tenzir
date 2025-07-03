@@ -1,4 +1,4 @@
 export
-foo()
-bar(x)
-baz(a=1, b="test")
+count()
+parse_json(data)
+hash_md5(value)

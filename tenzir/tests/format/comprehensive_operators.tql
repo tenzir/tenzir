@@ -5,7 +5,7 @@ select x, y
 export
 import
 summarize count = count()
-group by x
+group x
 sort x
 head 10
 tail 5
