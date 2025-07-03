@@ -70,7 +70,7 @@ jobs:
         run: |
           docker buildx build . \
             -t 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG} \
-            --target tenzir-node-untested \
+            --target tenzir-node \
             --platform ${PLATFORM} \
             --cache-from "type=registry,ref=${CACHE_TAG}" \
             --push
