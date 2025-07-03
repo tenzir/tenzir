@@ -54,14 +54,25 @@ jobs:
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 1
+
       - name: Build and Push Marketplace Image
         env:
+          # TODO: add multi-arch support
+          PLATFORM: linux/amd64
+          CACHE_TAG: ghcr.io/tenzir/tenzir:amd64-build-cache
           RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
         run: |
           docker buildx build . \
             -t 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG} \
-            --target tenzir-node \
-            --platform linux/amd64,linux/arm64 \
+            --target tenzir-node-untested \
+            --platform ${PLATFORM} \
+            --cache-from "type=registry,ref=${CACHE_TAG}" \
             --push
 
       - name: Add new version to AWS Marketplace
