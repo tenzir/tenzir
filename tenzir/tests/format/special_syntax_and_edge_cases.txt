@@ -1,0 +1,150 @@
+// Test comments and whitespace handling
+/* Multi-line comment
+   spanning multiple lines */
+select field1, /* inline comment */ field2
+// Comment at end of line
+drop old_field // Another end comment
+
+// Test various string quote styles
+single_quotes = 'Hello World'
+double_quotes = "Hello World"
+mixed_quotes = "She said 'Hello'"
+nested_quotes = 'He said "Hello World"'
+
+// Test escape sequences in strings
+escaped = "Line 1\nLine 2\tTabbed\rCarriage\x41\u0041"
+unicode = "Unicode: \u03B1\u03B2\u03B3"
+hex_escape = "\x48\x65\x6C\x6C\x6F"
+
+// Test multiline constructs
+multiline_record = {
+  name: "Test",
+  values: [
+    1,
+    2,
+    3
+  ],
+  nested: {
+    a: 1,
+    b: 2
+  }
+}
+
+// Test operator spacing variations
+spaced_ops = a + b - c * d / e
+no_space_ops = a+b-c*d/e
+mixed_spacing = a+ b -c* d /e
+
+// Test complex function call formatting
+complex_call = some_function(
+  arg1,
+  arg2="value",
+  arg3=complex_expression + another_value,
+  arg4=[1, 2, 3]
+)
+
+// Test record field with special characters
+special_fields = {
+  "field-with-dashes": 1,
+  "field_with_underscores": 2,
+  "field with spaces": 3,
+  "field.with.dots": 4,
+  "field:with:colons": 5,
+  "field@with@at": 6,
+  "field#with#hash": 7
+}
+
+// Test list with mixed types
+mixed_list = [
+  42,
+  "string",
+  true,
+  null,
+  {nested: "record"},
+  [1, 2, 3],
+  now(),
+  192.168.1.1
+]
+
+// Test deeply nested expressions
+deeply_nested = {
+  level1: {
+    level2: {
+      level3: {
+        level4: {
+          value: "deep",
+          list: [
+            {
+              inner: {
+                deeper: [1, 2, 3]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+// Test function calls with no arguments
+no_args = now()
+empty_parens = random()
+
+// Test method chaining with complex expressions
+chained = data
+  .map(x => x.score * 2)
+  .where(x => x > threshold)
+  .sort()
+  .slice(0, 10)
+  .map(x => {
+    id: x.id,
+    double_score: x.score
+  })
+
+// Test optional field access variations
+optional1 = record.field?
+optional2 = record["field"]?
+optional3 = record.nested?.field
+optional4 = record.nested?["field"]
+
+// Test metadata access
+event_name = @name
+import_time = @import_time
+internal_flag = @internal
+
+// Test this keyword variations
+copy_event = this
+modify_event = {...this, new_field: "value"}
+replace_event = {id: this.id, processed: true}
+
+// Test move keyword
+moved_simple = move old_field
+moved_complex = move nested.field + 10
+moved_expression = move source.value * 2
+
+// Test complex assignment patterns
+a, b = [1, 2]
+{x, y} = {x: 10, y: 20}
+nested.field = value
+this.new_field = computed_value
+
+// Test edge cases with operators
+pipe_separator = field1 | field2
+pipeline_with_pipe = from "file" | head 10
+bitwise_or = a | b
+logical_or = condition1 or condition2
+
+// Test various literal edge cases
+scientific_notation = 1.23e-4
+hex_number = 0xFF
+binary_number = 0b1010
+octal_number = 0o755
+float_with_suffix = 2.5k
+negative_duration = -1h
+zero_values = [0, 0.0, 0s, 0h]
+
+// Test record spread with complex expressions
+spread_simple = {...base}
+spread_multiple = {...first, ...second}
+spread_with_overrides = {...base, field: "override"}
+spread_complex = {...user, ...settings, id: generate_id()}

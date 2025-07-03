@@ -1,0 +1,1 @@
+from{xs:[1,2,3]}|simple=xs.map(x=>x+1)|complex=xs.map(x=>x*2+1)|nested=xs.map(x=>{value:x,double:x*2})|chained=xs.map(x=>x+1).map(y=>y*2)|conditional=xs.map(x=>x>2)|record_access=items.map(item=>item.field+1)|nested_lambda=xs.map(x=>items.map(item=>item+x))|complex_expr=data.map(d=>d.value*factor+offset)

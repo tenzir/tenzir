@@ -1,0 +1,8 @@
+from {x: 1, y: 2}
+simple_if = value if condition
+null_if = null if false
+string_if = "text" if true
+nested_if = x + y if x > 0
+chained_if = value if condition1 if condition2
+complex_if = {result: value if x > 0, other: y if y < 10}
+field_if = record.field if record.field != null

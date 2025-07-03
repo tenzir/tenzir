@@ -1,0 +1,9 @@
+from {
+  list_val: [1, 2, "three"],
+  nested: {
+    inner: {
+      value: 42,
+    },
+  },
+  mixed_list: [null, {a: 1}, [2, 3]],
+}

@@ -1,0 +1,40 @@
+// Test let statements
+let $meaning = 42
+let $start = now() - 1h
+let $end = $start + 30min
+let $complex = count(some_field) * 2.5
+
+// Test if statements
+if score < 100 {
+  severity = "medium"
+  drop details
+} else {
+  severity = "high"
+}
+
+// Test nested if statements
+if type == "error" {
+  priority = 1
+} else if type == "warning" {
+  priority = 2
+} else {
+  priority = 3
+}
+
+// Test assignment statements with complex field paths
+traffic.bytes_out = event.sent_bytes
+metadata.enriched.geo.country = "US"
+nested.deep.field = value
+
+// Test if with pipeline expressions
+if category == "security" {
+  where severity > 5
+  select timestamp, src_ip, dst_ip
+} else {
+  head 100
+}
+
+// Test let substitution
+let $threshold = 1000
+where count > $threshold
+select name, count, threshold = $threshold

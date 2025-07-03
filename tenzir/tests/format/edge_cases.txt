@@ -1,0 +1,69 @@
+from {x: 1}
+where x > 0 and y < 10
+select x, y = f(a, b, c)
+put complex = (a + b) * c
+extend nested = field.method1().method2(param)
+replace computed = func1(func2(value))
+where condition and another_condition
+select result = x if condition else fallback
+summarize count = count(), sum = sum(x), avg = avg(y)
+group by field1, field2
+sort by field1 asc, field2 desc
+head 10
+tail 5
+slice 1:10
+drop unwanted_field
+rename old_name = new_name
+deduplicate field1, field2
+enumerate
+batch 100
+throttle 10/sec
+cache
+buffer 1000
+sample 0.1
+delay 5s
+measure
+taste
+unique
+reverse
+pass
+discard
+flatten
+unflatten
+fields
+schemas
+version
+plugins
+api
+show
+print
+serve
+files
+processes
+sockets
+chart
+ocsf
+python
+shell
+timeshift @import_time + duration("1h")
+parse csv
+compress gzip
+decompress gzip
+load_balance
+repeat 3
+fork
+if complex_condition(x, y) {
+where x > threshold(value)
+} else {
+select fallback_value = default()
+}
+match type_id(this) {
+"string" => {
+select string_length = length(this)
+}
+"int" => {
+select int_value = this
+}
+}
+let $computed = complex_function(a, b, c)
+assert condition(x, y, z)

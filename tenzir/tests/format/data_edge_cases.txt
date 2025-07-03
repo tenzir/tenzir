@@ -1,0 +1,25 @@
+from {
+  null_val: null,
+  empty_string: "",
+  number: 42.5,
+  boolean: true,
+  nested: [
+    1,
+    2,
+    {
+      inner: "value",
+    },
+  ],
+  deeply_nested: {
+    level1: {
+      level2: {
+        level3: [
+          {
+            a: 1,
+            b: null,
+          },
+        ],
+      },
+    },
+  },
+}

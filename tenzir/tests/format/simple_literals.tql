@@ -1,0 +1,8 @@
+// test: format
+
+from {
+  str: "hello",
+  num: 42,
+  bool_val: true,
+  null_val: null
+}

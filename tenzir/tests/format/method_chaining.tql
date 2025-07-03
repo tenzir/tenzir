@@ -1,0 +1,1 @@
+from{data:[1,2,3,4,5]}|select processed=data.map(x=>x*2)|select filtered=processed.filter(x=>x>4)|result=data.map(x=>{value:x,double:x*2})

@@ -1,0 +1,6 @@
+// test: format
+
+export
+foo()
+bar(x)
+baz(a=1, b="test")

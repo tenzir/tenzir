@@ -1,99 +1,103 @@
-{ callPackage, toImageFn, ... }@args:
-let
-  pkgFun =
-    {
-      self,
-      lib,
-      stdenv,
-      callPackage,
-      tenzir-source,
-      cmake,
-      ninja,
-      pkg-config,
-      poetry,
-      lld,
-      boost,
-      caf,
-      curl,
-      libpcap,
-      arrow-cpp,
-      arrow-adbc-cpp,
-      aws-sdk-cpp-tenzir,
-      azure-sdk-for-cpp,
-      libbacktrace,
-      clickhouse-cpp,
-      fast-float,
-      flatbuffers,
-      fluent-bit,
-      protobuf,
-      google-cloud-cpp,
-      grpc,
-      spdlog,
-      libyamlcpp,
-      simdjson,
-      robin-map,
-      jemalloc,
-      libunwind,
-      xxHash,
-      rabbitmq-c,
-      yara,
-      rdkafka,
-      cppzmq,
-      libmaxminddb,
-      re2,
-      dpkg,
-      rpm,
-      restinio,
-      llhttp,
-      pfs,
-      # Defaults to null because it is omitted for the developer edition build.
-      tenzir-plugins-source ? null,
-      extraPlugins ? [ ],
-      symlinkJoin,
-      extraCmakeFlags ? [ ],
-      python3,
-      uv,
-      uv-bin,
-      pkgsBuildHost,
-      makeBinaryWrapper,
-      isReleaseBuild ? false,
-      ...
-    }:
-    let
-      inherit (stdenv.hostPlatform) isMusl isStatic;
+{
+  callPackage,
+  toImageFn,
+  ...
+} @ args: let
+  pkgFun = {
+    self,
+    lib,
+    stdenv,
+    callPackage,
+    tenzir-source,
+    cmake,
+    ninja,
+    pkg-config,
+    poetry,
+    lld,
+    boost,
+    caf,
+    curl,
+    libpcap,
+    arrow-cpp,
+    # arrow-adbc-cpp,
+    aws-sdk-cpp-tenzir,
+    azure-sdk-for-cpp,
+    libbacktrace,
+    clickhouse-cpp,
+    fast-float,
+    flatbuffers,
+    fluent-bit,
+    protobuf,
+    google-cloud-cpp,
+    grpc,
+    spdlog,
+    libyamlcpp,
+    simdjson,
+    robin-map,
+    jemalloc,
+    libunwind,
+    xxHash,
+    rabbitmq-c,
+    yara,
+    rdkafka,
+    cppzmq,
+    libmaxminddb,
+    re2,
+    dpkg,
+    rpm,
+    restinio,
+    llhttp,
+    pfs,
+    # Defaults to null because it is omitted for the developer edition build.
+    tenzir-plugins-source ? null,
+    extraPlugins ? [],
+    symlinkJoin,
+    extraCmakeFlags ? [],
+    python3,
+    uv,
+    uv-bin,
+    pkgsBuildHost,
+    makeBinaryWrapper,
+    isReleaseBuild ? false,
+    ...
+  }: let
+    inherit (stdenv.hostPlatform) isMusl isStatic;
 
-      version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
+    version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
 
-      extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
-      bundledPlugins =
-        [
-          "plugins/amqp"
-          "plugins/azure-blob-storage"
-          "plugins/clickhouse"
-          "plugins/fluent-bit"
-          "plugins/from_velociraptor"
-          "plugins/gcs"
-          "plugins/google-cloud-pubsub"
-          "plugins/kafka"
-          "plugins/nic"
-          "plugins/parquet"
-          "plugins/s3"
-          "plugins/sigma"
-          "plugins/sqs"
-          "plugins/web"
-          "plugins/zmq"
-        ]
-        # Temporarily disable yara on the static mac build because of issues
-        # building protobufc.
-        ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
-          "plugins/yara"
-        ];
-      py3 =
-        let
-          p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildHost.python3 else python3;
-        in
-        p.withPackages (
-          ps: with ps; [
+    extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
+    bundledPlugins =
+      [
+        "plugins/amqp"
+        "plugins/azure-blob-storage"
+        "plugins/clickhouse"
+        "plugins/fluent-bit"
+        "plugins/from_velociraptor"
+        "plugins/gcs"
+        "plugins/google-cloud-pubsub"
+        "plugins/kafka"
+        "plugins/nic"
+        "plugins/parquet"
+        "plugins/s3"
+        "plugins/sigma"
+        "plugins/sqs"
+        "plugins/web"
+        "plugins/zmq"
+      ]
+      # Temporarily disable yara on the static mac build because of issues
+      # building protobufc.
+      ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
+        "plugins/yara"
+      ];
+    py3 = let
+      p =
+        if stdenv.buildPlatform.canExecute stdenv.hostPlatform
+        then pkgsBuildHost.python3
+        else python3;
+    in
+      p.withPackages (
+        ps:
+          with ps; [
             aiohttp
             dynaconf
             pandas
@@ -101,79 +105,82 @@ let
             python-box
             pip
           ]
-        );
+      );
 
-      allPluginSrcs = builtins.mapAttrs (
-        name: type: if type == "directory" then "${tenzir-plugins-source}/${name}" else null
-      ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
+    allPluginSrcs = builtins.mapAttrs (
+      name: type:
+        if type == "directory"
+        then "${tenzir-plugins-source}/${name}"
+        else null
+    ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
 
-      withTenzirPluginsStatic =
-        selection:
-        let
-          layerPlugins = selection allPluginSrcs;
-          final =
-            (self.override {
-              extraPlugins = extraPlugins ++ layerPlugins;
-            }).overrideAttrs
-              (prevAttrs: {
-                passthru = prevAttrs.passthru // {
-                  asImage = toImage {
-                    pkg = final;
-                    plugins = [ ];
-                  };
-                };
-              });
-        in
-        final;
-
-      withTenzirPlugins =
-        { prevLayer }:
-        selection:
-        let
-          allPlugins = callPackage ./plugins {
-            tenzir = self;
-            tenzir-plugins-srcs = allPluginSrcs;
-          };
-          layerPlugins = selection allPlugins;
-          thisLayer = symlinkJoin {
-            inherit (self)
-              meta
-              pname
-              version
-              name
-              ;
-            paths = [
-              self
-            ] ++ builtins.sort (lhs: rhs: lhs.name < rhs.name) (builtins.concatLists thisLayer.plugins);
-            nativeBuildInputs = [ makeBinaryWrapper ];
-            postBuild = ''
-              rm $out/bin/tenzir
-              makeWrapper ${lib.getExe self} $out/bin/tenzir \
-                --inherit-argv0 \
-                --set-default TENZIR_RUNTIME_PREFIX $out
-            '';
-
-            passthru = self.passthru // {
-              plugins = prevLayer.plugins ++ [ layerPlugins ];
-              withPlugins = withTenzirPlugins { prevLayer = thisLayer; };
-
+    withTenzirPluginsStatic = selection: let
+      layerPlugins = selection allPluginSrcs;
+      final =
+        (self.override {
+          extraPlugins = extraPlugins ++ layerPlugins;
+        }).overrideAttrs
+        (prevAttrs: {
+          passthru =
+            prevAttrs.passthru
+            // {
               asImage = toImage {
-                pkg = self;
-                plugins = prevLayer.plugins ++ [ layerPlugins ];
+                pkg = final;
+                plugins = [];
               };
             };
-          };
-        in
-        thisLayer;
-
-      toImage = pkgsBuildHost.callPackage toImageFn {
-        inherit isStatic;
-      };
-
+        });
     in
+      final;
+
+    withTenzirPlugins = {prevLayer}: selection: let
+      allPlugins = callPackage ./plugins {
+        tenzir = self;
+        tenzir-plugins-srcs = allPluginSrcs;
+      };
+      layerPlugins = selection allPlugins;
+      thisLayer = symlinkJoin {
+        inherit
+          (self)
+          meta
+          pname
+          version
+          name
+          ;
+        paths =
+          [
+            self
+          ]
+          ++ builtins.sort (lhs: rhs: lhs.name < rhs.name) (builtins.concatLists thisLayer.plugins);
+        nativeBuildInputs = [makeBinaryWrapper];
+        postBuild = ''
+          rm $out/bin/tenzir
+          makeWrapper ${lib.getExe self} $out/bin/tenzir \
+            --inherit-argv0 \
+            --set-default TENZIR_RUNTIME_PREFIX $out
+        '';
+
+        passthru =
+          self.passthru
+          // {
+            plugins = prevLayer.plugins ++ [layerPlugins];
+            withPlugins = withTenzirPlugins {prevLayer = thisLayer;};
+
+            asImage = toImage {
+              pkg = self;
+              plugins = prevLayer.plugins ++ [layerPlugins];
+            };
+          };
+      };
+    in
+      thisLayer;
+
+    toImage = pkgsBuildHost.callPackage toImageFn {
+      inherit isStatic;
+    };
+  in
     stdenv.mkDerivation (
-      finalAttrs:
-      (
+      finalAttrs: (
         {
           inherit version;
           pname = "tenzir";
@@ -188,7 +195,13 @@ let
             chmod -R u+w source/extra-plugins
           '';
 
-          outputs = [ "out" ] ++ (if isStatic then [ "package" ] else [ "dev" ]);
+          outputs =
+            ["out"]
+            ++ (
+              if isStatic
+              then ["package"]
+              else ["dev"]
+            );
 
           nativeBuildInputs =
             [
@@ -206,7 +219,7 @@ let
             ++ lib.optionals stdenv.hostPlatform.isDarwin [
               lld
             ];
-          propagatedNativeBuildInputs = [ pkg-config ];
+          propagatedNativeBuildInputs = [pkg-config];
           buildInputs =
             [
               aws-sdk-cpp-tenzir
@@ -253,7 +266,7 @@ let
               xxHash
             ]
             ++ lib.optionals (!isStatic) [
-              arrow-adbc-cpp
+              # arrow-adbc-cpp
             ]
             ++ lib.optionals isMusl [
               jemalloc
@@ -296,7 +309,11 @@ let
               "-UCMAKE_INSTALL_LOCALEDIR"
               "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
               "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-              "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
+              "-DCPACK_GENERATOR=${
+                if stdenv.hostPlatform.isDarwin
+                then "TGZ;productbuild"
+                else "TGZ;DEB;RPM"
+              }"
               "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
@@ -313,12 +330,11 @@ let
             ++ lib.optionals stdenv.hostPlatform.isDarwin (
               let
                 compilerName =
-                  if stdenv.cc.isClang then
-                    "clang"
-                  else if stdenv.cc.isGNU then
-                    "gcc"
-                  else
-                    "unknown";
+                  if stdenv.cc.isClang
+                  then "clang"
+                  else if stdenv.cc.isGNU
+                  then "gcc"
+                  else "unknown";
                 # ar with lto support
                 ar =
                   stdenv.cc.bintools.targetPrefix
@@ -337,8 +353,7 @@ let
                     "unknown" = "ranlib";
                   }
                   ."${compilerName}";
-              in
-              [
+              in [
                 # Want's to install into the users home, but that would be the
                 # builder in the Nix context, and that doesn't make sense.
                 "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
@@ -349,15 +364,14 @@ let
           # TODO: Omit this for "tagged release" builds.
           preConfigure =
             (
-              if isReleaseBuild then
-                ''
-                  cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
-                ''
-              else
-                ''
-                  version_build_metadata=$(basename $out | cut -d'-' -f 1)
-                  cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-                ''
+              if isReleaseBuild
+              then ''
+                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
+              ''
+              else ''
+                version_build_metadata=$(basename $out | cut -d'-' -f 1)
+                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
+              ''
             )
             # TODO: Fix LTO on darwin by passing these commands by their original
             # executable names "llvm-ar" and "llvm-ranlib". Should work with
@@ -374,13 +388,12 @@ let
             "pic"
           ];
 
-          preBuild =
-            let
-              memory_bytes_command = {
-                Linux = "awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo";
-                Darwin = "${lib.getBin pkgsBuildHost.darwin.system_cmds}/bin/sysctl -n hw.memsize";
-              };
-            in
+          preBuild = let
+            memory_bytes_command = {
+              Linux = "awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo";
+              Darwin = "${lib.getBin pkgsBuildHost.darwin.system_cmds}/bin/sysctl -n hw.memsize";
+            };
+          in
             ''
               echo "Reserving at least 2 GB per compilation unit."
               echo "Old NIX_BUILD_CORES = $NIX_BUILD_CORES"
@@ -418,20 +431,20 @@ let
           postInstall = ''
             wrapProgram $out/bin/tenzir \
               --prefix PATH : ${
-                lib.makeBinPath (
-                  [ py3.python ]
-                  # The static binary bundles uv.
-                  ++ lib.optionals (!isStatic) [ uv ]
-                )
-              } \
+              lib.makeBinPath (
+                [py3.python]
+                # The static binary bundles uv.
+                ++ lib.optionals (!isStatic) [uv]
+              )
+            } \
               --suffix PYTHONPATH : ${py3}/${py3.sitePackages}
           '';
 
           passthru = {
-            plugins = [ ];
+            plugins = [];
             withPlugins =
-              if isStatic then
-                withTenzirPluginsStatic
+              if isStatic
+              then withTenzirPluginsStatic
               else
                 withTenzirPlugins {
                   prevLayer = self;
@@ -439,7 +452,7 @@ let
 
             asImage = toImage {
               pkg = self;
-              plugins = [ ];
+              plugins = [];
             };
           };
 
@@ -450,7 +463,7 @@ let
             mainProgram = "tenzir";
             license = licenses.bsd3;
             platforms = platforms.unix;
-            maintainers = with maintainers; [ tobim ];
+            maintainers = with maintainers; [tobim];
           };
         }
         # disallowedReferences does not work on darwin.
@@ -491,6 +504,6 @@ let
         }
       )
     );
-  self' = callPackage pkgFun ({ self = self'; } // args);
+  self' = callPackage pkgFun ({self = self';} // args);
 in
-self'
+  self'

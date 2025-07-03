@@ -73,6 +73,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     = caf::get_or(inv.options, "tenzir.exec.dump-finalized", false);
   cfg.dump_pipeline
     = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
+  cfg.dump_format
+    = caf::get_or(inv.options, "tenzir.exec.format", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
   cfg.dump_metrics
@@ -152,6 +154,8 @@ public:
                    "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
+        .add<bool>("format",
+                   "parse the pipeline and print the formatted version")
         .add<bool>("dump-ir",
                    "print a textual description of the IR and then exit")
         .add<bool>("dump-inst-ir", "print a textual description of the "

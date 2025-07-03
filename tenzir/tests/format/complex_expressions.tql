@@ -1,0 +1,1 @@
+from{x:1}|where(x>0 and x<10)or(x>20 and x<30)|select nested_access=data.field?.subfield?[0]?.value|result=f"Value:{x}"

@@ -1,0 +1,78 @@
+// Test pipeline expressions with operators
+every 10s {
+  summarize sum(amount), count()
+}
+
+cron "0 9 * * *" {
+  from "/var/log/access.log"
+  read_csv
+  where status >= 400
+  to "/tmp/errors.json"
+}
+
+// Test nested pipeline expressions
+fork {
+  if category == "security" {
+    where severity > 5
+    select timestamp, src_ip, dst_ip
+  } else {
+    head 100
+  }
+}
+
+// Test method calls vs function calls (UFCS)
+string_length = "hello".length()
+string_length_func = length("hello")
+list_map = [1, 2, 3].map(x => x * 2)
+list_where = data.where(x => x.score > 50)
+
+// Test complex method chaining
+result = events
+  .where(timestamp > now() - 1h)
+  .select(src_ip, dst_ip, bytes)
+  .summarize(
+    total_bytes = sum(bytes),
+    unique_ips = count_distinct(src_ip)
+  )
+
+// Test named arguments in operators
+batch timeout=1s, max_events=1000
+buffer 10M, policy="drop"
+sample 30s, max_samples=2k
+assert_throughput 1000, within=1s
+
+// Test operators with trailing commas
+select name, age, city,
+drop old_field, unused_field,
+sort timestamp, -score,
+
+// Test complex pipeline with multiple stages
+from "data.json"
+| read_json
+| where timestamp > now() - 24h
+| select timestamp, user_id, action, details
+| enumerate event_id
+| set processed_at = now()
+| summarize actions_per_user = count() by user_id
+| sort -actions_per_user
+| head 10
+| to "top_users.csv"
+
+// Test local and remote pipeline execution
+local {
+  sort timestamp
+  head 1000
+}
+
+remote {
+  version
+  metrics "cpu"
+}
+
+// Test empty pipeline expressions
+if condition {
+}
+
+fork {
+  pass
+}

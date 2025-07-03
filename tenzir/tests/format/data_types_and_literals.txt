@@ -1,0 +1,69 @@
+// Test basic literals
+bool_true = true
+bool_false = false
+null_value = null
+integer = 42
+float_number = 123.45
+
+// Test numeric suffixes - power of ten
+power_of_ten_k = 2.5k
+power_of_ten_M = 1.2M
+power_of_ten_G = 5G
+power_of_ten_T = 10T
+
+// Test numeric suffixes - power of two
+power_of_two_Ki = 2Ki
+power_of_two_Mi = 1Mi
+power_of_two_Gi = 512Gi
+power_of_two_Ti = 1Ti
+
+// Test duration literals
+nanoseconds = 100ns
+microseconds = 500us
+milliseconds = 1500ms
+seconds = 30s
+minutes = 5min
+hours = 2h
+days = 7d
+weeks = 2w
+months = 6mo
+years = 1y
+
+// Test date and time literals
+date_only = 2024-10-03
+full_timestamp = 2001-02-03T04:05:06Z
+local_time = 2024-12-25T09:30:00
+
+// Test IP address literals
+ipv4_address = 192.168.0.1
+ipv6_address = ::ab12:253
+ipv6_full = 2001:0db8:85a3:0000:0000:8a2e:0370:7334
+
+// Test subnet literals
+ipv4_subnet = 192.0.0.0/8
+ipv6_subnet = 2001:db8::/32
+cidr_notation = 10.0.0.0/16
+
+// Test string literals
+simple_string = "Hello, World!"
+escaped_string = "Line 1\nLine 2\tTabbed"
+quoted_string = "She said \"Hello\""
+
+// Test raw strings
+raw_string = r"C:\Users\Admin\Documents"
+raw_with_quotes = r#"They said "hello" to me"#
+raw_multiline = r"""
+This is a
+multiline raw string
+with "quotes" and \backslashes
+"""
+
+// Test byte strings
+byte_string = b"\x01\x02\x03\xFF"
+byte_hello = b"Hello"
+byte_mixed = b"\x48\x65\x6C\x6C\x6F"
+
+// Test complex combinations
+combined_duration = 1h + 30min + 15s
+network_check = 192.168.1.100 in 192.168.1.0/24
+time_range = now() - 24h

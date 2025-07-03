@@ -1,0 +1,22 @@
+from {
+  empty_list: [],
+  single_null: [null],
+  mixed_nulls: [null, 42, null, "text", null],
+  mixed_types: [123, "string", true, null, {a: 1}, [1, 2, 3]],
+  nested_lists: [[], [42], [null, "text"], [[1, 2], [3, 4]]],
+  nested_records: [{}, {a: 42}, {a: null, b: "text"}, {nested: {x: 1}}],
+  complex_mixed: [
+    {type: "number", value: 42},
+    {type: "string", value: "text"},
+    {type: "list", value: [1, 2, 3]},
+    {type: "record", value: {inner: true}}
+  ],
+  edge_cases: [
+    null,
+    "",
+    0,
+    false,
+    [],
+    {}
+  ]
+}

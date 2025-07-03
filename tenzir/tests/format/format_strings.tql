@@ -1,0 +1,1 @@
+let$name="world"|let$count=42|from{simple:f"Hello{$name}",math:f"Count is{$count+1}",nested:f"Outer{f"inner{$name}"}text"}

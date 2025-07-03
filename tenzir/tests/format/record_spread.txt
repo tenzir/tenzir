@@ -1,0 +1,9 @@
+from {base: {a: 1, b: 2}}
+simple = {...base, c: 3}
+override = {...base, a: 99, c: 3}
+multiple = {...base, ...other, d: 4}
+nested = {outer: {...base, inner: {x: 1, y: 2}}}
+mixed = {start: "value", ...base, middle: 42, ...other, end: true}
+complex = {...{a: 1, b: 2}, c: 3, ...{d: 4, e: 5}}
+empty_spread = {...{}, value: 1}
+list_spread = [1, 2, ...other_list, 3, 4]

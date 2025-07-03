@@ -26,6 +26,7 @@ struct exec_config {
   bool dump_tokens = false;
   bool dump_ast = false;
   bool dump_pipeline = false;
+  bool dump_format = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
 

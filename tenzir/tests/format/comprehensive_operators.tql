@@ -1,0 +1,71 @@
+// Comprehensive test for TQL operators (should not have parentheses)
+from {x: 1, y: 2}
+where x > 0
+select x, y
+export
+import
+summarize count = count()
+group by x
+sort x
+head 10
+tail 5
+slice 0:10
+drop y
+rename x = new_x
+put z = x + y
+extend w = x * 2
+replace x = x + 1
+deduplicate x
+enumerate
+batch 100
+throttle 10/sec
+cache
+buffer 1000
+sample 0.1
+delay 5s
+measure
+taste
+unique
+reverse
+pass
+discard
+flatten
+unflatten
+enumerate
+fields
+schemas
+version
+plugins
+api
+show
+print
+serve
+files
+processes
+sockets
+chart
+ocsf
+python
+shell
+timeshift @import_time + 1h
+parse csv
+compress gzip
+decompress gzip
+load_balance
+repeat 3
+fork
+if true {
+  where x > 0
+} else {
+  where x < 0
+}
+match x {
+  1 => {
+    select x
+  }
+  2 => {
+    select y
+  }
+}
+let $var = 42
+assert x > 0

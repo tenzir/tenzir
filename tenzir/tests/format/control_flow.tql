@@ -1,0 +1,18 @@
+let $foo = 42
+export
+if $foo == 1 {
+let $bar = 2
+where foo == $foo
+} else {
+let $bar = 3
+where bar == $bar
+}
+match x {
+"foo" => {
+bar
+}
+42 => {
+foo bar
+qux bar
+}
+}

@@ -1,0 +1,50 @@
+// Test format strings
+percent = round(found / total * 100)
+message = f"Found {found}/{total}: {percent}%"
+complex_format = f"User {user.name} has {user.score} points at {now()}"
+escaped_braces = f"Literal braces: {{example}} and {{{{nested}}}}"
+
+// Test lambda expressions
+numbers = [1, 2, 3, 4, 5]
+doubled = numbers.map(x => x * 2)
+filtered = numbers.where(x => x > 3)
+complex_lambda = data.map(item => {
+  score: item.value * 2,
+  category: item.type
+})
+
+// Test conditional expressions (ternary)
+status = "active" if user.online else "inactive"
+priority = 1 if severity == "high" else 2 if severity == "medium" else 3
+optional_value = value if value != null
+fallback_value = user.name else "Anonymous"
+
+// Test record construction with spread
+base_record = {name: "John", age: 30}
+extended_record = {...base_record, city: "New York", active: true}
+merged_records = {...user_info, ...settings, timestamp: now()}
+
+// Test list construction with spread
+base_list = [1, 2, 3]
+extended_list = [...base_list, 4, 5, 6]
+combined_lists = [...first_list, ...second_list, extra_item]
+
+// Test indexing expressions
+first_item = my_list[0]
+named_field = record["field with spaces"]
+dynamic_field = user[field_name]
+nested_index = data[category][index]
+
+// Test special keywords
+current_event = this
+moved_field = move old_field + 10
+metadata_name = @name
+metadata_time = @import_time
+optional_field = record.field?
+
+// Test complex chained expressions
+result = data
+  .where(x => x.score > 50)
+  .map(x => {...x, normalized: x.score / 100})
+  .sort()
+  .slice(0, 10)
