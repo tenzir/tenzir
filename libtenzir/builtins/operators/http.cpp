@@ -550,7 +550,7 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
     });
 }
 
-auto make_metadata(const http::response& r, uint64_t len = 1)
+auto make_metadata(const http::response& r, const uint64_t len)
   -> series_builder {
   auto sb = series_builder{};
   for (auto i = uint64_t{}; i < len; ++i) {
@@ -564,21 +564,23 @@ auto make_metadata(const http::response& r, uint64_t len = 1)
   return sb;
 }
 
-auto make_metadata(const http::request& r) -> series {
+auto make_metadata(const http::request& r, const uint64_t len) -> series {
   auto sb = series_builder{};
-  auto rb = sb.record();
-  auto hb = rb.field("headers").record();
-  r.header().for_each_field([&](std::string_view k, std::string_view v) {
-    hb.field(k, v);
-  });
-  auto qb = rb.field("query").record();
-  for (const auto& [k, v] : r.header().query()) {
-    qb.field(k, v);
+  for (auto i = uint64_t{}; i < len; ++i) {
+    auto rb = sb.record();
+    auto hb = rb.field("headers").record();
+    r.header().for_each_field([&](std::string_view k, std::string_view v) {
+      hb.field(k, v);
+    });
+    auto qb = rb.field("query").record();
+    for (const auto& [k, v] : r.header().query()) {
+      qb.field(k, v);
+    }
+    rb.field("path", r.header().path());
+    rb.field("fragment", r.header().fragment());
+    rb.field("method", to_string(r.header().method()));
+    rb.field("version", r.header().version());
   }
-  rb.field("path", r.header().path());
-  rb.field("fragment", r.header().fragment());
-  rb.field("method", to_string(r.header().method()));
-  rb.field("version", r.header().version());
   return sb.finish_assert_one_array();
 }
 
@@ -1008,8 +1010,8 @@ public:
                   }
                   pull();
                   if (args_.metadata_field) {
-                    slice = assign(*args_.metadata_field, make_metadata(r),
-                                   slice, dh);
+                    slice = assign(*args_.metadata_field,
+                                   make_metadata(r, slice.rows()), slice, dh);
                   }
                   slices.push_back(std::move(slice));
                 },
@@ -1207,7 +1209,7 @@ public:
     }
     http::with(ctrl.self().system())
       .context(args_.make_ssl_context(*uri))
-      .connect(std::move(uri))
+      .connect(*uri)
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
