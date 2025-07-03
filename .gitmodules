@@ -42,3 +42,6 @@
 [submodule "plugins/web/aux/llhttp"]
 	path = plugins/web/aux/llhttp
 	url = https://github.com/nodejs/llhttp.git
+[submodule "libtenzir/aux/ai-sdk-cpp"]
+	path = libtenzir/aux/ai-sdk-cpp
+	url = https://github.com/ClickHouse/ai-sdk-cpp
