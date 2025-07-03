@@ -1,0 +1,83 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 39e03cb..aef6758 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -29,7 +29,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
+ find_package(spdlog CONFIG REQUIRED)
+ find_package(httplib CONFIG REQUIRED)
+ find_package(OpenSSL REQUIRED)
+-find_package(unofficial-concurrentqueue CONFIG REQUIRED)
++find_package(concurrentqueue CONFIG REQUIRED)
+ 
+ # Core library target (always built)
+ add_library(ai-sdk-cpp-core)
+@@ -131,7 +131,7 @@ target_link_libraries(ai-sdk-cpp-core
+         httplib::httplib
+         OpenSSL::SSL
+         OpenSSL::Crypto
+-        unofficial::concurrentqueue::concurrentqueue
++        concurrentqueue::concurrentqueue
+ )
+ 
+ # Link dependencies for OpenAI component
+diff --git a/cmake/ai-sdk-cpp-config.cmake.in b/cmake/ai-sdk-cpp-config.cmake.in
+index d46bdb9..d3509ac 100644
+--- a/cmake/ai-sdk-cpp-config.cmake.in
++++ b/cmake/ai-sdk-cpp-config.cmake.in
+@@ -5,16 +5,21 @@
+ set(AI_SDK_VERSION "@PROJECT_VERSION@")
+ 
+ # Find dependencies
+-find_dependency(fmt CONFIG REQUIRED)
+ find_dependency(nlohmann_json CONFIG REQUIRED)
+ find_dependency(spdlog CONFIG REQUIRED)
+ find_dependency(httplib CONFIG REQUIRED)
+ find_dependency(OpenSSL REQUIRED)
+-find_dependency(unofficial-concurrentqueue CONFIG REQUIRED)
++find_dependency(concurrentqueue CONFIG REQUIRED)
+ 
+ # Include the targets file
+ include("${CMAKE_CURRENT_LIST_DIR}/ai-sdk-cpp-targets.cmake")
+ 
++# Set library aliases for consistent naming
++add_library(ai::sdk ALIAS ai-sdk-cpp)
++add_library(ai::core ALIAS ai-sdk-cpp-core)
++add_library(ai::openai ALIAS ai-sdk-cpp-openai)
++add_library(ai::anthropic ALIAS ai-sdk-cpp-anthropic)
++
+ # Available components
+ set(AI_SDK_AVAILABLE_COMPONENTS core openai anthropic)
+ 
+@@ -71,4 +76,4 @@ if(NOT TARGET ai::core)
+     message(FATAL_ERROR "ai::core target not found. Make sure ai-sdk-cpp was properly installed.")
+ endif()
+ 
+-message(STATUS "Found AI SDK C++: ${CMAKE_CURRENT_LIST_DIR} (found version \"${AI_SDK_VERSION}\")") 
+\ No newline at end of file
++message(STATUS "Found AI SDK C++: ${CMAKE_CURRENT_LIST_DIR} (found version \"${AI_SDK_VERSION}\")") 
+diff --git a/src/providers/anthropic/anthropic_stream.h b/src/providers/anthropic/anthropic_stream.h
+index be138b9..4c8c188 100644
+--- a/src/providers/anthropic/anthropic_stream.h
++++ b/src/providers/anthropic/anthropic_stream.h
+@@ -7,7 +7,7 @@
+ #include <mutex>
+ #include <thread>
+ 
+-#include <concurrentqueue/concurrentqueue.h>
++#include <concurrentqueue/moodycamel/concurrentqueue.h>
+ #include <nlohmann/json.hpp>
+ 
+ namespace ai {
+diff --git a/src/providers/openai/openai_stream.h b/src/providers/openai/openai_stream.h
+index 93ac194..fd6c014 100644
+--- a/src/providers/openai/openai_stream.h
++++ b/src/providers/openai/openai_stream.h
+@@ -7,7 +7,7 @@
+ #include <mutex>
+ #include <thread>
+ 
+-#include <concurrentqueue/concurrentqueue.h>
++#include <concurrentqueue/moodycamel/concurrentqueue.h>
+ #include <nlohmann/json.hpp>
+ 
+ namespace ai {
