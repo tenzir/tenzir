@@ -376,6 +376,18 @@ auto mangle_version(std::string_view version) -> std::string {
   return result;
 }
 
+auto mangle_class_name(std::string_view class_name) -> std::string {
+  auto result = std::string{};
+  for (auto c : class_name) {
+    if (c == ' ') {
+      result += '_';
+    } else {
+      result += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+  }
+  return result;
+}
+
 auto make_list_series(const series& values, const arrow::ListArray& origin)
   -> basic_series<list_type> {
   // TODO
@@ -479,27 +491,182 @@ private:
   bool recommended_{};
 };
 
+struct ocsf_schema {
+  ocsf_schema(type type, std::string_view class_name,
+              std::string mangled_class_name)
+    : type{std::move(type)},
+      class_name{class_name},
+      mangled_class_name{std::move(mangled_class_name)} {
+  }
+
+  type type;
+  std::string_view class_name;
+  std::string mangled_class_name;
+};
+
+auto get_ocsf_schema(std::optional<std::string_view> version,
+                     std::optional<int64_t> class_uid, location self,
+                     operator_control_plane& ctrl)
+  -> std::optional<ocsf_schema> {
+  if (not version) {
+    diagnostic::warning("dropping events where `metadata.version` is null")
+      .primary(self)
+      .emit(ctrl.diagnostics());
+    return {};
+  }
+  auto parsed_version = parse_ocsf_version(*version);
+  if (not parsed_version) {
+    diagnostic::warning("dropping events with unknown OCSF version", *version)
+      .primary(self)
+      .note("found {:?}", *version)
+      .emit(ctrl.diagnostics());
+    return {};
+  }
+  if (not class_uid) {
+    diagnostic::warning("dropping events where `class_uid` is null")
+      .primary(self)
+      .emit(ctrl.diagnostics());
+    return {};
+  }
+  auto class_name = ocsf_class_name(*parsed_version, *class_uid);
+  if (not class_name) {
+    diagnostic::warning("dropping events where `class_uid` is unknown")
+      .primary(self)
+      .note("could not find class for value `{}`", *class_uid)
+      .emit(ctrl.diagnostics());
+    return {};
+  }
+  auto mangled_class_name = mangle_class_name(*class_name);
+  auto schema
+    = fmt::format("_ocsf.{}.{}", mangle_version(*version), mangled_class_name);
+  auto ty = modules::get_schema(schema);
+  if (not ty) {
+    diagnostic::warning("could not find schema for the given event")
+      .primary(self)
+      .note("tried to find version {:?} for class {:?}", *version, *class_name)
+      .emit(ctrl.diagnostics());
+    return {};
+  }
+  return ocsf_schema{
+    std::move(*ty),
+    *class_name,
+    std::move(mangled_class_name),
+  };
+}
+
 class trim_operator final : public crtp_operator<trim_operator> {
 public:
   trim_operator() = default;
 
-  trim_operator(bool optional, bool recommended)
-    : optional_{optional}, recommended_{recommended} {
+  trim_operator(struct location self, bool optional, bool recommended)
+    : self_{self}, optional_{optional}, recommended_{recommended} {
   }
 
   auto name() const -> std::string override {
     return "ocsf::trim";
   }
 
-  auto operator()(generator<table_slice> input) const
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      co_yield trimmer{optional_, recommended_}.trim(
-        slice, modules::get_schema("_ocsf.v1_5_0.network_activity").value());
+      // Get the required columns `metadata.version` and `class_uid`.
+      auto ty = as<record_type>(slice.schema());
+      auto metadata_index = ty.resolve_field("metadata");
+      if (not metadata_index) {
+        diagnostic::warning("dropping events where `metadata` does not exist")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto metadata_array = std::dynamic_pointer_cast<arrow::StructArray>(
+        to_record_batch(slice)->column(detail::narrow<int>(*metadata_index)));
+      if (not metadata_array) {
+        diagnostic::warning("dropping events where `metadata` is not a record")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto version_index
+        = metadata_array->struct_type()->GetFieldIndex("version");
+      if (version_index == -1) {
+        diagnostic::warning(
+          "dropping events where `metadata.version` does not exist")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
+        check(metadata_array->GetFlattenedField(version_index)));
+      if (not version_array) {
+        diagnostic::warning(
+          "dropping events where `metadata.version` is not a string")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      // TODO: We could have `class_name` and figure out it out from there.
+      auto class_index = ty.resolve_field("class_uid");
+      if (not class_index) {
+        diagnostic::warning("dropping events where `class_uid` does not exist")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
+        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
+      if (not class_array) {
+        diagnostic::warning(
+          "dropping events where `class_uid` is not an integer")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      // Figure out longest slices that share:
+      // - metadata.version
+      // - metadata.profiles
+      // - class_uid
+      // - metadata.extensions[].name
+      // Since we only support extensions that are served by the OCSF server for
+      // the corresponding version, we know that they have a non-conflicting
+      // name and there is no need to take their version into account (although
+      // we could check for consistency with the event).
+      auto begin = int64_t{0};
+      auto end = begin;
+      // TODO: If any of these attributes is changing with a high-frequency in
+      // the input stream, this operator will produce very small batches. This
+      // could be fixed by reordering events if needed.
+      auto version = view_at(*version_array, begin);
+      auto class_uid = view_at(*class_array, begin);
+      auto process = [&]() -> table_slice {
+        auto schema = get_ocsf_schema(version, class_uid, self_, ctrl);
+        if (not schema) {
+          return {};
+        }
+        return trimmer{optional_, recommended_}.trim(slice, schema->type);
+      };
+      for (; end < class_array->length(); ++end) {
+        auto next_version = view_at(*version_array, end);
+        auto next_class_uid = view_at(*class_array, end);
+        if (next_version == version and next_class_uid == class_uid) {
+          continue;
+        }
+        co_yield process();
+        begin = end;
+        version = next_version;
+        class_uid = next_class_uid;
+      }
+      co_yield process();
     }
   }
 
@@ -509,10 +676,13 @@ public:
   }
 
   friend auto inspect(auto& f, trim_operator& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(f.field("self", x.self_),
+                              f.field("optional", x.optional_),
+                              f.field("recommended", x.recommended_));
   }
 
 private:
+  struct location self_;
   bool optional_{};
   bool recommended_{};
 };
@@ -657,14 +827,6 @@ public:
         }
         return make_string_list_function(profiles_lists);
       });
-      if (not class_array) {
-        diagnostic::warning(
-          "dropping events where `class_uid` is not an integer")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
       auto extensions_at = std::invoke([&] {
         auto extensions_index
           = metadata_array->struct_type()->GetFieldIndex("extensions");
@@ -738,88 +900,41 @@ public:
       // the input stream, this operator will produce very small batches. This
       // could be fixed by reordering events if needed.
       auto version = view_at(*version_array, begin);
-      auto id = view_at(*class_array, begin);
+      auto class_uid = view_at(*class_array, begin);
       auto profiles = profiles_at(begin);
       auto extensions = extensions_at(begin);
       auto process = [&]() -> table_slice {
-        if (not version) {
-          diagnostic::warning(
-            "dropping events where `metadata.version` is null")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
+        auto schema = get_ocsf_schema(version, class_uid, self_, ctrl);
+        if (not schema) {
           return {};
         }
-        auto parsed_version = parse_ocsf_version(*version);
-        if (not parsed_version) {
-          diagnostic::warning("dropping events with unknown OCSF version",
-                              *version)
-            .primary(self_)
-            .note("found {:?}", *version)
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        if (not id) {
-          diagnostic::warning("dropping events where `class_uid` is null")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        auto class_name = ocsf_class_name(*parsed_version, *id);
-        if (not class_name) {
-          diagnostic::warning("dropping events where `class_uid` is unknown")
-            .primary(self_)
-            .note("could not find class for value `{}`", *id)
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        auto snake_case_class_name = std::string{};
-        for (auto c : *class_name) {
-          if (c == ' ') {
-            snake_case_class_name += '_';
-          } else {
-            snake_case_class_name
-              += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-          }
-        }
-        auto schema = fmt::format("_ocsf.{}.{}", mangle_version(*version),
-                                  snake_case_class_name);
-        auto ty = modules::get_schema(schema);
-        if (not ty) {
-          diagnostic::warning("could not find schema for the given event")
-            .primary(self_)
-            .note("tried to find version {:?} for class {:?}", *version,
-                  *class_name)
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        auto extension = ty->attribute("extension");
+        auto extension = schema->type.attribute("extension");
         if (extension and not extensions.contains(*extension)) {
           diagnostic::warning("dropping event for class {:?} because extension "
                               "{:?} is not enabled",
-                              *class_name, *extension)
+                              schema->class_name, *extension)
             .primary(self_)
             .emit(ctrl.diagnostics());
           return {};
         }
-        auto type_name = "ocsf." + snake_case_class_name;
-        auto result = caster{self_, ctrl.diagnostics(), profiles, extensions,
-                             preserve_variants_}
-                        .cast(subslice(slice, begin, end), *ty, type_name);
-        return result;
+        auto type_name = "ocsf." + schema->mangled_class_name;
+        return caster{self_, ctrl.diagnostics(), profiles, extensions,
+                      preserve_variants_}
+          .cast(subslice(slice, begin, end), schema->type, type_name);
       };
       for (; end < class_array->length(); ++end) {
         auto next_version = view_at(*version_array, end);
-        auto next_id = view_at(*class_array, end);
+        auto next_class_uid = view_at(*class_array, end);
         auto next_profiles = profiles_at(end);
         auto next_extensions = extensions_at(end);
-        if (next_version == version and next_id == id
+        if (next_version == version and next_class_uid == class_uid
             and next_profiles == profiles and extensions == next_extensions) {
           continue;
         }
         co_yield process();
         begin = end;
         version = next_version;
-        id = next_id;
+        class_uid = next_class_uid;
         profiles = next_profiles;
         extensions = next_extensions;
       }
@@ -865,6 +980,8 @@ class trim_plugin final : public operator_plugin2<trim_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    // TODO: Consider using a more intelligent default that is not simply based
+    // on attributes being optional.
     auto optional = true;
     auto recommended = false;
     argument_parser2::operator_(name())
@@ -872,7 +989,8 @@ public:
       .named("recommended", recommended)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<trim_operator>(optional, recommended);
+    return std::make_unique<trim_operator>(inv.self.get_location(), optional,
+                                           recommended);
   }
 };
 

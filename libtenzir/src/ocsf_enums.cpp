@@ -6200,6 +6200,6 @@ boost::unordered_flat_map<std::string_view, boost::unordered_flat_map<int64_t, s
     {400999, "Email Activity: Other"},
   }},
 };
-
 // clang-format on
+
 } // namespace tenzir

@@ -310,8 +310,8 @@ def write_generic_enums(schemas: list[Schema]) -> None:
             for num, caption in sorted(values.items()):
                 f.write(f'    {{{num}, "{caption}"}},\n')
             f.write("  }},\n")
-        f.write("};\n\n")
-        f.write("// clang-format on\n")
+        f.write("};\n")
+        f.write("// clang-format on\n\n")
         f.write("} // namespace tenzir\n")
 
 
