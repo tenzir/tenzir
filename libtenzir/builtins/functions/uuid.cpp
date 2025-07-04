@@ -13,7 +13,7 @@
 
 // Include our compatibility header for Boost < 1.86
 #if BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
-#include <tenzir/detail/boost_uuid_generators.hpp>
+#  include <tenzir/detail/boost_uuid_generators.hpp>
 #endif
 
 #include <arrow/builder.h>

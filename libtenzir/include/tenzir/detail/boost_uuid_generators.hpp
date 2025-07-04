@@ -16,30 +16,33 @@
 //
 // To remove this patch:
 // 1. Delete this file
-// 2. Remove the #include <tenzir/detail/boost_uuid_generators.hpp> from uuid.cpp
+// 2. Remove the #include <tenzir/detail/boost_uuid_generators.hpp> from
+// uuid.cpp
 // 3. Remove the #if BOOST_VERSION < 108600 guard around the include
 //
 // For testing on systems with Boost >= 1.86:
 // Option 1: Compile with -DTENZIR_FORCE_BOOST_UUID_COMPAT
-//   cmake --build build --target tenzir -- CXXFLAGS="-DTENZIR_FORCE_BOOST_UUID_COMPAT"
+//   cmake --build build --target tenzir --
+//   CXXFLAGS="-DTENZIR_FORCE_BOOST_UUID_COMPAT"
 //
 // Option 2: Add to CMake configuration:
 //   cmake -DCMAKE_CXX_FLAGS="-DTENZIR_FORCE_BOOST_UUID_COMPAT" ..
 //
-// This will use the compatibility implementations in the tenzir::compat namespace
-// to avoid conflicts with the real Boost 1.86+ implementations.
+// This will use the compatibility implementations in the tenzir::compat
+// namespace to avoid conflicts with the real Boost 1.86+ implementations.
 
 #if BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/detail/sha1.hpp>
-#include <boost/uuid/detail/md5.hpp>
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <cstring>
-#include <random>
+#  include <boost/uuid/detail/md5.hpp>
+#  include <boost/uuid/detail/sha1.hpp>
+#  include <boost/uuid/random_generator.hpp>
+#  include <boost/uuid/uuid.hpp>
+
+#  include <atomic>
+#  include <chrono>
+#  include <cstdint>
+#  include <cstring>
+#  include <random>
 
 namespace tenzir {
 namespace compat {
@@ -54,10 +57,12 @@ public:
 
   static time_point now() noexcept {
     using days = std::chrono::duration<std::int32_t, std::ratio<86400>>;
-    constexpr auto epoch_diff = days(141427); // Days between 1582-10-15 and 1970-01-01
+    constexpr auto epoch_diff
+      = days(141427); // Days between 1582-10-15 and 1970-01-01
     auto sys_now = std::chrono::system_clock::now();
     auto sys_duration = sys_now.time_since_epoch();
-    auto uuid_duration = std::chrono::duration_cast<duration>(sys_duration) + epoch_diff;
+    auto uuid_duration
+      = std::chrono::duration_cast<duration>(sys_duration) + epoch_diff;
     return time_point(uuid_duration);
   }
 
@@ -134,12 +139,13 @@ public:
 
   result_type operator()() noexcept {
     boost::uuids::uuid result = time_generator_v1::operator()();
-    std::uint32_t time_low = (result.data[0] << 24) | (result.data[1] << 16) |
-                             (result.data[2] << 8) | result.data[3];
+    std::uint32_t time_low = (result.data[0] << 24) | (result.data[1] << 16)
+                             | (result.data[2] << 8) | result.data[3];
     std::uint16_t time_mid = (result.data[4] << 8) | result.data[5];
     std::uint16_t time_hi = ((result.data[6] << 8) | result.data[7]) & 0x0FFF;
-    std::uint64_t timestamp = time_low | (static_cast<std::uint64_t>(time_mid) << 32) |
-                              (static_cast<std::uint64_t>(time_hi) << 48);
+    std::uint64_t timestamp = time_low
+                              | (static_cast<std::uint64_t>(time_mid) << 32)
+                              | (static_cast<std::uint64_t>(time_hi) << 48);
     std::uint32_t time_high = static_cast<std::uint32_t>(timestamp >> 28);
     result.data[0] = (time_high >> 24) & 0xFF;
     result.data[1] = (time_high >> 16) & 0xFF;
@@ -148,7 +154,8 @@ public:
     time_mid = static_cast<std::uint16_t>(timestamp >> 12);
     result.data[4] = (time_mid >> 8) & 0xFF;
     result.data[5] = time_mid & 0xFF;
-    std::uint16_t time_low_and_version = (static_cast<std::uint16_t>(timestamp & 0xFFF)) | 0x6000;
+    std::uint16_t time_low_and_version
+      = (static_cast<std::uint16_t>(timestamp & 0xFFF)) | 0x6000;
     result.data[6] = (time_low_and_version >> 8) & 0xFF;
     result.data[7] = time_low_and_version & 0xFF;
     return result;
@@ -160,13 +167,15 @@ class time_generator_v7 {
 public:
   using result_type = boost::uuids::uuid;
 
-  time_generator_v7() : state_(0), rng_(std::random_device{}()) {}
+  time_generator_v7() : state_(0), rng_(std::random_device{}()) {
+  }
 
   result_type operator()() noexcept {
     boost::uuids::uuid result;
     state_ = get_new_state(state_);
     std::uint64_t time_ms = state_ >> 16;
-    std::uint64_t timestamp = (time_ms << 16) | 0x7000 | ((state_ & 0xFFFF) >> 6);
+    std::uint64_t timestamp
+      = (time_ms << 16) | 0x7000 | ((state_ & 0xFFFF) >> 6);
     result.data[0] = (timestamp >> 56) & 0xFF;
     result.data[1] = (timestamp >> 48) & 0xFF;
     result.data[2] = (timestamp >> 40) & 0xFF;
@@ -207,16 +216,17 @@ private:
 } // namespace compat
 } // namespace tenzir
 
-// Add aliases to boost namespace only if we're actually replacing missing functionality
-#if BOOST_VERSION < 108600
+// Add aliases to boost namespace only if we're actually replacing missing
+// functionality
+#  if BOOST_VERSION < 108600
 namespace boost {
 namespace uuids {
-  using tenzir::compat::uuid_clock;
-  using tenzir::compat::time_generator_v1;
-  using tenzir::compat::time_generator_v6;
-  using tenzir::compat::time_generator_v7;
+using tenzir::compat::time_generator_v1;
+using tenzir::compat::time_generator_v6;
+using tenzir::compat::time_generator_v7;
+using tenzir::compat::uuid_clock;
 } // namespace uuids
 } // namespace boost
-#endif
+#  endif
 
 #endif // BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
