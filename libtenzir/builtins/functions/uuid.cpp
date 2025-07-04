@@ -11,15 +11,16 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-// Include our compatibility header for Boost < 1.86
-#if BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
-#  include <tenzir/detail/boost_uuid_generators.hpp>
-#endif
-
 #include <arrow/builder.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+
+// Include our compatibility header for Boost < 1.86
+#include <boost/version.hpp>
+#if BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
+#  include <tenzir/detail/boost_uuid_generators.hpp>
+#endif
 
 #include <optional>
 #include <string>
