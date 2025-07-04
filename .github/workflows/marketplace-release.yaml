@@ -11,6 +11,11 @@ on:
         description: 'Tenzir Node Version to publish'
         required: true
         type: string
+      existing_image:
+        description: 'Name of an existing Docker image to use (optional)'
+        required: false
+        type: string
+
 
 jobs:
   marketplace-release:
@@ -33,8 +38,25 @@ jobs:
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir
 
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+
+      - name: Update private submodules
+        run: |
+          git submodule update --init --recursive contrib/tenzir-plugins
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      # Login to ghcr before the build because we use it for caching.
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: tenzir-bot
+          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -44,16 +66,40 @@ jobs:
 
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: 709825985650
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 1
 
       - name: Build and Push Marketplace Image
+        if: (github.event.inputs.existing_image == '' || github.event.inputs.existing_image == null)
         env:
+          # TODO: add multi-arch support
+          PLATFORM: linux/amd64
+          CACHE_TAG: ghcr.io/tenzir/tenzir:amd64-build-cache
           RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
         run: |
           docker buildx build . \
             -t 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG} \
             --target tenzir-node \
-            --platform linux/amd64,linux/arm64 \
+            --platform ${PLATFORM} \
+            --cache-from "type=registry,ref=${CACHE_TAG}" \
             --push
+
+      - name: Tag and Push Existing Image
+        if: github.event.inputs.existing_image != ''
+        env:
+          EXISTING_IMAGE: ${{ github.event.inputs.existing_image }}
+          RELEASE_TAG: ${{ github.event.inputs.version_tag }}
+        run: |
+          docker pull "${EXISTING_IMAGE}"
+          docker tag "${EXISTING_IMAGE}" 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG}
+          docker push 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG}
 
       - name: Add new version to AWS Marketplace
         env:
