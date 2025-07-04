@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - runner: ubuntu-latest
+          - runner: ubicloud-standard-4
             arch: linux/amd64
             tag: amd64
           - runner: ubicloud-standard-4-arm
