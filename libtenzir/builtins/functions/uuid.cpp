@@ -39,6 +39,10 @@ public:
     return "tql2.uuid";
   }
 
+  auto is_deterministic() const -> bool override {
+    return false;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto version_opt = std::optional<located<std::string>>{};
