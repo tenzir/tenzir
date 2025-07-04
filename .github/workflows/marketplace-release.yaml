@@ -11,6 +11,11 @@ on:
         description: 'Tenzir Node Version to publish'
         required: true
         type: string
+      existing_image:
+        description: 'Name of an existing Docker image to use (optional)'
+        required: false
+        type: string
+
 
 jobs:
   marketplace-release:
@@ -72,6 +77,7 @@ jobs:
               max-parallelism = 1
 
       - name: Build and Push Marketplace Image
+        if: (github.event.inputs.existing_image == '' || github.event.inputs.existing_image == null)
         env:
           # TODO: add multi-arch support
           PLATFORM: linux/amd64
@@ -84,6 +90,16 @@ jobs:
             --platform ${PLATFORM} \
             --cache-from "type=registry,ref=${CACHE_TAG}" \
             --push
+
+      - name: Tag and Push Existing Image
+        if: github.event.inputs.existing_image != ''
+        env:
+          EXISTING_IMAGE: ${{ github.event.inputs.existing_image }}
+          RELEASE_TAG: ${{ github.event.inputs.version_tag }}
+        run: |
+          docker pull "${EXISTING_IMAGE}"
+          docker tag "${EXISTING_IMAGE}" 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG}
+          docker push 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG}
 
       - name: Add new version to AWS Marketplace
         env:
