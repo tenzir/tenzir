@@ -3343,6 +3343,11 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
   };
 }
 
+auto record_type::field(std::string_view name) const -> std::optional<type> {
+  TRY(auto index, resolve_field(name));
+  return field(index).type;
+}
+
 size_t record_type::flat_index(const offset& index) const noexcept {
   TENZIR_ASSERT(!index.empty(), "index must not be empty");
   auto flat_index = size_t{0};

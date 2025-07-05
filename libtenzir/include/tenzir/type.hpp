@@ -1362,6 +1362,7 @@ public:
   /// Returns the field at the given index.
   [[nodiscard]] field_view field(size_t index) const noexcept;
   [[nodiscard]] field_view field(const offset& index) const noexcept;
+  auto field(std::string_view name) const -> std::optional<type>;
 
   /// Returns the flat index to a given offset.
   /// @note This is necessary to work with the table_slice API, which does not
