@@ -1,0 +1,3 @@
+score = base * weight + bonus
+rating = "excellent"if score >= 100 else "good"if score >= 75 else "needs_improvement"
+final_score = score * multiplier / divisor - penalty

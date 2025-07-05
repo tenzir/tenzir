@@ -1,0 +1,4 @@
+from "data.json"
+where name == "John"
+select name, age, email
+head 10

@@ -1,0 +1,1 @@
+if event_type=="login"{if source_ip in ["192.168.0.0/16","10.0.0.0/8"]{trust="high"|priority=1}else{trust="low"|priority=3}}else if event_type=="logout"{cleanup=true}

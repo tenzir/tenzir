@@ -1,0 +1,1 @@
+message=f"Alert: {severity} event from {src_ip} at {timestamp}"|encoded=encode_base64(r"C:\temp\logs\security.log")|pattern=starts_with(data,"ERROR")
