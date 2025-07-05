@@ -1,5 +1,11 @@
 from { input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26"},
   { input: "surname: Tom, family_name: Cat"},
   { input: "surname: Jerry, family_name: Mouse"},
-  { input: "failure"}
+  { input: "failure"},
+  { input: "x:"},
+  { input: "x:,y:42"},
+  { input: "x:1,y:,z:3"},
+  { input: "x:1,y:1,2"},
+  { input: "x:1,y:1,2,z:3"},
+  { input: r#"x:,y:"""#}
 output = input.parse_kv(field_split=r"\s*,\s*", value_split=r"\s*:\s*")

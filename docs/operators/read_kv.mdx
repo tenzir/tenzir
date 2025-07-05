@@ -27,7 +27,8 @@ Afterwards, the extracted fields are split into their key and value by
 `r":\s*"` could be used to split `foo: bar` into the key `foo` and its value
 `bar`, and similarly `baz: 42` into `baz` and `42`. The result would thus be
 `{"foo": "bar", "baz": 42}`. If the regex matches multiple substrings, only the
-first match is used.
+first match is used. If no match is found, the "field" is considered an extension
+of the previous fields value.
 
 The supported regular expression syntax is
 [RE2](https://github.com/google/re2/wiki/Syntax). In particular, this means that
@@ -106,7 +107,7 @@ PATH: C:\foo INPUT_MESSAGE: hello world
 PATH: D:\bar VALUE: 42 INFO: Great
 ```
 
-```tql title=" "
+```tql
 read_kv field_split=r"(\s+)[A-Z][A-Z_]+:",
   value_split=r":\s*"
 ```
@@ -128,6 +129,25 @@ i.e., at least two uppercase characters followed by a colon. We can express this
 as `"(\s+)[A-Z][A-Z_]+:"`, which yields `PATH: C:\foo` and `INPUT_MESSAGE: hello
 world`. We then split the key from its value with `":\s*"`. Since only the first
 match is used to split key and value, this leaves the path intact.
+
+### Fields without a `value_split`
+
+
+```txt title="Input"
+x=1 y=2 z=3 4 5 a=6
+```
+```tql
+read_kv
+```
+```tql
+{
+  x: 1,
+  y: 2,
+  z: "3 4 5",
+  a: 6,
+}
+```
+
 
 ## See Also
 

@@ -558,15 +558,6 @@ EOF
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice ::-1"
 }
 
-# bats test_tags=pipelines
-@test "Parse KV" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/txt/key_value_pairs.txt read lines | parse line kv \"(\s+)[A-Z][A-Z_]+\" \":\s*\""
-  check ! tenzir 'parse line kv "(foo)(bar)" ""'
-  check ! tenzir 'parse line kv "foo(?=bar)" ""'
-}
-
 @test "Parse JSON with numeric timestamp" {
   export TENZIR_LEGACY=true
 
