@@ -1,6 +1,6 @@
 ---
 title: random
-category: Math
+category: Utility
 example: 'random()'
 ---
 
@@ -27,3 +27,7 @@ from {x: random()}
 ```tql
 {x: 0.19634716885782455}
 ```
+
+## See Also
+
+[`uuid`](uuid.md)
