@@ -25,6 +25,16 @@ using owning_root_fbs_buffer = flatbuffer<fbs::data::Secret>;
 using owning_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
 using viewing_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
 
+using secret_offset_t = flatbuffers::Offset<fbs::data::Secret>;
+/// Copies the secret `s` into the builder `fbb`, returning the offset
+auto copy(flatbuffers::FlatBufferBuilder& fbb, const fbs::data::Secret& s)
+  -> secret_offset_t;
+
+auto deref(const auto* ptr) -> decltype(auto) {
+  TENZIR_ASSERT_EXPENSIVE(ptr);
+  return *ptr;
+}
+
 /// The implementation of the secret/secret_view types.
 /// The actual value can be obtained using
 /// `operator_control_plane::resolve_secret_must_yield`.
@@ -65,6 +75,10 @@ public:
   /// Creates a new secret with the contents of `other` appended to it.
   auto with_appended(const secret_common<viewing_fbs_buffer>& other) const
     -> secret;
+  /// Creates a new secret with `operation` applied to it. Handles `f⁻¹(f(x))`
+  /// by dropping the identity operation.
+  template <fbs::data::SecretTransformations operation>
+  auto with_operation() const -> secret;
 
   FlatbufferType buffer;
 };
@@ -116,11 +130,9 @@ public:
   friend class secret_view;
   using impl::impl;
 
-  secret(std::string_view name, std::string_view operations, bool is_literal);
-
   static auto make_literal(std::string_view value) -> secret;
-  static auto make_managed(std::string_view value) -> secret;
-  static auto from_fb(const fbs::data::Secret*) -> secret;
+  static auto make_managed(std::string_view name) -> secret;
+  static auto from_fb(const fbs::data::Secret& fb) -> secret;
 };
 
 /// @relates detail::secrets::secret_common
@@ -213,4 +225,80 @@ template <>
 struct printer_registry<secret_view> {
   using type = secret_printer<secret_view>;
 };
+
+template <>
+class variant_traits<fbs::data::Secret> {
+public:
+  /// Unions contain the alternative count + 1 alternatives, the special NONE
+  /// state.
+  static constexpr size_t count
+    = std::to_underlying(fbs::data::SecretUnion::MAX) + 1;
+
+  static constexpr auto index(const fbs::data::Secret& x) -> size_t {
+    return std::to_underlying(x.data_type());
+  }
+
+  template <size_t I>
+  static constexpr auto get(const fbs::data::Secret& x) -> decltype(auto) {
+    using enum fbs::data::SecretUnion;
+    if constexpr (I == std::to_underlying(NONE)) {
+      constexpr static auto r = std::monostate{};
+      return static_cast<const std::monostate&>(r);
+    } else if constexpr (I == std::to_underlying(literal)) {
+      auto* ptr = x.data_as_literal();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else if constexpr (I == std::to_underlying(name)) {
+      auto* ptr = x.data_as_name();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else if constexpr (I == std::to_underlying(concatenation)) {
+      auto* ptr = x.data_as_concatenation();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else if constexpr (I == std::to_underlying(transformed)) {
+      auto* ptr = x.data_as_transformed();
+      TENZIR_ASSERT_EXPENSIVE(ptr);
+      return *ptr;
+    } else {
+      static_assert(detail::always_false_v<std::integral_constant<size_t, I>>,
+                    "Unimplemented secret union alternative");
+    }
+  }
+};
+
+template <>
+class variant_traits<secret> {
+  using base = variant_traits<fbs::data::Secret>;
+
+public:
+  static constexpr auto count = base::count;
+
+  static constexpr auto index(const secret& x) -> size_t {
+    return base::index(*x.buffer);
+  }
+
+  template <size_t I>
+  static constexpr auto get(const secret& x) -> decltype(auto) {
+    return base::get<I>(*x.buffer);
+  }
+};
+
+template <>
+class variant_traits<secret_view> {
+  using base = variant_traits<fbs::data::Secret>;
+
+public:
+  static constexpr auto count = base::count;
+
+  static constexpr auto index(const secret& x) -> size_t {
+    return base::index(*x.buffer);
+  }
+
+  template <size_t I>
+  static constexpr auto get(const secret& x) -> decltype(auto) {
+    return base::get<I>(*x.buffer);
+  }
+};
+
 } // namespace tenzir
