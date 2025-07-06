@@ -30,4 +30,4 @@ from {x: random()}
 
 ## See Also
 
-[`uuid`](uuid.md)
+[`uuid`](/reference/functions/uuid)
