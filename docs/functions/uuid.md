@@ -73,4 +73,4 @@ from {guid: uuid(version="nil")}
 
 ## See Also
 
-[`random`](random.md)
+[`random`](/reference/functions/random)
