@@ -7,7 +7,7 @@ example: 'http "example.com"'
 Sends HTTP/1.1 requests and forwards the response.
 
 ```tql
-http url:string, [method=string, body=blob|record|string, encode=string,
+http url:string, [method=string, body=record|string|blob, encode=string,
      headers=record, response_field=field, metadata_field=field,
      paginate=record->string, paginate_delay=duration, parallel=int, tls=bool,
      certfile=string, keyfile=string, password=string,

@@ -7,7 +7,7 @@ example: 'from_http "0.0.0.0:8080"'
 Sends and receives HTTP/1.1 requests.
 
 ```tql
-from_http url:string, [method=string, body=blob|record|string, encode=string,
+from_http url:string, [method=string, body=record|string|blob, encode=string,
           headers=record, metadata_field=field, paginate=record->string,
           paginate_delay=duration, connection_timeout=duration,
           max_retry_count=int, retry_delay=duration, tls=bool, certfile=string,

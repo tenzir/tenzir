@@ -95,7 +95,7 @@ auto try_decompress_body(const std::string_view encoding,
     const auto result = decompressor->Decompress(
       detail::narrow<int64_t>(body.size_bytes() - read),
       reinterpret_cast<const uint8_t*>(body.data() + read),
-      detail::narrow<int64_t>(out.capacity() - written),
+      detail::narrow<int64_t>(out.size() - written),
       reinterpret_cast<uint8_t*>(out.data() + written));
     if (not result.ok()) {
       diagnostic::warning("failed to decompress: {}",
@@ -617,7 +617,7 @@ struct from_http_args {
     p.named("encode", encode);
     p.named("headers", headers);
     p.named("metadata_field", metadata_field);
-    p.named("paginate", paginate, "record=>string");
+    p.named("paginate", paginate, "record->string");
     p.named("paginate_delay", paginate_delay);
     p.named("connection_timeout", connection_timeout);
     p.named("max_retry_count", max_retry_count);
@@ -863,14 +863,15 @@ struct from_http_args {
     return std::nullopt;
   }
 
-  auto make_headers(bool insert_content_type) const
+  auto make_headers() const
     -> std::pair<std::unordered_map<std::string, std::string>,
                  detail::stable_map<std::string, secret>> {
     auto hdrs = std::unordered_map<std::string, std::string>{};
     auto secrets = detail::stable_map<std::string, secret>{};
+    auto insert_content_type = body and is<record>(body->inner);
     if (headers) {
       for (const auto& [k, v] : headers->inner) {
-        if (insert_content_type and caf::icase_equal(k, "content-type")) {
+        if (caf::icase_equal(k, "content-type")) {
           insert_content_type = false;
         }
         match(
@@ -887,7 +888,7 @@ struct from_http_args {
         hdrs.emplace(k, as<std::string>(v));
       }
     }
-    if (insert_content_type and body and is<record>(body->inner)) {
+    if (insert_content_type) {
       hdrs.emplace("Content-Type", encode and encode->inner == "form"
                                      ? "application/x-www-form-urlencoded"
                                      : "application/json");
@@ -1113,8 +1114,7 @@ public:
       = std::vector<std::pair<http::client_factory, caf::uri>>{};
     auto reqs = std::vector<secret_request>{};
     auto url = std::string{};
-    auto [headers, secrets]
-      = args_.make_headers(args_.body and is<record>(args_.body->inner));
+    auto [headers, secrets] = args_.make_headers();
     reqs.emplace_back(make_secret_request("url", args_.url, url, dh));
     if (not secrets.empty()) {
       const auto& loc = args_.headers->source;
@@ -1253,10 +1253,6 @@ public:
         [&](const std::string& x) {
           body = x;
         },
-        [&](const secret& x) {
-          reqs.emplace_back(
-            make_secret_request("body", x, args_.body->source, body, dh));
-        },
         [&](const record& x) {
           if (args_.encode and args_.encode->inner == "form") {
             body = curl::escape(flatten(x));
@@ -1366,6 +1362,25 @@ private:
   from_http_args args_;
 };
 
+void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
+                             session ctx) {
+  for (auto& arg : inv.args) {
+    match(
+      arg,
+      [&](const ast::assignment& arg) {
+        auto name = try_as<ast::field_path>(arg.left);
+        if (name and name->path().size() == 1
+            and name->path()[0].id.name == "payload") {
+          diagnostic::warning(
+            "parameter `payload` is deprecated, use `body` instead")
+            .primary(arg.left)
+            .emit(ctx);
+        }
+      },
+      [](const auto&) {});
+  }
+}
+
 struct from_http final : public virtual operator_factory_plugin {
   auto name() const -> std::string override {
     return "tql2.from_http";
@@ -1379,6 +1394,7 @@ struct from_http final : public virtual operator_factory_plugin {
     args.add_to(p);
     TRY(p.parse(inv, ctx));
     TRY(args.validate(ctx));
+    warn_deprecated_payload(inv, ctx);
     if (args.server) {
       return std::make_unique<from_http_server_operator>(std::move(args));
     }
@@ -1422,12 +1438,12 @@ struct http_args {
   auto add_to(argument_parser2& p) {
     p.positional("url", url, "string");
     p.named("method", method, "string");
-    p.named("body|payload", body, "string");
+    p.named("body|payload", body, "record|string|blob");
     p.named("encode", encode);
     p.named("headers", headers, "record");
     p.named("response_field", response_field);
     p.named("metadata_field", metadata_field);
-    p.named("paginate", paginate, "record=>string");
+    p.named("paginate", paginate, "record->string");
     p.named_optional("paginate_delay", paginate_delay);
     p.named_optional("parallel", parallel);
     p.named("tls", tls);
@@ -2098,6 +2114,7 @@ struct http_plugin final : public operator_plugin2<http_operator> {
     args.add_to(p);
     TRY(p.parse(inv, ctx));
     TRY(args.validate(ctx));
+    warn_deprecated_payload(inv, ctx);
     return std::make_unique<http_operator>(std::move(args));
   }
 };
