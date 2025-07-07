@@ -1277,7 +1277,7 @@ public:
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
       .retry_delay(args_.retry_delay->inner)
-      .add_header_fields(std::move(headers))
+      .add_header_fields(headers)
       .request(args_.make_method().value(), body)
       .or_else([&](const caf::error& e) {
         diagnostic::error("failed to make http request: {}", e)
