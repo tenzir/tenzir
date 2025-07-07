@@ -1,5 +1,5 @@
 ---
-title: `save_tcp` now reconnects on network outages
+title: "`save_tcp` now reconnects on network outages"
 type: feature
 authors: tobim
 pr: 5230

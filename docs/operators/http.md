@@ -7,11 +7,11 @@ example: 'http "example.com"'
 Sends HTTP/1.1 requests and forwards the response.
 
 ```tql
-http url:string, [method=string, payload=string, headers=record,
-     response_field=field, metadata_field=field, paginate=record->string,
-     paginate_delay=duration, parallel=int, tls=bool, certfile=string,
-     keyfile=string, password=string, connection_timeout=duration,
-     max_retry_count=int, retry_delay=duration { … }]
+http url:string, [method=string, body=record|string|blob, encode=string,
+     headers=record, response_field=field, metadata_field=field,
+     paginate=record->string, paginate_delay=duration, parallel=int, tls=bool,
+     certfile=string, keyfile=string, password=string,
+     connection_timeout=duration, max_retry_count=int, retry_delay=duration { … }]
 ```
 
 ## Description
@@ -33,7 +33,7 @@ URL to connect to.
 
 ### `method = string (optional)`
 
-One of the following HTTP method to use when using the client:
+One of the following HTTP methods to use when using the client:
 
 - `get`
 - `head`
@@ -42,13 +42,24 @@ One of the following HTTP method to use when using the client:
 - `del`
 - `connect`
 - `options`
-- `trace` Nice!
+- `trace`
 
-Defaults to `get`, or `post` if `payload` is specified.
+Defaults to `get`, or `post` if `body` is specified.
 
-### `payload = string (optional)`
+### `body = blob|record|string (optional)`
 
-Payload to send with the HTTP request.
+Body to send with the HTTP request.
+
+If the value is a `record`, then the body is encoded according to the `encode`
+option and an appropriate `Content-Type` is set for the request.
+
+### `encode = string (optional)`
+
+Specifies how to encode `record` bodies. Supported values:
+- `json`
+- `form`
+
+Defaults to `json`.
 
 ### `headers = record (optional)`
 
@@ -79,7 +90,7 @@ resulting string is used as the URL for a new GET request with the same headers.
 
 ### `paginate_delay = duration (optional)`
 
-The duration to wait between consecutive paginatation requests.
+The duration to wait between consecutive pagination requests.
 
 Defaults to `0s`.
 
