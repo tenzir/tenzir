@@ -28,77 +28,8 @@
 namespace tenzir {
 
 /// IP address types for classification.
-enum class ip_address_class {
-  unspecified,
-  loopback,
-  link_local,
-  multicast,
-  broadcast,
-  private_,
-  global
-};
-
-// Custom to_string to handle the private_ -> private mapping
-[[maybe_unused]] inline auto to_string(ip_address_class x) -> std::string_view {
-  switch (x) {
-    using enum ip_address_class;
-    case unspecified:
-      return "unspecified";
-    case loopback:
-      return "loopback";
-    case link_local:
-      return "link_local";
-    case multicast:
-      return "multicast";
-    case broadcast:
-      return "broadcast";
-    case private_:
-      return "private"; // Special case: remove trailing underscore
-    case global:
-      return "global";
-  }
-  TENZIR_UNREACHABLE();
-}
-
-// from_string implementation
-[[maybe_unused]] inline auto
-adl_from_string(tenzir::tag<ip_address_class>, std::string_view str)
-  -> std::optional<ip_address_class> {
-  using enum ip_address_class;
-  if (str == "unspecified") {
-    return unspecified;
-  }
-  if (str == "loopback") {
-    return loopback;
-  }
-  if (str == "link_local") {
-    return link_local;
-  }
-  if (str == "multicast") {
-    return multicast;
-  }
-  if (str == "broadcast") {
-    return broadcast;
-  }
-  if (str == "private_" || str == "private") {
-    return private_; // Accept both forms
-  }
-  if (str == "global") {
-    return global;
-  }
-  return std::nullopt;
-}
-
-// inspect implementation for serialization
-[[maybe_unused]] auto inspect(auto& f, ip_address_class& x) -> bool {
-  return tenzir::detail::inspect_enum_str(f, x,
-                                          {"unspecified", "loopback",
-                                           "link_local", "multicast",
-                                           "broadcast", "private_", "global"});
-}
-
-// Mark as TENZIR_ENUM-compatible for fmt formatter
-[[maybe_unused]] void adl_tenzir_macro_enum(ip_address_class);
+TENZIR_ENUM(ip_address_class, unspecified, loopback, link_local, multicast,
+            broadcast, private_, global);
 
 /// An IP address.
 class ip : detail::totally_ordered<ip>, detail::bitwise<ip> {
