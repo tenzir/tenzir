@@ -1,5 +1,5 @@
 ---
-title: "Add IP address classification functions"
+title: "IP address categorization functions"
 type: feature
 authors: mavam
 pr: 5336
