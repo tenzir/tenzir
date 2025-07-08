@@ -12,8 +12,8 @@ fork { … }
 
 ## Description
 
-The `fork` operator execute a subpipeline with a copy its input, that is:
-whenever an event arrives, it is send both to the given pipeline and forwarded
+The `fork` operator executes a subpipeline with a copy of its input, that is:
+whenever an event arrives, it is sent both to the given pipeline and forwarded
 at the same time to the next operator.
 
 ### `{ … }`
