@@ -1,6 +1,6 @@
 ---
 title: is_link_local
-category: IP
+category: Networking
 example: 'is_link_local(169.254.1.1)'
 ---
 
@@ -45,7 +45,8 @@ from {
 
 ## See Also
 
-[`is_v4`](/reference/functions/is_v4), [`is_v6`](/reference/functions/is_v6),
+[`is_v4`](/reference/functions/is_v4),
+[`is_v6`](/reference/functions/is_v6),
 [`is_multicast`](/reference/functions/is_multicast),
 [`is_loopback`](/reference/functions/is_loopback),
 [`is_private`](/reference/functions/is_private),

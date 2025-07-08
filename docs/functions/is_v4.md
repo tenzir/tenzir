@@ -1,6 +1,6 @@
 ---
 title: is_v4
-category: IP
+category: Networking
 example: 'is_v4(1.2.3.4)'
 ---
 

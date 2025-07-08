@@ -1,6 +1,6 @@
 ---
 title: is_private
-category: IP
+category: Networking
 example: 'is_private(192.168.1.1)'
 ---
 
@@ -54,7 +54,8 @@ from {
 
 ## See Also
 
-[`is_v4`](/reference/functions/is_v4), [`is_v6`](/reference/functions/is_v6),
+[`is_v4`](/reference/functions/is_v4),
+[`is_v6`](/reference/functions/is_v6),
 [`is_multicast`](/reference/functions/is_multicast),
 [`is_loopback`](/reference/functions/is_loopback),
 [`is_global`](/reference/functions/is_global),

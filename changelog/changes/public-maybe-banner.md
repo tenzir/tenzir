@@ -5,9 +5,9 @@ authors: mavam
 pr: 5336
 ---
 
-Ever wondered if that suspicious traffic is coming from inside the house? 🏠
-We've got you covered with a new suite of IP address classification functions
-that make network analysis a breeze.
+Ever wondered if that suspicious traffic is coming from inside the corporate
+network? 🏢 We've got you covered with a new suite of IP address classification
+functions that make network analysis a breeze.
 
 **`is_private()`** - Quickly spot internal RFC 1918 addresses in your logs.
 Perfect for identifying lateral movement or distinguishing between internal and

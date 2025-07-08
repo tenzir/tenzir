@@ -1,6 +1,6 @@
 ---
 title: ip_type
-category: IP
+category: Networking
 example: 'ip_type(8.8.8.8)'
 ---
 
@@ -53,7 +53,8 @@ from {
 
 ## See Also
 
-[`is_v4`](/reference/functions/is_v4), [`is_v6`](/reference/functions/is_v6),
+[`is_v4`](/reference/functions/is_v4),
+[`is_v6`](/reference/functions/is_v6),
 [`is_multicast`](/reference/functions/is_multicast),
 [`is_loopback`](/reference/functions/is_loopback),
 [`is_private`](/reference/functions/is_private),

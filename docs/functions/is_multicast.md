@@ -1,6 +1,6 @@
 ---
 title: is_multicast
-category: IP
+category: Networking
 example: 'is_multicast(224.0.0.1)'
 ---
 
@@ -42,7 +42,8 @@ from {
 
 ## See Also
 
-[`is_v4`](/reference/functions/is_v4), [`is_v6`](/reference/functions/is_v6),
+[`is_v4`](/reference/functions/is_v4),
+[`is_v6`](/reference/functions/is_v6),
 [`is_loopback`](/reference/functions/is_loopback),
 [`is_private`](/reference/functions/is_private),
 [`is_global`](/reference/functions/is_global),
