@@ -1,0 +1,8 @@
+{
+  is_v4_ipv4_1: true,
+  is_v4_ipv4_2: true,
+  is_v4_ipv6_1: false,
+  is_v4_ipv6_2: false,
+  is_v4_invalid: null,
+  is_v4_null: null,
+}
