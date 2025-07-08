@@ -1,0 +1,11 @@
+{
+  is_loopback_ipv4_127_0: true,
+  is_loopback_ipv4_127_255: true,
+  is_loopback_ipv6: true,
+  is_loopback_ipv4_private: false,
+  is_loopback_ipv6_global: false,
+  is_loopback_multicast: false,
+  is_loopback_private: false,
+  is_loopback_invalid: null,
+  is_loopback_null: null,
+}

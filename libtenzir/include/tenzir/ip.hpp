@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/byteswap.hpp"
 #include "tenzir/detail/debug_writer.hpp"
+#include "tenzir/detail/enum.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/hash/legacy_hash.hpp"
@@ -25,6 +26,10 @@
 #include <type_traits>
 
 namespace tenzir {
+
+/// IP address types for classification.
+TENZIR_ENUM(ip_address_class, unspecified, loopback, link_local, multicast,
+            broadcast, private_, global);
 
 /// An IP address.
 class ip : detail::totally_ordered<ip>, detail::bitwise<ip> {
@@ -137,6 +142,22 @@ public:
   /// this means the first bytes equals 255.
   /// @returns `true` if the address is a multicast address.
   [[nodiscard]] auto is_multicast() const -> bool;
+
+  /// Determines whether the address is a private address.
+  /// @returns `true` if the address is a private address.
+  [[nodiscard]] auto is_private() const -> bool;
+
+  /// Determines whether the address is a global address.
+  /// @returns `true` if the address is a global address.
+  [[nodiscard]] auto is_global() const -> bool;
+
+  /// Determines whether the address is a link-local address.
+  /// @returns `true` if the address is a link-local address.
+  [[nodiscard]] auto is_link_local() const -> bool;
+
+  /// Returns the type of IP address.
+  /// @returns The ip_address_class enum value.
+  [[nodiscard]] auto type() const -> ip_address_class;
 
   /// Masks out lower bits of the address.
   /// @param top_bits_to_keep The number of bits *not* to mask out,
