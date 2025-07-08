@@ -1,0 +1,2 @@
+let $threshold=100
+from "events.json"|where severity=="high"and bytes>$threshold|summarize total=count(),avg_bytes=mean(bytes)|sort -avg_bytes|head 10

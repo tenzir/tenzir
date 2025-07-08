@@ -1,0 +1,1 @@
+enriched=events.map(e=>({timestamp:e.ts.format_time("%Y-%m-%d"),value:e.val.to_string()}))|head 50

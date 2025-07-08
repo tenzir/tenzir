@@ -25,6 +25,7 @@ struct exec_config {
   std::string implicit_events_sink = make_default_implicit_events_sink(false);
   bool dump_tokens = false;
   bool dump_ast = false;
+  bool dump_formatted = false;
   bool dump_pipeline = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
