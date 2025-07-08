@@ -199,7 +199,12 @@ public:
                   check(b->AppendNull());
                   continue;
                 }
-                check(b->Append(to_string(value->type())));
+                auto type_str = to_string(value->type());
+                // Remove trailing underscore from "private_"
+                if (type_str == "private_") {
+                  type_str = "private";
+                }
+                check(b->Append(type_str));
               }
             },
             [&](const auto&) {
