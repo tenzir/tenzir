@@ -1,6 +1,6 @@
 ---
 title: is_global
-category: Networking
+category: IP
 example: 'is_global(8.8.8.8)'
 ---
 

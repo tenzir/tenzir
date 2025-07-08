@@ -1,18 +1,18 @@
 ---
-title: ip_type
-category: Networking
-example: 'ip_type(8.8.8.8)'
+title: ip_category
+category: IP
+example: 'ip_category(8.8.8.8)'
 ---
 
 Returns the type classification of an IP address.
 
 ```tql
-ip_type(x:ip) -> string
+ip_category(x:ip) -> string
 ```
 
 ## Description
 
-The `ip_type` function returns the type classification of a given IP address `x`
+The `ip_category` function returns the category classification of a given IP address `x`
 as a string. The possible return values are:
 
 - `"unspecified"` - Unspecified address (0.0.0.0 or ::)
@@ -33,11 +33,11 @@ just non-global.
 
 ```tql
 from {
-  global_ipv4: ip_type(8.8.8.8),
-  private_ipv4: ip_type(192.168.1.1),
-  loopback: ip_type(127.0.0.1),
-  multicast: ip_type(224.0.0.1),
-  link_local: ip_type(169.254.1.1),
+  global_ipv4: ip_category(8.8.8.8),
+  private_ipv4: ip_category(192.168.1.1),
+  loopback: ip_category(127.0.0.1),
+  multicast: ip_category(224.0.0.1),
+  link_local: ip_category(169.254.1.1),
 }
 ```
 

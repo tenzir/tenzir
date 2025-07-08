@@ -1,6 +1,6 @@
 ---
 title: is_multicast
-category: Networking
+category: IP
 example: 'is_multicast(224.0.0.1)'
 ---
 

@@ -51,13 +51,13 @@ where src_ip != dst_ip and dst_ip.is_loopback()
 // Unusual loopback connections might indicate malware
 ```
 
-**`ip_type()`** - Get the complete classification in one shot. Returns:
+**`ip_category()`** - Get the complete classification in one shot. Returns:
 "global", "private", "multicast", "link_local", "loopback", "broadcast", or
 "unspecified":
 
 ```tql
-where src_ip.ip_type() == "private" and dst_ip.ip_type() == "multicast"
-// Analyze traffic patterns by IP type
+where src_ip.ip_category() == "private" and dst_ip.ip_category() == "multicast"
+// Analyze traffic patterns by IP category
 ```
 
 These functions work seamlessly with both IPv4 and IPv6 addresses, making them

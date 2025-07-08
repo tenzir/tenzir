@@ -166,10 +166,10 @@ public:
   }
 };
 
-class ip_type_plugin final : public function_plugin {
+class ip_category_plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "ip_type";
+    return "ip_category";
   }
 
   auto is_deterministic() const -> bool override {
@@ -179,7 +179,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("ip_type")
+    TRY(argument_parser2::function("ip_category")
           .positional("x", expr, "ip")
           .parse(inv, ctx));
     return function_use::make(
@@ -203,7 +203,7 @@ public:
               }
             },
             [&](const auto&) {
-              diagnostic::warning("`ip_type` expected `ip`, but got `{}`",
+              diagnostic::warning("`ip_category` expected `ip`, but got `{}`",
                                   arg.type.kind())
                 .primary(expr)
                 .emit(ctx);
@@ -238,4 +238,4 @@ TENZIR_REGISTER_PLUGIN(
   tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::global>)
 TENZIR_REGISTER_PLUGIN(
   tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::link_local>)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::ip_type_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::ip_category_plugin)

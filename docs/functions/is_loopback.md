@@ -1,6 +1,6 @@
 ---
 title: is_loopback
-category: Networking
+category: IP
 example: 'is_loopback(127.0.0.1)'
 ---
 

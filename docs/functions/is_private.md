@@ -1,6 +1,6 @@
 ---
 title: is_private
-category: Networking
+category: IP
 example: 'is_private(192.168.1.1)'
 ---
 

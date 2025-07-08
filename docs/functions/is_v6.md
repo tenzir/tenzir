@@ -1,6 +1,6 @@
 ---
 title: is_v6
-category: Networking
+category: IP
 example: 'is_v6(::1)'
 ---
 

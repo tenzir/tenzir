@@ -1,6 +1,6 @@
 ---
 title: is_link_local
-category: Networking
+category: IP
 example: 'is_link_local(169.254.1.1)'
 ---
 
