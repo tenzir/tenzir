@@ -56,7 +56,7 @@ where src_ip != dst_ip and dst_ip.is_loopback()
 "unspecified":
 
 ```tql
-src_ip.ip_type() == "private" and dst_ip.ip_type() == "multicast"
+where src_ip.ip_type() == "private" and dst_ip.ip_type() == "multicast"
 // Analyze traffic patterns by IP type
 ```
 
