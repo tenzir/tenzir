@@ -8,8 +8,11 @@
 
 #include "tenzir/secret.hpp"
 
+#include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/fbs/data.hpp"
-#include "tenzir/logger.hpp"
+#include "tenzir/table_slice.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/array/array_binary.h>
 
@@ -128,7 +131,7 @@ auto copy(flatbuffers::FlatBufferBuilder& fbb, const fbs::data::Secret& s)
                                    transformed.transformation());
     },
   };
-  return match(s, f);
+  return tenzir::match(s, f);
 }
 
 template <typename FlatbufferType>
@@ -143,7 +146,7 @@ auto secret_common<FlatbufferType>::is_all_literal() const -> bool {
     [](this const auto& self,
        const fbs::data::SecretConcatenation& concat) -> bool {
       for (const auto* child : deref(concat.secrets())) {
-        if (not match(deref(child), self)) {
+        if (not tenzir::match(deref(child), self)) {
           return false;
         }
       }
@@ -151,10 +154,10 @@ auto secret_common<FlatbufferType>::is_all_literal() const -> bool {
     },
     [](this const auto& self,
        const fbs::data::SecretTransformed& transformed) -> bool {
-      return match(deref(transformed.secret()), self);
+      return tenzir::match(deref(transformed.secret()), self);
     },
   };
-  return match(*buffer, f);
+  return tenzir::match(*buffer, f);
 }
 
 namespace {
@@ -238,7 +241,7 @@ auto prepend_append_literal_impl(flatbuffers::FlatBufferBuilder& fbb,
       return finish_concatenation(fbb, offsets);
     },
   };
-  return match(s, f);
+  return tenzir::match(s, f);
 }
 
 } // namespace
@@ -319,7 +322,7 @@ auto secret_common<FlatbufferType>::with_appended(
       return finish_concatenation(fbb, secrets);
     },
   };
-  const auto offset = match(std::tie(*buffer, *other.buffer), f);
+  const auto offset = tenzir::match(std::tie(*buffer, *other.buffer), f);
   return finish_builder(fbb, offset);
 }
 
@@ -343,7 +346,7 @@ auto secret_common<FlatbufferType>::with_operation(
       return finish_transformation(fbb, inner_offset, operation);
     },
   };
-  const auto offset = match(*buffer, f);
+  const auto offset = tenzir::match(*buffer, f);
   return finish_builder(fbb, offset);
 }
 
@@ -370,6 +373,50 @@ auto secret::from_fb(const fbs::data::Secret& fb) -> secret {
 }
 
 secret_view::secret_view(const secret& s) : impl{s.buffer} {
+}
+
+namespace {
+const static auto replace_secret_transformation
+  = [](struct record_type::field field, std::shared_ptr<arrow::Array> array)
+  -> std::vector<
+    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+  auto new_type = tenzir::type{string_type{}};
+  new_type.assign_metadata(field.type);
+  auto builder = string_type::make_arrow_builder(arrow::default_memory_pool());
+  for (const auto& value :
+       values3(as<type_to_arrow_array_t<secret_type>>(*array))) {
+    if (not value) {
+      check(builder->AppendNull());
+      continue;
+    }
+    check(append_builder(string_type{}, *builder, "***"));
+  }
+  return {{
+    {field.name, std::move(new_type)},
+    check(builder->Finish()),
+  }};
+};
+} // namespace
+
+auto replace_secrets(table_slice slice) -> replace_secrets_result {
+  if (slice.rows() == 0) {
+    return {std::move(slice), {}};
+  }
+  const auto& type = as<record_type>(slice.schema());
+  // Resolve enumeration types, if there are any.
+  auto transformations = std::vector<indexed_transformation>{};
+  auto renames = std::vector<std::string>{};
+  for (const auto& [field, index] : type.leaves()) {
+    if (! is<secret_type>(field.type)) {
+      continue;
+    }
+    transformations.emplace_back(index, replace_secret_transformation);
+    renames.emplace_back(field.name);
+  }
+  return {
+    transform_columns(slice, std::move(transformations)),
+    std::move(renames),
+  };
 }
 
 } // namespace tenzir

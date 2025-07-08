@@ -302,7 +302,14 @@ public:
         co_yield {};
         co_return;
       }
-      auto record_batch = remove_empty_records(to_record_batch(input));
+      auto [no_secrets, modified_fields] = replace_secrets(std::move(input));
+      if (modified_fields.size() > 0) {
+        diagnostic::warning("`secret` is serialized as text")
+          .note("fields `{}` will be `\"***\"`",
+                fmt::join(modified_fields, "`, `"))
+          .emit(ctrl_.diagnostics());
+      }
+      auto record_batch = remove_empty_records(to_record_batch(no_secrets));
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (! record_batch_status.ok()) {
         diagnostic::error("{}",

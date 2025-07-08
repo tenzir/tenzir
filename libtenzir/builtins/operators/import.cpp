@@ -44,23 +44,31 @@ public:
         co_yield {};
         continue;
       }
+      auto [slice_wo_secrets, modified_fields]
+        = replace_secrets(std::move(slice));
+      if (modified_fields.size() > 0) {
+        diagnostic::warning("`secret` cannot imported as secrets")
+          .note("fields `{}` will be `\"***\"`",
+                fmt::join(modified_fields, "`, `"))
+          .emit(ctrl.diagnostics());
+      }
       // The current catalog assumes that all events have at least one field.
       // This check guards against that. We should remove it once we get to
       // rewriting our catalog.
-      if (as<record_type>(slice.schema()).num_fields() == 0) {
+      if (as<record_type>(slice_wo_secrets.schema()).num_fields() == 0) {
         continue;
       }
-      if (not slice.schema().attribute("internal").has_value()) {
+      if (not slice_wo_secrets.schema().attribute("internal").has_value()) {
         metric_handler.emit({
-          {"schema", std::string{slice.schema().name()}},
-          {"schema_id", slice.schema().make_fingerprint()},
-          {"events", slice.rows()},
+          {"schema", std::string{slice_wo_secrets.schema().name()}},
+          {"schema_id", slice_wo_secrets.schema().make_fingerprint()},
+          {"events", slice_wo_secrets.rows()},
         });
       }
-      total_events += slice.rows();
+      total_events += slice_wo_secrets.rows();
       inflight_batches += 1;
       ctrl.self()
-        .mail(std::move(slice))
+        .mail(std::move(slice_wo_secrets))
         .request(importer, caf::infinite)
         .then(
           [&]() {

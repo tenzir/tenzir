@@ -369,7 +369,13 @@ auto print_feather(
   const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer,
   const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
   -> generator<chunk_ptr> {
-  auto batch = to_record_batch(input);
+  auto [no_secrets, modified_fields] = replace_secrets(std::move(input));
+  if (modified_fields.size() > 0) {
+    diagnostic::warning("`secret` is serialized as text")
+      .note("fields `{}` will be `\"***\"`", fmt::join(modified_fields, "`, `"))
+      .emit(ctrl.diagnostics());
+  }
+  auto batch = to_record_batch(no_secrets);
   auto validate_status = batch->Validate();
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
   auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
