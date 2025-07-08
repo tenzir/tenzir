@@ -80,7 +80,7 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
   if (inv.arguments.size() != 2) {
     return caf::make_message(ec::silent);
   }
-  caf::scoped_actor self{sys};
+  auto self = caf::scoped_actor{sys};
   auto endpoint = to<tenzir::endpoint>(inv.arguments[0]);
   TENZIR_ASSERT(endpoint);
   auto identifier
@@ -92,28 +92,30 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
   auto result = caf::expected<caf::actor>{caf::error{}};
   const auto node = std::move(*node_opt);
   auto shell = self->spawn(caf::actor_from_state<pipeline_shell>, node);
-  self->mail(atom::connect_v, atom::shell_v, identifier, shell).send(node);
-  auto err = caf::error{ec::no_error};
-  auto stop = false;
+  auto error = caf::error{ec::no_error};
+  self->mail(atom::connect_v, atom::shell_v, identifier, shell)
+    .request(node, caf::infinite)
+    .receive([]() {},
+             [&](caf::error err) {
+               error = std::move(err);
+             });
+  if (error) {
+    return caf::make_message(error);
+  }
   self->monitor(node);
   self->monitor(shell);
-  self
-    ->do_receive([&](caf::down_msg& msg) {
-      if (msg.source == node) {
-        TENZIR_DEBUG("pipeline_shell_command received DOWN from node", *self);
-      }
-      if (msg.source == shell) {
-        TENZIR_DEBUG("pipeline_shell_command received DOWN from shell", *self);
-      }
-      stop = true;
-      if (msg.reason != caf::exit_reason::user_shutdown) {
-        err = std::move(msg.reason);
-      }
-    })
-    .until([&] {
-      return stop;
-    });
-  return caf::make_message(err);
+  self->receive([&](caf::down_msg& msg) {
+    if (msg.source == node) {
+      TENZIR_DEBUG("pipeline_shell_command received DOWN from node", *self);
+    }
+    if (msg.source == shell) {
+      TENZIR_DEBUG("pipeline_shell_command received DOWN from shell", *self);
+    }
+    if (msg.reason != caf::exit_reason::user_shutdown) {
+      error = std::move(msg.reason);
+    }
+  });
+  return caf::make_message(error);
 }
 
 class plugin final : public command_plugin {

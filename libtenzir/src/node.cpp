@@ -340,19 +340,22 @@ auto node_state::create_pipeline_shell() -> void {
     = detail::objectpath()->parent_path().parent_path() / "bin" / "tenzir-ctl";
   auto proc = reproc::process{};
   auto options = reproc::options{};
-  // clang-format off
-  reproc::stop_actions proc_stop = {
+  options.redirect.err.type = reproc::redirect::parent;
+  auto proc_stop = reproc::stop_actions{
     .first = {.action = reproc::stop::terminate,
-              .timeout = reproc::milliseconds(10)},
+              .timeout = reproc::milliseconds(10),},
     .second = {.action = reproc::stop::kill,
-               .timeout = reproc::milliseconds(0)},
+               .timeout = reproc::milliseconds(0),},
     .third = {},
   };
-  // clang-format on
   options.stop = proc_stop;
+  auto console_verbosity
+    = caf::get_or<std::string>(self->config().content,
+                               "tenzir.console-verbosity",
+                               tenzir::defaults::logger::console_verbosity);
   auto args = std::vector<std::string>{
     tenzir_ctl,
-    "--console-verbosity=quiet",
+    fmt::format("--console-verbosity={}", console_verbosity),
     "pipeline_shell",
     fmt::to_string(*endpoint),
     fmt::to_string(child_id),

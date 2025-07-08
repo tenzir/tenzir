@@ -174,10 +174,10 @@ caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
 
 auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
                      caf::timespan timeout,
-                     std::optional<caf::timespan> retry_delay)
-  -> caf::expected<node_actor> {
-  auto connector_actor
-    = self->spawn(connector, retry_delay, detail::get_deadline(timeout));
+                     std::optional<caf::timespan> retry_delay,
+                     bool internal_connection) -> caf::expected<node_actor> {
+  auto connector_actor = self->spawn(
+    connector, retry_delay, detail::get_deadline(timeout), internal_connection);
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
   TENZIR_ASSERT(endpoint.port.has_value());
@@ -214,7 +214,8 @@ auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
   return result;
 }
 
-auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor> {
+auto connect_to_node(caf::scoped_actor& self, bool internal_connection)
+  -> caf::expected<node_actor> {
   // If we already are in a node, do nothing.
   if (auto node = self->system().registry().get<node_actor>("tenzir.node")) {
     return node;
@@ -228,7 +229,8 @@ auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor> {
   auto endpoint = *node_endpoint;
   auto timeout = detail::node_connection_timeout(opts);
   auto retry_delay = detail::get_retry_delay(opts);
-  return connect_to_node(self, endpoint, timeout, retry_delay);
+  return connect_to_node(self, endpoint, timeout, retry_delay,
+                         internal_connection);
 }
 
 } // namespace tenzir
