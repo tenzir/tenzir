@@ -48,4 +48,4 @@ from {
 [`is_private`](/reference/functions/is_private),
 [`is_global`](/reference/functions/is_global),
 [`is_link_local`](/reference/functions/is_link_local),
-[`ip_type`](/reference/functions/ip_type)
+[`ip_category`](/reference/functions/ip_category)
