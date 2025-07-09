@@ -51,4 +51,4 @@ from {
 [`is_loopback`](/reference/functions/is_loopback),
 [`is_private`](/reference/functions/is_private),
 [`is_global`](/reference/functions/is_global),
-[`ip_type`](/reference/functions/ip_type)
+[`ip_category`](/reference/functions/ip_category)
