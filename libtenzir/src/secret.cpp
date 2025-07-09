@@ -8,13 +8,16 @@
 
 #include "tenzir/secret.hpp"
 
-#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/fbs/data.hpp"
+#include "tenzir/replace_columns.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/array/array_binary.h>
+
+#include <concepts>
 
 namespace tenzir {
 namespace detail::secrets {
@@ -375,48 +378,25 @@ auto secret::from_fb(const fbs::data::Secret& fb) -> secret {
 secret_view::secret_view(const secret& s) : impl{s.buffer} {
 }
 
-namespace {
-const static auto replace_secret_transformation
-  = [](struct record_type::field field, std::shared_ptr<arrow::Array> array)
-  -> std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-  auto new_type = tenzir::type{string_type{}};
-  new_type.assign_metadata(field.type);
-  auto builder = string_type::make_arrow_builder(arrow::default_memory_pool());
-  for (const auto& value :
-       values3(as<type_to_arrow_array_t<secret_type>>(*array))) {
-    if (not value) {
-      check(builder->AppendNull());
-      continue;
-    }
-    check(append_builder(string_type{}, *builder, "***"));
-  }
-  return {{
-    {field.name, std::move(new_type)},
-    check(builder->Finish()),
-  }};
-};
-} // namespace
-
-auto replace_secrets(table_slice slice) -> replace_secrets_result {
-  if (slice.rows() == 0) {
-    return {std::move(slice), {}};
-  }
-  const auto& type = as<record_type>(slice.schema());
-  // Resolve enumeration types, if there are any.
-  auto transformations = std::vector<indexed_transformation>{};
-  auto renames = std::vector<std::string>{};
-  for (const auto& [field, index] : type.leaves()) {
-    if (! is<secret_type>(field.type)) {
-      continue;
-    }
-    transformations.emplace_back(index, replace_secret_transformation);
-    renames.emplace_back(field.name);
-  }
-  return {
-    transform_columns(slice, std::move(transformations)),
-    std::move(renames),
+auto replace_secrets(table_slice slice) -> std::pair<bool, table_slice> {
+  auto f = detail::overload{
+    [](const basic_series<secret_type>& s) -> std::optional<series> {
+      auto b = arrow::StringBuilder{};
+      check(b.Reserve(s.length()));
+      for (auto i = int64_t{0}; i < s.array->length(); ++i) {
+        if (s.array->IsNull(i)) {
+          check(b.AppendNull());
+          continue;
+        }
+        check(b.Append("***"));
+      }
+      return series{string_type{}, finish(b)};
+    },
+    [](const auto&) -> std::optional<series> {
+      return std::nullopt;
+    },
   };
+  return replace(std::move(slice), f);
 }
 
 } // namespace tenzir

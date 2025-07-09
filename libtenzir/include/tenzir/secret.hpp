@@ -164,14 +164,8 @@ void hash_append(HashAlgorithm& h, const secret_view& s) {
   return hash_append(h, static_cast<const secret_view::impl&>(s));
 }
 
-/// Returned by `replace_secrets`. The `table_slice` will have all secrets
-/// replaced with the string `"***"`. The vector is the collection of columns
-/// that were replaced.
-/// This is not a proper type, because we do not want to pull `table_slice`s
-/// definition here.
-using replace_secrets_result = std::pair<table_slice, std::vector<std::string>>;
 /// Replaces all secrets in the table slice with the string `"***"`
-auto replace_secrets(table_slice slice) -> replace_secrets_result;
+auto replace_secrets(table_slice slice) -> std::pair<bool, table_slice>;
 
 } // namespace tenzir
 

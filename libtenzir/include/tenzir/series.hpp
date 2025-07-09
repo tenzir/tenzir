@@ -205,7 +205,10 @@ public:
     using Type = decltype(ty);
     // Directly using `typeid(*x.array)` leads to a warning.
     auto& deref = *x.array;
-    TENZIR_ASSERT(typeid(type_to_arrow_array_t<Type>) == typeid(deref));
+    TENZIR_ASSERT(
+      typeid(type_to_arrow_array_t<Type>) == typeid(deref), "`{}` != `{}`",
+      caf::detail::pretty_type_name(typeid(type_to_arrow_array_t<Type>)),
+      caf::detail::pretty_type_name(typeid(deref)));
     auto array = std::static_pointer_cast<type_to_arrow_array_t<Type>>(x.array);
     return basic_series<Type>{std::move(ty), std::move(array)};
   }

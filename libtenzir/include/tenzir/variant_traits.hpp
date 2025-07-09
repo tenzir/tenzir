@@ -146,23 +146,54 @@ class variant_traits<std::reference_wrapper<T>>
 static_assert(has_variant_traits<std::reference_wrapper<std::variant<int>>>);
 
 namespace detail {
-/// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
-template <size_t I, has_variant_traits V>
-constexpr auto variant_get(V&& v) -> decltype(auto) {
-  if constexpr (std::is_reference_v<decltype(variant_traits<std::remove_cvref_t<
-                                               V>>::template get<I>(v))>) {
-    // We call `as_mutable` here because `forward_like` never removes `const`.
-    return std::forward_like<V>(
-      as_mutable(variant_traits<std::remove_cvref_t<V>>::template get<I>(v)));
-  } else {
-    return variant_traits<std::remove_cvref_t<V>>::template get<I>(v);
-  }
-}
-
 template <has_variant_traits V, size_t I>
 using variant_alternative = std::remove_cvref_t<
   decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(
     std::declval<V>()))>;
+
+template <typename T>
+consteval static std::string_view type_name_of() {
+#if defined _WIN32
+  constexpr std::string_view s = __FUNCTION__;
+  const auto begin_search = s.find_first_of("<");
+  const auto space = s.find(' ', begin_search);
+  const auto begin_type = space != s.npos ? space + 1 : begin_search + 1;
+  const auto end_type = s.find_last_of(">");
+  return s.substr(begin_type, end_type - begin_type);
+#elif defined __GNUC__
+  constexpr std::string_view s = __PRETTY_FUNCTION__;
+  constexpr std::string_view t_equals = "T = ";
+  const auto begin_type = s.find(t_equals) + t_equals.size();
+  const auto end_type = s.find_first_of(";]", begin_type);
+  return s.substr(begin_type, end_type - begin_type);
+#endif
+}
+
+template <has_variant_traits V, size_t... Is>
+consteval auto make_name_table(std::index_sequence<Is...>)
+  -> std::array<std::string_view, sizeof...(Is)> {
+  return std::array{type_name_of<variant_alternative<V, Is>>()...};
+}
+
+/// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
+template <size_t I, has_variant_traits V>
+constexpr auto variant_get(V&& v) -> decltype(auto) {
+  using traits = variant_traits<std::remove_cvref_t<V>>;
+  [[maybe_unused]] const auto current_index = traits::index(v);
+  [[maybe_unused]] constexpr static auto alternative_names
+    = make_name_table<V>(std::make_index_sequence<traits::count>());
+  TENZIR_ASSERT_EXPENSIVE(
+    current_index == I,
+    "invalid variant access: [current: `{} ({})`] != [requested: "
+    "`{} ({})`]",
+    current_index, alternative_names[current_index], I, alternative_names[I]);
+  if constexpr (std::is_reference_v<decltype(traits::template get<I>(v))>) {
+    // We call `as_mutable` here because `forward_like` never removes `const`.
+    return std::forward_like<V>(as_mutable(traits::template get<I>(v)));
+  } else {
+    return traits::template get<I>(v);
+  }
+}
 
 template <has_variant_traits V, class T>
 constexpr auto variant_index = std::invoke(
@@ -366,18 +397,17 @@ auto is(const V& v) -> bool {
 template <concepts::unqualified T, has_variant_traits V>
 auto as(V&& v) -> forward_like_t<V, T> {
   using bare = std::remove_cvref_t<V>;
-  constexpr auto alternative_index = detail::variant_index<bare, T>;
-  const auto current_index = variant_traits<bare>::index(v);
+  using traits = variant_traits<std::remove_cvref_t<V>>;
+  [[maybe_unused]] const auto current_index = traits::index(v);
+  [[maybe_unused]] constexpr static auto alternative_index
+    = detail::variant_index<bare, T>;
+  [[maybe_unused]] constexpr static auto alternative_names
+    = detail::make_name_table<V>(std::make_index_sequence<traits::count>());
   TENZIR_ASSERT(current_index == alternative_index,
                 "invalid variant access: [current: `{} ({})`] != [requested: "
                 "`{} ({})`]",
-                current_index,
-                match(std::forward<V>(v),
-                      []<typename H>(const H&) {
-                        return caf::detail::pretty_type_name(
-                          typeid(std::remove_cvref_t<H>));
-                      }),
-                alternative_index, caf::detail::pretty_type_name(typeid(T)));
+                current_index, alternative_names[current_index],
+                alternative_index, alternative_names[alternative_index]);
   return detail::variant_get<alternative_index>(std::forward<V>(v));
 };
 
