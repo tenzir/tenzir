@@ -16,6 +16,7 @@
 #include "tenzir/execution_node.hpp"
 #include "tenzir/pipeline.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
 #include <caf/event_based_actor.hpp>
@@ -358,6 +359,45 @@ auto pipeline_executor(
     self->system().config(), "tenzir.no-location-overrides", false);
   self->state().has_terminal = has_terminal;
   self->state().is_hidden = is_hidden;
+  self->set_exception_handler([self](const std::exception_ptr& exception)
+                                -> caf::error {
+    auto error = std::invoke([&] {
+      try {
+        std::rethrow_exception(exception);
+      } catch (diagnostic& diag) {
+        return std::move(diag).to_error();
+      } catch (panic_exception& panic) {
+        auto has_node = self->system().registry().get("tenzir.node") != nullptr;
+        auto diagnostic = to_diagnostic(panic);
+        if (has_node) {
+          auto buffer = std::stringstream{};
+          buffer << "internal error in operator\n";
+          auto printer = make_diagnostic_printer(std::nullopt,
+                                                 color_diagnostics::no, buffer);
+          printer->emit(diagnostic);
+          auto string = std::move(buffer).str();
+          if (not string.empty() and string.back() == '\n') {
+            string.pop_back();
+          }
+          TENZIR_ERROR(string);
+        }
+        return std::move(diagnostic).to_error();
+      } catch (const std::exception& err) {
+        return diagnostic::error("{}", err.what())
+          .note("unhandled exception in pipeline_executor {}", *self)
+          .to_error();
+      } catch (...) {
+        return diagnostic::error("unhandled exception in pipeline_executor {}",
+                                 *self)
+          .to_error();
+      }
+    });
+    if (self->state().start_rp.pending()) {
+      self->state().start_rp.deliver(std::move(error));
+      return ec::silent;
+    }
+    return error;
+  });
   return {
     [self](atom::start) -> caf::result<void> {
       return self->state().start();
