@@ -1,0 +1,23 @@
+from {
+  // Basic padding with default space
+  basic: "hello".pad_left(10),
+  // Padding with custom character
+  zeros: "42".pad_left(5, "0"),
+  // String already long enough
+  no_pad: "hello world".pad_left(5),
+  // Empty string
+  empty: "".pad_left(5, "-"),
+  // Single character
+  single: "x".pad_left(3, "."),
+  // Padding with unicode character
+  unicode: "test".pad_left(8, "★"),
+  // Zero length
+  zero_len: "hello".pad_left(0),
+  // Negative length (should return empty)
+  neg_len: "hello".pad_left(-5),
+  // Multi-character pad (should fail)
+  multi_pad: "test".pad_left(10, "ab"),
+  // Null handling
+  null_str: null.pad_left(5),
+  null_len: "test".pad_left(null),
+}
