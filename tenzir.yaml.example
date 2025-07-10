@@ -41,7 +41,7 @@ tenzir:
   # Configure the behavior of the `cache` operator. The Tenzir Platform uses the
   # cache operator to store and retrieve data efficiently.
   cache:
-    # Specifies the default write-timeout for the `cache` operator.
+    # Specifies the default lifetime for the `cache` operator.
     #lifetime: 10min
 
     # Specifies an upper bound for the total memory usage in bytes across all
