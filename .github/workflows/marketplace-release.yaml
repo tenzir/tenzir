@@ -1,5 +1,8 @@
 name: AWS Marketplace Release
 
+permissions:
+  id-token: write
+
 on:
   release:
     types: [published]
