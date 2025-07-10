@@ -1,8 +1,8 @@
 ---
-title: "Remove file size limit from `to_asl`"
+title: "Remove file size limit from Amazon Security Lake Integration"
 type: bugfix
 authors: IyeOnline
 pr: 5340
 ---
 
-We removed the 256MB file size limit from the `to_asl` operator.
+We removed the 256MB file size limit from the Amazon Security Lake integration.

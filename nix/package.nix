@@ -93,7 +93,7 @@ rec {
           ps.packages
           ps.pipeline-manager
           ps.platform
-          ps.to_asl
+          ps.to_amazon_security_lake
           ps.to_azure_log_analytics
           ps.to_splunk
           ps.to_google_secops

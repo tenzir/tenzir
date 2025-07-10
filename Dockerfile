@@ -504,16 +504,16 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/snowflake cmake --install build-snowflake --component Runtime && \
     rm -rf build-snowflake
 
-FROM plugins-source AS to_asl-plugin
+FROM plugins-source AS to_amazon_security_lake-plugin
 
-COPY contrib/tenzir-plugins/to_asl ./contrib/tenzir-plugins/to_asl
+COPY contrib/tenzir-plugins/to_amazon_security_lake ./contrib/tenzir-plugins/to_amazon_security_lake
 RUN --mount=target=/ccache,type=cache \
-    cmake -S contrib/tenzir-plugins/to_asl -B build-to_asl -G Ninja \
+    cmake -S contrib/tenzir-plugins/to_amazon_security_lake -B build-to_amazon_security_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-to_asl --parallel && \
-    cmake --build build-to_asl --target bats && \
-    DESTDIR=/plugin/to_asl cmake --install build-to_asl --component Runtime && \
-    rm -rf build-to_asl
+    cmake --build build-to_amazon_security_lake --parallel && \
+    cmake --build build-to_amazon_security_lake --target bats && \
+    DESTDIR=/plugin/to_amazon_security_lake cmake --install build-to_amazon_security_lake --component Runtime && \
+    rm -rf build-to_amazon_security_lake
 
 FROM plugins-source AS to_azure_log_analytics-plugin
 
@@ -581,7 +581,7 @@ COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manag
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
-COPY --from=to_asl-plugin --chown=tenzir:tenzir /plugin/to_asl /
+COPY --from=to_amazon_security_lake-plugin --chown=tenzir:tenzir /plugin/to_amazon_security_lake /
 COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure_log_analytics /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
