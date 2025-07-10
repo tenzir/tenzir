@@ -193,6 +193,9 @@ struct bridge_state {
     if (not mode.internal) {
       emit_metrics();
     }
+    if (buffer_rp.pending()) {
+      buffer_rp.deliver(caf::none);
+    }
   }
 };
 
