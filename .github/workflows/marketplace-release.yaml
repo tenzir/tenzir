@@ -62,7 +62,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::390844774768:role/aws-marketplace-github-access
-          aws-region: us-east-1
+          aws-region: eu-west-1
 
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v2
