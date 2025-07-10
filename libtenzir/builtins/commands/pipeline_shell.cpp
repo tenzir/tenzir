@@ -85,7 +85,8 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
   TENZIR_ASSERT(endpoint);
   auto identifier
     = static_cast<std::uint32_t>(std::stoul(inv.arguments[1], nullptr));
-  auto node_opt = connect_to_node(self, *endpoint, caf::infinite);
+  auto node_opt = connect_to_node(self, *endpoint, caf::infinite, std::nullopt,
+                                  /*internal_connection=*/true);
   if (not node_opt) {
     return caf::make_message(std::move(node_opt.error()));
   }
@@ -106,10 +107,11 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
   self->monitor(shell);
   self->receive([&](caf::down_msg& msg) {
     if (msg.source == node) {
-      TENZIR_DEBUG("pipeline_shell_command received DOWN from node", *self);
+      TENZIR_DEBUG("pipeline_shell_command received DOWN from node");
+      self->send_exit(shell, msg.reason);
     }
     if (msg.source == shell) {
-      TENZIR_DEBUG("pipeline_shell_command received DOWN from shell", *self);
+      TENZIR_DEBUG("pipeline_shell_command received DOWN from shell");
     }
     if (msg.reason != caf::exit_reason::user_shutdown) {
       error = std::move(msg.reason);
