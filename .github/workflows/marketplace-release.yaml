@@ -77,6 +77,7 @@ jobs:
           role-to-assume: arn:aws:iam::390844774768:role/aws-marketplace-github-access
           aws-region: eu-west-1
           role-session-name: GithubActionsCISession
+          role-skip-session-tagging: true
           role-chaining: true
 
       - name: Login to AWS ECR
