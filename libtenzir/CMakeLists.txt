@@ -468,6 +468,7 @@ target_compile_definitions(libtenzir
 
 if (NOT APPLE)
   target_link_libraries(libtenzir PRIVATE atomic)
+  target_link_libraries(libtenzir_builtins PRIVATE atomic)
 endif ()
 
 # Configure options-dependent code files.
