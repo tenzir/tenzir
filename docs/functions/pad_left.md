@@ -12,9 +12,9 @@ pad_left(x:string, length:int, [pad_char:string=" "]) -> string
 
 ## Description
 
-The `pad_left` function pads the string `x` on the left side with `pad_char` 
-(default: space) until it reaches the specified `length`. If the string is 
-already longer than or equal to the specified length, it returns the original 
+The `pad_left` function pads the string `x` on the left side with `pad_char`
+(default: space) until it reaches the specified `length`. If the string is
+already longer than or equal to the specified length, it returns the original
 string unchanged.
 
 ### `x: string`
