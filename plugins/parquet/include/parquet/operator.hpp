@@ -302,6 +302,13 @@ public:
         co_yield {};
         co_return;
       }
+      auto has_secrets = false;
+      std::tie(has_secrets, input) = replace_secrets(std::move(input));
+      if (has_secrets) {
+        diagnostic::warning("`secret` is serialized as text")
+          .note("fields will be `\"***\"`")
+          .emit(ctrl_.diagnostics());
+      }
       auto record_batch = remove_empty_records(to_record_batch(input));
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (! record_batch_status.ok()) {

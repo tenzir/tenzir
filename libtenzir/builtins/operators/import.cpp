@@ -44,6 +44,13 @@ public:
         co_yield {};
         continue;
       }
+      auto has_secrets = false;
+      std::tie(has_secrets, slice) = replace_secrets(std::move(slice));
+      if (has_secrets) {
+        diagnostic::warning("`secret` cannot imported as secrets")
+          .note("fields will be `\"***\"`")
+          .emit(ctrl.diagnostics());
+      }
       // The current catalog assumes that all events have at least one field.
       // This check guards against that. We should remove it once we get to
       // rewriting our catalog.

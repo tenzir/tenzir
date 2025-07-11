@@ -713,8 +713,7 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
 
 namespace {
 constexpr static auto resolve_enumerations_transformation
-  = [](struct record_type::field field,
-       std::shared_ptr<arrow::Array> array) noexcept
+  = [](struct record_type::field field, std::shared_ptr<arrow::Array> array)
   -> std::vector<
     std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
   const auto& et = as<enumeration_type>(field.type);
