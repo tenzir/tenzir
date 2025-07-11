@@ -494,8 +494,13 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
     }
   });
   pipe.inner.prepend(std::make_unique<internal_source>(std::move(ptr)));
-  pipe.inner.append(
-    std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
+
+  // Only append internal_sink if the pipeline doesn't already end with a sink
+  auto output_type = pipe.inner.infer_type(tag_v<chunk_ptr>);
+  if (output_type and output_type->is_not<void>()) {
+    pipe.inner.append(
+      std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
+  }
   TENZIR_DEBUG("[http] spawning subpipeline");
   const auto handle
     = ctrl.self().spawn(pipeline_executor,
@@ -639,8 +644,8 @@ struct from_http_args {
         diagnostic::error(ty.error()).primary(*parse).emit(dh);
         return failure::promise();
       }
-      if (ty.value().is_not<table_slice>()) {
-        diagnostic::error("pipeline must return events")
+      if (not ty->is_any<void, table_slice>()) {
+        diagnostic::error("pipeline must return events or be a sink")
           .primary(*parse)
           .emit(dh);
         return failure::promise();
