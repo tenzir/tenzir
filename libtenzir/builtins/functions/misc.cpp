@@ -579,8 +579,8 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [subject = std::move(subject), field = std::move(field),
-       fallback
-       = std::move(fallback)](evaluator eval, session ctx) -> multi_series {
+       fallback = std::move(fallback)](evaluator eval,
+                                       session ctx) mutable -> multi_series {
         TENZIR_UNUSED(ctx);
         auto expr = ast::expression{
           ast::index_expr{
