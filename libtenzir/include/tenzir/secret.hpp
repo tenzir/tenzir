@@ -32,7 +32,7 @@ auto copy(flatbuffers::FlatBufferBuilder& fbb, const fbs::data::Secret& s)
   -> secret_offset_t;
 
 auto deref(const auto* ptr) -> decltype(auto) {
-  TENZIR_ASSERT_EXPENSIVE(ptr);
+  TENZIR_ASSERT(ptr);
   return *ptr;
 }
 
@@ -249,21 +249,13 @@ public:
     using enum fbs::data::SecretUnion;
     constexpr static auto i = static_cast<fbs::data::SecretUnion>(I + 1);
     if constexpr (i == literal) {
-      auto* ptr = x.data_as_literal();
-      TENZIR_ASSERT_EXPENSIVE(ptr);
-      return *ptr;
+      return detail::secrets::deref(x.data_as_literal());
     } else if constexpr (i == name) {
-      auto* ptr = x.data_as_name();
-      TENZIR_ASSERT_EXPENSIVE(ptr);
-      return *ptr;
+      return detail::secrets::deref(x.data_as_name());
     } else if constexpr (i == concatenation) {
-      auto* ptr = x.data_as_concatenation();
-      TENZIR_ASSERT_EXPENSIVE(ptr);
-      return *ptr;
+      return detail::secrets::deref(x.data_as_concatenation());
     } else if constexpr (i == transformed) {
-      auto* ptr = x.data_as_transformed();
-      TENZIR_ASSERT_EXPENSIVE(ptr);
-      return *ptr;
+      return detail::secrets::deref(x.data_as_transformed());
     } else {
       static_assert(detail::always_false_v<std::integral_constant<size_t, I>>,
                     "Unimplemented secret union alternative");

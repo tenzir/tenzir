@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/collect.hpp"
+#include "tenzir/detail/enum.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/variant_traits.hpp"
@@ -28,6 +30,56 @@ concept replacer_for_typed_series
           { f(s) } -> std::same_as<std::optional<series>>;
         };
 
+TENZIR_ENUM(
+  transfer_metadata_strategy,
+  /* preserve the metadata of the old series */
+  preserve,
+  /* use the metadata of the replacement series */
+  replace,
+  /* merge the metadata of old and new, using the old entries on conflict */
+  merge_preserve,
+  /* merge the metadata of old and new, using the new entries on conflict */
+  merge_replace);
+
+auto transfer_metadata(const type& old, type replacement,
+                       transfer_metadata_strategy metadata) -> type {
+  switch (metadata) {
+    using enum transfer_metadata_strategy;
+    case preserve: {
+      replacement.assign_metadata(old);
+      return replacement;
+    }
+    case replace: {
+      return replacement;
+    }
+    case merge_preserve: {
+      auto new_meta = collect(old.attributes());
+      for (auto [k, v] : replacement.attributes()) {
+        const auto it
+          = std::ranges::find(new_meta, k, &type::attribute_view::key);
+        if (it == new_meta.end()) {
+          new_meta.emplace_back(k, v);
+        }
+      }
+      return type{std::move(replacement), std::move(new_meta)};
+    }
+    case merge_replace: {
+      auto new_meta = collect(old.attributes());
+      for (auto [k, v] : replacement.attributes()) {
+        const auto it
+          = std::ranges::find(new_meta, k, &type::attribute_view::key);
+        if (it == new_meta.end()) {
+          new_meta.emplace_back(k, v);
+        } else {
+          it->value = v;
+        }
+      }
+      return type{std::move(replacement), std::move(new_meta)};
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
 /// Applies `transform` to all columns in a slice when called.
 /// * If `transform(series)` is possible, this will be called before matching.
 ///   If it produces a transform result, the result is used/returned directly.
@@ -38,6 +90,7 @@ template <typename F>
   requires(replacer_for_typed_series<F> or replacer_for_erased_series<F>)
 struct replace_visitor {
   F transform;
+  transfer_metadata_strategy metadata = transfer_metadata_strategy::preserve;
 
   auto operator()(const series& s) -> std::optional<series> {
     if constexpr (replacer_for_erased_series<F>) {
@@ -47,15 +100,15 @@ struct replace_visitor {
     }
     if constexpr (replacer_for_typed_series<F>) {
       if (auto nested_transformed = match(s, *this)) {
-        series& res = *nested_transformed;
-        res.type.assign_metadata(s.type);
-        return res;
+        nested_transformed->type = transfer_metadata(
+          s.type, std::move(nested_transformed->type), metadata);
+        return *nested_transformed;
       }
     }
     return std::nullopt;
   }
 
-  template <concepts::none_of<tenzir::type> T>
+  template <typename T>
   auto operator()(const basic_series<T>& s) -> std::optional<series> {
     return transform(s);
   }
@@ -105,8 +158,11 @@ struct replace_visitor {
 /// transform on both the list itself and its data array.
 template <typename F, typename T>
   requires(replacer_for_erased_series<F> or replacer_for_typed_series<F>)
-auto replace(basic_series<T> s, F transform) -> std::pair<bool, series> {
-  auto transformer = replace_visitor{std::move(transform)};
+auto replace(basic_series<T> s, F transform,
+             transfer_metadata_strategy metadata
+             = transfer_metadata_strategy::preserve)
+  -> std::pair<bool, series> {
+  auto transformer = replace_visitor{std::move(transform), metadata};
   auto transformed = transformer(s);
   if (not transformed) {
     return {false, s};
@@ -121,17 +177,19 @@ auto replace(basic_series<T> s, F transform) -> std::pair<bool, series> {
 /// @relates `replace_visitor`
 template <typename F>
   requires(replacer_for_erased_series<F> or replacer_for_typed_series<F>)
-auto replace(table_slice slice, F transform) -> std::pair<bool, table_slice> {
+auto replace(table_slice slice, F transform,
+             transfer_metadata_strategy metadata
+             = transfer_metadata_strategy::preserve)
+  -> std::pair<bool, table_slice> {
   const auto& input_type = as<record_type>(slice.schema());
   auto rb = to_record_batch(slice);
   auto input_struct_array = check(rb->ToStructArray());
-  auto transformer = replace_visitor{std::move(transform)};
+  auto transformer = replace_visitor{std::move(transform), metadata};
   auto transformed = transformer(series{input_type, input_struct_array});
   if (not transformed) {
     return {false, slice};
   }
   auto& transformed_type = transformed->type;
-  transformed_type.assign_metadata(slice.schema());
   auto& transformed_array = as<arrow::StructArray>(*transformed->array);
   auto output_batch
     = arrow::RecordBatch::Make(transformed_type.to_arrow_schema(),

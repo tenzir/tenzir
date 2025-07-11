@@ -179,14 +179,6 @@ consteval auto make_name_table(std::index_sequence<Is...>)
 template <size_t I, has_variant_traits V>
 constexpr auto variant_get(V&& v) -> decltype(auto) {
   using traits = variant_traits<std::remove_cvref_t<V>>;
-  [[maybe_unused]] const auto current_index = traits::index(v);
-  [[maybe_unused]] constexpr static auto alternative_names
-    = make_name_table<V>(std::make_index_sequence<traits::count>());
-  TENZIR_ASSERT_EXPENSIVE(
-    current_index == I,
-    "invalid variant access: [current: `{} ({})`] != [requested: "
-    "`{} ({})`]",
-    current_index, alternative_names[current_index], I, alternative_names[I]);
   if constexpr (std::is_reference_v<decltype(traits::template get<I>(v))>) {
     // We call `as_mutable` here because `forward_like` never removes `const`.
     return std::forward_like<V>(as_mutable(traits::template get<I>(v)));
