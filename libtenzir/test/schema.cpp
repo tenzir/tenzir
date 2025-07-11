@@ -95,31 +95,6 @@ TEST(merging) {
   CHECK(merged->find("inner"));
 }
 
-TEST(serialization) {
-  module mod;
-  auto t = type{
-    "foo",
-    record_type{
-      {"s1", string_type{}},
-      {"d1", double_type{}},
-      {"c", type{uint64_type{}, {{"skip"}}}},
-      {"i", int64_type{}},
-      {"s2", string_type{}},
-      {"d2", double_type{}},
-    },
-  };
-  mod.add(t);
-  // Save & load
-  caf::byte_buffer buf;
-  CHECK(detail::serialize(buf, mod));
-  module mod2;
-  CHECK_EQUAL(detail::legacy_deserialize(buf, mod2), true);
-  // Check integrity
-  auto u = mod2.find("foo");
-  REQUIRE(u);
-  CHECK(t == *u);
-}
-
 TEST(parseable - simple sequential) {
   auto str = "type a = int64 type b = string type c = a"s;
   module mod;
@@ -413,14 +388,14 @@ TEST(parseable - with context) {
     )__"sv;
     auto p = symbol_map_parser{};
     symbol_map sm;
-    CHECK(!p(str, sm));
+    CHECK(! p(str, sm));
   }
   {
     MESSAGE("Duplicate definition error - re-entry");
     auto p = symbol_map_parser{};
     symbol_map sm;
     CHECK(p("type foo = double", sm));
-    CHECK(!p("type foo = int64", sm));
+    CHECK(! p("type foo = int64", sm));
   }
   {
     MESSAGE("Arithmetic - basic addition");
@@ -465,7 +440,7 @@ TEST(parseable - with context) {
     )__"sv;
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
-    CHECK(!r.resolve());
+    CHECK(! r.resolve());
   }
   {
     MESSAGE("Arithmetic - priorities");

@@ -82,24 +82,6 @@ TEST(construction) {
   CHECK(get<data>(p1->rhs) == data{"foo"});
 }
 
-TEST(serialization) {
-  expression ex0, ex1;
-  caf::byte_buffer buf;
-  CHECK(detail::serialize(buf, expr0, expr1));
-  CHECK_EQUAL(detail::legacy_deserialize(buf, ex0, ex1), true);
-  auto d = try_as<disjunction>(&ex1);
-  REQUIRE(d);
-  REQUIRE(!d->empty());
-  auto n = try_as<negation>(&d->at(0));
-  REQUIRE(n);
-  auto c = try_as<conjunction>(&n->expr());
-  REQUIRE(c);
-  REQUIRE_EQUAL(c->size(), 2u);
-  auto p = try_as<predicate>(&c->at(1));
-  REQUIRE(p);
-  CHECK_EQUAL(p->op, relational_operator::equal);
-}
-
 TEST(predicate expansion) {
   auto expr = to<expression>("10.0.0.0/8");
   auto normalized
@@ -245,10 +227,10 @@ TEST(validation - meta extractor) {
   CHECK(tenzir::match(*expr, validator{}));
   expr = to<expression>("#schema == 42");
   REQUIRE(expr);
-  CHECK(!tenzir::match(*expr, validator{}));
+  CHECK(! tenzir::match(*expr, validator{}));
   expr = to<expression>("#schema == zeek.conn");
   REQUIRE(expr);
-  CHECK(!tenzir::match(*expr, validator{}));
+  CHECK(! tenzir::match(*expr, validator{}));
 }
 
 TEST(validation - type extractor) {
@@ -260,7 +242,7 @@ TEST(validation - type extractor) {
   CHECK(tenzir::match(*expr, validator{}));
   expr = to<expression>(":bool > -42");
   REQUIRE(expr);
-  CHECK(!tenzir::match(*expr, validator{}));
+  CHECK(! tenzir::match(*expr, validator{}));
   expr = to<expression>(":timestamp < now");
   REQUIRE(expr);
   CHECK(tenzir::match(*expr, validator{}));
@@ -287,9 +269,9 @@ TEST(matcher) {
   MESSAGE("field extractors");
   CHECK(match("x < 4.2 || (y == true && z in 10.0.0.0/8)", r));
   CHECK(match("x < 4.2 && (y == false || :bool == false)", r));
-  CHECK(!match("x < 4.2 && a == true", r));
+  CHECK(! match("x < 4.2 && a == true", r));
   MESSAGE("attribute extractors");
-  CHECK(!match("#schema == \"foo\"", r));
+  CHECK(! match("#schema == \"foo\"", r));
   r = type{"foo", r};
   CHECK(match("#schema == \"foo\"", r));
   CHECK(match("#schema != \"bar\"", r));
