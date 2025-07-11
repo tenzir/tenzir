@@ -1,0 +1,21 @@
+// Test enum derivation within list structures
+// This test verifies that the derive operator works with enum fields inside lists
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,
+  files: [
+    {
+      name: "file1.txt",
+      confidentiality_id: 1,  // Should derive confidentiality string
+    },
+    {
+      name: "file2.txt", 
+      confidentiality_id: 2,  // Should derive confidentiality string
+    },
+  ],
+}
+ocsf::derive

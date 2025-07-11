@@ -58,7 +58,9 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(const legacy_none_type& x) {
-    TENZIR_ASSERT(!x.name().empty());
+    if (x.name().empty()) {
+      return x;
+    }
     auto concrete = lookup(x.name());
     if (!concrete)
       return concrete.error();

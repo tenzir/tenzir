@@ -57,6 +57,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     // | "pattern"_p   ->* type_factory<legacy_pattern_type>
     | "ip"_p        ->* type_factory<legacy_address_type>
     | "subnet"_p    ->* type_factory<legacy_subnet_type>
+    | "null"_p      ->* type_factory<legacy_none_type>
     ) >> &(!parsers::identifier_char)
     ;
   // Enumeration

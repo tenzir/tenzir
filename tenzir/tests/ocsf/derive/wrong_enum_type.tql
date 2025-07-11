@@ -1,0 +1,13 @@
+// Test enum field with wrong type
+// This test verifies that the derive operator handles enum fields with incorrect types
+// Expected behavior: emit warning when enum field is not int64 type
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: "not_an_int",  // Should be int64, but provided string
+  activity_name: "Create",
+}
+ocsf::derive

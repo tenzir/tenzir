@@ -1,0 +1,30 @@
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4001,
+  activity_id: 1,
+  severity_id: 1,
+  time: 1640995200000000,
+  type_uid: 400101,
+  enrichments: [
+    {
+      name: "test_enrichment",
+      value: "test_value",
+    },
+  ],
+  ja4_fingerprint_list: [
+    {
+      algorithm: "JA4",
+      value: "test_fingerprint",
+    },
+  ],
+  attacks: [
+    {
+      technique: {
+        name: "test_technique",
+      },
+    },
+  ],
+}
+ocsf::trim

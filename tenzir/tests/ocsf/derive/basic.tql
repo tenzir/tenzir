@@ -1,0 +1,11 @@
+// Test basic enum derivation - derive string from int
+// This test verifies that the derive operator can convert integer enum values to their string equivalents
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,  // Should derive activity_name based on enum
+}
+ocsf::derive

@@ -1,0 +1,12 @@
+// Test deriving string from non-int field type
+// This test verifies that the derive operator handles attempting to derive from non-int field
+// Expected behavior: emit warning when trying to derive sibling from non-int field
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1.5,  // Float instead of int64
+}
+ocsf::derive
