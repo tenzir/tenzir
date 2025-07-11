@@ -1,18 +1,18 @@
 ---
-title: to_asl
+title: to_amazon_security_lake
 category: Outputs/Events
-example: 'to_asl "s3://…"'
+example: 'to_amazon_security_lake "s3://…"'
 ---
 
-Sends events to Amazon Security Lake (ASL).
+Sends events to Amazon Security Lake.
 
 ```tql
-to_asl s3_uri:string, region=string, account_id=string, [timeout=duration]
+to_amazon_security_lake s3_uri:string, region=string, account_id=string, [timeout=duration]
 ```
 
 ## Description
 
-The `to_asl` operator sends OCSF events to an [Amazon Security Lake][asl].
+The `to_amazon_security_lake` operator sends OCSF events to an [Amazon Security Lake][asl].
 
 The events **must** match the Lakes selected OCSF event class. The operator does not
 perform any validation on the events.
@@ -76,7 +76,7 @@ let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuv
 
 export
 where @name == "ocsf.network_activity"
-to_asl $s3_uri,
+to_amazon_security_lake $s3_uri,
   region="eu-west-2",
   accountId="123456789012"
 ```

@@ -72,4 +72,4 @@ save_s3 "s3://examplebucket2/obj.yaml"
 ## See Also
 
 [`load_s3`](/reference/operators/load_s3),
-[`to_asl`](/reference/operators/to_asl)
+[`to_amazon_security_lake`](/reference/operators/to_amazon_security_lake)
