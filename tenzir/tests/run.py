@@ -16,6 +16,7 @@ import typing
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
+from typing import override
 
 TENZIR_BINARY = shutil.which("tenzir")
 TENZIR_NODE_BINARY = shutil.which("tenzir-node")
@@ -244,34 +245,15 @@ def run_simple_test(
     *,
     update: bool,
     args: typing.Sequence[str] = (),
-    ext: str,
+    output_ext: str,
     coverage: bool = False,
-) -> typing.Union[bool, str]:
+) -> bool:
     try:
         # Parse test configuration
         test_config = parse_test_config(test, coverage=coverage)
     except ValueError as e:
         report_failure(test, f"└─▶ \033[31m{e}\033[0m")
         return False
-
-    if test_config.get("skip"):
-        print(f"{INFO} skipped {test}: {test_config['skip']}")
-        ref_path = test.with_suffix(f".{ext}")
-        if update:
-            # Always overwrite reference file with empty content
-            with ref_path.open("wb") as f:
-                f.write(b"")
-        else:
-            # If reference file exists, it must be empty
-            if ref_path.exists():
-                expected = ref_path.read_bytes()
-                if expected != b"":
-                    report_failure(
-                        test,
-                        f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m',
-                    )
-                    return False
-        return "skipped"
 
     try:
         env, config_args = get_test_env_and_config_args(test)
@@ -329,8 +311,8 @@ def run_simple_test(
                 sys.stdout.buffer.write(prefix.encode() + line + b"\n")
         return False
     if not good:
-        ext = "txt"
-    ref_path = test.with_suffix(f".{ext}")
+        output_ext = "txt"
+    ref_path = test.with_suffix(f".{output_ext}")
     if update:
         with ref_path.open("wb") as f:
             f.write(output)
@@ -379,7 +361,7 @@ class Runner(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run(self, test: Path, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> typing.Union[bool, str]:
         raise NotImplementedError
 
 
@@ -403,26 +385,65 @@ class ExtRunner(Runner):
 
 
 class TqlRunner(ExtRunner):
+    output_ext: str = "txt"
+
     def __init__(self, *, prefix: str):
         super().__init__(prefix=prefix, ext="tql")
+
+
+def handle_skip(
+    reason: str, test: Path, update: bool, output_ext: str
+) -> typing.Union[bool, str]:
+    rel_path = test.relative_to(ROOT)
+    print(f"{INFO} skipped {rel_path}: {reason}")
+    ref_path = test.with_suffix(f".{output_ext}")
+    if update:
+        # Always overwrite reference file with empty content
+        with ref_path.open("wb") as f:
+            f.write(b"")
+    else:
+        # If reference file exists, it must be empty
+        if ref_path.exists():
+            expected = ref_path.read_bytes()
+            if expected != b"":
+                report_failure(
+                    test,
+                    f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m',
+                )
+                return False
+    return "skipped"
 
 
 class LexerRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="lexer")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
                 test,
                 update=update,
                 args=("--dump-tokens",),
-                ext="txt",
+                output_ext=self.output_ext,
                 coverage=coverage,
             )
         return run_simple_test(
-            test, update=update, args=("--dump-tokens",), ext="txt", coverage=coverage
+            test,
+            update=update,
+            args=("--dump-tokens",),
+            output_ext=self.output_ext,
+            coverage=coverage,
         )
 
 
@@ -430,14 +451,30 @@ class AstRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ast")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool | str:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=("--dump-ast",), ext="txt", coverage=coverage
+                test,
+                update=update,
+                args=("--dump-ast",),
+                output_ext=self.output_ext,
+                coverage=coverage,
             )
         return run_simple_test(
-            test, update=update, args=("--dump-ast",), ext="txt", coverage=coverage
+            test,
+            update=update,
+            args=("--dump-ast",),
+            output_ext=self.output_ext,
+            coverage=coverage,
         )
 
 
@@ -445,18 +482,32 @@ class OldIrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="oldir")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
                 test,
                 update=update,
                 args=("--dump-pipeline",),
-                ext="txt",
+                output_ext=self.output_ext,
                 coverage=coverage,
             )
         return run_simple_test(
-            test, update=update, args=("--dump-pipeline",), ext="txt", coverage=coverage
+            test,
+            update=update,
+            args=("--dump-pipeline",),
+            output_ext=self.output_ext,
+            coverage=coverage,
         )
 
 
@@ -464,14 +515,32 @@ class IrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ir")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=("--dump-ir",), ext="txt", coverage=coverage
+                test,
+                update=update,
+                args=("--dump-ir",),
+                output_ext=self.output_ext,
+                coverage=coverage,
             )
         return run_simple_test(
-            test, update=update, args=("--dump-ir",), ext="txt", coverage=coverage
+            test,
+            update=update,
+            args=("--dump-ir",),
+            output_ext=self.output_ext,
+            coverage=coverage,
         )
 
 
@@ -481,8 +550,18 @@ class DiffRunner(TqlRunner):
         self._a = a
         self._b = b
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node_diff(
                 test, update=update, a=self._a, b=self._b, coverage=coverage
@@ -546,21 +625,31 @@ class FinalizeRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="finalize")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
                 test,
                 update=update,
                 args=("--dump-finalized",),
-                ext="txt",
+                output_ext=self.output_ext,
                 coverage=coverage,
             )
         return run_simple_test(
             test,
             update=update,
             args=("--dump-finalized",),
-            ext="txt",
+            output_ext=self.output_ext,
             coverage=coverage,
         )
 
@@ -569,13 +658,29 @@ class ExecRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="exec")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=(), ext="txt", coverage=coverage
+                test,
+                update=update,
+                args=(),
+                output_ext=self.output_ext,
+                coverage=coverage,
             )
-        return run_simple_test(test, update=update, ext="txt", coverage=coverage)
+        return run_simple_test(
+            test, update=update, output_ext=self.output_ext, coverage=coverage
+        )
 
 
 @contextmanager
@@ -670,7 +775,7 @@ def run_with_node(
     test: Path,
     update: bool,
     args: typing.Sequence[str],
-    ext: str,
+    output_ext: str,
     coverage: bool = False,
 ) -> bool:
     # Parse test configuration with coverage flag to adjust timeout
@@ -682,7 +787,11 @@ def run_with_node(
         try:
             cmd_args = [f"--endpoint={endpoint}", *[x for x in args if x is not None]]
             result = run_simple_test(
-                test, update=update, args=cmd_args, ext=ext, coverage=coverage
+                test,
+                update=update,
+                args=cmd_args,
+                output_ext=output_ext,
+                coverage=coverage,
             )
             return result
         except Exception as e:
@@ -806,6 +915,7 @@ class CustomFixture(ExtRunner):
     def __init__(self):
         super().__init__(prefix="custom", ext="sh")
 
+    @override
     def run(self, test: Path, update: bool) -> bool:
         env = os.environ.copy()
         env["PATH"] = (ROOT / "_custom").as_posix() + ":" + env["PATH"]
