@@ -151,8 +151,8 @@ jobs:
                             "709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:$RELEASE_TAG"
                           ],
                           "CompatibleServices": ["ECS"],
-                          "Description": "Tenzir Node container image for AWS Marketplace (ECS)",
-                          "UsageInstructions": "docker pull 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:$RELEASE_TAG"
+                          "Description": "Deploy this container to efficiently collect, shape, and route security data at scale within your AWS environment. Tenzir Node is the core building block for creating powerful and cost-effective security data pipelines.",
+                          "UsageInstructions": "Follow our detailed AWS instructions at https://docs.tenzir.com/guides/node-setup/deploy-a-node/#aws to deploy your Tenzir Node."
                         }
                       }
                     }
