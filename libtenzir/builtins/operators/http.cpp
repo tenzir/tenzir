@@ -494,8 +494,13 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
     }
   });
   pipe.inner.prepend(std::make_unique<internal_source>(std::move(ptr)));
-  pipe.inner.append(
-    std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
+
+  // Only append internal_sink if the pipeline doesn't already end with a sink
+  auto output_type = pipe.inner.infer_type(tag_v<chunk_ptr>);
+  if (output_type and output_type->is_not<void>()) {
+    pipe.inner.append(
+      std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
+  }
   TENZIR_DEBUG("[http] spawning subpipeline");
   const auto handle
     = ctrl.self().spawn(pipeline_executor,
@@ -639,8 +644,8 @@ struct from_http_args {
         diagnostic::error(ty.error()).primary(*parse).emit(dh);
         return failure::promise();
       }
-      if (ty.value().is_not<table_slice>()) {
-        diagnostic::error("pipeline must return events")
+      if (not ty->is_any<void, table_slice>()) {
+        diagnostic::error("pipeline must return events or be a sink")
           .primary(*parse)
           .emit(dh);
         return failure::promise();
@@ -1395,10 +1400,32 @@ struct from_http final : public virtual operator_factory_plugin {
     TRY(p.parse(inv, ctx));
     TRY(args.validate(ctx));
     warn_deprecated_payload(inv, ctx);
-    if (args.server) {
-      return std::make_unique<from_http_server_operator>(std::move(args));
+    // Check if the subpipeline is a sink
+    bool subpipeline_is_sink = false;
+    if (args.parse) {
+      auto ty = args.parse->inner.infer_type(tag_v<chunk_ptr>);
+      if (ty and ty->is<void>()) {
+        subpipeline_is_sink = true;
+      }
     }
-    return std::make_unique<from_http_client_operator>(std::move(args));
+    // Create the appropriate operator
+    operator_ptr op;
+    if (args.server) {
+      op = std::make_unique<from_http_server_operator>(std::move(args));
+    } else {
+      op = std::make_unique<from_http_client_operator>(std::move(args));
+    }
+    if (subpipeline_is_sink) {
+      auto pipe = std::make_unique<pipeline>();
+      pipe->append(std::move(op));
+      const auto* discard_plugin
+        = plugins::find<operator_factory_plugin>("discard");
+      TENZIR_ASSERT(discard_plugin);
+      TRY(auto discard_op, discard_plugin->make({inv.self, {}}, ctx));
+      pipe->append(std::move(discard_op));
+      return pipe;
+    }
+    return op;
   }
 
   auto load_properties() const -> load_properties_t override {
