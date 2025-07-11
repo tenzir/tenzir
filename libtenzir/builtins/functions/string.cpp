@@ -235,23 +235,19 @@ public:
           .positional("length", length_expr, "int")
           .positional("pad_char", pad_char)
           .parse(inv, ctx));
-
     // Default to space if no pad character provided
     if (not pad_char) {
       pad_char = " ";
     }
-
     return function_use::make([subject_expr = std::move(subject_expr),
                                length_expr = std::move(length_expr),
                                pad_char = std::move(pad_char),
                                pad_left = pad_left_, name = name_](
                                 evaluator eval, session ctx) -> multi_series {
       auto b = arrow::StringBuilder{};
-
       for (auto [subject, length] :
            split_multi_series(eval(subject_expr), eval(length_expr))) {
         TENZIR_ASSERT(subject.length() == length.length());
-
         auto f = detail::overload{
           [&](const arrow::StringArray& subject_array,
               const arrow::Int64Array& length_array) {
@@ -260,18 +256,15 @@ public:
                 check(b.AppendNull());
                 continue;
               }
-
               auto str = subject_array.GetView(i);
               auto target_length = length_array.Value(i);
-
               if (target_length <= 0) {
                 check(b.Append(""));
                 continue;
               }
-
               // For simple string length, we can use the string view's size for
-              // ASCII or count UTF-8 characters manually
-              int64_t str_length = 0;
+              // ASCII or count UTF-8 characters manually.
+              auto str_length = int64_t{0};
               auto ptr = str.data();
               auto end = ptr + str.size();
               while (ptr < end) {
@@ -281,14 +274,12 @@ public:
                 }
                 ptr++;
               }
-
               if (str_length >= target_length) {
-                // String is already long enough
+                // String is already long enough.
                 check(b.Append(str));
                 continue;
               }
-
-              // Validate pad character is single character
+              // Validate pad character is single character.
               int64_t pad_char_length = 0;
               ptr = pad_char->data();
               end = ptr + pad_char->size();
@@ -298,7 +289,6 @@ public:
                 }
                 ptr++;
               }
-
               if (pad_char_length != 1) {
                 diagnostic::warning("`{}` expected single character for "
                                     "padding, "
@@ -309,13 +299,11 @@ public:
                 check(b.AppendNull());
                 continue;
               }
-
-              // Calculate padding needed
+              // Calculate padding needed.
               auto padding_needed
                 = static_cast<size_t>(target_length - str_length);
               std::string result;
               result.reserve(str.size() + padding_needed * pad_char->size());
-
               if (pad_left) {
                 // Pad on the left
                 for (size_t j = 0; j < padding_needed; ++j) {
@@ -329,7 +317,6 @@ public:
                   result += *pad_char;
                 }
               }
-
               check(b.Append(result));
             }
           },
