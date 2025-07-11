@@ -1041,7 +1041,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "syslog_printer";
+    return "write_syslog";
   }
 
   auto optimize(const expression&, event_order) const
@@ -1166,15 +1166,11 @@ public:
 };
 
 class write_syslog final : public operator_plugin2<syslog_printer> {
-  auto name() const -> std::string override {
-    return "write_syslog";
-  }
-
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.op = inv.self.get_location();
-    auto p = argument_parser2::operator_(name());
+    auto p = argument_parser2::operator_("write_syslog");
     args.add_to(p);
     TRY(p.parse(inv, ctx));
     return std::make_unique<syslog_printer>(std::move(args));

@@ -15,11 +15,13 @@ namespace tenzir::plugins::secret {
 
 namespace {
 
-class testing_operator final : public crtp_operator<testing_operator> {
+class assert_secret_operator final
+  : public crtp_operator<assert_secret_operator> {
 public:
-  testing_operator() = default;
+  assert_secret_operator() = default;
 
-  explicit testing_operator(located<class secret> s, located<data> expected)
+  explicit assert_secret_operator(located<class secret> s,
+                                  located<data> expected)
     : secret_{std::move(s)}, expected_{std::move(expected)} {
   }
 
@@ -62,7 +64,7 @@ public:
     return do_not_optimize(*this);
   }
 
-  friend auto inspect(auto& f, testing_operator& x) -> bool {
+  friend auto inspect(auto& f, assert_secret_operator& x) -> bool {
     return f.object(x).fields(f.field("secret_", x.secret_),
                               f.field("value", x.expected_));
   }
@@ -72,10 +74,11 @@ private:
   located<data> expected_ = {};
 };
 
-class testing_operator_plugin final : public virtual operator_factory_plugin {
+class testing_operator_plugin final
+  : public virtual operator_plugin2<assert_secret_operator> {
 public:
   auto name() const -> std::string override {
-    return testing_operator{}.name();
+    return assert_secret_operator{}.name();
   }
 
   auto initialize(const record&, const record& global_config)
@@ -106,8 +109,8 @@ public:
       .named("expected", expected)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<testing_operator>(std::move(secret),
-                                              std::move(expected));
+    return std::make_unique<assert_secret_operator>(std::move(secret),
+                                                    std::move(expected));
   }
 
 private:
