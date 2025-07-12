@@ -202,13 +202,9 @@ auto plugin_serialize(Inspector& f, const Base& x) -> bool {
   static_assert(not Inspector::is_loading);
   auto name = x.name();
   auto const* p = plugins::find<serialization_plugin<Base>>(name);
-  if (not p) {
-    f.set_error(caf::make_error(
-      ec::serialization_error,
-      fmt::format("serialization plugin `{}` for `{}` not found", name,
-                  caf::detail::pretty_type_name(typeid(Base)))));
-    return false;
-  }
+  TENZIR_ASSERT(p,
+                fmt::format("serialization plugin `{}` for `{}` not found",
+                            name, caf::detail::pretty_type_name(typeid(Base))));
   if (auto dbg = as_debug_writer(f)) {
     return dbg->prepend("{} ", name) && p->serialize(std::ref(f), x);
   }
@@ -225,13 +221,9 @@ auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
       return false;
     }
     auto const* p = plugins::find<serialization_plugin<Base>>(name);
-    if (not p) {
-      f.set_error(caf::make_error(
-        ec::serialization_error,
-        fmt::format("serialization plugin `{}` for `{}` not found", name,
-                    caf::detail::pretty_type_name(typeid(Base)))));
-      return false;
-    }
+    TENZIR_ASSERT(p, fmt::format("serialization plugin `{}` for `{}` not found",
+                                 name,
+                                 caf::detail::pretty_type_name(typeid(Base))));
     p->deserialize(f, x);
     return x != nullptr;
   } else {

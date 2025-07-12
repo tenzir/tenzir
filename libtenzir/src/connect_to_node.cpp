@@ -172,26 +172,18 @@ caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
   return node_endpoint;
 }
 
-caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
-  // If we already are in a node, do nothing.
-  if (auto node = self->system().registry().get<node_actor>("tenzir.node")) {
-    return node;
-  }
-  // Fetch values from config.
-  const auto& opts = content(self->system().config());
-  auto node_endpoint = detail::get_node_endpoint(opts);
-  if (!node_endpoint) {
-    return std::move(node_endpoint.error());
-  }
-  auto timeout = detail::node_connection_timeout(opts);
-  auto connector_actor = self->spawn(connector, detail::get_retry_delay(opts),
-                                     detail::get_deadline(timeout));
+auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
+                     caf::timespan timeout,
+                     std::optional<caf::timespan> retry_delay,
+                     bool internal_connection) -> caf::expected<node_actor> {
+  auto connector_actor = self->spawn(
+    connector, retry_delay, detail::get_deadline(timeout), internal_connection);
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
-  TENZIR_ASSERT(node_endpoint->port.has_value());
+  TENZIR_ASSERT(endpoint.port.has_value());
   self
-    ->mail(atom::connect_v,
-           connect_request{node_endpoint->port->number(), node_endpoint->host})
+    ->mail(atom::connect_v, connect_request{.port = endpoint.port->number(),
+                                            .host = endpoint.host})
     .request(connector_actor, caf::infinite)
     .receive(
       [&](node_actor& res) {
@@ -220,6 +212,25 @@ caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
                                              timeout, std::move(error)));
       });
   return result;
+}
+
+auto connect_to_node(caf::scoped_actor& self, bool internal_connection)
+  -> caf::expected<node_actor> {
+  // If we already are in a node, do nothing.
+  if (auto node = self->system().registry().get<node_actor>("tenzir.node")) {
+    return node;
+  }
+  // Fetch values from config.
+  const auto& opts = content(self->system().config());
+  auto node_endpoint = detail::get_node_endpoint(opts);
+  if (not node_endpoint) {
+    return std::move(node_endpoint.error());
+  }
+  auto endpoint = *node_endpoint;
+  auto timeout = detail::node_connection_timeout(opts);
+  auto retry_delay = detail::get_retry_delay(opts);
+  return connect_to_node(self, endpoint, timeout, retry_delay,
+                         internal_connection);
 }
 
 } // namespace tenzir

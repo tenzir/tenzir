@@ -50,7 +50,7 @@ auto command_runner(command_runner_actor::pointer self)
     [self](atom::run, tenzir::invocation& invocation) -> caf::result<void> {
       auto [root, root_factory] = make_application("tenzir-ctl");
       auto result = run(invocation, self->home_system(), root_factory);
-      if (!result) {
+      if (! result) {
         TENZIR_ERROR("failed to run start command {}: {}", invocation,
                      result.error());
       }
@@ -98,7 +98,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   caf::scoped_actor self{sys};
   // Spawn our node.
   auto node_opt = spawn_node(self);
-  if (!node_opt) {
+  if (not node_opt) {
     return caf::make_message(std::move(node_opt.error()));
   }
   auto const& node = node_opt->get();
@@ -122,7 +122,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
                         node_endpoint->host.c_str(), reuse_address);
     };
     auto bound_port = publish();
-    if (!bound_port) {
+    if (not bound_port) {
       auto err
         = diagnostic::error("failed to bind to port {}",
                             node_endpoint->port->number())
@@ -132,6 +132,8 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
             .to_error();
       return caf::make_message(std::move(err));
     }
+    node_endpoint->port.emplace(*bound_port, port_type::tcp);
+    self->mail(atom::set_v, *node_endpoint).send(node);
     listen_endpoint = fmt::format("{}:{}", node_endpoint->host, *bound_port);
     TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
                 *listen_endpoint);
@@ -167,7 +169,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     }
   }
   std::vector<command_runner_actor> command_runners;
-  if (!commands.empty()) {
+  if (not commands.empty()) {
     auto [root, root_factory] = make_application("tenzir-ctl");
     // We're already in the start command, so we can safely assert that
     // make_application works as expected.
@@ -184,7 +186,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
       }
       TENZIR_INFO("running post-start command {}", command);
       auto hook_invocation = parse(*root, cli.begin(), cli.end());
-      if (!hook_invocation) {
+      if (not hook_invocation) {
         return caf::make_message(hook_invocation.error());
       }
       detail::merge_settings(inv.options, hook_invocation->options,

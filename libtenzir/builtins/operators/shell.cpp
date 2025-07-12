@@ -371,7 +371,7 @@ private:
   located<secret> command_;
 };
 
-class plugin final : public virtual operator_factory_plugin {
+class plugin final : public virtual operator_plugin2<shell_operator> {
 public:
   auto name() const -> std::string override {
     return "shell";

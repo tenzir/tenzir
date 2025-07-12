@@ -39,11 +39,19 @@ check_version(const record& remote_version, const record& cfg) -> bool;
 } // namespace detail
 
 /// Connects to a remote Tenzir server.
-auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor>;
+auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
+                     caf::timespan timeout,
+                     std::optional<caf::timespan> retry_delay = std::nullopt,
+                     bool internal_connection = false)
+  -> caf::expected<node_actor>;
+
+auto connect_to_node(caf::scoped_actor& self, bool internal_connection = false)
+  -> caf::expected<node_actor>;
 
 template <class... Sigs>
 void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
-                     std::function<void(caf::expected<node_actor>)> callback) {
+                     std::function<void(caf::expected<node_actor>)> callback,
+                     bool internal_connection = false) {
   // Fetch values from config.
   const auto& opts = content(self->system().config());
   auto node_endpoint = detail::get_node_endpoint(opts);
@@ -51,8 +59,9 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
     return callback(std::move(node_endpoint.error()));
   }
   const auto timeout = detail::node_connection_timeout(opts);
-  auto connector = self->spawn(tenzir::connector, detail::get_retry_delay(opts),
-                               detail::get_deadline(timeout));
+  auto connector
+    = self->spawn(tenzir::connector, detail::get_retry_delay(opts),
+                  detail::get_deadline(timeout), internal_connection);
   self
     ->mail(atom::connect_v,
            connect_request{node_endpoint->port->number(), node_endpoint->host})

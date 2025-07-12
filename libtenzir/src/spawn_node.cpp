@@ -33,6 +33,9 @@ auto spawn_node(caf::scoped_actor& self)
   // Fetch values from config.
   auto db_dir
     = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
+  auto disable_pipeline_subprocesses
+    = get_or(opts, "tenzir.disable-pipeline-subprocesses",
+             defaults::disable_pipeline_subprocesses);
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err) {
@@ -92,7 +95,7 @@ auto spawn_node(caf::scoped_actor& self)
     }
   }
   // Spawn the node.
-  auto actor = self->spawn(node, abs_dir);
+  auto actor = self->spawn(node, abs_dir, disable_pipeline_subprocesses);
   actor->attach_functor(
     [=, pid_file = std::move(pid_file),
      &system = self->system()](const caf::error&) -> caf::result<void> {

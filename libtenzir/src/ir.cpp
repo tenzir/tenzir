@@ -508,7 +508,10 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
     result.insert(result.end(), std::move_iterator{ops.begin()},
                   std::move_iterator{ops.end()});
   }
+  TENZIR_DIAGNOSTIC_PUSH
+  TENZIR_DIAGNOSTIC_IGNORE_REDUNDANT_MOVE
   return std::move(result);
+  TENZIR_DIAGNOSTIC_POP
 }
 
 auto ir::pipeline::infer_type(operator_type2 input,
