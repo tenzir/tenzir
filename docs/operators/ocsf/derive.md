@@ -34,7 +34,7 @@ from {
 }
 ocsf::derive
 ```
-```
+```tql
 {
   activity_id: 1,
   activity_name: "Create",
@@ -106,7 +106,7 @@ warning: found inconsistency between `activity_id` and `activity_name`
 9 | ocsf::derive
   | ~~~~~~~~~~~~
   |
-  = note: got 1 and "Delete", which map to "Create" and 4, respectively
+  = note: got 1 ("Create") and "Delete" (4)
 ```
 
 ## See Also

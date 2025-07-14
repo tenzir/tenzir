@@ -7,7 +7,7 @@ example: 'ocsf::trim'
 Drops fields from OCSF events to reduce their size.
 
 ```tql
-ocsf::trim [optional=bool, recommended=bool]
+ocsf::trim [drop_optional=bool, drop_recommended=bool]
 ```
 
 ## Description
@@ -19,13 +19,13 @@ smart decisions about field retention, considering factors such as field
 criticality, data relationships, schema compliance requirements, and usage
 patterns within the OCSF schema.
 
-### `optional = bool`
+### `drop_optional = bool`
 
 Explicitly control whether to remove fields marked as optional in the OCSF
 schema. When specified, overrides the intelligent default behavior for optional
 fields.
 
-### `recommended = bool`
+### `drop_recommended = bool`
 
 Explicitly control whether to remove fields marked as recommended in the OCSF
 schema. When specified, overrides the intelligent default behavior for
@@ -82,7 +82,7 @@ from {
   },
   activity_id: 1,
 }
-ocsf::trim optional=true, recommended=false
+ocsf::trim drop_optional=true, drop_recommended=false
 ```
 ```tql
 {
@@ -113,7 +113,7 @@ from {
   severity: "Critical",
   severity_id: 5,
 }
-ocsf::trim optional=true, recommended=true
+ocsf::trim drop_optional=true, drop_recommended=true
 ```
 ```tql
 {

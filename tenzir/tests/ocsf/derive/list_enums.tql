@@ -7,14 +7,14 @@ from {
   },
   class_uid: 1001,
   activity_id: 1,
-  files: [
+  observables: [
     {
-      name: "file1.txt",
-      confidentiality_id: 1,  // Should derive confidentiality string
+      value: "foo",
+      type_id: 4,  // Should derive confidentiality string
     },
     {
-      name: "file2.txt", 
-      confidentiality_id: 2,  // Should derive confidentiality string
+      value: "bar",
+      type_id: 5,  // Should derive confidentiality string
     },
   ],
 }

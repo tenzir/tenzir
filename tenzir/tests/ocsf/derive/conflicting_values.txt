@@ -13,4 +13,4 @@ warning: found inconsistency between `activity_id` and `activity_name`
 13 | ocsf::derive
    | ~~~~~~~~~~~~ 
    |
-   = note: got 1 and "Delete"
+   = note: got 1 ("Create") and "Delete" (4)

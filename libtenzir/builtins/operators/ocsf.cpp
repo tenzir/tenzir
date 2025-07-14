@@ -392,8 +392,8 @@ auto mangle_class_name(std::string_view class_name) -> std::string {
 
 class trimmer {
 public:
-  trimmer(bool optional, bool recommended)
-    : optional_{optional}, recommended_{recommended} {
+  trimmer(bool drop_optional, bool drop_recommended)
+    : drop_optional_{drop_optional}, drop_recommended_{drop_recommended} {
   }
 
   auto trim(const table_slice& slice, const type& ty) -> table_slice {
@@ -468,17 +468,17 @@ private:
   }
 
   auto should_drop(const type& ty) const -> bool {
-    if (optional_ and ty.attribute("optional")) {
+    if (drop_optional_ and ty.attribute("optional")) {
       return true;
     }
-    if (recommended_ and ty.attribute("recommended")) {
+    if (drop_recommended_ and ty.attribute("recommended")) {
       return true;
     }
     return false;
   }
 
-  bool optional_{};
-  bool recommended_{};
+  bool drop_optional_{};
+  bool drop_recommended_{};
 };
 
 struct ocsf_schema {
@@ -547,8 +547,10 @@ class trim_operator final : public crtp_operator<trim_operator> {
 public:
   trim_operator() = default;
 
-  trim_operator(struct location self, bool optional, bool recommended)
-    : self_{self}, optional_{optional}, recommended_{recommended} {
+  trim_operator(struct location self, bool drop_optional, bool drop_recommended)
+    : self_{self},
+      drop_optional_{drop_optional},
+      drop_recommended_{drop_recommended} {
   }
 
   auto name() const -> std::string override {
@@ -636,7 +638,8 @@ public:
         if (not schema) {
           return {};
         }
-        return trimmer{optional_, recommended_}.trim(slice, schema->type);
+        return trimmer{drop_optional_, drop_recommended_}.trim(slice,
+                                                               schema->type);
       };
       for (; end < class_array->length(); ++end) {
         auto next_version = view_at(*version_array, end);
@@ -660,14 +663,14 @@ public:
 
   friend auto inspect(auto& f, trim_operator& x) -> bool {
     return f.object(x).fields(f.field("self", x.self_),
-                              f.field("optional", x.optional_),
-                              f.field("recommended", x.recommended_));
+                              f.field("drop_optional", x.drop_optional_),
+                              f.field("drop_recommended", x.drop_recommended_));
   }
 
 private:
   struct location self_;
-  bool optional_{};
-  bool recommended_{};
+  bool drop_optional_{};
+  bool drop_recommended_{};
 };
 
 class deriver {
@@ -889,8 +892,8 @@ private:
             diagnostic::warning("found inconsistency between `{}` and `{}`",
                                 int_name, string_name)
               .primary(self_)
-              .note("got {} and {:?}, which map to {:?} and {}, respectively",
-                    *int_value, *string_value, expected_string->second,
+              .note("got {} ({:?}) and {:?} ({})", *int_value,
+                    expected_string->second, *string_value,
                     expected_int->second)
               .emit(dh_);
           }
@@ -1389,15 +1392,15 @@ public:
     -> failure_or<operator_ptr> override {
     // TODO: Consider using a more intelligent default that is not simply based
     // on attributes being optional.
-    auto optional = true;
-    auto recommended = false;
+    auto drop_optional = true;
+    auto drop_recommended = false;
     argument_parser2::operator_(name())
-      .named("optional", optional)
-      .named("recommended", recommended)
+      .named("drop_optional", drop_optional)
+      .named("drop_recommended", drop_recommended)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<trim_operator>(inv.self.get_location(), optional,
-                                           recommended);
+    return std::make_unique<trim_operator>(inv.self.get_location(),
+                                           drop_optional, drop_recommended);
   }
 };
 
