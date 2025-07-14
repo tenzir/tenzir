@@ -545,14 +545,14 @@ private:
 };
 
 struct ocsf_schema {
-  ocsf_schema(type type, std::string_view class_name,
+  ocsf_schema(class type type, std::string_view class_name,
               std::string mangled_class_name)
     : type{std::move(type)},
       class_name{class_name},
       mangled_class_name{std::move(mangled_class_name)} {
   }
 
-  type type;
+  class type type;
   std::string_view class_name;
   std::string mangled_class_name;
 };
