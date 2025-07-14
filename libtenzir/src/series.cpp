@@ -60,9 +60,6 @@ auto make_record_series(std::span<const series_field> fields,
   }
   auto null_bitmap = origin.null_bitmap();
   if (origin.offset() != 0) {
-    // TODO: We can't use the null bitmap as-is. Note that this is probably not
-    // correctly handled everywhere else. Hence the `TENZIR_UNREACHABLE` should
-    // not be any worse, but this needs to be addressed eventually.
     null_bitmap
       = check(arrow::internal::CopyBitmap(arrow::default_memory_pool(),
                                           origin.null_bitmap_data(),
@@ -70,9 +67,9 @@ auto make_record_series(std::span<const series_field> fields,
   }
   return {
     record_type{tenzir_fields},
-    std::make_shared<arrow::StructArray>(arrow::struct_(arrow_fields),
-                                         origin.length(), children, null_bitmap,
-                                         origin.data()->null_count),
+    std::make_shared<arrow::StructArray>(
+      arrow::struct_(arrow_fields), origin.length(), children,
+      std::move(null_bitmap), origin.data()->null_count, 0),
   };
 }
 

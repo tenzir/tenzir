@@ -1,0 +1,13 @@
+// Test bidirectional derivation with invalid string value
+// This test verifies that the derive operator handles invalid enum string values during bidirectional derivation
+// Expected behavior: emit warning when both fields are present but string enum value is invalid
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,  // Valid enum value (Create)
+  activity_name: "InvalidAction",  // Invalid string value
+}
+ocsf::derive

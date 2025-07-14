@@ -1,0 +1,17 @@
+{
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4001,
+  activity_id: 1,
+  connection_info: {
+    protocol_name: "TCP",
+  },
+  message: "Test message",
+  severity_id: 1,
+  time: 1640995200000000,
+  type_uid: 400101,
+  dst_endpoint: {
+    hostname: "example.com",
+  },
+}

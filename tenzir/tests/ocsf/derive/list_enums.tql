@@ -1,0 +1,21 @@
+// Test enum derivation within list structures
+// This test verifies that the derive operator works with enum fields inside lists
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,
+  observables: [
+    {
+      value: "foo",
+      type_id: 4,  // Should derive confidentiality string
+    },
+    {
+      value: "bar",
+      type_id: 5,  // Should derive confidentiality string
+    },
+  ],
+}
+ocsf::derive

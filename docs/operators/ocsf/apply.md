@@ -12,17 +12,17 @@ ocsf::apply [preserve_variants=bool]
 
 ## Description
 
-The `ocsf::apply` operator casts incoming events to the type associated with
-their OCSF event class. The resulting type is determined based on four fields:
+The `ocsf::apply` operator casts incoming events to their corresponding OCSF
+event class type. The resulting type is determined by four fields:
 `metadata.version`, `metadata.profiles`, `metadata.extensions` and `class_uid`.
-Events that share the same values for those fields will be cast to the same
-type. Tenzir supports all OCSF versions (including `-dev` versions), all
-profiles and all event classes. Extensions are at the moment limited to those
-that are versioned together with OCSF, which includes the `win` and `linux`
-extensions.
+Events sharing the same values for these fields are cast to the same type.
+Tenzir supports all OCSF versions (including `-dev` versions), all profiles, and
+all event classes. Extensions are currently limited to those versioned with
+OCSF, including the `win` and `linux` extensions.
 
 To this end, the operator performs the following steps:
-- Add optional fields that are not present in the original event with a `null` value
+- Add optional fields that are not present in the original event with a `null`
+  value
 - Emit a warning for extra fields that should not be there and drop them
 - Encode free-form objects (such as `unmapped`) using their JSON representation
 - Assign `@name` depending on the class name, for example: `ocsf.dns_activity`
@@ -37,12 +37,12 @@ automatically assign OCSF enumerations based on their sibling ID.
 
 ### `preserve_variants = bool`
 
-Setting this option to `true` makes it so that free-form objects such as
-`unmapped` are preserved as-is, instead of being JSON-encoded. Note that this
-means that the resulting event schema is no longer the same across events of the
-same class, as changes to these free-form objects lead to different schemas. For
-schema-consistency and performance reasons, we recommend not setting this option
-and instead using `unmapped.parse_json()` to extract the fields on-demand.
+Setting this option to `true` preserves free-form objects such as `unmapped`
+as-is, instead of being JSON-encoded. Note that this means the resulting event
+schema is no longer consistent across events of the same class, as changes to
+these free-form objects lead to different schemas. For schema-consistency and
+performance reasons, we recommend keeping this option `false` and instead using
+`unmapped.parse_json()` to extract fields on-demand.
 
 ## Examples
 
@@ -110,3 +110,8 @@ where class_name == "Network Activity" and metadata.version == "1.5.0"
 ocsf::apply
 to_clickhouse table="network_activity"
 ```
+
+## See Also
+
+[`ocsf::derive`](/reference/operators/ocsf/derive),
+[`ocsf::trim`](/reference/operators/ocsf/trim)

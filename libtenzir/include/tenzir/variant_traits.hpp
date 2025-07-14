@@ -60,16 +60,7 @@ class variant_traits;
 
 template <class T>
 concept has_variant_traits
-  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>
-    and requires(const std::remove_cvref_t<T>& v) {
-          {
-            variant_traits<std::remove_cvref_t<T>>::count
-          } -> std::same_as<const std::size_t&>;
-          {
-            variant_traits<std::remove_cvref_t<T>>::index(v)
-          } -> std::same_as<std::size_t>;
-          variant_traits<std::remove_cvref_t<T>>::template get<0>(v);
-        };
+  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>;
 
 namespace detail {
 
@@ -146,6 +137,7 @@ class variant_traits<std::reference_wrapper<T>>
 static_assert(has_variant_traits<std::reference_wrapper<std::variant<int>>>);
 
 namespace detail {
+
 template <has_variant_traits V, size_t I>
 using variant_alternative = std::remove_cvref_t<
   decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(
@@ -415,6 +407,9 @@ auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   if (current_index != alternative_index) {
     return nullptr;
   }
+  // TODO: Otherwise, this should probably return `std::optional`.
+  static_assert(
+    std::is_reference_v<decltype(detail::variant_get<alternative_index>(v))>);
   return &detail::variant_get<alternative_index>(v);
 };
 
