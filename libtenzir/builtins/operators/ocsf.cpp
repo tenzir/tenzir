@@ -361,6 +361,69 @@ private:
   bool preserve_variants_;
 };
 
+struct metadata {
+  std::shared_ptr<arrow::StringArray> version_array;
+  std::shared_ptr<arrow::Int64Array> class_array;
+  std::shared_ptr<arrow::StructArray> metadata_array;
+};
+
+auto extract_metadata(const table_slice& slice, location self,
+                      diagnostic_handler& dh) -> std::optional<metadata> {
+  auto ty = as<record_type>(slice.schema());
+  auto metadata_index = ty.resolve_field("metadata");
+  if (not metadata_index) {
+    diagnostic::warning("dropping events where `metadata` does not exist")
+      .primary(self)
+      .emit(dh);
+    return {};
+  }
+  auto metadata_array = std::dynamic_pointer_cast<arrow::StructArray>(
+    to_record_batch(slice)->column(detail::narrow<int>(*metadata_index)));
+  if (not metadata_array) {
+    diagnostic::warning("dropping events where `metadata` is not a record")
+      .primary(self)
+      .emit(dh);
+    return {};
+  }
+  auto version_index = metadata_array->struct_type()->GetFieldIndex("version");
+  if (version_index == -1) {
+    diagnostic::warning(
+      "dropping events where `metadata.version` does not exist")
+      .primary(self)
+      .emit(dh);
+    return {};
+  }
+  auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
+    check(metadata_array->GetFlattenedField(version_index)));
+  if (not version_array) {
+    diagnostic::warning(
+      "dropping events where `metadata.version` is not a string")
+      .primary(self)
+      .emit(dh);
+    return {};
+  }
+  auto class_index = ty.resolve_field("class_uid");
+  if (not class_index) {
+    diagnostic::warning("dropping events where `class_uid` does not exist")
+      .primary(self)
+      .emit(dh);
+    return {};
+  }
+  auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
+    to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
+  if (not class_array) {
+    diagnostic::warning("dropping events where `class_uid` is not an integer")
+      .primary(self)
+      .emit(dh);
+    return {};
+  }
+  return metadata{
+    .version_array = std::move(version_array),
+    .class_array = std::move(class_array),
+    .metadata_array = std::move(metadata_array),
+  };
+}
+
 auto mangle_version(std::string_view version) -> std::string {
   auto result = std::string{};
   result.reserve(1 + version.size());
@@ -566,63 +629,13 @@ public:
         continue;
       }
       // Get the required columns `metadata.version` and `class_uid`.
-      auto ty = as<record_type>(slice.schema());
-      auto metadata_index = ty.resolve_field("metadata");
-      if (not metadata_index) {
-        diagnostic::warning("dropping events where `metadata` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
+      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
+      if (not metadata) {
         co_yield {};
         continue;
       }
-      auto metadata_array = std::dynamic_pointer_cast<arrow::StructArray>(
-        to_record_batch(slice)->column(detail::narrow<int>(*metadata_index)));
-      if (not metadata_array) {
-        diagnostic::warning("dropping events where `metadata` is not a record")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto version_index
-        = metadata_array->struct_type()->GetFieldIndex("version");
-      if (version_index == -1) {
-        diagnostic::warning(
-          "dropping events where `metadata.version` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
-        check(metadata_array->GetFlattenedField(version_index)));
-      if (not version_array) {
-        diagnostic::warning(
-          "dropping events where `metadata.version` is not a string")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      // TODO: We could have `class_name` and figure out it out from there.
-      auto class_index = ty.resolve_field("class_uid");
-      if (not class_index) {
-        diagnostic::warning("dropping events where `class_uid` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
-        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
-      if (not class_array) {
-        diagnostic::warning(
-          "dropping events where `class_uid` is not an integer")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
+      auto& version_array = metadata->version_array;
+      auto& class_array = metadata->class_array;
       // Figure out longest slices that share:
       // - metadata.version
       // - class_uid
@@ -1033,62 +1046,13 @@ public:
         continue;
       }
       // Get the required columns `metadata.version` and `class_uid`.
-      auto ty = as<record_type>(slice.schema());
-      auto metadata_index = ty.resolve_field("metadata");
-      if (not metadata_index) {
-        diagnostic::warning("dropping events where `metadata` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
+      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
+      if (not metadata) {
         co_yield {};
         continue;
       }
-      auto metadata_array = std::dynamic_pointer_cast<arrow::StructArray>(
-        to_record_batch(slice)->column(detail::narrow<int>(*metadata_index)));
-      if (not metadata_array) {
-        diagnostic::warning("dropping events where `metadata` is not a record")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto version_index
-        = metadata_array->struct_type()->GetFieldIndex("version");
-      if (version_index == -1) {
-        diagnostic::warning(
-          "dropping events where `metadata.version` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
-        check(metadata_array->GetFlattenedField(version_index)));
-      if (not version_array) {
-        diagnostic::warning(
-          "dropping events where `metadata.version` is not a string")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto class_index = ty.resolve_field("class_uid");
-      if (not class_index) {
-        diagnostic::warning("dropping events where `class_uid` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
-        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
-      if (not class_array) {
-        diagnostic::warning(
-          "dropping events where `class_uid` is not an integer")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
+      auto& version_array = metadata->version_array;
+      auto& class_array = metadata->class_array;
       // Figure out longest slices that share:
       // - metadata.version
       // - class_uid
@@ -1150,62 +1114,14 @@ public:
         continue;
       }
       // Get the required columns `metadata.version` and `class_uid`.
-      auto ty = as<record_type>(slice.schema());
-      auto metadata_index = ty.resolve_field("metadata");
-      if (not metadata_index) {
-        diagnostic::warning("dropping events where `metadata` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
+      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
+      if (not metadata) {
         co_yield {};
         continue;
       }
-      auto metadata_array = std::dynamic_pointer_cast<arrow::StructArray>(
-        to_record_batch(slice)->column(detail::narrow<int>(*metadata_index)));
-      if (not metadata_array) {
-        diagnostic::warning("dropping events where `metadata` is not a record")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto version_index
-        = metadata_array->struct_type()->GetFieldIndex("version");
-      if (version_index == -1) {
-        diagnostic::warning(
-          "dropping events where `metadata.version` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
-        check(metadata_array->GetFlattenedField(version_index)));
-      if (not version_array) {
-        diagnostic::warning(
-          "dropping events where `metadata.version` is not a string")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto class_index = ty.resolve_field("class_uid");
-      if (not class_index) {
-        diagnostic::warning("dropping events where `class_uid` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
-        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
-      if (not class_array) {
-        diagnostic::warning(
-          "dropping events where `class_uid` is not an integer")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
+      auto& version_array = metadata->version_array;
+      auto& class_array = metadata->class_array;
+      auto& metadata_array = metadata->metadata_array;
       auto profiles_at = std::invoke([&]() {
         auto profiles_index
           = metadata_array->struct_type()->GetFieldIndex("profiles");
