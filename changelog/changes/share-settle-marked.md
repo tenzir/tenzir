@@ -24,9 +24,8 @@ This transforms the event to include the derived `activity_name: "Create"` and
 `class_name: "File System Activity"` fields.
 
 **`ocsf::trim`** intelligently removes fields from OCSF events to reduce data
-size while preserving essential information. It uses smart heuristics by
-default, with optional explicit control over optional and recommended field
-removal.
+size while preserving essential information. You can also have explicit control
+over optional and recommended field removal.
 
 ```tql
 from {

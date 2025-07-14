@@ -14,22 +14,17 @@ ocsf::trim [drop_optional=bool, drop_recommended=bool]
 
 The `ocsf::trim` operator uses intelligent analysis to determine which fields to
 remove from OCSF events, optimizing data size while preserving essential
-information. By default, the operator applies AI-supported heuristics to make
-smart decisions about field retention, considering factors such as field
-criticality, data relationships, schema compliance requirements, and usage
-patterns within the OCSF schema.
+information.
 
 ### `drop_optional = bool`
 
-Explicitly control whether to remove fields marked as optional in the OCSF
-schema. When specified, overrides the intelligent default behavior for optional
-fields.
+If specified, explicitly controls whether to remove fields marked as optional in
+the OCSF schema. Otherwise, this decision is left to the operator itself.
 
 ### `drop_recommended = bool`
 
-Explicitly control whether to remove fields marked as recommended in the OCSF
-schema. When specified, overrides the intelligent default behavior for
-recommended fields.
+If specified, explicitly controls whether to remove fields marked as recommended
+in the OCSF schema. Otherwise, this decision is left to the operator itself.
 
 ## Examples
 
@@ -39,7 +34,9 @@ recommended fields.
 from {
   class_uid: 3002,
   class_name: "Authentication",  // will be removed
-  metadata: {version: "1.5.0"},
+  metadata: {
+    version: "1.5.0",
+  },
   user: {
     name: "alice",
     uid: "1000",
@@ -77,8 +74,8 @@ from {
   file: {
     name: "document.txt",
     path: "/home/user/document.txt",
-    size: 1024,  // optional field - will be removed
-    type: "Regular File",  // optional field - also removed
+    size: 1024,  // optional: will be removed
+    type: "Regular File",  // optional: also removed
   },
   activity_id: 1,
 }
