@@ -8,7 +8,6 @@
 
 #include "tenzir/flatbuffer.hpp"
 
-#include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/logger_formatters.hpp"
 #include "tenzir/fbs/type.hpp"
 #include "tenzir/test/test.hpp"
