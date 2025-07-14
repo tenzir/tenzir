@@ -316,7 +316,8 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
 }
 
 rest_response::rest_response(const tenzir::record& data)
-  : body_(to_json_oneline(data)) {
+  : body_(to_json_oneline(data)),
+    headers_{{"Content-Type", "application/json"}} {
 }
 
 auto rest_response::from_json_string(std::string json) -> rest_response {
@@ -327,11 +328,17 @@ auto rest_response::from_json_string(std::string json) -> rest_response {
   auto result = rest_response{};
   result.code_ = 200;
   result.body_ = std::move(json);
+  result.headers_.try_emplace("Content-Type", "application/json");
   return result;
 }
 
 auto rest_response::is_error() const -> bool {
   return is_error_;
+}
+
+auto rest_response::headers() const
+  -> const std::unordered_map<std::string, std::string>& {
+  return headers_;
 }
 
 auto rest_response::body() const -> const std::string& {
@@ -344,10 +351,6 @@ auto rest_response::code() const -> size_t {
 
 auto rest_response::error_detail() const -> const caf::error& {
   return detail_;
-}
-
-auto rest_response::release() && -> std::string {
-  return std::move(body_);
 }
 
 auto rest_response::make_error(uint16_t error_code, std::string_view message,

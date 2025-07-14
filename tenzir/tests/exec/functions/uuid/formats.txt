@@ -1,0 +1,14 @@
+{
+  x: 1,
+  nil_uuid: "00000000-0000-0000-0000-000000000000",
+  is_nil: true,
+  v1_format_valid: true,
+  v4_format_valid: true,
+  v6_format_valid: true,
+  v7_format_valid: true,
+  default_is_v4: true,
+  nil_not_v1: true,
+  nil_not_v4: true,
+  nil_not_v6: true,
+  nil_not_v7: true,
+}

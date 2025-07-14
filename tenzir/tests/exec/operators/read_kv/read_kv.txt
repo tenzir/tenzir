@@ -1,0 +1,18 @@
+{
+  CATEGORY: "Initialization",
+  HELLO: "World: 123",
+  ID: null,
+}
+{
+  CATEGORY: "Access",
+  ID: "XER-8343-12",
+  FILE: "C:\\foo\\bar.exe",
+  ARGUMENTS: "[--qux]",
+}
+{
+  CATEGORY: 42,
+  BYE: null,
+}
+{
+  BYE: null,
+}

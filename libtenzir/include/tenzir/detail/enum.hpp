@@ -20,10 +20,24 @@
 #define TENZIR_ENUM_CHECK(x)                                                   \
   if (str == #x) {                                                             \
     return x;                                                                  \
+  }                                                                            \
+  if constexpr (std::string_view{#x}.ends_with('_')) {                         \
+    auto without_underscore = std::string_view{#x};                            \
+    without_underscore.remove_suffix(1);                                       \
+    if (str == without_underscore) {                                           \
+      return x;                                                                \
+    }                                                                          \
   }
 #define TENZIR_ENUM_CASE(x)                                                    \
-  case x:                                                                      \
-    return #x;
+  case x: {                                                                    \
+    constexpr auto str = std::string_view{#x};                                 \
+    if (str.ends_with('_')) {                                                  \
+      auto result = str;                                                       \
+      result.remove_suffix(1);                                                 \
+      return result;                                                           \
+    }                                                                          \
+    return str;                                                                \
+  }
 
 /// Defines an `enum class` with implementations for `inspect` (that uses
 /// strings if the inspector has a human-readable format), `to_string`,

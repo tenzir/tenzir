@@ -457,6 +457,10 @@ endif ()
 target_compile_definitions(libtenzir
                            PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
 
+if (NOT APPLE)
+  target_link_libraries(libtenzir PRIVATE atomic)
+endif ()
+
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(

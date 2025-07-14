@@ -467,7 +467,7 @@ template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible
     = detail::is_any_v<T, caf::none_t, bool, int64_t, uint64_t, double, duration,
-                       time, std::string, blob, ip, subnet, enumeration>;
+                       time, std::string, blob, ip, subnet, enumeration, secret>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, pattern>) {
@@ -482,8 +482,8 @@ view<T> make_view(const T& x) {
     return record_view_handle{
       record_view_ptr{caf::make_counted<default_record_view>(x)}};
   } else {
-    TENZIR_ASSERT(!"missing branch");
-    return {};
+    static_assert(detail::always_false_v<T>, "missing branch");
+    TENZIR_UNREACHABLE();
   }
 }
 

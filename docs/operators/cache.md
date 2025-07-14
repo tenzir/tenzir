@@ -75,7 +75,7 @@ Defines the maximum inactivity time until the cache is evicted from memory. The
 timer starts when writing the cache completes (or runs into the capacity limit),
 and resets whenever the cache is read from.
 
-Defaults to `10min`, or the value specified in the `tenzir.cache.lifetme`
+Defaults to `10min`, or the value specified in the `tenzir.cache.lifetime`
 option.
 
 ### `write_timeout = duration (optional)`

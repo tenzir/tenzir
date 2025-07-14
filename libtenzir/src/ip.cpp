@@ -133,7 +133,111 @@ auto ip::is_broadcast() const -> bool {
 }
 
 auto ip::is_multicast() const -> bool {
-  return is_v4() ? bytes_[12] == 224 : bytes_[0] == 0xff;
+  return is_v4() ? (bytes_[12] >= 224 && bytes_[12] <= 239) : bytes_[0] == 0xff;
+}
+
+auto ip::is_private() const -> bool {
+  if (is_v4()) {
+    // IPv4 private addresses:
+    // 10.0.0.0/8 (10.0.0.0 - 10.255.255.255)
+    // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+    // 192.168.0.0/16 (192.168.0.0 - 192.168.255.255)
+    // Note: 169.254.0.0/16 (link-local) is NOT included here
+    return (bytes_[12] == 10)
+           || (bytes_[12] == 172 && bytes_[13] >= 16 && bytes_[13] <= 31)
+           || (bytes_[12] == 192 && bytes_[13] == 168);
+  } else {
+    // IPv6 private addresses:
+    // fc00::/7 - Unique Local Addresses (ULA)
+    // Note: fe80::/10 (link-local) is NOT included here
+    return (bytes_[0] >= 0xfc && bytes_[0] <= 0xfd);
+  }
+}
+
+auto ip::is_global() const -> bool {
+  // A global address is one that is not:
+  // - loopback
+  // - private
+  // - link-local
+  // - multicast
+  // - broadcast (IPv4 only)
+  // - unspecified (0.0.0.0 or ::)
+
+  // Check for unspecified address
+  if (is_v4()) {
+    // For IPv4, check if the last 4 bytes are all zero (0.0.0.0)
+    if (bytes_[12] == 0 && bytes_[13] == 0 && bytes_[14] == 0
+        && bytes_[15] == 0) {
+      return false;
+    }
+  } else {
+    // For IPv6, check if all bytes are zero (::)
+    bool is_unspecified = true;
+    for (int i = 0; i < 16; ++i) {
+      if (bytes_[i] != 0) {
+        is_unspecified = false;
+        break;
+      }
+    }
+    if (is_unspecified) {
+      return false;
+    }
+  }
+
+  return ! is_loopback() && ! is_private() && ! is_link_local()
+         && ! is_multicast() && ! is_broadcast();
+}
+
+auto ip::is_link_local() const -> bool {
+  if (is_v4()) {
+    // IPv4 link-local: 169.254.0.0/16
+    return bytes_[12] == 169 && bytes_[13] == 254;
+  } else {
+    // IPv6 link-local: fe80::/10
+    return (bytes_[0] == 0xfe) && ((bytes_[1] & 0xc0) == 0x80);
+  }
+}
+
+auto ip::type() const -> ip_address_class {
+  // Check for unspecified address first (0.0.0.0 or ::)
+  if (is_v4()) {
+    // For IPv4, check if the last 4 bytes are all zero (0.0.0.0)
+    if (bytes_[12] == 0 && bytes_[13] == 0 && bytes_[14] == 0
+        && bytes_[15] == 0) {
+      return ip_address_class::unspecified;
+    }
+  } else {
+    // For IPv6, check if all bytes are zero (::)
+    bool is_unspecified = true;
+    for (int i = 0; i < 16; ++i) {
+      if (bytes_[i] != 0) {
+        is_unspecified = false;
+        break;
+      }
+    }
+    if (is_unspecified) {
+      return ip_address_class::unspecified;
+    }
+  }
+
+  // Check in order of specificity
+  if (is_loopback()) {
+    return ip_address_class::loopback;
+  }
+  if (is_link_local()) {
+    return ip_address_class::link_local;
+  }
+  if (is_multicast()) {
+    return ip_address_class::multicast;
+  }
+  if (is_broadcast()) {
+    return ip_address_class::broadcast;
+  }
+  if (is_private()) {
+    return ip_address_class::private_;
+  }
+  // Everything else is global
+  return ip_address_class::global;
 }
 
 auto ip::mask(unsigned top_bits_to_keep) -> bool {

@@ -76,13 +76,35 @@ public:
   }
 };
 
-class is_v4_or_v6 final : public function_plugin {
-public:
-  is_v4_or_v6(bool v4) : v4_{v4} {
-  }
+enum class check_type {
+  v4,
+  v6,
+  multicast,
+  loopback,
+  private_,
+  global,
+  link_local
+};
 
+template <check_type CheckType>
+class ip_check final : public function_plugin {
+public:
   auto name() const -> std::string override {
-    return v4_ ? "is_v4" : "is_v6";
+    if constexpr (CheckType == check_type::v4) {
+      return "is_v4";
+    } else if constexpr (CheckType == check_type::v6) {
+      return "is_v6";
+    } else if constexpr (CheckType == check_type::multicast) {
+      return "is_multicast";
+    } else if constexpr (CheckType == check_type::loopback) {
+      return "is_loopback";
+    } else if constexpr (CheckType == check_type::private_) {
+      return "is_private";
+    } else if constexpr (CheckType == check_type::global) {
+      return "is_global";
+    } else if constexpr (CheckType == check_type::link_local) {
+      return "is_link_local";
+    }
   }
 
   auto is_deterministic() const -> bool override {
@@ -104,13 +126,29 @@ public:
             [&](const arrow::NullArray& arg) {
               check(b.AppendNulls(arg.length()));
             },
-            [&](const ip_type::array_type& arg) {
-              for (const auto& value : values(ip_type{}, arg)) {
+            [&](const tenzir::ip_type::array_type& arg) {
+              for (const auto& value : values(tenzir::ip_type{}, arg)) {
                 if (not value) {
                   check(b.AppendNull());
                   continue;
                 }
-                check(b.Append(value->is_v4() == v4_));
+                bool result = false;
+                if constexpr (CheckType == check_type::v4) {
+                  result = value->is_v4();
+                } else if constexpr (CheckType == check_type::v6) {
+                  result = value->is_v6();
+                } else if constexpr (CheckType == check_type::multicast) {
+                  result = value->is_multicast();
+                } else if constexpr (CheckType == check_type::loopback) {
+                  result = value->is_loopback();
+                } else if constexpr (CheckType == check_type::private_) {
+                  result = value->is_private();
+                } else if constexpr (CheckType == check_type::global) {
+                  result = value->is_global();
+                } else if constexpr (CheckType == check_type::link_local) {
+                  result = value->is_link_local();
+                }
+                check(b.Append(result));
               }
             },
             [&](const auto&) {
@@ -126,9 +164,59 @@ public:
         return series{bool_type{}, finish(b)};
       });
   }
+};
 
-private:
-  bool v4_;
+class ip_category_plugin final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "ip_category";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("ip_category")
+          .positional("x", expr, "ip")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
+        check(b->Reserve(eval.length()));
+        for (auto& arg : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray& arg) {
+              for (auto i = 0; i < arg.length(); ++i) {
+                check(b->AppendNull());
+              }
+            },
+            [&](const tenzir::ip_type::array_type& arg) {
+              for (const auto& value : values(tenzir::ip_type{}, arg)) {
+                if (not value) {
+                  check(b->AppendNull());
+                  continue;
+                }
+                check(b->Append(to_string(value->type())));
+              }
+            },
+            [&](const auto&) {
+              diagnostic::warning("`ip_category` expected `ip`, but got `{}`",
+                                  arg.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              for (auto i = 0; i < arg.length(); ++i) {
+                check(b->AppendNull());
+              }
+            },
+          };
+          match(*arg.array, f);
+        }
+        return series{string_type{}, finish(*b)};
+      });
+  }
 };
 
 } // namespace
@@ -136,5 +224,18 @@ private:
 } // namespace tenzir::plugins::ip
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::ip)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::is_v4_or_v6{true})
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::is_v4_or_v6{false})
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::v4>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::v6>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::multicast>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::loopback>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::private_>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::global>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::ip::ip_check<tenzir::plugins::ip::check_type::link_local>)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::ip_category_plugin)

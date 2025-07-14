@@ -72,32 +72,59 @@ public:
     regex_ = std::move(regex);
   }
 
-  auto split(std::string_view input,
-             const detail::quoting_escaping_policy& quoting) const
-    -> std::pair<std::string_view, std::string_view> {
+  struct separator_info {
+    size_t start = 0;
+    size_t end = 0;
+
+    auto found() const {
+      return end > start;
+    }
+
+    auto length() const {
+      return end - start;
+    }
+  };
+
+  using split_result
+    = std::tuple<std::string_view, std::string_view, separator_info>;
+
+  static auto make_no_split(std::string_view input) -> split_result {
+    return {input, {}, {std::string_view::npos, std::string_view::npos}};
+  }
+
+  static auto make_split(std::string_view input, const re2::StringPiece& group)
+    -> split_result {
+    const auto head = std::string_view{input.data(), group.data()};
+    const auto tail = std::string_view{group.data() + group.size(),
+                                       input.data() + input.size()};
+    const auto sep_start = static_cast<size_t>(group.data() - input.data());
+    const auto sep_end = sep_start + group.size();
+    return {head, tail, {sep_start, sep_end}};
+  }
+
+  auto
+  split(std::string_view input, const detail::quoting_escaping_policy& quoting,
+        size_t start_offset = 0) const -> split_result {
     TENZIR_ASSERT(regex_);
     TENZIR_ASSERT(regex_->NumberOfCapturingGroups() == 1);
     auto group = re2::StringPiece{};
-    auto start_offset = 0;
     while (true) {
       const auto ss = input.substr(start_offset);
       if (not re2::RE2::PartialMatch({ss.data(), ss.size()}, *regex_, &group)) {
-        return {input, {}};
+        return make_no_split(input);
       }
       auto head = std::string_view{input.data(), group.data()};
-      auto tail = std::string_view{group.data() + group.size(),
-                                   input.data() + input.size()};
       auto is_valid = not quoting.is_inside_of_quotes(input, head.size());
       if (is_valid) {
-        return {head, tail};
+        return make_split(input, group);
       } else {
         start_offset = head.size() + group.size();
       }
       if (head.size() + group.size() == 0) {
-        return {input, {}};
+        return make_no_split(input);
       }
     }
-    return {input, {}};
+    return make_no_split(input);
   }
 
   template <class Inspector>
@@ -173,24 +200,52 @@ public:
   auto parse_line(multi_series_builder& builder, diagnostic_handler& dh,
                   std::string_view line) const -> void {
     auto event = builder.record();
+    struct previous_t {
+      std::string_view key;
+      std::string_view value;
+    };
+    auto previous = std::optional<previous_t>{};
+    const auto commit = [this, &event, &previous]() {
+      if (not previous) {
+        return;
+      }
+      auto key = args_.quoting_.unquote_unescape(previous->key);
+      if (previous->value.empty()) {
+        event.unflattened_field(key).null();
+        return;
+      }
+      auto value = args_.quoting_.unquote_unescape(previous->value);
+      event.unflattened_field(key).data_unparsed(std::move(value));
+    };
     while (not line.empty()) {
-      // TODO: We ignore split failures here. There might be better ways
-      // to handle this.
-      auto [head, tail] = args_.field_split_.split(line, args_.quoting_);
-      auto [key_view, value_view]
+      const auto [head, tail, field_sep]
+        = args_.field_split_.split(line, args_.quoting_);
+      const auto [key_view, value_view, value_sep]
         = args_.value_split_.split(head, args_.quoting_);
-      auto key = args_.quoting_.unquote_unescape(key_view);
-      auto value = args_.quoting_.unquote_unescape(value_view);
-      event.unflattened_field(std::move(key)).data_unparsed(std::move(value));
+      if (value_sep.found()) {
+        commit();
+        previous.emplace(key_view, value_view);
+      } else if (previous) {
+        if (previous->value.empty()) {
+          previous->value = value_view;
+        } else {
+          previous->value = std::string_view{
+            previous->value.data(),
+            previous->value.size() + field_sep.length() + key_view.length(),
+          };
+        }
+      } else {
+        previous.emplace(key_view, value_view);
+      }
       if (line == tail) {
-        diagnostic::error("`kv` did not make progress")
+        diagnostic::error("`kv` parsing did not make progress")
           .note("check your field splitter")
           .emit(dh);
-        // TODO: warn instead and just continue?
         return;
       }
       line = tail;
     }
+    commit();
   }
 
   auto parse_strings(const arrow::StringArray& input,

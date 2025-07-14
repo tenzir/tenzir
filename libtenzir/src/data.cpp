@@ -97,12 +97,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::blob,
                              value_offset.Union());
     },
-    [&](const secret& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto elements = builder.CreateVector(
-        value.buffer->elements()->data(), value.buffer->elements()->size());
-      const auto value_offset = fbs::data::CreateSecret(builder, elements);
-      return fbs::CreateData(builder, fbs::data::Data::secret,
-                             value_offset.Union());
+    [&](const secret&) -> flatbuffers::Offset<fbs::Data> {
+      TENZIR_UNREACHABLE();
     },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
       auto options = fbs::data::CreatePatternOptions(
@@ -248,7 +244,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       return caf::none;
     }
     case fbs::data::Data::secret: {
-      to = secret::from_fb(from.data_as_secret());
+      TENZIR_UNREACHABLE();
       return caf::none;
     }
     case fbs::data::Data::enumeration: {

@@ -11,6 +11,9 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/curl.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/operator_control_plane.hpp"
@@ -25,6 +28,7 @@
 #include "tenzir/tql2/set.hpp"
 
 #include <arrow/util/compression.h>
+#include <boost/url/parse.hpp>
 #include <caf/action.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
@@ -61,9 +65,9 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
   });
 };
 
-auto try_decompress_payload(const std::string_view encoding,
-                            const std::span<const std::byte> payload,
-                            diagnostic_handler& dh) -> std::optional<blob> {
+auto try_decompress_body(const std::string_view encoding,
+                         const std::span<const std::byte> body,
+                         diagnostic_handler& dh) -> std::optional<blob> {
   if (encoding.empty()) {
     return std::nullopt;
   }
@@ -77,7 +81,7 @@ auto try_decompress_payload(const std::string_view encoding,
     return std::nullopt;
   }
   auto out = blob{};
-  out.resize(payload.size_bytes() * 2);
+  out.resize(body.size_bytes() * 2);
   const auto codec = arrow::util::Codec::Create(
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   TENZIR_ASSERT(codec.ok());
@@ -87,16 +91,16 @@ auto try_decompress_payload(const std::string_view encoding,
   const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
   auto written = size_t{};
   auto read = size_t{};
-  while (read != payload.size_bytes()) {
+  while (read != body.size_bytes()) {
     const auto result = decompressor->Decompress(
-      detail::narrow<int64_t>(payload.size_bytes() - read),
-      reinterpret_cast<const uint8_t*>(payload.data() + read),
-      detail::narrow<int64_t>(out.capacity() - written),
+      detail::narrow<int64_t>(body.size_bytes() - read),
+      reinterpret_cast<const uint8_t*>(body.data() + read),
+      detail::narrow<int64_t>(out.size() - written),
       reinterpret_cast<uint8_t*>(out.data() + written));
     if (not result.ok()) {
       diagnostic::warning("failed to decompress: {}",
                           result.status().ToString())
-        .note("emitting compressed payload")
+        .note("emitting compressed body")
         .emit(dh);
       return std::nullopt;
     }
@@ -121,7 +125,7 @@ auto try_decompress_payload(const std::string_view encoding,
       if (not result.ok()) {
         diagnostic::warning("failed to reset decompressor: {}",
                             result.ToString())
-          .note("emitting compressed payload")
+          .note("emitting compressed body")
           .emit(dh);
         return std::nullopt;
       }
@@ -327,11 +331,51 @@ private:
   bool exited = false;
 };
 
-auto find_plugin_for_mime(std::string_view mime, location op,
-                          diagnostic_handler& dh, bool is_warning)
+auto find_decompression_plugin(std::string_view ext, location op,
+                               diagnostic_handler& dh)
   -> failure_or<operator_ptr> {
+  for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
+    if (std::ranges::contains(plugin->decompress_properties().extensions,
+                              ext)) {
+      TENZIR_DEBUG("[http] inferred plugin `{}` for extension `{}`",
+                   plugin->name(), ext);
+      auto inv = operator_factory_plugin::invocation{
+        ast::entity{
+          std::vector{ast::identifier{plugin->name(), op}},
+        },
+        {},
+      };
+      auto sp = session_provider::make(dh);
+      TRY(auto opptr, plugin->make(std::move(inv), sp.as_session()));
+      return opptr;
+    }
+  }
+  return nullptr;
+}
+
+auto find_parser_plugin(std::string_view ext, location op,
+                        diagnostic_handler& dh) -> failure_or<operator_ptr> {
+  for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
+    if (std::ranges::contains(plugin->read_properties().extensions, ext)) {
+      TENZIR_DEBUG("[http] inferred plugin `{}` for extension `{}`",
+                   plugin->name(), ext);
+      auto inv = operator_factory_plugin::invocation{
+        ast::entity{
+          std::vector{ast::identifier{plugin->name(), op}},
+        },
+        {},
+      };
+      auto sp = session_provider::make(dh);
+      TRY(auto opptr, plugin->make(std::move(inv), sp.as_session()));
+      return opptr;
+    }
+  }
+  return nullptr;
+}
+
+auto find_plugin_for_mime(std::string_view mime, location op,
+                          diagnostic_handler& dh) -> failure_or<operator_ptr> {
   mime = mime.substr(0, mime.find(';'));
-  auto sp = session_provider::make(dh);
   for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
     if (std::ranges::contains(plugin->read_properties().mime_types, mime)) {
       auto inv = operator_factory_plugin::invocation{
@@ -340,37 +384,54 @@ auto find_plugin_for_mime(std::string_view mime, location op,
         },
         {},
       };
-      auto opptr = plugin->make(std::move(inv), session{sp});
-      if (not opptr) {
-        diagnostic::error("could not instantiate the parser for mime-type `{}`",
-                          mime)
-          .primary(op)
-          .hint("consider specifying a parsing pipeline if the format is known")
-          .emit(dh);
-        return failure::promise();
-      }
-      return std::move(*opptr);
+      auto sp = session_provider::make(dh);
+      TRY(auto opptr, plugin->make(std::move(inv), sp.as_session()));
+      return opptr;
     }
   }
   diagnostic::error("could not find a parser for mime-type `{}`", mime)
     .primary(op)
     .hint("consider specifying a parsing pipeline if the format is known")
-    .compose([&](auto x) {
-      if (is_warning) {
-        return std::move(x).severity(severity::warning).note("skipping request");
-      }
-      return x;
-    })
     .emit(dh);
   return failure::promise();
 }
 
 auto make_pipeline(const std::optional<located<pipeline>>& pipe,
-                   const http::response& r, location oploc,
-                   diagnostic_handler& dh, bool is_warning)
-  -> failure_or<located<pipeline>> {
+                   const caf::uri& uri, const http::response& r, location oploc,
+                   diagnostic_handler& dh) -> failure_or<located<pipeline>> {
   if (pipe) {
     return *pipe;
+  }
+  auto parsed = boost::urls::parse_uri_reference(uri.str());
+  if (not parsed) {
+    diagnostic::error("invalid URI `{}`", uri.str()).primary(oploc).emit(dh);
+    return failure::promise();
+  }
+  if (not parsed->segments().empty()) {
+    auto segment = parsed->segments().back();
+    if (const auto last_dot = segment.rfind('.');
+        last_dot != std::string::npos and last_dot + 1 != segment.size()
+        and last_dot != 0) {
+      auto extension = segment.substr(last_dot + 1);
+      auto v = std::vector<operator_ptr>{};
+      TENZIR_DEBUG("[http] finding decompression plugin for extension `{}`",
+                   extension);
+      TRY(auto decompressor, find_decompression_plugin(extension, oploc, dh));
+      if (decompressor) {
+        v.push_back(std::move(decompressor));
+        if (const auto first_dot = segment.rfind('.', last_dot - 1);
+            first_dot != std::string::npos and first_dot != 0) {
+          extension = segment.substr(first_dot + 1, last_dot - first_dot - 1);
+        }
+      }
+      TENZIR_DEBUG("[http] finding parser plugin for extension `{}`",
+                   extension);
+      TRY(auto parser, find_parser_plugin(extension, oploc, dh));
+      if (parser) {
+        v.push_back(std::move(parser));
+        return located{pipeline{std::move(v)}, oploc};
+      }
+    }
   }
   const auto& headers = r.header_fields();
   const auto* mit = std::ranges::find_if(headers, [](const auto& x) {
@@ -384,13 +445,10 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
       .emit(dh);
     return failure::promise();
   }
-  TRY(auto ptr, find_plugin_for_mime(mit->second, oploc, dh, is_warning));
+  TRY(auto ptr, find_plugin_for_mime(mit->second, oploc, dh));
   auto v = std::vector<operator_ptr>{};
   v.push_back(std::move(ptr));
-  return located{
-    pipeline{std::move(v)},
-    oploc,
-  };
+  return located{pipeline{std::move(v)}, oploc};
 }
 
 auto make_pipeline(const std::optional<located<pipeline>>& pipe,
@@ -408,7 +466,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
       .emit(dh);
     return failure::promise();
   }
-  TRY(auto ptr, find_plugin_for_mime(mime, oploc, dh, true));
+  TRY(auto ptr, find_plugin_for_mime(mime, oploc, dh));
   auto v = std::vector<operator_ptr>{};
   v.push_back(std::move(ptr));
   return located{
@@ -470,8 +528,8 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
   if (slice.rows() != 1) {
     diagnostic::warning("cannot paginate over multiple events")
       .primary(*paginate)
+      .note("stopping pagination")
       .emit(dh);
-    // TODO: Decide on the semantics
     return std::nullopt;
   }
   const auto ms = eval(*paginate, series{slice}, dh);
@@ -495,7 +553,7 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
     });
 }
 
-auto make_metadata(const http::response& r, uint64_t len = 1)
+auto make_metadata(const http::response& r, const uint64_t len)
   -> series_builder {
   auto sb = series_builder{};
   for (auto i = uint64_t{}; i < len; ++i) {
@@ -509,21 +567,23 @@ auto make_metadata(const http::response& r, uint64_t len = 1)
   return sb;
 }
 
-auto make_metadata(const http::request& r) -> series {
+auto make_metadata(const http::request& r, const uint64_t len) -> series {
   auto sb = series_builder{};
-  auto rb = sb.record();
-  auto hb = rb.field("headers").record();
-  r.header().for_each_field([&](std::string_view k, std::string_view v) {
-    hb.field(k, v);
-  });
-  auto qb = rb.field("query").record();
-  for (const auto& [k, v] : r.header().query()) {
-    qb.field(k, v);
+  for (auto i = uint64_t{}; i < len; ++i) {
+    auto rb = sb.record();
+    auto hb = rb.field("headers").record();
+    r.header().for_each_field([&](std::string_view k, std::string_view v) {
+      hb.field(k, v);
+    });
+    auto qb = rb.field("query").record();
+    for (const auto& [k, v] : r.header().query()) {
+      qb.field(k, v);
+    }
+    rb.field("path", r.header().path());
+    rb.field("fragment", r.header().fragment());
+    rb.field("method", to_string(r.header().method()));
+    rb.field("version", r.header().version());
   }
-  rb.field("path", r.header().path());
-  rb.field("fragment", r.header().fragment());
-  rb.field("method", to_string(r.header().method()));
-  rb.field("version", r.header().version());
   return sb.finish_assert_one_array();
 }
 
@@ -532,7 +592,8 @@ struct from_http_args {
   std::optional<expression> filter;
   located<secret> url;
   std::optional<located<std::string>> method;
-  std::optional<located<secret>> payload;
+  std::optional<located<data>> body;
+  std::optional<located<std::string>> encode;
   std::optional<located<record>> headers;
   std::optional<ast::field_path> metadata_field;
   std::optional<ast::lambda_expr> paginate;
@@ -552,10 +613,11 @@ struct from_http_args {
   auto add_to(argument_parser2& p) {
     p.positional("url", url);
     p.named("method", method);
-    p.named("payload", payload);
+    p.named("body|payload", body);
+    p.named("encode", encode);
     p.named("headers", headers);
     p.named("metadata_field", metadata_field);
-    p.named("paginate", paginate, "record=>string");
+    p.named("paginate", paginate, "record->string");
     p.named("paginate_delay", paginate_delay);
     p.named("connection_timeout", connection_timeout);
     p.named("max_retry_count", max_retry_count);
@@ -635,8 +697,9 @@ struct from_http_args {
       return (check_option(is_server, xs).is_success() && ...);
     };
     if (server) {
-      check_options(true, method, payload, headers, paginate, paginate_delay,
-                    connection_timeout, max_retry_count, retry_delay);
+      check_options(true, method, body, encode, headers, paginate,
+                    paginate_delay, connection_timeout, max_retry_count,
+                    retry_delay);
       TRY(validate_server_opts(dh));
     } else {
       check_options(false, responses, max_request_size);
@@ -654,6 +717,35 @@ struct from_http_args {
             .emit(dh);
           return failure::promise();
         }
+      }
+    }
+    if (body) {
+      TRY(match(
+        body->inner,
+        [](const concepts::one_of<blob, std::string, record> auto&)
+          -> failure_or<void> {
+          return {};
+        },
+        [&](const auto&) -> failure_or<void> {
+          diagnostic::error("`body` must be `blob`, `record` or `string`")
+            .primary(body->source)
+            .emit(dh);
+          return failure::promise();
+        }));
+    }
+    if (encode) {
+      if (not body) {
+        diagnostic::error("encoding specified without a `body`")
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (encode->inner != "json" and encode->inner != "form") {
+        diagnostic::error("unsupported encoding: `{}`", encode->inner)
+          .primary(encode->source)
+          .hint("must be `json` or `form`")
+          .emit(dh);
+        return failure::promise();
       }
     }
     if (method and method->inner.empty()) {
@@ -762,7 +854,7 @@ struct from_http_args {
 
   auto make_method() const -> std::optional<http::method> {
     if (not method) {
-      return payload ? http::method::post : http::method::get;
+      return body ? http::method::post : http::method::get;
     }
     auto m = http::method{};
     if (http::from_string(method->inner, m)) {
@@ -774,23 +866,32 @@ struct from_http_args {
   auto make_headers() const
     -> std::pair<std::unordered_map<std::string, std::string>,
                  detail::stable_map<std::string, secret>> {
-    if (not headers) {
-      return {};
-    }
     auto hdrs = std::unordered_map<std::string, std::string>{};
     auto secrets = detail::stable_map<std::string, secret>{};
-    for (const auto& [k, v] : headers->inner) {
-      match(
-        v,
-        [&](const std::string& x) {
-          hdrs.emplace(k, x);
-        },
-        [&](const secret& x) {
-          secrets.emplace(k, x);
-        },
-        [](const auto&) {
-          TENZIR_UNREACHABLE();
-        });
+    auto insert_content_type = body and is<record>(body->inner);
+    if (headers) {
+      for (const auto& [k, v] : headers->inner) {
+        if (caf::icase_equal(k, "content-type")) {
+          insert_content_type = false;
+        }
+        match(
+          v,
+          [&](const std::string& x) {
+            hdrs.emplace(k, x);
+          },
+          [&](const secret& x) {
+            secrets.emplace(k, x);
+          },
+          [](const auto&) {
+            TENZIR_UNREACHABLE();
+          });
+        hdrs.emplace(k, as<std::string>(v));
+      }
+    }
+    if (insert_content_type) {
+      hdrs.emplace("Content-Type", encode and encode->inner == "form"
+                                     ? "application/x-www-form-urlencoded"
+                                     : "application/json");
     }
     return std::pair{hdrs, secrets};
   }
@@ -817,8 +918,8 @@ struct from_http_args {
   friend auto inspect(auto& f, from_http_args& x) -> bool {
     return f.object(x).fields(
       f.field("op", x.op), f.field("filter", x.filter), f.field("url", x.url),
-      f.field("method", x.method), f.field("payload", x.payload),
-      f.field("headers", x.headers),
+      f.field("method", x.method), f.field("body", x.body),
+      f.field("encode", x.encode), f.field("headers", x.headers),
       f.field("metadata_field", x.metadata_field),
       f.field("paginate", x.paginate),
       f.field("paginate_delay", x.paginate_delay),
@@ -843,6 +944,12 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto& dh = ctrl.diagnostics();
+    auto tdh = transforming_diagnostic_handler{
+      dh,
+      [](diagnostic diag) {
+        return std::move(diag).modify().severity(severity::warning).done();
+      },
+    };
     auto pull = std::optional<caf::async::consumer_resource<http::request>>{};
     auto url = std::string{};
     auto port = uint16_t{};
@@ -913,13 +1020,13 @@ public:
           return;
         }
         const auto make_chunk = [&] {
-          if (auto body = try_decompress_payload(
+          if (auto body = try_decompress_body(
                 r.header().field("content-encoding"), r.body(), dh)) {
             return chunk::make(std::move(*body));
           }
           return chunk::copy(r.body());
         };
-        auto pipe = make_pipeline(args_.parse, r, args_.op, dh);
+        auto pipe = make_pipeline(args_.parse, r, args_.op, tdh);
         if (not pipe) {
           return;
         }
@@ -939,16 +1046,13 @@ public:
                   TENZIR_DEBUG("[http] pulled slice");
                   if (slice.rows() == 0) {
                     TENZIR_DEBUG("[http] finishing subpipeline");
-                    // TODO: Decide on the `parallel` semantics here, iff we
-                    // want them.
-                    // --awaiting;
                     ctrl.set_waiting(false);
                     return;
                   }
                   pull();
                   if (args_.metadata_field) {
-                    slice = assign(*args_.metadata_field, make_metadata(r),
-                                   slice, dh);
+                    slice = assign(*args_.metadata_field,
+                                   make_metadata(r, slice.rows()), slice, dh);
                   }
                   slices.push_back(std::move(slice));
                 },
@@ -1006,16 +1110,12 @@ public:
     auto& dh = ctrl.diagnostics();
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
-    auto paginate_queue = std::vector<http::client_factory>{};
+    auto paginate_queue
+      = std::vector<std::pair<http::client_factory, caf::uri>>{};
     auto reqs = std::vector<secret_request>{};
     auto url = std::string{};
-    auto payload = std::string{};
     auto [headers, secrets] = args_.make_headers();
     reqs.emplace_back(make_secret_request("url", args_.url, url, dh));
-    if (args_.payload) {
-      reqs.emplace_back(
-        make_secret_request("payload", *args_.payload, payload, dh));
-    }
     if (not secrets.empty()) {
       const auto& loc = args_.headers->source;
       for (auto& [name, secret] : secrets) {
@@ -1041,111 +1141,140 @@ public:
     } else if (args_.tls.inner and url.starts_with("http://")) {
       url.insert(4, "s");
     }
-    const auto handle_response = [&, hdrs = headers](const http::response& r) {
-      ctrl.set_waiting(false);
-      TENZIR_DEBUG("[http] handling response with size: {}B",
-                   r.body().size_bytes());
-      if (const auto code = std::to_underlying(r.code());
-          code < 200 or 399 < code) {
-        diagnostic::error("received erroneous http status code: `{}`", code)
-          .primary(args_.op)
-          .emit(dh);
-        return;
-      }
-      if (r.body().empty()) {
-        --awaiting;
-        return;
-      }
-      const auto& headers = r.header_fields();
-      const auto* eit = std::ranges::find_if(headers, [](const auto& x) {
-        return caf::icase_equal(x.first, "content-encoding");
-      });
-      const auto encoding = eit != std::ranges::end(headers) ? eit->first : "";
-      const auto make_chunk = [&] {
-        if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
-          return chunk::make(std::move(*body));
-        }
-        return chunk::copy(r.body());
-      };
-      auto pipe = make_pipeline(args_.parse, r, args_.op, dh, false);
-      if (not pipe) {
-        return;
-      }
-      const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
-                                        args_.filter, make_chunk(), false);
-      std::invoke([&, &args_ = args_, r, actor,
-                   hdrs](this const auto& pull) -> void {
-        TENZIR_DEBUG("[http] requesting slice");
-        ctrl.self()
-          .mail(atom::pull_v)
-          .request(actor, caf::infinite)
-          .then(
-            [&, r, pull, actor, hdrs](table_slice slice) {
-              TENZIR_DEBUG("[http] pulled slice");
-              ctrl.set_waiting(false);
-              if (slice.rows() == 0) {
-                TENZIR_DEBUG("[http] finishing subpipeline");
-                --awaiting;
-                return;
-              }
-              pull();
-              if (args_.metadata_field) {
-                auto sb = make_metadata(r, slice.rows());
-                slice
-                  = assign(*args_.metadata_field, sb.finish_assert_one_array(),
-                           slice, ctrl.diagnostics());
-              }
-              if (auto url = next_url(args_.paginate, slice, dh)) {
-                if (not url->starts_with("http://")
-                    and not url->starts_with("https://")) {
-                  url->insert(0, args_.tls.inner ? "https://" : "http://");
-                }
-                if (args_.tls.inner and url->starts_with("http://")) {
-                  url->insert(4, "s");
-                }
-                auto uri = caf::make_uri(*url);
-                if (! uri) {
-                  diagnostic::error("failed to parse uri: {}", uri.error())
+    const auto handle_response = [&](caf::uri uri) {
+      return
+        [&, hdrs = headers, uri = std::move(uri)](const http::response& r) {
+          ctrl.set_waiting(false);
+          TENZIR_DEBUG("[http] handling response with size: {}B",
+                       r.body().size_bytes());
+          if (const auto code = std::to_underlying(r.code());
+              code < 200 or 399 < code) {
+            diagnostic::error("received erroneous http status code: `{}`", code)
+              .primary(args_.op)
+              .emit(dh);
+            return;
+          }
+          if (r.body().empty()) {
+            --awaiting;
+            return;
+          }
+          const auto& headers = r.header_fields();
+          const auto* eit = std::ranges::find_if(headers, [](const auto& x) {
+            return caf::icase_equal(x.first, "content-encoding");
+          });
+          const auto encoding
+            = eit != std::ranges::end(headers) ? eit->first : "";
+          const auto make_chunk = [&] {
+            if (auto body = try_decompress_body(encoding, r.body(), dh)) {
+              return chunk::make(std::move(*body));
+            }
+            return chunk::copy(r.body());
+          };
+          auto pipe = make_pipeline(args_.parse, uri, r, args_.op, dh);
+          if (not pipe) {
+            return;
+          }
+          const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
+                                            args_.filter, make_chunk(), false);
+          std::invoke([&, &args_ = args_, r, actor,
+                       hdrs](this const auto& pull) -> void {
+            TENZIR_DEBUG("[http] requesting slice");
+            ctrl.self()
+              .mail(atom::pull_v)
+              .request(actor, caf::infinite)
+              .then(
+                [&, r, pull, actor, hdrs](table_slice slice) {
+                  TENZIR_DEBUG("[http] pulled slice");
+                  ctrl.set_waiting(false);
+                  if (slice.rows() == 0) {
+                    TENZIR_DEBUG("[http] finishing subpipeline");
+                    --awaiting;
+                    return;
+                  }
+                  pull();
+                  if (args_.metadata_field) {
+                    auto sb = make_metadata(r, slice.rows());
+                    slice = assign(*args_.metadata_field,
+                                   sb.finish_assert_one_array(), slice,
+                                   ctrl.diagnostics());
+                  }
+                  if (auto url = next_url(args_.paginate, slice, dh)) {
+                    if (not url->starts_with("http://")
+                        and not url->starts_with("https://")) {
+                      url->insert(0, args_.tls.inner ? "https://" : "http://");
+                    }
+                    if (args_.tls.inner and url->starts_with("http://")) {
+                      url->insert(4, "s");
+                    }
+                    auto uri = caf::make_uri(*url);
+                    if (not uri) {
+                      diagnostic::error("failed to parse uri: {}", uri.error())
+                        .primary(args_.op)
+                        .emit(ctrl.diagnostics());
+                    }
+                    paginate_queue.emplace_back(
+                      std::move(
+                        http::with(ctrl.self().system())
+                          .context(args_.make_ssl_context(*uri))
+                          .connect(*uri)
+                          .max_response_size(max_response_size)
+                          .connection_timeout(args_.connection_timeout->inner)
+                          .max_retry_count(args_.max_retry_count->inner)
+                          .retry_delay(args_.retry_delay->inner)
+                          .add_header_fields(hdrs)),
+                      std::move(*uri));
+                  } else {
+                    TENZIR_DEBUG("[http] done paginating");
+                  }
+                  slices.push_back(std::move(slice));
+                },
+                [&](const caf::error&) {
+                  diagnostic::error("failed to parse response")
                     .primary(args_.op)
                     .emit(ctrl.diagnostics());
-                }
-                paginate_queue.push_back(std::move(
-                  http::with(ctrl.self().system())
-                    .context(args_.make_ssl_context(*uri))
-                    .connect(*uri)
-                    .max_response_size(max_response_size)
-                    .connection_timeout(args_.connection_timeout->inner)
-                    .max_retry_count(args_.max_retry_count->inner)
-                    .retry_delay(args_.retry_delay->inner)
-                    .add_header_fields(hdrs)));
-              } else {
-                TENZIR_DEBUG("[http] done paginating");
-              }
-              slices.push_back(std::move(slice));
-            },
-            [&](const caf::error&) {
-              diagnostic::error("failed to parse response")
-                .primary(args_.op)
-                .emit(ctrl.diagnostics());
-            });
-      });
-      TENZIR_DEBUG("[http] handled response");
+                });
+          });
+          TENZIR_DEBUG("[http] handled response");
+        };
     };
     auto uri = caf::make_uri(url);
-    if (! uri) {
+    if (not uri) {
       diagnostic::error("failed to parse uri: {}", uri.error())
         .primary(args_.op)
         .emit(ctrl.diagnostics());
     }
+    auto body = std::string{};
+    if (args_.body) {
+      match(
+        args_.body->inner,
+        [&](const blob& x) {
+          body.append(reinterpret_cast<const char*>(x.data()), x.size());
+        },
+        [&](const std::string& x) {
+          body = x;
+        },
+        [&](const record& x) {
+          if (args_.encode and args_.encode->inner == "form") {
+            body = curl::escape(flatten(x));
+            return;
+          }
+          auto p = json_printer{{}};
+          auto it = std::back_inserter(body);
+          p.print(it, x);
+        },
+        [](const auto&) {
+          TENZIR_UNREACHABLE();
+        });
+    }
     http::with(ctrl.self().system())
       .context(args_.make_ssl_context(*uri))
-      .connect(std::move(uri))
+      .connect(*uri)
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
       .retry_delay(args_.retry_delay->inner)
-      .add_header_fields(std::move(headers))
-      .request(args_.make_method().value(), payload)
+      .add_header_fields(headers)
+      .request(args_.make_method().value(), body)
       .or_else([&](const caf::error& e) {
         diagnostic::error("failed to make http request: {}", e)
           .primary(args_.op)
@@ -1156,18 +1285,19 @@ public:
       })
       .transform([&](const caf::async::future<http::response>& fut) {
         ++awaiting;
-        fut.bind_to(ctrl.self()).then(handle_response, [&](const caf::error& e) {
-          diagnostic::error("request failed: `{}`", e)
-            .primary(args_.op)
-            .emit(dh);
-        });
+        fut.bind_to(ctrl.self())
+          .then(handle_response(std::move(*uri)), [&](const caf::error& e) {
+            diagnostic::error("request failed: `{}`", e)
+              .primary(args_.op)
+              .emit(dh);
+          });
       });
     do {
       ctrl.set_waiting(awaiting != 0);
       co_yield {};
-      // NOTE: Must be an index-based loop. The thread can go back to the
-      // observe loop after yielding here, causing the vector's iterator to
-      // be invalidated.
+      // NOTE: Must be an index-based loop. The thread can go back to
+      // the observe loop after yielding here, causing the vector's
+      // iterator to be invalidated.
       for (auto i = size_t{}; i < slices.size(); ++i) {
         co_yield slices[i];
       }
@@ -1176,7 +1306,8 @@ public:
         ++awaiting;
         ctrl.self().run_delayed(
           args_.paginate_delay->inner,
-          [&, req = std::move(paginate_queue[i])] mutable {
+          [&, preq = std::move(paginate_queue[i])] mutable {
+            auto& [req, uri] = preq;
             std::move(req)
               .get()
               .or_else([&](const caf::error& e) {
@@ -1189,11 +1320,12 @@ public:
               })
               .transform([&](const caf::async::future<http::response>& fut) {
                 fut.bind_to(ctrl.self())
-                  .then(handle_response, [&](const caf::error& e) {
-                    diagnostic::error("request failed: `{}`", e)
-                      .primary(args_.op)
-                      .emit(dh);
-                  });
+                  .then(handle_response(std::move(uri)),
+                        [&](const caf::error& e) {
+                          diagnostic::error("request failed: `{}`", e)
+                            .primary(args_.op)
+                            .emit(dh);
+                        });
               });
           });
       }
@@ -1230,6 +1362,25 @@ private:
   from_http_args args_;
 };
 
+void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
+                             session ctx) {
+  for (auto& arg : inv.args) {
+    match(
+      arg,
+      [&](const ast::assignment& arg) {
+        auto name = try_as<ast::field_path>(arg.left);
+        if (name and name->path().size() == 1
+            and name->path()[0].id.name == "payload") {
+          diagnostic::warning(
+            "parameter `payload` is deprecated, use `body` instead")
+            .primary(arg.left)
+            .emit(ctx);
+        }
+      },
+      [](const auto&) {});
+  }
+}
+
 struct from_http final : public virtual operator_factory_plugin {
   auto name() const -> std::string override {
     return "tql2.from_http";
@@ -1243,6 +1394,7 @@ struct from_http final : public virtual operator_factory_plugin {
     args.add_to(p);
     TRY(p.parse(inv, ctx));
     TRY(args.validate(ctx));
+    warn_deprecated_payload(inv, ctx);
     if (args.server) {
       return std::make_unique<from_http_server_operator>(std::move(args));
     }
@@ -1265,7 +1417,8 @@ struct http_args {
   tenzir::location op;
   ast::expression url;
   std::optional<ast::expression> method;
-  std::optional<ast::expression> payload;
+  std::optional<ast::expression> body;
+  std::optional<located<std::string>> encode;
   std::optional<ast::expression> headers;
   std::optional<ast::field_path> response_field;
   std::optional<ast::field_path> metadata_field;
@@ -1285,11 +1438,12 @@ struct http_args {
   auto add_to(argument_parser2& p) {
     p.positional("url", url, "string");
     p.named("method", method, "string");
-    p.named("payload", payload, "string");
+    p.named("body|payload", body, "record|string|blob");
+    p.named("encode", encode);
     p.named("headers", headers, "record");
     p.named("response_field", response_field);
     p.named("metadata_field", metadata_field);
-    p.named("paginate", paginate, "record=>string");
+    p.named("paginate", paginate, "record->string");
     p.named_optional("paginate_delay", paginate_delay);
     p.named_optional("parallel", parallel);
     p.named("tls", tls);
@@ -1304,6 +1458,21 @@ struct http_args {
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
     TENZIR_ASSERT(op);
+    if (encode) {
+      if (not body) {
+        diagnostic::error("encoding specified without a `body`")
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (encode->inner != "json" and encode->inner != "form") {
+        diagnostic::error("unsupported encoding: `{}`", encode->inner)
+          .primary(encode->source)
+          .hint("must be `json` or `form`")
+          .emit(dh);
+        return failure::promise();
+      }
+    }
     if (response_field and metadata_field) {
       auto rp = std::views::transform(response_field->path(),
                                       &ast::field_path::segment::id)
@@ -1364,7 +1533,7 @@ struct http_args {
   auto make_method(const std::string_view method) const
     -> std::optional<http::method> {
     if (method.empty()) {
-      if (not this->method and payload) {
+      if (not this->method and body) {
         return http::method::post;
       }
       return http::method::get;
@@ -1376,21 +1545,23 @@ struct http_args {
     return std::nullopt;
   }
 
-  auto make_ssl_context() const -> caf::expected<ssl::context> {
+  auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
     return ssl::context::enable(tls.has_value())
       .and_then(ssl::emplace_context(ssl::tls::any))
       .and_then(ssl::enable_default_verify_paths())
       .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
       .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
-      .and_then(ssl::use_password_if(inner(password)));
+      .and_then(ssl::use_password_if(inner(password)))
+      .and_then(ssl::use_sni_hostname(std::move(uri)));
   }
 
   friend auto inspect(auto& f, http_args& x) -> bool {
     return f.object(x).fields(
       f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
-      f.field("payload", x.payload), f.field("headers", x.headers),
-      f.field("tls", x.tls), f.field("certfile", x.certfile),
-      f.field("keyfile", x.keyfile), f.field("password", x.password),
+      f.field("body", x.body), f.field("encode", x.encode),
+      f.field("headers", x.headers), f.field("tls", x.tls),
+      f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
+      f.field("password", x.password),
       f.field("metadata_field", x.metadata_field),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
@@ -1399,6 +1570,12 @@ struct http_args {
       f.field("paginate_delay", x.paginate_delay), f.field("parse", x.parse),
       f.field("filter", x.filter));
   }
+};
+
+struct pagination_request {
+  http::client_factory factory;
+  caf::uri uri;
+  std::unordered_map<std::string, std::string> headers;
 };
 
 class http_operator final : public crtp_operator<http_operator> {
@@ -1413,119 +1590,133 @@ public:
     -> generator<table_slice> {
     co_yield {};
     auto& dh = ctrl.diagnostics();
+    auto tdh = transforming_diagnostic_handler{
+      dh,
+      [](diagnostic diag) {
+        return std::move(diag).modify().severity(severity::warning).done();
+      },
+    };
     // TODO: consider if this should also be extractable
     // NOTE: lambda because context has a deleted copy constructor
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
-    auto paginate_queue
-      = std::vector<std::pair<http::client_factory,
-                              std::unordered_map<std::string, std::string>>>{};
+    auto pagination_queue = std::vector<pagination_request>{};
     auto hdr_warned = false;
-    const auto handle_response =
-      [&](view<record> og, std::unordered_map<std::string, std::string> hdrs) {
-        return [&, hdrs = std::move(hdrs),
-                og = materialize(std::move(og))](const http::response& r) {
-          TENZIR_DEBUG("[http] handling response with size: {}B",
-                       r.body().size_bytes());
-          ctrl.set_waiting(false);
-          if (const auto code = std::to_underlying(r.code());
-              code < 200 or 399 < code) {
-            --awaiting;
-            diagnostic::warning("received erroneous http status code: `{}`",
-                                code)
-              .primary(args_.op)
-              .note("skipping response handling")
-              .emit(dh);
-            return;
-          }
-          if (r.body().empty()) {
-            --awaiting;
-            return;
-          }
-          auto p = make_pipeline(args_.parse, r, args_.op, dh, true);
-          if (not p) {
-            --awaiting;
-            return;
-          }
-          const auto& headers = r.header_fields();
-          const auto* it = std::ranges::find_if(headers, [](const auto& x) {
-            return caf::icase_equal(x.first, "content-encoding");
-          });
-          const auto encoding
-            = it != std::ranges::end(headers) ? it->first : "";
-          const auto make_chunk = [&] {
-            if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
-              return chunk::make(std::move(*body));
+    const auto handle_response
+      = [&](view<record> og, caf::uri uri,
+            std::unordered_map<std::string, std::string> hdrs) {
+          return [&, hdrs = std::move(hdrs), uri = std::move(uri),
+                  og = materialize(std::move(og))](const http::response& r) {
+            TENZIR_DEBUG("[http] handling response with size: {}B",
+                         r.body().size_bytes());
+            ctrl.set_waiting(false);
+            if (const auto code = std::to_underlying(r.code());
+                code < 200 or 399 < code) {
+              --awaiting;
+              diagnostic::warning("received erroneous http status code: `{}`",
+                                  code)
+                .primary(args_.op)
+                .note("skipping response handling")
+                .emit(dh);
+              return;
             }
-            return chunk::copy(r.body());
-          };
-          const auto actor
-            = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
-          std::invoke([&, &args_ = args_, r, og, hdrs,
-                       actor](this const auto& pull) -> void {
-            TENZIR_DEBUG("[http] requesting slice");
-            ctrl.self()
-              .mail(atom::pull_v)
-              .request(actor, caf::infinite)
-              .then(
-                [&, r, hdrs, pull, og, actor](table_slice slice) {
-                  TENZIR_DEBUG("[http] pulled slice");
-                  ctrl.set_waiting(false);
-                  if (slice.rows() == 0) {
-                    TENZIR_DEBUG("[http] finishing subpipeline");
+            if (r.body().empty()) {
+              --awaiting;
+              return;
+            }
+            auto p = make_pipeline(args_.parse, uri, r, args_.op, tdh);
+            if (not p) {
+              --awaiting;
+              return;
+            }
+            const auto& headers = r.header_fields();
+            const auto* it = std::ranges::find_if(headers, [](const auto& x) {
+              return caf::icase_equal(x.first, "content-encoding");
+            });
+            const auto encoding
+              = it != std::ranges::end(headers) ? it->first : "";
+            const auto make_chunk = [&] {
+              if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
+                return chunk::make(std::move(*body));
+              }
+              return chunk::copy(r.body());
+            };
+            const auto actor
+              = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
+            std::invoke([&, &args_ = args_, r, og, hdrs,
+                         actor](this const auto& pull) -> void {
+              TENZIR_DEBUG("[http] requesting slice");
+              ctrl.self()
+                .mail(atom::pull_v)
+                .request(actor, caf::infinite)
+                .then(
+                  [&, r, hdrs, pull, og, actor](table_slice slice) {
+                    TENZIR_DEBUG("[http] pulled slice");
+                    ctrl.set_waiting(false);
+                    if (slice.rows() == 0) {
+                      TENZIR_DEBUG("[http] finishing subpipeline");
+                      --awaiting;
+                      return;
+                    }
+                    pull();
+                    if (args_.response_field) {
+                      auto sb = series_builder{};
+                      for (auto i = size_t{}; i < slice.rows(); ++i) {
+                        sb.data(og);
+                      }
+                      slice = assign(*args_.response_field, series{slice},
+                                     sb.finish_assert_one_slice(), tdh);
+                    }
+                    if (args_.metadata_field) {
+                      auto sb = make_metadata(r, slice.rows());
+                      slice = assign(*args_.metadata_field,
+                                     sb.finish_assert_one_array(), slice,
+                                     ctrl.diagnostics());
+                    }
+                    if (auto url = next_url(args_.paginate, slice, tdh)) {
+                      if (not url->starts_with("http://")
+                          and not url->starts_with("https://")) {
+                        url->insert(0, args_.tls ? "https://" : "http://");
+                      }
+                      if (args_.tls and url->starts_with("http://")) {
+                        url->insert(4, "s");
+                      }
+                      auto caf_uri = caf::make_uri(*url);
+                      if (not caf_uri) {
+                        diagnostic::warning("failed to parse uri: {}",
+                                            caf_uri.error())
+                          .primary(args_.op)
+                          .note("skipping request")
+                          .emit(dh);
+                      } else {
+                        pagination_queue.emplace_back(
+                          std::move(http::with(ctrl.self().system())
+                                      .context(args_.make_ssl_context(*caf_uri))
+                                      .connect(*caf_uri)
+                                      .max_response_size(max_response_size)
+                                      .connection_timeout(
+                                        args_.connection_timeout.inner)
+                                      .max_retry_count(args_.max_retry_count)
+                                      .retry_delay(args_.retry_delay.inner)
+                                      .add_header_fields(hdrs)),
+                          std::move(*caf_uri), std::move(hdrs));
+                      }
+                    } else {
+                      TENZIR_DEBUG("[http] done paginating");
+                    }
+                    slices.push_back(std::move(slice));
+                  },
+                  [&](const caf::error&) {
                     --awaiting;
-                    return;
-                  }
-                  pull();
-                  if (args_.response_field) {
-                    auto sb = series_builder{};
-                    for (auto i = size_t{}; i < slice.rows(); ++i) {
-                      sb.data(og);
-                    }
-                    slice = assign(*args_.response_field, series{slice},
-                                   sb.finish_assert_one_slice(), dh);
-                  }
-                  if (args_.metadata_field) {
-                    auto sb = make_metadata(r, slice.rows());
-                    slice = assign(*args_.metadata_field,
-                                   sb.finish_assert_one_array(), slice,
-                                   ctrl.diagnostics());
-                  }
-                  if (auto url = next_url(args_.paginate, slice, dh)) {
-                    if (not url->starts_with("http://")
-                        and not url->starts_with("https://")) {
-                      url->insert(0, args_.tls ? "https://" : "http://");
-                    }
-                    if (args_.tls and url->starts_with("http://")) {
-                      url->insert(4, "s");
-                    }
-                    paginate_queue.emplace_back(
-                      std::move(
-                        http::with(ctrl.self().system())
-                          .context(args_.make_ssl_context())
-                          .connect(caf::make_uri(*url))
-                          .max_response_size(max_response_size)
-                          .connection_timeout(args_.connection_timeout.inner)
-                          .max_retry_count(args_.max_retry_count)
-                          .retry_delay(args_.retry_delay.inner)
-                          .add_header_fields(hdrs)),
-                      hdrs);
-                  } else {
-                    TENZIR_DEBUG("[http] done paginating");
-                  }
-                  slices.push_back(std::move(slice));
-                },
-                [&](const caf::error&) {
-                  --awaiting;
-                  ctrl.set_waiting(false);
-                  diagnostic::warning("failed to parse response")
-                    .primary(args_.op)
-                    .emit(ctrl.diagnostics());
-                });
-          });
-          TENZIR_DEBUG("[http] handled response");
+                    ctrl.set_waiting(false);
+                    diagnostic::warning("failed to parse response")
+                      .primary(args_.op)
+                      .emit(ctrl.diagnostics());
+                  });
+            });
+            TENZIR_DEBUG("[http] handled response");
+          };
         };
-      };
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -1573,9 +1764,10 @@ public:
           .note("skipping request")
           .emit(dh);
       }
-      auto hdrs = std::vector<std::unordered_map<std::string, std::string>>{};
-      hdrs.reserve(slice.rows());
+      auto hdrs = std::vector<
+        std::pair<std::unordered_map<std::string, std::string>, bool>>{};
       if (args_.headers) {
+        hdrs.reserve(slice.rows());
         auto hdr_ms = eval(*args_.headers, slice, dh);
         for (const auto& s : hdr_ms.parts()) {
           if (s.type.kind().is_not<record_type>()) {
@@ -1595,8 +1787,11 @@ public:
                 .emit(dh);
               continue;
             }
-            auto& h = hdrs.emplace_back();
+            auto& [h, has_content_type] = hdrs.emplace_back();
+            const auto has_body = args_.body.has_value();
             for (const auto& [k, v] : *val) {
+              has_content_type
+                |= has_body and caf::icase_equal(k, "content-type");
               match(
                 v,
                 [&](const std::string_view& x) {
@@ -1622,19 +1817,23 @@ public:
             }
           }
         }
+      } else {
+        hdrs.resize(slice.rows());
       }
       if (not reqs.empty()) {
         co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
       }
+      TENZIR_ASSERT(urls.size() == slice.rows());
+      TENZIR_ASSERT(hdrs.size() == slice.rows());
       auto url_it = urls.begin();
       auto hdr_it = hdrs.begin();
       auto methods = eval_optional_string(args_.method, slice, dh);
-      auto payloads = eval_optional_string(args_.payload, slice, dh);
+      auto bodies = eval_body(slice, dh);
       for (auto row : slice.values()) {
-        auto& url = *url_it;
-        auto& headers = *hdr_it;
+        auto& url = *url_it++;
+        auto& [headers, has_content_type] = *hdr_it++;
         const auto method = methods.next().value();
-        const auto payload = payloads.next().value();
+        const auto [body, insert_content_type] = bodies.next().value();
         if (url.empty()) {
           diagnostic::warning("`url` must not be empty")
             .primary(args_.url)
@@ -1656,17 +1855,30 @@ public:
             .emit(dh);
           continue;
         }
+        auto caf_uri = caf::make_uri(url);
+        if (not caf_uri) {
+          diagnostic::warning("failed to parse uri: {}", caf_uri.error())
+            .primary(args_.op)
+            .emit(dh);
+          continue;
+        }
+        if (insert_content_type and not has_content_type) {
+          headers.emplace("Content-Type",
+                          args_.encode and args_.encode->inner == "form"
+                            ? "application/x-www-form-urlencoded"
+                            : "application/json");
+        }
         http::with(ctrl.self().system())
-          .context(args_.make_ssl_context())
-          .connect(caf::make_uri(url))
+          .context(args_.make_ssl_context(*caf_uri))
+          .connect(*caf_uri)
           .max_response_size(max_response_size)
           .connection_timeout(args_.connection_timeout.inner)
           .max_retry_count(args_.max_retry_count)
           .retry_delay(args_.retry_delay.inner)
-          .add_header_fields(std::move(headers))
-          .request(*m, payload)
+          .add_header_fields(headers)
+          .request(*m, body)
           .or_else([&](const caf::error& e) {
-            diagnostic::error("failed to make http request: {}", e)
+            diagnostic::warning("failed to make http request: {}", e)
               .primary(args_.op)
               .emit(dh);
           })
@@ -1676,7 +1888,8 @@ public:
           .transform([&](const caf::async::future<http::response>& fut) {
             ++awaiting;
             fut.bind_to(ctrl.self())
-              .then(handle_response(row, std::move(headers)),
+              .then(handle_response(row, std::move(*caf_uri),
+                                    std::move(headers)),
                     [&](const caf::error& e) {
                       --awaiting;
                       ctrl.set_waiting(false);
@@ -1699,16 +1912,17 @@ public:
         // NOTE: Must be an index-based loop. The thread can go back to the
         // observe loop after yielding here, causing the vector's iterator to
         // be invalidated.
-        for (auto i = size_t{}; i < paginate_queue.size(); ++i) {
+        for (auto i = size_t{}; i < pagination_queue.size(); ++i) {
           ++awaiting;
           ctrl.self().run_delayed(
             args_.paginate_delay.inner,
-            [&, req = std::move(paginate_queue[i].first),
-             hdrs = std::move(paginate_queue[i].second)] mutable {
+            [&, preq = std::move(pagination_queue[i])] mutable {
+              auto& [req, uri, hdrs] = preq;
               std::move(req)
                 .get()
                 .or_else([&](const caf::error& e) {
-                  diagnostic::error("failed to make http request: {}", e)
+                  --awaiting;
+                  diagnostic::warning("failed to make http request: {}", e)
                     .primary(args_.op)
                     .emit(dh);
                 })
@@ -1717,7 +1931,7 @@ public:
                 })
                 .transform([&](const caf::async::future<http::response>& fut) {
                   fut.bind_to(ctrl.self())
-                    .then(handle_response(row, std::move(hdrs)),
+                    .then(handle_response(row, std::move(uri), std::move(hdrs)),
                           [&](const caf::error& e) {
                             --awaiting;
                             ctrl.set_waiting(false);
@@ -1739,7 +1953,7 @@ public:
             co_yield {};
           }
         }
-        paginate_queue.clear();
+        pagination_queue.clear();
       }
     }
     do {
@@ -1753,7 +1967,76 @@ public:
       }
       slices.clear();
     } while (awaiting != 0);
-    TENZIR_ASSERT(paginate_queue.empty());
+    TENZIR_ASSERT(pagination_queue.empty());
+  }
+
+  auto eval_body(const table_slice& slice, diagnostic_handler& dh) const
+    -> generator<std::pair<std::string_view, bool>> {
+    if (not args_.body) {
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        co_yield {};
+      }
+      co_return;
+    }
+    const auto ms = eval(args_.body.value(), slice, dh);
+    for (const auto& s : ms.parts()) {
+      if (s.type.kind().is<null_type>()) {
+        for (auto i = int64_t{}; i < s.length(); ++i) {
+          co_yield {};
+        }
+        continue;
+      }
+      if (s.type.kind().is<blob_type>()) {
+        for (auto val : s.values<blob_type>()) {
+          if (not val) {
+            co_yield {};
+            continue;
+          }
+          co_yield {
+            {reinterpret_cast<const char*>(val->data()), val->size()},
+            false,
+          };
+        }
+        continue;
+      }
+      if (s.type.kind().is<string_type>()) {
+        for (auto val : s.values<string_type>()) {
+          if (not val) {
+            co_yield {};
+            continue;
+          }
+          co_yield {val.value(), false};
+        }
+        continue;
+      }
+      if (s.type.kind().is<record_type>()) {
+        auto buf = std::string{};
+        const auto form = args_.encode and args_.encode->inner == "form";
+        for (auto val : s.values<record_type>()) {
+          if (not val) {
+            co_yield {};
+            continue;
+          }
+          if (form) {
+            co_yield {curl::escape(flatten(materialize(val.value()))), true};
+            continue;
+          }
+          auto p = json_printer{{}};
+          auto it = std::back_inserter(buf);
+          p.print(it, val.value());
+          co_yield {buf, true};
+          buf.clear();
+        }
+        continue;
+      }
+      diagnostic::warning("expected `blob`, `record` or `string`, got `{}`",
+                          s.type.kind())
+        .primary(args_.body.value())
+        .emit(dh);
+      for (auto i = int64_t{}; i < s.length(); ++i) {
+        co_yield {};
+      }
+    }
   }
 
   static auto
@@ -1831,6 +2114,7 @@ struct http_plugin final : public operator_plugin2<http_operator> {
     args.add_to(p);
     TRY(p.parse(inv, ctx));
     TRY(args.validate(ctx));
+    warn_deprecated_payload(inv, ctx);
     return std::make_unique<http_operator>(std::move(args));
   }
 };

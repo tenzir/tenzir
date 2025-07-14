@@ -257,78 +257,76 @@ struct exec_node_control_plane final : public operator_control_plane {
     secret_request_callback callback;
     location loc;
 
+    static auto apply_transformation(ecc::cleansing_blob blob,
+                                     fbs::data::SecretTransformations operation,
+                                     diagnostic_handler& dh, location loc)
+      -> failure_or<ecc::cleansing_blob> {
+      switch (operation) {
+        using enum fbs::data::SecretTransformations;
+        case decode_base64: {
+          const auto decoded = detail::base64::try_decode(std::string_view{
+            reinterpret_cast<const char*>(blob.data()),
+            reinterpret_cast<const char*>(blob.data() + blob.size()),
+          });
+          if (not decoded) {
+            diagnostic::error("failed to `decode_base64` secret value")
+              .primary(loc)
+              .emit(dh);
+            return failure::promise();
+          }
+          const auto dec_bytes = as_bytes(*decoded);
+          blob.assign(dec_bytes.begin(), dec_bytes.end());
+          return blob;
+        }
+        case encode_base64: {
+          const auto encoded = detail::base64::encode(std::string_view{
+            reinterpret_cast<const char*>(blob.data()),
+            reinterpret_cast<const char*>(blob.data() + blob.size()),
+          });
+          const auto enc_bytes = as_bytes(encoded);
+          blob.assign(enc_bytes.begin(), enc_bytes.end());
+          return blob;
+        }
+      }
+      TENZIR_UNREACHABLE();
+    }
+
     auto finish(const request_map_t& requested,
                 exec_node_diagnostic_handler<Input, Output>& dh) const
       -> failure_or<void> {
-      auto res = ecc::cleansing_blob{};
-      auto temp_blob = ecc::cleansing_blob{};
       // For every element in the original secret
       bool all_literal = true;
-      for (const auto& e : *secret.buffer->elements()) {
-        const auto name = e->name()->string_view();
-        const auto ops = e->operations()->string_view();
-        const auto is_literal = e->is_literal();
-        all_literal |= is_literal;
-        if (is_literal) {
-          // If it is a literal secret, we copy its name into a temporary blob.
-          temp_blob.assign(
-            reinterpret_cast<const std::byte*>(name.data()),
-            reinterpret_cast<const std::byte*>(name.data() + name.size()));
-        } else {
-          // If it is managed, get the value from the requested ones.
-          // Inside of this finisher, we know that all requests gave back values.
-          const auto it = requested.find(std::string{name});
+      using ret_t = failure_or<ecc::cleansing_blob>;
+      const auto f = detail::overload{
+        [](const fbs::data::SecretLiteral& l) -> ret_t {
+          const auto& v = detail::secrets::deref(l.value());
+          const auto v_bytes = as_bytes(v);
+          return ecc::cleansing_blob{v_bytes.begin(), v_bytes.end()};
+        },
+        [&requested](const fbs::data::SecretName& l) -> ret_t {
+          const auto it
+            = requested.find(detail::secrets::deref(l.value()).str());
           TENZIR_ASSERT(it != requested.end());
-          temp_blob = it->second.value;
-        }
-        // Now we perform all operations for this secret element
-        if (not ops.empty()) {
-          for (const auto& op : detail::split(ops, ";")) {
-            if (op == "decode_base64") {
-              auto decoded = detail::base64::try_decode(std::string_view{
-                reinterpret_cast<const char*>(temp_blob.data()),
-                reinterpret_cast<const char*>(temp_blob.data()
-                                              + temp_blob.size()),
-              });
-              if (not decoded) {
-                diagnostic::error("failed to `decode_base64` secret value")
-                  .primary(loc)
-                  .emit(dh);
-                return failure::promise();
-              }
-              temp_blob.assign(
-                reinterpret_cast<const std::byte*>(decoded->data()),
-                reinterpret_cast<const std::byte*>(decoded->data()
-                                                   + decoded->size()));
-              continue;
-            }
-            if (op == "encode_base64") {
-              auto encoded = detail::base64::encode(std::string_view{
-                reinterpret_cast<const char*>(temp_blob.data()),
-                reinterpret_cast<const char*>(temp_blob.data()
-                                              + temp_blob.size()),
-              });
-              temp_blob.assign(
-                reinterpret_cast<const std::byte*>(encoded.data()),
-                reinterpret_cast<const std::byte*>(encoded.data()
-                                                   + encoded.size()));
-              continue;
-            }
-            // Handle trailing semicolon
-            if (op.empty()) {
-              break;
-            }
-            // Any operation we enable on secret elements must be implemented here
-            TENZIR_UNREACHABLE();
+          return it->second.value;
+        },
+        [](this const auto& self,
+           const fbs::data::SecretConcatenation& concat) -> ret_t {
+          auto res = ecc::cleansing_blob{};
+          for (auto* p : detail::secrets::deref(concat.secrets())) {
+            TRY(auto part, match(detail::secrets::deref(p), self));
+            res.insert(res.end(), part.begin(), part.end());
           }
-        }
-        // We append the resolved & transformed element to the final result.
-        res.insert(res.end(), temp_blob.begin(), temp_blob.end());
-        // Add the resolved part to the censor
-        if (not is_literal) {
-          dh.add_to_censor(std::move(temp_blob));
-        }
-      }
+          return res;
+        },
+        [&dh, loc
+              = this->loc](this const auto& self,
+                           const fbs::data::SecretTransformed& trafo) -> ret_t {
+          TRY(auto nested, match(detail::secrets::deref(trafo.secret()), self));
+          return apply_transformation(std::move(nested), trafo.transformation(),
+                                      dh, loc);
+        },
+      };
+      TRY(auto res, match(secret, f));
       // Finally, we invoke the callback
       return callback(resolved_secret_value{std::move(res), all_literal});
     }
@@ -340,13 +338,27 @@ struct exec_node_control_plane final : public operator_control_plane {
     auto requested_secrets = std::make_shared<request_map_t>();
     auto finishers = std::vector<secret_finisher>{};
     for (auto& req : requests) {
-      for (const auto& element : *req.secret.buffer->elements()) {
-        const auto name = element->name()->string_view();
-        const auto is_literal = element->is_literal();
-        if (not is_literal) {
-          requested_secrets->try_emplace(std::string{name}, req.location);
-        }
-      }
+      const auto collect = detail::overload{
+        [](const fbs::data::SecretLiteral&) -> void {
+          ; /* noop */
+        },
+        [&requested_secrets,
+         loc = req.location](const fbs::data::SecretName& n) -> void {
+          requested_secrets->try_emplace(
+            detail::secrets::deref(n.value()).str(), loc);
+        },
+        [](this const auto& self,
+           const fbs::data::SecretConcatenation& concat) -> void {
+          for (const auto* p : detail::secrets::deref(concat.secrets())) {
+            match(detail::secrets::deref(p), self);
+          }
+        },
+        [](this const auto& self,
+           const fbs::data::SecretTransformed& trafo) -> void {
+          match(detail::secrets::deref(trafo.secret()), self);
+        },
+      };
+      match(req.secret, collect);
       finishers.emplace_back(std::move(req.secret), std::move(req.callback),
                              req.location);
     }

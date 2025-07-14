@@ -1,14 +1,14 @@
 ---
 title: from_http
 category: Inputs/Events
-example: 'from_http "0.0.0.0:8080'
+example: 'from_http "0.0.0.0:8080"'
 ---
 
 Sends and receives HTTP/1.1 requests.
 
 ```tql
-from_http url:string, [method=string, payload=string, headers=record,
-          metadata_field=field, paginate=record->string,
+from_http url:string, [method=string, body=record|string|blob, encode=string,
+          headers=record, metadata_field=field, paginate=record->string,
           paginate_delay=duration, connection_timeout=duration,
           max_retry_count=int, retry_delay=duration, tls=bool, certfile=string,
           keyfile=string, password=string { … }]
@@ -22,6 +22,15 @@ from_http url:string, server=true, [metadata_field=field, responses=record,
 The `from_http` operator issues HTTP requests or spins up an HTTP/1.1 server on
 a given address and forwards received requests as events.
 
+:::tip[Format and Compression Inference]
+
+The `from_http` operator automatically infers the file format (such as JSON, CSV, Parquet, etc.) and compression type (such as gzip, zstd, etc.) directly from the URL's file extension, just like the generic `from` operator. This makes it easier to load data from HTTP sources without manually specifying the format or decompression step.
+
+If the format or compression cannot be determined from the URL, the operator will fall back to using the HTTP `Content-Type` and `Content-Encoding` response headers to determine how to parse and decompress the data.
+
+If neither the URL nor the HTTP headers provide enough information, you can explicitly specify the decompression and parsing steps using a pipeline argument.
+:::
+
 ### `url: string`
 
 URL to listen on or to connect to.
@@ -30,7 +39,7 @@ Must have the form `<host>:<port>` when `server=true`.
 
 ### `method = string (optional)`
 
-One of the following HTTP method to use when using the client:
+One of the following HTTP methods to use when using the client:
 
 - `get`
 - `head`
@@ -41,11 +50,22 @@ One of the following HTTP method to use when using the client:
 - `options`
 - `trace`
 
-Defaults to `get`, or `post` if `payload` is specified.
+Defaults to `get`, or `post` if `body` is specified.
 
-### `payload = string (optional)`
+### `body = blob|record|string (optional)`
 
-Payload to send with the HTTP request.
+Body to send with the HTTP request.
+
+If the value is a `record`, then the body is encoded according to the `encode`
+option and an appropriate `Content-Type` is set for the request.
+
+### `encode = string (optional)`
+
+Specifies how to encode `record` bodies. Supported values:
+- `json`
+- `form`
+
+Defaults to `json`.
 
 ### `headers = record (optional)`
 
@@ -81,7 +101,7 @@ resulting string is used as the URL for a new GET request with the same headers.
 
 ### `paginate_delay = duration (optional)`
 
-The duration to wait between consecutive paginatation requests.
+The duration to wait between consecutive pagination requests.
 
 Defaults to `0s`.
 
@@ -129,7 +149,7 @@ Requests to an unspecified endpoint are responded with HTTP Status `200 OK`.
 
 The maximum size of an incoming request to accept.
 
-Defaults to `10Mib`.
+Defaults to `10MiB`.
 
 ### `tls = bool (optional)`
 

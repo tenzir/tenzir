@@ -43,8 +43,6 @@ jobs:
             Automated update of OCSF schemas from upstream.
 
             This PR was automatically created by the update-ocsf-schemas workflow.
-
-            Triggered by: @${{ github.actor }}
           branch: topic/update-ocsf-schemas
           commit-message: Update OCSF schemas
           labels: maintenance

@@ -132,8 +132,8 @@ public:
           co_yield {};
           co_return;
         }
-        auto printer
-          = check(pipeline::internal_parse_as_operator("write feather"));
+        auto printer = check(pipeline::internal_parse_as_operator(
+          "write feather --compression-type zstd"));
         TENZIR_ASSERT(printer);
         auto untyped_instance = check(printer->instantiate(
           [](auto slice) -> generator<table_slice> {

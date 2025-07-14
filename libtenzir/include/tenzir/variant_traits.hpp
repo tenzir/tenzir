@@ -138,30 +138,53 @@ static_assert(has_variant_traits<std::reference_wrapper<std::variant<int>>>);
 
 namespace detail {
 
-/// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
-template <size_t I, has_variant_traits V>
-constexpr auto variant_get(V&& v) -> decltype(auto) {
-  if constexpr (std::is_reference_v<decltype(variant_traits<std::remove_cvref_t<
-                                               V>>::template get<I>(v))>) {
-    // We call `as_mutable` here because `forward_like` never removes `const`.
-    return std::forward_like<V>(
-      as_mutable(variant_traits<std::remove_cvref_t<V>>::template get<I>(v)));
-  } else {
-    return variant_traits<std::remove_cvref_t<V>>::template get<I>(v);
-  }
-}
-
 template <has_variant_traits V, size_t I>
 using variant_alternative = std::remove_cvref_t<
   decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(
     std::declval<V>()))>;
 
+template <typename T>
+consteval static std::string_view type_name_of() {
+#if defined _WIN32
+  constexpr std::string_view s = __FUNCTION__;
+  const auto begin_search = s.find_first_of("<");
+  const auto space = s.find(' ', begin_search);
+  const auto begin_type = space != s.npos ? space + 1 : begin_search + 1;
+  const auto end_type = s.find_last_of(">");
+  return s.substr(begin_type, end_type - begin_type);
+#elif defined __GNUC__
+  constexpr std::string_view s = __PRETTY_FUNCTION__;
+  constexpr std::string_view t_equals = "T = ";
+  const auto begin_type = s.find(t_equals) + t_equals.size();
+  const auto end_type = s.find_first_of(";]", begin_type);
+  return s.substr(begin_type, end_type - begin_type);
+#endif
+}
+
+template <has_variant_traits V, size_t... Is>
+consteval auto make_name_table(std::index_sequence<Is...>)
+  -> std::array<std::string_view, sizeof...(Is)> {
+  return std::array{type_name_of<variant_alternative<V, Is>>()...};
+}
+
+/// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
+template <size_t I, has_variant_traits V>
+constexpr auto variant_get(V&& v) -> decltype(auto) {
+  using traits = variant_traits<std::remove_cvref_t<V>>;
+  if constexpr (std::is_reference_v<decltype(traits::template get<I>(v))>) {
+    // We call `as_mutable` here because `forward_like` never removes `const`.
+    return std::forward_like<V>(as_mutable(traits::template get<I>(v)));
+  } else {
+    return traits::template get<I>(v);
+  }
+}
+
 template <has_variant_traits V, class T>
 constexpr auto variant_index = std::invoke(
   []<size_t... Is>(std::index_sequence<Is...>) {
-    constexpr auto arr
+    constexpr static auto arr
       = std::array{std::same_as<variant_alternative<V, Is>, T>...};
-    constexpr auto occurrence_count
+    constexpr static auto occurrence_count
       = std::count(std::begin(arr), std::end(arr), true);
     static_assert(occurrence_count == 1,
                   "variant must contain exactly one copy of T");
@@ -217,48 +240,73 @@ concept variant_invocable_for_all
           and (Variant_Size < 31 or variant_invocable_for_r<F, V, R, 30>)
           and (Variant_Size < 32 or variant_invocable_for_r<F, V, R, 31>)));
 
-// Ensures that the Functor `F` can be invoked with every alternative in `V`,
-// yielding the same type for all alternatives
+template <has_variant_traits V, class... Fs>
+struct variant_invoke_result
+  : std::type_identity<
+      std::invoke_result_t<decltype(overload{std::declval<Fs>()...}),
+                           decltype(variant_get<0>(std::declval<V>()))>> {};
+
+template <has_variant_traits V, class F>
+struct variant_invoke_result<V, F>
+  : std::type_identity<
+      std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>> {};
+
+template <has_variant_traits V, class... Fs>
+using variant_invoke_result_t = typename variant_invoke_result<V, Fs...>::type;
+
+/// Ensures that the Functor `F` can be invoked with every alternative in `V`,
+/// yielding the same type for all alternatives.
+/// These are 4 separate constraints, as that greatly improves the error message
+/// by catching errors early.
 template <class F, class V>
-concept variant_matcher_for
-  = has_variant_traits<V>
-    and requires(F f, V v) { variant_get<0>(v); }
-    /// The return type of invoking the functor with the first alternative
-    /// determines the final return type
-    and requires(F f, V v) { f(variant_get<0>(v)); }
-    /// Invoking the functor with all of the alternatives must yield the same
-    /// type
-    and variant_invocable_for_all<
-      F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>,
-      variant_traits<std::remove_cvref_t<V>>::count>;
+concept variant_matcher_for =
+  /// Must have variant traits for `V`
+  has_variant_traits<V>
+  /// Must be able to `get` the first alternative.
+  and requires(F f, V v) { variant_get<0>(v); }
+  /// The functor must be invocable with the 0th alternative, as that determines
+  /// the return type of the entire match.
+  and requires(F f, V v) { f(variant_get<0>(v)); }
+  /// The functor must be invocable for all alternatives and they must all yield
+  /// the same type.
+  and variant_invocable_for_all<F, V, variant_invoke_result_t<V, F>,
+                                variant_traits<std::remove_cvref_t<V>>::count>;
+
+template <class V, class... Fs>
+concept forms_variant_matcher_for
+  = (sizeof...(Fs) > 1
+     and variant_matcher_for<decltype(detail::overload{std::declval<Fs>()...}),
+                             V>);
+
+/// "Type erased" core of `match`, i.e. `f( get<I>(v) )`.
+template <class V, variant_matcher_for<V> F, size_t I>
+auto match_function(V&& v, F&& f) -> variant_invoke_result_t<V, F> {
+  return std::invoke(std::forward<F>(f), variant_get<I>(std::forward<V>(v)));
+}
 
 template <class V, variant_matcher_for<V> F>
-constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
+using function_pointer_type = variant_invoke_result_t<V, F> (*)(V&&, F&&);
+template <class V, variant_matcher_for<V> F>
+using table_type = std::array<function_pointer_type<V, F>,
+                              variant_traits<std::remove_cvref_t<V>>::count>;
+
+/// Creates the table used in `match_one`.
+template <class V, variant_matcher_for<V> F, size_t... Is>
+consteval auto make_table_for(std::index_sequence<Is...>) -> table_type<V, F> {
+  return std::array{
+    static_cast<function_pointer_type<V, F>>(&match_function<V, F, Is>)...,
+  };
+};
+
+template <has_variant_traits V, variant_matcher_for<V> F>
+constexpr auto match_one(V&& v, F&& f) -> variant_invoke_result_t<V, F> {
   using traits = variant_traits<std::remove_cvref_t<V>>;
-  using return_type = std::invoke_result_t<F, decltype(variant_get<0>(v))>;
-  auto index = traits::index(std::as_const(v));
-  // TODO: A switch/if-style dispatch might be more performant.
-  constexpr auto table = std::invoke(
-    []<size_t... Is>(std::index_sequence<Is...>) {
-      return std::array{
-        // Arguments are not necessarily &&-refs due to reference collapsing.
-        // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
-        +[](F&& f, V&& v) -> return_type {
-          // We repeat ourselves here because we don't want to handle the case
-          // where `void` is returned separately.
-          using local_return_type = decltype(std::invoke(
-            std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
-          static_assert(std::same_as<local_return_type, return_type>,
-                        "all cases must have the same return type");
-          return static_cast<return_type>(std::invoke(
-            std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
-        }...,
-      };
-    },
-    std::make_index_sequence<traits::count>());
+  const auto index = traits::index(std::as_const(v));
+  constexpr static auto table
+    = make_table_for<V, F>(std::make_index_sequence<traits::count>());
   static_assert(table.size() == traits::count);
   TENZIR_ASSERT(index < traits::count);
-  return table[index](std::forward<F>(f), std::forward<V>(v)); // NOLINT
+  return table[index](std::forward<V>(v), std::forward<F>(f)); // NOLINT
 }
 
 template <class... Xs, class F>
@@ -292,14 +340,16 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, F&& f) -> decltype(auto) {
 /// This overload takes by value, as it makes a copy internally.
 /// If you need your matcher to be a reference, you can pass it as a `std::ref`.
 template <has_variant_traits V, class... Fs>
-constexpr auto match(V&& v, Fs... fs) -> decltype(auto) {
+  requires detail::forms_variant_matcher_for<V, Fs...>
+constexpr auto match(V&& v, Fs... fs)
+  -> detail::variant_invoke_result_t<V, Fs...> {
   return detail::match_one(std::forward<V>(v),
                            detail::overload{std::move(fs)...});
 }
 
-/// Calls the given functions with the current variant alternative.
-template <has_variant_traits V, class F>
-constexpr auto match(V&& v, F&& f) -> decltype(auto) {
+/// Calls the given function with the current variant alternative.
+template <has_variant_traits V, detail::variant_matcher_for<V> F>
+constexpr auto match(V&& v, F&& f) -> detail::variant_invoke_result_t<V, F> {
   return detail::match_one(std::forward<V>(v), std::forward<F>(f));
 }
 
@@ -307,6 +357,7 @@ constexpr auto match(V&& v, F&& f) -> decltype(auto) {
 /// This overload takes by value, as it makes a copy internally.
 /// If you need your matcher to be a reference, you can pass it as a `std::ref`.
 template <has_variant_traits... Ts, class... Fs>
+  requires(sizeof...(Fs) > 1)
 constexpr auto match(std::tuple<Ts...> v, Fs... fs) -> decltype(auto) {
   return detail::match_tuple(std::move(v), detail::overload{std::move(fs)...});
 }
@@ -330,18 +381,17 @@ auto is(const V& v) -> bool {
 template <concepts::unqualified T, has_variant_traits V>
 auto as(V&& v) -> forward_like_t<V, T> {
   using bare = std::remove_cvref_t<V>;
-  constexpr auto alternative_index = detail::variant_index<bare, T>;
-  const auto current_index = variant_traits<bare>::index(v);
+  using traits = variant_traits<std::remove_cvref_t<V>>;
+  [[maybe_unused]] const auto current_index = traits::index(v);
+  [[maybe_unused]] constexpr static auto alternative_index
+    = detail::variant_index<bare, T>;
+  [[maybe_unused]] constexpr static auto alternative_names
+    = detail::make_name_table<V>(std::make_index_sequence<traits::count>());
   TENZIR_ASSERT(current_index == alternative_index,
                 "invalid variant access: [current: `{} ({})`] != [requested: "
                 "`{} ({})`]",
-                current_index,
-                match(std::forward<V>(v),
-                      []<typename H>(const H&) {
-                        return caf::detail::pretty_type_name(
-                          typeid(std::remove_cvref_t<H>));
-                      }),
-                alternative_index, caf::detail::pretty_type_name(typeid(T)));
+                current_index, alternative_names[current_index],
+                alternative_index, alternative_names[alternative_index]);
   return detail::variant_get<alternative_index>(std::forward<V>(v));
 };
 
@@ -350,6 +400,9 @@ template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   using bare = std::remove_cvref_t<V>;
   constexpr auto alternative_index = detail::variant_index<bare, T>;
+  // TODO: Otherwise, this should probably return `std::optional`.
+  static_assert(
+    std::is_reference_v<decltype(detail::variant_get<alternative_index>(v))>);
   const auto current_index = variant_traits<bare>::index(v);
   if (current_index != alternative_index) {
     return nullptr;
