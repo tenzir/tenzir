@@ -20,4 +20,4 @@ from {
     hostname: "example.com",
   },
 }
-ocsf::trim optional=false
+ocsf::trim drop_optional=false
