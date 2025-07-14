@@ -181,6 +181,8 @@ public:
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
     auto alternative = std::optional<ast::if_stmt::else_t>{};
+    // Accept newlines before `else`.
+    consume_trivia_with_newlines();
     if (auto else_kw = accept(tk::else_)) {
       alternative.emplace(else_kw.location, ast::pipeline{});
       if (peek(tk::if_)) {
