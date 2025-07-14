@@ -318,6 +318,13 @@ private:
       return false;
     }
     if (has_metadata) {
+      if (not x) {
+        // If we're here then we got a non-nullptr chunk with metadata, which is
+        // a logic error in the serializer.
+        f.set_error(caf::make_error(ec::logic_error,
+                                    "non-nullptr chunk cannot have metadata"));
+        return false;
+      }
       TENZIR_ASSERT(x, "got chunk without data but with metadata");
       if (not f.apply(x->metadata_)) {
         return false;
