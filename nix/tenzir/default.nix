@@ -197,13 +197,13 @@ let
             [
               cmake
               ninja
-              dpkg
               protobuf
               grpc
               poetry
               makeBinaryWrapper
             ]
             ++ lib.optionals stdenv.isLinux [
+              dpkg
               rpm
             ]
             ++ lib.optionals stdenv.hostPlatform.isDarwin [
