@@ -229,16 +229,14 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto length_expr = ast::expression{};
-    auto pad_char = std::optional<std::string>{};
+    auto pad_char_arg = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "string")
           .positional("length", length_expr, "int")
-          .positional("pad_char", pad_char)
+          .positional("pad_char", pad_char_arg)
           .parse(inv, ctx));
-    // Default to space if no pad character provided
-    if (not pad_char) {
-      pad_char = " ";
-    }
+    auto pad_char
+      = pad_char_arg.value_or(located<std::string>{" ", location::unknown});
     return function_use::make([subject_expr = std::move(subject_expr),
                                length_expr = std::move(length_expr),
                                pad_char = std::move(pad_char),
@@ -281,8 +279,8 @@ public:
               }
               // Validate pad character is single character.
               int64_t pad_char_length = 0;
-              ptr = pad_char->data();
-              end = ptr + pad_char->size();
+              ptr = pad_char.inner.data();
+              end = ptr + pad_char.inner.size();
               while (ptr < end) {
                 if ((*ptr & 0xC0) != 0x80) {
                   pad_char_length++;
@@ -293,8 +291,8 @@ public:
                 diagnostic::warning("`{}` expected single character for "
                                     "padding, "
                                     "but got `{}` with length {}",
-                                    name, *pad_char, pad_char_length)
-                  .primary(subject_expr)
+                                    name, pad_char.inner, pad_char_length)
+                  .primary(pad_char)
                   .emit(ctx);
                 check(b.AppendNull());
                 continue;
@@ -303,18 +301,19 @@ public:
               auto padding_needed
                 = static_cast<size_t>(target_length - str_length);
               std::string result;
-              result.reserve(str.size() + padding_needed * pad_char->size());
+              result.reserve(str.size()
+                             + padding_needed * pad_char.inner.size());
               if (pad_left) {
                 // Pad on the left
                 for (size_t j = 0; j < padding_needed; ++j) {
-                  result += *pad_char;
+                  result += pad_char.inner;
                 }
                 result += str;
               } else {
                 // Pad on the right
                 result = str;
                 for (size_t j = 0; j < padding_needed; ++j) {
-                  result += *pad_char;
+                  result += pad_char.inner;
                 }
               }
               check(b.Append(result));
