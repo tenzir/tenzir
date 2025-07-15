@@ -180,18 +180,16 @@ file(GLOB_RECURSE libtenzir_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/*.hpp")
 
-add_library(libtenzir ${libtenzir_sources})
-TenzirTargetEnableTooling(libtenzir)
-add_library(tenzir::libtenzir ALIAS libtenzir)
-
-add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
+add_library(libtenzir_builtins OBJECT ${libtenzir_builtins_sources})
 TenzirTargetEnableTooling(libtenzir_builtins)
-target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
+add_library(libtenzir ${libtenzir_sources} $<TARGET_OBJECTS:libtenzir_builtins>)
+TenzirTargetEnableTooling(libtenzir)
+add_library(tenzir::libtenzir ALIAS libtenzir)
+
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
-target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
 # Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
 # that libtenzir is considered to have an unstable API and ABI. The +7 is a
@@ -237,11 +235,13 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(yaml-cpp 0.6.2 REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
   target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
-  target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp::yaml-cpp)
+  target_include_directories(libtenzir_builtins PRIVATE $<TARGET_PROPERTY:yaml-cpp::yaml-cpp,INTERFACE_INCLUDE_DIRECTORIES>)
+  target_compile_definitions(libtenzir_builtins PRIVATE $<TARGET_PROPERTY:yaml-cpp::yaml-cpp,INTERFACE_COMPILE_DEFINITIONS>)
   dependency_summary("yaml-cpp" yaml-cpp::yaml-cpp "Dependencies")
 else ()
   target_link_libraries(libtenzir PRIVATE yaml-cpp)
-  target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp)
+  target_include_directories(libtenzir_builtins PRIVATE ${yaml-cpp_INCLUDE_DIRS})
+  target_compile_definitions(libtenzir_builtins PRIVATE ${yaml-cpp_DEFINITIONS})
   dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 endif ()
 
@@ -461,6 +461,20 @@ if (NOT APPLE)
   target_link_libraries(libtenzir PRIVATE atomic)
 endif ()
 
+# Configure libtenzir_builtins to inherit compile properties from libtenzir
+# Since libtenzir_builtins objects are included directly in libtenzir, it needs the same compile environment
+target_include_directories(libtenzir_builtins PRIVATE 
+  $<TARGET_PROPERTY:libtenzir,INTERFACE_INCLUDE_DIRECTORIES>
+  $<TARGET_PROPERTY:libtenzir_internal,INTERFACE_INCLUDE_DIRECTORIES>)
+target_compile_definitions(libtenzir_builtins PRIVATE 
+  TENZIR_ENABLE_BUILTINS
+  $<TARGET_PROPERTY:libtenzir,INTERFACE_COMPILE_DEFINITIONS>
+  $<TARGET_PROPERTY:libtenzir_internal,INTERFACE_COMPILE_DEFINITIONS>)
+target_compile_features(libtenzir_builtins PRIVATE 
+  $<TARGET_PROPERTY:libtenzir_internal,INTERFACE_COMPILE_FEATURES>)
+# Ensure FlatBuffers headers are generated before building libtenzir_builtins
+add_dependencies(libtenzir_builtins libtenzir-fbs)
+
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
@@ -533,11 +547,9 @@ if (TARGET tenzir-python-wheel)
   add_dependencies(libtenzir tenzir-python-wheel)
 endif ()
 
-# Install libtenzir in PREFIX/lib and headers in PREFIX/include/tenzir. We also
-# install the static libtenzir_builtins archive for development targets because
-# the plugin unit test binaries need to be able to link against it.
+# Install libtenzir in PREFIX/lib and headers in PREFIX/include/tenzir.
 install(
-  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
+  TARGETS libtenzir ${_tenzir_bundled_simdjson}
           ${_tenzir_bundled_pfs}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
