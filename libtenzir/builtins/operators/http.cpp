@@ -1554,8 +1554,8 @@ struct http_args {
         diagnostic::error(ty.error()).primary(*parse).emit(dh);
         return failure::promise();
       }
-      if (ty.value().is_not<table_slice>()) {
-        diagnostic::error("pipeline must return events")
+      if (not ty->is_any<void, table_slice>()) {
+        diagnostic::error("pipeline must return events or be a sink")
           .primary(*parse)
           .emit(dh);
         return failure::promise();
