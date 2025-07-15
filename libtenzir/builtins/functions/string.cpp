@@ -248,14 +248,14 @@ public:
         TENZIR_ASSERT(subject.length() == length.length());
         auto f = detail::overload{
           [&](const arrow::StringArray& subject_array,
-              const arrow::Int64Array& length_array) {
+              const concepts::one_of<arrow::Int64Array, arrow::UInt64Array> auto& length_array) {
             for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
               if (subject_array.IsNull(i) || length_array.IsNull(i)) {
                 check(b.AppendNull());
                 continue;
               }
               auto str = subject_array.GetView(i);
-              auto target_length = length_array.Value(i);
+              auto target_length = detail::narrow<int64_t>(length_array.Value(i));
               if (target_length <= 0) {
                 check(b.Append(""));
                 continue;
@@ -319,15 +319,17 @@ public:
               check(b.Append(result));
             }
           },
-          [&](const arrow::NullArray& array, const auto&) {
-            check(b.AppendNulls(array.length()));
-          },
-          [&](const auto&, const auto&) {
-            // Type mismatch
-            diagnostic::warning("`{}` expected (string, int), but got ({}, {})",
-                                name, subject.type.kind(), length.type.kind())
-              .primary(subject_expr)
-              .emit(ctx);
+          [&]<class T, class U>(const T&, const U&) {
+            if constexpr(not detail::is_any_v<T, arrow::StringArray, arrow::NullArray>) {
+              diagnostic::warning("`{}` expected `string`, but got `{}`", name, subject.type.kind())
+                .primary(subject_expr)
+                .emit(ctx);
+            }
+            if constexpr(not detail::is_any_v<U, arrow::Int64Array, arrow::UInt64Array, arrow::NullArray>) {
+              diagnostic::warning("`{}` expected `int`, but got `{}`", name, length.type.kind())
+                .primary(length_expr)
+                .emit(ctx);
+            }
             check(b.AppendNulls(subject.length()));
           },
         };

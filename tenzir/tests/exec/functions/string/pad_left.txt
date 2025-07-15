@@ -17,10 +17,3 @@ warning: `pad_left` expected single character for padding, but got `ab` with len
 19 |   multi_pad: "test".pad_left(10, "ab"),
    |                                  ~~~~ 
    |
-
-warning: `pad_left` expected (string, int), but got (string, null)
-  --> exec/functions/string/pad_left.tql:22:13
-   |
-22 |   null_len: "test".pad_left(null),
-   |             ~~~~~~ 
-   |

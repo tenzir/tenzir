@@ -17,10 +17,3 @@ warning: `pad_right` expected single character for padding, but got `xy` with le
 19 |   multi_pad: "test".pad_right(10, "xy"),
    |                                   ~~~~ 
    |
-
-warning: `pad_right` expected (string, int), but got (string, null)
-  --> exec/functions/string/pad_right.tql:22:13
-   |
-22 |   null_len: "test".pad_right(null),
-   |             ~~~~~~ 
-   |
