@@ -35,6 +35,7 @@ apt-get -y --no-install-recommends install \
     librabbitmq-dev \
     librdkafka-dev \
     libre2-dev \
+    libreproc-dev \
     libspdlog-dev \
     libssl-dev \
     libsqlite3-dev \

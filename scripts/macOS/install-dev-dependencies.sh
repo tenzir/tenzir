@@ -29,6 +29,7 @@ brew install --overwrite \
     poetry \
     protobuf \
     rabbitmq-c \
+    reproc \
     rsync \
     simdjson \
     socat \

@@ -510,12 +510,8 @@ private:
   code_or_path_t code_ = {};
 };
 
-class plugin final : public virtual operator_factory_plugin {
+class plugin final : public virtual operator_plugin2<python_operator> {
 public:
-  auto name() const -> std::string override {
-    return "python";
-  }
-
   struct config config = {};
 
   auto initialize(const record& plugin_config, const record&)

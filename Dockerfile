@@ -383,6 +383,7 @@ RUN --mount=target=/ccache,type=cache \apt-get update && \
       librabbitmq4 \
       librdkafka++1 \
       libre2-11 \
+      libreproc++14 \
       libspdlog1.15 \
       libunwind8 \
       libxxhash-dev \
@@ -595,7 +596,7 @@ USER tenzir:tenzir
 FROM tenzir-ce-untested AS tenzir-ce-integration
 
 COPY tenzir/tests/ ./tests
-RUN ./tests/run.py && echo "success" > /tmp/tenzir-integration-result
+RUN ./tests/run.py -j $(nproc) ./tests && echo "success" > /tmp/tenzir-integration-result
 
 # -- tenzir-ce -----------------------------------------------------------------
 

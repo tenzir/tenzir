@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
 import argparse
+import builtins
 import dataclasses
+import difflib
 import os
 import shutil
+import socket
 import subprocess
 import sys
-import threading
-import difflib
-import typing
-import time
-import socket
 import tempfile
+import threading
+import time
+import typing
 from abc import ABC, abstractmethod
-import builtins
-
 from contextlib import contextmanager
-
+from pathlib import Path
+from typing import override
 
 TENZIR_BINARY = shutil.which("tenzir")
 TENZIR_NODE_BINARY = shutil.which("tenzir-node")
@@ -53,7 +52,7 @@ def parse_test_config(test_file, coverage=False):
         "timeout": 20,  # Default timeout of 20 seconds
         "test": "exec",  # Default to exec runner
         "node": False,  # Default to not using a node
-        "skip": None,   # Optional skip reason
+        "skip": None,  # Optional skip reason
     }
 
     valid_keys = set(config.keys())
@@ -233,9 +232,22 @@ def print_diff(expected: bytes, actual: bytes, path: Path):
             sys.stdout.buffer.write(prefix + line)
 
 
+def check_group_is_empty(pgid: int):
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return
+    raise ValueError("leftover child processes!")
+
+
 def run_simple_test(
-    test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str, coverage: bool = False
-) -> typing.Union[bool, str]:
+    test: Path,
+    *,
+    update: bool,
+    args: typing.Sequence[str] = (),
+    output_ext: str,
+    coverage: bool = False,
+) -> bool:
     try:
         # Parse test configuration
         test_config = parse_test_config(test, coverage=coverage)
@@ -243,32 +255,14 @@ def run_simple_test(
         report_failure(test, f"└─▶ \033[31m{e}\033[0m")
         return False
 
-    if test_config.get("skip"):
-        print(f"{INFO} skipped {test}: {test_config['skip']}")
-        ref_path = test.with_suffix(f".{ext}")
-        if update:
-            # Always overwrite reference file with empty content
-            with ref_path.open("wb") as f:
-                f.write(b"")
-        else:
-            # If reference file exists, it must be empty
-            if ref_path.exists():
-                expected = ref_path.read_bytes()
-                if expected != b"":
-                    report_failure(
-                        test,
-                        f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m'
-                    )
-                    return False
-        return "skipped"
-
     try:
         env, config_args = get_test_env_and_config_args(test)
 
         # Set up environment for code coverage if enabled
         if coverage:
-            coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
-                                       os.path.join(os.getcwd(), "coverage"))
+            coverage_dir = os.environ.get(
+                "CMAKE_COVERAGE_OUTPUT_DIRECTORY", os.path.join(os.getcwd(), "coverage")
+            )
             source_dir = os.environ.get("COVERAGE_SOURCE_DIR", os.getcwd())
             os.makedirs(coverage_dir, exist_ok=True)
             test_name = test.stem
@@ -296,26 +290,29 @@ def run_simple_test(
         output = output.replace(str(ROOT).encode() + b"/", b"")
         good = completed.returncode == 0
     except subprocess.TimeoutExpired:
-        report_failure(test, f'└─▶ \033[31msubprocess hit {test_config["timeout"]}s timeout\033[0m')
+        report_failure(
+            test, f'└─▶ \033[31msubprocess hit {test_config["timeout"]}s timeout\033[0m'
+        )
         return False
     except subprocess.CalledProcessError as e:
-        report_failure(test, f'└─▶ \033[31msubprocess error: {e}\033[0m')
+        report_failure(test, f"└─▶ \033[31msubprocess error: {e}\033[0m")
         return False
     except Exception as e:
-        report_failure(test, f'└─▶ \033[31munexpected exception: {e}\033[0m')
+        report_failure(test, f"└─▶ \033[31munexpected exception: {e}\033[0m")
         return False
     if test_config["error"] == good:
         with stdout_lock:
             report_failure(
-                test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
+                test,
+                f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m",
             )
             for last, line in last_and(output.split(b"\n")):
                 prefix = "│ " if not last else "└─"
                 sys.stdout.buffer.write(prefix.encode() + line + b"\n")
         return False
     if not good:
-        ext = "txt"
-    ref_path = test.with_suffix(f".{ext}")
+        output_ext = "txt"
+    ref_path = test.with_suffix(f".{output_ext}")
     if update:
         with ref_path.open("wb") as f:
             f.write(output)
@@ -364,7 +361,7 @@ class Runner(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run(self, test: Path, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> typing.Union[bool, str]:
         raise NotImplementedError
 
 
@@ -388,44 +385,129 @@ class ExtRunner(Runner):
 
 
 class TqlRunner(ExtRunner):
+    output_ext: str = "txt"
+
     def __init__(self, *, prefix: str):
         super().__init__(prefix=prefix, ext="tql")
+
+
+def handle_skip(
+    reason: str, test: Path, update: bool, output_ext: str
+) -> typing.Union[bool, str]:
+    rel_path = test.relative_to(ROOT)
+    print(f"{INFO} skipped {rel_path}: {reason}")
+    ref_path = test.with_suffix(f".{output_ext}")
+    if update:
+        # Always overwrite reference file with empty content
+        with ref_path.open("wb") as f:
+            f.write(b"")
+    else:
+        # If reference file exists, it must be empty
+        if ref_path.exists():
+            expected = ref_path.read_bytes()
+            if expected != b"":
+                report_failure(
+                    test,
+                    f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m',
+                )
+                return False
+    return "skipped"
 
 
 class LexerRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="lexer")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=("--dump-tokens",), ext="txt", coverage=coverage)
-        return run_simple_test(test, update=update, args=("--dump-tokens",), ext="txt", coverage=coverage)
+            return run_with_node(
+                test,
+                update=update,
+                args=("--dump-tokens",),
+                output_ext=self.output_ext,
+                coverage=coverage,
+            )
+        return run_simple_test(
+            test,
+            update=update,
+            args=("--dump-tokens",),
+            output_ext=self.output_ext,
+            coverage=coverage,
+        )
 
 
 class AstRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ast")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool | str:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=("--dump-ast",), ext="txt", coverage=coverage)
-        return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt", coverage=coverage)
+            return run_with_node(
+                test,
+                update=update,
+                args=("--dump-ast",),
+                output_ext=self.output_ext,
+                coverage=coverage,
+            )
+        return run_simple_test(
+            test,
+            update=update,
+            args=("--dump-ast",),
+            output_ext=self.output_ext,
+            coverage=coverage,
+        )
 
 
 class OldIrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="oldir")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=("--dump-pipeline",), ext="txt", coverage=coverage
+                test,
+                update=update,
+                args=("--dump-pipeline",),
+                output_ext=self.output_ext,
+                coverage=coverage,
             )
         return run_simple_test(
-            test, update=update, args=("--dump-pipeline",), ext="txt", coverage=coverage
+            test,
+            update=update,
+            args=("--dump-pipeline",),
+            output_ext=self.output_ext,
+            coverage=coverage,
         )
 
 
@@ -433,11 +515,33 @@ class IrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ir")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=("--dump-ir",), ext="txt", coverage=coverage)
-        return run_simple_test(test, update=update, args=("--dump-ir",), ext="txt", coverage=coverage)
+            return run_with_node(
+                test,
+                update=update,
+                args=("--dump-ir",),
+                output_ext=self.output_ext,
+                coverage=coverage,
+            )
+        return run_simple_test(
+            test,
+            update=update,
+            args=("--dump-ir",),
+            output_ext=self.output_ext,
+            coverage=coverage,
+        )
 
 
 class DiffRunner(TqlRunner):
@@ -446,10 +550,22 @@ class DiffRunner(TqlRunner):
         self._a = a
         self._b = b
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
-            return run_with_node_diff(test, update=update, a=self._a, b=self._b, coverage=coverage)
+            return run_with_node_diff(
+                test, update=update, a=self._a, b=self._b, coverage=coverage
+            )
         try:
             pass
         except ValueError as e:
@@ -509,14 +625,32 @@ class FinalizeRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="finalize")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=("--dump-finalized",), ext="txt", coverage=coverage
+                test,
+                update=update,
+                args=("--dump-finalized",),
+                output_ext=self.output_ext,
+                coverage=coverage,
             )
         return run_simple_test(
-            test, update=update, args=("--dump-finalized",), ext="txt", coverage=coverage
+            test,
+            update=update,
+            args=("--dump-finalized",),
+            output_ext=self.output_ext,
+            coverage=coverage,
         )
 
 
@@ -524,11 +658,29 @@ class ExecRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="exec")
 
-    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+    @override
+    def run(
+        self, test: Path, update: bool, coverage: bool = False
+    ) -> typing.Union[bool, str]:
         test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("skip"):
+            return handle_skip(
+                str(test_config["skip"]),
+                test,
+                update=update,
+                output_ext=self.output_ext,
+            )
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=(), ext="txt", coverage=coverage)
-        return run_simple_test(test, update=update, ext="txt", coverage=coverage)
+            return run_with_node(
+                test,
+                update=update,
+                args=(),
+                output_ext=self.output_ext,
+                coverage=coverage,
+            )
+        return run_simple_test(
+            test, update=update, output_ext=self.output_ext, coverage=coverage
+        )
 
 
 @contextmanager
@@ -549,8 +701,10 @@ def tenzir_node_endpoint(test: Path, coverage: bool = False):
 
             # Set up environment for code coverage if enabled
             if coverage:
-                coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
-                                             os.path.join(os.getcwd(), "coverage"))
+                coverage_dir = os.environ.get(
+                    "CMAKE_COVERAGE_OUTPUT_DIRECTORY",
+                    os.path.join(os.getcwd(), "coverage"),
+                )
                 source_dir = os.environ.get("COVERAGE_SOURCE_DIR", os.getcwd())
                 os.makedirs(coverage_dir, exist_ok=True)
                 test_name = test.stem + "-node"
@@ -575,6 +729,7 @@ def tenzir_node_endpoint(test: Path, coverage: bool = False):
                 text=True,
                 bufsize=1,
                 env=env,
+                start_new_session=True,
             )
 
             # Wait for the node to print its endpoint and parse it
@@ -598,23 +753,30 @@ def tenzir_node_endpoint(test: Path, coverage: bool = False):
         finally:
             if node_process:
                 try:
+                    pgid = os.getpgid(node_process.pid)
                     node_process.terminate()
-                    node_process.wait(timeout=5)
+                    _ = node_process.wait(timeout=5)
+                    check_group_is_empty(pgid)
                 except subprocess.TimeoutExpired as e:
                     report_failure(
                         test,
                         f"└─▶ \033[31mError terminating node process within 5s: {e}",
                     )
                     node_process.kill()
-                    node_process.wait()
+                    _ = node_process.wait()
                 except Exception as e:
                     report_failure(
-                        test, f"└─▶ \033[31mError terminating node process: {e}"
+                        test,
+                        f"└─▶ \033[31mError terminating node process: {type(e)}:{e}",
                     )
 
 
 def run_with_node(
-    test: Path, update: bool, args: typing.Sequence[str], ext: str, coverage: bool = False
+    test: Path,
+    update: bool,
+    args: typing.Sequence[str],
+    output_ext: str,
+    coverage: bool = False,
 ) -> bool:
     # Parse test configuration with coverage flag to adjust timeout
     test_config = parse_test_config(test, coverage=coverage)
@@ -624,22 +786,31 @@ def run_with_node(
             return False
         try:
             cmd_args = [f"--endpoint={endpoint}", *[x for x in args if x is not None]]
-            result = run_simple_test(test, update=update, args=cmd_args, ext=ext, coverage=coverage)
+            result = run_simple_test(
+                test,
+                update=update,
+                args=cmd_args,
+                output_ext=output_ext,
+                coverage=coverage,
+            )
             return result
         except Exception as e:
             report_failure(test, f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
             return False
 
 
-def run_with_node_diff(test: Path, *, update: bool, a: str, b: str, coverage: bool = False) -> bool:
+def run_with_node_diff(
+    test: Path, *, update: bool, a: str, b: str, coverage: bool = False
+) -> bool:
     # Parse test configuration with coverage flag to adjust timeout
     test_config = parse_test_config(test, coverage=coverage)
     env, _ = get_test_env_and_config_args(test)
 
     # Set up environment for code coverage if enabled
     if coverage:
-        coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
-                                     os.path.join(os.getcwd(), "coverage"))
+        coverage_dir = os.environ.get(
+            "CMAKE_COVERAGE_OUTPUT_DIRECTORY", os.path.join(os.getcwd(), "coverage")
+        )
         source_dir = os.environ.get("COVERAGE_SOURCE_DIR", os.getcwd())
         os.makedirs(coverage_dir, exist_ok=True)
         test_name = test.stem
@@ -744,6 +915,7 @@ class CustomFixture(ExtRunner):
     def __init__(self):
         super().__init__(prefix="custom", ext="sh")
 
+    @override
     def run(self, test: Path, update: bool) -> bool:
         env = os.environ.copy()
         env["PATH"] = (ROOT / "_custom").as_posix() + ":" + env["PATH"]
@@ -843,9 +1015,16 @@ def main() -> None:
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("--purge", action="store_true")
-    parser.add_argument("--coverage", action="store_true", help="Enable code coverage collection (increases timeouts by 5x)")
-    parser.add_argument("--coverage-source-dir", type=str,
-                       help="Source directory for code coverage path mapping (defaults to current directory)")
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Enable code coverage collection (increases timeouts by 5x)",
+    )
+    parser.add_argument(
+        "--coverage-source-dir",
+        type=str,
+        help="Source directory for code coverage path mapping (defaults to current directory)",
+    )
     default_jobs = 4 * (os.cpu_count() or 16)
     parser.add_argument("-j", "--jobs", type=int, default=default_jobs, metavar="N")
     args = parser.parse_args()
@@ -912,7 +1091,7 @@ def main() -> None:
     # Sort by test path (item[1])
     queue.sort(key=lambda tup: str(tup[1]), reverse=True)
     os.environ["TENZIR_EXEC__DUMP_DIAGNOSTICS"] = "true"
-    if not TENZIR_BINARY :
+    if not TENZIR_BINARY:
         sys.exit(f"error: could not find TENZIR_BINARY executable `{TENZIR_BINARY}`")
     try:
         version = get_version()
@@ -922,16 +1101,22 @@ def main() -> None:
     print(f"{INFO} running {len(queue)} tests with v{version}")
 
     # Pass coverage flag to workers
-    workers = [Worker(queue, update=args.update, coverage=args.coverage) for _ in range(args.jobs)]
+    workers = [
+        Worker(queue, update=args.update, coverage=args.coverage)
+        for _ in range(args.jobs)
+    ]
     summary = Summary()
     for worker in workers:
         worker.start()
     for worker in workers:
         summary += worker.join()
-    print(f"{INFO} {summary.total - summary.failed - summary.skipped}/{summary.total} tests passed ({summary.skipped} skipped)")
+    print(
+        f"{INFO} {summary.total - summary.failed - summary.skipped}/{summary.total} tests passed ({summary.skipped} skipped)"
+    )
     if args.coverage:
-        coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
-                                     os.path.join(os.getcwd(), "coverage"))
+        coverage_dir = os.environ.get(
+            "CMAKE_COVERAGE_OUTPUT_DIRECTORY", os.path.join(os.getcwd(), "coverage")
+        )
         source_dir = args.coverage_source_dir or os.getcwd()
         print(f"{INFO} Code coverage data collected in {coverage_dir}")
         print(f"{INFO} Source directory for coverage mapping: {source_dir}")

@@ -172,10 +172,13 @@ void log_connection_failed(connect_request request, caf::error err,
 
 connector_actor::behavior_type make_no_retry_behavior(
   connector_actor::stateful_pointer<connector_state> self,
-  std::optional<std::chrono::steady_clock::time_point> deadline) {
+  std::optional<std::chrono::steady_clock::time_point> deadline,
+  bool internal_connection) {
+  auto log_level
+    = internal_connection ? spdlog::level::trace : spdlog::level::info;
   return {
-    [self, deadline](atom::connect,
-                     connect_request request) -> caf::result<node_actor> {
+    [self, deadline, log_level](
+      atom::connect, connect_request request) -> caf::result<node_actor> {
       const auto remaining_time = calculate_remaining_time(deadline);
       if (not remaining_time) {
         return caf::make_error(ec::timeout,
@@ -187,10 +190,12 @@ connector_actor::behavior_type make_no_retry_behavior(
       self->mail(caf::connect_atom_v, request.host, request.port)
         .request(self->state().middleman, *remaining_time)
         .then(
-          [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
-                        const std::set<std::string>&) mutable {
-            TENZIR_INFO("client connected to node at {}:{}", request.host,
-                        request.port);
+          [rp, request, log_level](const caf::node_id&,
+                                   caf::strong_actor_ptr& node,
+                                   const std::set<std::string>&) mutable {
+            detail::logger()->log(log_level,
+                                  "client connected to node at {}:{}",
+                                  request.host, request.port);
             rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
           },
           [rp, request](caf::error& err) mutable {
@@ -209,15 +214,18 @@ connector_actor::behavior_type make_no_retry_behavior(
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline) {
+          std::optional<std::chrono::steady_clock::time_point> deadline,
+          bool internal_connection) {
   self->state().middleman = self->system().has_openssl_manager()
                               ? self->system().openssl_manager().actor_handle()
                               : self->system().middleman().actor_handle();
   if (not retry_delay) {
-    return make_no_retry_behavior(std::move(self), deadline);
+    return make_no_retry_behavior(self, deadline, internal_connection);
   }
+  auto log_level
+    = internal_connection ? spdlog::level::trace : spdlog::level::info;
   return {
-    [self, delay = *retry_delay, deadline](
+    [self, delay = *retry_delay, deadline, log_level](
       atom::connect, connect_request request) -> caf::result<node_actor> {
       const auto remaining_time = calculate_remaining_time(deadline);
       if (not remaining_time) {
@@ -226,8 +234,9 @@ connector(connector_actor::stateful_pointer<connector_state> self,
                                            "within a given deadline",
                                            *self));
       }
-      TENZIR_INFO("client connects to {}:{}{}", request.host, request.port,
-                  formatted_resolved_host_suffix(request.host));
+      detail::logger()->log(log_level, "client connects to {}:{}{}",
+                            request.host, request.port,
+                            formatted_resolved_host_suffix(request.host));
       auto rp = self->make_response_promise<node_actor>();
       auto handle_error = [self, rp, request, delay,
                            deadline](const caf::error& err) mutable {
@@ -242,19 +251,20 @@ connector(connector_actor::stateful_pointer<connector_state> self,
           rp.deliver(caf::make_error(
             ec::system_error,
             fmt::format("failed to connect to node at {}:{}: {}", request.host,
-                        request.port, std::move(err))));
+                        request.port, err)));
         }
       };
 
       self->mail(caf::connect_atom_v, request.host, request.port)
         .request(self->state().middleman, *remaining_time)
         .then(
-          [rp, request, handle_error](const caf::node_id&,
-                                      caf::strong_actor_ptr& node,
-                                      const std::set<std::string>&) mutable {
+          [rp, request, handle_error,
+           log_level](const caf::node_id&, caf::strong_actor_ptr& node,
+                      const std::set<std::string>&) mutable {
             if (node) {
-              TENZIR_INFO("client connected to node at {}:{}", request.host,
-                          request.port);
+              detail::logger()->log(log_level,
+                                    "client connected to node at {}:{}",
+                                    request.host, request.port);
               rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
               return;
             }

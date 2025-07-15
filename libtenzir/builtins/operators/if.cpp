@@ -122,6 +122,13 @@ public:
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
+            if (not err or err == caf::sec::request_receiver_down
+                or err == caf::exit_reason::remote_link_unreachable) {
+              done = true;
+              result = table_slice{};
+              ctrl.set_waiting(false);
+              return;
+            }
             diagnostic::error(std::move(err))
               .note("failed to pull events into branch")
               .primary(source_)
@@ -129,7 +136,9 @@ public:
           });
       ctrl.set_waiting(true);
       co_yield {};
-      co_yield std::move(result);
+      if (not done) {
+        co_yield std::move(result);
+      }
     }
   }
 
@@ -184,6 +193,11 @@ public:
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
+            if (not err or err == caf::sec::request_receiver_down
+                or err == caf::exit_reason::remote_link_unreachable) {
+              ctrl.set_waiting(false);
+              return;
+            }
             diagnostic::error(std::move(err))
               .note("failed to push events from branch")
               .primary(source_)
