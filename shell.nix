@@ -19,7 +19,6 @@ pkgs.mkShell (
         pkgs.ccache
         pkgs.clang-tools
         pkgs.cmake-format
-        pkgs.gdb
         pkgs.nixfmt-rfc-style
         pkgs.speeve
         pkgs.shfmt
@@ -44,9 +43,10 @@ pkgs.mkShell (
         # Bintools come with a wrapped lld for faster linking.
         pkgs.llvmPackages.bintools
       ]
-      # Temporarily only on Linux.
       ++ lib.optionals pkgs.stdenv.isLinux [
+        # Temporarily only on Linux.
         pkgs.pandoc
+        pkgs.gdb
       ];
     # To build libcaf_openssl with bundled CAF.
     buildInputs = [

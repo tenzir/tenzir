@@ -18,7 +18,7 @@ stdenv.mkDerivation {
   buildInputs = [ tenzir ];
 
   meta = with lib; {
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
     maintainers = with maintainers; [ tobim ];
   };
 }

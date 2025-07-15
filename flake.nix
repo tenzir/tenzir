@@ -9,12 +9,11 @@
   };
 
   inputs.isReleaseBuild.url = "github:boolean-option/false";
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/a8af4a1033a3ab6d14d37731512ecd8bbf39c2b9";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/80efaa12b886558fd0a674f5e11b550311045f90";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.nix2container.url = "github:nlewo/nix2container";
-  inputs.nix2container.inputs.flake-utils.follows = "flake-utils";
   inputs.nix2container.inputs.nixpkgs.follows = "nixpkgs";
   inputs.sbomnix.url = "github:tiiuae/sbomnix";
   inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";

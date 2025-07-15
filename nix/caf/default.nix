@@ -49,6 +49,7 @@ in
       ]
       ++ lib.optionals stdenv.hostPlatform.isLinux [
         "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+        "-DCAF_CXX_VERSION=23"
       ];
     hardeningDisable = [
       "fortify"

@@ -26,7 +26,7 @@ let
       flatbuffers,
       fluent-bit,
       protobuf,
-      google-cloud-cpp,
+      google-cloud-cpp-tenzir,
       grpc,
       spdlog,
       libyamlcpp,
@@ -43,6 +43,8 @@ let
       libmaxminddb,
       re2,
       dpkg,
+      lz4,
+      zstd,
       rpm,
       restinio,
       llhttp,
@@ -195,13 +197,13 @@ let
             [
               cmake
               ninja
-              dpkg
               protobuf
               grpc
               poetry
               makeBinaryWrapper
             ]
             ++ lib.optionals stdenv.isLinux [
+              dpkg
               rpm
             ]
             ++ lib.optionals stdenv.hostPlatform.isDarwin [
@@ -243,7 +245,7 @@ let
               caf
               curl
               flatbuffers
-              google-cloud-cpp
+              google-cloud-cpp-tenzir
               grpc
               libmaxminddb
               libyamlcpp
@@ -263,6 +265,9 @@ let
 
           env = {
             POETRY_VIRTUALENVS_IN_PROJECT = 1;
+            # Needed to statisfy the ORCs custom cmake modules.
+            ZSTD_ROOT = lib.getDev zstd;
+            LZ4_ROOT = lz4;
           };
           cmakeFlags =
             [
