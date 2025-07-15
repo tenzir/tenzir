@@ -319,6 +319,9 @@ public:
               check(b.Append(result));
             }
           },
+          [&](const arrow::NullArray& array, const auto&) {
+            check(b.AppendNulls(array.length()));
+          },
           [&](const auto&, const auto&) {
             // Type mismatch
             diagnostic::warning("`{}` expected (string, int), but got ({}, {})",

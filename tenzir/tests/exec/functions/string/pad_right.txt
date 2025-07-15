@@ -18,13 +18,6 @@ warning: `pad_right` expected single character for padding, but got `xy` with le
    |                                   ~~~~ 
    |
 
-warning: `pad_right` expected (string, int), but got (null, int64)
-  --> exec/functions/string/pad_right.tql:21:13
-   |
-21 |   null_str: null.pad_right(5),
-   |             ~~~~ 
-   |
-
 warning: `pad_right` expected (string, int), but got (string, null)
   --> exec/functions/string/pad_right.tql:22:13
    |
