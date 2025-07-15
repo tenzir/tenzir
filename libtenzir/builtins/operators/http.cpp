@@ -1415,13 +1415,16 @@ struct from_http final : public virtual operator_factory_plugin {
         subpipeline_is_sink = true;
       }
     }
-    // Create the appropriate operator
     operator_ptr op;
     if (args.server) {
       op = std::make_unique<from_http_server_operator>(std::move(args));
     } else {
       op = std::make_unique<from_http_client_operator>(std::move(args));
     }
+    // If the subpipeline is a sink, the `from_http` parent operator would not
+    // never produce any events. It would be effectively a sink. To remain
+    // consistent with other parts in the codebase, we explicitly append a
+    // discard operator for such scenarios.
     if (subpipeline_is_sink) {
       auto pipe = std::make_unique<pipeline>();
       pipe->append(std::move(op));
