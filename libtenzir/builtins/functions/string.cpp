@@ -237,107 +237,114 @@ public:
           .parse(inv, ctx));
     auto pad_char
       = pad_char_arg.value_or(located<std::string>{" ", location::unknown});
-    return function_use::make([subject_expr = std::move(subject_expr),
-                               length_expr = std::move(length_expr),
-                               pad_char = std::move(pad_char),
-                               pad_left = pad_left_, name = name_](
-                                evaluator eval, session ctx) -> multi_series {
-      auto b = arrow::StringBuilder{};
-      for (auto [subject, length] :
-           split_multi_series(eval(subject_expr), eval(length_expr))) {
-        TENZIR_ASSERT(subject.length() == length.length());
-        auto f = detail::overload{
-          [&](const arrow::StringArray& subject_array,
-              const concepts::one_of<arrow::Int64Array, arrow::UInt64Array> auto& length_array) {
-            for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
-              if (subject_array.IsNull(i) || length_array.IsNull(i)) {
-                check(b.AppendNull());
-                continue;
-              }
-              auto str = subject_array.GetView(i);
-              auto target_length = detail::narrow<int64_t>(length_array.Value(i));
-              if (target_length <= 0) {
-                check(b.Append(""));
-                continue;
-              }
-              // For simple string length, we can use the string view's size for
-              // ASCII or count UTF-8 characters manually.
-              auto str_length = int64_t{0};
-              auto ptr = str.data();
-              auto end = ptr + str.size();
-              while (ptr < end) {
-                // Skip UTF-8 continuation bytes (10xxxxxx)
-                if ((*ptr & 0xC0) != 0x80) {
-                  str_length++;
+    return function_use::make(
+      [subject_expr = std::move(subject_expr),
+       length_expr = std::move(length_expr), pad_char = std::move(pad_char),
+       pad_left = pad_left_,
+       name = name_](evaluator eval, session ctx) -> multi_series {
+        auto b = arrow::StringBuilder{};
+        for (auto [subject, length] :
+             split_multi_series(eval(subject_expr), eval(length_expr))) {
+          TENZIR_ASSERT(subject.length() == length.length());
+          auto f = detail::overload{
+            [&](const arrow::StringArray& subject_array,
+                const concepts::one_of<arrow::Int64Array,
+                                       arrow::UInt64Array> auto& length_array) {
+              for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
+                if (subject_array.IsNull(i) || length_array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
                 }
-                ptr++;
-              }
-              if (str_length >= target_length) {
-                // String is already long enough.
-                check(b.Append(str));
-                continue;
-              }
-              // Validate pad character is single character.
-              int64_t pad_char_length = 0;
-              ptr = pad_char.inner.data();
-              end = ptr + pad_char.inner.size();
-              while (ptr < end) {
-                if ((*ptr & 0xC0) != 0x80) {
-                  pad_char_length++;
+                auto str = subject_array.GetView(i);
+                auto target_length
+                  = detail::narrow<int64_t>(length_array.Value(i));
+                if (target_length <= 0) {
+                  check(b.Append(""));
+                  continue;
                 }
-                ptr++;
+                // For simple string length, we can use the string view's size
+                // for ASCII or count UTF-8 characters manually.
+                auto str_length = int64_t{0};
+                auto ptr = str.data();
+                auto end = ptr + str.size();
+                while (ptr < end) {
+                  // Skip UTF-8 continuation bytes (10xxxxxx)
+                  if ((*ptr & 0xC0) != 0x80) {
+                    str_length++;
+                  }
+                  ptr++;
+                }
+                if (str_length >= target_length) {
+                  // String is already long enough.
+                  check(b.Append(str));
+                  continue;
+                }
+                // Validate pad character is single character.
+                int64_t pad_char_length = 0;
+                ptr = pad_char.inner.data();
+                end = ptr + pad_char.inner.size();
+                while (ptr < end) {
+                  if ((*ptr & 0xC0) != 0x80) {
+                    pad_char_length++;
+                  }
+                  ptr++;
+                }
+                if (pad_char_length != 1) {
+                  diagnostic::warning("`{}` expected single character for "
+                                      "padding, "
+                                      "but got `{}` with length {}",
+                                      name, pad_char.inner, pad_char_length)
+                    .primary(pad_char)
+                    .emit(ctx);
+                  check(b.AppendNull());
+                  continue;
+                }
+                // Calculate padding needed.
+                auto padding_needed
+                  = static_cast<size_t>(target_length - str_length);
+                std::string result;
+                result.reserve(str.size()
+                               + padding_needed * pad_char.inner.size());
+                if (pad_left) {
+                  // Pad on the left
+                  for (size_t j = 0; j < padding_needed; ++j) {
+                    result += pad_char.inner;
+                  }
+                  result += str;
+                } else {
+                  // Pad on the right
+                  result = str;
+                  for (size_t j = 0; j < padding_needed; ++j) {
+                    result += pad_char.inner;
+                  }
+                }
+                check(b.Append(result));
               }
-              if (pad_char_length != 1) {
-                diagnostic::warning("`{}` expected single character for "
-                                    "padding, "
-                                    "but got `{}` with length {}",
-                                    name, pad_char.inner, pad_char_length)
-                  .primary(pad_char)
+            },
+            [&]<class T, class U>(const T&, const U&) {
+              if constexpr (not detail::is_any_v<T, arrow::StringArray,
+                                                 arrow::NullArray>) {
+                diagnostic::warning("`{}` expected `string`, but got `{}`",
+                                    name, subject.type.kind())
+                  .primary(subject_expr)
                   .emit(ctx);
-                check(b.AppendNull());
-                continue;
               }
-              // Calculate padding needed.
-              auto padding_needed
-                = static_cast<size_t>(target_length - str_length);
-              std::string result;
-              result.reserve(str.size()
-                             + padding_needed * pad_char.inner.size());
-              if (pad_left) {
-                // Pad on the left
-                for (size_t j = 0; j < padding_needed; ++j) {
-                  result += pad_char.inner;
-                }
-                result += str;
-              } else {
-                // Pad on the right
-                result = str;
-                for (size_t j = 0; j < padding_needed; ++j) {
-                  result += pad_char.inner;
-                }
+              if constexpr (not detail::is_any_v<U, arrow::Int64Array,
+                                                 arrow::UInt64Array,
+                                                 arrow::NullArray>) {
+                diagnostic::warning("`{}` expected `int`, but got `{}`", name,
+                                    length.type.kind())
+                  .primary(length_expr)
+                  .emit(ctx);
               }
-              check(b.Append(result));
-            }
-          },
-          [&]<class T, class U>(const T&, const U&) {
-            if constexpr(not detail::is_any_v<T, arrow::StringArray, arrow::NullArray>) {
-              diagnostic::warning("`{}` expected `string`, but got `{}`", name, subject.type.kind())
-                .primary(subject_expr)
-                .emit(ctx);
-            }
-            if constexpr(not detail::is_any_v<U, arrow::Int64Array, arrow::UInt64Array, arrow::NullArray>) {
-              diagnostic::warning("`{}` expected `int`, but got `{}`", name, length.type.kind())
-                .primary(length_expr)
-                .emit(ctx);
-            }
-            check(b.AppendNulls(subject.length()));
-          },
-        };
-        match(std::tie(*subject.array, *length.array), f);
-      }
+              check(b.AppendNulls(subject.length()));
+            },
+          };
+          match(std::tie(*subject.array, *length.array), f);
+        }
 
-      return series{string_type{}, finish(b)};
-    });
+        return series{string_type{}, finish(b)};
+      });
   }
 
 private:
