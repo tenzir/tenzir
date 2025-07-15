@@ -500,7 +500,6 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
     }
   });
   pipe.inner.prepend(std::make_unique<internal_source>(std::move(ptr)));
-
   // Only append internal_sink if the pipeline doesn't already end with a sink
   auto output_type = pipe.inner.infer_type(tag_v<chunk_ptr>);
   if (output_type and output_type->is_not<void>()) {
