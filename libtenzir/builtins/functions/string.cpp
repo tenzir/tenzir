@@ -237,6 +237,26 @@ public:
           .parse(inv, ctx));
     auto pad_char
       = pad_char_arg.value_or(located<std::string>{" ", location::unknown});
+    // Validate pad character is single character
+    if (pad_char_arg.has_value()) {
+      int64_t pad_char_length = 0;
+      auto ptr = pad_char.inner.data();
+      auto end = ptr + pad_char.inner.size();
+      while (ptr < end) {
+        if ((*ptr & 0xC0) != 0x80) {
+          pad_char_length++;
+        }
+        ptr++;
+      }
+      if (pad_char_length != 1) {
+        diagnostic::error("`{}` expected single character for padding, "
+                          "but got `{}` with length {}",
+                          name(), pad_char.inner, pad_char_length)
+          .primary(pad_char)
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
     return function_use::make(
       [subject_expr = std::move(subject_expr),
        length_expr = std::move(length_expr), pad_char = std::move(pad_char),
@@ -277,26 +297,6 @@ public:
                 if (str_length >= target_length) {
                   // String is already long enough.
                   check(b.Append(str));
-                  continue;
-                }
-                // Validate pad character is single character.
-                int64_t pad_char_length = 0;
-                ptr = pad_char.inner.data();
-                end = ptr + pad_char.inner.size();
-                while (ptr < end) {
-                  if ((*ptr & 0xC0) != 0x80) {
-                    pad_char_length++;
-                  }
-                  ptr++;
-                }
-                if (pad_char_length != 1) {
-                  diagnostic::warning("`{}` expected single character for "
-                                      "padding, "
-                                      "but got `{}` with length {}",
-                                      name, pad_char.inner, pad_char_length)
-                    .primary(pad_char)
-                    .emit(ctx);
-                  check(b.AppendNull());
                   continue;
                 }
                 // Calculate padding needed.

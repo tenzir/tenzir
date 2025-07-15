@@ -1,0 +1,6 @@
+error: `pad_left` expected single character for padding, but got `ab` with length 2
+ --> exec/functions/string/pad_left_multi_char_error.tql:4:34
+  |
+4 |   multi_pad: "test".pad_left(10, "ab")
+  |                                  ^^^^ 
+  |

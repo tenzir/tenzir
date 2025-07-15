@@ -15,8 +15,6 @@ from {
   zero_len: "hello".pad_left(0),
   // Negative length (should return empty)
   neg_len: "hello".pad_left(-5),
-  // Multi-character pad (should fail)
-  multi_pad: "test".pad_left(10, "ab"),
   // Null handling
   null_str: null.pad_left(5),
   null_len: "test".pad_left(null),
