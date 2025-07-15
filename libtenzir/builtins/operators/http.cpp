@@ -262,6 +262,12 @@ struct http_state {
     });
   }
 
+  ~http_state() {
+    if (slice_rp_.pending()) {
+      slice_rp_.deliver(table_slice{});
+    }
+  }
+
   auto make_behavior() -> http_actor::behavior_type {
     return {
       [&](atom::internal, atom::push, table_slice output) {
@@ -1233,8 +1239,9 @@ public:
                   }
                   slices.push_back(std::move(slice));
                 },
-                [&](const caf::error&) {
-                  diagnostic::error("failed to parse response")
+                [&](const caf::error& err) {
+                  diagnostic::error(err)
+                    .note("failed to parse response")
                     .primary(args_.op)
                     .emit(ctrl.diagnostics());
                 });
@@ -1733,10 +1740,11 @@ public:
                     }
                     slices.push_back(std::move(slice));
                   },
-                  [&](const caf::error&) {
+                  [&](const caf::error& err) {
                     --awaiting;
                     ctrl.set_waiting(false);
-                    diagnostic::warning("failed to parse response")
+                    diagnostic::warning(err)
+                      .note("failed to parse response")
                       .primary(args_.op)
                       .emit(ctrl.diagnostics());
                   });
