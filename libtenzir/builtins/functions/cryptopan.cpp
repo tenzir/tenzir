@@ -20,7 +20,7 @@ namespace tenzir::plugins::cryptopan {
 
 namespace {
 
-class encrypt : public virtual function_plugin {
+class encrypt_cryptopan : public virtual function_plugin {
   auto name() const -> std::string override {
     return "encrypt_cryptopan";
   }
@@ -51,25 +51,25 @@ class encrypt : public virtual function_plugin {
           byte.append("0");
         }
         TENZIR_ASSERT(i < seed_bytes.size());
-        seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+        seed_bytes[i] = std::strtoul(byte.c_str(), nullptr, 16);
       }
     }
     return function_use::make([expr = std::move(expr),
-                               seed = std::move(seed_bytes)](evaluator eval,
-                                                             session ctx) {
+                               seed = seed_bytes](evaluator eval, session ctx) {
       return map_series(eval(expr), [&](series s) {
         if (is<null_type>(s.type)) {
           return series::null(ip_type{}, s.length());
         }
-        auto ptr = std::dynamic_pointer_cast<ip_type::array_type>(s.array);
-        if (not ptr) {
+        auto typed_series = s.as<ip_type>();
+        if (not typed_series) {
           diagnostic::warning("expected type `ip`, got `{}`", s.type.kind())
             .primary(expr)
             .emit(ctx);
           return series::null(ip_type{}, s.length());
         }
         auto b = ip_type::make_arrow_builder(arrow::default_memory_pool());
-        for (const auto& value : values(ip_type{}, *ptr)) {
+        for (const auto& value : typed_series->values()) {
           if (not value) {
             check(b->AppendNull());
             continue;
@@ -86,4 +86,4 @@ class encrypt : public virtual function_plugin {
 } // namespace
 } // namespace tenzir::plugins::cryptopan
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::cryptopan::encrypt)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::cryptopan::encrypt_cryptopan)
