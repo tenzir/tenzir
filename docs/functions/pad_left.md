@@ -7,7 +7,7 @@ example: '"hello".pad_left(10)'
 Pads a string on the left to a specified length.
 
 ```tql
-pad_left(x:string, length:int, [pad_char:string=" "]) -> string
+pad_left(x:string, length:int, [pad_char:string]) -> string
 ```
 
 ## Description
@@ -25,9 +25,11 @@ The string to pad.
 
 The target length of the resulting string.
 
-### `pad_char: string = " "`
+### `pad_char: string`
 
 The character to use for padding. Must be a single character. Defaults to a space.
+
+Defaults to `" "`.
 
 ## Examples
 
