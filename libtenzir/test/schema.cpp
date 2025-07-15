@@ -13,7 +13,6 @@
 #include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/tenzir/error.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/serialize.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/test/test.hpp"
@@ -93,31 +92,6 @@ TEST(merging) {
   CHECK(merged->find("a"));
   CHECK(merged->find("b"));
   CHECK(merged->find("inner"));
-}
-
-TEST(serialization) {
-  module mod;
-  auto t = type{
-    "foo",
-    record_type{
-      {"s1", string_type{}},
-      {"d1", double_type{}},
-      {"c", type{uint64_type{}, {{"skip"}}}},
-      {"i", int64_type{}},
-      {"s2", string_type{}},
-      {"d2", double_type{}},
-    },
-  };
-  mod.add(t);
-  // Save & load
-  caf::byte_buffer buf;
-  CHECK(detail::serialize(buf, mod));
-  module mod2;
-  CHECK_EQUAL(detail::legacy_deserialize(buf, mod2), true);
-  // Check integrity
-  auto u = mod2.find("foo");
-  REQUIRE(u);
-  CHECK(t == *u);
 }
 
 TEST(parseable - simple sequential) {
@@ -413,14 +387,14 @@ TEST(parseable - with context) {
     )__"sv;
     auto p = symbol_map_parser{};
     symbol_map sm;
-    CHECK(!p(str, sm));
+    CHECK(not p(str, sm));
   }
   {
     MESSAGE("Duplicate definition error - re-entry");
     auto p = symbol_map_parser{};
     symbol_map sm;
     CHECK(p("type foo = double", sm));
-    CHECK(!p("type foo = int64", sm));
+    CHECK(not p("type foo = int64", sm));
   }
   {
     MESSAGE("Arithmetic - basic addition");
@@ -465,7 +439,7 @@ TEST(parseable - with context) {
     )__"sv;
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
-    CHECK(!r.resolve());
+    CHECK(not r.resolve());
   }
   {
     MESSAGE("Arithmetic - priorities");
