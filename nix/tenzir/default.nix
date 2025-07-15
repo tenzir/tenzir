@@ -26,7 +26,7 @@ let
       flatbuffers,
       fluent-bit,
       protobuf,
-      google-cloud-cpp,
+      google-cloud-cpp-tenzir,
       grpc,
       spdlog,
       libyamlcpp,
@@ -243,7 +243,7 @@ let
               caf
               curl
               flatbuffers
-              google-cloud-cpp
+              google-cloud-cpp-tenzir
               grpc
               libmaxminddb
               libyamlcpp
