@@ -766,8 +766,8 @@ TENZIR_REGISTER_PLUGIN(trim{"trim", "utf8_trim"})
 TENZIR_REGISTER_PLUGIN(trim{"trim_start", "utf8_ltrim"})
 TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
 
-TENZIR_REGISTER_PLUGIN(pad{"pad_left", true})
-TENZIR_REGISTER_PLUGIN(pad{"pad_right", false})
+TENZIR_REGISTER_PLUGIN(pad{"pad_start", true})
+TENZIR_REGISTER_PLUGIN(pad{"pad_end", false})
 
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})

@@ -1,18 +1,18 @@
 ---
-title: pad_left
+title: pad_end
 category: String/Transformation
-example: '"hello".pad_left(10)'
+example: '"hello".pad_end(10)'
 ---
 
-Pads a string on the left to a specified length.
+Pads a string at the end to a specified length.
 
 ```tql
-pad_left(x:string, length:int, [pad_char:string]) -> string
+pad_end(x:string, length:int, [pad_char:string]) -> string
 ```
 
 ## Description
 
-The `pad_left` function pads the string `x` on the left side with `pad_char`
+The `pad_end` function pads the string `x` at the end with `pad_char`
 (default: space) until it reaches the specified `length`. If the string is
 already longer than or equal to the specified length, it returns the original
 string unchanged.
@@ -36,27 +36,27 @@ Defaults to `" "`.
 ### Pad with spaces
 
 ```tql
-from {x: "hello".pad_left(10)}
+from {x: "hello".pad_end(10)}
 ```
 
 ```tql
-{x: "     hello"}
+{x: "hello     "}
 ```
 
 ### Pad with custom character
 
 ```tql
-from {x: "42".pad_left(5, "0")}
+from {x: "hello".pad_end(10, ".")}
 ```
 
 ```tql
-{x: "00042"}
+{x: "hello....."}
 ```
 
 ### String already long enough
 
 ```tql
-from {x: "hello world".pad_left(5)}
+from {x: "hello world".pad_end(5)}
 ```
 
 ```tql
@@ -65,6 +65,6 @@ from {x: "hello world".pad_left(5)}
 
 ## See Also
 
-[`pad_right`](/reference/functions/pad_right),
+[`pad_start`](/reference/functions/pad_start),
 [`trim`](/reference/functions/trim),
-[`trim_start`](/reference/functions/trim_start)
+[`trim_end`](/reference/functions/trim_end)
