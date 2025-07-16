@@ -5,8 +5,8 @@
   empty: "-----",
   single: "..x",
   unicode: "★★★★test",
-  zero_len: "",
-  neg_len: "",
+  zero_len: "hello",
+  neg_len: "hello",
   null_str: null,
   null_len: null,
 }

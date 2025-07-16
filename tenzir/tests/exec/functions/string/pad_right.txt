@@ -5,8 +5,8 @@
   empty: "=====",
   single: "y---",
   unicode: "test♦♦♦♦",
-  zero_len: "",
-  neg_len: "",
+  zero_len: "world",
+  neg_len: "world",
   null_str: null,
   null_len: null,
 }

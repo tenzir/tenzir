@@ -278,10 +278,6 @@ public:
                 auto str = subject_array.GetView(i);
                 auto target_length
                   = detail::narrow<int64_t>(length_array.Value(i));
-                if (target_length <= 0) {
-                  check(b.Append(""));
-                  continue;
-                }
                 // For simple string length, we can use the string view's size
                 // for ASCII or count UTF-8 characters manually.
                 auto str_length = int64_t{0};
