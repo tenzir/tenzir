@@ -1,0 +1,2 @@
+from {x: 1}, {x: null}, {x: 1}, {x: 2}, {x: null}
+summarize freq_with_null=frequency(x)

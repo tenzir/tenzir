@@ -1,0 +1,2 @@
+from {x: "a"}, {x: "b"}, {x: "a"}, {x: "c"}, {x: "a"}, {x: "b"}
+summarize freq_dist=frequency(x)

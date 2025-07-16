@@ -1,0 +1,8 @@
+{
+  freq_single: [
+    {
+      value: 42,
+      frequency: 1.0,
+    },
+  ],
+}

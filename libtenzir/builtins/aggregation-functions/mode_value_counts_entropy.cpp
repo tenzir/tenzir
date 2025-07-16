@@ -16,7 +16,7 @@
 
 namespace tenzir::plugins::mode_value_counts_entropy {
 
-TENZIR_ENUM(kind, mode, value_counts, entropy);
+TENZIR_ENUM(kind, mode, value_counts, entropy, frequency);
 
 namespace {
 
@@ -92,6 +92,26 @@ public:
         if (normalize_) {
           return result / std::log(counts_.size());
         }
+        return result;
+      }
+      case kind::frequency: {
+        auto result = list{};
+        result.reserve(counts_.size());
+        const auto total
+          = std::transform_reduce(counts_.begin(), counts_.end(), size_t{},
+                                  std::plus<>{}, [](const auto& x) {
+                                    return x.second;
+                                  });
+        for (const auto& [value, count] : counts_) {
+          const auto frequency = detail::narrow<double>(count) / total;
+          result.emplace_back(record{
+            {"value", value},
+            {"frequency", frequency},
+          });
+        }
+        std::ranges::sort(result, std::greater<>{}, [](const auto& x) {
+          return as<double>(as_vector(as<record>(x))[1].second);
+        });
         return result;
       }
     }
@@ -193,6 +213,7 @@ class plugin : public virtual aggregation_plugin {
 using mode_plugin = plugin<kind::mode>;
 using value_counts_plugin = plugin<kind::value_counts>;
 using entropy_plugin = plugin<kind::entropy>;
+using frequency_plugin = plugin<kind::frequency>;
 
 } // namespace
 
@@ -202,3 +223,4 @@ using namespace tenzir::plugins::mode_value_counts_entropy;
 TENZIR_REGISTER_PLUGIN(mode_plugin)
 TENZIR_REGISTER_PLUGIN(value_counts_plugin)
 TENZIR_REGISTER_PLUGIN(entropy_plugin)
+TENZIR_REGISTER_PLUGIN(frequency_plugin)

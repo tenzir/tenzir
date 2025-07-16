@@ -1,0 +1,2 @@
+from {x: 42}
+summarize freq_single=frequency(x)

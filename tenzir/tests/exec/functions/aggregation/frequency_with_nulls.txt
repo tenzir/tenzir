@@ -1,0 +1,12 @@
+{
+  freq_with_null: [
+    {
+      value: 1,
+      frequency: 0.6666666666666666,
+    },
+    {
+      value: 2,
+      frequency: 0.3333333333333333,
+    },
+  ],
+}
