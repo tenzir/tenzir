@@ -211,6 +211,143 @@ private:
   std::string fn_name_;
 };
 
+class pad : public virtual function_plugin {
+public:
+  explicit pad(std::string name, bool pad_left)
+    : name_{std::move(name)}, pad_left_{pad_left} {
+  }
+
+  auto name() const -> std::string override {
+    return name_;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto length_expr = ast::expression{};
+    auto pad_char_arg = std::optional<located<std::string>>{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "string")
+          .positional("length", length_expr, "int")
+          .positional("pad_char", pad_char_arg)
+          .parse(inv, ctx));
+    auto pad_char
+      = pad_char_arg.value_or(located<std::string>{" ", location::unknown});
+    // Validate pad character is single character
+    if (pad_char_arg.has_value()) {
+      int64_t pad_char_length = 0;
+      auto ptr = pad_char.inner.data();
+      auto end = ptr + pad_char.inner.size();
+      while (ptr < end) {
+        if ((*ptr & 0xC0) != 0x80) {
+          pad_char_length++;
+        }
+        ptr++;
+      }
+      if (pad_char_length != 1) {
+        diagnostic::error("`{}` expected single character for padding, "
+                          "but got `{}` with length {}",
+                          name(), pad_char.inner, pad_char_length)
+          .primary(pad_char)
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
+    return function_use::make(
+      [subject_expr = std::move(subject_expr),
+       length_expr = std::move(length_expr), pad_char = std::move(pad_char),
+       pad_left = pad_left_,
+       name = name_](evaluator eval, session ctx) -> multi_series {
+        auto b = arrow::StringBuilder{};
+        for (auto [subject, length] :
+             split_multi_series(eval(subject_expr), eval(length_expr))) {
+          TENZIR_ASSERT(subject.length() == length.length());
+          auto f = detail::overload{
+            [&](const arrow::StringArray& subject_array,
+                const concepts::one_of<arrow::Int64Array,
+                                       arrow::UInt64Array> auto& length_array) {
+              for (auto i = int64_t{0}; i < subject_array.length(); ++i) {
+                if (subject_array.IsNull(i) || length_array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                auto str = subject_array.GetView(i);
+                auto target_length
+                  = detail::narrow<int64_t>(length_array.Value(i));
+                // For simple string length, we can use the string view's size
+                // for ASCII or count UTF-8 characters manually.
+                auto str_length = int64_t{0};
+                auto ptr = str.data();
+                auto end = ptr + str.size();
+                while (ptr < end) {
+                  // Skip UTF-8 continuation bytes (10xxxxxx)
+                  if ((*ptr & 0xC0) != 0x80) {
+                    str_length++;
+                  }
+                  ptr++;
+                }
+                if (str_length >= target_length) {
+                  // String is already long enough.
+                  check(b.Append(str));
+                  continue;
+                }
+                // Calculate padding needed.
+                auto padding_needed
+                  = static_cast<size_t>(target_length - str_length);
+                std::string result;
+                result.reserve(str.size()
+                               + padding_needed * pad_char.inner.size());
+                if (pad_left) {
+                  // Pad on the left
+                  for (size_t j = 0; j < padding_needed; ++j) {
+                    result += pad_char.inner;
+                  }
+                  result += str;
+                } else {
+                  // Pad on the right
+                  result = str;
+                  for (size_t j = 0; j < padding_needed; ++j) {
+                    result += pad_char.inner;
+                  }
+                }
+                check(b.Append(result));
+              }
+            },
+            [&]<class T, class U>(const T&, const U&) {
+              if constexpr (not detail::is_any_v<T, arrow::StringArray,
+                                                 arrow::NullArray>) {
+                diagnostic::warning("`{}` expected `string`, but got `{}`",
+                                    name, subject.type.kind())
+                  .primary(subject_expr)
+                  .emit(ctx);
+              }
+              if constexpr (not detail::is_any_v<U, arrow::Int64Array,
+                                                 arrow::UInt64Array,
+                                                 arrow::NullArray>) {
+                diagnostic::warning("`{}` expected `int`, but got `{}`", name,
+                                    length.type.kind())
+                  .primary(length_expr)
+                  .emit(ctx);
+              }
+              check(b.AppendNulls(subject.length()));
+            },
+          };
+          match(std::tie(*subject.array, *length.array), f);
+        }
+
+        return series{string_type{}, finish(b)};
+      });
+  }
+
+private:
+  std::string name_;
+  bool pad_left_;
+};
+
 class nullary_method : public virtual function_plugin {
 public:
   nullary_method(std::string name, std::string fn_name, type result_ty)
@@ -628,6 +765,9 @@ TENZIR_REGISTER_PLUGIN(match_regex)
 TENZIR_REGISTER_PLUGIN(trim{"trim", "utf8_trim"})
 TENZIR_REGISTER_PLUGIN(trim{"trim_start", "utf8_ltrim"})
 TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
+
+TENZIR_REGISTER_PLUGIN(pad{"pad_start", true})
+TENZIR_REGISTER_PLUGIN(pad{"pad_end", false})
 
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})

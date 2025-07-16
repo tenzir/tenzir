@@ -1,0 +1,21 @@
+from {
+  // Basic padding with default space
+  basic: "hello".pad_end(10),
+  // Padding with custom character
+  dots: "hello".pad_end(10, "."),
+  // String already long enough
+  no_pad: "hello world".pad_end(5),
+  // Empty string
+  empty: "".pad_end(5, "="),
+  // Single character
+  single: "y".pad_end(4, "-"),
+  // Padding with unicode character
+  unicode: "test".pad_end(8, "♦"),
+  // Zero length
+  zero_len: "world".pad_end(0),
+  // Negative length (should return empty)
+  neg_len: "world".pad_end(-3),
+  // Null handling
+  null_str: null.pad_end(5),
+  null_len: "test".pad_end(null),
+}

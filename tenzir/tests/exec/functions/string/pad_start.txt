@@ -1,0 +1,12 @@
+{
+  basic: "     hello",
+  zeros: "00042",
+  no_pad: "hello world",
+  empty: "-----",
+  single: "..x",
+  unicode: "★★★★test",
+  zero_len: "hello",
+  neg_len: "hello",
+  null_str: null,
+  null_len: null,
+}

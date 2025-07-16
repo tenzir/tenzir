@@ -1,0 +1,14 @@
+{
+  text: "center",
+  centered: "----center----",
+  text1: "Name                ",
+  text2: "  Age",
+  text3: "City           ",
+  num1: "007",
+  num2: "042",
+  num3: "123",
+  separator: "========================================",
+  edge1: "xxxyyy",
+  edge2: "abc",
+  unicode_both: "←←←←中文→→",
+}
