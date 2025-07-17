@@ -2,7 +2,7 @@ name: Tenzir Installer
 on:
   workflow_dispatch:
   schedule:
-    - cron: "20 2 * * *" # everyday at 2:20
+    - cron: "20 2 * * *"  # every day at 2:20
 
 # IMPORTANT NOTE: The distros that are tested here were chosen to maximize test
 # coverage of the installer script. That doesn't imply that we commit to support
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [ubuntu-22.04, ubuntu-latest]
+        image: [ubuntu-22.04, ubuntu-24.04]
         tag: ["latest", "main"]
     runs-on: ${{ matrix.image }}
     env:
@@ -41,8 +41,8 @@ jobs:
         image:
           [
             "ubuntu:22.04",
-            "ubuntu:23.04",
-            "ubuntu:23.10",
+            "ubuntu:24.04",
+            "ubuntu:24.10",
             "debian:11",
             "debian:12",
           ]

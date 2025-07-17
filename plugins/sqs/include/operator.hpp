@@ -164,53 +164,53 @@ struct connector_args {
   }
 };
 
-class sqs_loader final : public plugin_loader {
+class sqs_loader final : public crtp_operator<sqs_loader> {
 public:
   sqs_loader() = default;
 
   explicit sqs_loader(connector_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
-    auto make = [](operator_control_plane& ctrl,
-                   connector_args args) mutable -> generator<chunk_ptr> {
-      try {
-        auto poll_time
-          = args.poll_time ? args.poll_time->inner : default_poll_time;
-        auto queue = sqs_queue{args.queue, poll_time};
-        co_yield {};
-        while (true) {
-          constexpr auto num_messages = size_t{1};
-          auto messages = queue.receive_messages(num_messages, poll_time);
-          if (messages.empty()) {
-            co_yield {};
-          } else {
-            for (const auto& message : messages) {
-              TENZIR_DEBUG("got message {} ({})", message.GetMessageId(),
-                           message.GetReceiptHandle());
-              // It seems there's no way to get the Aws::String out of the
-              // message to move it into the chunk. So we have to copy it.
-              const auto& body = message.GetBody();
-              auto str = std::string_view{body.data(), body.size()};
-              co_yield chunk::copy(str);
-              queue.delete_message(message);
-            }
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    try {
+      auto poll_time
+        = args_.poll_time ? args_.poll_time->inner : default_poll_time;
+      auto queue = sqs_queue{args_.queue, poll_time};
+      co_yield {};
+      while (true) {
+        constexpr auto num_messages = size_t{1};
+        auto messages = queue.receive_messages(num_messages, poll_time);
+        if (messages.empty()) {
+          co_yield {};
+        } else {
+          for (const auto& message : messages) {
+            TENZIR_DEBUG("got message {} ({})", message.GetMessageId(),
+                         message.GetReceiptHandle());
+            // It seems there's no way to get the Aws::String out of the
+            // message to move it into the chunk. So we have to copy it.
+            const auto& body = message.GetBody();
+            auto str = std::string_view{body.data(), body.size()};
+            co_yield chunk::copy(str);
+            queue.delete_message(message);
           }
         }
-      } catch (diagnostic& d) {
-        ctrl.diagnostics().emit(std::move(d));
       }
-    };
-    return make(ctrl, args_);
+    } catch (diagnostic& d) {
+      ctrl.diagnostics().emit(std::move(d));
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "sqs";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "json";
+    return "load_sqs";
   }
 
   friend auto inspect(auto& f, sqs_loader& x) -> bool {
@@ -223,46 +223,48 @@ private:
   connector_args args_;
 };
 
-class sqs_saver final : public plugin_saver {
+class sqs_saver final : public crtp_operator<sqs_saver> {
 public:
   sqs_saver() = default;
 
   sqs_saver(connector_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto poll_time
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;
     auto queue = std::shared_ptr<sqs_queue>{};
     try {
       queue = std::make_shared<sqs_queue>(args_.queue, poll_time);
-    } catch (const diagnostic& d) {
-      return d.to_error();
+    } catch (diagnostic& d) {
+      ctrl.diagnostics().emit(std::move(d));
     }
-    return [&ctrl, queue = std::move(queue)](chunk_ptr chunk) mutable {
+    for (auto chunk : input) {
       if (!chunk || chunk->size() == 0) {
-        return;
+        co_yield {};
+        continue;
       }
       try {
         queue->send_message(to_aws_string(std::move(chunk)));
       } catch (diagnostic& d) {
         ctrl.diagnostics().emit(std::move(d));
       }
-      return;
-    };
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "sqs";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
+    return "save_sqs";
   }
 
   friend auto inspect(auto& f, sqs_saver& x) -> bool {

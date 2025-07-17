@@ -45,28 +45,57 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   auto ip = ipv4 | ipv6.when([&] {
     return ipv6_enabled;
   });
+  struct in_string {
+    in_string(int64_t hashes, bool format, bool raw)
+      : hashes{hashes}, format{format}, raw{raw} {
+    }
+
+    int64_t hashes;
+    bool format;
+    bool raw;
+  };
+  struct in_replacement {
+    int64_t braces = 0;
+  };
+  auto stack = std::stack<variant<in_string, in_replacement>>{};
+  auto string_info = [&]() -> in_string& {
+    TENZIR_ASSERT(not stack.empty());
+    return as<in_string>(stack.top());
+  };
+  auto is_format_string = [&] {
+    return string_info().format;
+  };
+  auto is_non_raw_string = [&] {
+    return not string_info().raw;
+  };
+  auto is_non_format_string = [&] {
+    return not is_format_string();
+  };
+  auto string_hashes = [&] {
+    return string_info().hashes;
+  };
   // clang-format off
-  auto p
+  auto normal_parser
     = ignore(ip >> "/" >> *digit)
       ->* [] { return tk::subnet; }
     | ignore(ip)
       ->* [] { return tk::ip; }
-    | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
+    | ignore(+digit >> '-' >> +digit >> '-' >> +digit
+        >> *(alnum | ':' | '+' | '-') >> ~('.' >> +digit)
+        >> ~('Z' | (('+' | '-') >> +digit)))
       ->* [] { return tk::datetime; }
     | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
       ->* [] { return tk::scalar; }
-    | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
-      ->* [] { return tk::string; }
-    | ignore('"' >> *(('\\' >> any) | (any - '"')))
-      ->* [] { return tk::error; } // non-terminated string
-    | ignore("r\"" >> *(any - '"') >> '"')
-      ->* [] { return tk::raw_string; }
-    | ignore("r\"" >> *(any - '"'))
-      ->* [] { return tk::error; } // non-terminated raw string
-    | ignore("r#\"" >> *(any - "\"#") >> "\"#")
-      ->* [] { return tk::raw_string; }
-    | ignore("r#\"" >> *(any - "\"#"))
-      ->* [] { return tk::error; } // non-terminated raw string
+    | ignore(ch<'\"'> )
+      ->* [] { return tk::string_begin; }
+    | ignore(ch<'r'> >> *ch<'#'> >> '"')
+      ->* [] { return tk::raw_string_begin; }
+    | ignore(ch<'b'> >> *ch<'#'> >> '"')
+      ->* [] { return tk::blob_begin; }
+    | ignore(lit{"br"} >> *ch<'#'> >> '"')
+      ->* [] { return tk::raw_blob_begin; }
+    | ignore(lit{"f"} >> '"')
+      ->* [] { return tk::format_string_begin; }
     | ignore("//" >> *(any - '\n'))
       ->* [] { return tk::line_comment; }
     | ignore("/*" >> *(any - "*/") >> "*/")
@@ -90,7 +119,9 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("=", equal)
     | X("|", pipe)
     | X("...", dot_dot_dot)
+    | X(".?", dot_question_mark)
     | X(".", dot)
+    | X("?", question_mark)
     | X("(", lpar)
     | X(")", rpar)
     | X("{", lbrace)
@@ -112,16 +143,16 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("in", in)
     | X("let", let)
     | X("match", match)
-    | X("meta", meta)
     | X("not", not_)
     | X("null", null)
     | X("or", or_)
+    | X("move", move)
     | X("this", this_)
     | X("true", true_)
 #undef X
     | ignore((
         lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
-        | "fn" | "meta" | "super" | "for" | "while" | "mod" | "module"
+        | "fn" | "super" | "for" | "while" | "mod" | "module"
       ) >> !continue_ident) ->* [] { return tk::reserved_keyword; }
     | ignore('$' >> identifier)
       ->* [] { return tk::dollar_ident; }
@@ -134,17 +165,84 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
         ("\\" >> *(space - '\n') >> '\n')) |
         ("#!" >> *(any - '\n')).when([&] { return result.empty(); })
       )
-      ->* [] { return tk::whitespace; }
-  ;
+      ->* [] { return tk::whitespace; };
+  auto common_content
+    // Quotes are allowed in strings with a '#' prefix.
+    = lit{"\""} >> !function_repeat_parser{ch<'#'>, string_hashes}
+    // They are also allowed in non-raw strings if preceded by backslash.
+    | lit{"\\\""}.when(is_non_raw_string)
+    // We also need to handle double backslashes to consume both at once.
+    | lit{"\\\\"}.when(is_non_raw_string);
+  auto closing_quote
+    = ignore(lit{"\""} >> function_repeat_parser{ch<'#'>, string_hashes})
+      ->* [] { return tk::closing_quote; };
+  auto string_content
+    = ignore(+(common_content | any - closing_quote))
+      ->* [] { return tk::char_seq; }
+    | closing_quote;
+  auto format_string_content
+    = ignore(+(common_content | "{{" | "}}" | any - closing_quote - '{' - '}'))
+      ->* [] { return tk::char_seq; }
+    | ignore(lit{"{"})
+      ->* [] { return tk::fmt_begin; }
+    | ignore(lit{"}"})
+      ->* [] { return tk::fmt_end; }
+    | closing_quote;
+  auto string_parser
+    = string_content.when(is_non_format_string)
+    | format_string_content.when(is_format_string);
   // clang-format on
   auto current = content.begin();
   while (current != content.end()) {
     auto kind = tk{};
-    if (p.parse(current, content.end(), kind)) {
+    auto success = false;
+    if (stack.empty() or is<in_replacement>(stack.top())) {
+      const auto start = current;
+      success = normal_parser.parse(current, content.end(), kind);
+      if (success) {
+        auto normal_begin = kind == tk::string_begin or kind == tk::blob_begin;
+        auto format_begin = kind == tk::format_string_begin;
+        auto raw_begin
+          = kind == tk::raw_string_begin or kind == tk::raw_blob_begin;
+        if (normal_begin or format_begin or raw_begin) {
+          stack.emplace(in_string{
+            std::count(start, current, '#'),
+            format_begin,
+            raw_begin,
+          });
+        } else if (not stack.empty()) {
+          auto& rep = as<in_replacement>(stack.top());
+          if (kind == tk::lbrace) {
+            rep.braces += 1;
+          } else if (kind == tk::rbrace) {
+            rep.braces -= 1;
+            if (rep.braces < 0) {
+              stack.pop();
+              kind = tk::fmt_end;
+            }
+          }
+        }
+      }
+    } else {
+      success = string_parser.parse(current, content.end(), kind);
+      if (success) {
+        if (kind == tk::fmt_begin) {
+          stack.emplace(in_replacement{});
+        } else if (kind == tk::closing_quote) {
+          TENZIR_ASSERT(not stack.empty());
+          stack.pop();
+        } else if (kind == tk::fmt_end) {
+          // We ignore this here but catch it within the parser.
+        } else {
+          TENZIR_ASSERT(kind == tk::char_seq);
+        }
+      }
+    }
+    if (success) {
       result.emplace_back(kind, current - content.begin());
     } else {
-      // We could not parse a token starting from `current`. Instead, we emit a
-      // special `error` token and go to the next character.
+      // We could not parse a token starting from `current`. Instead, we emit
+      // a special `error` token and go to the next character.
       ++current;
       auto end = current - content.begin();
       if (result.empty() || result.back().kind != tk::error) {
@@ -188,6 +286,9 @@ auto describe(token_kind k) -> std::string_view {
     X(and_, "`and`");
     X(at, "@");
     X(bang_equal, "`!=`");
+    X(blob_begin, "`b\"`");
+    X(char_seq, "character sequence");
+    X(closing_quote, "`\"`");
     X(colon_colon, "`::`");
     X(colon, "`:`");
     X(comma, "`,`");
@@ -195,6 +296,7 @@ auto describe(token_kind k) -> std::string_view {
     X(delim_comment, "`/*...*/`");
     X(dollar_ident, "dollar identifier");
     X(dot_dot_dot, "`...`");
+    X(dot_question_mark, "`.?`");
     X(dot, "`.`");
     X(else_, "`else`");
     X(equal_equal, "`==`");
@@ -202,6 +304,9 @@ auto describe(token_kind k) -> std::string_view {
     X(error, "error");
     X(false_, "`false`");
     X(fat_arrow, "`=>`");
+    X(fmt_begin, "`{`");
+    X(fmt_end, "`}`");
+    X(format_string_begin, "format string");
     X(greater_equal, "`>=`");
     X(greater, "`>`");
     X(identifier, "identifier");
@@ -216,15 +321,17 @@ auto describe(token_kind k) -> std::string_view {
     X(line_comment, "`// ...`");
     X(lpar, "`(`");
     X(match, "`match`");
-    X(meta, "`meta`");
     X(minus, "`-`");
+    X(move, "`move`");
     X(newline, "newline");
     X(not_, "`not`");
     X(null, "`null`");
     X(or_, "`or`");
     X(pipe, "`|`");
     X(plus, "`+`");
-    X(raw_string, "raw string");
+    X(question_mark, "`?`");
+    X(raw_blob_begin, "`br\"`");
+    X(raw_string_begin, "`r\"`");
     X(rbrace, "`}`");
     X(rbracket, "`]`");
     X(reserved_keyword, "reserved keyword");
@@ -233,7 +340,7 @@ auto describe(token_kind k) -> std::string_view {
     X(single_quote, "`'`");
     X(slash, "`/`");
     X(star, "`*`");
-    X(string, "string");
+    X(string_begin, "`\"`");
     X(subnet, "subnet");
     X(this_, "`this`");
     X(true_, "`true`");
@@ -245,8 +352,6 @@ auto describe(token_kind k) -> std::string_view {
 }
 
 auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
   if (arrow::util::ValidateUTF8(content)) {
     return {};
   }

@@ -42,11 +42,14 @@
        }
 -    },
 -    where_ir {
--      self: 22..27,
+-      self: 36..41,
 -      predicate: binary_expr {
--        left: root_field `foo` @ 28..31,
--        op: "eq" @ 32..34,
--        right: constant int64 42 @ 35..39
+-        left: root_field {
+-          id: `foo` @ 42..45,
+-          has_question_mark: false
+-        },
+-        op: "eq" @ 46..48,
+-        right: constant int64 42 @ 49..53
 -      }
      }
    ]

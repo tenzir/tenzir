@@ -267,7 +267,7 @@ private:
       return false;
     }
     const auto& record_schema = *record_schema_ptr;
-    auto struct_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+    auto struct_array = check(to_record_batch(slice)->ToStructArray());
     for (const auto& item : cfg_) {
       const auto count = item.count_fields(record_schema);
       if (item.req == requirement::none) {
@@ -300,7 +300,7 @@ private:
       return std::nullopt;
     }
     const auto& record_schema = *record_schema_ptr;
-    auto struct_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+    auto struct_array = check(to_record_batch(slice)->ToStructArray());
     std::vector<type::attribute_view> result{};
     for (const auto& item : cfg_) {
       const auto count = item.count_fields(record_schema);

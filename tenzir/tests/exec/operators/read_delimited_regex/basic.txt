@@ -1,0 +1,9 @@
+{
+  data: "<123>foo=bar",
+}
+{
+  data: "<456>foo=baz x=y",
+}
+{
+  data: "<999>x=z\n",
+}

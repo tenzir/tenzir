@@ -126,7 +126,7 @@ public:
     // at the start, and uses std::upper_bound to find the entry in the cache
     // using the offset table.
     const auto chunked_key
-      = arrow::ChunkedArray::Make(std::move(sort_keys_)).ValueOrDie();
+      = check(arrow::ChunkedArray::Make(std::move(sort_keys_)));
     const auto indices
       = arrow::compute::SortIndices(*chunked_key, sort_options_);
     if (not indices.ok()) {
@@ -335,7 +335,7 @@ public:
       = std::vector<std::tuple<std::string /*key*/, bool /*descending*/,
                                bool /*nulls_first*/>>{};
     bool stable = false;
-    if (!p(f, l, stable, sort_args)) {
+    if (! p(f, l, stable, sort_args)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -555,6 +555,10 @@ public:
     std::ranges::transform(inv.args, std::back_inserter(sort_exprs),
                            make_sort_key);
     return std::make_unique<sort_operator2>(std::move(sort_exprs));
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(function_plugin::invocation inv, session ctx) const

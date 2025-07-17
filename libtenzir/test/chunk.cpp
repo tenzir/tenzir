@@ -72,44 +72,15 @@ TEST(slicing) {
   CHECK_EQUAL(z->size(), 5u);
 }
 
-TEST(serialization) {
-  std::string str = "foobarbaz";
-  auto x = chunk::make(std::move(str));
-  caf::byte_buffer buf;
-  CHECK(detail::serialize(buf, x));
-  chunk_ptr y;
-  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
-  REQUIRE_NOT_EQUAL(y, nullptr);
-  CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
-}
-
-TEST(nullptr serialization) {
-  auto x = chunk_ptr{};
-  caf::byte_buffer buf;
-  CHECK(detail::serialize(buf, x));
-  chunk_ptr y;
-  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
-  REQUIRE_EQUAL(y, nullptr);
-}
-
-TEST(empty serialization) {
-  auto x = chunk::make_empty();
-  caf::byte_buffer buf;
-  CHECK(detail::serialize(buf, x));
-  chunk_ptr y;
-  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
-  REQUIRE_NOT_EQUAL(y, nullptr);
-  CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
-}
-
 TEST(compression) {
   // We assemble a large test string with many repetitions for compression
   // tests.
   const auto piece = std::string_view{"foobarbaz"};
   auto str = std::string{};
   str.reserve(piece.size() * 1000);
-  for (auto i = 0; i < 1000; ++i)
+  for (auto i = 0; i < 1000; ++i) {
     str += piece;
+  }
   const auto original = chunk::make(std::move(str));
   const auto compressed = unbox(chunk::compress(as_bytes(*original)));
   CHECK_LESS(compressed->size(), original->size());

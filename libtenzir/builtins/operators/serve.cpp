@@ -119,6 +119,11 @@ constexpr auto SPEC_V0 = R"_(
                 example: "200ms"
                 default: "5s"
                 description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
+              schema:
+                type: string
+                example: "exact"
+                default: "legacy"
+                description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema schema definitions from the output entirely.
     responses:
       200:
         description: Success.
@@ -233,9 +238,12 @@ struct request_limits {
   duration timeout = defaults::api::serve::timeout;
 };
 
+TENZIR_ENUM(schema, legacy, exact, never);
+
 struct serve_request {
   std::string serve_id = {};
   std::string continuation_token = {};
+  enum schema schema = schema::legacy;
   request_limits limits = {};
 };
 
@@ -692,12 +700,32 @@ struct serve_handler_state {
       }
       result.limits.timeout = **timeout;
     }
+    auto schema = try_get<std::string>(params, "schema");
+    if (not schema) {
+      auto detail_msg
+        = fmt::format("{}; got params {}", schema.error(), params);
+      auto detail
+        = caf::make_error(ec::invalid_argument, std::move(detail_msg));
+      return parse_error{.message = "failed to read schema parameter",
+                         .detail = std::move(detail)};
+    }
+    if (*schema) {
+      auto opt = from_string<enum schema>(**schema);
+      if (not opt) {
+        return parse_error{
+          .message = "invalid schema parameter",
+          .detail = caf::make_error(ec::invalid_argument,
+                                    fmt::format("got `{}`", **schema))};
+      }
+      result.schema = *opt;
+    }
     return result;
   }
 
   static auto create_response(const std::string& next_continuation_token,
                               const std::vector<table_slice>& results,
-                              serve_state state) -> std::string {
+                              serve_state state, enum schema schema)
+    -> std::string {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
@@ -712,17 +740,16 @@ struct serve_handler_state {
               R"({{"next_continuation_token":"{}","state":"{}","events":[)",
               next_continuation_token, state);
     auto out_iter = std::back_inserter(result);
-    auto seen_schemas = std::unordered_set<type>{};
+    auto seen_types = std::unordered_set<type>{};
     bool first = true;
     for (const auto& slice : results) {
       if (slice.rows() == 0) {
         continue;
       }
-      seen_schemas.insert(slice.schema());
+      seen_types.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
       auto type = as<record_type>(resolved_slice.schema());
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       for (const auto& row : values(type, *array)) {
         if (first) {
           out_iter = fmt::format_to(out_iter, "{{");
@@ -737,13 +764,21 @@ struct serve_handler_state {
         TENZIR_ASSERT(ok);
       }
     }
+    if (schema == schema::never) {
+      if (not seen_types.empty()) {
+        *out_iter++ = '}';
+      }
+      *out_iter++ = ']';
+      *out_iter++ = '}';
+      return result;
+    }
     // Write schemas
-    if (seen_schemas.empty()) {
+    if (seen_types.empty()) {
       out_iter = fmt::format_to(out_iter, R"(],"schemas":[]}}{})", '\n');
       return result;
     }
     out_iter = fmt::format_to(out_iter, R"(}}],"schemas":[)");
-    for (bool first = true; const auto& schema : seen_schemas) {
+    for (bool first = true; const auto& type : seen_types) {
       if (first) {
         out_iter = fmt::format_to(out_iter, "{{");
       } else {
@@ -751,11 +786,13 @@ struct serve_handler_state {
       }
       first = false;
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
-                                schema.make_fingerprint());
-      const auto ok = printer.print(out_iter, schema.to_definition());
+                                type.make_fingerprint());
+      const auto ok = printer.print(out_iter, schema == schema::legacy
+                                                ? type.to_legacy_definition()
+                                                : type.to_definition());
       TENZIR_ASSERT(ok);
     }
-    out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
+    out_iter = fmt::format_to(out_iter, R"(}}]}})");
     return result;
   }
 
@@ -781,15 +818,17 @@ struct serve_handler_state {
              request.limits.max_events)
       .request(serve_manager, caf::infinite)
       .then(
-        [rp](const std::tuple<std::string, std::vector<table_slice>>&
-               result) mutable {
+        [rp, schema = request.schema](
+          const std::tuple<std::string, std::vector<table_slice>>&
+            result) mutable {
           const auto& [continuation_token, results] = result;
-          rp.deliver(rest_response::from_json_string(create_response(
-            continuation_token, results,
-            continuation_token.empty() ? serve_state::completed
-                                       : serve_state::running)));
+          rp.deliver(rest_response::from_json_string(
+            create_response(continuation_token, results,
+                            continuation_token.empty() ? serve_state::completed
+                                                       : serve_state::running,
+                            schema)));
         },
-        [rp](const caf::error& err) mutable {
+        [rp, schema = request.schema](const caf::error& err) mutable {
           if (err == caf::exit_reason::user_shutdown
               or err.context().match_elements<diagnostic>()) {
             // The pipeline has either shut down naturally or we got an error
@@ -800,7 +839,8 @@ struct serve_handler_state {
             rp.deliver(rest_response::from_json_string(create_response(
               {}, {},
               err == caf::exit_reason::user_shutdown ? serve_state::completed
-                                                     : serve_state::failed)));
+                                                     : serve_state::failed,
+              schema)));
             return;
           }
           rp.deliver(rest_response::make_error(400, fmt::to_string(err), {}));
@@ -863,7 +903,7 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-    //  Forward events to the SERVE MANAGER.
+    // Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -1018,6 +1058,7 @@ public:
           {"max_events", uint64_type{}},
           {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
+          {"schema", string_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,

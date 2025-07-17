@@ -24,11 +24,16 @@
 
 namespace tenzir {
 
-using symbol_map = std::unordered_map<std::string, legacy_type>;
-
 /// Converts a symbol_map into a schema. Can use an additional symbol table
 /// as context.
 struct symbol_resolver {
+  symbol_resolver(const symbol_map& global, symbol_map& local,
+                  bool lazy = false)
+    : global{global},
+      local{local},
+      result_module{lazy ? std::optional<module>{} : module{}} {
+  }
+
   caf::expected<legacy_type> lookup(const std::string& key) {
     // First we check if the key is already locally resolved.
     auto resolved_symbol = resolved.find(key);
@@ -53,7 +58,9 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(const legacy_none_type& x) {
-    TENZIR_ASSERT(!x.name().empty());
+    if (x.name().empty()) {
+      return x;
+    }
     auto concrete = lookup(x.name());
     if (!concrete)
       return concrete.error();
@@ -175,10 +182,13 @@ struct symbol_resolver {
     // TODO: The schema parser will soon be obsoleted by the YAML schema
     // specification, which is why the type and schema parsers still operate on
     // legacy types.
-    auto added = sch.add(type::from_legacy_type(iter->second));
-    if (!added)
-      return caf::make_error(ec::parse_error, "failed to insert type",
-                             value.first);
+    if (result_module) {
+      auto added = result_module->add(type::from_legacy_type(iter->second));
+      if (not added) {
+        return caf::make_error(ec::parse_error, "failed to insert type",
+                               value.first);
+      }
+    }
     return iter->second;
   }
 
@@ -199,15 +209,17 @@ struct symbol_resolver {
     // Finally we replace the now empty local set with the set of resolved
     // symbols for further use by the caller.
     local = std::move(resolved);
-    return sch;
+    return result_module ? std::move(*result_module) : module{};
   }
 
   const symbol_map& global;
   // This is an in-out parameter so the use site of the symbol_resolver can
   // use the resolved symbol_map to resolve symbols that are parsed later.
   symbol_map& local;
-  symbol_map resolved = {};
-  module sch = {};
+  symbol_map resolved;
+
+private:
+  std::optional<module> result_module;
 };
 
 struct symbol_map_parser : parser_base<symbol_map_parser> {

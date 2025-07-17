@@ -40,6 +40,8 @@ namespace {
     case and_:
     case or_:
     case in:
+    case if_:
+    case else_:
       return false;
   }
   TENZIR_UNREACHABLE();
@@ -64,6 +66,8 @@ namespace {
     case and_:
     case or_:
     case in:
+    case if_:
+    case else_:
       return std::nullopt;
   }
   TENZIR_UNREACHABLE();
@@ -86,6 +90,8 @@ namespace {
     case and_:
     case or_:
     case in:
+    case if_:
+    case else_:
       return false;
   }
   TENZIR_UNREACHABLE();
@@ -93,6 +99,33 @@ namespace {
 
 template <ast::binary_op Op, class L, class R>
 struct BinOpKernel;
+
+template <>
+struct BinOpKernel<ast::binary_op::add, secret_type, secret_type> {
+  using result = secret;
+  static auto evaluate(secret_view l, secret_view r)
+    -> std::variant<result, const char*> {
+    return l.with_appended(r);
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
+  using result = secret;
+  static auto evaluate(view<std::string> l, secret_view r)
+    -> std::variant<result, const char*> {
+    return r.with_prepended(l);
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, secret_type, string_type> {
+  using result = secret;
+  static auto evaluate(secret_view l, view<std::string> r)
+    -> std::variant<result, const char*> {
+    return l.with_appended(r);
+  }
+};
 
 template <ast::binary_op Op, integral_type L, integral_type R>
   requires(is_arithmetic(Op))
@@ -296,6 +329,10 @@ struct BinOpKernel<Op, L, R> {
 
   static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
     -> std::variant<result, const char*> {
+    if constexpr (std::same_as<secret_type, L>
+                  or std::same_as<secret_type, R>) {
+      return "`secret` cannot be compared";
+    }
     using enum ast::binary_op;
     if constexpr (Op == eq) {
       return l == r;
@@ -416,67 +453,6 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
 };
 
 template <>
-struct EvalBinOp<ast::binary_op::and_, bool_type, null_type> {
-  static auto eval(const arrow::BooleanArray& l, const arrow::NullArray&,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
-    check(b.Reserve(l.length()));
-    for (const auto& v : l) {
-      if (v and v == false) {
-        check(b.Append(false));
-      } else {
-        check(b.AppendNull());
-      }
-    }
-    return finish(b);
-  }
-};
-
-template <>
-struct EvalBinOp<ast::binary_op::and_, null_type, bool_type> {
-  static auto eval(const arrow::NullArray& l, const arrow::BooleanArray& r,
-                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
-    return EvalBinOp<ast::binary_op::and_, bool_type, null_type>::eval(r, l,
-                                                                       warn);
-  }
-};
-
-template <>
-struct EvalBinOp<ast::binary_op::or_, bool_type, null_type> {
-  static auto eval(const arrow::BooleanArray& l, const arrow::NullArray&,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
-    check(b.Reserve(l.length()));
-    for (const auto& v : l) {
-      if (v and v == true) {
-        check(b.Append(true));
-      } else {
-        check(b.AppendNull());
-      }
-    }
-    return finish(b);
-  }
-};
-
-template <>
-struct EvalBinOp<ast::binary_op::or_, null_type, bool_type> {
-  static auto eval(const arrow::NullArray& l, const arrow::BooleanArray& r,
-                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
-    return EvalBinOp<ast::binary_op::or_, bool_type, null_type>::eval(r, l,
-                                                                      warn);
-  }
-};
-
-template <ast::binary_op Op>
-  requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
-struct EvalBinOp<Op, null_type, null_type> {
-  static auto eval(const arrow::NullArray& l, const arrow::NullArray&, auto&&)
-    -> std::shared_ptr<arrow::NullArray> {
-    return std::make_shared<arrow::NullArray>(l.length());
-  }
-};
-
-template <>
 struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
@@ -532,68 +508,6 @@ struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
       auto right_subnet = value_at(subnet_type{}, r, i);
       auto result = right_subnet.contains(left_subnet);
       check(b.Append(result));
-    }
-    return finish(b);
-  }
-};
-
-// TODO: We probably don't want this.
-template <ast::binary_op Op>
-  requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
-struct EvalBinOp<Op, bool_type, bool_type> {
-  static constexpr auto is_and = Op == ast::binary_op::and_;
-
-  static auto eval(const arrow::BooleanArray& l, const arrow::BooleanArray& r,
-                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
-    // TODO: Bad.
-    auto has_null = l.null_bitmap() || r.null_bitmap();
-    auto has_offset = l.offset() != 0 || r.offset() != 0;
-    if (not has_null && not has_offset) {
-      auto buffer = check(arrow::AllocateBitmap(l.length()));
-      auto size = (l.length() + 7) / 8;
-      TENZIR_ASSERT(l.values()->size() >= size);
-      TENZIR_ASSERT(r.values()->size() >= size);
-      const auto* l_ptr = l.values()->data();
-      const auto* r_ptr = r.values()->data();
-      auto* o_ptr = buffer->mutable_data();
-      for (auto i = int64_t{0}; i < size; ++i) {
-        if constexpr (is_and) {
-          o_ptr[i] = l_ptr[i] & r_ptr[i]; // NOLINT
-        } else {
-          o_ptr[i] = l_ptr[i] | r_ptr[i]; // NOLINT
-        }
-      }
-      return std::make_shared<arrow::BooleanArray>(l.length(),
-                                                   std::move(buffer));
-    }
-    auto b = arrow::BooleanBuilder{};
-    check(b.Reserve(l.length()));
-    for (auto i = int64_t{0}; i < l.length(); ++i) {
-      auto lv = l.Value(i);
-      auto rv = r.Value(i);
-      auto ln = l.IsNull(i);
-      auto rn = r.IsNull(i);
-      auto lt = not ln && lv;
-      auto lf = not ln && not lv;
-      auto rt = not rn && rv;
-      auto rf = not rn && not rv;
-      if constexpr (is_and) {
-        if (lt && rt) {
-          b.UnsafeAppend(true);
-        } else if (lf || rf) {
-          b.UnsafeAppend(false);
-        } else {
-          b.UnsafeAppendNull();
-        }
-      } else {
-        if (lt || rt) {
-          b.UnsafeAppend(true);
-        } else if (lf && rf) {
-          b.UnsafeAppend(false);
-        } else {
-          b.UnsafeAppendNull();
-        }
-      }
     }
     return finish(b);
   }
@@ -727,24 +641,24 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
   }
 };
 
-} // namespace
-
-auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
-  auto eval_op
-    = [&]<ast::binary_op Op>(multi_series l, multi_series r) -> multi_series {
-    TENZIR_ASSERT(x.op.inner == Op);
-    TENZIR_ASSERT(l.length() == r.length());
-    return map_series(std::move(l), std::move(r), [&](series l, series r) {
+template <ast::binary_op Op>
+auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
+  TENZIR_ASSERT(x.op.inner == Op);
+  auto left = self.eval(x.left);
+  auto right = self.eval(x.right);
+  TENZIR_ASSERT(left.length() == right.length());
+  return map_series(
+    std::move(left), std::move(right), [&](series left, series right) {
       return match(
-        std::tie(l.type, r.type),
+        std::tie(left.type, right.type),
         [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
           if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
             using LA = type_to_arrow_array_t<L>;
             using RA = type_to_arrow_array_t<R>;
-            auto& la = as<LA>(*l.array);
-            auto& ra = as<RA>(*r.array);
+            auto& la = as<LA>(*left.array);
+            auto& ra = as<RA>(*right.array);
             auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
-              diagnostic::warning("{}", w).primary(x).emit(ctx_);
+              diagnostic::warning("{}", w).primary(x).emit(self.ctx());
             });
             auto ot = type::from_arrow(*oa->type());
             return series{std::move(ot), std::move(oa)};
@@ -753,19 +667,236 @@ auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
             // TODO: Where coercion? => coercion is done in kernel.
             diagnostic::warning("binary operator `{}` not implemented for `{}` "
                                 "and `{}`",
-                                x.op.inner, l.type.kind(), r.type.kind())
+                                x.op.inner, left.type.kind(), right.type.kind())
               .primary(x)
-              .emit(ctx_);
-            return null();
+              .emit(self.ctx());
+            return self.null();
           }
         });
     });
+}
+
+template <ast::binary_op Op>
+auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
+  auto builder = arrow::BooleanBuilder{};
+  check(builder.Reserve(self.length()));
+  auto left_offset = int64_t{0};
+  for (const auto& left : self.eval(x.left)) {
+    const auto length = left.length();
+    const auto left_begin = left_offset;
+    const auto left_end = left_begin + length;
+    left_offset += length;
+    const auto typed_left = left.as<bool_type>();
+    if (not typed_left) {
+      if (not is<null_type>(left.type)) {
+        diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
+          .primary(x.left)
+          .emit(self.ctx());
+      }
+    }
+    const auto short_circuit_eval_right = [&]<bool Value>() {
+      for (const auto& right : self.slice(left_begin, left_end).eval(x.right)) {
+        if (const auto typed_right = right.as<bool_type>()) {
+          for (const auto& value : *typed_right->array) {
+            if (value and *value == Value) {
+              check(builder.Append(Value));
+              continue;
+            }
+            check(builder.AppendNull());
+          }
+          continue;
+        }
+        if (not is<null_type>(right.type)) {
+          diagnostic::warning("expected `bool`, but got `{}`",
+                              right.type.kind())
+            .primary(x.right)
+            .emit(self.ctx());
+        }
+        check(builder.AppendNulls(right.length()));
+      }
+    };
+    if constexpr (Op == ast::binary_op::and_) {
+      if (not typed_left) {
+        short_circuit_eval_right.template operator()<false>();
+        continue;
+      }
+      if (typed_left->array->false_count() == length) {
+        check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        continue;
+      }
+    } else if constexpr (Op == ast::binary_op::or_) {
+      if (not typed_left) {
+        short_circuit_eval_right.template operator()<true>();
+        continue;
+      }
+      if (typed_left->array->true_count() == length) {
+        check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        continue;
+      }
+    } else {
+      static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
+    }
+    TENZIR_ASSERT(typed_left);
+    const auto get_left = [&](int64_t i) -> bool {
+      return typed_left->array->IsValid(i) and typed_left->array->GetView(i);
+    };
+    const auto eval_right = [&](int64_t start, int64_t end) -> void {
+      for (const auto& right :
+           self.slice(left_begin + start, left_begin + end).eval(x.right)) {
+        if (is<bool_type>(right.type)) {
+          check(
+            builder.AppendArraySlice(*right.array->data(), 0, right.length()));
+          continue;
+        }
+        if (not is<null_type>(right.type)) {
+          diagnostic::warning("expected `bool`, but got `{}`",
+                              right.type.kind())
+            .primary(x.right)
+            .emit(self.ctx());
+        }
+        check(builder.AppendNulls(right.length()));
+      }
+    };
+    auto range_offset = int64_t{0};
+    auto range_current = get_left(0);
+    const auto append_until = [&](int64_t end) {
+      if constexpr (Op == ast::binary_op::and_ or Op == ast::binary_op::or_) {
+        if (range_current == (Op == ast::binary_op::and_)) {
+          eval_right(range_offset, end);
+        } else {
+          check(builder.AppendArraySlice(*left.array->data(), range_offset,
+                                         end - range_offset));
+        }
+      } else {
+        static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
+      }
+    };
+    for (auto i = int64_t{1}; i < length; ++i) {
+      if (range_current == get_left(i)) {
+        continue;
+      }
+      append_until(i);
+      range_offset = i;
+      range_current = not range_current;
+    }
+    append_until(length);
+  }
+  return series{
+    bool_type{},
+    finish(builder),
   };
-  using enum ast::binary_op;
+}
+
+auto eval_if(evaluator& self, const ast::binary_expr& x,
+             const ast::expression& fallback
+             = ast::constant{caf::none, location::unknown}) -> multi_series {
+  auto right_offset = int64_t{0};
+  return map_series(
+    self.eval(x.right), [&](const series& right) -> multi_series {
+      const auto length = right.length();
+      const auto right_begin = right_offset;
+      const auto right_end = right_begin + length;
+      right_offset += length;
+      const auto typed_right = right.as<bool_type>();
+      if (not typed_right) {
+        diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+          .primary(x.right)
+          .emit(self.ctx());
+        return self.slice(right_begin, right_end).eval(fallback);
+      }
+      if (typed_right->array->true_count() == length) {
+        return self.slice(right_begin, right_end).eval(x.left);
+      }
+      if (typed_right->array->null_count() > 0) {
+        diagnostic::warning("expected `bool`, but got `null`")
+          .primary(x.right)
+          .emit(self.ctx());
+      }
+      if (typed_right->array->true_count() == 0) {
+        return self.slice(right_begin, right_end).eval(fallback);
+      }
+      const auto get_right = [&](int64_t i) -> bool {
+        return typed_right->array->IsValid(i)
+               and typed_right->array->GetView(i);
+      };
+      auto result = multi_series{};
+      auto range_offset = int64_t{0};
+      auto range_current = get_right(0);
+      const auto append_until = [&](int64_t end) {
+        result.append(self.slice(right_begin + range_offset, right_begin + end)
+                        .eval(range_current ? x.left : fallback));
+      };
+      for (auto i = int64_t{1}; i < length; ++i) {
+        if (range_current == get_right(i)) {
+          continue;
+        }
+        append_until(i);
+        range_offset = i;
+        range_current = not range_current;
+      }
+      append_until(length);
+      TENZIR_ASSERT(result.length() == length);
+      return result;
+    });
+}
+
+auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
+  // Short-circuit the evaluation of `x if y else z`, avoiding the
+  // construction of null series. This is also important for correctness, as
+  // `null if true else 42` should return `null`, but without this would return
+  // `42`.
+  if (const auto* binop = try_as<ast::binary_expr>(x.left)) {
+    if (binop->op.inner == ast::binary_op::if_) {
+      return eval_if(self, *binop, x.right);
+    }
+  }
+  auto left_offset = int64_t{0};
+  return map_series(self.eval(x.left), [&](series left) -> multi_series {
+    const auto length = left.length();
+    const auto left_begin = left_offset;
+    const auto left_end = left_begin + length;
+    left_offset += length;
+    if (left.array->null_count() == 0) {
+      return left;
+    }
+    if (left.array->null_count() == length) {
+      return self.slice(left_begin, left_end).eval(x.right);
+    }
+    const auto get_left_valid = [&](int64_t i) -> bool {
+      return left.array->IsValid(i);
+    };
+    auto result = multi_series{};
+    auto range_offset = int64_t{0};
+    auto range_current = get_left_valid(0);
+    const auto append_until = [&](int64_t end) {
+      if (not range_current) {
+        result.append(
+          self.slice(left_begin + range_offset, left_begin + end).eval(x.right));
+        return;
+      }
+      result.append(left.slice(range_offset, end));
+    };
+    for (auto i = int64_t{1}; i < length; ++i) {
+      if (range_current == get_left_valid(i)) {
+        continue;
+      }
+      append_until(i);
+      range_offset = i;
+      range_current = not range_current;
+    }
+    append_until(length);
+    TENZIR_ASSERT(result.length() == length);
+    return result;
+  });
+}
+
+} // namespace
+
+auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
   switch (x.op.inner) {
 #define X(op)                                                                  \
-  case op:                                                                     \
-    return eval_op.operator()<op>(eval(x.left), eval(x.right))
+  case ast::binary_op::op:                                                     \
+    return eval_op<ast::binary_op::op>(*this, x)
     X(add);
     X(sub);
     X(mul);
@@ -777,10 +908,17 @@ auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
     X(lt);
     X(leq);
     X(in);
-    // TODO: Short circuiting.
-    X(and_);
-    X(or_);
 #undef X
+      // These four have special handling as they short-circuit the evaluation
+      // of either side of the expression.
+    case ast::binary_op::and_:
+      return eval_and_or<ast::binary_op::and_>(*this, x);
+    case ast::binary_op::or_:
+      return eval_and_or<ast::binary_op::or_>(*this, x);
+    case ast::binary_op::if_:
+      return eval_if(*this, x);
+    case ast::binary_op::else_:
+      return eval_else(*this, x);
   }
   TENZIR_UNREACHABLE();
 }

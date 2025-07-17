@@ -3,17 +3,21 @@ Checks: >
   *,
   -abseil-*,
   -altera-*,
-  -bugprone-lambda-function-name,
+  -boost-*,
   -bugprone-easily-swappable-parameters,
+  -bugprone-lambda-function-name,
+  -bugprone-suspicious-stringview-data-usage,
   -bugprone-switch-missing-default-case,
   -cert-dcl16-c,
   -cert-err58-cpp,
   -clang-analyzer-alpha*,
   -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-avoid-do-while,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-avoid-reference-coroutine-parameters,
   -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-static-cast-downcast,
   -cppcoreguidelines-pro-type-union-access,
@@ -25,17 +29,19 @@ Checks: >
   -misc-no-recursion,
   -modernize-use-nodiscard,
   -modernize-use-ranges,
+  -performance-enum-size,
+  -readability-avoid-nested-conditional-operator,
   -readability-braces-around-statements,
   -readability-else-after-return,
   -readability-function-cognitive-complexity,
   -readability-identifier-length,
   -readability-magic-numbers,
   -readability-named-parameter,
+  -readability-redundant-inline-specifier,
   -readability-uppercase-literal-suffix,
   -dummy-must-be-last-entry-without-trailing-comma
 WarningsAsErrors:      ''
 HeaderFilterRegex:     '/tenzir/'
-AnalyzeTemporaryDtors: false
 CheckOptions:
   - key:             readability-implicit-bool-conversion.AllowPointerConditions
     value:           true

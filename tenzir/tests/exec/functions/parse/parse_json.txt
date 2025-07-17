@@ -25,7 +25,6 @@
   output: null,
 }
 warning: failed to parse a boolean value in the JSON document
- = note: at `failure`
 
 warning: could not parse json
  --> exec/functions/parse/parse_json.tql:6:10

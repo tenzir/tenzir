@@ -83,23 +83,24 @@ struct enriched_dummy {};
 // dummies
 // clang-format off
 using field_type_list = detail::type_list<
-  caf::none_t,
-  bool,
-  int64_t,
-  uint64_t,
-  double,
-  duration,
-  time,
-  std::string,
-  pattern_dummy,
-  ip,
-  subnet,
-  enumeration,
-  node_list,
-  map_dummy,
-  node_record,
-  enriched_dummy,
-  blob
+  /* 0 */ caf::none_t,
+  /* 1 */ bool,
+  /* 2 */ int64_t,
+  /* 3 */ uint64_t,
+  /* 4 */ double,
+  /* 5 */ duration,
+  /* 6 */ time,
+  /* 7 */ std::string,
+  /* 8 */ pattern_dummy,
+  /* 9 */ ip,
+  /*10 */ subnet,
+  /*11 */ enumeration,
+  /*12 */ node_list,
+  /*13 */ map_dummy,
+  /*14 */ node_record,
+  /*15 */ enriched_dummy,
+  /*16 */ blob,
+  /*17 */ secret
 >;
 // clang-format on
 
@@ -303,8 +304,12 @@ private:
   ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::record_type* seed) -> void;
+
   /// @brief marks all fields in the record as dead.
   auto clear() -> void;
+
+  /// @brief reduces the number of elements to the limit
+  auto prune() -> void;
 
   // Record entry. This contains a string for the key and a field.
   // Its defined out of line because node_object cannot be defined at this point.
@@ -399,8 +404,12 @@ private:
   ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::list_type* seed) -> void;
+
   /// @brief marks the list and all its contents as dead, resetting its size to 0
   auto clear() -> void;
+
+  /// @brief reduces the number of elements to the limit
+  auto prune() -> void;
 
   // gets all alive nodes, i.e. all nodes with indices in `[0, first_dead_idx_)`
   auto alive_elements() -> std::span<node_object>;
@@ -516,6 +525,12 @@ private:
 struct node_record::entry_type {
   std::string key;
   node_object value;
+
+  /// This must exist for the `data_.resize()` call, but is guaranteed by the
+  /// surrounding logic to never be called.
+  entry_type() {
+    TENZIR_UNREACHABLE();
+  }
 
   entry_type(std::string_view name) : key{name} {
   }

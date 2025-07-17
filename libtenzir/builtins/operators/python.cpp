@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
@@ -23,6 +24,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -34,16 +36,44 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <boost/interprocess/sync/named_semaphore.hpp>
-#include <boost/process.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/settings.hpp>
 
 #include <filesystem>
 
-namespace tenzir::plugins::python {
-namespace {
+#if __has_include(<boost/process/v1/child.hpp>)
+
+#  include <boost/process/v1/args.hpp>
+#  include <boost/process/v1/async.hpp>
+#  include <boost/process/v1/async_system.hpp>
+#  include <boost/process/v1/child.hpp>
+#  include <boost/process/v1/cmd.hpp>
+#  include <boost/process/v1/env.hpp>
+#  include <boost/process/v1/environment.hpp>
+#  include <boost/process/v1/error.hpp>
+#  include <boost/process/v1/exe.hpp>
+#  include <boost/process/v1/group.hpp>
+#  include <boost/process/v1/handles.hpp>
+#  include <boost/process/v1/io.hpp>
+#  include <boost/process/v1/pipe.hpp>
+#  include <boost/process/v1/search_path.hpp>
+#  include <boost/process/v1/shell.hpp>
+#  include <boost/process/v1/spawn.hpp>
+#  include <boost/process/v1/start_dir.hpp>
+#  include <boost/process/v1/system.hpp>
+
+namespace bp = boost::process::v1;
+
+#else
+
+#  include <boost/process.hpp>
 
 namespace bp = boost::process;
+
+#endif
+
+namespace tenzir::plugins::python {
+namespace {
 
 /// Arrow InputStream API implementation over a file descriptor.
 class arrow_fd_wrapper : public ::arrow::io::InputStream {
@@ -70,7 +100,7 @@ public:
 
   auto Read(int64_t nbytes, void* out) -> ::arrow::Result<int64_t> override {
     auto bytes_read = detail::read(fd_, out, nbytes);
-    if (!bytes_read) {
+    if (! bytes_read) {
       return ::arrow::Status::IOError(fmt::to_string(bytes_read.error()));
     }
     auto sbytes = detail::narrow_cast<int64_t>(*bytes_read);
@@ -136,15 +166,17 @@ auto drain_pipe(bp::ipstream& pipe) -> std::string {
   return result;
 }
 
+using code_or_path_t = located<std::variant<std::filesystem::path, secret>>;
+
 class python_operator final : public crtp_operator<python_operator> {
 public:
   python_operator() = default;
 
   explicit python_operator(struct config config, std::string requirements,
-                           std::variant<std::filesystem::path, std::string> code)
+                           code_or_path_t code_or_path)
     : config_{std::move(config)},
       requirements_{std::move(requirements)},
-      code_{std::move(code)} {
+      code_{std::move(code_or_path)} {
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
@@ -163,7 +195,7 @@ public:
                         version::major, version::minor, version::patch)};
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};
-      if (!config_.create_venvs) {
+      if (! config_.create_venvs) {
         venv_base_dir = std::nullopt;
       } else if (const auto* cache_dir
                  = get_if<std::string>(&ctrl.self().home_system().config(),
@@ -182,30 +214,23 @@ public:
       // when many charts were using the Python operator.
       co_yield {};
       // Get the code to be executed.
-      auto maybe_code = std::visit(
-        detail::overload{
-          [](std::filesystem::path path) -> caf::expected<std::string> {
-            auto code_chunk = chunk::make_empty();
-            if (auto err = read(path, code_chunk)) {
-              return diagnostic::error(err)
-                .note("failed to read code from file")
-                .to_error();
-            }
-            return std::string{
-              reinterpret_cast<const char*>(code_chunk->data()),
-              code_chunk->size()};
-          },
-          [](std::string inline_code) -> caf::expected<std::string> {
-            return inline_code;
-          }},
-        code_);
-      if (!maybe_code) {
-        diagnostic::error(maybe_code.error())
-          .note("failed to obtain code")
-          .emit(ctrl.diagnostics());
-        co_return;
+      auto code = std::string{};
+      if (auto* path = try_as<std::filesystem::path>(code_.inner)) {
+        auto code_chunk = chunk::make_empty();
+        if (auto err = read(*path, code_chunk)) {
+          diagnostic::error(err)
+            .note("failed to read code from file")
+            .emit(ctrl.diagnostics());
+        }
+        code = std::string{reinterpret_cast<const char*>(code_chunk->data()),
+                           code_chunk->size()};
+      } else if (auto* secret = try_as<class secret>(code_.inner)) {
+        co_yield ctrl.resolve_secrets_must_yield({make_secret_request(
+          "code", *secret, code_.source, code, ctrl.diagnostics())});
+      } else {
+        TENZIR_UNREACHABLE();
       }
-      auto code = detail::strip_leading_indentation(std::string{*maybe_code});
+      code = detail::strip_leading_indentation(std::move(code));
       // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
@@ -244,7 +269,7 @@ public:
                           *maybe_venv, ec);
               return;
             }
-            if (!exists) {
+            if (! exists) {
               return;
             }
             std::filesystem::remove_all(*maybe_venv, ec);
@@ -293,14 +318,14 @@ public:
         };
         // `split` creates an empty token in case the input was entirely
         // empty, but we don't want that so we need an extra guard.
-        if (!implicit_requirements.empty()) {
+        if (! implicit_requirements.empty()) {
           auto implicit_requirements_vec
             = detail::split_escaped(implicit_requirements, " ", "\\");
           pip_invocation.insert(pip_invocation.end(),
                                 implicit_requirements_vec.begin(),
                                 implicit_requirements_vec.end());
         }
-        if (!requirements_.empty()) {
+        if (! requirements_.empty()) {
           auto requirements_vec = detail::split(requirements_, " ");
           pip_invocation.insert(pip_invocation.end(), requirements_vec.begin(),
                                 requirements_vec.end());
@@ -362,14 +387,14 @@ public:
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
       errpipe.pipe().assign_sink(-1);
-      if (!child.running()) {
+      if (! child.running()) {
         auto python_error = drain_pipe(errpipe);
         diagnostic::error("{}", python_error)
           .note("python process exited with error")
           .throw_();
       }
       for (auto&& slice : input) {
-        if (!child.running()) {
+        if (! child.running()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -381,18 +406,17 @@ public:
         }
         auto original_schema_name = slice.schema().name();
         auto batch = to_record_batch(slice);
-        auto stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-        auto writer = arrow::ipc::MakeStreamWriter(
-                        stream, slice.schema().to_arrow_schema())
-                        .ValueOrDie();
-        if (!writer->WriteRecordBatch(*batch).ok()) {
+        auto stream = check(arrow::io::BufferOutputStream::Create());
+        auto writer = check(arrow::ipc::MakeStreamWriter(
+          stream, slice.schema().to_arrow_schema()));
+        if (! writer->WriteRecordBatch(*batch).ok()) {
           diagnostic::error("failed to convert input batch to Arrow format")
             .note(
               "failed to write in conversion from input batch to Arrow format")
             .emit(ctrl.diagnostics());
           co_return;
         }
-        if (auto status = writer->Close(); !status.ok()) {
+        if (auto status = writer->Close(); ! status.ok()) {
           diagnostic::error("{}", status.message())
             .note("failed to close writer in conversion from input batch to "
                   "Arrow format")
@@ -400,7 +424,7 @@ public:
           co_return;
         }
         auto result = stream->Finish();
-        if (!result.status().ok()) {
+        if (! result.status().ok()) {
           diagnostic::error("{}", result.status().message())
             .note(
               "failed to flush in conversion from input batch to Arrow format")
@@ -411,7 +435,7 @@ public:
                      detail::narrow<int>((*result)->size()));
         auto file = arrow_fd_wrapper{std_out.native_source()};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
-        if (!reader.status().ok()) {
+        if (! reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -419,7 +443,7 @@ public:
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
-        if (!result_batch.status().ok()) {
+        if (! result_batch.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -429,7 +453,7 @@ public:
         // The writer on the other side writes an invalid record batch as
         // end-of-stream marker; we have to read it now to remove it from
         // the pipe.
-        if (auto result = (*reader)->ReadNext(); !result.ok()) {
+        if (auto result = (*reader)->ReadNext(); ! result.ok()) {
           diagnostic::error("{}", result.status().message())
             .note("failed to read closing bytes")
             .emit(ctrl.diagnostics());
@@ -483,19 +507,18 @@ public:
 private:
   config config_ = {};
   std::string requirements_ = {};
-  std::variant<std::filesystem::path, std::string> code_ = {};
+  code_or_path_t code_ = {};
 };
 
-class plugin final : public virtual operator_plugin<python_operator>,
-                     public virtual operator_factory_plugin {
+class plugin final : public virtual operator_plugin2<python_operator> {
 public:
   struct config config = {};
 
-  auto initialize(const record& plugin_config, const record& /*global_config*/)
+  auto initialize(const record& plugin_config, const record&)
     -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
-    if (!create_virtualenv) {
+    if (! create_virtualenv) {
       return create_virtualenv.error();
     }
     config.create_venvs = *create_virtualenv;
@@ -506,49 +529,11 @@ public:
     return {};
   }
 
-  auto signature() const -> operator_signature override {
-    return {
-      .transformation = true,
-    };
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::optional<located<std::string>>{};
-    auto requirements = std::string{};
-    auto filename = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"python", "https://docs.tenzir.com/"
-                                            "operators/python"};
-    parser.add("-r,--requirements", requirements, "<requirements>");
-    parser.add("-f,--file", filename, "<filename>");
-    parser.add(command, "<command>");
-    parser.parse(p);
-    if (!filename && !command) {
-      diagnostic::error("must have either the `--file` argument or inline code")
-        .throw_();
-    }
-    if (filename && command) {
-      diagnostic::error(
-        "cannot have `--file` argument together with inline code")
-        .primary(filename->source)
-        .primary(command->source)
-        .throw_();
-    }
-    auto code = std::variant<std::filesystem::path, std::string>{};
-    if (command.has_value()) {
-      code = command->inner;
-    } else {
-      code = std::filesystem::path{filename->inner};
-    }
-    return std::make_unique<python_operator>(config, std::move(requirements),
-                                             std::move(code));
-  }
-
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto requirements = std::optional<std::string>{};
-    auto code = std::optional<located<std::string>>{};
+    auto code = std::optional<located<secret>>{};
     auto path = std::optional<located<std::string>>{};
-    auto code_or_path = std::variant<std::filesystem::path, std::string>{};
     auto parser = argument_parser2::operator_("python")
                     .positional("code", code)
                     .named("file", path)
@@ -571,10 +556,13 @@ public:
         .emit(ctx);
       return failure::promise();
     }
+    auto code_or_path = code_or_path_t{};
     if (code) {
-      code_or_path = code->inner;
+      code_or_path.inner = std::move(code->inner);
+      code_or_path.source = code->source;
     } else {
-      code_or_path = std::filesystem::path{path->inner};
+      code_or_path.inner = std::filesystem::path{path->inner};
+      code_or_path.source = path->source;
     }
     if (not requirements) {
       requirements = "";

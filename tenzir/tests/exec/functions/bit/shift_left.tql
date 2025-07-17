@@ -1,0 +1,1 @@
+from {x: shift_left(5, 2)}

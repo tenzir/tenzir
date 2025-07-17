@@ -134,16 +134,16 @@ struct rest_response {
 
   auto is_error() const -> bool;
   auto body() const -> const std::string&;
+  auto headers() const -> const std::unordered_map<std::string, std::string>&;
   auto code() const -> size_t;
   auto error_detail() const -> const caf::error&;
-  auto release() && -> std::string;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, rest_response& r) {
     return f.object(r)
       .pretty_name("tenzir.rest_response")
       .fields(f.field("code", r.code_), f.field("body", r.body_),
-              f.field("detail", r.detail_));
+              f.field("headers", r.headers_), f.field("detail", r.detail_));
   }
 
 private:
@@ -152,6 +152,9 @@ private:
 
   // The response body
   std::string body_ = "{}";
+
+  // The headers to transmit
+  std::unordered_map<std::string, std::string> headers_ = {};
 
   // Whether this is an error response. We can't just check `code_` because
   // HTTP defines many different "success" values, and we can't just check

@@ -14,6 +14,7 @@ setup() {
     -v "${DATADIR}/misc/elasticmq.conf:/opt/elasticmq.conf" \
     softwaremill/elasticmq-native)
   export CONTAINER_ID="${container_id}"
+  export TENZIR_LEGACY=true
 }
 
 teardown() {

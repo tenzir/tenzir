@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/concepts.hpp"
 #include "tenzir/config.hpp"  // IWYU pragma: export
 #include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
@@ -130,9 +131,9 @@ class stringification_inspector;
 namespace tenzir {
 
 class active_store;
-class aggregation_function;
 class bitmap;
 class blob_type;
+class blob;
 class bool_type;
 class chunk;
 class command;
@@ -168,6 +169,7 @@ class plugin;
 class port;
 class record_type;
 class segment;
+class secret_type;
 class shared_diagnostic_handler;
 class string_type;
 class subnet_type;
@@ -230,6 +232,8 @@ struct data_extractor;
 struct data_point;
 struct diagnostic;
 struct disjunction;
+struct encrypted_secret_value;
+struct endpoint;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
@@ -276,6 +280,7 @@ struct resource;
 struct rest_endpoint;
 struct rest_response;
 struct schema_statistics;
+struct secret_resolution_result;
 struct spawn_arguments;
 struct status;
 struct taxonomies;
@@ -329,6 +334,7 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
+using symbol_map = std::unordered_map<std::string, legacy_type>;
 
 /// A duration in time with nanosecond resolution.
 using duration = caf::timespan;
@@ -340,20 +346,7 @@ using time = caf::timestamp;
 /// Enumeration type.
 using enumeration = uint8_t;
 
-/// Blob type.
-struct blob : std::vector<std::byte> {
-  using super = std::vector<std::byte>;
-  using super::super;
-
-  friend constexpr auto operator+(blob l, const blob& r) -> blob {
-    return l += r;
-  }
-
-  constexpr auto operator+=(const blob& r) -> blob& {
-    insert(end(), r.begin(), r.end());
-    return *this;
-  }
-};
+class secret;
 
 namespace fbs {
 
@@ -426,11 +419,13 @@ struct dollar_var;
 struct entity;
 struct expression;
 struct field_access;
+struct format_expr;
 struct function_call;
 struct identifier;
 struct if_stmt;
 struct index_expr;
 struct invocation;
+struct lambda_expr;
 struct let_stmt;
 struct list;
 struct match_stmt;
@@ -444,7 +439,7 @@ struct unary_expr;
 struct underscore;
 struct unpack;
 
-class simple_selector;
+class field_path;
 
 using statement
   = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
@@ -477,6 +472,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::diagnostic))
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
+  TENZIR_ADD_TYPE_ID((tenzir::endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::ewah_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))
@@ -508,6 +504,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
   TENZIR_ADD_TYPE_ID((tenzir::series))
+  TENZIR_ADD_TYPE_ID((tenzir::secret))
+  TENZIR_ADD_TYPE_ID((tenzir::secret_resolution_result))
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))

@@ -16,12 +16,16 @@
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/query_context.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/mail_cache.hpp>
+#include <caf/response_type.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <queue>
 #include <vector>
 
 namespace tenzir {
@@ -55,6 +59,42 @@ struct catalog_lookup_result {
   }
 };
 
+class request_cache {
+public:
+  template <class... Signatures, class... Args>
+  auto
+  stash(caf::typed_event_based_actor<Signatures...>* self, Args&&... args) {
+    using handle_type = caf::typed_actor<Signatures...>;
+    using response_type = caf::response_type_t<typename handle_type::signatures,
+                                               std::remove_cvref_t<Args>...>;
+    return [&]<class... Ts>(caf::type_list<Ts...>) {
+      auto rp = self->template make_response_promise<Ts...>();
+      stash_.emplace(
+        [self, rp,
+         args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+          TENZIR_ASSERT(rp.pending());
+          std::apply(
+            [&](auto&&... args) {
+              rp.delegate(handle_type{self},
+                          std::forward<decltype(args)>(args)...);
+            },
+            std::move(args));
+        });
+      return rp;
+    }.template operator()(response_type{});
+  }
+
+  auto unstash() {
+    while (not stash_.empty()) {
+      stash_.front()();
+      stash_.pop();
+    }
+  }
+
+private:
+  std::queue<std::function<void()>> stash_;
+};
+
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
@@ -63,8 +103,7 @@ public:
   constexpr static auto name = "catalog";
 
   /// Creates the catalog from a set of partition synopses.
-  auto initialize(
-    std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>> ps)
+  auto initialize(std::vector<partition_synopsis_pair> partitions)
     -> caf::result<atom::ok>;
 
   /// Add a new partition synopsis.
@@ -100,7 +139,9 @@ public:
   // See also ae9dbed.
   std::unordered_map<tenzir::type,
                      detail::flat_map<uuid, partition_synopsis_ptr>>
-    synopses_per_type = {};
+    synopses_per_type;
+
+  std::optional<request_cache> cache;
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;

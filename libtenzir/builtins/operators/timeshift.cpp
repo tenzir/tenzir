@@ -134,7 +134,7 @@ class timeshift_operator2 final : public crtp_operator<timeshift_operator2> {
 public:
   timeshift_operator2() = default;
 
-  explicit timeshift_operator2(ast::simple_selector selector, double speed,
+  explicit timeshift_operator2(ast::field_path selector, double speed,
                                std::optional<time> start) noexcept
     : speed_{speed}, selector_{std::move(selector)}, start_{start} {
   }
@@ -206,7 +206,7 @@ public:
 
 private:
   double speed_{1.0};
-  ast::simple_selector selector_;
+  ast::field_path selector_;
   std::optional<time> start_;
 };
 
@@ -241,7 +241,7 @@ struct plugin2 : operator_plugin2<timeshift_operator2> {
     -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
-    auto selector = ast::simple_selector{};
+    auto selector = ast::field_path{};
     argument_parser2::operator_("timeshift")
       .positional("field", selector, "time")
       .named("speed", speed)

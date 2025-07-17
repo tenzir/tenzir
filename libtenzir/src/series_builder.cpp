@@ -120,6 +120,11 @@ struct atom_view_to_type<view<blob>> {
   using type = blob_type;
 };
 
+template <>
+struct atom_view_to_type<view<secret>> {
+  using type = secret_type;
+};
+
 template <class T>
 using atom_view_to_type_t = atom_view_to_type<T>::type;
 
@@ -172,7 +177,7 @@ public:
     auto builder = arrow::NullBuilder{};
     check(builder.AppendNulls(count));
     length_ -= count;
-    return {null_type{}, builder.Finish().ValueOrDie()};
+    return {null_type{}, check(builder.Finish())};
   }
 
   auto arrow_type() const -> std::shared_ptr<arrow::DataType> override {
@@ -270,10 +275,8 @@ public:
     auto result = series{};
     if (count == 0) {
       result.type = type();
-      result.array
-        = result.type.make_arrow_builder(arrow::default_memory_pool())
-            ->Finish()
-            .ValueOrDie();
+      result.array = check(
+        result.type.make_arrow_builder(arrow::default_memory_pool())->Finish());
     } else {
       result = builder_->finish(count);
     }
@@ -477,7 +480,7 @@ public:
       variant_offsets[discriminant] += 1;
     }
     discriminants_.erase(discriminants_.begin(), end);
-    return {string_type{}, builder.Finish().ValueOrDie()};
+    return {string_type{}, check(builder.Finish())};
   }
 
   auto arrow_type() const -> std::shared_ptr<arrow::DataType> override {
@@ -571,7 +574,7 @@ public:
   using array_type = arrow::TypeTraits<typename T::arrow_type>::ArrayType;
 
   auto finish() -> std::shared_ptr<array_type> {
-    return std::static_pointer_cast<array_type>(inner_->Finish().ValueOrDie());
+    return std::static_pointer_cast<array_type>(check(inner_->Finish()));
   }
 
   auto finish(int64_t count) -> series override {
@@ -581,7 +584,7 @@ public:
     auto rest_begin = count;
     auto rest_count = array->length() - rest_begin;
     check(append_array_slice(*inner_, type_, *array, rest_begin, rest_count));
-    return {type_, array->SliceSafe(0, count).ValueOrDie()};
+    return {type_, check(array->SliceSafe(0, count))};
   }
 
   auto arrow_type() const -> std::shared_ptr<arrow::DataType> override {
@@ -667,8 +670,20 @@ public:
     auto offsets = std::shared_ptr<arrow::Int32Array>{};
     check(offsets_.Finish(&offsets));
     auto result_offsets = std::static_pointer_cast<arrow::Int32Array>(
-      offsets->SliceSafe(0, count + 1).ValueOrDie());
+      check(offsets->SliceSafe(0, count + 1)));
+    // The last offset must always be non-null. However, if we finish this
+    // builder partially, it can happen that we wrote a null. This is a rare
+    // edge case, and thus we just take the performance hit here of
+    // reconstructing the offset array. Note that the underlying value is set
+    // correctly even if we write a null.
     auto ending_offset = result_offsets->Value(count);
+    if (result_offsets->IsNull(count)) {
+      check(offsets_.Reserve(result_offsets->length()));
+      check(offsets_.AppendArraySlice(*result_offsets->data(), 0,
+                                      result_offsets->length() - 1));
+      check(offsets_.Append(ending_offset));
+      check(offsets_.Finish(&result_offsets));
+    }
     TENZIR_TRACE("ending offset of list is {} out of {}", ending_offset,
                  elements_.length());
     if (count == old_length) {
@@ -686,9 +701,8 @@ public:
     // The following call will reset the list type (and therefore destroy the
     // inner builder) if no elements remain.
     auto result_elements = elements_.finish(ending_offset);
-    auto result
-      = arrow::ListArray::FromArrays(*result_offsets, *result_elements.array)
-          .ValueOrDie();
+    auto result = check(
+      arrow::ListArray::FromArrays(*result_offsets, *result_elements.array));
     TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
     return {list_type{result_elements.type}, result};
   }
@@ -778,7 +792,7 @@ public:
     if (valid_.length() > 0) {
       if (count < valid_.length()) {
         auto total_bits = valid_.length();
-        null_bitmap = valid_.Finish().ValueOrDie();
+        null_bitmap = check(valid_.Finish());
         auto copy_bits = total_bits - count;
         check(valid_.Reserve(copy_bits));
         valid_.UnsafeAppend(null_bitmap->data(), count, copy_bits);
@@ -786,7 +800,7 @@ public:
       } else {
         auto missing = count - valid_.length();
         check(valid_.Append(missing, true));
-        null_bitmap = valid_.Finish().ValueOrDie();
+        null_bitmap = check(valid_.Finish());
       }
     }
     auto result = std::make_shared<arrow::StructArray>(
@@ -820,7 +834,7 @@ public:
   void resize(int64_t new_length) override {
     if (new_length < length_) {
       if (valid_.length() > new_length) {
-        auto nulls = valid_.Finish().ValueOrDie();
+        auto nulls = check(valid_.Finish());
         check(valid_.Append(nulls->data(), new_length));
       }
       for (auto& [_, builder] : fields_) {

@@ -1,0 +1,11 @@
+from {
+  "false_and_false": false and false,
+  "false_and_null": false and null,
+  "false_and_true": false and true,
+  "null_and_false": null and false,
+  "null_and_null": null and null,
+  "null_and_true": null and true,
+  "true_and_false": true and false,
+  "true_and_null": true and null,
+  "true_and_true": true and true,
+}

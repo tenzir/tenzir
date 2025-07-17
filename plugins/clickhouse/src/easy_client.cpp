@@ -20,13 +20,14 @@ using namespace std::string_view_literals;
 
 namespace tenzir::plugins::clickhouse {
 
-auto easy_client::make(arguments args,
-                       diagnostic_handler& dh) -> std::unique_ptr<easy_client> {
-  auto client = std::make_unique<easy_client>(std::move(args), dh);
+auto easy_client::make(arguments args, diagnostic_handler& dh)
+  -> std::unique_ptr<easy_client> {
+  auto client
+    = std::make_unique<easy_client>(std::move(args), dh, ctor_token{});
   /// Note that technically, we have a ToCToU bug here. The table could be
   /// created or deleted in between this, the `get` call below and the potential
   /// creation in `insert`.
-  const auto table_existed = client->table_exists();
+  const auto table_existed = client->check_if_table_exists();
   TENZIR_TRACE("table exists: {}", table_existed);
   if (client->args_.mode.inner == mode::create and table_existed) {
     diagnostic::error("mode is `create`, but table `{}` already exists",
@@ -61,7 +62,7 @@ auto easy_client::make(arguments args,
   return client;
 }
 
-auto easy_client::table_exists() -> bool {
+auto easy_client::check_if_table_exists() -> bool {
   // // This does not work for some reason. It returns a table with 0 rows.
   // auto query = Query{fmt::format("EXISTS TABLE {}", table)};
   // auto exists = false;
@@ -98,11 +99,14 @@ auto easy_client::get_schema_transformations() -> failure_or<void> {
   transformations_.emplace();
   bool failed = false;
   auto cb = [&](const Block& block) {
+    auto path = path_type{};
     for (size_t i = 0; i < block.GetRowCount(); ++i) {
       auto name = block[0]->As<ColumnString>()->At(i);
       auto type_str = remove_non_significant_whitespace(
         block[1]->As<ColumnString>()->At(i));
-      auto functions = make_functions_from_clickhouse(type_str, dh_);
+      path.push_back(name);
+      auto functions = make_functions_from_clickhouse(path, type_str, dh_);
+      path.pop_back();
       if (not functions) {
         failed = true;
         return;
@@ -123,22 +127,32 @@ auto easy_client::get_schema_transformations() -> failure_or<void> {
 
 auto easy_client::create_table(const tenzir::record_type& schema)
   -> failure_or<void> {
+  TENZIR_ASSERT(args_.primary);
   auto columns = std::string{};
   auto trafos = transformer_record::schema_transformations{};
   auto primary_found = false;
+  auto path = path_type{};
+  /// TODO: This should really be merged with the transformer itself. Its an
+  /// (almost) duplicate of `make_record_functions_from_clickhouse`
   for (auto [k, t] : schema.fields()) {
     if (not validate_identifier(k)) {
       emit_invalid_identifier("column name", k, args_.operator_location, dh_);
       return failure::promise();
     }
-    auto clickhouse_type
-      = type_to_clickhouse_typename(t, k != args_.primary->inner);
-    auto functions = make_functions_from_clickhouse(clickhouse_type, dh_);
-    if (not functions) {
-      return failure::promise();
-    }
-    primary_found |= k == args_.primary->inner;
-    trafos.try_emplace(std::string{k}, std::move(functions));
+    const auto is_primary = k == args_.primary->inner;
+    path.push_back(k);
+    TRY(auto clickhouse_typename,
+        type_to_clickhouse_typename(path, t, not is_primary, dh_));
+    TENZIR_ASSERT(not clickhouse_typename.empty());
+    auto functions
+      = make_functions_from_clickhouse(path, clickhouse_typename, dh_);
+    path.pop_back();
+    TENZIR_ASSERT(functions,
+                  "expected to get functions for top level columns {}", k);
+    primary_found |= is_primary;
+    const auto [it, success]
+      = trafos.try_emplace(std::string{k}, std::move(functions));
+    TENZIR_ASSERT(success);
   }
   if (not primary_found) {
     diagnostic::error(
@@ -150,30 +164,36 @@ auto easy_client::create_table(const tenzir::record_type& schema)
   }
   transformations_ = transformer_record{"UNUSED", std::move(trafos)};
   constexpr static std::string_view engine = "MergeTree";
-  auto query_text
-    = fmt::format("CREATE TABLE {}"
-                  " {}"
-                  " ENGINE = {}"
-                  " ORDER BY {}",
-                  args_.table.inner,
-                  plain_clickhouse_tuple_elements(schema, args_.primary->inner),
-                  engine, args_.primary->inner);
+  TRY(auto clickhouse_columns,
+      plain_clickhouse_tuple_elements(path, schema, dh_, args_.primary->inner));
+  auto query_text = fmt::format("CREATE TABLE {}"
+                                " {}"
+                                " ENGINE = {}"
+                                " ORDER BY {}",
+                                args_.table.inner, clickhouse_columns, engine,
+                                args_.primary->inner);
   auto query = Query{query_text};
   client_.Execute(query);
   return {};
 }
 
-auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
+auto easy_client::insert(const table_slice& slice) -> bool {
   if (not transformations_) {
+    TENZIR_DEBUG("creating table");
     const auto& schema = as<record_type>(slice.schema());
-    TRY(create_table(schema));
-    TENZIR_TRACE("created table");
+    if (not create_table(schema)) {
+      return false;
+    }
+    TENZIR_DEBUG("created table");
     TENZIR_ASSERT(transformations_);
   }
   dropmask_.clear();
   dropmask_.resize(slice.rows());
   TENZIR_ASSERT(transformations_);
   auto updated = transformer::drop::none;
+  path_type path{};
+  /// TODO: This should really be merged with the transformer itself. Its an
+  /// (almost) duplicate of `make_record_functions_from_clickhouse`
   for (const auto& [k, t, arr] : columns_of(slice)) {
     auto [trafo, idx] = transformations_->transfrom_and_index_for(k);
     if (not trafo) {
@@ -182,11 +202,15 @@ auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
         .note("column will be dropped")
         .primary(args_.operator_location)
         .emit(dh_);
+      continue;
     }
     transformations_->found_column[idx] = true;
-    updated = updated | trafo->update_dropmask(t, arr, dropmask_, dh_);
+    path.push_back(k);
+    updated = updated | trafo->update_dropmask(path, t, arr, dropmask_, dh_);
+    path.pop_back();
     if (updated == transformer::drop::all) {
-      return failure::promise();
+      // has already been reported
+      return false;
     }
   }
   for (const auto& [i, kvp] :
@@ -201,22 +225,36 @@ auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
       "required column missing in input, event will be dropped")
       .note("column `{}` is missing", kvp.first)
       .emit(dh_);
-    return failure::promise();
+    return false;
   }
+  const auto dropcount = pop_count(dropmask_);
   auto block = ::clickhouse::Block{};
   for (const auto& [k, t, arr] : columns_of(slice)) {
     const auto [trafo, out_idx] = transformations_->transfrom_and_index_for(k);
     if (not trafo) {
       continue;
     }
-    auto this_column = trafo->create_column(t, arr, dropmask_, dh_);
-    TENZIR_ASSERT(this_column);
+    path.push_back(k);
+    auto this_column
+      = trafo->create_column(path, t, arr, dropmask_, dropcount, dh_);
+    TENZIR_ASSERT(this_column->Size() == slice.rows() - dropcount,
+                  "wrong row count in column `{}`; {} != {} - {}",
+                  fmt::join(path, "."), this_column->Size(), slice.rows(),
+                  dropcount);
+    path.pop_back();
+    if (not this_column) {
+      diagnostic::warning("failed to add column `{}` to ClickHouse table", k)
+        .emit(dh_);
+      return false;
+    }
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
-
-  if (block.GetColumnCount() > 0) {
+  TENZIR_ASSERT(block.GetRowCount() == slice.rows() - dropcount,
+                "wrong row count for final block `{} != {} - {}`",
+                block.GetRowCount(), slice.rows(), dropcount);
+  if (block.GetRowCount() > 0 and block.GetColumnCount() > 0) {
     client_.Insert(args_.table.inner, block);
   }
-  return {};
+  return true;
 }
 } // namespace tenzir::plugins::clickhouse

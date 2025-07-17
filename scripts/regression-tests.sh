@@ -18,12 +18,12 @@ docker run \
 
 sleep 3
 
-docker exec -i tenzir-regression \
-  tenzir 'read suricata | import' \
+docker exec -e TENZIR_TQL2=true tenzir-regression \
+  tenzir 'read_suricata | import' \
   < tenzir/bats/data/inputs/suricata/eve.json
 
-docker exec tenzir-regression \
-  tenzir 'export | where #schema == "suricata.alert" | write json' \
+docker exec -e TENZIR_TQL2=true tenzir-regression \
+  tenzir 'export | where @name == "suricata.alert" | write_json' \
   > old.json
 
 docker rm -f tenzir-regression
@@ -35,8 +35,8 @@ docker run \
 
 sleep 3
 
-docker exec tenzir-regression \
-  tenzir 'export | where #schema == "suricata.alert" | write json' \
+docker exec -e TENZIR_TQL2=true tenzir-regression \
+  tenzir 'export | where @name == "suricata.alert" | write_json' \
   > new.json
 
 docker rm -f tenzir-regression

@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/as_bytes.hpp"
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/function.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/narrow.hpp"
@@ -95,7 +96,7 @@ public:
   /// is intended to guard against accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
-    requires(!std::is_lvalue_reference_v<Buffer> && //
+    requires(not std::is_lvalue_reference_v<Buffer> && //
              requires(const Buffer& buffer) {
                { as_bytes(buffer) } -> std::convertible_to<view_type>;
              })
@@ -279,48 +280,103 @@ private:
 
   template <class Inspector>
   friend bool load_impl(Inspector& f, chunk_ptr& x) {
-    int64_t size = 0;
-    if (!f.apply(size))
+    x = nullptr;
+    if (not f.template begin_object_t<chunk_ptr>()) {
       return false;
-    if (size == chunk::invalid_size) {
-      x = nullptr;
-      return true;
     }
-    if (size == 0) {
-      x = chunk::make_empty();
-      return true;
+    auto has_bytes = false;
+    if (not f.begin_field("bytes", has_bytes)) {
+      return false;
     }
-    auto buffer = std::make_unique<chunk::value_type[]>(size);
-    const auto data = buffer.get();
-    for (auto i = 0; i < size; ++i)
-      if (!f.apply(buffer[i])) {
-        x = nullptr;
+    if (has_bytes) {
+      chunk::size_type size = 0;
+      if (not f.begin_sequence(size)) {
         return false;
       }
-    // Loading the metadata can fail as it wasn't present before Tenzir v4.4.
-    auto metadata = chunk_metadata{};
-    (void)f.apply(metadata);
-    x = chunk::make(
-      data, size,
-      [buffer = std::move(buffer)]() noexcept {
-        static_cast<void>(buffer);
-      },
-      std::move(metadata));
+      auto buffer = std::make_unique_for_overwrite<std::byte[]>(size); // NOLINT
+      for (auto* it = buffer.get(); it != buffer.get() + size; ++it) {
+        if (not f.value(*it)) {
+          return false;
+        }
+      }
+      if (not f.end_sequence()) {
+        return false;
+      }
+      const auto view = chunk::view_type{buffer.get(), size};
+      x = chunk::make(
+        view,
+        [buffer = std::move(buffer)]() noexcept {
+          static_cast<void>(buffer);
+        },
+        chunk_metadata{});
+    }
+    if (not f.end_field()) {
+      return false;
+    }
+    auto has_metadata = false;
+    if (not f.begin_field("metadata", has_metadata)) {
+      return false;
+    }
+    if (has_metadata) {
+      if (not x) {
+        // If we're here then we got a non-nullptr chunk with metadata, which is
+        // a logic error in the serializer.
+        f.set_error(caf::make_error(ec::logic_error,
+                                    "non-nullptr chunk cannot have metadata"));
+        return false;
+      }
+      TENZIR_ASSERT(x, "got chunk without data but with metadata");
+      if (not f.apply(x->metadata_)) {
+        return false;
+      }
+    }
+    if (not f.end_field()) {
+      return false;
+    }
+    if (not f.end_object()) {
+      return false;
+    }
     return true;
   }
 
   template <class Inspector>
-  friend bool save_impl(Inspector& f, chunk_ptr& x) {
-    using tenzir::detail::narrow;
-    if (x == nullptr)
-      return f.apply(chunk::invalid_size);
-    if (!f.apply(narrow<int64_t>(x->size())))
+  friend auto save_impl(Inspector& f, chunk_ptr& x) -> bool {
+    if (not f.template begin_object_t<chunk_ptr>()) {
       return false;
-    for (auto byte : *x)
-      if (!f.apply(byte))
+    }
+    if (not f.begin_field("bytes", x != nullptr)) {
+      return false;
+    }
+    if (x) {
+      if (not f.begin_sequence(x->size())) {
         return false;
-    if (not f.apply(x->metadata()))
+      }
+      for (auto byte : x->view_) {
+        if (not f.value(byte)) {
+          return false;
+        }
+      }
+      if (not f.end_sequence()) {
+        return false;
+      }
+    }
+    if (not f.end_field()) {
       return false;
+    }
+    if (not f.begin_field("metadata", x != nullptr)) {
+      return false;
+    }
+    if (x) {
+      if (not f.apply(x->metadata_)) {
+        return false;
+      }
+    }
+    if (not f.end_field()) {
+      return false;
+    }
+    if (not f.end_object()) {
+      return false;
+    }
     return true;
   }
 
@@ -366,8 +422,9 @@ struct formatter<tenzir::chunk_ptr> {
 
   template <class FormatContext>
   auto format(const tenzir::chunk_ptr& value, FormatContext& ctx) const {
-    if (!value)
+    if (not value) {
       return fmt::format_to(ctx.out(), "{}", "nullptr");
+    }
     return fmt::format_to(ctx.out(), "*{}", fmt::ptr(value.get()));
   }
 };

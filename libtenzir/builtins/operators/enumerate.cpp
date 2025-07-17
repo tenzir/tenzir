@@ -71,7 +71,7 @@ public:
       }
       offset += n;
       // Replace first column with a pair of (RID, first).
-      auto rid_array = builder->Finish().ValueOrDie();
+      auto rid_array = finish(*builder);
       return {
         {{field_, rid_type}, rid_array},
         {field, array},
@@ -121,7 +121,7 @@ class enumerate_operator2 final : public crtp_operator<enumerate_operator2> {
 public:
   enumerate_operator2() = default;
 
-  explicit enumerate_operator2(ast::simple_selector selector)
+  explicit enumerate_operator2(ast::field_path selector)
     : selector_{std::move(selector)} {
   }
 
@@ -158,7 +158,7 @@ private:
     return f.apply(x.selector_);
   }
 
-  ast::simple_selector selector_;
+  ast::field_path selector_;
 };
 
 class plugin final : public virtual operator_plugin<enumerate_operator> {
@@ -196,7 +196,7 @@ class plugin2 final : public virtual operator_plugin2<enumerate_operator2> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto selector = ast::simple_selector::try_from(
+    auto selector = ast::field_path::try_from(
       ast::root_field{ast::identifier{"#", inv.self.get_location()}});
     TENZIR_ASSERT(selector.has_value());
     TRY(argument_parser2::operator_("enumerate")

@@ -13,8 +13,10 @@
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 
 #include <arrow/util/tdigest.h>
 
@@ -27,6 +29,10 @@ class sqrt final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.sqrt";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -81,7 +87,6 @@ public:
               diagnostic::warning("expected `number`, got `{}`",
                                   value.type.kind())
                 .primary(expr)
-                .docs("https://docs.tenzir.com/functions/sqrt")
                 .emit(ctx);
               check(b.AppendNulls(value.length()));
             },
@@ -97,6 +102,10 @@ class random final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.random";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return false;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -118,17 +127,53 @@ public:
 
 class count_instance final : public aggregation_instance {
 public:
-  explicit count_instance(std::optional<ast::expression> expr)
-    : expr_{std::move(expr)} {
+  explicit count_instance(std::optional<ast::expression> expr,
+                          std::optional<ast::lambda_expr> lambda)
+    : expr_{std::move(expr)}, lambda_{std::move(lambda)} {
+    if (lambda_) {
+      // Aggregation functions do not evaluate their arguments for null values,
+      // so we patch the lambda expression from `left => right` to `left =>
+      // right if left != null else false`
+      lambda_->right = ast::binary_expr{
+        ast::binary_expr{
+          lambda_->right,
+          located{ast::binary_op::if_, location::unknown},
+          ast::binary_expr{
+            lambda_->left_as_field_path().inner(),
+            located{ast::binary_op::neq, location::unknown},
+            ast::constant{caf::none, location::unknown},
+          },
+        },
+        located{ast::binary_op::else_, location::unknown},
+        ast::constant{false, location::unknown},
+      };
+    }
   }
 
   void update(const table_slice& input, session ctx) override {
-    if (not expr_) {
-      count_ += detail::narrow<int64_t>(input.rows());
+    const auto subject
+      = expr_ ? eval(*expr_, input, ctx) : multi_series{series{input}};
+    if (not lambda_) {
+      for (const auto& part : subject) {
+        count_ += part.array->length() - part.array->null_count();
+      }
       return;
     }
-    auto arg = eval(*expr_, input, ctx);
-    count_ += arg.length() - arg.null_count();
+    for (const auto& pred : eval(*lambda_, subject, ctx)) {
+      const auto typed_pred = pred.as<bool_type>();
+      if (not typed_pred) {
+        diagnostic::warning("expected `bool`, got `{}`", pred.type.kind())
+          .primary(lambda_->right)
+          .emit(ctx);
+        continue;
+      }
+      if (typed_pred->array->null_count() > 0) {
+        diagnostic::warning("expected `bool`, got `null`")
+          .primary(lambda_->right)
+          .emit(ctx);
+      }
+      count_ += typed_pred->array->true_count();
+    }
   }
 
   auto get() const -> data override {
@@ -159,6 +204,7 @@ public:
 
 private:
   std::optional<ast::expression> expr_;
+  std::optional<ast::lambda_expr> lambda_;
   int64_t count_ = 0;
 };
 
@@ -168,13 +214,39 @@ public:
     return "tql2.count";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = std::optional<ast::expression>{};
     TRY(argument_parser2::function("count")
           .positional("x", expr, "any")
           .parse(inv, ctx));
-    return std::make_unique<count_instance>(std::move(expr));
+    return std::make_unique<count_instance>(std::move(expr), std::nullopt);
+  }
+};
+
+class count_if final : public aggregation_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.count_if";
+  }
+
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    auto lambda = ast::lambda_expr{};
+    TRY(argument_parser2::function("count_if")
+          .positional("x", expr, "any")
+          .positional("predicate", lambda, "any => bool")
+          .parse(inv, ctx));
+    return std::make_unique<count_instance>(std::move(expr), std::move(lambda));
   }
 };
 
@@ -229,7 +301,8 @@ public:
           // Silently ignore nulls, like we do above.
         },
         [&](const auto&) {
-          diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+          diagnostic::warning("expected `int`, `uint`, `double` or "
+                              "`duration`, "
                               "got `{}`",
                               arg.type.kind())
             .primary(expr_)
@@ -283,6 +356,10 @@ class quantile final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.quantile";
+  }
+
+  auto is_deterministic() const -> bool final {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const
@@ -348,6 +425,10 @@ public:
     return "tql2.median";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
@@ -398,5 +479,6 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count_if)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::quantile)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::median)

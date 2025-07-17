@@ -10,6 +10,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <caf/typed_actor.hpp>
 
@@ -21,14 +22,14 @@ class metric_handler {
 public:
   metric_handler() = default;
   metric_handler(metrics_receiver_actor receiver, uint64_t operator_index,
-                 uint64_t metric_index, const type& metric_type);
+                 const type& metric_type);
 
   auto emit(record&& r) -> void;
 
 private:
   metrics_receiver_actor receiver_ = {};
   uint64_t op_index_ = {};
-  uint64_t metric_index_ = {};
+  uuid metrics_id_ = uuid::random();
 };
 
 } // namespace tenzir

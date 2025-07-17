@@ -117,6 +117,7 @@ stdenv.mkDerivation rec {
       "-DFLB_RELEASE=ON"
       "-DFLB_DEBUG=OFF"
       "-DFLB_PREFER_SYSTEM_LIBS=Yes"
+      "-DFLB_CORO_STACK_SIZE=24576"
     ]
     ++ lib.optionals stdenv.cc.isClang [
       # FLB_SECURITY causes bad linker options for Clang to be set.
@@ -135,18 +136,22 @@ stdenv.mkDerivation rec {
     "dev"
   ];
 
-  postInstall = let
-    archive-blacklist = [
-      "libmaxminddb.a"
-      "libxxhash.a"
-    ];
-  in lib.optionalString stdenv.hostPlatform.isStatic ''
-    set -x
-    mkdir -p $out/lib
-    find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
-           -exec cp "{}" $out/lib/ \;
-    set +x
-  '';
+  postInstall =
+    let
+      archive-blacklist = [
+        "libmaxminddb.a"
+        "libxxhash.a"
+      ];
+    in
+    lib.optionalString stdenv.hostPlatform.isStatic ''
+      set -x
+      mkdir -p $out/lib
+      find . -type f \( -name "*.a" ${
+        lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist
+      } \) \
+             -exec cp "{}" $out/lib/ \;
+      set +x
+    '';
 
   doInstallCheck = true;
 

@@ -16,10 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
       - name: Check
         run: |
           pip install --upgrade ansible ansible-lint
@@ -31,12 +33,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
       - name: Check
         run: |
+          set -eo pipefail
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
           git add --intent-to-add --all
@@ -51,12 +56,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
       - name: Check
         run: |
+          set -eo pipefail
           pip install --upgrade clang-format
           which clang-format
           clang-format --version
@@ -70,6 +78,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -81,6 +91,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Run cmake-format
         run: |
+          set -eo pipefail
           git add --intent-to-add --all
           git ls-files -z -- 'CMakeLists.txt' '*.cmake' |
             xargs -0 uvx --from cmakelang cmake-format --in-place
@@ -96,6 +107,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 18
@@ -109,12 +122,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
       - name: Check
         run: |
+          set -eo pipefail
           pip install --upgrade shellcheck-py
           git add --intent-to-add --all
           git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
@@ -125,12 +141,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
       - name: Check
         run: |
+          set -eo pipefail
           pip install --upgrade shfmt-py
           git add --intent-to-add --all
           git ls-files --recurse-submodules -z -- '*.bats' ':!:tenzir/bats/lib/bats*/**' |
@@ -142,6 +161,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: hashicorp/setup-terraform@v3
       - name: Check
         run: |
@@ -152,12 +173,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
       - name: Check
         run: |
+          set -eo pipefail
           pip install --upgrade yamllint
           git add --intent-to-add --all
           git ls-files --recurse-submodules -z -- '*.yaml' '.yml' |

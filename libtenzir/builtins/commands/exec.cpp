@@ -91,10 +91,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
                   cfg.implicit_events_source);
-  cfg.tql2 = caf::get_or(inv.options, "tenzir.tql2", cfg.tql2);
-  cfg.silence_tql1_deprecation_notice
-    = caf::get_or(inv.options, "tenzir.silence-tql1-deprecation-notice",
-                  cfg.silence_tql1_deprecation_notice);
+  cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
+  cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   auto filename = std::string{};
   auto content = std::string{};
@@ -178,8 +176,13 @@ public:
         .add<std::string>("implicit-events-source",
                           "implicit source for pipelines starting with events "
                           "(default: 'from stdin read json'")
+        .add<bool>("multi", "split pipelines at void-to-void boundaries, "
+                            "running them sequentially")
         .add<bool>("strict",
                    "return a non-zero exit code if any warnings occured"));
+    exec->options.add<bool>("?tenzir", "tql2",
+                            "enable TQL2-only mode (deprecated; this option is "
+                            "always enabled)");
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

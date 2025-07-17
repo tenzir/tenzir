@@ -9,8 +9,10 @@
 #pragma once
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/offset.hpp"
 #include "tenzir/type.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/array.h>
 #include <arrow/record_batch.h>
@@ -19,6 +21,8 @@
 #include <memory>
 
 namespace tenzir {
+
+struct series_field;
 
 template <class Type>
 struct basic_series {
@@ -33,13 +37,13 @@ struct basic_series {
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, type>)
     : type{slice.schema()},
-      array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
+      array{check(to_record_batch(slice)->ToStructArray())} {
   }
 
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, record_type>)
-    : type{as<record_type>(slice.schema())},
-      array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
+    : type{tenzir::as<record_type>(slice.schema())},
+      array{check(to_record_batch(slice)->ToStructArray())} {
   }
 
   basic_series(table_slice slice, offset idx)
@@ -49,9 +53,24 @@ struct basic_series {
   }
 
   template <class Other>
-    requires(std::same_as<Type, type> || std::same_as<Other, Type>)
+    requires(not std::same_as<Other, class tenzir::type>)
   basic_series(Other type, std::shared_ptr<type_to_arrow_array_t<Type>> array)
     : type{std::move(type)}, array{std::move(array)} {
+  }
+
+  explicit(false)
+    basic_series(std::shared_ptr<type_to_arrow_array_t<Type>> array)
+    requires basic_type<Type>
+    : type{Type{}}, array{std::move(array)} {
+  }
+
+  basic_series(class type type,
+               std::shared_ptr<type_to_arrow_array_t<class type>> array)
+    requires(std::same_as<Type, class type>)
+    : type{std::move(type)}, array{std::move(array)} {
+    TENZIR_ASSERT_EXPENSIVE(not this->array
+                            or this->type.to_arrow_type()->id()
+                                 == this->array->type_id());
   }
 
   // TODO: std::get_if, etc.
@@ -74,6 +93,12 @@ struct basic_series {
     }
   }
 
+  auto field(std::string_view name) const -> std::optional<series>
+    requires(std::same_as<Type, record_type>);
+
+  auto fields() const -> generator<series_field>
+    requires(std::same_as<Type, record_type>);
+
   auto length() const -> int64_t {
     return array ? array->length() : 0;
   }
@@ -86,7 +111,13 @@ struct basic_series {
     (void)b->AppendNulls(length);
     return {std::move(ty),
             std::static_pointer_cast<type_to_arrow_array_t<Other>>(
-              b->Finish().ValueOrDie())};
+              check(b->Finish()))};
+  }
+
+  static auto null(int64_t length) -> basic_series<Type>
+    requires(basic_type<Type>)
+  {
+    return null(Type{}, length);
   }
 
   template <class Inspector>
@@ -140,9 +171,15 @@ struct basic_series {
 
   [[nodiscard]] auto slice(int64_t begin, int64_t end) const
     -> basic_series<Type> {
-    auto sliced = array->SliceSafe(begin, end - begin);
-    TENZIR_ASSERT(sliced.ok());
-    return {type, sliced.MoveValueUnsafe()};
+    auto sliced = check(array->SliceSafe(begin, end - begin));
+    return {
+      type,
+      std::static_pointer_cast<type_to_arrow_array_t<Type>>(std::move(sliced)),
+    };
+  }
+
+  auto at(int64_t i) const& {
+    return view_at(*array, i);
   }
 
   Type type;
@@ -152,5 +189,55 @@ struct basic_series {
 /// A series represents a contiguous representation of nullable data of the same
 /// type, e.g., a column in a table slice.
 using series = basic_series<type>;
+
+template <>
+class variant_traits<series> {
+public:
+  static constexpr auto count = variant_traits<type>::count;
+
+  static auto index(const series& x) -> size_t {
+    return variant_traits<type>::index(x.type);
+  }
+
+  template <size_t I>
+  static auto get(const series& x) -> decltype(auto) {
+    auto ty = variant_traits<type>::get<I>(x.type);
+    using Type = decltype(ty);
+    // Directly using `typeid(*x.array)` leads to a warning.
+    auto& deref = *x.array;
+    TENZIR_ASSERT(
+      typeid(type_to_arrow_array_t<Type>) == typeid(deref), "`{}` != `{}`",
+      caf::detail::pretty_type_name(typeid(type_to_arrow_array_t<Type>)),
+      caf::detail::pretty_type_name(typeid(deref)));
+    auto array = std::static_pointer_cast<type_to_arrow_array_t<Type>>(x.array);
+    return basic_series<Type>{std::move(ty), std::move(array)};
+  }
+};
+
+struct series_field {
+  std::string_view name;
+  series data;
+};
+
+auto make_record_series(std::span<const series_field> fields,
+                        const arrow::StructArray& origin)
+  -> basic_series<record_type>;
+
+/// Returns a list series with the given inner values, and the list structure
+/// derived from an existing `arrow::ListArray`.
+auto make_list_series(const series& values, const arrow::ListArray& origin)
+  -> basic_series<list_type>;
+
+/// @related flatten
+struct flatten_series_result {
+  basic_series<type> series;
+  std::vector<std::string> renamed_fields = {};
+};
+
+/// Flattens a `series` if it is a record, returning it as-is otherwise
+/// @param s a series to flatten
+/// @param flatten_separator the separator to use in between nested keys
+auto flatten(series s, std::string_view flatten_separator = ".")
+  -> flatten_series_result;
 
 } // namespace tenzir

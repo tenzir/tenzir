@@ -1,0 +1,11 @@
+// Test reverse enum derivation - derive int from string
+// This test verifies that the derive operator can convert string enum values to their integer equivalents
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_name: "Read",  // Should derive activity_id = 2
+}
+ocsf::derive

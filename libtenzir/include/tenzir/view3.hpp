@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -169,7 +170,9 @@ template <std::derived_from<arrow::Array> T>
 auto view_at(const T& x, int64_t i)
   -> std::optional<view3<type_to_data_t<type_from_arrow_t<T>>>> {
   TENZIR_ASSERT(0 <= i);
-  TENZIR_ASSERT(i < x.length());
+  TENZIR_ASSERT(i < x.length(),
+                "index `{}` is out of range for array of length `{}`", i,
+                x.length());
   if (x.IsNull(i)) {
     return std::nullopt;
   }
@@ -215,16 +218,16 @@ inline auto record_view3::iterator::operator*() const
   };
 }
 
-template <std::same_as<arrow::Array> T>
-auto values3(const T& array) -> generator<data_view3> {
+inline auto values3(const arrow::Array& array) -> generator<data_view3> {
   return match(
     array,
     [&](const auto& x) -> generator<data_view3> {
-      for (auto i = int64_t{0}; i < array.length(); ++i) {
+      for (auto i = int64_t{0}; i < x.length(); ++i) {
         if (auto v = view_at(x, i)) {
           co_yield *v;
+        } else {
+          co_yield caf::none;
         }
-        co_yield caf::none;
       }
     },
     [&](const arrow::MapArray&) -> generator<data_view3> {
@@ -232,7 +235,9 @@ auto values3(const T& array) -> generator<data_view3> {
     });
 }
 
-template <std::derived_from<arrow::Array> T>
+template <typename T>
+  requires(not std::same_as<T, arrow::Array>
+           and std::derived_from<T, arrow::Array>)
 auto values3(const T& array)
   -> generator<std::optional<view3<type_to_data_t<type_from_arrow_t<T>>>>> {
   for (auto i = int64_t{0}; i < array.length(); ++i) {

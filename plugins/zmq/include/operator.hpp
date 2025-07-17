@@ -357,52 +357,53 @@ private:
   size_t num_peers_{0};
 };
 
-class zmq_loader final : public plugin_loader {
+class zmq_loader final : public crtp_operator<zmq_loader> {
 public:
   zmq_loader() = default;
 
   zmq_loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto conn = connection::make_source(args_);
     if (not conn) {
-      TENZIR_ERROR(conn.error());
-      return std::nullopt;
+      diagnostic::error(conn.error()).emit(ctrl.diagnostics());
+      co_return;
     }
-    auto make = [](operator_control_plane& ctrl,
-                   connection conn) mutable -> generator<chunk_ptr> {
-      while (true) {
-        if (conn.monitored()) {
-          // Poll in larger strides if we have no peers. Once we have at least
-          // one peer, there is no need to wait on monitoring events.
-          auto timeout = conn.num_peers() == 0 ? 500ms : 0ms;
-          conn.poll_monitor(timeout);
-          if (conn.num_peers() == 0) {
-            co_yield {};
-            continue;
-          }
-        }
-        if (auto message = conn.receive(250ms)) {
-          co_yield *message;
-        } else if (message == ec::timeout) {
+    while (true) {
+      if (conn->monitored()) {
+        // Poll in larger strides if we have no peers. Once we have at least
+        // one peer, there is no need to wait on monitoring events.
+        auto timeout = conn->num_peers() == 0 ? 500ms : 0ms;
+        conn->poll_monitor(timeout);
+        if (conn->num_peers() == 0) {
           co_yield {};
-        } else {
-          diagnostic::error(message.error()).emit(ctrl.diagnostics());
-          break;
+          continue;
         }
       }
-    };
-    return make(ctrl, std::move(*conn));
+      if (auto message = conn->receive(250ms)) {
+        co_yield *message;
+      } else if (message == ec::timeout) {
+        co_yield {};
+      } else {
+        diagnostic::error(message.error()).emit(ctrl.diagnostics());
+        break;
+      }
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "zmq";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "json";
+    return "load_zmq";
   }
 
   auto internal() const -> bool override {
@@ -419,25 +420,26 @@ private:
   loader_args args_;
 };
 
-class zmq_saver final : public plugin_saver {
+class zmq_saver final : public crtp_operator<zmq_saver> {
 public:
   zmq_saver() = default;
 
   zmq_saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    co_yield {};
     auto conn = connection::make_sink(args_);
     if (not conn) {
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to setup ZeroMQ: {}",
-                                         conn.error()));
+      diagnostic::error("failed to setup ZeroMQ: {}", conn.error())
+        .emit(ctrl.diagnostics());
     }
-    return [&ctrl, conn = std::make_shared<connection>(std::move(*conn))](
-             chunk_ptr chunk) mutable {
+    for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
-        return;
+        co_yield {};
+        continue;
       }
       if (conn->monitored()) {
         // Block until we have at least one peer, or fast-track with a zero
@@ -450,23 +452,24 @@ public:
       if (auto error = conn->send(chunk)) {
         diagnostic::error(error).emit(ctrl.diagnostics());
       }
-    };
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "zmq";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
+    return "save_zmq";
   }
 
   auto internal() const -> bool override {
     return args_.endpoint and args_.endpoint->inner.starts_with("inproc://");
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
   }
 
   friend auto inspect(auto& f, zmq_saver& x) -> bool {

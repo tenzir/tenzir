@@ -7,10 +7,10 @@ setup() {
 }
 
 @test "file roundtrip" {
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | top proto"
-  file=$(mktemp)
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | to ${file} write feather"
-  check tenzir "from ${file} read feather | top proto"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | top proto"
+  file="$(mktemp).feather"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | to \"${file}\""
+  check tenzir "from \"${file}\" | top proto"
 }
 
 @test "batch sizes" {
@@ -25,30 +25,30 @@ setup() {
     pip install pyarrow
   fi
 
-  tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 512 | write feather" |
+  tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | batch 512 | write_feather" |
     check python "${BATS_TENZIR_MISCDIR}/scripts/print-arrow-batch-size.py"
 }
 
 @test "invalid format" {
   gunzip -c "${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz" |
-    check ! tenzir "read feather"
+    check ! tenzir "read_feather"
 }
 
 @test "Additional write options" {
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level 10 --compression-type zstd | read feather | measure | drop timestamp"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | slice 1150:1160 | batch 512 | write feather --compression-level 7 --compression-type lz4 --min-space-savings .6 | read feather"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | batch 256 | write_feather compression_level=10, compression_type=\"zstd\" | read_feather | measure | drop timestamp"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | slice begin=1150, end=1160 | batch 512 | write_feather compression_level=7, compression_type=\"lz4\", min_space_savings=0.6 | read_feather"
   gunzip -c "${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz" |
-    check tenzir "read zeek-tsv | write feather --compression-level 7 | read feather | summarize count(.)"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type zstd --min-space-savings 0 | read feather | measure | drop timestamp"
+    check tenzir "read_zeek_tsv | write_feather compression_level=7 | read_feather | summarize count=count()"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | batch 256 | write_feather compression_level=-1, compression_type=\"zstd\", min_space_savings=0.0 | read_feather | measure | drop timestamp"
   gunzip -c "${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz" |
-    check ! tenzir "read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type wrongname | read feather"
+    check ! tenzir "read_zeek_tsv | batch 256 | write_feather compression_level=-1, compression_type=\"wrongname\" | read_feather"
 }
 
 @test "Verify compression" {
   file1=$(mktemp)
   file2=$(mktemp)
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch | to ${file1} write feather --compression-type uncompressed"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch | to ${file2} write feather --compression-level 20 --compression-type zstd"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | batch | to \"${file1}\" { write_feather compression_type=\"uncompressed\" }"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | batch | to \"${file2}\" { write_feather compression_level=20, compression_type=\"zstd\" }"
   filesize() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
       stat -f %z "$@"
@@ -63,14 +63,14 @@ setup() {
 
 @test "truncated input" {
   file=$(mktemp)
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 512 | to ${file} write feather"
+  check tenzir "from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv } | batch 512 | to \"${file}\" { write_feather }"
   dd "if=${file}" "of=${file}.10k" bs=1 count=10000
   dd "if=${file}" "of=${file}.1M" bs=1 count=1000000
-  check ! tenzir "from ${file}.10k read feather | summarize count(.)"
+  check ! tenzir "from \"${file}.10k\" { read_feather } | summarize count=count()"
   # This test emits a warning that looks like this:
   #   warning: truncated 60584 trailing bytes
   # The exact number of trailing bytes is different between Arrow versions, so
   # we modify the warning to just say X bytes.
-  tenzir "from ${file}.1M read feather | summarize count(.)" |
+  tenzir "from \"${file}.1M\" { read_feather } | summarize count=count()" |
     check perl -pe 's/truncated \d+/truncated X/g'
 }

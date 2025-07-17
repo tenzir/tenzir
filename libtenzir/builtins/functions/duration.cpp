@@ -25,6 +25,10 @@ public:
     return "duration";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -90,6 +94,10 @@ public:
     return name_;
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -106,6 +114,16 @@ public:
           arg.type,
           [&](const null_type&) {
             check(b->AppendNulls(arg.length()));
+          },
+          [&](const duration_type& t) {
+            diagnostic::warning("interpreting as `{}` has no effect", name())
+              .primary(expr, "already has type `duration`")
+              .hint("use `count_{}` to extract the number of {}", name(),
+                    name())
+              .emit(ctx);
+            check(append_array_slice(
+              *b, t, as<type_to_arrow_array_t<duration_type>>(*arg.array), 0,
+              arg.length()));
           },
           [&]<class U>(const U&)
             requires concepts::one_of<U, int64_type, uint64_type, double_type>
@@ -176,6 +194,10 @@ public:
 
   auto name() const -> std::string override {
     return name_;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

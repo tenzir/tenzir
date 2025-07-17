@@ -69,15 +69,18 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       {"hour", cast(hours(1))},
       {"hrs", cast(hours(1))},
       {"h", cast(hours(1))},
-      {"days", cast(hours(24))},
-      {"day", cast(hours(24))},
-      {"d", cast(hours(24))},
-      {"weeks", cast(hours(24 * 7))},
-      {"week", cast(hours(24 * 7))},
-      {"w", cast(hours(24 * 7))},
-      {"years", cast(hours(24 * 365))},
-      {"year", cast(hours(24 * 365))},
-      {"y", cast(hours(24 * 365))},
+      {"days", cast(days(1))},
+      {"day", cast(days(1))},
+      {"d", cast(days(1))},
+      {"weeks", cast(weeks(1))},
+      {"week", cast(weeks(1))},
+      {"w", cast(weeks(1))},
+      {"months", cast(months(1))},
+      {"month", cast(months(1))},
+      {"mo", cast(months(1))},
+      {"years", cast(years(1))},
+      {"year", cast(years(1))},
+      {"y", cast(years(1))},
     };
     static const auto unit
       = (+parsers::alpha)
@@ -117,7 +120,7 @@ struct compound_duration_parser
       return x.has_value();
     });
     auto positive_duration
-      = ignore(&!parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
+      = ignore(&! parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
     auto compound_duration = negation >> (positive_duration % *parsers::space);
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return compound_duration(f, l, x);
@@ -193,16 +196,21 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parser_literals;
     using namespace std::chrono;
-    auto year = integral_parser<int, 4, 4>{}.with(
-      [](auto x) { return x >= 1900; });
-    auto mon = integral_parser<int, 2, 2>{}.with(
-      [](auto x) { return x >= 1 && x <= 12; });
-    auto day = integral_parser<int, 2, 2>{}.with(
-      [](auto x) { return x >= 1 && x <= 31; });
-    auto hour = integral_parser<int, 2, 2>{}.with(
-      [](auto x) { return x >= 0 && x <= 23; });
-    auto min = integral_parser<int, 2, 2>{}.with(
-      [](auto x) { return x >= 0 && x <= 59; });
+    auto year = integral_parser<int, 4, 4>{}.with([](auto x) {
+      return x >= 1900;
+    });
+    auto mon = integral_parser<int, 2, 2>{}.with([](auto x) {
+      return x >= 1 && x <= 12;
+    });
+    auto day = integral_parser<int, 2, 2>{}.with([](auto x) {
+      return x >= 1 && x <= 31;
+    });
+    auto hour = integral_parser<int, 2, 2>{}.with([](auto x) {
+      return x >= 0 && x <= 23;
+    });
+    auto min = integral_parser<int, 2, 2>{}.with([](auto x) {
+      return x >= 0 && x <= 59;
+    });
     auto sec = parsers::real_detect_sep.with([](auto x) {
       return x >= 0.0 && x <= 60.0;
     });
@@ -235,8 +243,9 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
       auto ms = std::tie(mins, secs, zshift);
       auto hms = std::tie(hrs, ms);
       auto dhms = std::tie(dys, hms);
-      if (!p(f, l, yrs, mons, dhms))
+      if (! p(f, l, yrs, mons, dhms)) {
         return false;
+      }
       sys_days ymd = to_days(yrs, mons, dys);
       auto zone_offset = (hours{zhrs} + minutes{zmins}) * zsign;
       auto delta
@@ -265,13 +274,20 @@ struct time_parser : parser_base<time_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parser_literals;
-    auto plus = [](duration t) { return time::clock::now() + t; };
-    auto minus = [](duration t) { return time::clock::now() - t; };
+    auto plus = [](duration t) {
+      return time::clock::now() + t;
+    };
+    auto minus = [](duration t) {
+      return time::clock::now() - t;
+    };
     auto ws = ignore(*parsers::space);
     auto p = parsers::ymdhms | '@' >> parsers::unix_ts
              | "now" >> ws >> ('+' >> ws >> parsers::duration->*plus
                                | '-' >> ws >> parsers::duration->*minus)
-             | "now"_p->*[]() { return time::clock::now(); }
+             | "now"_p->*
+                 []() {
+                   return time::clock::now();
+                 }
              | "in" >> ws >> parsers::duration->*plus
              | (parsers::duration->*minus) >> ws >> "ago";
     return p(f, l, a);

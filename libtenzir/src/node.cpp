@@ -14,29 +14,31 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/concept/convertible/data.hpp"
-#include "tenzir/concept/parseable/tenzir/si.hpp"
-#include "tenzir/concept/parseable/tenzir/time.hpp"
-#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/disk_monitor.hpp"
+#include "tenzir/ecc.hpp"
 #include "tenzir/execution_node.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/index.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/terminate.hpp"
 #include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
+#include <boost/asio/execution_context.hpp>
+#include <boost/process/v2/environment.hpp>
+#include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/function_view.hpp>
@@ -46,6 +48,7 @@
 #include <chrono>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 namespace tenzir {
 
@@ -67,7 +70,7 @@ auto find_endpoint_plugin(const http_request_description& desc)
   -> const rest_endpoint_plugin* {
   for (auto const& plugin : plugins::get()) {
     auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
-    if (!rest_plugin) {
+    if (not rest_plugin) {
       continue;
     }
     for (const auto& endpoint : rest_plugin->rest_endpoints()) {
@@ -83,8 +86,8 @@ auto find_endpoint_plugin(const http_request_description& desc)
 auto register_component(node_actor::stateful_pointer<node_state> self,
                         const caf::actor& component, std::string_view type,
                         std::string_view label = {}) -> caf::error {
-  if (!self->state().registry.add(component, std::string{type},
-                                  std::string{label})) {
+  if (not self->state().registry.add(component, std::string{type},
+                                     std::string{label})) {
     auto msg // separate variable for clang-format only
       = fmt::format("{} failed to add component to registry: {}", *self,
                     label.empty() ? type : label);
@@ -121,7 +124,7 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
                                  | std::ranges::views::values,
                                ", "));
       self->system().registry().erase(source.id());
-      if (!self->state().tearing_down) {
+      if (not self->state().tearing_down) {
         auto component = self->state().registry.remove(source);
         // Terminate if a singleton dies.
         if (is_core_component(component->type)) {
@@ -132,33 +135,6 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
       }
     });
   return caf::none;
-}
-
-} // namespace
-
-auto node_state::get_endpoint_handler(const http_request_description& desc)
-  -> const handler_and_endpoint& {
-  static const auto empty_response = handler_and_endpoint{};
-  auto it = rest_handlers.find(desc.canonical_path);
-  if (it != rest_handlers.end()) {
-    return it->second;
-  }
-  // Spawn handler on first usage
-  auto const* plugin = find_endpoint_plugin(desc);
-  if (!plugin) {
-    return empty_response;
-  }
-  // TODO: Monitor the spawned handler and restart if it goes down.
-  auto handler = plugin->handler(self->system(), self);
-  for (auto const& endpoint : plugin->rest_endpoints()) {
-    rest_handlers[endpoint.canonical_path()]
-      = std::make_pair(handler, endpoint);
-  }
-  auto result = rest_handlers.find(desc.canonical_path);
-  // If no canonical path matches, `find_endpoint_plugin()` should
-  // have already returned `nullptr`.
-  TENZIR_ASSERT(result != rest_handlers.end());
-  return result->second;
 }
 
 auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
@@ -225,8 +201,7 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
 
 auto spawn_importer(node_actor::stateful_pointer<node_state> self,
                     const index_actor& index) -> importer_actor {
-  auto importer
-    = self->spawn(tenzir::importer, self->state().dir / "importer", index);
+  auto importer = self->spawn(caf::actor_from_state<tenzir::importer>, index);
   TENZIR_ASSERT(importer);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
                                     "importer")) {
@@ -243,20 +218,20 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
       &settings, "tenzir.start.disk-budget-check-binary");
     const auto hiwater
       = detail::get_bytesize(settings, "tenzir.start.disk-budget-high", 0);
-    if (!hiwater) {
+    if (not hiwater) {
       diagnostic::error(hiwater.error())
         .note("failed to parse `tenzir.start.disk-budget-high`")
         .throw_();
     }
     auto lowater
       = detail::get_bytesize(settings, "tenzir.start.disk-budget-low", 0);
-    if (!lowater) {
+    if (not lowater) {
       diagnostic::error(lowater.error())
         .note("failed to parse `tenzir.start.disk-budget-low`")
         .throw_();
     }
     // Set low == high as the default value.
-    if (not*lowater) {
+    if (not *lowater) {
       *lowater = *hiwater;
     }
     const auto step_size
@@ -342,7 +317,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   for (const auto* plugin : sequenced_components) {
     auto name = plugin->component_name();
     auto handle = plugin->make_component(self);
-    if (!handle) {
+    if (not handle) {
       diagnostic::error("{} failed to create the {} component", *self, name)
         .throw_();
     }
@@ -357,10 +332,128 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   }
 }
 
-auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
-          std::filesystem::path dir) -> node_actor::behavior_type {
+} // namespace
+
+auto node_state::create_pipeline_shell() -> void {
+  TENZIR_ASSERT(endpoint.has_value());
+  static const auto tenzir_ctl
+    = detail::objectpath()->parent_path().parent_path() / "bin" / "tenzir-ctl";
+  auto proc = reproc::process{};
+  auto options = reproc::options{};
+  options.redirect.err.type = reproc::redirect::parent;
+  auto proc_stop = reproc::stop_actions{
+    .first = {.action = reproc::stop::terminate,
+              .timeout = reproc::milliseconds(10),},
+    .second = {.action = reproc::stop::kill,
+               .timeout = reproc::milliseconds(0),},
+    .third = {},
+  };
+  options.stop = proc_stop;
+  auto console_verbosity
+    = caf::get_or<std::string>(self->config().content,
+                               "tenzir.console-verbosity",
+                               tenzir::defaults::logger::console_verbosity);
+  auto args = std::vector<std::string>{
+    tenzir_ctl,
+    fmt::format("--console-verbosity={}", console_verbosity),
+    "pipeline_shell",
+    fmt::to_string(*endpoint),
+    fmt::to_string(child_id),
+  };
+  if (auto err = proc.start(args, options)) {
+    TENZIR_WARN("Failed to start child process: {}", err);
+    return;
+  }
+  creating_pipeline_shells.emplace(child_id, std::move(proc));
+  child_id++;
+}
+
+auto node_state::monitor_shell_for_pipe(caf::strong_actor_ptr client,
+                                        reproc::process proc) -> void {
+  auto addr = client->address();
+  owned_shells.emplace(addr, std::move(proc));
+  self->monitor(client, [this, addr](const caf::error&) {
+    auto& ps = owned_shells;
+    const auto it = ps.find(addr);
+    if (it == ps.end()) {
+      return;
+    }
+    TENZIR_ASSERT(it != ps.end(),
+                  "child terminator got down from unknown client");
+    if (auto err = it->second.terminate()) {
+      TENZIR_WARN("failed to terminate subprocess: {}", err);
+    }
+    ps.erase(it);
+  });
+}
+
+auto node_state::connect_pipeline_shell(uint32_t child_id,
+                                        pipeline_shell_actor handle)
+  -> caf::result<void> {
+  auto it = creating_pipeline_shells.find(child_id);
+  TENZIR_ASSERT(it != creating_pipeline_shells.end());
+  auto proc = std::move(it->second);
+  creating_pipeline_shells.erase(it);
+  if (shell_response_promises.empty()) {
+    created_pipeline_shells.emplace_back(std::move(proc), std::move(handle));
+    return {};
+  }
+  auto promise = shell_response_promises.front();
+  shell_response_promises.pop_front();
+  auto client = promise.source();
+  promise.deliver(std::move(handle));
+  monitor_shell_for_pipe(client, std::move(proc));
+  return {};
+}
+
+auto node_state::get_pipeline_shell() -> caf::result<pipeline_shell_actor> {
+  self->schedule_fn([this]() {
+    create_pipeline_shell();
+  });
+  if (not created_pipeline_shells.empty()) {
+    auto [proc, shell] = std::move(created_pipeline_shells.front());
+    created_pipeline_shells.pop_front();
+    auto client = self->current_sender();
+    monitor_shell_for_pipe(client, std::move(proc));
+    return shell;
+  }
+  // empty
+  auto rp = self->make_response_promise<pipeline_shell_actor>();
+  shell_response_promises.push_back(rp);
+  return rp;
+}
+
+auto node_state::get_endpoint_handler(const http_request_description& desc)
+  -> const handler_and_endpoint& {
+  static const auto empty_response = handler_and_endpoint{};
+  auto it = rest_handlers.find(desc.canonical_path);
+  if (it != rest_handlers.end()) {
+    return it->second;
+  }
+  // Spawn handler on first usage
+  auto const* plugin = find_endpoint_plugin(desc);
+  if (not plugin) {
+    return empty_response;
+  }
+  // TODO: Monitor the spawned handler and restart if it goes down.
+  auto handler = plugin->handler(self->system(), self);
+  for (auto const& endpoint : plugin->rest_endpoints()) {
+    rest_handlers[endpoint.canonical_path()]
+      = std::make_pair(handler, endpoint);
+  }
+  auto result = rest_handlers.find(desc.canonical_path);
+  // If no canonical path matches, `find_endpoint_plugin()` should
+  // have already returned `nullptr`.
+  TENZIR_ASSERT(result != rest_handlers.end());
+  return result->second;
+}
+
+auto node(node_actor::stateful_pointer<node_state> self,
+          std::filesystem::path dir, bool disable_pipeline_subprocesses)
+  -> node_actor::behavior_type {
   self->state().self = self;
   self->state().dir = std::move(dir);
+  self->state().disable_pipeline_subprocesses = disable_pipeline_subprocesses;
   self->set_exception_handler([=](std::exception_ptr& ptr) -> caf::error {
     try {
       std::rethrow_exception(ptr);
@@ -398,7 +491,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       TENZIR_DEBUG("{} proxying request with id {} to {} with {}", *self,
                    request_id, desc.canonical_path, desc.json_body);
       auto [handler, endpoint] = self->state().get_endpoint_handler(desc);
-      if (!handler) {
+      if (not handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
         for (const auto& plugin : plugins::get<rest_endpoint_plugin>()) {
           for (const auto& endpoint : plugin->rest_endpoints()) {
@@ -417,12 +510,12 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           caf::make_error(ec::logic_error, "failed to spawn endpoint handler"));
       }
       auto unparsed_params = http_parameter_map::from_json(desc.json_body);
-      if (!unparsed_params) {
+      if (not unparsed_params) {
         return rest_response::make_error(400, "invalid json",
                                          unparsed_params.error());
       }
       auto params = parse_endpoint_parameters(endpoint, *unparsed_params);
-      if (!params) {
+      if (not params) {
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());
       }
@@ -490,9 +583,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         if (not handle) {
           failed.push_back(label);
           continue;
-        } else {
-          result.push_back(std::move(handle));
         }
+        result.push_back(std::move(handle));
       }
       if (not failed.empty()) {
         return diagnostic::error("node failed to retrieve components: {}",
@@ -507,6 +599,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return retrieve_versions(check(to<record>(content(self->config()))));
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,
+           std::string definition,
            const receiver_actor<diagnostic>& diagnostic_handler,
            const metrics_receiver_actor& metrics_receiver, int index,
            bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
@@ -520,8 +613,9 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       auto description = fmt::format("{:?}", op);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
-                          static_cast<node_actor>(self), diagnostic_handler,
-                          metrics_receiver, index, false, is_hidden, run_id);
+                          std::move(definition), static_cast<node_actor>(self),
+                          diagnostic_handler, metrics_receiver, index, false,
+                          is_hidden, run_id);
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "
@@ -565,7 +659,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       }
       TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
       const auto node_shutdown_reason
-        = msg.reason == caf::exit_reason::user_shutdown
+        = not msg.reason or msg.reason == caf::exit_reason::user_shutdown
               or msg.reason == ec::silent
             ? msg.reason
             : diagnostic::error(msg.reason)
@@ -579,10 +673,27 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           self->send_exit(handle, msg.reason);
         }
       }
+      // Tell pipeline executors that are waiting for pipeline shells that we
+      // are shutting down. This should not be treated as an error in the
+      // pipeline itself.
+      auto& ps = self->state().shell_response_promises;
+      for (auto& p : ps) {
+        p.deliver(caf::make_error(ec::silent));
+      }
+      ps.clear();
       auto& registry = self->state().registry;
       // Core components are terminated in a second stage, we remove them from
       // the registry upfront and deal with them later.
       std::vector<caf::actor> core_shutdown_handles;
+      // Always shut down the pipeline manager first. This is a must, as
+      // otherwise the shutdown of other components can cause dependent
+      // pipelines to either complete, stop, or fail, and if the pipeline
+      // manager hasn't yet noticed that it's supposed to shutdown it may still
+      // want to persist its state afterwards, causing the pipelines to be in
+      // the wrong state after restarting.
+      if (auto pm = registry.remove("pipeline-manager")) {
+        core_shutdown_handles.push_back(std::move(pm->actor));
+      }
       for (const auto& name :
            self->state().ordered_components | std::ranges::views::reverse) {
         if (auto comp = registry.remove(name)) {
@@ -625,6 +736,70 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                          *self, err);
             core_shutdown_sequence();
           });
+    },
+    [self](atom::set, endpoint endpoint) {
+      TENZIR_ASSERT(endpoint.port != 0);
+      self->state().endpoint = std::move(endpoint);
+      if (not self->state().disable_pipeline_subprocesses) {
+        for (int i = 0; i < 5; i++) {
+          self->state().create_pipeline_shell();
+        }
+      }
+    },
+    [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
+      if (self->state().disable_pipeline_subprocesses) {
+        return pipeline_shell_actor{};
+      }
+      if (not self->state().endpoint) {
+        return self->mail(atom::spawn_v, atom::shell_v)
+          .delegate(static_cast<node_actor>(self));
+      }
+      return self->state().get_pipeline_shell();
+    },
+    [self](atom::connect, atom::shell, uint32_t child_id,
+           pipeline_shell_actor handle) -> caf::result<void> {
+      if (self->state().tearing_down) {
+        // Just ignore.
+        return ec::no_error;
+      }
+      return self->state().connect_pipeline_shell(child_id, std::move(handle));
+    },
+    [self](atom::resolve, std::string name,
+           std::string public_key) -> caf::result<secret_resolution_result> {
+      const auto& cfg = content(self->system().config());
+      const auto key = fmt::format("tenzir.secrets.{}", name);
+      const auto* value = caf::get_if(&cfg, key);
+      if (value) {
+        auto value_string = caf::get_as<std::string>(*value);
+        if (not value_string) {
+          return secret_resolution_error{"config secret is not a string"};
+        }
+        auto encrypted = ecc::encrypt(*value_string, public_key);
+        if (not encrypted) {
+          return encrypted.error();
+        }
+        return encrypted_secret_value{*encrypted};
+      }
+      auto store
+        = self->system().registry().get<secret_store_actor>("tenzir.platform");
+      if (not store) {
+        return secret_resolution_error{
+          "secret does not exist locally and no secret store is available"};
+      }
+      auto rp = self->make_response_promise<secret_resolution_result>();
+      // We apparently cannot `delegate` here, since this may be across process
+      // boundaries if the request came from the client process.
+      // https://github.com/actor-framework/actor-framework/issues/2056
+      self->mail(atom::resolve_v, std::move(name), std::move(public_key))
+        .request(store, caf::infinite)
+        .then(
+          [rp = rp](secret_resolution_result r) mutable {
+            rp.deliver(std::move(r));
+          },
+          [rp = rp](caf::error e) mutable {
+            rp.deliver(std::move(e));
+          });
+      return rp;
     },
   };
 }

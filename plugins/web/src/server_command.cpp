@@ -212,8 +212,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         .request(handler, caf::infinite)
         .then(
           [response](rest_response& rsp) {
-            auto&& body = std::move(rsp).release();
-            response->finish(std::move(body));
+            response->finish(rsp.body());
           },
           [response](const caf::error& e) {
             TENZIR_WARN("internal server error while handling request: {}", e);

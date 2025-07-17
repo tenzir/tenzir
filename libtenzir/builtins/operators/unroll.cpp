@@ -202,8 +202,7 @@ class unroll_operator final : public crtp_operator<unroll_operator> {
 public:
   unroll_operator() = default;
 
-  explicit unroll_operator(ast::simple_selector field)
-    : field_{std::move(field)} {
+  explicit unroll_operator(ast::field_path field) : field_{std::move(field)} {
   }
 
   explicit unroll_operator(located<std::string> field)
@@ -250,7 +249,7 @@ public:
           return offsets.front();
         };
       },
-      [&](const ast::simple_selector& field) {
+      [&](const ast::field_path& field) {
         return [&](const table_slice& slice) {
           return resolve(field, slice.schema())
             .match(
@@ -276,11 +275,12 @@ public:
               },
               [&](const resolve_error& err) -> std::optional<offset> {
                 err.reason.match(
-                  [&](resolve_error::field_not_found) {
+                  [&](const resolve_error::field_not_found&) {
                     diagnostic::warning("field `{}` not found", err.ident.name)
                       .primary(err.ident)
                       .emit(ctrl.diagnostics());
                   },
+                  [&](const resolve_error::field_not_found_no_error&) {},
                   [&](const resolve_error::field_of_non_record& reason) {
                     diagnostic::warning("type `{}` has no field `{}`",
                                         reason.type.kind(), err.ident.name)
@@ -325,7 +325,7 @@ public:
   }
 
 private:
-  variant<ast::simple_selector, located<std::string>> field_;
+  variant<ast::field_path, located<std::string>> field_;
   bool unordered_ = {};
 };
 
@@ -347,7 +347,7 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto field = ast::simple_selector{};
+    auto field = ast::field_path{};
     auto parser
       = argument_parser2::operator_(name()).positional("field", field, "list");
     TRY(parser.parse(inv, ctx));

@@ -20,6 +20,8 @@
 
 namespace tenzir::plugins::measure {
 
+TENZIR_ENUM(schema, name_only, legacy, exact);
+
 namespace {
 
 class measure_operator final : public crtp_operator<measure_operator> {
@@ -27,11 +29,11 @@ public:
   measure_operator() = default;
 
   measure_operator(uint64_t batch_size, bool real_time, bool cumulative,
-                   bool definition)
+                   enum schema schema)
     : batch_size_{detail::narrow<int64_t>(batch_size)},
       real_time_{real_time},
       cumulative_{cumulative},
-      definition_{definition} {
+      schema_{schema} {
   }
 
   auto operator()(generator<table_slice> input) const
@@ -58,11 +60,19 @@ public:
       metric.field("timestamp", time::clock::now());
       metric.field("events", events);
       metric.field("schema_id", slice.schema().make_fingerprint());
-      if (definition_) {
-        metric.field("schema",
-                     is_new ? data{slice.schema().to_definition()} : data{});
-      } else {
-        metric.field("schema", slice.schema().name());
+      switch (schema_) {
+        case schema::name_only:
+          metric.field("schema", slice.schema().name());
+          break;
+        case schema::legacy:
+          metric.field("schema", is_new
+                                   ? data{slice.schema().to_legacy_definition()}
+                                   : data{});
+          break;
+        case schema::exact:
+          metric.field("schema",
+                       is_new ? data{slice.schema().to_definition()} : data{});
+          break;
       }
       if (real_time_ or builder.length() == batch_size_
           or last_finish + defaults::import::batch_timeout < now) {
@@ -132,14 +142,14 @@ public:
     return f.object(x).fields(f.field("batch_size", x.batch_size_),
                               f.field("real_time", x.real_time_),
                               f.field("cumulative", x.cumulative_),
-                              f.field("definition", x.definition_));
+                              f.field("schema", x.schema_));
   }
 
 private:
   int64_t batch_size_ = {};
   bool real_time_ = {};
   bool cumulative_ = {};
-  bool definition_ = {};
+  schema schema_ = {};
 };
 
 class plugin final : public virtual operator_plugin<measure_operator>,
@@ -158,7 +168,7 @@ public:
     parser.add("--cumulative", cumulative);
     parser.parse(p);
     return std::make_unique<measure_operator>(batch_size_, real_time,
-                                              cumulative, false);
+                                              cumulative, schema::name_only);
   }
 
   auto make(invocation inv, session ctx) const
@@ -166,14 +176,19 @@ public:
     bool real_time = false;
     bool cumulative = false;
     bool definition = false;
+    bool exact_definition = false;
     argument_parser2::operator_("measure")
       .named("real_time", real_time)
       .named("cumulative", cumulative)
       .named("_definition", definition)
+      .named("_exact_definition", exact_definition)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<measure_operator>(batch_size_, real_time,
-                                              cumulative, definition);
+                                              cumulative,
+                                              exact_definition ? schema::exact
+                                              : definition     ? schema::legacy
+                                                           : schema::name_only);
   }
 
 private:

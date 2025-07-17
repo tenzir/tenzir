@@ -1,0 +1,17 @@
+from {
+  // Hex escapes in blobs
+  b1: b"\x41",            // A
+  b2: b"\x61",            // a
+  b3: b"\x20",            // space
+  b4: b"\x00",            // null byte
+  b5: b"\xff",            // highest byte value
+  b6: b"\x41\x42\x43",    // ABC
+
+  // Mixed hex and other escapes
+  mixed1: "Hello\x20\x57\x6F\x72\x6C\x64",  // Hello World
+  mixed2: b"Hello\x20\x57\x6F\x72\x6C\x64", // Hello World
+
+  // Hex in the middle of a string
+  middle1: "A\x42C",      // ABC
+  middle2: b"A\x42C"      // ABC
+}

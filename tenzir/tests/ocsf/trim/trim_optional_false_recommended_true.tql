@@ -1,0 +1,23 @@
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 4001,
+  activity_id: 1,
+  activity_name: "Test Activity",
+  app_name: "TestApp",
+  connection_info: {
+    protocol_name: "TCP",
+  },
+  count: 5,
+  duration: 1000,
+  message: "Test message",
+  raw_data: "test data",
+  severity_id: 1,
+  time: 1640995200000000,
+  type_uid: 400101,
+  dst_endpoint: {
+    hostname: "example.com",
+  },
+}
+ocsf::trim drop_optional=false, drop_recommended=true

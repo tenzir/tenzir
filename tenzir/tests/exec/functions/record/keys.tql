@@ -1,0 +1,8 @@
+from (
+  {x: 1, y: "hello", z: true},       // Basic record with various types
+  {"field-with-dash": 42},           // Field with special characters
+  {a: {b: 1, c: 2}},                 // Nested record
+  {},                                // Empty record
+  {x: null},                         // Record with null value
+)
+select keys = this.keys()

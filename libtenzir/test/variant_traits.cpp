@@ -196,15 +196,20 @@ TEST(expression) {
     ast::root_field{ast::identifier{"test", location::unknown}}};
   REQUIRE(try_as<ast::root_field>(&expr));
   REQUIRE(not try_as<ast::this_>(&expr));
-  as<ast::root_field>(expr).ident.name = "okay";
+  as<ast::root_field>(expr).id.name = "okay";
   match(
     std::move(expr),
     [](ast::root_field&& x) {
-      REQUIRE(x.ident.name == "okay");
+      REQUIRE(x.id.name == "okay");
     },
     [](auto&&) {
       FAIL("unreachable");
     });
+}
+
+TEST(fail) {
+  auto v = variant<int, double>{};
+  CAF_CHECK_THROWS_AS(as<double>(v), tenzir::panic_exception);
 }
 
 } // namespace tenzir

@@ -26,10 +26,10 @@ using argument_parser_data_types
   = detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
                      as_located>;
 
-using argument_parser_full_types
-  = detail::tl_concat_t<argument_parser_data_types,
-                        detail::type_list<located<pipeline>, ast::expression,
-                                          ast::simple_selector, located<data>>>;
+using argument_parser_full_types = detail::tl_concat_t<
+  argument_parser_data_types,
+  detail::type_list<located<pipeline>, ast::expression, ast::field_path,
+                    ast::lambda_expr, located<data>>>;
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
@@ -70,8 +70,8 @@ public:
 
   /// Adds a required positional argument.
   template <argument_parser_type T>
-  auto positional(std::string name, T& x,
-                  std::string type = maybe_default<T>) -> argument_parser2&;
+  auto positional(std::string name, T& x, std::string type = maybe_default<T>)
+    -> argument_parser2&;
 
   /// Adds an optional positional argument.
   template <argument_parser_type T>
@@ -82,8 +82,8 @@ public:
 
   /// Adds a required named argument.
   template <argument_parser_type T>
-  auto named(std::string name, T& x,
-             std::string type = maybe_default<T>) -> argument_parser2&;
+  auto named(std::string name, T& x, std::string type = maybe_default<T>)
+    -> argument_parser2&;
 
   /// Adds an optional named argument. Use this is "Not Given" is a case you
   /// need to handle.
@@ -94,24 +94,25 @@ public:
   /// Adds an optional named argument. Use this if you have an object with a
   /// default value.
   template <argument_parser_type T>
-  auto named_optional(std::string name, T& x,
-                      std::string type = maybe_default<T>) -> argument_parser2&;
+  auto
+  named_optional(std::string name, T& x, std::string type = maybe_default<T>)
+    -> argument_parser2&;
 
   /// Adds an optional named argument.
   auto named(std::string name, std::optional<location>& x,
              std::string type = "") -> argument_parser2&;
 
   /// Adds an optional named argument.
-  auto
-  named(std::string name, bool& x, std::string type = "") -> argument_parser2&;
+  auto named(std::string name, bool& x, std::string type = "")
+    -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
-  auto parse(const operator_factory_plugin::invocation& inv,
-             session ctx) -> failure_or<void>;
+  auto parse(const operator_factory_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::function_call& call, session ctx) -> failure_or<void>;
-  auto parse(const function_plugin::invocation& inv,
-             session ctx) -> failure_or<void>;
+  auto parse(const function_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::entity& self, std::span<ast::expression const> args,
              session ctx) -> failure_or<void>;
 
@@ -162,14 +163,15 @@ private:
   };
 
   struct named_t {
-    named_t(std::string name, std::string type, any_setter set, bool required)
-      : name{std::move(name)},
-        type{std::move(type)},
-        set{std::move(set)},
-        required{required} {
+    named_t(std::string_view name, std::string type, any_setter set,
+            bool required)
+      : type{std::move(type)}, set{std::move(set)}, required{required} {
+      for (auto part : detail::split(name, "|")) {
+        names.emplace_back(part);
+      }
     }
 
-    std::string name;
+    std::vector<std::string> names;
     std::string type;
     any_setter set;
     bool required = false;

@@ -692,6 +692,11 @@ auto to_string(const url& x) -> std::string;
 /// @relates url
 auto to_error(url::code code) -> caf::error;
 
+/// URL-decodes a string.
+/// @param str The input to decode.
+/// @returns the decoded string.
+auto try_unescape(std::string_view str) -> std::optional<std::string>;
+
 /// URL-encodes a string.
 /// @param str The input to encode.
 /// @returns The encoded string.

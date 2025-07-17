@@ -1,0 +1,16 @@
+{
+  line: "{\"json\": 123}",
+  path: "inputs/from_file/foo/bar/bar.json",
+}
+{
+  line: "{\"json\": 123}",
+  path: "inputs/from_file/foo/baz/baz.json",
+}
+{
+  line: "{\"json\": 123}",
+  path: "inputs/from_file/foo/foo1.json",
+}
+{
+  line: "{\"json\": 123}",
+  path: "inputs/from_file/foo/foo2.json",
+}

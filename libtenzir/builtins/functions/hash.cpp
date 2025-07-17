@@ -73,7 +73,7 @@ public:
     -> caf::expected<state_type> override {
     // Get the target field if it exists.
     auto column_index = schema.resolve_key_or_concept_once(config_.field);
-    if (!column_index) {
+    if (! column_index) {
       return state_type{};
     }
     auto transform_fn = [this](struct record_type::field field,
@@ -107,7 +107,7 @@ public:
             config_.out,
             string_type{},
           },
-          hashes_builder->Finish().ValueOrDie(),
+          finish(*hashes_builder),
         },
       };
     };
@@ -153,7 +153,7 @@ public:
     const auto options = option_set_parser{{{"salt", 's'}}};
     const auto option_parser = (required_ws_or_comment >> options);
     auto parsed_options = std::unordered_map<std::string, data>{};
-    if (!option_parser(f, l, parsed_options)) {
+    if (! option_parser(f, l, parsed_options)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
@@ -165,7 +165,7 @@ public:
                                   >> optional_ws_or_comment
                                   >> end_of_pipeline_operator;
     auto parsed_extractors = std::vector<std::string>{};
-    if (!extractor_parser(f, l, parsed_extractors)) {
+    if (! extractor_parser(f, l, parsed_extractors)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
@@ -179,7 +179,7 @@ public:
     config.out = parsed_extractors.front() + "_hashed";
     for (const auto& [key, value] : parsed_options) {
       auto value_str = try_as<std::string>(&value);
-      if (!value_str) {
+      if (! value_str) {
         return {
           std::string_view{f, l},
           caf::make_error(ec::syntax_error, fmt::format("invalid option value "
@@ -205,6 +205,10 @@ template <class HashAlgorithm, detail::string_literal Name>
 class fun : public virtual function_plugin {
   auto name() const -> std::string override {
     return fmt::format("hash_{}", Name);
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

@@ -18,6 +18,6 @@ namespace tenzir::detail {
 /// @param filename The path to the PID file.
 /// @returns `none` if acquiring succeeded and an error on failure.
 /// @relates release_pid_file
-caf::error acquire_pid_file(const std::filesystem::path& filename);
+auto acquire_pid_file(const std::filesystem::path& filename) -> caf::error;
 
 } // namespace tenzir::detail

@@ -24,9 +24,13 @@ struct pipeline_executor_state {
   node_actor node = {};
 
   /// The currently running pipeline.
+  std::string definition;
   std::optional<pipeline> pipe = {};
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
+
+  /// Handle to the `pipeline_shell_actor` responsible for the subprocess.
+  pipeline_shell_actor shell;
 
   /// The diagnostic handler that receives diagnostics from all the execution
   /// nodes.
@@ -47,6 +51,10 @@ struct pipeline_executor_state {
   /// Determines whether the pipeline has been started.
   bool is_started = {};
 
+  /// Determine whether this executor is running in an ad-hoc tenzir cli
+  /// or in a node.
+  auto running_in_node() const -> bool;
+
   auto start() -> caf::result<void>;
   auto pause() -> caf::result<void>;
   auto resume() -> caf::result<void>;
@@ -64,7 +72,7 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics,
+  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
   bool is_hidden) -> pipeline_executor_actor::behavior_type;
 

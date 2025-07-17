@@ -1,0 +1,21 @@
+// Test combining pad_start and pad_end
+from {
+  text: "center",
+  // Center text with padding on both sides
+  centered: "center".pad_start(10, "-").pad_end(14, "-"),
+  // Create a formatted table-like output
+  text1: "Name".pad_end(20, " "),
+  text2: "Age".pad_start(5, " "),
+  text3: "City".pad_end(15, " "),
+  // Format numbers with leading zeros
+  num1: "7".pad_start(3, "0"),
+  num2: "42".pad_start(3, "0"),
+  num3: "123".pad_start(3, "0"),
+  // Create a visual separator
+  separator: "".pad_end(40, "="),
+  // Test edge cases with both functions
+  edge1: "".pad_start(3, "x").pad_end(6, "y"),
+  edge2: "abc".pad_start(2).pad_end(1),
+  // Unicode padding combinations
+  unicode_both: "中文".pad_start(6, "←").pad_end(8, "→"),
+}

@@ -51,11 +51,11 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 /// alongside Tenzir-related meta data (currently limited to the import time).
 /// Message envelope is unwrapped and the metadata, attached to the to-level
 /// schema the input record batch is copied to the newly created record batch.
-std::shared_ptr<arrow::RecordBatch>
-unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
+auto unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb)
+  -> std::shared_ptr<arrow::RecordBatch> {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
-  auto event_rb = arrow::RecordBatch::FromStructArray(event_col).ValueOrDie();
+  auto event_rb = check(arrow::RecordBatch::FromStructArray(event_col));
   return event_rb->ReplaceSchemaMetadata(schema_metadata);
 }
 
@@ -68,7 +68,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
     auto status = builder->Append(v);
     TENZIR_ASSERT(status.ok());
   }
-  return builder->Finish().ValueOrDie();
+  return finish(*builder);
 }
 
 /// Wrap a record batch into an event envelope containing the event data
@@ -77,7 +77,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
 auto wrap_record_batch(const table_slice& slice)
   -> std::shared_ptr<arrow::RecordBatch> {
   auto rb = to_record_batch(slice);
-  auto event_array = rb->ToStructArray().ValueOrDie();
+  auto event_array = check(rb->ToStructArray());
   auto time_col = make_import_time_col(slice.import_time(), rb->num_rows());
   auto schema = arrow::schema(
     {arrow::field("import_time", time_type::to_arrow_type()),
@@ -102,14 +102,14 @@ auto decode_ipc_stream(chunk_ptr chunk)
   }
   auto open_reader_result
     = arrow::ipc::RecordBatchFileReader::Open(as_arrow_file(std::move(chunk)));
-  if (!open_reader_result.ok()) {
+  if (not open_reader_result.ok()) {
     return caf::make_error(ec::format_error,
                            fmt::format("failed to open reader: {}",
                                        open_reader_result.status().ToString()));
   }
   auto reader = open_reader_result.MoveValueUnsafe();
   auto get_generator_result = reader->GetRecordBatchGenerator();
-  if (!get_generator_result.ok()) {
+  if (not get_generator_result.ok()) {
     return caf::make_error(
       ec::format_error, fmt::format("failed to get batch generator: {}",
                                     get_generator_result.status().ToString()));
@@ -119,11 +119,11 @@ auto decode_ipc_stream(chunk_ptr chunk)
             auto gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
     while (true) {
       auto next = gen();
-      if (!next.is_finished()) {
+      if (not next.is_finished()) {
         next.Wait();
       }
       TENZIR_ASSERT(next.is_finished());
-      auto result = next.MoveResult().ValueOrDie();
+      auto result = check(next.MoveResult());
       if (arrow::IsIterationEnd(result)) {
         co_return;
       }
@@ -133,9 +133,9 @@ auto decode_ipc_stream(chunk_ptr chunk)
 }
 
 class passive_feather_store final : public passive_store {
-  [[nodiscard]] caf::error load(chunk_ptr chunk) override {
+  [[nodiscard]] auto load(chunk_ptr chunk) -> caf::error override {
     auto decode_result = decode_ipc_stream(std::move(chunk));
-    if (!decode_result) {
+    if (not decode_result) {
       return caf::make_error(ec::format_error,
                              fmt::format("failed to load feather store: {}",
                                          decode_result.error()));
@@ -145,7 +145,7 @@ class passive_feather_store final : public passive_store {
     return {};
   }
 
-  [[nodiscard]] generator<table_slice> slices() const override {
+  [[nodiscard]] auto slices() const -> generator<table_slice> override {
     auto offset = id{};
     auto i = size_t{};
     while (true) {
@@ -173,14 +173,14 @@ class passive_feather_store final : public passive_store {
     }
   }
 
-  [[nodiscard]] uint64_t num_events() const override {
+  [[nodiscard]] auto num_events() const -> uint64_t override {
     if (cached_num_events_ == 0) {
       cached_num_events_ = rows(collect(slices()));
     }
     return cached_num_events_;
   }
 
-  [[nodiscard]] type schema() const override {
+  [[nodiscard]] auto schema() const -> type override {
     for (const auto& slice : slices()) {
       return slice.schema();
     }
@@ -188,20 +188,21 @@ class passive_feather_store final : public passive_store {
   }
 
 private:
-  generator<std::shared_ptr<arrow::RecordBatch>> remaining_slices_generator_
-    = {};
+  generator<std::shared_ptr<arrow::RecordBatch>> remaining_slices_generator_;
   mutable generator<std::shared_ptr<arrow::RecordBatch>>::iterator
-    remaining_slices_iterator_
-    = {};
+    remaining_slices_iterator_;
   mutable uint64_t cached_num_events_ = {};
-  mutable std::vector<table_slice> cached_slices_ = {};
+  mutable std::vector<table_slice> cached_slices_;
 };
 
 class active_feather_store final : public active_store {
 public:
-  active_feather_store() = default;
+  active_feather_store(int64_t compression_level)
+    : compression_level_{compression_level} {
+  }
 
-  [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
+  [[nodiscard]] auto add(std::vector<table_slice> new_slices)
+    -> caf::error override {
     new_slices_.reserve(new_slices.size() + new_slices_.size());
     for (auto& slice : new_slices) {
       // The index already sets the correct offset for this slice, but in some
@@ -227,7 +228,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] caf::expected<chunk_ptr> finish() override {
+  [[nodiscard]] auto finish() -> caf::expected<chunk_ptr> override {
     if (num_new_events_ > 0) {
       rebatched_slices_.push_back(concatenate(std::exchange(new_slices_, {})));
     }
@@ -237,26 +238,27 @@ public:
       record_batches.push_back(wrap_record_batch(slice));
     }
     const auto table = ::arrow::Table::FromRecordBatches(record_batches);
-    if (!table.ok()) {
+    if (not table.ok()) {
       return caf::make_error(ec::system_error, table.status().ToString());
     }
-    auto output_stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+    auto output_stream = check(arrow::io::BufferOutputStream::Create());
     auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
-    // TODO: Set write_properties.chunksize to the expected batch size
     write_properties.compression = arrow::Compression::ZSTD;
+    write_properties.compression_level = compression_level_;
+    write_properties.chunksize = defaults::import::table_slice_size;
     const auto write_status = ::arrow::ipc::feather::WriteTable(
       *table.ValueUnsafe(), output_stream.get(), write_properties);
-    if (!write_status.ok()) {
+    if (not write_status.ok()) {
       return caf::make_error(ec::system_error, write_status.ToString());
     }
     auto buffer = output_stream->Finish();
-    if (!buffer.ok()) {
+    if (not buffer.ok()) {
       return caf::make_error(ec::system_error, buffer.status().ToString());
     }
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
-  [[nodiscard]] generator<table_slice> slices() const override {
+  [[nodiscard]] auto slices() const -> generator<table_slice> override {
     // We need to make a copy of the slices here because the slices_ vector
     // may get invalidated while we iterate over it.
     auto rebatched_slices = rebatched_slices_;
@@ -269,13 +271,14 @@ public:
     }
   }
 
-  [[nodiscard]] uint64_t num_events() const override {
+  [[nodiscard]] auto num_events() const -> uint64_t override {
     return num_events_;
   }
 
 private:
-  std::vector<table_slice> rebatched_slices_ = {};
-  std::vector<table_slice> new_slices_ = {};
+  int64_t compression_level_;
+  std::vector<table_slice> rebatched_slices_;
+  std::vector<table_slice> new_slices_;
   size_t num_new_events_ = {};
   size_t num_events_ = {};
 };
@@ -286,8 +289,8 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
-  arrow::Status OnRecordBatchDecoded(
-    std::shared_ptr<arrow::RecordBatch> record_batch) override {
+  auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
+    -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
     return arrow::Status::OK();
   }
@@ -306,7 +309,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
     auto payload = byte_reader(required_size);
-    if (!payload) {
+    if (not payload) {
       co_yield {};
       continue;
     }
@@ -328,13 +331,13 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
     }
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
-    if (!decode_result.ok()) {
+    if (not decode_result.ok()) {
       diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
         .note("failed to decode the byte stream into a record batch")
         .emit(ctrl.diagnostics());
       co_return;
     }
-    while (!listener->record_batch_buffer.empty()) {
+    while (not listener->record_batch_buffer.empty()) {
       decoded_once = true;
       truncated_bytes = 0;
       auto batch = listener->record_batch_buffer.front();
@@ -366,11 +369,18 @@ auto print_feather(
   const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer,
   const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
   -> generator<chunk_ptr> {
+  auto has_secrets = false;
+  std::tie(has_secrets, input) = replace_secrets(std::move(input));
+  if (has_secrets) {
+    diagnostic::warning("`secret` is serialized as text")
+      .note("fields will be `\"***\"`")
+      .emit(ctrl.diagnostics());
+  }
   auto batch = to_record_batch(input);
   auto validate_status = batch->Validate();
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
   auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
-  if (!stream_writer_status.ok()) {
+  if (not stream_writer_status.ok()) {
     diagnostic::error("{}", stream_writer_status.ToStringWithoutContextLines())
       .note("failed to write record batch")
       .emit(ctrl.diagnostics());
@@ -379,7 +389,7 @@ auto print_feather(
   // We must finish the clear the buffer because the provided APIs do not offer
   // a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
-  if (!finished_buffer_result.ok()) {
+  if (not finished_buffer_result.ok()) {
     diagnostic::error(
       "{}", finished_buffer_result.status().ToStringWithoutContextLines())
       .note("failed to finish stream")
@@ -390,7 +400,7 @@ auto print_feather(
   // The buffer is reinit with newly allocated memory because the API does not
   // offer a Reset that just clears the original data.
   auto reset_buffer_result = sink->Reset();
-  if (!reset_buffer_result.ok()) {
+  if (not reset_buffer_result.ok()) {
     diagnostic::error("{}", reset_buffer_result.ToStringWithoutContextLines())
       .note("failed to reset stream")
       .emit(ctrl.diagnostics());
@@ -399,9 +409,9 @@ auto print_feather(
 
 class feather_options {
 public:
-  std::optional<located<int64_t>> compression_level{};
-  std::optional<located<std::string>> compression_type{};
-  std::optional<located<double>> min_space_savings{};
+  std::optional<located<int64_t>> compression_level;
+  std::optional<located<std::string>> compression_type;
+  std::optional<located<double>> min_space_savings;
 
   friend auto inspect(auto& f, feather_options& x) -> bool {
     return f.object(x).fields(f.field("compression_level", x.compression_level),
@@ -453,7 +463,7 @@ public:
         .to_error();
     }
     auto ipc_write_options = arrow::ipc::IpcWriteOptions::Defaults();
-    if (!options_.compression_type) {
+    if (not options_.compression_type) {
       if (options_.min_space_savings) {
         diagnostic::warning("ignoring min space savings option")
           .note("has no effect without `--compression-type`")
@@ -469,7 +479,7 @@ public:
     } else {
       auto result_compression_type = arrow::util::Codec::GetCompressionType(
         options_.compression_type->inner);
-      if (!result_compression_type.ok()) {
+      if (not result_compression_type.ok()) {
         return diagnostic::error(
                  "{}",
                  result_compression_type.status().ToStringWithoutContextLines())
@@ -483,7 +493,7 @@ public:
                                  : arrow::util::kUseDefaultCompressionLevel;
       auto codec_result = arrow::util::Codec::Create(
         result_compression_type.MoveValueUnsafe(), compression_level);
-      if (!codec_result.ok()) {
+      if (not codec_result.ok()) {
         return diagnostic::error(
                  "{}", codec_result.status().ToStringWithoutContextLines())
           .note("failed to create codec")
@@ -492,12 +502,14 @@ public:
           .to_error();
       }
       ipc_write_options.codec = codec_result.MoveValueUnsafe();
-      ipc_write_options.min_space_savings = options_.min_space_savings->inner;
+      if (options_.min_space_savings) {
+        ipc_write_options.min_space_savings = options_.min_space_savings->inner;
+      }
     }
     const auto schema = input_schema.to_arrow_schema();
     auto stream_writer_result = arrow::ipc::MakeStreamWriter(
       sink.ValueUnsafe(), schema, ipc_write_options);
-    if (!stream_writer_result.ok()) {
+    if (not stream_writer_result.ok()) {
       return diagnostic::error(
                "{}",
                stream_writer_result.status().ToStringWithoutContextLines())
@@ -530,6 +542,16 @@ private:
 class plugin final : public virtual parser_plugin<feather_parser>,
                      public virtual printer_plugin<feather_printer>,
                      public virtual store_plugin {
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    TENZIR_UNUSED(plugin_config);
+    const auto default_compression_level = int64_t{check(
+      arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD))};
+    compression_level_ = get_or(global_config, "tenzir.zstd-compression-level",
+                                default_compression_level);
+    return {};
+  }
+
   auto name() const -> std::string override {
     return "feather";
   }
@@ -554,15 +576,18 @@ class plugin final : public virtual parser_plugin<feather_parser>,
     return std::make_unique<feather_printer>(std::move(options));
   }
 
-  [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
-  make_passive_store() const override {
+  [[nodiscard]] auto make_passive_store() const
+    -> caf::expected<std::unique_ptr<passive_store>> override {
     return std::make_unique<store::passive_feather_store>();
   }
 
-  [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const override {
-    return std::make_unique<store::active_feather_store>();
+  [[nodiscard]] auto make_active_store() const
+    -> caf::expected<std::unique_ptr<active_store>> override {
+    return std::make_unique<store::active_feather_store>(compression_level_);
   }
+
+private:
+  int64_t compression_level_ = 0;
 };
 
 class read_plugin final

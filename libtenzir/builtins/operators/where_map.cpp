@@ -136,7 +136,7 @@ public:
     parser.add(expr, "<expr>");
     parser.parse(p);
     auto normalized_and_validated = normalize_and_validate(expr.inner);
-    if (!normalized_and_validated) {
+    if (! normalized_and_validated) {
       diagnostic::error("invalid expression")
         .primary(expr.source)
         .docs("https://tenzir.com/language/expressions")
@@ -210,8 +210,93 @@ public:
         co_yield {};
         continue;
       }
+<<<<<<< HEAD
       auto results = filter2(slice, expr_, ctrl.diagnostics(), warn_);
       if (not results.empty()) {
+||||||| 2f8b4af7129
+      auto offset = int64_t{0};
+      for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
+        auto array = try_as<arrow::BooleanArray>(&*filter.array);
+        if (not array) {
+          diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+          offset += filter.array->length();
+          co_yield {};
+          continue;
+        }
+        if (array->true_count() == array->length()) {
+          co_yield subslice(slice, offset, offset + array->length());
+          offset += array->length();
+          continue;
+        }
+        if (warn_) {
+          diagnostic::warning("assertion failure")
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+        }
+        auto length = array->length();
+        auto current_value = array->Value(0);
+        auto current_begin = int64_t{0};
+        // We add an artificial `false` at index `length` to flush.
+        auto results = std::vector<table_slice>{};
+        for (auto i = int64_t{1}; i < length + 1; ++i) {
+          const auto next = i != length && array->IsValid(i) && array->Value(i);
+          if (current_value == next) {
+            continue;
+          }
+          if (current_value) {
+            results.push_back(
+              subslice(slice, offset + current_begin, offset + i));
+          }
+          current_value = next;
+          current_begin = i;
+        }
+=======
+      auto offset = int64_t{0};
+      for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
+        auto array = try_as<arrow::BooleanArray>(&*filter.array);
+        if (not array) {
+          diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+          offset += filter.array->length();
+          co_yield {};
+          continue;
+        }
+        if (array->true_count() == array->length()) {
+          co_yield subslice(slice, offset, offset + array->length());
+          offset += array->length();
+          continue;
+        }
+        if (array->null_count() > 0) {
+          diagnostic::warning("expected `bool`, got `null`")
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+        }
+        if (warn_) {
+          diagnostic::warning("assertion failure")
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+        }
+        auto length = array->length();
+        auto current_value = array->Value(0);
+        auto current_begin = int64_t{0};
+        // We add an artificial `false` at index `length` to flush.
+        auto results = std::vector<table_slice>{};
+        for (auto i = int64_t{1}; i < length + 1; ++i) {
+          const auto next = i != length && array->IsValid(i) && array->Value(i);
+          if (current_value == next) {
+            continue;
+          }
+          if (current_value) {
+            results.push_back(
+              subslice(slice, offset + current_begin, offset + i));
+          }
+          current_value = next;
+          current_begin = i;
+        }
+>>>>>>> main
         co_yield concatenate(std::move(results));
       }
     }
@@ -249,105 +334,153 @@ private:
 
 struct arguments {
   ast::expression field;
-  ast::simple_selector capture;
-  ast::expression expr;
+  ast::lambda_expr lambda;
+
+  static auto parse(const std::string& name, const std::string& lambda_name,
+                    const std::string& lambda_hint,
+                    const function_plugin::invocation& inv, session ctx)
+    -> failure_or<arguments> {
+    auto dh = collecting_diagnostic_handler{};
+    auto sp = session_provider::make(dh);
+    auto args = arguments{};
+    if (argument_parser2::function(name)
+          .positional("list", args.field, "list")
+          .positional(lambda_name, args.lambda, lambda_hint)
+          .parse(inv, sp.as_session())) {
+      std::move(dh).forward_to(ctx);
+      return args;
+    }
+    auto diags = std::exchange(dh, {}).collect();
+    auto expr = ast::expression{};
+    if (argument_parser2::function(name)
+          .positional("list", args.field, "list")
+          .positional("x", expr, "any")
+          .positional("expr", args.lambda.right, "any")
+          .parse(inv, sp.as_session())) {
+      diagnostic::warning("deprecated; please use a lambda expression instead")
+        .primary(expr.get_location().combine(args.lambda.right))
+        .hint("instead of `x, y`, provide `x => y`")
+        .emit(ctx);
+      std::move(dh).forward_to(ctx);
+      auto* field = try_as<ast::root_field>(expr);
+      if (not field or field->has_question_mark) {
+        diagnostic::error("expected identifier").primary(expr).emit(ctx);
+        return failure::promise();
+      }
+      args.lambda.left = std::move(field->id);
+      return args;
+    }
+    for (auto& diag : diags) {
+      ctx.dh().emit(std::move(diag));
+    }
+    return args;
+  }
 };
 
 auto make_where_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  auto args = arguments{};
-  TRY(argument_parser2::function("where")
-        .positional("list", args.field, "list")
-        .positional("capture", args.capture)
-        .positional("expression", args.expr, "any")
-        .parse(inv, ctx));
-  return function_use::make([args = std::move(args)](
-                              function_plugin::evaluator eval, session ctx) {
-    return map_series(eval(args.field), [&](series field) -> multi_series {
-      if (field.as<null_type>()) {
-        return field;
-      }
-      auto field_list = field.as<list_type>();
-      if (not field_list) {
-        diagnostic::warning("expected `list`, but got `{}`", field.type.kind())
-          .primary(args.field)
-          .emit(ctx);
-        return series::null(null_type{}, eval.length());
-      }
-      // We get the field's inner values array and create a dummy table slice
-      // with a single field to evaluate the mapped expression on. TODO: We
-      // should consider unrolling the surrounding event to make more than just
-      // the capture available. This may be rather expensive, though, so we
-      // should consider doing some static analysis to only unroll the fields
-      // actually used.
-      auto list_values
-        = series{field_list->type.value_type(), field_list->array->values()};
-      if (list_values.length() == 0) {
-        return field;
-      }
-      // TODO: The name here is somewhat arbitrary. It could be accessed if
-      // `@name` where to be used inside the inner expression.
-      const auto empty_type = type{"where", record_type{}};
-      auto slice = table_slice{
-        arrow::RecordBatch::Make(empty_type.to_arrow_schema(),
-                                 list_values.length(), arrow::ArrayVector{}),
-        empty_type,
-      };
-      slice = assign(args.capture, list_values, slice, ctx);
-      auto ms = tenzir::eval(args.expr, slice, ctx);
-      TENZIR_ASSERT(not ms.parts().empty());
-      auto result = std::vector<series>{};
-      auto offset = int64_t{0};
-      auto next_offset = int64_t{0};
-      for (auto& values : ms.parts()) {
-        offset = next_offset;
-        next_offset += values.length();
-        if (values.as<null_type>()) {
-          auto builder = series_builder{field.type};
-          for (auto i = int64_t{0}; i < field.length(); ++i) {
-            builder.list();
-          }
-          result.push_back(builder.finish_assert_one_array());
-          continue;
-        }
-        const auto predicate = values.as<bool_type>();
-        if (not predicate) {
-          diagnostic::warning("expected `bool`, but got `{}`",
-                              values.type.kind())
-            .primary(args.expr)
-            .emit(ctx);
-          result.push_back(series::null(field.type, field.length()));
-          continue;
-        }
-        if (predicate->array->true_count() == predicate->length()) {
-          result.push_back(field.slice(offset, values.length()));
-          continue;
-        }
-        auto predicate_gen = predicate->values();
-        auto builder = series_builder{field.type};
-        match(field_list->type.value_type(), [&]<concrete_type T>(const T&) {
-          for (auto&& list : field_list->values()) {
-            if (not list) {
-              builder.null();
-              continue;
+  TRY(auto args,
+      arguments::parse("where", "predicate", "any => bool", inv, ctx));
+  return function_use::make(
+    [args = std::move(args)](function_plugin::evaluator eval, session ctx) {
+      return map_series(eval(args.field), [&](series field) -> multi_series {
+        return match(
+          field.type,
+          [&](const null_type&) -> series {
+            return field;
+          },
+          [&](const list_type&) -> series {
+            const auto lists = check(field.as<list_type>());
+            const auto list_values
+              = series{lists.type.value_type(), lists.array->values()};
+            auto ids = null_bitmap{};
+            auto all_true = true;
+            auto all_false = true;
+            // TODO: Technically, this call to `evaluate` can cause warnings, as
+            // lists may contain bogus values in the value array where the list
+            // itself is `null`. This is very unlikely to happen in practice,
+            // and one proper fix for this would be passing in a null bitmap to
+            // the call to evaluate to indicate which rows not to evaluate.
+            for (const auto& result :
+                 tenzir::eval(args.lambda, list_values, ctx)) {
+              match(
+                result.type,
+                [&](const bool_type&) {
+                  const auto pred = check(result.as<bool_type>());
+                  if (pred.array->true_count() == pred.length()) {
+                    all_false = false;
+                    ids.append_bits(true, pred.length());
+                    return;
+                  }
+                  all_true = false;
+                  if (pred.array->null_count() > 0) {
+                    diagnostic::warning("expected `bool`, got `null`")
+                      .primary(args.lambda.right)
+                      .emit(ctx);
+                  }
+                  if (pred.array->true_count() == 0) {
+                    ids.append_bits(false, pred.length());
+                    return;
+                  }
+                  all_false = false;
+                  for (const auto& elem : *pred.array) {
+                    ids.append_bit(elem.value_or(false));
+                  }
+                },
+                [&](const auto&) {
+                  diagnostic::warning("expected `bool`, got `{}`",
+                                      result.type.kind())
+                    .primary(args.lambda.right)
+                    .emit(ctx);
+                  all_true = false;
+                  ids.append_bits(false, result.length());
+                });
             }
-            auto list_builder = builder.list();
-            for (auto&& element : *list) {
-              auto should_filter = predicate_gen.next();
-              TENZIR_ASSERT(should_filter);
-              if (should_filter->value_or(false)) {
-                list_builder.data(as<view<type_to_data_t<T>>>(element));
+            TENZIR_ASSERT(list_values.length()
+                          == detail::narrow<int64_t>(ids.size()));
+            if (all_true) {
+              return field;
+            }
+            if (all_false) {
+              auto builder = series_builder{field.type};
+              for (int64_t i = 0; i < lists.length(); ++i) {
+                builder.list();
               }
+              return builder.finish_assert_one_array();
             }
-          }
-          // Check that we actually did iterate over all evaluated
-          TENZIR_ASSERT(not predicate_gen.next());
-        });
-        result.push_back(builder.finish_assert_one_array());
-      }
-      return multi_series{std::move(result)};
+            auto builder = series_builder{field.type};
+            match(list_values.type, [&](const auto& list_values_type) {
+              for (int64_t i = 0; i < lists.length(); ++i) {
+                if (lists.array->IsNull(i)) {
+                  builder.null();
+                  continue;
+                }
+                auto list_builder = builder.list();
+                const auto offset = lists.array->value_offset(i);
+                const auto length = lists.array->value_length(i);
+                for (auto j = offset; j < offset + length; ++j) {
+                  if (not ids[j]) {
+                    continue;
+                  }
+                  if (list_values.array->IsNull(j)) {
+                    list_builder.null();
+                    continue;
+                  }
+                  list_builder.data(
+                    value_at(list_values_type, *list_values.array, j));
+                }
+              }
+            });
+            return builder.finish_assert_one_array();
+          },
+          [&](const auto&) -> series {
+            diagnostic::warning("expected `list`, got `{}`", field.type.kind())
+              .primary(args.field)
+              .emit(ctx);
+            return series::null(null_type{}, field.length());
+          });
+      });
     });
-  });
 }
 
 struct where_result_part {
@@ -367,11 +500,11 @@ struct where_result_part {
   int64_t event_count = 0;
 
   auto physical_size() const -> size_t {
-    if (slices.empty()) {
-      return 0;
+    auto sum = size_t{0};
+    for (auto& slice : slices) {
+      sum += slice.size();
     }
-    TENZIR_ASSERT(slices.size() == 1);
-    return slices.front().size();
+    return sum;
   }
 
   auto add_null() -> void {
@@ -403,23 +536,17 @@ struct where_result_part {
     }
     check(offset_builder.Append(
       offset_builder.GetValue(offset_builder.length() - 1) + n));
-    if (slices.empty()) {
+    if (slices.empty() or current_part_index != slices.back().part) {
       slices.emplace_back(current_part_index, 0, n);
       return;
     }
-    TENZIR_ASSERT(current_part_index == slices.back().part);
     slices.back().slice_end += n;
   }
 };
 
 auto make_map_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  auto args = arguments{};
-  TRY(argument_parser2::function("map")
-        .positional("list", args.field, "list")
-        .positional("capture", args.capture)
-        .positional("expression", args.expr, "any")
-        .parse(inv, ctx));
+  TRY(auto args, arguments::parse("map", "function", "any => any", inv, ctx));
   return function_use::make([args = std::move(args)](
                               function_plugin::evaluator eval, session ctx) {
     return map_series(eval(args.field), [&](series field) -> multi_series {
@@ -444,16 +571,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
       if (list_values.length() == 0) {
         return field;
       }
-      // TODO: The name here is somewhat arbitrary. It could be accessed if
-      // `@name` where to be used inside the inner expression.
-      const auto empty_type = type{"map", record_type{}};
-      auto slice = table_slice{
-        arrow::RecordBatch::Make(empty_type.to_arrow_schema(),
-                                 list_values.length(), arrow::ArrayVector{}),
-        empty_type,
-      };
-      slice = assign(args.capture, list_values, slice, ctx);
-      auto ms = tenzir::eval(args.expr, slice, ctx);
+      auto ms = tenzir::eval(args.lambda, list_values, ctx);
       TENZIR_ASSERT(not ms.parts().empty());
       // If there were no conflicts in the result, we are in the happy case
       // Here we just need to take that slice and re-join it with the offsets
@@ -601,7 +719,8 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           remaining_length -= take_from_current;
           TENZIR_ASSERT(take_from_current > 0);
           merging_part.slices.emplace_back(
-            current_part_index, current_part_offset, take_from_current);
+            current_part_index, current_part_offset,
+            current_part_offset + take_from_current);
           current_part_offset += take_from_current;
           TENZIR_ASSERT(current_part_offset <= current_part_length());
           if (current_part_offset == current_part_length()) {
@@ -659,8 +778,8 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
                                merged_series.type.kind());
           }
           diagnostic::warning(
-            "`expr` must evaluate to compatible types within the same list")
-            .primary(args.expr, primary)
+            "lambda must evaluate to compatible types within the same list")
+            .primary(args.lambda.right, primary)
             .note(note)
             .emit(ctx);
         }
@@ -859,6 +978,10 @@ public:
     return std::make_unique<where_ir>(loc, std::move(expr));
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     return make_where_function(std::move(inv), ctx);
@@ -869,6 +992,10 @@ class map_plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.map";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

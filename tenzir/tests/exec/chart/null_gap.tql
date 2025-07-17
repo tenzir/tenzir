@@ -1,0 +1,2 @@
+from {x: duration(null), y: 1}, {x: 1s, y: 2}
+chart_bar x=x, y=sum(y), resolution=1s

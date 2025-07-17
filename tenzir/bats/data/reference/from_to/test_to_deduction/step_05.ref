@@ -7,13 +7,109 @@
     gzip_format: "gzip" @ 0..0
   },
   tql2.save_http {
-    url: "https://example.org/example.yaml.bz2",
+    is_ftp: false,
+    url: {
+      buffer: {
+        chunk: {
+          bytes: [
+            12,
+            0,
+            0,
+            0,
+            8,
+            0,
+            14,
+            0,
+            7,
+            0,
+            8,
+            0,
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            12,
+            0,
+            0,
+            0,
+            0,
+            0,
+            6,
+            0,
+            8,
+            0,
+            4,
+            0,
+            6,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            36,
+            0,
+            0,
+            0,
+            104,
+            116,
+            116,
+            112,
+            115,
+            58,
+            47,
+            47,
+            101,
+            120,
+            97,
+            109,
+            112,
+            108,
+            101,
+            46,
+            111,
+            114,
+            103,
+            47,
+            101,
+            120,
+            97,
+            109,
+            112,
+            108,
+            101,
+            46,
+            121,
+            97,
+            109,
+            108,
+            46,
+            98,
+            122,
+            50,
+            0,
+            0,
+            0,
+            0
+          ],
+          metadata: {
+            
+          }
+        },
+        table-offset: 12
+      }
+    } @ 3..41,
     transfer_opts: {
       verbose: false,
       default_protocol: "https",
       poll_timeout: "100ms",
       ssl: {
-        tls: true @ 0..0
+        uses_curl_http: false
       }
     },
     http_opts: {
@@ -22,9 +118,15 @@
       chunked: false,
       multipart: false,
       method: "",
-      items: [
+      body: [
         
-      ]
+      ] @ 0..0,
+      headers: [
+        
+      ] @ 0..0,
+      params: [
+        
+      ] @ 0..0
     }
   }
 ]

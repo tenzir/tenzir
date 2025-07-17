@@ -8,6 +8,7 @@ setup() {
   setup_node_with_default_config
 
   # We don't care about the actual events, just the number of them.
+  export TENZIR_LEGACY=true
   export TENZIR_EXEC__IMPLICIT_EVENTS_SINK='legacy "enumerate index | put index | write json --compact-output | save -"'
 }
 
@@ -34,7 +35,7 @@ teardown() {
 }
 
 @test "every with multiple operators" {
-  export TENZIR_TQL2=true
+  export TENZIR_LEGACY=false
   check tenzir -f /dev/stdin <<EOF
 every 10ms {
   from {x: 42}

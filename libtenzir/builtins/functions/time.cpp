@@ -18,6 +18,7 @@ namespace tenzir::plugins::time_ {
 // TODO: gcc emits a bogus -Wunused-function warning for this macro when used
 // inside an anonymous namespace.
 TENZIR_ENUM(ymd_subtype, year, month, day);
+TENZIR_ENUM(hms_subtype, hour, minute, second);
 
 namespace {
 
@@ -25,6 +26,10 @@ class time_ final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.time";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -83,6 +88,10 @@ public:
     return "since_epoch";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -132,6 +141,10 @@ public:
     return "from_epoch";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -179,6 +192,10 @@ public:
 
   auto name() const -> std::string override {
     return std::string{to_string(ymd_subtype_)};
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -240,61 +257,112 @@ private:
   ymd_subtype ymd_subtype_;
 };
 
-class as_secs final : public function_plugin {
+class hour_minute_second final : public function_plugin {
 public:
+  explicit hour_minute_second(hms_subtype field) : hms_subtype_(field) {
+  }
+
   auto name() const -> std::string override {
-    return "as_secs";
+    return std::string{to_string(hms_subtype_)};
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .positional("x", expr, "duration")
+          .positional("x", expr, "time")
           .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr), this](evaluator eval, session ctx) {
-        return map_series(eval(expr), [&](series arg) {
-          auto f = detail::overload{
-            [](const arrow::NullArray& arg) {
-              return series::null(double_type{}, arg.length());
-            },
-            [&](const arrow::DurationArray& arg) {
-              auto& ty = as<arrow::DurationType>(*arg.type());
-              TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
-              auto factor = 1000 * 1000 * 1000;
+    return function_use::make([expr = std::move(expr), this](
+                                evaluator eval, session ctx) -> multi_series {
+      return map_series(eval(expr), [&](series arg) -> series {
+        // For seconds, we return a double to include subsecond precision
+        auto return_type = hms_subtype_ == hms_subtype::second
+                             ? type{double_type{}}
+                             : type{int64_type{}};
+        auto f = detail::overload{
+          [&](const arrow::NullArray& arg) -> series {
+            return series::null(return_type, arg.length());
+          },
+          [&](const arrow::TimestampArray& arg) -> series {
+            auto& ty = as<arrow::TimestampType>(*arg.type());
+            TENZIR_ASSERT(ty.timezone().empty());
+            if (hms_subtype_ == hms_subtype::second) {
               auto b = arrow::DoubleBuilder{};
               check(b.Reserve(arg.length()));
-              for (auto i = 0; i < arg.length(); ++i) {
+              for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
                   check(b.AppendNull());
                   continue;
                 }
-                auto val = arg.Value(i);
-                auto pre = static_cast<double>(val / factor);
-                auto post = static_cast<double>(val % factor) / factor;
-                check(b.Append(pre + post));
+                auto&& value = value_at(time_type{}, arg, i);
+                auto duration_since_day_start
+                  = value - std::chrono::floor<std::chrono::days>(value);
+                auto hours = std::chrono::duration_cast<std::chrono::hours>(
+                  duration_since_day_start);
+                duration_since_day_start -= hours;
+                auto minutes = std::chrono::duration_cast<std::chrono::minutes>(
+                  duration_since_day_start);
+                duration_since_day_start -= minutes;
+                // Convert remaining duration to seconds with fractional part
+                auto seconds_double
+                  = static_cast<double>(duration_since_day_start.count()) / 1e9;
+                check(b.Append(seconds_double));
               }
               return series{double_type{}, finish(b)};
-            },
-            [&](const auto&) {
-              diagnostic::warning("`{}` expected `duration`, but got `{}`",
-                                  name(), arg.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              return series::null(double_type{}, arg.length());
-            },
-          };
-          return match(*arg.array, f);
-        });
+            }
+            auto b = arrow::Int64Builder{};
+            check(b.Reserve(arg.length()));
+            for (auto i = int64_t{0}; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                check(b.AppendNull());
+                continue;
+              }
+              auto&& value = value_at(time_type{}, arg, i);
+              const auto duration_since_day_start
+                = value - std::chrono::floor<std::chrono::days>(value);
+              const auto hours = std::chrono::duration_cast<std::chrono::hours>(
+                duration_since_day_start);
+              if (hms_subtype_ == hms_subtype::hour) {
+                check(b.Append(hours.count()));
+                continue;
+              }
+              TENZIR_ASSERT(hms_subtype_ == hms_subtype::minute);
+              const auto minutes
+                = std::chrono::duration_cast<std::chrono::minutes>(
+                  duration_since_day_start - hours);
+              check(b.Append(minutes.count()));
+            }
+            return series{int64_type{}, finish(b)};
+          },
+          [&](const auto&) -> series {
+            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                arg.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(return_type, arg.length());
+          },
+        };
+        return match(*arg.array, f);
       });
+    });
   }
+
+private:
+  hms_subtype hms_subtype_;
 };
 
 class now final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.now";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return false;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -316,6 +384,10 @@ class format_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.format_time";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -370,6 +442,10 @@ class parse_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_time";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -437,10 +513,12 @@ using namespace tenzir::plugins::time_;
 TENZIR_REGISTER_PLUGIN(time_)
 TENZIR_REGISTER_PLUGIN(since_epoch)
 TENZIR_REGISTER_PLUGIN(from_epoch)
-TENZIR_REGISTER_PLUGIN(as_secs)
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::day});
+TENZIR_REGISTER_PLUGIN(hour_minute_second{hms_subtype::hour});
+TENZIR_REGISTER_PLUGIN(hour_minute_second{hms_subtype::minute});
+TENZIR_REGISTER_PLUGIN(hour_minute_second{hms_subtype::second});
 TENZIR_REGISTER_PLUGIN(now)
 TENZIR_REGISTER_PLUGIN(format_time)
 TENZIR_REGISTER_PLUGIN(parse_time)

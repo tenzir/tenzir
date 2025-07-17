@@ -10,6 +10,7 @@
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/exec.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/url/parse.hpp>
@@ -33,8 +34,8 @@ struct operator_args {
                               f.field("max_size", x.max_size));
   }
 
-  std::string uri;
-  std::vector<ast::simple_selector> by;
+  located<std::string> uri;
+  std::vector<ast::field_path> by;
   std::string extension;
   pipeline writer;
   duration timeout{};
@@ -161,15 +162,15 @@ struct group_t {
 
 // TODO: No need to recompute.
 // TODO: This name might not be the best.
-auto selector_to_name(const ast::simple_selector& sel) -> std::string {
-  auto path = sel.path() | std::views::transform(&ast::identifier::name);
+auto selector_to_name(const ast::field_path& sel) -> std::string {
+  auto path = sel.path() | std::views::transform(&ast::field_path::segment::id)
+              | std::views::transform(&ast::identifier::name);
   return fmt::to_string(fmt::join(path, "."));
 }
 
 // TODO: Un-copy-paste this?
 auto remove_columns(const table_slice& slice,
-                    std::span<const ast::simple_selector> selectors)
-  -> table_slice {
+                    std::span<const ast::field_path> selectors) -> table_slice {
   auto transformations = std::vector<indexed_transformation>{};
   for (auto& sel : selectors) {
     auto resolved = resolve(sel, slice.schema());
@@ -195,6 +196,43 @@ auto extend_url_path(boost::urls::url url_view, std::string_view path)
   return fmt::to_string(url);
 }
 
+auto get_extension(std::string_view method_name) -> std::string {
+  if (method_name == "brotli") {
+    return "br";
+  }
+  if (method_name == "bz2") {
+    return "bz2";
+  }
+  if (method_name == "gzip") {
+    return "gz";
+  }
+  if (method_name == "lz4") {
+    return "lz4";
+  }
+  if (method_name == "zstd") {
+    return "zst";
+  }
+  return {};
+}
+
+auto make_saver(located<std::string_view> url, diagnostic_handler& dh)
+  -> failure_or<pipeline> {
+  // We need our own diagnostic handler here, as `parse_and_compile` will refer
+  // to locations in this pipeline.
+  auto collecter = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(collecter);
+  auto ctx = provider.as_session();
+  auto saver
+    = parse_and_compile(fmt::format("to {:?} {{ pass }}", url.inner), ctx);
+  for (auto&& diag : std::move(collecter).collect()) {
+    for (auto& annotation : diag.annotations) {
+      annotation.source = url.source;
+    }
+    dh.emit(std::move(diag));
+  }
+  return saver;
+}
+
 class to_hive final : public crtp_operator<to_hive> {
 public:
   to_hive() = default;
@@ -210,7 +248,7 @@ public:
     // TODO: Using `data` is not optimal, but okay for now.
     auto groups = std::unordered_map<data, group_t>{};
     auto next_id = size_t{0};
-    auto base_url = boost::urls::parse_uri_reference(args_.uri);
+    auto base_url = boost::urls::parse_uri_reference(args_.uri.inner);
     TENZIR_ASSERT(base_url);
     auto process = [&](table_slice slice) {
       auto by = std::vector<multi_series>{};
@@ -254,8 +292,8 @@ public:
           TENZIR_TRACE("creating saver with path {}", partitioned_url);
           // TODO: Even though we check this before with a test URL, this can
           // still fail afterwards in theory.
-          auto saver = pipeline::internal_parse(
-            fmt::format("save {:?}", partitioned_url));
+          auto saver = make_saver({partitioned_url, args_.uri.source},
+                                  ctrl.diagnostics());
           TENZIR_ASSERT(saver);
           it = groups.emplace_hint(it, std::move(key_data),
                                    group_t{args_.writer, std::move(*saver),
@@ -286,10 +324,12 @@ public:
         auto chunk
           = flush_group.write.feed(subslice(slice, current_start, row));
         current_start = row;
-        flush_group.bytes_written += chunk->size();
-        TENZIR_TRACE("saving {} bytes", chunk->size());
-        flush_group.save.feed(std::move(chunk));
-        TENZIR_TRACE("saving done");
+        if (chunk) {
+          flush_group.bytes_written += chunk->size();
+          TENZIR_TRACE("saving {} bytes", chunk->size());
+          flush_group.save.feed(std::move(chunk));
+          TENZIR_TRACE("saving done");
+        }
         if (flush_group.bytes_written > args_.max_size) {
           TENZIR_TRACE("ending group because of size limit");
           flush_group.run_to_completion();
@@ -362,10 +402,12 @@ public:
     auto timeout = std::optional<located<duration>>{};
     auto max_size = std::optional<located<uint64_t>>{};
     auto format = located<std::string>{};
+    auto compression = std::optional<located<std::string>>{};
     TRY(argument_parser2::operator_(name())
           .positional("uri", uri)
           .named("partition_by", by_expr, "list<field>")
           .named("format", format)
+          .named("compression", compression)
           .named("timeout", timeout)
           .named("max_size", max_size)
           .parse(inv, ctx));
@@ -376,7 +418,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    auto by = std::vector<ast::simple_selector>{};
+    auto by = std::vector<ast::field_path>{};
     by.reserve(by_list->items.size());
     for (auto& item : by_list->items) {
       auto expr = std::get_if<ast::expression>(&item);
@@ -386,7 +428,7 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-      auto sel = ast::simple_selector::try_from(*expr);
+      auto sel = ast::field_path::try_from(*expr);
       if (not sel) {
         diagnostic::error("expected a selector").primary(item).emit(ctx);
         return failure::promise();
@@ -398,8 +440,13 @@ public:
       return failure::promise();
     }
     // TODO: `json` should be `ndjson` (probably not only here).
-    auto writer = pipeline::internal_parse(fmt::format(
-      "write {}", format.inner == "json" ? "json -c" : format.inner));
+    auto writer_definition = fmt::format(
+      "write {}", format.inner == "json" ? "json -c" : format.inner);
+    if (compression) {
+      fmt::format_to(std::back_inserter(writer_definition), "| compress \"{}\"",
+                     compression->inner);
+    }
+    auto writer = pipeline::internal_parse(writer_definition);
     if (not writer) {
       // TODO: This could also be a different error (e.g., for `xsv`).
       diagnostic::error("invalid format `{}`", format.inner)
@@ -412,17 +459,9 @@ public:
       diagnostic::error("invalid URL `{}`", uri.inner).primary(uri).emit(ctx);
       return failure::promise();
     }
-    auto test_uri
-      = extend_url_path(*url_view, fmt::format("/0.{}", format.inner));
-    auto saver = pipeline::internal_parse(fmt::format("save {:?}", test_uri));
-    if (not saver) {
-      // There might be some exotic URL format's that are recognized by Boost
-      // but not by our internal URL parser.
-      diagnostic::error("unsupported URL format `{}`", test_uri)
-        .primary(uri)
-        .emit(ctx);
-      return failure::promise();
-    }
+    auto test_uri = extend_url_path(
+      *url_view, fmt::format("/__partitions__/0.{}", format.inner));
+    TRY(make_saver({test_uri, uri.source}, ctx));
     if (format.inner == "parquet" && max_size) {
       // TODO: This is not great.
       diagnostic::error(
@@ -431,12 +470,16 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    // TODO: Maybe add compression for non-parquet data.
+    auto extension = format.inner;
+    if (compression) {
+      extension
+        = fmt::format("{}.{}", format.inner, get_extension(compression->inner));
+    }
     return std::make_unique<to_hive>(operator_args{
-      .uri = fmt::to_string(*url_view),
+      .uri = located{fmt::to_string(*url_view), uri.source},
       .by = std::move(by),
       // TODO: Not always right.
-      .extension = std::move(format.inner),
+      .extension = std::move(extension),
       .writer = std::move(*writer),
       .timeout = timeout ? timeout->inner : 5min,
       .max_size = max_size ? max_size->inner : 100_M,

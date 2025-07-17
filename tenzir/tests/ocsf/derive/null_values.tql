@@ -1,0 +1,12 @@
+// Test null and missing values
+// This test verifies that the derive operator handles null and missing values properly
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: null,
+  activity_name: "Delete",  // Should derive activity_id = 4
+}
+ocsf::derive

@@ -5,4 +5,4 @@ error: required argument `src_ip` was not provided
   |                ^^^^^^^^^^^^ 
   |
   = usage: community_id(src_ip=ip, dst_ip=ip, proto=string, [src_port=int, dst_port=int, seed=int])
-  = docs: https://docs.tenzir.com/tql2/functions/community_id
+  = docs: https://docs.tenzir.com/reference/functions/community_id

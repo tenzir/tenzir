@@ -348,7 +348,7 @@ macro (TenzirInstallExampleConfiguration target source prefix destination)
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}-example-config.cmake"
     "\
-    cmake_minimum_required(VERSION 3.25...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     file(READ \"${source}\" content)
     # Randomly generated string that temporarily replaces semicolons.
     set(dummy \"J.3t26kvfjEoi9BXbf2j.qMY\")

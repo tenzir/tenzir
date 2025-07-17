@@ -19,6 +19,10 @@ public:
     return "tql2.file_name";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -73,6 +77,10 @@ public:
     return "tql2.parent_dir";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -88,9 +96,7 @@ public:
             [&](const arrow::NullArray& arg) {
               check(b.AppendNulls(arg.length()));
             },
-            [](const arrow::StringArray& arg) {
-              auto b = arrow::StringBuilder{};
-              check(b.Reserve(arg.length()));
+            [&](const arrow::StringArray& arg) {
               for (auto row = int64_t{0}; row < arg.length(); ++row) {
                 if (arg.IsNull(row)) {
                   check(b.AppendNull());
@@ -105,9 +111,9 @@ public:
                 if (pos == std::string::npos) {
                   // TODO: What should we do here?
                   check(b.Append(path));
-                } else {
-                  check(b.Append(path.substr(0, pos)));
+                  continue;
                 }
+                check(b.Append(path.substr(0, pos)));
               }
             },
             [&](const auto&) {

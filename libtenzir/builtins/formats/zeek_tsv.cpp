@@ -300,6 +300,9 @@ struct zeek_printer {
       [](const map_type&) -> std::string {
         TENZIR_UNREACHABLE();
       },
+      [](const secret_type&) -> std::string {
+        return "string";
+      },
       [](const record_type&) -> std::string {
         return "record";
       },
@@ -709,12 +712,9 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       document.builder = series_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
-      auto target_schema
-        = std::ranges::find_if(modules::schemas(), [&](const auto& schema) {
-            return schema.name() == schema_name;
-          });
+      auto target_schema = modules::get_schema(schema_name);
       document.target_schema
-        = target_schema == modules::schemas().end() ? type{} : *target_schema;
+        = target_schema ? std::move(*target_schema) : type{};
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.
@@ -823,8 +823,7 @@ public:
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
       auto input_schema = resolved_slice.schema();
       auto input_type = as<record_type>(input_schema);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       auto first = true;
       auto is_first_schema = not * last_schema;
       auto did_schema_change = *last_schema != input_schema;

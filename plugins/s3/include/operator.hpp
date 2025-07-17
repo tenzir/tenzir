@@ -12,6 +12,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
@@ -39,7 +40,7 @@ struct s3_config {
 
 struct s3_args {
   bool anonymous = {};
-  located<std::string> uri = {};
+  located<secret> uri = {};
   std::optional<s3_config> config = {};
 
   template <class Inspector>
@@ -50,8 +51,9 @@ struct s3_args {
   }
 };
 
-auto get_options(const s3_args& args) -> caf::expected<arrow::fs::S3Options> {
-  auto opts = arrow::fs::S3Options::FromUri(args.uri.inner);
+auto get_options(const s3_args& args, const arrow::util::Uri& uri)
+  -> caf::expected<arrow::fs::S3Options> {
+  auto opts = arrow::fs::S3Options::FromUri(uri);
   if (not opts.ok()) {
     return diagnostic::error("failed to parse S3 options: {}",
                              opts.status().ToString())
@@ -71,80 +73,72 @@ auto get_options(const s3_args& args) -> caf::expected<arrow::fs::S3Options> {
 // TODO: Get the backpressure-adjusted value at runtime from the execution node.
 static constexpr size_t max_chunk_size = 1 << 20;
 
-class s3_loader final : public plugin_loader {
+class s3_loader final : public crtp_operator<s3_loader> {
 public:
   s3_loader() = default;
 
   s3_loader(s3_args args) : args_{std::move(args)} {
   }
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
-    return
-      [](s3_args args, operator_control_plane& ctrl) -> generator<chunk_ptr> {
-        auto uri = arrow::util::Uri{};
-        const auto parse_result = uri.Parse(args.uri.inner);
-        if (not parse_result.ok()) {
-          diagnostic::error("failed to parse URI `{}`: {}", args.uri.inner,
-                            parse_result.ToString())
-            .primary(args.uri.source)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        auto opts = get_options(args);
-        if (not opts) {
-          diagnostic::error(opts.error()).emit(ctrl.diagnostics());
-          co_return;
-        }
-        auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
-        if (not fs.ok()) {
-          diagnostic::error("failed to create Arrow S3 filesystem: {}",
-                            fs.status().ToString())
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        auto file_info = fs.ValueUnsafe()->GetFileInfo(
-          fmt::format("{}{}", uri.host(), uri.path()));
-        if (not file_info.ok()) {
-          diagnostic::error("failed to get file info for URI "
-                            "`{}`: {}",
-                            args.uri.inner, file_info.status().ToString())
-            .primary(args.uri.source)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
-        if (not input_stream.ok()) {
-          diagnostic::error("failed to open input stream for URI "
-                            "`{}`: {}",
-                            args.uri.inner, input_stream.status().ToString())
-            .primary(args.uri.source)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        while (not input_stream.ValueUnsafe()->closed()) {
-          auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
-          if (not input_stream.ok()) {
-            diagnostic::error("failed to read from input stream for URI "
-                              "`{}`: {}",
-                              args.uri.inner, buffer.status().ToString())
-              .primary(args.uri.source)
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          if (buffer.ValueUnsafe()->size() == 0) {
-            break;
-          }
-          co_yield chunk::make(buffer.MoveValueUnsafe());
-        }
-      }(args_, ctrl);
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto uri = arrow::util::Uri{};
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
+    auto opts = get_options(args_, uri);
+    if (not opts) {
+      diagnostic::error(opts.error()).emit(ctrl.diagnostics());
+      co_return;
+    }
+    auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
+    if (not fs.ok()) {
+      diagnostic::error("failed to create Arrow S3 filesystem: {}",
+                        fs.status().ToStringWithoutContextLines())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    auto file_info = fs.ValueUnsafe()->GetFileInfo(
+      fmt::format("{}{}", uri.host(), uri.path()));
+    if (not file_info.ok()) {
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
+        .primary(args_.uri.source)
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    auto input_stream = fs.ValueUnsafe()->OpenInputStream(*file_info);
+    if (not input_stream.ok()) {
+      diagnostic::error("failed to open input stream: {}",
+                        input_stream.status().ToStringWithoutContextLines())
+        .primary(args_.uri.source)
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    while (not input_stream.ValueUnsafe()->closed()) {
+      auto buffer = input_stream.ValueUnsafe()->Read(max_chunk_size);
+      if (not input_stream.ok()) {
+        diagnostic::error("failed to read from input stream: {}",
+                          buffer.status().ToStringWithoutContextLines())
+          .primary(args_.uri.source)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      if (buffer.ValueUnsafe()->size() == 0) {
+        break;
+      }
+      co_yield chunk::make(buffer.MoveValueUnsafe());
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "s3";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "json";
+    return "load_s3";
   }
 
   friend auto inspect(auto& f, s3_loader& x) -> bool {
@@ -155,87 +149,80 @@ private:
   s3_args args_;
 };
 
-class s3_saver final : public plugin_saver {
+class s3_saver final : public crtp_operator<s3_saver> {
 public:
   s3_saver() = default;
 
   s3_saver(s3_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto uri = arrow::util::Uri{};
-    const auto parse_result = uri.Parse(args_.uri.inner);
-    if (not parse_result.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to parse URI `{}`: {}",
-                                         args_.uri.inner,
-                                         parse_result.ToString()));
-    }
-    auto opts = get_options(args_);
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
+    auto opts = get_options(args_, uri);
     if (not opts) {
-      return std::move(opts.error());
+      diagnostic::error(opts.error()).emit(ctrl.diagnostics());
     }
     auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
     if (not fs.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to create Arrow S3 "
-                                         "filesystem: {}",
-                                         fs.status().ToString()));
+      diagnostic::error("failed to create Arrow S3 "
+                        "filesystem: {}",
+                        fs.status().ToStringWithoutContextLines())
+        .emit(ctrl.diagnostics());
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to get file info from path "
-                                         "`{}`: {}",
-                                         args_.uri.inner,
-                                         file_info.status().ToString()));
+      diagnostic::error("failed to get file info: {}",
+                        file_info.status().ToStringWithoutContextLines())
+        .emit(ctrl.diagnostics());
     }
     auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
     if (not output_stream.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to open output stream for URI "
-                                         "`{}`: {}",
-                                         args_.uri.inner,
-                                         output_stream.status().ToString()));
+      diagnostic::error("failed to open output stream: {}",
+                        output_stream.status().ToStringWithoutContextLines())
+        .emit(ctrl.diagnostics());
     }
     auto stream_guard
       = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
           if (not output_stream.ok()) {
-            diagnostic::error("{}", status.ToString())
-              .note("failed to close stream for URI `{}`", args_.uri.inner)
+            diagnostic::error("failed to close stream: {}",
+                              status.ToStringWithoutContextLines())
+              .primary(args_.uri.source)
               .emit(ctrl.diagnostics());
           }
         });
-    return [&ctrl, output_stream, uri = args_.uri.inner,
-            stream_guard = std::make_shared<decltype(stream_guard)>(
-              std::move(stream_guard))](chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0) {
-        return;
+    for (auto chunk : input) {
+      if (! chunk || chunk->size() == 0) {
+        co_yield {};
+        continue;
       }
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
-        diagnostic::error("{}", status.ToString())
-          .note("failed to erite to stream for URI `{}`", uri)
+        diagnostic::error("failed to write to stream: {}",
+                          status.ToStringWithoutContextLines())
+          .primary(args_.uri.source)
           .emit(ctrl.diagnostics());
-        return;
       }
-    };
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "s3";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
+    return "save_s3";
   }
 
   friend auto inspect(auto& f, s3_saver& x) -> bool {

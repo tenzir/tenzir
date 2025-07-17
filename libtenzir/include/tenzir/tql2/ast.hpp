@@ -16,6 +16,7 @@
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_path.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/detail/is_one_of.hpp>
 
@@ -47,15 +48,6 @@ struct identifier {
 
   auto get_location() const -> location {
     return location;
-  }
-
-  friend auto operator<=>(const identifier& lhs, const identifier& rhs)
-    -> std::strong_ordering {
-    return lhs.name <=> rhs.name;
-  }
-
-  friend auto operator==(const identifier& lhs, const identifier& rhs) -> bool {
-    return lhs.name == rhs.name;
   }
 
   friend auto inspect(auto& f, identifier& x) -> bool {
@@ -98,28 +90,27 @@ struct underscore : location {
 struct dollar_var {
   dollar_var() = default;
 
-  explicit dollar_var(identifier ident) : ident{std::move(ident)} {
+  explicit dollar_var(identifier id) : id{std::move(id)} {
   }
 
   auto name_without_dollar() const -> std::string_view {
-    TENZIR_ASSERT(ident.name.starts_with("$"));
-    return std::string_view{ident.name}.substr(1);
+    TENZIR_ASSERT(id.name.starts_with("$"));
+    return std::string_view{id.name}.substr(1);
   }
 
   auto get_location() const -> tenzir::location {
-    return ident.location;
+    return id.location;
   }
 
   friend auto inspect(auto& f, dollar_var& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("`{}`", x.ident.name)
-             && dbg->append(" -> {:?}", x.let)
-             && dbg->append(" @ {:?}", x.ident.location);
+      return dbg->fmt_value("`{}`", x.id.name) && dbg->append(" -> {:?}", x.let)
+             && dbg->append(" @ {:?}", x.id.location);
     }
-    return f.object(x).fields(f.field("ident", x.ident), f.field("let", x.let));
+    return f.object(x).fields(f.field("id", x.id), f.field("let", x.let));
   }
 
-  identifier ident;
+  identifier id;
   let_id let;
 };
 
@@ -143,7 +134,7 @@ struct constant {
 
   friend auto inspect(auto& f, constant& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      if (auto t = try_as<time>(x.value)) {
+      if (auto* t = try_as<time>(x.value)) {
         // Time printing is not reliable across platforms otherwise.
         return dbg->fmt_value("time {} @ {:?}", data{*t}, x.source);
       }
@@ -178,22 +169,30 @@ struct this_ {
 };
 
 struct root_field {
-  identifier ident;
+  root_field() = default;
+
+  root_field(identifier id, bool has_question_mark = false)
+    : id{std::move(id)}, has_question_mark{has_question_mark} {
+  }
+
+  identifier id;
+  bool has_question_mark{};
 
   auto get_location() const -> location {
-    return ident.location;
+    return id.location;
   }
 
   friend auto inspect(auto& f, root_field& x) -> bool {
-    return f.apply(x.ident);
+    return f.object(x).fields(
+      f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
   }
 };
 
 using expression_kinds
   = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
                       constant, field_access, index_expr, binary_expr,
-                      unary_expr, function_call, underscore, unpack, assignment,
-                      dollar_var>;
+                      unary_expr, function_call, lambda_expr, underscore,
+                      unpack, assignment, dollar_var, format_expr>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -219,18 +218,7 @@ struct expression {
   std::unique_ptr<expression_kind> kind;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, expression& x) -> bool {
-    if constexpr (Inspector::is_loading) {
-      x.kind = std::make_unique<expression_kind>();
-    } else {
-      if (auto dbg = as_debug_writer(f);
-          dbg && not detail::make_dependent<Inspector>(x.kind)) {
-        return dbg->fmt_value("<invalid>");
-      }
-      TENZIR_ASSERT(x.kind);
-    }
-    return f.apply(*detail::make_dependent<Inspector>(x.kind));
-  }
+  friend auto inspect(Inspector& f, expression& x) -> bool;
 
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
@@ -253,16 +241,26 @@ struct expression {
   auto is_deterministic(const registry& reg) const -> bool;
 };
 
-/// A "simple selector" has a path that contains only constant field names.
+/// A field path is a list of constant field names.
 ///
-/// This can contain expressions like `foo`, `foo.bar` and `this.foo["bar"]`. It
-/// does not allow `foo[some_expr()]`, `foo[0]`, etc. These selectors will be
-/// added at a later point in time.
-class simple_selector {
+/// This can contain expressions like `foo`, `foo.?bar` and `this.foo["bar"]`.
+/// It does not allow `foo[some_expr()]`, `foo[0]`, etc. These field paths will
+/// be added at a later point in time.
+class field_path {
 public:
-  simple_selector() = default;
+  struct segment {
+    identifier id;
+    bool has_question_mark;
 
-  static auto try_from(ast::expression expr) -> std::optional<simple_selector>;
+    friend auto inspect(auto& f, segment& x) -> bool {
+      return f.object(x).fields(
+        f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
+    }
+  };
+
+  field_path() = default;
+
+  static auto try_from(ast::expression expr) -> std::optional<field_path>;
 
   auto get_location() const -> location {
     return expr_.get_location();
@@ -272,7 +270,7 @@ public:
     return has_this_;
   }
 
-  auto path() const -> std::span<const identifier> {
+  auto path() const -> std::span<const segment> {
     return path_;
   }
 
@@ -284,23 +282,12 @@ public:
     return std::move(expr_);
   }
 
-  friend auto operator<=>(const simple_selector& lhs,
-                          const simple_selector& rhs) -> std::weak_ordering {
-    return lhs.path_ <=> rhs.path_;
-  }
-
-  friend auto operator==(const simple_selector& lhs, const simple_selector& rhs)
-    -> bool {
-    return lhs.path_ == rhs.path_;
-  }
-
 private:
-  simple_selector(ast::expression expr, bool has_this,
-                  std::vector<identifier> path)
+  field_path(ast::expression expr, bool has_this, std::vector<segment> path)
     : expr_{std::move(expr)}, has_this_{has_this}, path_{std::move(path)} {
   }
 
-  friend auto inspect(auto& f, simple_selector& x) -> bool {
+  friend auto inspect(auto& f, field_path& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr_),
                               f.field("has_this", x.has_this_),
                               f.field("path", x.path_));
@@ -308,7 +295,7 @@ private:
 
   ast::expression expr_;
   bool has_this_{};
-  std::vector<identifier> path_;
+  std::vector<segment> path_;
 };
 
 /// A selector is something that can be assigned.
@@ -316,7 +303,7 @@ private:
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
 /// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
-struct selector : variant<meta, simple_selector> {
+struct selector : variant<meta, field_path> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
@@ -349,7 +336,7 @@ struct unpack {
 };
 
 TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, geq, lt, leq, and_, or_,
-            in);
+            in, if_, else_);
 
 struct binary_expr {
   binary_expr() = default;
@@ -372,7 +359,7 @@ struct binary_expr {
   }
 };
 
-TENZIR_ENUM(unary_op, pos, neg, not_);
+TENZIR_ENUM(unary_op, pos, neg, not_, move);
 
 struct unary_expr {
   unary_expr() = default;
@@ -390,6 +377,32 @@ struct unary_expr {
 
   auto get_location() const -> location {
     return op.source.combine(expr);
+  }
+};
+
+struct lambda_expr {
+  lambda_expr() = default;
+
+  lambda_expr(identifier left, location arrow, expression right)
+    : left{std::move(left)}, arrow{arrow}, right{std::move(right)} {
+  }
+
+  identifier left;
+  location arrow;
+  expression right;
+
+  friend auto inspect(auto& f, lambda_expr& x) -> bool {
+    return f.object(x).fields(f.field("left", x.left),
+                              f.field("arrow", x.arrow),
+                              f.field("right", x.right));
+  }
+
+  auto left_as_field_path() const -> field_path {
+    return check(field_path::try_from(root_field{left, false}));
+  }
+
+  auto get_location() const -> location {
+    return left.get_location().combine(right);
   }
 };
 
@@ -470,17 +483,27 @@ struct function_call {
 struct field_access {
   field_access() = default;
 
-  field_access(expression left, location dot, identifier name)
-    : left{std::move(left)}, dot{dot}, name{std::move(name)} {
+  field_access(expression left, location dot, bool has_question_mark,
+               identifier name)
+    : left{std::move(left)},
+      dot{dot},
+      has_question_mark{has_question_mark},
+      name{std::move(name)} {
   }
 
   expression left;
   location dot;
+  bool has_question_mark = false;
   identifier name;
 
   friend auto inspect(auto& f, field_access& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
+                              f.field("has_question_mark", x.has_question_mark),
                               f.field("name", x.name));
+  }
+
+  auto suppress_warnings() const -> bool {
+    return has_question_mark;
   }
 
   auto get_location() const -> location {
@@ -492,23 +515,25 @@ struct index_expr {
   index_expr() = default;
 
   index_expr(expression expr, location lbracket, expression index,
-             location rbracket)
+             location rbracket, bool has_question_mark)
     : expr{std::move(expr)},
       lbracket{lbracket},
       index{std::move(index)},
-      rbracket{rbracket} {
+      rbracket{rbracket},
+      has_question_mark{has_question_mark} {
   }
 
   expression expr;
   location lbracket;
   expression index;
   location rbracket;
+  bool has_question_mark = false;
 
   friend auto inspect(auto& f, index_expr& x) -> bool {
-    return f.object(x).fields(f.field("expr", x.expr),
-                              f.field("lbracket", x.lbracket),
-                              f.field("index", x.index),
-                              f.field("rbracket", x.rbracket));
+    return f.object(x).fields(
+      f.field("expr", x.expr), f.field("lbracket", x.lbracket),
+      f.field("index", x.index), f.field("rbracket", x.rbracket),
+      f.field("has_question_mark", x.has_question_mark));
   }
 
   auto get_location() const -> location {
@@ -749,6 +774,35 @@ struct pipeline_expr {
   }
 };
 
+struct format_expr {
+  struct replacement {
+    ast::expression expr;
+
+    friend auto inspect(auto& f, replacement& x) -> bool {
+      return f.apply(x.expr);
+    }
+  };
+  using segment = variant<std::string, replacement>;
+
+  format_expr() = default;
+
+  format_expr(std::vector<segment> segments, location location)
+    : segments{std::move(segments)}, location{location} {
+  }
+
+  std::vector<segment> segments;
+  struct location location;
+
+  friend auto inspect(auto& f, format_expr& x) -> bool {
+    return f.object(x).fields(f.field("segments", x.segments),
+                              f.field("location", x.location));
+  }
+
+  auto get_location() const -> struct location {
+    return location;
+  }
+};
+
 inline expression::~expression() = default;
 inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
@@ -853,6 +907,11 @@ protected:
     go(x.args);
   }
 
+  void enter(lambda_expr& x) {
+    go(x.left);
+    go(x.right);
+  }
+
   void enter(pipeline_expr& x) {
     go(x.inner);
   }
@@ -913,13 +972,13 @@ protected:
     match(x);
   }
 
-  void enter(ast::simple_selector& x) {
+  void enter(ast::field_path& x) {
     // TODO: What should we do here?
     TENZIR_UNUSED(x);
   }
 
   void enter(ast::root_field& x) {
-    go(x.ident);
+    go(x.id);
   }
 
   void enter(ast::this_& x) {
@@ -941,6 +1000,19 @@ protected:
 
   void enter(ast::underscore& x) {
     TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::format_expr& x) {
+    for (auto& s : x.segments) {
+      tenzir::match(
+        s,
+        [&](const std::string&) {
+          // noop
+        },
+        [&](ast::format_expr::replacement& r) {
+          go(r.expr);
+        });
+    }
   }
 
 private:
@@ -973,6 +1045,20 @@ private:
     return static_cast<Self&>(*this);
   }
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, expression& x) -> bool {
+  if constexpr (Inspector::is_loading) {
+    x.kind = std::make_unique<expression_kind>();
+  } else {
+    if (auto dbg = as_debug_writer(f);
+        dbg && not detail::make_dependent<Inspector>(x.kind)) {
+      return dbg->fmt_value("<invalid>");
+    }
+    TENZIR_ASSERT(x.kind);
+  }
+  return f.apply(*detail::make_dependent<Inspector>(x.kind));
+}
 
 } // namespace tenzir::ast
 

@@ -16,6 +16,8 @@ setup() {
 
 # bats test_tags=parser
 @test "Parse basic" {
+  export TENZIR_LEGACY=true
+
   tenzir --dump-ast " "
   tenzir --dump-ast "// comment"
   tenzir --dump-ast "#!/usr/bin/env tenzir"
@@ -23,6 +25,8 @@ setup() {
 
 # bats test_tags=parser
 @test "Parse operators" {
+  export TENZIR_LEGACY=true
+
   check tenzir --dump-ast "version"
   check ! tenzir "version --tev"
   check ! tenzir "version 42"
@@ -52,16 +56,9 @@ setup() {
 }
 
 # bats test_tags=pipelines
-@test "Apply operator" {
-  check tenzir "apply ${QUERYDIR}/some_source | write json"
-  check tenzir "apply ${QUERYDIR}/some_source.tql | write json"
-  check ! tenzir "apply /tmp/does_not_exist"
-  check ! tenzir "apply does_not_exist.tql"
-  run ! tenzir "apply ${QUERYDIR}/from_unknown_file.tql"
-}
-
-# bats test_tags=pipelines
 @test "Local Pipeline Execution" {
+  export TENZIR_LEGACY=true
+
   # - is an alternative form of stdin and stdout
   check -c "gunzip -c '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from stdin read json | write json | save stdout'"
   check -c "gunzip -c '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from file - read json | to stdout write json'"
@@ -77,78 +74,108 @@ setup() {
 
 # bats test_tags=pipelines
 @test "Read from JSON File" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/record-in-list.json read json | write json"
 }
 
 # bats test_tags=json
 @test "Read incomplete JSON object" {
+  export TENZIR_LEGACY=true
+
   check ! tenzir "from file ${INPUTSDIR}/json/incomplete-object.json"
 }
 
 # bats test_tags=pipelines
 @test "Type mismatch in a column" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/type-mismatch.json read json | write json"
 }
 
 # bats test_tags=pipelines
 @test "Use schema time unit when converting from a double to a duration" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/double-to-duration-cast.json read json --selector=schema:argus | select SIntPkt | write json"
 }
 
 # bats test_tags=pipelines,json
 @test "Read JSON with nested selector field" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/suricata/eve.json read json --selector=flow.start | put x=#schema"
 }
 
 # bats test_tags=pipelines,json
 @test "Read JSON with integer selector" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/suricata/eve.json read json --selector=pcap_cnt | put x=#schema"
 }
 
 # bats test_tags=pipelines
 @test "Read from suricata file" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/suricata/eve.json read suricata | write json"
   check tenzir "from file ${INPUTSDIR}/suricata/eve.json read json --schema=suricata.alert --no-infer | write json"
 }
 
 # bats test_tags=pipelines
 @test "Skip columns that are not in the schema for suricata input with no-infer option" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/suricata/dns-with-no-schema-column.json read suricata --no-infer | select custom_field | write json"
 }
 
 # bats test_tags=pipelines
 @test "Read from zeek json file" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/zeek/zeek.json read zeek-json | write json"
 }
 
 # bats test_tags=json
 @test "Read JSON from tshark output" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/pcap/tshark.json"
 }
 
 # bats test_tags=json
 @test "Read JSON with new field in record list" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json read json --merge"
   check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json"
 }
 
 # bats test_tags=json
 @test "Read JSON with differents fields in one record list" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/record-list-different-fields.json"
 }
 
 # bats test_tags=json
 @test "Read JSON with list config in overwritten field" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/record-list-conflict-field-overwrite.json"
 }
 
 # bats test_tags=json
 @test "Read JSON record list with nulls and conflict" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from file ${INPUTSDIR}/json/record-list-with-null-conflict.json"
 }
 
 # bats test_tags=pipelines, cef
 @test "Schema ID Extractor" {
+  export TENZIR_LEGACY=true
+
   check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | put fingerprint = #schema_id | write json'"
 
   check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id == \"59e472ba9bb9e014\" | write json'"
@@ -157,43 +184,19 @@ setup() {
 }
 
 # bats test_tags=pipelines
-@test "Measure Events" {
-  check tenzir "from ${INPUTSDIR}/json/files.log.json.gz read json | measure | summarize events=sum(events) by schema | write json"
-  check tenzir "from ${INPUTSDIR}/json/files.log.json.gz read json | measure --real-time | summarize events=sum(events) by schema | write json"
-}
-
-# bats test_tags=pipelines
-@test "Measure Bytes" {
-  check tenzir "from ${INPUTSDIR}/json/conn.log.json.gz | measure | summarize bytes=sum(bytes) | write json"
-  check tenzir "from ${INPUTSDIR}/json/conn.log.json.gz | measure --real-time | summarize bytes=sum(bytes) | write json"
-}
-
-# bats test_tags=pipelines
 @test "Batch Events" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'version | repeat 10 | batch 5 | measure | select events'
   check tenzir 'version | repeat 10 | batch 1 | measure | select events'
   check tenzir 'version | repeat 10 | batch 3 | measure | select events'
   check tenzir 'version | repeat 10 | batch 15 | measure | select events'
 }
-# bats test_tags=pipelines
-@test "Empty Record in Pipeline" {
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write json"
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write csv"
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write xsv \" \" ; NULL"
-}
-
-# bats test_tags=pipelines, repeat
-@test "Repeat" {
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | repeat 5 | read cef | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | repeat 5 | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | measure | summarize sum(events) by schema | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | repeat 5 | read cef | measure | summarize sum(events) by schema | write json"
-  check tenzir "load ${INPUTSDIR}/cef/forcepoint.log | read cef | repeat 5 | measure | summarize sum(events) by schema | write json"
-}
 
 # bats test_tags=pipelines
 @test "Heterogeneous Lists" {
+  export TENZIR_LEGACY=true
+
   cat ${INPUTSDIR}/json/basic-types.json |
     check ! tenzir "from stdin read json | put foo=[\"true\", false]"
 
@@ -215,6 +218,8 @@ setup() {
 
 # bats test_tags=pipelines,zeek
 @test "Zeek TSV Pipeline Format" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | write json"
   check tenzir "from ${INPUTSDIR}/zeek/merge_with_whitespace_separation.log read zeek-tsv | write json"
   check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | head 300 | write zeek-tsv --disable-timestamp-tags"
@@ -241,6 +246,8 @@ setup() {
 
 # bats test_tags=pipelines, zeek
 @test "Sort" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | select ts, uid | sort ts | write json"
   check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | select uid | sort uid desc | write json"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service | write json"
@@ -250,6 +257,8 @@ setup() {
 
 # bats test_tags=pipelines
 @test "Slice Regression Test" {
+  export TENZIR_LEGACY=true
+
   # This tests for a bug fixed by tenzir/tenzir#3171 that caused sliced nested
   # arrays to be accessed incorrectly, resulting in a crash. The head 8 and tail
   # 3 operators are intentionally chosen to slice in the middle of a batch.
@@ -260,58 +269,9 @@ setup() {
 }
 
 # bats test_tags=pipelines, zeek
-@test "Shell" {
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 1 | write json -c | shell rev"
-  check tenzir 'shell "echo foo"'
-  check tenzir 'shell "{ echo \"#\"; seq 1 2 10; }" | read csv | write json -c'
-}
-
-# bats test_tags=pipelines
-@test "Summarize All None Some" {
-  # The summarize operator supports using fields which do not exist, using
-  # `null` instead of their value. Here, we test many combinations of this
-  # behavior. We use the letters A, N and S for all, none and some,
-  # respectively. For example, SA means that the some (but not all)
-  # schemas do not have the aggregation column present, but for all
-  # of them, the group-by column exists.
-
-  # AA
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path) by _path"
-  # NN
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y) by z"
-  # NA
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y) by _path"
-  # AN
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path) by z"
-  # NS
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y) by id.orig_h"
-  # SN
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h) by z"
-  # AS
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path) by id.orig_h"
-  # SA
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h) by _path"
-  # SS
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h) by id.orig_h"
-  # A
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(_path)"
-  # S
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(id.orig_h)"
-  # N
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=distinct(y)"
-}
-
-# bats test_tags=pipelines
-@test "Summarize Dot" {
-  check tenzir "from ${INPUTSDIR}/zeek/zeek.json read zeek-json | summarize x=count(.)"
-  cat ${INPUTSDIR}/zeek/zeek.json |
-    check ! tenzir "from stdin read zeek-json | summarize x=distinct(.)"
-  cat ${INPUTSDIR}/zeek/zeek.json |
-    check ! tenzir "from stdin read zeek-json | summarize x=count(_path) by ."
-}
-
-# bats test_tags=pipelines, zeek
 @test "Flatten Operator" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | tail 10 | flatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | flatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/nested-structure.json read json | flatten | to stdout"
@@ -327,6 +287,8 @@ setup() {
 
 # bats test_tags=pipelines
 @test "Unflatten Operator" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/json/record-in-list-in-record.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/records-in-nested-lists.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/records-in-nested-record-lists.json read json | unflatten | to stdout"
@@ -376,6 +338,8 @@ EOF
 
 # bats test_tags=pipelines
 @test "JSON Printer" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | write json"
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | write json --compact-output"
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | write json --omit-nulls"
@@ -386,46 +350,10 @@ EOF
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | head 1 | flatten | write json --omit-empty"
 }
 
-# bats test_tags=pipelines, parser, printer, pcap
-@test "PCAP Format" {
-  # Make sure basic decapsulation logic works.
-  check tenzir "from ${INPUTSDIR}/pcap/example.pcap.gz read pcap | decapsulate | drop pcap.data | write json"
-  # Decapsulate VLAN information. Manually verified with:
-  # tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
-  check tenzir "from ${INPUTSDIR}/pcap/vlan-single-tagging.pcap read pcap | decapsulate | select vlan.outer, vlan.inner | write json"
-  check tenzir "from ${INPUTSDIR}/pcap/vlan-double-tagging.pcap read pcap | decapsulate | select vlan.outer, vlan.inner | write json"
-  # Re-produce an identical copy of the input by taking the input PCAP file
-  # header as blueprint for the output trace. The MD5 of the original input
-  # is 2696858410a08f5edb405b8630a9858c.
-  check -c "tenzir 'from ${INPUTSDIR}/pcap/example.pcap.gz read pcap -e | write pcap' | md5sum | cut -f 1 -d ' '"
-  # Concatenate PCAPs and process them. The test ensures that we have the
-  # right sequencing of file header and packet header events.
-  check tenzir "shell \"cat ${INPUTSDIR}/pcap/vlan-*.pcap\" | read pcap -e | put schema=#schema | write json -c"
-  # Decapsulate an SLL2 frame.
-  check tenzir "from ${INPUTSDIR}/pcap/sll2.pcap | decapsulate | write json -c"
-}
-
-# bats test_tags=pipelines, compression
-@test "Compression" {
-  # TODO: Also add tests for lz4, zstd, bz2, and brotli, and compression in
-  # general. The current integration testing framework does not support
-  # testing binary outputs very well, so we should implement more tests once
-  # we're completed the transition to bats (see tenzir/tenzir#2859).
-  check tenzir "load file ${INPUTSDIR}/json/conn.log.json.gz | decompress gzip | read zeek-json | summarize num_events=count(.)"
-}
-
-# bats test_tags=pipelines, formats
-@test "Lines" {
-  check tenzir "from ${INPUTSDIR}/cef/checkpoint.log read lines | summarize n=count(.) | write json -c"
-  check tenzir "from ${INPUTSDIR}/cef/checkpoint.log read lines -s | summarize n=count(.) | write json -c"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | write lines"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | put e | write lines"
-  check tenzir "from ${INPUTSDIR}/json/type-mismatch.json read json | write lines"
-  check tenzir "from ${INPUTSDIR}/json/whitespace.json read json | write lines"
-}
-
 # bats test_#tags=pipelines
 @test "S3 Connector" {
+  export TENZIR_LEGACY=true
+
   # TODO: Set up Tenzir S3 stuff for Tenzir-internal read/write tests?
   # TODO: Re-enable this test once Arrow updated their bundled AWS SDK from version 1.10.55,
   # see: https://github.com/apache/arrow/issues/37721
@@ -436,12 +364,16 @@ EOF
 
 # bats test_tags=pipelines
 @test "Get and Set Attributes" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'version | set-attributes --foo bar --abc=def | get-attributes'
   check tenzir 'version | set-attributes --first 123 | set-attributes --second 456 | get-attributes'
 }
 
 # bats test_tags=pipelines,chart
 @test "Chart Arguments" {
+  export TENZIR_LEGACY=true
+
   cat ${INPUTSDIR}/json/all-types.json |
     check ! tenzir "from stdin read json | chart pie -x b"
   cat ${INPUTSDIR}/json/all-types.json |
@@ -462,6 +394,8 @@ EOF
 
 # bats test_tags=pipelines
 @test "Yield Operator" {
+  export TENZIR_LEGACY=true
+
   cat ${INPUTSDIR}/suricata/rrdata-eve.json |
     check tenzir "read suricata | yield dns"
   cat ${INPUTSDIR}/suricata/rrdata-eve.json |
@@ -478,6 +412,8 @@ EOF
 
 # bats test_tags=pipelines, syslog
 @test "Syslog format" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/syslog/syslog.log read syslog"
   check tenzir "from ${INPUTSDIR}/syslog/syslog-rfc3164.log read syslog"
   check tenzir "from ${INPUTSDIR}/syslog/multiline.log read syslog"
@@ -485,6 +421,8 @@ EOF
 
 # bats test_tags=pipelines
 @test "Parse CEF in JSON in JSON from Lines" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/json/cef-in-json-in-json.json read lines"
   check tenzir "from ${INPUTSDIR}/json/cef-in-json-in-json.json read lines | parse line json"
   check tenzir "from ${INPUTSDIR}/json/cef-in-json-in-json.json read lines | parse line json | parse line.foo json"
@@ -493,12 +431,16 @@ EOF
 
 # bats test_tags=pipelines
 @test "Parse CEF over syslog" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/syslog/cef-over-syslog.log read syslog"
   check tenzir "from ${INPUTSDIR}/syslog/cef-over-syslog.log read syslog | parse content cef"
 }
 
 # bats test_tags=pipelines
 @test "Parse with Grok" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{GREEDYDATA:version}"'
   check tenzir 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
   check tenzir 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok --indexed-captures "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak}-%{DATA:ref}(-%{DATA:extra})?)?"'
@@ -513,6 +455,8 @@ EOF
 
 # bates test_tags=pipelines
 @test "Read Grok" {
+  export TENZIR_LEGACY=true
+
   echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{GREEDYDATA:version}"'
   echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
   echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok --indexed-captures "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak}-%{DATA:ref}(-%{DATA:extra})?)?"'
@@ -523,23 +467,31 @@ EOF
 
 # bats test_tags=pipelines
 @test "Print JSON in CEF" {
+  export TENZIR_LEGACY=true
+
   check tenzir "read cef | slice 1:3 | print extension json | select extension" <${INPUTSDIR}/cef/forcepoint.log
   check ! tenzir "read cef | print extension.dvc json " <${INPUTSDIR}/cef/forcepoint.log
 }
 
 # bats test_tags=pipelines
 @test "Print CSV in CEF" {
+  export TENZIR_LEGACY=true
+
   check tenzir "read cef | slice 1:2 | print extension csv" <${INPUTSDIR}/cef/forcepoint.log
   check tenzir "read cef | slice 1:2 | print extension csv --no-header | select extension" <${INPUTSDIR}/cef/forcepoint.log
 }
 
 # bats test_tags=pipelines
 @test "Print non UTF8 string" {
+  export TENZIR_LEGACY=true
+
   check ! tenzir "read cef | print extension feather" <${INPUTSDIR}/cef/forcepoint.log
   check ! tenzir "read cef | print extension bitz" <${INPUTSDIR}/cef/forcepoint.log
 }
 
 @test "Print nested data" {
+  export TENZIR_LEGACY=true
+
   check tenzir "read json | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b csv" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b zeek-tsv | parse a.b zeek-tsv" <${INPUTSDIR}/json/nested-object.json
@@ -548,17 +500,23 @@ EOF
 }
 
 @test "Print multiple events" {
+  export TENZIR_LEGACY=true
+
   check tenzir "read json | repeat 4 | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
   check ! tenzir "read json | repeat 2 | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
 }
 
 # bats test_tags=pipelines, csv
 @test "CSV with comments" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/csv/ipblocklist.csv read csv --allow-comments"
 }
 
 # bats test_tags=pipelines, xsv
 @test "XSV Format" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/xsv/sample.csv read csv | extend schema=#schema | write csv"
   check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv | extend schema=#schema | write ssv"
   check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv | extend schema=#schema | write tsv"
@@ -571,6 +529,8 @@ EOF
 }
 
 @test "read xsv auto expand" {
+  export TENZIR_LEGACY=true
+
   echo "1,2,3" | check tenzir 'read csv --header "foo,bar,baz"'
   echo "1,2" | check tenzir 'read csv --header "foo,bar,baz"'
   echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,bar,baz"'
@@ -580,6 +540,8 @@ EOF
 
 # bats test_tags=pipelines, xsv
 @test "Slice" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :1"
@@ -596,14 +558,9 @@ EOF
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice ::-1"
 }
 
-# bats test_tags=pipelines
-@test "Parse KV" {
-  check tenzir "from ${INPUTSDIR}/txt/key_value_pairs.txt read lines | parse line kv \"(\s+)[A-Z][A-Z_]+\" \":\s*\""
-  check ! tenzir 'parse line kv "(foo)(bar)" ""'
-  check ! tenzir 'parse line kv "foo(?=bar)" ""'
-}
-
 @test "Parse JSON with numeric timestamp" {
+  export TENZIR_LEGACY=true
+
   local schemas="$BATS_RUN_TMPDIR/tmp/$BATS_TEST_NAME"
   mkdir -p $schemas
   local schema="$schemas/foo_bar.schema"
@@ -622,6 +579,8 @@ EOF
 }
 
 @test "bitz format" {
+  export TENZIR_LEGACY=true
+
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | write bitz | read bitz"
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | set #schema=\"foo\" | write bitz | read bitz | set schema=#schema"
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | batch 1 | write bitz | read bitz"
@@ -630,14 +589,7 @@ EOF
 
 # bats test_tags=pipelines, deduplicate
 @test "Deduplicate operator" {
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate e, limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | batch 1 | deduplicate b, limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1, distance=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate {b: b, e: e}, limit=1"
-
-  check tenzir --tql2 "deduplicate value, limit=2" <<EOF
+  check tenzir "deduplicate value, limit=2" <<EOF
 {"value": "192.168.1.1", "tag": 1}
 {"value": "192.168.1.2", "tag": 2}
 {"value": "192.168.1.3", "tag": 3}
@@ -649,7 +601,7 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
-  check tenzir --tql2 "deduplicate value, distance=3, limit=1" <<EOF
+  check tenzir "deduplicate value, distance=3, limit=1" <<EOF
 {"value": "192.168.1.1", "tag": 1}
 {"value": "192.168.1.2", "tag": 2}
 {"value": "192.168.1.3", "tag": 3}
@@ -661,14 +613,14 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
-  check tenzir --tql2 "deduplicate value, limit=1" <<EOF
+  check tenzir "deduplicate value, limit=1" <<EOF
 {"value": 123, "tag": 1}
 {"value": null, "tag": 2}
 {"value": 123, "tag": 3}
 {"tag": 4}
 EOF
 
-  check tenzir --tql2 "deduplicate foo.bar, limit=1" <<EOF
+  check tenzir "deduplicate foo.bar, limit=1" <<EOF
 {"foo": {"bar": 123}, "tag": 1}
 {"foo": {"bar": null}, "tag": 2}
 {"foo": 123, "tag": 3}
@@ -679,13 +631,13 @@ EOF
 {"foo": {"bar": 123}, "tag": 8}
 EOF
 
-  check tenzir --tql2 "deduplicate {a: a, b: b}, limit=1" <<EOF
+  check tenzir "deduplicate {a: a, b: b}, limit=1" <<EOF
 {"a": 1, "b": 2, "tag": 1}
 {"b": "reset", "tag": 2}
 {"b": 2, "a": 1, "tag": 3}
 EOF
 
-  check tenzir --tql2 "deduplicate limit=1" <<EOF
+  check tenzir "deduplicate limit=1" <<EOF
 {"a": 1, "b": 2}
 {"b": "reset"}
 {"b": 2, "a": 1}
@@ -694,45 +646,8 @@ EOF
 
 # bats test_tags=pipelines
 @test "unroll operator" {
-  check tenzir 'unroll b' <<EOF
-{"a": 1, "b": [1, 2, 3]}
-{"a": 2, "b": [1]}
-{"a": 3, "b": []}
-{"a": 4, "b": null}
-EOF
-
-  check tenzir 'unroll conn | where conn.dest !in 192.168.0.0/16 || active > 100ms' <<EOF
-{
-  "src": "192.168.0.5",
-  "conn": [
-    {
-      "dest": "192.168.0.34",
-      "active": "381ms"
-    },
-    {
-      "dest": "192.168.0.120",
-      "active": "42ms"
-    },
-    {
-      "dest": "1.2.3.4",
-      "active": "67ms"
-    }
-  ]
-}
-EOF
-
-  # Make sure that we can duplicate records that contain enumerations.
-  check tenzir 'read suricata | unroll vlan' <<EOF
-{"event_type": "dns", "vlan": [0, null], "dns": {"type": "answer"}}
-EOF
-
-  # Make sure that we can duplicate enumerations that sit next to the unrolled list.
-  check tenzir 'read suricata | unroll dns.answers' <<EOF
-{"event_type": "dns", "dns": {"type": "answer", "answers": [{}, null]}}
-EOF
-
   # Test how we unroll records, including their various options for null fields.
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: {baz: 2, qux: 3}},
@@ -746,7 +661,7 @@ unroll events
 this = events
 unroll bar
 EOF
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: {baz: 2, qux: 3}},
@@ -762,7 +677,7 @@ unordered {
   unroll bar
 }
 EOF
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: 2, baz: 3},
@@ -773,7 +688,7 @@ unroll events
 this = events
 unroll this
 EOF
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: 2, baz: 3},
@@ -789,6 +704,8 @@ EOF
 }
 
 @test "unflatten empty record and empty record null" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json | unflatten' <<EOF
 {"foo": {}}
 {"foo": null}
@@ -796,6 +713,8 @@ EOF
 }
 
 @test "precise json" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": "0.042s"}
 {"foo": "0.043s", "bar": null}
@@ -803,6 +722,8 @@ EOF
 }
 
 @test "precise json raw" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise --raw' <<EOF
 {"foo": "0.042s"}
 {"foo": "0.043s", "bar": [{}]}
@@ -810,78 +731,70 @@ EOF
 }
 
 @test "precise json overwrite field" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": "0.042s", "foo": 42}
 EOF
 }
 
 @test "precise json list type conflict" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": [42, "bar"]}
 EOF
 }
 
 @test "precise json big integer" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": 424242424242424242424242}
 EOF
 }
 
 @test "precise json incomplete input" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": 42
 EOF
 }
 
 @test "precise json broken input" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": 42,,,
 EOF
 }
 
 @test "precise json bad ndjson" {
+  export TENZIR_LEGACY=true
+
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": 42}{"foo": 43}
 EOF
 }
 
 @test "legacy operator" {
-  check ! tenzir --tql2 --dump-pipeline 'legacy'
-  check tenzir --tql2 --dump-pipeline 'legacy ""'
-  check tenzir --tql2 --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
-  check ! tenzir --tql2 --dump-pipeline 'legacy "this_operator_does_not_exist"'
+  check ! tenzir --dump-pipeline 'legacy'
+  check tenzir --dump-pipeline 'legacy ""'
+  check tenzir --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
+  check ! tenzir --dump-pipeline 'legacy "this_operator_does_not_exist"'
 }
 
 @test "assert operator" {
-  check tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
-  check ! tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
-}
-
-@test "summarize an empty input" {
-  check tenzir --tql2 'from {} | head 0 | summarize count(), sum(foo)'
-  check tenzir --tql2 'from {} | head 0| summarize count(), sum(foo), bar'
-}
-
-@test "map and where an empty list" {
-  check tenzir --tql2 'from {foo: []} | foo = foo.map(x, x + 1)'
-  check tenzir --tql2 'from {foo: []} | foo = foo.where(x, x > 3)'
-}
-
-@test "map and where a list of numbers" {
-  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.map(x, x + 1)'
-  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.where(x, x > 3)'
-}
-
-@test "map and where with records" {
-  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
-  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
+  check tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
+  check ! tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
 }
 
 @test "zip" {
-  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: [], bar: [4, 5]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: [], bar: []} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: null, bar: [1]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: null, bar: null} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [], bar: []} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: null, bar: [1]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: null, bar: null} | baz = zip(foo, bar)'
 }

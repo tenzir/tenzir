@@ -37,33 +37,33 @@ emit_invalid_identifier(std::string_view name, std::string_view value,
                         location loc, diagnostic_handler& dh) {
   diagnostic::error("invalid {} `{}`", name, value)
     .primary(loc)
-    .hint("`{}` must either be a quoted string, or match the regular "
+    .hint("{} must either be a quoted string, or match the regular "
           "expression `{}`",
           name, validation_expr)
     .emit(dh);
 }
 
-struct arguments {
+struct operator_arguments {
   tenzir::location operator_location;
-  located<std::string> host = {"localhost", operator_location};
+  located<secret> host = {secret::make_literal("localhost"), operator_location};
   located<uint16_t> port = {9000, operator_location};
-  located<std::string> user = {"default", operator_location};
-  located<std::string> password = {"", operator_location};
+  located<secret> user = {secret::make_literal("default"), operator_location};
+  located<secret> password = {secret::make_literal(""), operator_location};
   located<std::string> table = {"REQUIRED", location::unknown};
   located<enum mode> mode = located{mode::create_append, operator_location};
   std::optional<located<std::string>> primary = std::nullopt;
   ssl_options ssl = {};
 
-  static auto
-  try_parse(std::string operator_name, operator_factory_plugin::invocation inv,
-            session ctx) -> failure_or<arguments> {
-    auto res = arguments{inv.self.get_location()};
+  static auto try_parse(std::string operator_name,
+                        operator_factory_plugin::invocation inv, session ctx)
+    -> failure_or<operator_arguments> {
+    auto res = operator_arguments{inv.self.get_location()};
     auto mode_str = located<std::string>{
       to_string(mode::create_append),
       res.operator_location,
     };
     auto port = std::optional<located<int64_t>>{};
-    auto primary_selector = std::optional<ast::simple_selector>{};
+    auto primary_selector = std::optional<ast::field_path>{};
     auto parser = argument_parser2::operator_(operator_name);
     parser.named_optional("host", res.host);
     parser.named("port", port);
@@ -101,16 +101,15 @@ struct arguments {
           .emit(ctx);
         return failure::promise();
       }
-      res.primary = {p.front().name, primary_selector->get_location()};
+      res.primary = {p.front().id.name, primary_selector->get_location()};
       if (not validate_identifier(res.primary->inner)) {
         emit_invalid_identifier("primary", res.primary->inner,
                                 res.primary->source, ctx);
         return failure::promise();
       }
     }
-    TRY(res.ssl.validate(res.host, ctx));
     if (not port) {
-      if (res.ssl.tls.inner) {
+      if (res.ssl.get_tls().inner) {
         port = located{9440, res.operator_location};
       } else {
         port = located{9000, res.operator_location};
@@ -120,32 +119,7 @@ struct arguments {
     return res;
   }
 
-  auto make_options() const -> ::clickhouse::ClientOptions {
-    auto opts = ::clickhouse::ClientOptions()
-                  .SetEndpoints({{host.inner, port.inner}})
-                  .SetUser(user.inner)
-                  .SetPassword(password.inner);
-    if (ssl.tls.inner) {
-      auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
-      tls_opts.SetSkipVerification(ssl.skip_peer_verification.has_value());
-      auto commands
-        = std::vector<::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
-      if (ssl.cacert) {
-        commands.emplace_back("ChainCAFile", ssl.cacert->inner);
-      }
-      if (ssl.certfile) {
-        commands.emplace_back("Certificate", ssl.certfile->inner);
-      }
-      if (ssl.keyfile) {
-        commands.emplace_back("PrivateKey", ssl.keyfile->inner);
-      }
-      tls_opts.SetConfiguration(commands);
-      opts.SetSSLOptions(std::move(tls_opts));
-    }
-    return opts;
-  }
-
-  friend auto inspect(auto& f, arguments& x) -> bool {
+  friend auto inspect(auto& f, operator_arguments& x) -> bool {
     return f.object(x).fields(
       f.field("operator_location", x.operator_location),
       f.field("host", x.host), f.field("port", x.port), f.field("user", x.user),

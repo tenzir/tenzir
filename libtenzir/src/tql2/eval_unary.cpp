@@ -72,7 +72,8 @@ struct EvalUnOp<ast::unary_op::neg, T> {
         }
         check(b.Append(-val));
       } else if constexpr (std::same_as<T, uint64_type>) {
-        if (val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        if (val
+            > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1) {
           overflow = true;
           check(b.AppendNull());
           continue;
@@ -151,6 +152,20 @@ auto evaluator::eval(const ast::unary_expr& x) -> multi_series {
     X(neg);
     X(not_);
 #undef X
+    case move: {
+      if (ast::field_path::try_from(x.expr)) {
+        diagnostic::warning("move is not supported here")
+          .primary(x.op, "has no effect")
+          .hint("move only works on fields within assignments")
+          .emit(ctx_);
+      } else {
+        diagnostic::warning("move has no effect")
+          .primary(x.expr, "is not a field")
+          .hint("move only works on fields within assignments")
+          .emit(ctx_);
+      }
+      return eval(x.expr);
+    }
   }
   TENZIR_UNREACHABLE();
 }

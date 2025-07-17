@@ -1,0 +1,9 @@
+{
+  x: b"foo & bar, qux/quux",
+  special: b"!@#$%^&*()=+[]{}\\|;:'\",.<>?/~`",
+  unicode: b"Hello World 你好",
+  whitespace: b"line1\nline2\ttabbed",
+  url: b"https://example.com/path?key=value&param=data",
+  mixed: b"Hello World+and+some normal text",
+  malformed: b"incomplete%2+ normal%",
+}

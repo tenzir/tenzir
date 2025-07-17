@@ -1,0 +1,7 @@
+// node: true
+
+remote {
+  from {
+    message: "Hello, world!"
+  }
+}

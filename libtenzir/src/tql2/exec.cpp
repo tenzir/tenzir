@@ -77,7 +77,7 @@ public:
   }
 
   void emit_not_found(const ast::dollar_var& var) {
-    diagnostic::error("variable `{}` was not declared", var.ident.name)
+    diagnostic::error("variable `{}` was not declared", var.id.name)
       .primary(var)
       .emit(ctx_);
     failure_ = failure::promise();
@@ -450,11 +450,31 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       // Do not proceed to execution if there has been an error.
       return false;
     }
-    auto result = exec_pipeline(std::move(pipe), ctx, cfg, sys);
-    if (not result) {
-      diagnostic::error(result.error()).emit(ctx);
+    auto pipes = std::vector<pipeline>{};
+    if (not cfg.multi) {
+      pipes.push_back(std::move(pipe));
+    } else {
+      auto split = std::move(pipe).split_at_void();
+      if (not split) {
+        diagnostic::error(split.error()).emit(ctx);
+        return false;
+      }
+      pipes = std::move(*split);
     }
-    return not ctx.has_failure();
+    for (auto& pipe : pipes) {
+      auto result
+        = exec_pipeline(std::move(pipe), std::string{source}, ctx, cfg, sys);
+      if (not result) {
+        if (result.error() != ec::silent) {
+          diagnostic::error(result.error()).emit(ctx);
+        }
+        return false;
+      }
+      if (ctx.has_failure()) {
+        return false;
+      }
+    }
+    return true;
   });
   return result ? *result : false;
 }

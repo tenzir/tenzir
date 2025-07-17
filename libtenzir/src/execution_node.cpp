@@ -9,15 +9,19 @@
 #include "tenzir/execution_node.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/connect_to_node.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
-#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/ecc.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/secret_resolution.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -36,6 +40,21 @@
 namespace tenzir {
 
 namespace {
+
+template <class F>
+void loop_at(caf::scheduled_actor* self, caf::actor_clock::time_point start,
+             caf::timespan delay, F&& f) {
+  auto run = [self, start, delay, f = std::forward<F>(f)]() mutable {
+    std::invoke(f);
+    loop_at(self, start + delay, delay, std::move(f));
+  };
+  self->delay_until_fn(start + delay, std::move(run));
+}
+
+template <class F>
+void loop(caf::scheduled_actor* self, caf::timespan delay, F&& f) {
+  loop_at(self, self->clock().now() + delay, delay, std::forward<F>(f));
+}
 
 using namespace std::chrono_literals;
 using namespace si_literals;
@@ -111,8 +130,26 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   }
 
   void emit(diagnostic diag) override {
+    if (not censor.is_noop()) {
+      diag.message = censor.censor(std::move(diag.message));
+      for (auto& annotation : diag.annotations) {
+        annotation.text = censor.censor(std::move(annotation.text));
+      }
+      for (auto& note : diag.notes) {
+        note.message = censor.censor(std::move(note.message));
+      }
+    }
     TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
                  diag);
+    switch (state.op->strictness()) {
+      case strictness_level::strict:
+        if (diag.severity == severity::warning) {
+          diag.severity = severity::error;
+        }
+        break;
+      case strictness_level::normal:
+        break;
+    }
     if (diag.severity == severity::error) {
       throw std::move(diag);
     }
@@ -121,10 +158,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     }
   }
 
+  void add_to_censor(ecc::cleansing_blob v) {
+    censor.secrets.emplace(std::move(v));
+  }
+
 private:
   exec_node_state<Input, Output>& state;
   receiver_actor<diagnostic> handle = {};
   diagnostic_deduplicator deduplicator_;
+  secret_censor censor;
 };
 
 template <class Input, class Output>
@@ -147,6 +189,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     return *state.self;
   }
 
+  auto definition() const noexcept -> std::string_view override {
+    return state.definition;
+  }
+
   auto run_id() const noexcept -> uuid override {
     return state.run_id;
   }
@@ -167,7 +213,6 @@ struct exec_node_control_plane final : public operator_control_plane {
     return metric_handler{
       metrics_receiver_,
       operator_index_,
-      metric_index++,
       t,
     };
   }
@@ -196,12 +241,238 @@ struct exec_node_control_plane final : public operator_control_plane {
     }
   }
 
+  struct located_resolved_secret {
+    location loc;
+    ecc::cleansing_blob value;
+
+    located_resolved_secret(location loc) : loc{loc} {
+    }
+  };
+
+  using request_map_t
+    = std::unordered_map<std::string, located_resolved_secret>;
+
+  struct secret_finisher {
+    class secret secret;
+    secret_request_callback callback;
+    location loc;
+
+    static auto apply_transformation(ecc::cleansing_blob blob,
+                                     fbs::data::SecretTransformations operation,
+                                     diagnostic_handler& dh, location loc)
+      -> failure_or<ecc::cleansing_blob> {
+      switch (operation) {
+        using enum fbs::data::SecretTransformations;
+        case decode_base64: {
+          const auto decoded = detail::base64::try_decode(std::string_view{
+            reinterpret_cast<const char*>(blob.data()),
+            reinterpret_cast<const char*>(blob.data() + blob.size()),
+          });
+          if (not decoded) {
+            diagnostic::error("failed to `decode_base64` secret value")
+              .primary(loc)
+              .emit(dh);
+            return failure::promise();
+          }
+          const auto dec_bytes = as_bytes(*decoded);
+          blob.assign(dec_bytes.begin(), dec_bytes.end());
+          return blob;
+        }
+        case encode_base64: {
+          const auto encoded = detail::base64::encode(std::string_view{
+            reinterpret_cast<const char*>(blob.data()),
+            reinterpret_cast<const char*>(blob.data() + blob.size()),
+          });
+          const auto enc_bytes = as_bytes(encoded);
+          blob.assign(enc_bytes.begin(), enc_bytes.end());
+          return blob;
+        }
+      }
+      TENZIR_UNREACHABLE();
+    }
+
+    auto finish(const request_map_t& requested,
+                exec_node_diagnostic_handler<Input, Output>& dh) const
+      -> failure_or<void> {
+      // For every element in the original secret
+      bool all_literal = true;
+      using ret_t = failure_or<ecc::cleansing_blob>;
+      const auto f = detail::overload{
+        [](const fbs::data::SecretLiteral& l) -> ret_t {
+          const auto& v = detail::secrets::deref(l.value());
+          const auto v_bytes = as_bytes(v);
+          return ecc::cleansing_blob{v_bytes.begin(), v_bytes.end()};
+        },
+        [&requested](const fbs::data::SecretName& l) -> ret_t {
+          const auto it
+            = requested.find(detail::secrets::deref(l.value()).str());
+          TENZIR_ASSERT(it != requested.end());
+          return it->second.value;
+        },
+        [](this const auto& self,
+           const fbs::data::SecretConcatenation& concat) -> ret_t {
+          auto res = ecc::cleansing_blob{};
+          for (auto* p : detail::secrets::deref(concat.secrets())) {
+            TRY(auto part, match(detail::secrets::deref(p), self));
+            res.insert(res.end(), part.begin(), part.end());
+          }
+          return res;
+        },
+        [&dh, loc
+              = this->loc](this const auto& self,
+                           const fbs::data::SecretTransformed& trafo) -> ret_t {
+          TRY(auto nested, match(detail::secrets::deref(trafo.secret()), self));
+          return apply_transformation(std::move(nested), trafo.transformation(),
+                                      dh, loc);
+        },
+      };
+      TRY(auto res, match(secret, f));
+      // Finally, we invoke the callback
+      return callback(resolved_secret_value{std::move(res), all_literal});
+    }
+  };
+
+  auto resolve_secrets_must_yield(std::vector<secret_request> requests,
+                                  final_callback_t final_callback)
+    -> secret_resolution_sentinel override {
+    auto requested_secrets = std::make_shared<request_map_t>();
+    auto finishers = std::vector<secret_finisher>{};
+    for (auto& req : requests) {
+      const auto collect = detail::overload{
+        [](const fbs::data::SecretLiteral&) -> void {
+          ; /* noop */
+        },
+        [&requested_secrets,
+         loc = req.location](const fbs::data::SecretName& n) -> void {
+          requested_secrets->try_emplace(
+            detail::secrets::deref(n.value()).str(), loc);
+        },
+        [](this const auto& self,
+           const fbs::data::SecretConcatenation& concat) -> void {
+          for (const auto* p : detail::secrets::deref(concat.secrets())) {
+            match(detail::secrets::deref(p), self);
+          }
+        },
+        [](this const auto& self,
+           const fbs::data::SecretTransformed& trafo) -> void {
+          match(detail::secrets::deref(trafo.secret()), self);
+        },
+      };
+      match(req.secret, collect);
+      finishers.emplace_back(std::move(req.secret), std::move(req.callback),
+                             req.location);
+    }
+    if (requested_secrets->empty()) {
+      /// Finish all secrets via the respective finisher.
+      auto success = true;
+      for (const auto& f : finishers) {
+        success &= static_cast<bool>(
+          f.finish(*requested_secrets, *diagnostic_handler));
+      }
+      success &= static_cast<bool>(final_callback(true));
+      // We want to avoid re-scheduling in the error case, so we set_waiting
+      if (not success) {
+        set_waiting(true);
+      }
+      return secret_resolution_sentinel{};
+    }
+    auto node_callback = [this, finishers = std::move(finishers),
+                          final_callback = std::move(final_callback),
+                          requested_secrets = std::move(requested_secrets)](
+                           caf::expected<node_actor> maybe_actor) {
+      if (not maybe_actor) {
+        diagnostic::error("no Tenzir Node to resolve secrets")
+          .primary(finishers.front().loc)
+          .emit(diagnostics());
+        std::ignore = final_callback(false);
+        return;
+      }
+      auto fan = detail::make_fanout_counter_with_error<diagnostic>(
+        requested_secrets->size(),
+        [this, requested_secrets, finishers = std::move(finishers),
+         final_callback]() {
+          /// Finish all secrets via the respective finisher.
+          bool success = true;
+          for (const auto& f : finishers) {
+            success &= static_cast<bool>(
+              f.finish(*requested_secrets, *diagnostic_handler));
+          }
+          success &= static_cast<bool>(final_callback(success));
+          /// We do not want to re-schedule ourselves in the error case.
+          if (success) {
+            set_waiting(false);
+          }
+        },
+        [this, final_callback](std::span<diagnostic> diags) {
+          TENZIR_ASSERT(std::ranges::any_of(
+                          diags,
+                          [](const auto& severity) {
+                            return severity == severity::error;
+                          },
+                          &diagnostic::severity),
+                        "failed secret resolution must have produced at least "
+                        "one error");
+          for (auto& d : diags) {
+            diagnostics().emit(std::move(d));
+          }
+          /// We do not want to re-schedule ourselves in the error case.
+          std::ignore = final_callback(false);
+        });
+      for (auto& [name, out] : *requested_secrets) {
+        auto key_pair = ecc::generate_keypair();
+        TENZIR_ASSERT(key_pair);
+        auto public_key = key_pair->public_key;
+        state.self->mail(atom::resolve_v, name, std::move(public_key))
+          .request(*maybe_actor, caf::infinite)
+          .then(
+            [fan, keys = *key_pair, name, &out](secret_resolution_result res) {
+              match(
+                res,
+                [&](const encrypted_secret_value& v) {
+                  auto decrypted = ecc::decrypt(v.value, keys);
+                  if (not decrypted) {
+                    fan->receive_error(
+                      diagnostic::error("failed to decrypt secret: {}",
+                                        decrypted.error())
+                        .primary(out.loc)
+                        .note("secret `{}` failed", name)
+                        .done());
+                    return;
+                  }
+                  out.value = std::move(*decrypted);
+                  fan->receive_success();
+                  return;
+                },
+                [&](const secret_resolution_error& e) {
+                  fan->receive_error(
+                    diagnostic::error("could not get secret value: {}",
+                                      e.message)
+                      .primary(out.loc)
+                      .note("secret `{}` failed", name)
+                      .done());
+                });
+            },
+            [fan, loc = out.loc](caf::error e) {
+              fan->receive_error(
+                diagnostic::error(std::move(e)).primary(loc).done());
+            });
+      }
+    };
+    set_waiting(true);
+    auto node = this->node();
+    if (node) {
+      node_callback(node);
+      return {};
+    }
+    connect_to_node(state.self, std::move(node_callback));
+    return {};
+  }
+
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
   metrics_receiver_actor metrics_receiver_ = {};
   uint64_t operator_index_ = {};
-  uint64_t metric_index = {};
   bool has_terminal_ = {};
   bool is_hidden_ = {};
 };
@@ -209,11 +480,12 @@ struct exec_node_control_plane final : public operator_control_plane {
 template <class Input, class Output>
 struct exec_node_state {
   exec_node_state(exec_node_actor::pointer self, operator_ptr op,
-                  const node_actor& node,
+                  std::string definition, const node_actor& node,
                   const receiver_actor<diagnostic>& diagnostic_handler,
                   const metrics_receiver_actor& metrics_receiver, int index,
                   bool has_terminal, bool is_hidden, uuid run_id)
     : self{self},
+      definition{std::move(definition)},
       run_id{run_id},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
@@ -321,10 +593,6 @@ struct exec_node_state {
         return error;
       });
     return {
-      [this](atom::internal, atom::run) -> caf::result<void> {
-        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        return internal_run();
-      },
       [this](atom::start,
              std::vector<caf::actor>& all_previous) -> caf::result<void> {
         auto time_scheduled_guard
@@ -388,6 +656,9 @@ struct exec_node_state {
   /// A pointer to the parent actor.
   exec_node_actor::pointer self = {};
 
+  /// The definition of this pipeline.
+  std::string definition;
+
   /// A unique identifier for the current run.
   uuid run_id = {};
 
@@ -420,6 +691,9 @@ struct exec_node_state {
 
   /// A handle to the previous execution node.
   exec_node_actor previous = {};
+
+  /// Whether the previous execution node exited.
+  caf::actor_addr prev_addr = nullptr;
 
   /// The inbound buffer.
   std::deque<Input> inbound_buffer = {};
@@ -492,7 +766,7 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
+    loop(self, defaults::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
       emit_generic_op_metrics();
     });
@@ -517,6 +791,7 @@ struct exec_node_state {
       }
       previous
         = caf::actor_cast<exec_node_actor>(std::move(all_previous.back()));
+      prev_addr = previous->address();
       all_previous.pop_back();
       self->link_to(previous);
     }
@@ -762,19 +1037,17 @@ struct exec_node_state {
     TENZIR_TRACE("{} {} schedules run with a delay of {}", *self, op->name(),
                  data{backoff});
     run_scheduled = true;
-    if (backoff == duration::zero()) {
-      self->mail(atom::internal_v, atom::run_v).send(self);
-    } else {
-      backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
-        self->mail(atom::internal_v, atom::run_v).send(self);
+    if (use_backoff) {
+      backoff_disposable = self->run_delayed_weak(backoff, [this] {
+        run_scheduled = false;
+        run();
       });
+      return;
     }
-  }
-
-  auto internal_run() -> caf::result<void> {
-    run_scheduled = false;
-    run();
-    return {};
+    self->delay_fn([this] {
+      run_scheduled = false;
+      run();
+    });
   }
 
   auto issue_demand() -> void {
@@ -927,10 +1200,15 @@ struct exec_node_state {
       on_error(msg.reason);
       return;
     } else {
-      if (not previous) {
+      if (not previous and msg.source == prev_addr) {
+        // Ignore duplicate exit message from the previous node.
+        // For some reason, we can get multiple exit messages from the previous
+        // exec node. This can cause the current operator to ungracefully quit.
+        //
+        // We ignore this because we should only get exit messages from the exec
+        // nodes from the `linked` state.
         return;
       }
-      const auto prev_addr = previous->address();
       // We got an exit message, which can mean one of four things:
       // 1. The pipeline manager quit.
       // 2. The next operator quit.
@@ -938,7 +1216,7 @@ struct exec_node_state {
       // 4. The previous operator quit ungracefully.
       // In cases (1-3) we need to shut down this operator unconditionally.
       // For (4) we we need to treat the previous operator as offline.
-      if (msg.source != prev_addr) {
+      if (not previous or msg.source != prev_addr) {
         TENZIR_DEBUG("{} {} got exit message from the next execution node or "
                      "its executor with address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
@@ -961,15 +1239,15 @@ struct exec_node_state {
 } // namespace
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
-                     operator_type input_type, node_actor node,
+                     operator_type input_type, std::string definition,
+                     node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal, bool is_hidden, uuid run_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
-  TENZIR_ASSERT(node != nullptr
-                or not(op->location() == operator_location::remote));
+  TENZIR_ASSERT(node != nullptr or op->location() != operator_location::remote);
   TENZIR_ASSERT(diagnostics_handler != nullptr);
   TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);
@@ -987,8 +1265,9 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
         caf::actor_from_state<exec_node_state<input_type, output_type>>,
-        std::move(op), std::move(node), std::move(diagnostics_handler),
-        std::move(metrics_receiver), index, has_terminal, is_hidden, run_id);
+        std::move(op), std::move(definition), std::move(node),
+        std::move(diagnostics_handler), std::move(metrics_receiver), index,
+        has_terminal, is_hidden, run_id);
       return result;
     };
   };

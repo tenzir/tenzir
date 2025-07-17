@@ -22,7 +22,37 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
-#include <boost/process.hpp>
+
+#if __has_include(<boost/process/v1/child.hpp>)
+
+#  include <boost/process/v1/args.hpp>
+#  include <boost/process/v1/async.hpp>
+#  include <boost/process/v1/async_system.hpp>
+#  include <boost/process/v1/child.hpp>
+#  include <boost/process/v1/cmd.hpp>
+#  include <boost/process/v1/env.hpp>
+#  include <boost/process/v1/environment.hpp>
+#  include <boost/process/v1/error.hpp>
+#  include <boost/process/v1/exe.hpp>
+#  include <boost/process/v1/group.hpp>
+#  include <boost/process/v1/handles.hpp>
+#  include <boost/process/v1/io.hpp>
+#  include <boost/process/v1/pipe.hpp>
+#  include <boost/process/v1/search_path.hpp>
+#  include <boost/process/v1/shell.hpp>
+#  include <boost/process/v1/spawn.hpp>
+#  include <boost/process/v1/start_dir.hpp>
+#  include <boost/process/v1/system.hpp>
+
+namespace bp = boost::process::v1;
+
+#else
+
+#  include <boost/process.hpp>
+
+namespace bp = boost::process;
+
+#endif
 
 #include <mutex>
 #include <queue>
@@ -96,7 +126,7 @@ public:
   }
 
   auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
-    TENZIR_ASSERT(!buffer.empty());
+    TENZIR_ASSERT(! buffer.empty());
     TENZIR_TRACE("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
     auto size = detail::narrow<int>(buffer.size());
@@ -106,7 +136,7 @@ public:
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error {
-    TENZIR_ASSERT(!buffer.empty());
+    TENZIR_ASSERT(! buffer.empty());
     TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
@@ -126,15 +156,14 @@ public:
     auto ec = std::error_code{};
     child_.wait(ec);
     if (ec) {
-      return caf::make_error(ec::unspecified,
-                             fmt::format("waiting for child process failed: {}",
-                                         ec));
+      return diagnostic::error("{}", ec.message())
+        .note("failed to wait for child process")
+        .to_error();
     }
     auto code = child_.exit_code();
     if (code != 0) {
-      return caf::make_error(
-        ec::unspecified,
-        fmt::format("child process exited with exit-code {}", code));
+      return diagnostic::error("child process exited with exit-code {}", code)
+        .to_error();
     }
     return {};
   }
@@ -149,7 +178,7 @@ public:
 
 private:
   explicit child(std::string command) : command_{std::move(command)} {
-    TENZIR_ASSERT(!command_.empty());
+    TENZIR_ASSERT(! command_.empty());
   }
 
   std::string command_;
@@ -162,21 +191,22 @@ class shell_operator final : public crtp_operator<shell_operator> {
 public:
   shell_operator() = default;
 
-  explicit shell_operator(std::string command) : command_{std::move(command)} {
+  explicit shell_operator(located<secret> command)
+    : command_{std::move(command)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto command = std::string{};
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_secret_request("command", command_, command, ctrl.diagnostics())});
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
-    auto child = child::make(command_, mode);
-    if (!child) {
+    auto child = child::make(command, mode);
+    if (! child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
       co_return;
     }
-    // We yield once because reading below is blocking, but we want to
-    // directly signal that our initialization is complete.
-    co_yield {};
     auto buffer = std::vector<char>(block_size);
     while (true) {
       auto bytes_read = child->read(as_writeable_bytes(buffer));
@@ -204,9 +234,12 @@ public:
 
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto command = std::string{};
+    co_yield ctrl.resolve_secrets_must_yield(
+      {make_secret_request("command", command_, command, ctrl.diagnostics())});
     // TODO: Handle exceptions from `boost::process`.
-    auto child = child::make(command_, stdin_mode::pipe);
-    if (!child) {
+    auto child = child::make(command, stdin_mode::pipe);
+    if (! child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
@@ -337,35 +370,26 @@ public:
   }
 
 private:
-  std::string command_;
+  located<secret> command_;
 };
 
-class plugin final : public virtual operator_plugin<shell_operator>,
-                     public virtual operator_factory_plugin {
+class plugin final : public virtual operator_plugin2<shell_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-    };
+  auto name() const -> std::string override {
+    return "shell";
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::string{};
-    auto parser = argument_parser{"shell", "https://docs.tenzir.com/"
-                                           "operators/shell"};
-    parser.add(command, "<command>");
-    parser.parse(p);
-    return std::make_unique<shell_operator>(std::move(command));
+  auto initialize(const record&, const record&) -> caf::error override {
+    return {};
   }
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto command = located<std::string>{};
+    auto command = located<secret>{};
     auto parser
       = argument_parser2::operator_("shell").positional("cmd", command);
     TRY(parser.parse(inv, ctx));
-    return std::make_unique<shell_operator>(std::move(command).inner);
+    return std::make_unique<shell_operator>(std::move(command));
   }
 };
 

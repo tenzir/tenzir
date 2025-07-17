@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/aggregation_function.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
@@ -16,47 +15,6 @@
 namespace tenzir::plugins::any {
 
 namespace {
-
-class any_function final : public aggregation_function {
-public:
-  explicit any_function(type input_type) noexcept
-    : aggregation_function(std::move(input_type)) {
-    // nop
-  }
-
-private:
-  [[nodiscard]] type output_type() const override {
-    TENZIR_ASSERT(is<bool_type>(input_type()));
-    return input_type();
-  }
-
-  void add(const data_view& view) override {
-    using view_type = tenzir::view<bool>;
-    if (is<caf::none_t>(view)) {
-      return;
-    }
-    if (!any_) {
-      any_ = materialize(as<view_type>(view));
-    } else {
-      any_ = *any_ || as<view_type>(view);
-    }
-  }
-
-  void add(const arrow::Array& array) override {
-    const auto& bool_array = as<type_to_arrow_array_t<bool_type>>(array);
-    if (!any_) {
-      any_ = bool_array.true_count() > 0;
-    } else {
-      any_ = *any_ || bool_array.true_count() > 0;
-    }
-  }
-
-  [[nodiscard]] caf::expected<data> finish() && override {
-    return data{any_};
-  }
-
-  std::optional<bool> any_ = {};
-};
 
 class any_instance final : public aggregation_instance {
 public:
@@ -155,26 +113,13 @@ private:
   enum class state : int8_t { none, failed, nulled } state_{state::none};
 };
 
-class plugin : public virtual aggregation_function_plugin,
-               public virtual aggregation_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
+class plugin : public virtual aggregation_plugin {
+  auto name() const -> std::string override {
     return "any";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
-  make_aggregation_function(const type& input_type) const override {
-    if (is<bool_type>(input_type)) {
-      return std::make_unique<any_function>(input_type);
-    }
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("any aggregation function does not "
-                                       "support type {}",
-                                       input_type));
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const
@@ -184,10 +129,6 @@ class plugin : public virtual aggregation_function_plugin,
           .positional("x", expr, "bool")
           .parse(inv, ctx));
     return std::make_unique<any_instance>(std::move(expr));
-  }
-
-  auto aggregation_default() const -> data override {
-    return false;
   }
 };
 

@@ -1,0 +1,18 @@
+from {
+  // Binary data in blobs
+  binary1: b"\x00\x01\x02\x03\x04",       // First 5 bytes
+  binary2: b"\xFE\xFF",                   // UTF-16 BOM (non-UTF8)
+  binary3: b"\x7F\x45\x4C\x46",           // ELF magic number
+  binary4: b"\xCA\xFE\xBA\xBE",           // Java class file magic number
+  binary5: b"\x00\xFF\x00\xFF\x00\xFF",   // Binary pattern
+
+  // Invalid UTF-8 sequences in blobs (allowed)
+  invalid_utf8_1: b"\xC0\xAF",            // Invalid UTF-8 overlong encoding
+  invalid_utf8_2: b"\xF0\x82\x82\xAC",    // Overlong UTF-8 encoding of U+20AC
+
+  // High bytes that would cause UTF-8 validation errors in strings
+  high_bytes: b"\x80\x81\x82\x83",        // Continuation bytes without leader
+
+  // Mix of printable and binary
+  mixed_binary: b"Hello\x00World\xFF"     // Text with embedded binary
+}

@@ -1,14 +1,17 @@
 {
   lets: [
     {
-      ident: `$foo` @ 4..8,
-      expr: constant int64 42 @ 11..13,
+      ident: `$foo` @ 17..21,
+      expr: constant int64 42 @ 24..26,
       id: 1
     }
   ],
   operators: [
     group_ir {
-      over: root_field `count` @ 20..25,
+      over: root_field {
+        id: `count` @ 33..38,
+        has_question_mark: false
+      },
       pipe: {
         lets: [
           
@@ -19,15 +22,16 @@
             inv: {
               op: {
                 path: [
-                  `head` @ 30..34
+                  `head` @ 43..47
                 ],
                 ref: std::head/op
               },
               args: [
                 field_access {
-                  left: dollar_var `$group` -> 2 @ 35..41,
-                  dot: 41..42,
-                  name: `count` @ 42..47
+                  left: dollar_var `$group` -> 2 @ 48..54,
+                  dot: 54..55,
+                  has_question_mark: false,
+                  name: `count` @ 55..60
                 }
               ]
             }

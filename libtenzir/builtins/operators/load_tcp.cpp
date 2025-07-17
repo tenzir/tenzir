@@ -19,7 +19,9 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/ssl_options.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
 
 #include <boost/asio.hpp>
@@ -78,15 +80,15 @@ struct load_tcp_args : ssl_options {
   std::optional<location> connect = {};
   std::optional<located<uint64_t>> max_buffered_chunks = {};
   std::optional<located<class pipeline>> pipeline = {};
+  std::optional<ast::field_path> peer_field = {};
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
     return f.object(x).fields(
       f.field("ssl_options", static_cast<ssl_options&>(x)),
       f.field("endpoint", x.endpoint), f.field("parallel", x.parallel),
-      f.field("connect", x.connect), f.field("tls", x.tls),
-      f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
+      f.field("connect", x.connect),
       f.field("max_buffered_chunks", x.max_buffered_chunks),
-      f.field("pipeline", x.pipeline));
+      f.field("pipeline", x.pipeline), f.field("peer_field", x.peer_field));
   }
 };
 
@@ -204,18 +206,44 @@ public:
   load_tcp_sink_operator() = default;
 
   explicit load_tcp_sink_operator(
-    const connection_manager_actor<Elements>& connection_manager)
-    : connection_manager_{connection_manager} {
+    const connection_manager_actor<Elements>& connection_manager,
+    std::optional<ast::field_path> peer_field,
+    const boost::asio::ip::tcp::socket::endpoint_type& peer,
+    const boost::asio::ip::tcp::resolver::results_type& resolved_peer)
+    : connection_manager_{connection_manager},
+      peer_field_{std::move(peer_field)},
+      peer_ip_{peer.address().is_v4()
+                 ? ip::v4(as_bytes(peer.address().to_v4().to_bytes()))
+                 : ip::v6(as_bytes(peer.address().to_v6().to_bytes()))},
+      peer_port_{peer.port()} {
+    if (not resolved_peer.empty()) {
+      peer_hostname_ = resolved_peer.begin()->host_name();
+    }
   }
 
   auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
+    const auto peer = ast::constant{
+      record{
+        {"ip", peer_ip_},
+        {"port", peer_port_},
+        {"hostname", peer_hostname_},
+      },
+      location::unknown,
+    };
     for (auto&& elements : input) {
       if (size(elements) == 0) {
         co_yield {};
         continue;
+      }
+      if constexpr (std::is_same_v<Elements, table_slice>) {
+        if (peer_field_) {
+          auto right = eval(peer, elements, ctrl.diagnostics());
+          elements = assign(*peer_field_, std::move(right), std::move(elements),
+                            ctrl.diagnostics());
+        }
       }
       ctrl.set_waiting(true);
       ctrl.self()
@@ -256,12 +284,20 @@ public:
   }
 
   friend auto inspect(auto& f, load_tcp_sink_operator& x) -> bool {
-    return f.apply(x.connection_manager_);
+    return f.object(x).fields(
+      f.field("connection_manager", x.connection_manager_),
+      f.field("peer_field", x.peer_field_), f.field("peer_ip", x.peer_ip_),
+      f.field("peer_port", x.peer_port_),
+      f.field("peer_hostname", x.peer_hostname_));
   }
 
 private:
   detail::weak_handle<connection_manager_actor<Elements>> connection_manager_
     = {};
+  std::optional<ast::field_path> peer_field_;
+  ip peer_ip_;
+  uint64_t peer_port_;
+  std::optional<std::string> peer_hostname_;
 };
 
 // -- connection-manager actor -------------------------------------------------
@@ -271,13 +307,13 @@ struct connection_manager_state {
   [[maybe_unused]] static constexpr auto name = "connection-manager";
 
   connection_manager_actor<Elements>::pointer self = {};
+  std::string definition;
   load_tcp_args args = {};
   shared_diagnostic_handler diagnostics = {};
   metrics_receiver_actor metrics_receiver = {};
-  detail::stable_map<uint64_t, detail::stable_map<uint64_t, uint64_t>>
-    metrics_id_map = {};
-  static constexpr auto tcp_metrics_id = uint64_t{0};
-  uint64_t next_metrics_id = tcp_metrics_id + 1;
+  detail::stable_map<uint64_t, detail::stable_map<uuid, uuid>> metrics_id_map
+    = {};
+  inline static const uuid tcp_metrics_id = uuid::random();
   uint64_t operator_id = {};
 
   // Everything required for the I/O worker.
@@ -540,7 +576,7 @@ struct connection_manager_state {
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
     connection->emit_metrics(self);
-    if (args.tls.inner) {
+    if (args.get_tls().inner) {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
@@ -566,7 +602,19 @@ struct connection_manager_state {
           return;
         }
       }
-      if (args.skip_peer_verification) {
+      if (! args.connect) {
+        // Always set verify_none in listen mode, since we don't have a flag
+        // to request client certificates yet.
+        if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
+                                                 ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to set verify mode verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(*args.skip_peer_verification)
+            .emit(diagnostics);
+          return;
+        }
+      } else if (args.connect && args.skip_peer_verification) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
           diagnostic::warning("{}", ec.message())
@@ -584,7 +632,7 @@ struct connection_manager_state {
           diagnostic::warning("{}", ec.message())
             .note("failed to enable peer certificate verification")
             .note("handle `{}`", connection->socket->native_handle())
-            .primary(args.tls)
+            .primary(args.get_tls())
             .emit(diagnostics);
           return;
         }
@@ -608,24 +656,31 @@ struct connection_manager_state {
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
           .note("handle `{}`", connection->socket->native_handle())
-          .primary(args.tls)
+          .primary(args.get_tls())
           .emit(diagnostics);
         return;
       }
     }
+    // Resolve the peer endpoint.
+    const auto& peer_endpoint = connection->socket->remote_endpoint();
+    auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
+    const auto resolved_peer = resolver.resolve(peer_endpoint);
     // Set up and spawn the nested pipeline.
     auto pipeline = args.pipeline->inner;
     auto source = std::make_unique<load_tcp_source_operator>(
       connection_actor{self}, connection->socket->native_handle());
     pipeline.prepend(std::move(source));
     auto sink = std::make_unique<load_tcp_sink_operator<Elements>>(
-      connection_manager_actor<Elements>{self});
+      connection_manager_actor<Elements>{self}, args.peer_field, peer_endpoint,
+      resolved_peer);
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
-    connection->pipeline_executor = self->spawn(
-      pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
-      metrics_receiver_actor{self}, node, has_terminal, is_hidden);
+    connection->pipeline_executor
+      = self->spawn(pipeline_executor, std::move(pipeline), definition,
+                    receiver_actor<diagnostic>{self},
+                    metrics_receiver_actor{self}, node, has_terminal,
+                    is_hidden);
     self->monitor(
       connection->pipeline_executor,
       [this, source = connection->pipeline_executor->address()](
@@ -764,11 +819,13 @@ auto make_connection_manager(
   typename connection_manager_actor<Elements>::template stateful_pointer<
     connection_manager_state<Elements>>
     self,
-  const load_tcp_args& args, const shared_diagnostic_handler& diagnostics,
+  std::string definition, const load_tcp_args& args,
+  const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state().self = self;
+  self->state().definition = std::move(definition);
   self->state().args = args;
   self->state().diagnostics = diagnostics;
   self->state().metrics_receiver = metrics_receiver;
@@ -791,18 +848,16 @@ auto make_connection_manager(
     [self](atom::read) -> caf::result<Elements> {
       return self->state().read_elements();
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](uint64_t op_index, uuid metrics_id,
            type& schema) -> caf::result<void> {
-      auto& id = self->state().metrics_id_map[op_index][metric_index];
-      if (id == 0) {
-        id = self->state().next_metrics_id++;
-      }
+      auto& id = self->state().metrics_id_map[op_index][metrics_id];
+      id = uuid::random();
       return self->mail(self->state().operator_id, id, std::move(schema))
         .delegate(self->state().metrics_receiver);
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](uint64_t op_index, uuid metrics_id,
            record& metric) -> caf::result<void> {
-      const auto& id = self->state().metrics_id_map[op_index][metric_index];
+      const auto& id = self->state().metrics_id_map[op_index][metrics_id];
       return self->mail(self->state().operator_id, id, std::move(metric))
         .delegate(self->state().metrics_receiver);
     },
@@ -836,9 +891,9 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<Elements> {
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
-        make_connection_manager<Elements>, args_, ctrl.shared_diagnostics(),
-        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
-        ctrl.node())};
+        make_connection_manager<Elements>, std::string{ctrl.definition()},
+        args_, ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
+        ctrl.operator_index(), ctrl.is_hidden(), ctrl.node())};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);
@@ -910,6 +965,7 @@ public:
                     .positional("endpoint", endpoint)
                     .named("parallel", parallel)
                     .named("max_buffered_chunks", args.max_buffered_chunks)
+                    .named("peer_field", args.peer_field)
                     .positional("{ … }", args.pipeline);
     args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
@@ -959,10 +1015,10 @@ public:
       args.parallel = {1, location::unknown};
     }
     TRY(args.validate(endpoint, ctx));
-    if (not args.tls.inner) {
+    if (not args.get_tls().inner) {
       if (args.certfile) {
         diagnostic::error("conflicting option: `certfile` requires `tls`")
-          .primary(args.tls)
+          .primary(args.get_tls())
           .primary(args.certfile->source)
           .usage(parser.usage())
           .docs(parser.docs())
@@ -971,7 +1027,7 @@ public:
       }
       if (args.keyfile) {
         diagnostic::error("conflicting option: `keyfile` requires `tls`")
-          .primary(args.tls)
+          .primary(args.get_tls())
           .primary(args.keyfile->source)
           .usage(parser.usage())
           .docs(parser.docs())

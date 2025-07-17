@@ -14,10 +14,10 @@
 {x:[100]}
 {x:[{x:null},{x:0},null]}
 {x:null}
-warning: `expr` must evaluate to compatible types within the same list
-  --> exec/functions/list_map/single_batch_everything.tql:21:17
+warning: lambda must evaluate to compatible types within the same list
+  --> exec/functions/list_map/single_batch_everything.tql:23:18
    |
-21 | x = x.map( str, str.parse_json() )
-   |                 ~~~~~~~~~~~~~~~~ `list`, `record` are incompatible
+23 | x = x.map(str => str.parse_json())
+   |                  ~~~~~~~~~~~~~~~~ `list`, `record` are incompatible
    |
    = note: all entries that are not compatible with `record` will be `null`

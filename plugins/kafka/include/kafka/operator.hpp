@@ -63,12 +63,55 @@ inline auto offset_parser() {
   return beginning | end | stored | value;
 }
 
+inline void
+set_or_fail(const std::string& key, const std::string& value, location loc,
+            kafka::configuration& cfg, diagnostic_handler& dh) {
+  if (auto e = cfg.set(key, value)) {
+    diagnostic::error("failed to set librdkafka option {}={}: {}", key, value,
+                      e)
+      .primary(loc)
+      .emit(dh);
+  }
+};
+
+[[nodiscard]] inline auto
+configure_or_request(const located<record>& options, kafka::configuration& cfg,
+                     diagnostic_handler& dh) -> std::vector<secret_request> {
+  auto requests = std::vector<secret_request>{};
+
+  for (const auto& [key, value] : options.inner) {
+    match(
+      value,
+      [&](const concepts::arithmetic auto& v) {
+        set_or_fail(key, fmt::to_string(v), options.source, cfg, dh);
+      },
+      [&](const std::string& s) {
+        set_or_fail(key, s, options.source, cfg, dh);
+      },
+      [&](const secret& s) {
+        requests.emplace_back(
+          s, options.source,
+          [&cfg, &dh, loc = options.source,
+           key](resolved_secret_value v) -> failure_or<void> {
+            TRY(auto str, v.utf8_view("options." + key, loc, dh));
+            set_or_fail(key, std::string{str}, loc, cfg, dh);
+            return {};
+          });
+      },
+      [](const auto&) {
+        /// This case should be covered by the early validation in `plugin::make`
+        TENZIR_UNREACHABLE();
+      });
+  }
+  return requests;
+}
+
 struct loader_args {
   std::string topic;
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
-  located<std::vector<std::pair<std::string, std::string>>> options;
+  located<record> options;
   configuration::aws_iam_options aws;
 
   template <class Inspector>
@@ -81,25 +124,25 @@ struct loader_args {
   }
 };
 
-class kafka_loader final : public plugin_loader {
+class kafka_loader final : public crtp_operator<kafka_loader> {
 public:
   kafka_loader() = default;
 
   kafka_loader(loader_args args, record config)
     : args_{std::move(args)}, config_{std::move(config)} {
-    if (!config_.contains("group.id")) {
+    if (! config_.contains("group.id")) {
       config_["group.id"] = "tenzir";
     }
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
-    if (!cfg) {
+    if (! cfg) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to create configuration: {}", cfg.error())
           .done());
-      return {};
+      co_return;
     }
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
@@ -107,7 +150,6 @@ public:
       if (auto err = cfg->set("enable.partition.eof", "true")) {
         ctrl.diagnostics().emit(
           diagnostic::error("failed to enable partition EOF: {}", err).done());
-        return {};
       }
     }
     // Adjust rebalance callback to set desired offset.
@@ -121,74 +163,63 @@ public:
     if (auto err = cfg->set_rebalance_cb(offset)) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to set rebalance callback: {}", err).done());
-      return {};
     }
     // Override configuration with arguments.
-    if (not args_.options.inner.empty()) {
-      for (const auto& [key, value] : args_.options.inner) {
-        TENZIR_INFO("providing librdkafka option {}={}", key, value);
-        if (auto err = cfg->set(key, value)) {
-          ctrl.diagnostics().emit(
-            diagnostic::error("failed to set librdkafka option {}={}: {}", key,
-                              value, err)
-              .primary(args_.options.source)
-              .done());
-          return {};
-        }
-      }
+    {
+      auto secrets
+        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     // Create the consumer.
     if (auto value = cfg->get("bootstrap.servers")) {
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = consumer::make(*cfg);
-    if (!client) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to create consumer: {}", client.error())
-          .done());
-      return {};
+    if (! client) {
+      diagnostic::error("failed to create consumer: {}", client.error())
+        .emit(ctrl.diagnostics());
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
     if (auto err = client->subscribe({args_.topic})) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to subscribe to topic: {}", err).done());
-      return {};
+      diagnostic::error("failed to subscribe to topic: {}", err)
+        .emit(ctrl.diagnostics());
     }
     // Setup the coroutine factory.
-    auto make
-      = [](loader_args args, consumer client) mutable -> generator<chunk_ptr> {
-      auto num_messages = size_t{0};
-      while (true) {
-        auto msg = client.consume(500ms);
-        if (!msg) {
-          co_yield {};
-          if (msg.error() == ec::timeout) {
-            continue;
-          }
-          if (msg.error() == ec::end_of_input) {
-            // FIXME: currently doesn't work for N partitions with N > 1.
-            // Upgrade to a counter and only break out of the loop once this
-            // signal has been received N times.
-            break;
-          }
-          TENZIR_ERROR(msg.error());
+    auto num_messages = size_t{0};
+    while (true) {
+      auto msg = client->consume(500ms);
+      if (! msg) {
+        co_yield {};
+        if (msg.error() == ec::timeout) {
+          continue;
+        }
+        if (msg.error() == ec::end_of_input) {
+          // FIXME: currently doesn't work for N partitions with N > 1.
+          // Upgrade to a counter and only break out of the loop once this
+          // signal has been received N times.
           break;
         }
-        co_yield *msg;
-        if (args.count && args.count->inner == ++num_messages) {
-          break;
-        }
+        TENZIR_ERROR(msg.error());
+        break;
       }
-    };
-    return make(args_, std::move(*client));
+      co_yield *msg;
+      if (args_.count && args_.count->inner == ++num_messages) {
+        break;
+      }
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "kafka";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "json";
+    return "load_kafka";
   }
 
   friend auto inspect(auto& f, kafka_loader& x) -> bool {
@@ -206,7 +237,7 @@ struct saver_args {
   std::string topic;
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
-  located<std::vector<std::pair<std::string, std::string>>> options;
+  located<record> options;
   configuration::aws_iam_options aws;
 
   template <class Inspector>
@@ -218,7 +249,7 @@ struct saver_args {
   }
 };
 
-class kafka_saver final : public plugin_saver {
+class kafka_saver final : public crtp_operator<kafka_saver> {
 public:
   kafka_saver() = default;
 
@@ -226,32 +257,27 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
-    if (!cfg) {
-      TENZIR_ERROR("kafka failed to create configuration: {}", cfg.error());
-      return cfg.error();
+    if (! cfg) {
+      diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
     };
     // Override configuration with arguments.
-    if (not args_.options.inner.empty()) {
-      for (const auto& [key, value] : args_.options.inner) {
-        TENZIR_INFO("providing librdkafka option {}={}", key, value);
-        if (auto err = cfg->set(key, value)) {
-          diagnostic::error("failed to set librdkafka option {}={}: {}", key,
-                            value, err)
-            .primary(args_.options.source)
-            .throw_();
-        }
-      }
+    {
+      auto secrets
+        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     if (auto value = cfg->get("bootstrap.servers")) {
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = producer::make(*cfg);
-    if (!client) {
+    if (! client) {
       TENZIR_ERROR(client.error());
-      return client.error();
+      diagnostic::error(client.error()).emit(ctrl.diagnostics());
     };
     auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
@@ -273,36 +299,35 @@ public:
       auto result = parsers::time(args_.timestamp->inner, timestamp);
       TENZIR_ASSERT(result); // validated earlier
     }
-    return [&ctrl, client = *client, key = std::move(key), ts = timestamp,
-            topics = std::move(topics),
-            guard = std::make_shared<decltype(guard)>(std::move(guard))](
-             chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0) {
-        return;
+    for (auto chunk : input) {
+      if (! chunk || chunk->size() == 0) {
+        co_yield {};
+        continue;
       }
       for (const auto& topic : topics) {
         TENZIR_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
-        if (auto error = client.produce(topic, as_bytes(*chunk), key, ts)) {
+        if (auto error
+            = client->produce(topic, as_bytes(*chunk), key, timestamp)) {
           diagnostic::error(error).emit(ctrl.diagnostics());
-          return;
         }
       }
       // It's advised to call poll periodically to tell Kafka "you can flush
       // buffered messages if you like".
-      client.poll(0ms);
-    };
+      client->poll(0ms);
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "kafka";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
+    return "save_kafka";
   }
 
   friend auto inspect(auto& f, kafka_saver& x) -> bool {

@@ -2,7 +2,7 @@
   invocation {
     op: {
       path: [
-        `export` @ 0..6
+        `export` @ 14..20
       ],
       ref: unresolved
     },
@@ -11,64 +11,91 @@
     ]
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `foo` @ 9..12,
+    left: field_path {
+      expr: root_field {
+        id: `foo` @ 23..26,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `foo` @ 9..12
+        {
+          id: `foo` @ 23..26,
+          has_question_mark: false
+        }
       ]
     },
-    equals: 13..14,
-    right: constant int64 42 @ 15..17
+    equals: 27..28,
+    right: constant int64 42 @ 29..31
   },
   invocation {
     op: {
       path: [
-        `set` @ 20..23
+        `set` @ 34..37
       ],
       ref: unresolved
     },
     args: [
       assignment {
-        left: simple_selector {
-          expr: root_field `bar` @ 24..27,
+        left: field_path {
+          expr: root_field {
+            id: `bar` @ 38..41,
+            has_question_mark: false
+          },
           has_this: false,
           path: [
-            `bar` @ 24..27
+            {
+              id: `bar` @ 38..41,
+              has_question_mark: false
+            }
           ]
         },
-        equals: 28..29,
-        right: constant int64 43 @ 30..32
+        equals: 42..43,
+        right: constant int64 43 @ 44..46
       }
     ]
   },
   invocation {
     op: {
       path: [
-        `foo` @ 35..38
+        `foo` @ 49..52
       ],
       ref: unresolved
     },
     args: [
-      root_field `bar` @ 39..42,
+      root_field {
+        id: `bar` @ 53..56,
+        has_question_mark: false
+      },
       assignment {
-        left: simple_selector {
-          expr: root_field `baz` @ 44..47,
+        left: field_path {
+          expr: root_field {
+            id: `baz` @ 58..61,
+            has_question_mark: false
+          },
           has_this: false,
           path: [
-            `baz` @ 44..47
+            {
+              id: `baz` @ 58..61,
+              has_question_mark: false
+            }
           ]
         },
-        equals: 47..48,
-        right: root_field `qux` @ 48..51
+        equals: 61..62,
+        right: root_field {
+          id: `qux` @ 62..65,
+          has_question_mark: false
+        }
       },
-      root_field `quux` @ 53..57
+      root_field {
+        id: `quux` @ 67..71,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
     op: {
       path: [
-        `import` @ 60..66
+        `import` @ 74..80
       ],
       ref: unresolved
     },

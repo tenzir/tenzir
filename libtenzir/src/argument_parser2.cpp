@@ -12,6 +12,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 
@@ -116,6 +117,15 @@ auto argument_parser2::parse(const ast::entity& self,
             }
           }
         }
+        if constexpr (std::same_as<T, secret>) {
+          if (not cast) {
+            auto* other = try_as<std::string>(&*value);
+            if (other) {
+              value = secret::make_literal(*other);
+              cast = try_as<secret>(&*value);
+            }
+          }
+        }
         if (not cast) {
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
                                  type_kind::of<data_to_type_t<T>>, kind(*value))
@@ -135,22 +145,30 @@ auto argument_parser2::parse(const ast::entity& self,
       [&](setter<ast::expression>& set) {
         set(expr);
       },
-      [&](setter<ast::simple_selector>& set) {
-        auto sel = ast::simple_selector::try_from(expr);
+      [&](setter<ast::field_path>& set) {
+        auto sel = ast::field_path::try_from(expr);
         if (not sel) {
           emit(diagnostic::error("expected a selector").primary(expr));
           return;
         }
         set(std::move(*sel));
       },
+      [&](setter<ast::lambda_expr>& set) {
+        const auto* lambda = try_as<ast::lambda_expr>(expr);
+        if (not lambda) {
+          emit(diagnostic::error("expected a lambda").primary(expr));
+          return;
+        }
+        set(*lambda);
+      },
       [&](setter<located<pipeline>>& set) {
-        auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+        auto pipe_expr = try_as<ast::pipeline_expr>(expr);
         if (not pipe_expr) {
           emit(
             diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
-        auto pipe = compile(std::move(pipe_expr->inner), ctx);
+        auto pipe = compile(ast::pipeline{pipe_expr->inner}, ctx);
         if (pipe.is_error()) {
           result = pipe.error();
           return;
@@ -161,26 +179,37 @@ auto argument_parser2::parse(const ast::entity& self,
   }
   for (; arg != args.end(); ++arg) {
     arg->match(
-      [&](ast::assignment assignment) {
-        auto sel = std::get_if<ast::simple_selector>(&assignment.left);
-        if (not sel || sel->has_this() || sel->path().size() != 1) {
+      [&](const ast::assignment& assignment) {
+        auto* sel = try_as<ast::field_path>(assignment.left);
+        if (not sel or sel->has_this() or sel->path().size() != 1
+            or sel->path()[0].has_question_mark) {
           emit(diagnostic::error("invalid name").primary(assignment.left));
           return;
         }
-        auto& name = sel->path()[0].name;
-        auto it = std::ranges::find(named_, name, &named_t::name);
+        const auto& name = sel->path()[0].id.name;
+        auto it = std::ranges::find_if(named_, [&](const auto& named) {
+          return std::ranges::find(named.names, name) != named.names.end();
+        });
         if (it == named_.end()) {
-          auto filtered = std::views::filter(named_, [](auto&& x) {
-            return not x.name.starts_with("_");
-          });
-          if (not filtered.empty()) {
-            const auto best = std::ranges::max(filtered, {}, [&](auto&& x) {
-              return detail::calculate_similarity(name, x.name);
-            });
-            if (detail::calculate_similarity(name, best.name) > -10) {
+          auto names = std::vector<std::string_view>{};
+          for (const auto& named : named_) {
+            std::ranges::copy_if(named.names, std::back_inserter(names),
+                                 [](auto&& x) {
+                                   return not x.starts_with("_");
+                                 });
+          }
+          if (not names.empty()) {
+            const auto max_sim = std::ranges::max(
+              names | std::ranges::views::transform([&](auto x) {
+                return std::make_pair(detail::calculate_similarity(name, x), x);
+              }),
+              [&](const auto& lhs, const auto& rhs) {
+                return lhs.first < rhs.first;
+              });
+            if (max_sim.first > -10) {
               emit(diagnostic::error("named argument `{}` does not exist", name)
                      .primary(assignment.left)
-                     .hint("did you mean `{}`?", best.name));
+                     .hint("did you mean `{}`?", max_sim.second));
               return;
             }
           }
@@ -219,6 +248,15 @@ auto argument_parser2::parse(const ast::entity& self,
                 }
               }
             }
+            if constexpr (std::same_as<T, secret>) {
+              if (not cast) {
+                auto* other = try_as<std::string>(&*value);
+                if (other) {
+                  value = secret::make_literal(*other);
+                  cast = try_as<secret>(&*value);
+                }
+              }
+            }
             if (not cast) {
               // TODO: Attempt conversion.
               emit(diagnostic::error(
@@ -240,22 +278,30 @@ auto argument_parser2::parse(const ast::entity& self,
           [&](setter<ast::expression>& set) {
             set(expr);
           },
-          [&](setter<ast::simple_selector>& set) {
-            auto sel = ast::simple_selector::try_from(expr);
+          [&](setter<ast::field_path>& set) {
+            auto sel = ast::field_path::try_from(expr);
             if (not sel) {
               emit(diagnostic::error("expected a selector").primary(expr));
               return;
             }
             set(std::move(*sel));
           },
+          [&](setter<ast::lambda_expr>& set) {
+            const auto* lambda = try_as<ast::lambda_expr>(expr);
+            if (not lambda) {
+              emit(diagnostic::error("expected a lambda").primary(expr));
+              return;
+            }
+            set(*lambda);
+          },
           [&](setter<located<pipeline>>& set) {
-            auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+            const auto* pipe_expr = try_as<ast::pipeline_expr>(expr);
             if (not pipe_expr) {
               emit(diagnostic::error("expected a pipeline expression")
                      .primary(expr));
               return;
             }
-            auto pipe = compile(std::move(pipe_expr->inner), ctx);
+            auto pipe = compile(ast::pipeline{pipe_expr->inner}, ctx);
             if (pipe.is_error()) {
               result = pipe.error();
               return;
@@ -263,7 +309,7 @@ auto argument_parser2::parse(const ast::entity& self,
             set(located{std::move(pipe).unwrap(), expr.get_location()});
           });
       },
-      [&](ast::pipeline_expr pipe_expr) {
+      [&](const ast::pipeline_expr& pipe_expr) {
         if (positional_idx == positional_.size()) {
           emit(diagnostic::error("did not expect more positional arguments")
                  .primary(*arg));
@@ -271,7 +317,7 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         positional_[positional_idx].set.match(
           [&](setter<located<pipeline>>& set) {
-            auto pipe = compile(std::move(pipe_expr.inner), ctx);
+            auto pipe = compile(ast::pipeline{pipe_expr.inner}, ctx);
             if (pipe.is_error()) {
               result = pipe.error();
               return;
@@ -279,21 +325,20 @@ auto argument_parser2::parse(const ast::entity& self,
             set(located{std::move(pipe).unwrap(), pipe_expr.get_location()});
           },
           [&](auto&) {
+            // FIXME: It looks like this is reachable.
             TENZIR_UNREACHABLE();
           });
         ++positional_idx;
       },
-      [&](auto&) {
-        if (positional_idx == positional_.size()) {
-          emit(diagnostic::error("unexpected argument").primary(*arg));
-        }
+      [&](const auto&) {
+        emit(diagnostic::error("unexpected argument").primary(*arg));
       });
   }
   for (const auto& arg : named_) {
     if (arg.required and not arg.found) {
-      emit(
-        diagnostic::error("required argument `{}` was not provided", arg.name)
-          .primary(self.get_location()));
+      emit(diagnostic::error("required argument `{}` was not provided",
+                             fmt::join(arg.names, "|"))
+             .primary(self.get_location()));
     }
   }
   return result;
@@ -322,9 +367,12 @@ auto argument_parser2::usage() const -> std::string {
         // customizable instead.
         return "any";
       },
-      [](const setter<ast::simple_selector>&) -> std::string {
+      [](const setter<ast::field_path>&) -> std::string {
         // TODO: `field` is not 100% accurate, but we use it in the docs.
         return "field";
+      },
+      [](const setter<ast::lambda_expr>&) -> std::string {
+        return "lambda";
       },
       [](const setter<located<pipeline>>&) -> std::string {
         return "{ … }";
@@ -363,7 +411,8 @@ auto argument_parser2::usage() const -> std::string {
       usage_cache_ += fmt::format("{}:{}", positional.name, type);
     }
     const auto append_named_option = [&](const named_t& opt) {
-      if (opt.name.starts_with("_")) {
+      const auto name = fmt::to_string(fmt::join(opt.names, "|"));
+      if (name.starts_with("_")) {
         // This denotes an internal/unstable option.
         return;
       }
@@ -379,7 +428,7 @@ auto argument_parser2::usage() const -> std::string {
         in_brackets = true;
       }
       auto type = opt.type.empty() ? setter_to_string(opt.set) : opt.type;
-      usage_cache_ += fmt::format("{}={}", opt.name, type);
+      usage_cache_ += fmt::format("{}={}", name, type);
     };
     for (const auto& opt : named_) {
       if (opt.required) {
@@ -393,15 +442,19 @@ auto argument_parser2::usage() const -> std::string {
     }
     if (pipeline_last != pipeline_last_t::none) {
       auto is_optional = pipeline_last == pipeline_last_t::opt;
-      if (is_optional and not in_brackets) {
+      if (in_brackets) {
+        if (is_optional) {
+          usage_cache_ += ' ';
+        } else {
+          usage_cache_ += "] ";
+          in_brackets = false;
+        }
+      } else if (is_optional) {
+        if (std::exchange(has_previous, true)) {
+          usage_cache_ += " ";
+        }
         usage_cache_ += '[';
         in_brackets = true;
-      } else if (not is_optional and in_brackets) {
-        usage_cache_ += ']';
-        in_brackets = false;
-      }
-      if (std::exchange(has_previous, true)) {
-        usage_cache_ += " ";
       }
       usage_cache_ += "{ … }";
     }
@@ -428,7 +481,7 @@ auto argument_parser2::docs() const -> std::string {
     TENZIR_UNREACHABLE();
   });
   boost::replace_all(name, "::", "/");
-  return fmt::format("https://docs.tenzir.com/tql2/{}/{}", category, name);
+  return fmt::format("https://docs.tenzir.com/reference/{}/{}", category, name);
 }
 
 template <class T>

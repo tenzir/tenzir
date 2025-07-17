@@ -50,8 +50,8 @@ auto try_as(const YAML::Node& node, auto&& guard) -> bool {
   return false;
 }
 
-auto parse_node(auto&& guard, const YAML::Node& node,
-                diagnostic_handler& diag) -> void {
+auto parse_node(auto&& guard, const YAML::Node& node, diagnostic_handler& diag)
+  -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined: {
       diagnostic::warning("yaml parser encountered undefined field").emit(diag);
@@ -132,7 +132,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   auto msb = multi_series_builder{
     std::move(options),
     dh,
-    modules::schemas(),
+    modules::get_schema,
     detail::data_builder::non_number_parser,
   };
   auto document = std::string{};
@@ -174,8 +174,8 @@ template <class View>
 auto print_node(auto& out, const View& value) -> void {
   if constexpr (std::is_same_v<View, data_view>) {
     return match(value, [&](const auto& value) {
-        return print_node(out, value);
-      });
+      return print_node(out, value);
+    });
   } else if constexpr (std::same_as<View, data_view3>) {
     return match(value, [&](const auto& value) {
       return print_node(out, value);
@@ -190,6 +190,8 @@ auto print_node(auto& out, const View& value) -> void {
     out << std::string{value};
   } else if constexpr (std::is_same_v<View, view<blob>>) {
     out << detail::base64::encode(value);
+  } else if constexpr (std::is_same_v<View, view<secret>>) {
+    out << to_string(value);
   } else if constexpr (detail::is_any_v<View, view<double>, view<duration>,
                                         view<time>, view<pattern>, view<ip>,
                                         view<subnet>, view<enumeration>>) {
@@ -269,8 +271,7 @@ public:
         }
         auto input_type = as<record_type>(slice.schema());
         auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto array = check(to_record_batch(resolved_slice)->ToStructArray());
         auto out = std::make_unique<YAML::Emitter>();
         out->SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
         out->SetNullFormat(YAML::LowerNull);
@@ -349,8 +350,8 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
 
 class read_yaml final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_yaml");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -362,7 +363,10 @@ class read_yaml final
   }
 
   auto read_properties() const -> read_properties_t override {
-    return {.extensions = {"yaml"}};
+    return {
+      .extensions = {"yaml"},
+      .mime_types = {"application/yaml", "text/yaml", "text/x-yaml"},
+    };
   }
 };
 
@@ -372,8 +376,12 @@ public:
     return "tql2.parse_yaml";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple yaml values.
     auto parser = argument_parser2::function(name());
@@ -395,7 +403,7 @@ public:
               auto builder = multi_series_builder{
                 msb_opts,
                 ctx,
-                modules::schemas(),
+                modules::get_schema,
                 detail::data_builder::non_number_parser,
               };
               for (int64_t i = 0; i < arg.length(); ++i) {
@@ -423,8 +431,8 @@ public:
 
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<yaml_printer>>(yaml_printer{});
   }
@@ -439,8 +447,12 @@ class print_yaml final : public virtual function_plugin {
     return "print_yaml";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto include_document_markers = std::optional<location>{};
     auto parser = argument_parser2::function(name());

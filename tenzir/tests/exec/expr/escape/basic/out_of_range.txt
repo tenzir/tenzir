@@ -1,0 +1,6 @@
+error: unicode codepoint out of range
+ --> exec/expr/escape/basic/out_of_range.tql:4:7
+  |
+4 |   x: "\u{FFFFFF}",
+  |       ^^^^^^^^^^ 
+  |

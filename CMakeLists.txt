@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25...4.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
 # -- project setup -------------------------------------------------------------
 
@@ -116,29 +116,6 @@ else ()
 endif ()
 unset(_TENZIR_PARENT_DIRECTORY)
 
-# -- changelog -----------------------------------------------------------------
-
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirChangelog.cmake.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake" @ONLY)
-
-file(GLOB_RECURSE changelog_dependencies CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/changelog/**.md")
-
-add_custom_target(
-  changelog ALL
-  BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake"
-          ${changelog_dependencies}
-  COMMAND ${CMAKE_COMMAND} -P
-          "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake")
-
-option(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
-       "Skip build configuration after update-changelog target" OFF)
-mark_as_advanced(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
-if (TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
-  return()
-endif ()
-
 # -- testing -------------------------------------------------------------------
 
 cmake_dependent_option(
@@ -191,7 +168,7 @@ endif ()
 if (NOT TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   install(
     CODE "\
-    cmake_minimum_required(VERSION 3.25...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     get_filename_component(build_time_prefix
       \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     get_filename_component(install_time_prefix
@@ -216,8 +193,8 @@ install(
   EXPORT TenzirTargets
   COMPONENT Development)
 
-# Require standard C++20.
-target_compile_features(libtenzir_internal INTERFACE cxx_std_20)
+# Require standard C++26.
+target_compile_features(libtenzir_internal INTERFACE cxx_std_23)
 
 # Enable coroutines for GCC < 11.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
@@ -523,7 +500,7 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
   include(CodeCoverage)
   mark_as_advanced(CODE_COVERAGE)
   install(CODE "\
-    cmake_minimum_required(VERSION 3.25...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     message(FATAL_ERROR \"Builds with code coverage must not be installed.\")")
 endif ()
 
@@ -699,6 +676,8 @@ add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   add_custom_target(
     tenzir-schema
+    COMMAND ${CMAKE_COMMAND} -E remove_directory
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
     COMMAND
       ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
       "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
@@ -792,7 +771,7 @@ else ()
     # add_subdirectory libtenzir/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
     set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
-    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD 23)
     if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.25")
       add_subdirectory(libtenzir/aux/caf SYSTEM)
     else ()
@@ -899,7 +878,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
     "\
-    cmake_minimum_required(VERSION 3.25...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
     file(
       COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
@@ -1021,8 +1000,7 @@ endif ()
 # Install CHANGELOG, LICENSE, README, and VERSIONING. This can intentionally not
 # be disabled.
 install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
         "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.spdx.json"
         "${CMAKE_CURRENT_SOURCE_DIR}/VERSIONING.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"

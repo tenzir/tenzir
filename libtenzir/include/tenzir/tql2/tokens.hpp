@@ -22,14 +22,17 @@ TENZIR_ENUM(
   // identifiers
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_, underscore, let, in, meta,
+  this_, if_, else_, match, not_, and_, or_, move, underscore, let, in,
   reserved_keyword,
   // literals
-  scalar, true_, false_, null, raw_string, string, ip, subnet, datetime,
+  scalar, true_, false_, null, ip, subnet, datetime,
+  // strings
+  string_begin, raw_string_begin, blob_begin, raw_blob_begin,
+  format_string_begin, char_seq, fmt_begin, fmt_end, closing_quote,
   // punctuation
-  dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
-  greater, greater_equal, at, equal, comma, colon, single_quote, fat_arrow,
-  pipe, dot_dot_dot, colon_colon,
+  dot, dot_question_mark, question_mark, plus, minus, slash, star, equal_equal,
+  bang_equal, less, less_equal, greater, greater_equal, at, equal, comma, colon,
+  single_quote, fat_arrow, pipe, dot_dot_dot, colon_colon,
   // parenthesis
   lpar, rpar, lbrace, rbrace, lbracket, rbracket,
   // whitespace
@@ -53,8 +56,8 @@ struct token {
 /// - validate_utf8
 /// - tokenize_permissive
 /// - verify_tokens
-auto tokenize(std::string_view content,
-              session ctx) -> failure_or<std::vector<token>>;
+auto tokenize(std::string_view content, session ctx)
+  -> failure_or<std::vector<token>>;
 
 /// Checks that the source is valid UTF-8.
 auto validate_utf8(std::string_view content, session ctx) -> failure_or<void>;
@@ -63,7 +66,7 @@ auto validate_utf8(std::string_view content, session ctx) -> failure_or<void>;
 auto tokenize_permissive(std::string_view content) -> std::vector<token>;
 
 /// Emit errors for error tokens.
-auto verify_tokens(std::span<token const> tokens,
-                   session ctx) -> failure_or<void>;
+auto verify_tokens(std::span<token const> tokens, session ctx)
+  -> failure_or<void>;
 
 } // namespace tenzir

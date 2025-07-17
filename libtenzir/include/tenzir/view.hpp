@@ -17,6 +17,7 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/hash/hash.hpp"
+#include "tenzir/secret.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
@@ -96,10 +97,18 @@ private:
 };
 
 /// @relates view_trait
-struct blob_view : detail::totally_ordered<blob_view>,
-                   std::span<const std::byte> {
+struct blob_view : std::span<const std::byte>,
+                   detail::totally_ordered<blob_view> {
   using super = std::span<const std::byte>;
+
   using super::super;
+
+  explicit(false) blob_view(super span) : super{span} {
+  }
+
+  explicit operator blob() const {
+    return blob{begin(), end()};
+  }
 
   friend constexpr auto operator<=>(const blob_view& l, const blob_view& r) {
     return std::lexicographical_compare_three_way(l.begin(), l.end(), r.begin(),
@@ -154,6 +163,11 @@ struct view_trait<blob> {
   using type = blob_view;
 };
 
+template <>
+struct view_trait<secret> {
+  using type = secret_view;
+};
+
 // clang-format off
 /// A type-erased view over various types of data.
 /// @relates view_trait
@@ -173,7 +187,8 @@ using data_view = tenzir::variant<
   view<list>,
   view<map>,
   view<record>,
-  view<blob>
+  view<blob>,
+  view<secret>
 >;
 // clang-format on
 
@@ -452,7 +467,7 @@ template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible
     = detail::is_any_v<T, caf::none_t, bool, int64_t, uint64_t, double, duration,
-                       time, std::string, blob, ip, subnet, enumeration>;
+                       time, std::string, blob, ip, subnet, enumeration, secret>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, pattern>) {
@@ -467,8 +482,8 @@ view<T> make_view(const T& x) {
     return record_view_handle{
       record_view_ptr{caf::make_counted<default_record_view>(x)}};
   } else {
-    TENZIR_ASSERT(!"missing branch");
-    return {};
+    static_assert(detail::always_false_v<T>, "missing branch");
+    TENZIR_UNREACHABLE();
   }
 }
 
@@ -534,6 +549,9 @@ template <class T>
 std::string materialize(T&& x) {
   return materialize(std::string_view{std::forward<T>(x)});
 }
+
+template <class T>
+using materialize_t = decltype(materialize(std::declval<T>()));
 
 // -- utilities ----------------------------------------------------------------
 

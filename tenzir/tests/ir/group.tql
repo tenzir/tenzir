@@ -1,3 +1,5 @@
+// test: ir
+
 let $foo = 42
 group count {
   head $group.count

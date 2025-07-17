@@ -2,53 +2,83 @@
   invocation {
     op: {
       path: [
-        `a` @ 0..1
+        `a` @ 14..15
       ],
       ref: unresolved
     },
     args: [
-      root_field `b` @ 2..3,
-      root_field `c` @ 7..8,
-      root_field `d` @ 12..13,
-      root_field `e` @ 15..16
+      root_field {
+        id: `b` @ 16..17,
+        has_question_mark: false
+      },
+      root_field {
+        id: `c` @ 21..22,
+        has_question_mark: false
+      },
+      root_field {
+        id: `d` @ 26..27,
+        has_question_mark: false
+      },
+      root_field {
+        id: `e` @ 29..30,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
     op: {
       path: [
-        `f` @ 17..18
+        `f` @ 31..32
       ],
       ref: unresolved
     },
     args: [
-      root_field `g` @ 19..20
+      root_field {
+        id: `g` @ 33..34,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
     op: {
       path: [
-        `h` @ 21..22
+        `h` @ 35..36
       ],
       ref: unresolved
     },
     args: [
-      root_field `i` @ 27..28,
-      root_field `j` @ 32..33,
-      root_field `k` @ 38..39
+      root_field {
+        id: `i` @ 41..42,
+        has_question_mark: false
+      },
+      root_field {
+        id: `j` @ 46..47,
+        has_question_mark: false
+      },
+      root_field {
+        id: `k` @ 52..53,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
     op: {
       path: [
-        `l` @ 40..41
+        `l` @ 54..55
       ],
       ref: unresolved
     },
     args: [
       binary_expr {
-        left: root_field `m` @ 42..43,
-        op: "add" @ 44..45,
-        right: root_field `n` @ 48..49
+        left: root_field {
+          id: `m` @ 56..57,
+          has_question_mark: false
+        },
+        op: "add" @ 58..59,
+        right: root_field {
+          id: `n` @ 62..63,
+          has_question_mark: false
+        }
       }
     ]
   }

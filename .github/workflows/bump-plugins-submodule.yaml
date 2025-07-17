@@ -38,6 +38,10 @@ jobs:
           gpg_private_key: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
           git_user_signingkey: true
           git_commit_gpgsign: true
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
       - name: Bump plugins submodule
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -69,8 +73,9 @@ jobs:
 
             # Create a new commit for the updated submodule.
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
-            nix/update-plugins.sh
             git add contrib/tenzir-plugins
+            sleep 5
+            GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
             git add nix/
             git commit -m "Bump submodule from $plugins_sha_short to $new_plugins_main_sha"
             git push -u origin main

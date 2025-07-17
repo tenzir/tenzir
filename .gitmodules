@@ -6,10 +6,6 @@
 	path = plugins/web/aux/restinio
 	url = https://github.com/Stiffstream/restinio
 	shallow = true
-[submodule "web/.github"]
-	path = web/.github
-	url = https://github.com/tenzir/.github.git
-	shallow = true
 [submodule "contrib/tenzir-plugins"]
 	path = contrib/tenzir-plugins
 	url = git@github.com:tenzir/tenzir-plugins

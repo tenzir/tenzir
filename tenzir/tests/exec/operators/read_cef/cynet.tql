@@ -1,0 +1,3 @@
+from env("INPUTS") + "/cef/cynet.log" {
+  read_cef
+}

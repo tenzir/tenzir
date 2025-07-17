@@ -45,6 +45,8 @@ struct package_config final {
   record metadata = {};  // opaque extra data that can be set at install time
   record overrides = {}; // overrides for fields in the package definition
 
+  bool disabled = {};
+
   auto to_record() const -> record;
 
   static auto parse(const view<record>& data) -> caf::expected<package_config>;
@@ -54,7 +56,8 @@ struct package_config final {
       .pretty_name("package_config")
       .fields(f.field("source", x.source), f.field("inputs", x.inputs),
               f.field("version", x.version), f.field("metadata", x.metadata),
-              f.field("overrides", x.overrides));
+              f.field("overrides", x.overrides),
+              f.field("disabled", x.disabled));
   }
 };
 
@@ -164,6 +167,7 @@ struct package final {
   std::optional<std::string> description = {};
   std::optional<std::string> package_icon = {};
   std::optional<std::string> author_icon = {};
+  std::vector<std::string> categories = {};
 
   package_inputs_map inputs;
   package_pipelines_map pipelines;
@@ -187,7 +191,8 @@ struct package final {
       f.field("id", x.id), f.field("name", x.name), f.field("author", x.author),
       f.field("description", x.description),
       f.field("package_icon", x.package_icon),
-      f.field("author_icon", x.author_icon), f.field("inputs", x.inputs),
+      f.field("author_icon", x.author_icon),
+      f.field("categories", x.categories), f.field("inputs", x.inputs),
       f.field("pipelines", x.pipelines), f.field("contexts", x.contexts),
       f.field("examples", x.examples), f.field("config", x.config));
   }

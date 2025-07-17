@@ -51,7 +51,7 @@ struct xlimit {
 
 struct chart_args {
   chart_type ty;
-  ast::simple_selector x;
+  ast::field_path x;
   call_map y;
   std::optional<ast::expression> group;
   std::optional<xlimit> x_min;
@@ -221,14 +221,14 @@ struct chart_args {
     auto ident = ast::identifier{"once", location::unknown};
     const auto entity = ast::entity{std::vector{std::move(ident)}};
     for (const auto& [_, call] : y) {
-      if (auto ptr
+      if (const auto* ptr
           = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call))) {
         plugins.emplace_back(ptr, call);
         continue;
       }
       auto wrapped_call = ast::function_call{entity, {call}, call.rpar, false};
       TENZIR_ASSERT(resolve_entities(wrapped_call, ctx));
-      auto ptr
+      const auto* ptr
         = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(wrapped_call));
       TENZIR_ASSERT(ptr);
       plugins.emplace_back(ptr, std::move(wrapped_call));
@@ -248,7 +248,7 @@ struct chart_args {
   }
 };
 
-auto to_double(data&& d) -> data {
+auto to_double(data d) -> data {
   return match(
     d,
     [](concepts::integer auto& d) -> data {
@@ -309,10 +309,10 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto gnames = std::unordered_set<std::string>{};
-    auto xpath = args_.x.path()[0].name;
+    auto xpath = args_.x.path()[0].id.name;
     for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
       xpath += ".";
-      xpath += args_.x.path()[i].name;
+      xpath += args_.x.path()[i].id.name;
     }
     auto& dh = ctrl.diagnostics();
     auto sp = session_provider::make(dh);
@@ -356,7 +356,7 @@ public:
       }
       bucket* b = nullptr;
       for (auto i = size_t{};
-           auto&& [idx, x] : detail::enumerate(xs.values())) {
+           auto&& [idx, x] : detail::enumerate<int64_t>(xs.values())) {
         const auto group_name = std::invoke([&]() -> std::string_view {
           if (gs.array->IsNull(idx)) {
             if (args_.group) {
@@ -370,14 +370,20 @@ public:
           }
           return *gnames.emplace(value_at(string_type{}, *gs.array, idx)).first;
         });
-        auto* newb = get_bucket(groups, plugins, x, group_name, s);
-        if (b != newb) {
+        auto [newb, new_bucket] = get_bucket(groups, x, group_name, s);
+        if (b != newb or new_bucket) {
           if (b) {
             for (auto&& instance : *b) {
               instance->update(subslice(slice, consumed, consumed + i), s);
             }
           }
-          b = newb;
+          if (new_bucket) {
+            b = &get_groups(groups, x, s)
+                   ->emplace(group_name, args_.make_bucket(plugins, s))
+                   .first->second;
+          } else {
+            b = newb;
+          }
           consumed += i;
           i = 0;
         }
@@ -399,7 +405,7 @@ public:
       co_yield {};
       co_return;
     }
-    auto ynames = std::map<std::string, bool>{};
+    auto ynames = detail::stable_map<std::string, bool>{};
     auto b = series_builder{};
     const auto make_yname = [&](std::string_view group, std::string_view y) {
       if (not args_.group) {
@@ -417,18 +423,18 @@ public:
       return it->first;
     };
     const auto fill_value = args_.fill ? args_.fill->inner : data{};
-    const auto fill_at = [&](data x) {
+    const auto fill_at = [&](const data& x) {
       auto r = b.record();
-      r.field(xpath).data(std::move(x));
+      r.field(xpath).data(x);
       for (const auto& gname : gnames) {
         for (const auto& [y, _] : args_.y) {
           r.field(make_yname(gname, y)).data(fill_value);
         }
       }
     };
-    const auto insert = [&](data x, const grouped_bucket& groups) {
+    const auto insert = [&](const data& x, const grouped_bucket& groups) {
       auto r = b.record();
-      r.field(xpath).data(std::move(x));
+      r.field(xpath).data(x);
       if (args_.fill) {
         for (const auto& gname : gnames) {
           for (const auto& [y, _] : args_.y) {
@@ -444,7 +450,7 @@ public:
           }
           auto valid = validate_y(value, make_yname(name, y.first),
                                   y.second.get_location(), dh);
-          r.field(add_y(name, y.first, valid)).data(std::move(value));
+          r.field(add_y(name, y.first, valid)).data(value);
         }
       }
     };
@@ -532,7 +538,7 @@ public:
         check(b->AppendNulls(gs.length()));
         continue;
       }
-      if (auto str = try_as<arrow::StringArray>(*gs.array)) {
+      if (auto* str = try_as<arrow::StringArray>(*gs.array)) {
         if (gss.parts().size() == 1) {
           return std::move(gs);
         }
@@ -570,7 +576,7 @@ public:
     return series{string_type{}, finish(*b)};
   }
 
-  auto get_groups(group_map& map, const data_view x, session ctx) const
+  auto get_groups(group_map& map, const data_view& x, session ctx) const
     -> grouped_bucket* {
     // PERF: Maybe we only need to materialize when inserting new
     const auto xv = materialize(x);
@@ -584,29 +590,30 @@ public:
         .hint(
           "consider filtering data or aggregating over a bigger `resolution`")
         .emit(ctx);
+      return nullptr;
     }
     return &map[xv];
   }
 
-  auto get_bucket(group_map& map, const plugins_map& plugins, const data_view x,
-                  const std::string_view group, session ctx) const -> bucket* {
+  auto get_bucket(group_map& map, const data_view& x,
+                  const std::string_view group, session ctx) const
+    -> std::pair<bucket*, bool> {
     if (args_.ty != chart_type::bar and args_.ty != chart_type::pie) {
       if (is<caf::none_t>(x)) {
         diagnostic::warning("x-axis cannot be `null`")
           .primary(args_.x)
           .emit(ctx);
-        return nullptr;
+        return {nullptr, false};
       }
     }
-    auto gs = get_groups(map, x, ctx);
+    auto* gs = get_groups(map, x, ctx);
     if (not gs) {
-      return nullptr;
+      return {nullptr, false};
     }
     if (auto it = gs->find(group); it != gs->end()) {
-      return &it->second;
+      return {&it->second, false};
     }
-    auto [it, _] = gs->emplace(group, args_.make_bucket(plugins, ctx));
-    return &it->second;
+    return {nullptr, true};
   }
 
   auto filter_input(generator<table_slice> input, diagnostic_handler& dh) const
@@ -634,7 +641,7 @@ public:
       // Modified from `where`
       auto offset = int64_t{0};
       for (auto& filter : eval(expr, slice, dh)) {
-        const auto array = try_as<arrow::BooleanArray>(&*filter.array);
+        const auto* array = try_as<arrow::BooleanArray>(&*filter.array);
         TENZIR_ASSERT(array);
         const auto len = array->length();
         if (array->true_count() == 0) {
@@ -674,6 +681,9 @@ public:
       prev = curr;
       return std::nullopt;
     }
+    if (is<caf::none_t>(*prev) or is<caf::none_t>(curr)) {
+      return std::nullopt;
+    }
     auto result = match(
       std::tie(curr, *prev),
       [&](const duration& c, const duration& p) -> std::optional<data> {
@@ -696,7 +706,7 @@ public:
 
   auto make_attributes(
     const std::string& xpath, std::deque<std::string>& ynums,
-    std::map<std::string, bool>& ynames,
+    detail::stable_map<std::string, bool>& ynames,
     const detail::stable_map<std::string_view, std::string>& limits) const
     -> std::vector<type::attribute_view> {
     auto attrs = std::vector<type::attribute_view>{
@@ -753,7 +763,7 @@ public:
     const auto ty = type::infer(d);
     if (not ty) {
       diagnostic::warning("failed to infer type of `y`")
-        .primary(std::move(loc))
+        .primary(loc)
         .note(fmt::format("skipping {}", yname))
         .emit(dh);
       return false;
@@ -762,7 +772,7 @@ public:
               .is_any<null_type, int64_type, uint64_type, double_type,
                       duration_type>()) {
       diagnostic::warning("y-axis cannot have type `{}`", ty->kind())
-        .primary(std::move(loc))
+        .primary(loc)
         .note(fmt::format("skipping {}", yname))
         .emit(dh);
       return false;
@@ -852,8 +862,13 @@ class chart_plugin : public virtual operator_factory_plugin {
     auto x_min = std::optional<located<data>>{};
     auto x_max = std::optional<located<data>>{};
     auto p = argument_parser2::operator_(name());
-    p.named(Ty == chart_type::pie ? "label" : "x", args.x);
-    p.named(Ty == chart_type::pie ? "value" : "y", y, "any");
+    if constexpr (Ty == chart_type::bar or Ty == chart_type::pie) {
+      p.named("x|label", args.x);
+      p.named("y|value", y, "any");
+    } else {
+      p.named("x", args.x);
+      p.named("y", y, "any");
+    }
     if constexpr (Ty != chart_type::pie) {
       p.named("x_min", x_min, "constant");
       p.named("x_max", x_max, "constant");
@@ -955,11 +970,14 @@ class chart_plugin : public virtual operator_factory_plugin {
           return failure::promise();
         }
         const auto yname = std::invoke([&]() -> std::string {
-          if (auto ss = ast::simple_selector::try_from(y)) {
+          if (auto ss = ast::field_path::try_from(y)) {
             return fmt::format(
-              "{}", fmt::join(std::views::transform(ss->path(),
-                                                    &ast::identifier::name),
-                              "."));
+              "{}",
+              fmt::join(
+                ss->path()
+                  | std::ranges::views::transform(&ast::field_path::segment::id)
+                  | std::ranges::views::transform(&ast::identifier::name),
+                "."));
           }
           if (args.ty == chart_type::pie) {
             return "value";

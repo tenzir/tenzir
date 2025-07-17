@@ -1,0 +1,16 @@
+from {
+  // Basic test with spaces, ampersand, comma, and slash
+  x: "foo%20%26%20bar%2C%20qux%2Fquux".decode_url(),
+  // Test special characters
+  special: "%21%40%23%24%25%5E%26%2A%28%29%3D%2B%5B%5D%7B%7D%5C%7C%3B%3A%27%22%2C%2E%3C%3E%3F%2F%7E%60".decode_url(),
+  // Test spaces and unicode
+  unicode: "Hello%20World%20%E4%BD%A0%E5%A5%BD".decode_url(),
+  // Test newlines and tabs
+  whitespace: "line1%0Aline2%09tabbed".decode_url(),
+  // URL example
+  url: "https%3A%2F%2Fexample.com%2Fpath%3Fkey%3Dvalue%26param%3Ddata".decode_url(),
+  // Test mixed encoded/unencoded content
+  mixed: "Hello%20World+and+some normal%20text".decode_url(),
+  // Test incomplete/malformed sequences (should preserve them)
+  malformed: "incomplete%2+%20normal%".decode_url(),
+}

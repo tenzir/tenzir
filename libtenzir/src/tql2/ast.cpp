@@ -8,20 +8,11 @@
 
 #include "tenzir/tql2/ast.hpp"
 
-#include "caf/binary_deserializer.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/concept/convertible/data.hpp"
-#include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
-#include "tenzir/concept/parseable/tenzir/expression.hpp"
-#include "tenzir/concept/parseable/tenzir/pipeline.hpp"
-#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/substitute_ctx.hpp"
-#include "tenzir/tql/basic.hpp"
-#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/try.hpp"
 
@@ -32,12 +23,11 @@
 
 namespace tenzir::ast {
 
-auto simple_selector::try_from(ast::expression expr)
-  -> std::optional<simple_selector> {
+auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
   auto has_this = false;
-  auto path = std::vector<identifier>{};
-  auto current = static_cast<ast::expression*>(&expr);
+  auto path = std::vector<field_path::segment>{};
+  auto* current = &expr;
   while (true) {
     auto sub_result = current->match(
       [&](ast::this_&) -> variant<ast::expression*, bool> {
@@ -45,20 +35,21 @@ auto simple_selector::try_from(ast::expression expr)
         return true;
       },
       [&](ast::root_field& x) -> variant<ast::expression*, bool> {
-        path.push_back(x.ident);
+        path.emplace_back(x.id, x.has_question_mark);
         return true;
       },
       [&](ast::field_access& e) -> variant<ast::expression*, bool> {
-        path.push_back(e.name);
+        path.emplace_back(e.name, e.has_question_mark);
         return &e.left;
       },
       [&](ast::index_expr& e) -> variant<ast::expression*, bool> {
-        auto constant = std::get_if<ast::constant>(&*e.index.kind);
+        auto* constant = std::get_if<ast::constant>(&*e.index.kind);
         if (not constant) {
           return false;
         }
-        if (auto name = std::get_if<std::string>(&constant->value)) {
-          path.emplace_back(*name, constant->source);
+        if (auto* name = std::get_if<std::string>(&constant->value)) {
+          path.emplace_back(ast::identifier{*name, constant->source},
+                            e.has_question_mark);
           return &e.expr;
         }
         return false;
@@ -66,12 +57,16 @@ auto simple_selector::try_from(ast::expression expr)
       [](auto&) -> variant<ast::expression*, bool> {
         return false;
       });
-    if (auto success = std::get_if<bool>(&sub_result)) {
+    if (auto* success = std::get_if<bool>(&sub_result)) {
       if (not *success) {
         return {};
       }
       std::ranges::reverse(path);
-      return simple_selector{std::move(expr), has_this, std::move(path)};
+      return field_path{
+        std::move(expr),
+        has_this,
+        std::move(path),
+      };
     }
     current = std::get<ast::expression*>(sub_result);
   }
@@ -83,7 +78,7 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
       return selector{x};
     },
     [&](auto&) -> std::optional<selector> {
-      return simple_selector::try_from(std::move(expr));
+      return field_path::try_from(std::move(expr));
     });
 }
 
@@ -121,10 +116,10 @@ auto to_field_extractor(const ast::expression& x)
   auto p = (parsers::alpha | '_') >> *(parsers::alnum | '_');
   return x.match(
     [&](const ast::root_field& x) -> std::optional<field_extractor> {
-      if (not p(x.ident.name)) {
+      if (not p(x.id.name)) {
         return std::nullopt;
       }
-      return x.ident.name;
+      return x.id.name;
     },
     [&](const ast::field_access& x) -> std::optional<field_extractor> {
       if (not p(x.name.name)) {
@@ -145,6 +140,17 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
   return x.match<std::optional<operand>>(
     [](const ast::constant& x) {
       return x.as_data();
+    },
+    [](const ast::list& x) -> std::optional<operand> {
+      auto l = list{};
+      for (const auto& item : x.items) {
+        const auto* i = try_as<ast::expression>(item);
+        if (not i or not is<ast::constant>(*i)) {
+          return std::nullopt;
+        }
+        l.push_back(as<ast::constant>(*i).as_data());
+      }
+      return l;
     },
     [](const ast::meta& x) -> meta_extractor {
       switch (x.kind) {
@@ -172,7 +178,8 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
     });
 }
 
-auto to_duration_comparable(const ast::expression& e) -> std::optional<operand> {
+auto to_duration_comparable(const ast::expression& e)
+  -> std::optional<operand> {
   if (auto field = to_field_extractor(e)) {
     return std::move(field).value();
   }
@@ -186,16 +193,16 @@ auto to_duration_comparable(const ast::expression& e) -> std::optional<operand> 
 auto fold_now(const ast::expression& l, const ast::binary_op& op,
               const ast::expression& r) -> std::optional<operand> {
   // TODO: Evaluate unary_expr to a constant duration
-  const auto constant = std::get_if<ast::constant>(r.kind.get());
+  auto* const constant = std::get_if<ast::constant>(r.kind.get());
   if (not constant) {
     return std::nullopt;
   }
-  const auto y = std::get_if<duration>(&constant->value);
+  auto* const y = std::get_if<duration>(&constant->value);
   if (not y) {
     return std::nullopt;
   }
-  const auto call = std::get_if<ast::function_call>(l.kind.get());
-  if (not(call and call->fn.path[0].name == "now")) {
+  auto* const call = std::get_if<ast::function_call>(l.kind.get());
+  if (not call or call->fn.path[0].name != "now") {
     return std::nullopt;
   }
   if (op == ast::binary_op::add) {
@@ -222,7 +229,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
   if (not field) {
     return std::nullopt;
   }
-  const auto bexpr = std::get_if<ast::binary_expr>(right.kind.get());
+  auto* const bexpr = std::get_if<ast::binary_expr>(right.kind.get());
   if (not bexpr) {
     return std::nullopt;
   }
@@ -244,7 +251,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
 } // namespace
 
 auto is_true_literal(const ast::expression& y) -> bool {
-  if (auto constant = std::get_if<ast::constant>(&*y.kind)) {
+  if (auto* constant = std::get_if<ast::constant>(&*y.kind)) {
     return constant->as_data() == true;
   }
   return false;
@@ -260,6 +267,8 @@ auto split_legacy_expression(const ast::expression& x)
           case ast::binary_op::sub:
           case ast::binary_op::mul:
           case ast::binary_op::div:
+          case ast::binary_op::if_:
+          case ast::binary_op::else_:
             return {};
           case ast::binary_op::eq:
             return relational_operator::equal;
@@ -362,6 +371,13 @@ auto split_legacy_expression(const ast::expression& x)
         auto split = split_legacy_expression(y.expr);
         // TODO: When exactly can we split this?
         if (is_true_literal(split.second)) {
+          // There's a bug in the parsing of TQL1 expressions that effectively
+          // forbids nested negations. Because we roundtrip TQL1 expressions as
+          // part of our predicate pushdown, we need to handle this case
+          // specially.
+          if (auto* neg_first = try_as<negation>(split.first)) {
+            return std::pair{expression{neg_first->expr()}, split.second};
+          }
           return std::pair{expression{negation{split.first}}, split.second};
         }
       }
@@ -446,7 +462,7 @@ public:
   }
 
   void visit(ast::expression& x) {
-    if (auto var = try_as<ast::dollar_var>(x)) {
+    if (auto* var = try_as<ast::dollar_var>(x)) {
       if (auto value = ctx_.get(var->let)) {
         x = ast::constant{std::move(*value), var->get_location()};
       } else {
@@ -457,7 +473,7 @@ public:
     }
   }
 
-  void visit(ast::dollar_var&) {
+  static void visit(ast::dollar_var&) {
     // This is handled by the `ast::expression` case above.
     TENZIR_UNREACHABLE();
   }

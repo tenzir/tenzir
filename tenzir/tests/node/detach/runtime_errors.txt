@@ -1,0 +1,15 @@
+{
+  pipeline_id: "test-id",
+  hidden: true,
+  run: 1,
+  message: "json parser: SCALAR_DOCUMENT_AS_VALUE: A JSON document made of a scalar (number, Boolean, null or string) is treated as a value. Use get_bool(), get_double(), etc. on the document instead. ",
+  severity: "error",
+  notes: [
+    {
+      kind: "note",
+      message: "found invalid JSON",
+    },
+  ],
+  annotations: [],
+  rendered: "\u001B[1m\u001B[31merror\u001B[39m: json parser: SCALAR_DOCUMENT_AS_VALUE: A JSON document made of a scalar (number, Boolean, null or string) is treated as a value. Use get_bool(), get_double(), etc. on the document instead. \u001B[0m\n \u001B[1m\u001B[34m=\u001B[39m note:\u001B[0m found invalid JSON\n",
+}

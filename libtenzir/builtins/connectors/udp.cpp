@@ -149,7 +149,7 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   }
 }
 
-class loader final : public plugin_loader {
+class loader final : public crtp_operator<loader> {
 public:
   loader() = default;
 
@@ -157,13 +157,21 @@ public:
     // nop
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     return udp_loader_impl(ctrl, args_);
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
   auto name() const -> std::string override {
-    return "udp";
+    return "load_udp";
   }
 
   friend auto inspect(auto& f, loader& x) -> bool {
@@ -174,60 +182,59 @@ private:
   loader_args args_;
 };
 
-class saver final : public plugin_saver {
+class saver final : public crtp_operator<saver> {
 public:
   saver() = default;
 
   explicit saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto endpoint = socket_endpoint::parse(args_.url);
     if (not endpoint) {
-      return diagnostic::error("invalid UDP endpoint")
+      diagnostic::error("invalid UDP endpoint")
         .note("{}", endpoint.error())
-        .to_error();
+        .emit(ctrl.diagnostics());
     }
     auto socket = tenzir::socket{*endpoint};
     if (not socket) {
-      return diagnostic::error("failed to create UDP socket")
+      diagnostic::error("failed to create UDP socket")
         .note(detail::describe_errno())
         .note("endpoint: {}", endpoint->addr)
-        .to_error();
+        .emit(ctrl.diagnostics());
     };
     TENZIR_DEBUG("connecting to {}", args_.url);
     int enable = 1;
     if (::setsockopt(*socket.fd, SOL_SOCKET, SO_REUSEADDR, &enable,
                      sizeof(enable))
         < 0) {
-      return diagnostic::error("could not set socket to SO_REUSEADDR")
+      diagnostic::error("could not set socket to SO_REUSEADDR")
         .note(detail::describe_errno())
-        .to_error();
+        .emit(ctrl.diagnostics());
     }
     if (socket.connect(*endpoint) < 0) {
-      return diagnostic::error("failed to connect to socket")
+      diagnostic::error("failed to connect to socket")
         .note(detail::describe_errno())
         .note("endpoint: {}", endpoint->addr)
-        .to_error();
+        .emit(ctrl.diagnostics());
     }
-    return [&ctrl, socket = std::make_shared<tenzir::socket>(
-                     std::move(socket))](chunk_ptr chunk) mutable {
+    for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
-        return;
+        co_yield {};
+        continue;
       }
       // If we exceed the maximum UDP datagram size of 65,535 we are in trouble.
       if (chunk->size() > 65'535) {
         diagnostic::error("chunk exceeded maximum size of 65,535 bytes")
           .emit(ctrl.diagnostics());
-        return;
       }
-      auto sent_bytes = socket->send(as_bytes(chunk));
+      auto sent_bytes = socket.send(as_bytes(chunk));
       if (sent_bytes == -1) {
         diagnostic::error("failed to send data over UDP socket")
           .note(detail::describe_errno())
           .emit(ctrl.diagnostics());
-        return;
       }
       TENZIR_TRACE("sent {} bytes", sent_bytes);
       if (detail::narrow_cast<size_t>(sent_bytes) < chunk->size()) {
@@ -235,19 +242,20 @@ public:
           .note("got {} bytes but sent only {}", sent_bytes, chunk->size())
           .emit(ctrl.diagnostics());
       }
-    };
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "udp";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
+    return "save_udp";
   }
 
   friend auto inspect(auto& f, saver& x) -> bool {
@@ -258,50 +266,7 @@ private:
   saver_args args_;
 };
 
-class plugin final : public virtual loader_plugin<loader>,
-                     public virtual saver_plugin<saver> {
-public:
-  auto name() const -> std::string override {
-    return "udp";
-  }
-
-  auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto endpoint = located<std::string>{};
-    auto args = loader_args{};
-    parser.add(endpoint, "<endpoint>");
-    parser.add("-c,--connect", args.connect);
-    parser.add("-n,--insert-newlines", args.insert_newlines);
-    parser.parse(p);
-    if (not endpoint.inner.starts_with("udp://")) {
-      args.url = fmt::format("udp://{}", endpoint.inner);
-    } else {
-      args.url = std::move(endpoint.inner);
-    }
-    return std::make_unique<loader>(std::move(args));
-  }
-
-  auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto endpoint = located<std::string>{};
-    auto args = saver_args{};
-    parser.add(endpoint, "<endpoint>");
-    parser.parse(p);
-    if (not endpoint.inner.starts_with("udp://")) {
-      args.url = fmt::format("udp://{}", endpoint.inner);
-    } else {
-      args.url = std::move(endpoint.inner);
-    }
-    return std::make_unique<saver>(std::move(args));
-  }
-};
-
-class load_plugin final
-  : public virtual operator_plugin2<loader_adapter<loader>> {
+class load_plugin final : public virtual operator_plugin2<loader> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
@@ -313,7 +278,7 @@ class load_plugin final
     if (not args.url.starts_with("udp://")) {
       args.url.insert(0, "udp://");
     }
-    return std::make_unique<loader_adapter<loader>>(loader{std::move(args)});
+    return std::make_unique<loader>(std::move(args));
   }
 
   auto load_properties() const
@@ -322,8 +287,7 @@ class load_plugin final
   }
 };
 
-class save_plugin final
-  : public virtual operator_plugin2<saver_adapter<saver>> {
+class save_plugin final : public virtual operator_plugin2<saver> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
@@ -333,7 +297,7 @@ class save_plugin final
     if (not args.url.starts_with("udp://")) {
       args.url.insert(0, "udp://");
     }
-    return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+    return std::make_unique<saver>(std::move(args));
   }
 
   auto save_properties() const
@@ -345,6 +309,5 @@ class save_plugin final
 
 } // namespace tenzir::plugins::udp
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::udp::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::udp::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::udp::save_plugin)

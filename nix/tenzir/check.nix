@@ -21,6 +21,8 @@ stdenvNoCC.mkDerivation {
     let
       py3 = pkgsBuildBuild.python3.withPackages (ps: [
         ps.datetime
+        ps.pyarrow
+        ps.trustme
       ]);
       template = path: ''
         if [ -d "${path}/bats/tests" ]; then
@@ -38,10 +40,13 @@ stdenvNoCC.mkDerivation {
       export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
       export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/bats
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
+      export UV_NO_INDEX=1
+      export UV_OFFLINE=1
+      export UV_PYTHON=${lib.getExe py3}
       mkdir -p cache
       export XDG_CACHE_HOME=$PWD/cache
       ${template "tenzir"}
-      ${lib.concatMapStrings template unchecked.plugins}
+      ${lib.concatMapStrings template (builtins.map (x: x.src) (builtins.concatLists unchecked.plugins))}
     '';
 
   # We just symlink all outputs of the unchecked derivation.

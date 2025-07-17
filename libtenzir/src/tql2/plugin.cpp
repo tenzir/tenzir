@@ -75,7 +75,9 @@ auto aggregation_plugin::make_function(invocation inv, session ctx) const
           }
           const auto start = lists->array->value_offset(i);
           const auto end = start + lists->array->value_length(i);
-          fn->update(subslice(slice, start, end), ctx);
+          if (start != end) {
+            fn->update(subslice(slice, start, end), ctx);
+          }
           builder.data(fn->get());
           fn->reset();
         }

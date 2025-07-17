@@ -37,9 +37,10 @@ public:
     ctrl.self()
       .mail(atom::proxy_v, request, request_id)
       .request(ctrl.node(), caf::infinite)
-      .await(
+      .then(
         [&](rest_response& value) {
           response = std::move(value);
+          ctrl.set_waiting(false);
         },
         [&](caf::error error) {
           if (error == ec::no_error) {
@@ -49,9 +50,9 @@ public:
             .note("internal server error")
             .note("endpoint: {}", endpoint_)
             .note("request body: {}", request_body_)
-            .docs("https://docs.tenzir.com/operators/api")
             .emit(ctrl.diagnostics());
         });
+    ctrl.set_waiting(true);
     co_yield {};
     TENZIR_ASSERT(response.has_value());
     if (response->is_error()) {
@@ -62,7 +63,6 @@ public:
       diagnostic::error(std::move(detail))
         .note("request failed with code {}", response->code())
         .note("body: {}", response->body())
-        .docs("https://docs.tenzir.com/operators/api")
         .emit(ctrl.diagnostics());
       co_return;
     }

@@ -13,7 +13,6 @@
 #include "tenzir/collect.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/config.hpp"
-#include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
@@ -68,8 +67,8 @@ namespace plugins {
 
 namespace {
 
-detail::stable_set<std::filesystem::path>
-get_plugin_dirs(const caf::actor_system_config& cfg) {
+auto get_plugin_dirs(const caf::actor_system_config& cfg)
+  -> detail::stable_set<std::filesystem::path> {
   detail::stable_set<std::filesystem::path> result;
   const auto bare_mode = caf::get_or(cfg, "tenzir.bare-mode", false);
   // Since we do not read configuration files that were not explicitly
@@ -81,7 +80,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
   } else {
     TENZIR_WARN("failed to to extract plugin dirs: {}", dirs.error());
   }
-  if (!bare_mode) {
+  if (not bare_mode) {
     if (auto home = detail::getenv("HOME")) {
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "tenzir"
                     / "plugins");
@@ -91,9 +90,9 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
   return result;
 }
 
-caf::expected<std::filesystem::path>
-resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs,
-                    std::string_view name) {
+auto resolve_plugin_name(
+  const detail::stable_set<std::filesystem::path>& plugin_dirs,
+  std::string_view name) -> caf::expected<std::filesystem::path> {
   auto plugin_file_name = fmt::format("libtenzir-plugin-{}.{}", name,
                                       TENZIR_MACOS ? "dylib" : "so");
   for (const auto& dir : plugin_dirs) {
@@ -112,8 +111,8 @@ resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
 /// Remove builtins the given list of plugins.
-std::vector<std::string>
-remove_builtins(std::vector<std::string> paths_or_names) {
+auto remove_builtins(std::vector<std::string> paths_or_names)
+  -> std::vector<std::string> {
   std::erase_if(paths_or_names, [](const auto& path_or_name) {
     return std::any_of(plugins::get().begin(), plugins::get().end(),
                        [&](const auto& plugin) {
@@ -125,10 +124,11 @@ remove_builtins(std::vector<std::string> paths_or_names) {
 }
 
 /// Expand the 'bundled' and 'all' keywords for the given list of plugins.
-std::vector<std::string> expand_special_identifiers(
+auto expand_special_identifiers(
   std::vector<std::string> paths_or_names,
   const std::vector<std::string>& bundled_plugins,
-  const detail::stable_set<std::filesystem::path>& plugin_dirs) {
+  const detail::stable_set<std::filesystem::path>& plugin_dirs)
+  -> std::vector<std::string> {
   // Try to resolve the reserved identifier 'all'. The list may only contain
   // plugin names, plugin paths, and the reserved identifier 'bundled'
   // afterwards.
@@ -139,7 +139,7 @@ std::vector<std::string> expand_special_identifiers(
     for (const auto& dir : plugin_dirs) {
       auto ec = std::error_code{};
       for (const auto& file : std::filesystem::directory_iterator{dir, ec}) {
-        if (ec || !file.is_regular_file()) {
+        if (ec || not file.is_regular_file()) {
           break;
         }
         if (file.path().filename().string().starts_with("libtenzir-plugin-")) {
@@ -163,8 +163,8 @@ std::vector<std::string> expand_special_identifiers(
 }
 
 /// Unload disabled static plugins, i.e., static plugins not explicitly enabled.
-std::vector<std::string>
-unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
+auto unload_disabled_static_plugins(std::vector<std::string> paths_or_names)
+  -> std::vector<std::string> {
   auto check_and_remove_disabled_static_plugin = [&](auto& plugin) -> bool {
     switch (plugin.type()) {
       case plugin_ptr::type::dynamic:
@@ -192,9 +192,10 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
 }
 
 /// Resolve plugin names to a sorted set of paths.
-caf::expected<detail::stable_set<std::string>> resolve_plugin_names(
+auto resolve_plugin_names(
   std::vector<std::string> paths_or_names,
-  const detail::stable_set<std::filesystem::path>& plugin_dirs) {
+  const detail::stable_set<std::filesystem::path>& plugin_dirs)
+  -> caf::expected<detail::stable_set<std::string>> {
   for (auto& path_or_name : paths_or_names) {
     // Ignore paths.
     if (auto maybe_path = std::filesystem::path{path_or_name};
@@ -229,25 +230,25 @@ caf::expected<detail::stable_set<std::string>> resolve_plugin_names(
 
 } // namespace
 
-std::vector<plugin_ptr>& get_mutable() noexcept {
+auto get_mutable() noexcept -> std::vector<plugin_ptr>& {
   static auto plugins = std::vector<plugin_ptr>{};
   return plugins;
 }
 
-const std::vector<plugin_ptr>& get() noexcept {
+auto get() noexcept -> const std::vector<plugin_ptr>& {
   return get_mutable();
 }
 
-std::vector<std::pair<plugin_type_id_block, void (*)()>>&
-get_static_type_id_blocks() noexcept {
+auto get_static_type_id_blocks() noexcept
+  -> std::vector<std::pair<plugin_type_id_block, void (*)()>>& {
   static auto result
     = std::vector<std::pair<plugin_type_id_block, void (*)()>>{};
   return result;
 }
 
-caf::expected<std::vector<std::filesystem::path>>
-load(const std::vector<std::string>& bundled_plugins,
-     caf::actor_system_config& cfg) {
+auto load(const std::vector<std::string>& bundled_plugins,
+          caf::actor_system_config& cfg)
+  -> caf::expected<std::vector<std::filesystem::path>> {
   auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
   // Get the necessary options.
   auto paths_or_names
@@ -267,14 +268,14 @@ load(const std::vector<std::string>& bundled_plugins,
   // Try to resolve plugin names to plugin paths. After this step, the list only
   // contains deduplicated plugin paths.
   auto paths = resolve_plugin_names(std::move(paths_or_names), plugin_dirs);
-  if (!paths) {
+  if (not paths) {
     return std::move(paths.error());
   }
   // Load plugins.
   for (auto path : std::move(*paths)) {
     if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
       // Check for name clashes.
-      if (find((*plugin)->name())) {
+      if (find((*plugin)->name()) != nullptr) {
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("failed to load the {} plugin "
                                            "because another plugin already "
@@ -331,7 +332,7 @@ load(const std::vector<std::string>& bundled_plugins,
 }
 
 /// Initialize loaded plugins.
-caf::error initialize(caf::actor_system_config& cfg) {
+auto initialize(caf::actor_system_config& cfg) -> caf::error {
   // If everything went well, we should have a strictly-ordered list of plugins.
   if (auto it = std::ranges::adjacent_find(get(), std::greater_equal{});
       it != get().end()) {
@@ -391,7 +392,9 @@ caf::error initialize(caf::actor_system_config& cfg) {
   map_t load_schemes;
   map_t save_schemes;
   map_t read_extensions;
+  map_t read_mime_types;
   map_t write_extensions;
+  map_t write_mime_types;
   map_t compress_extensions;
   map_t decompress_extensions;
   constexpr static auto check
@@ -435,15 +438,23 @@ caf::error initialize(caf::actor_system_config& cfg) {
                        read_extensions)) {
       return e;
     }
+    if (auto e = check("read mime-type", name, read_prop.mime_types,
+                       read_mime_types)) {
+      return e;
+    }
     if (auto e = check("write extension", name, write_prop.extensions,
                        write_extensions)) {
+      return e;
+    }
+    if (auto e = check("write mime-type", name, write_prop.mime_types,
+                       write_mime_types)) {
       return e;
     }
   }
   return caf::none;
 }
 
-const std::vector<std::filesystem::path>& loaded_config_files() {
+auto loaded_config_files() -> const std::vector<std::filesystem::path>& {
   return loaded_config_files_singleton;
 }
 
@@ -451,7 +462,7 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
 
 // -- component plugin --------------------------------------------------------
 
-std::string component_plugin::component_name() const {
+auto component_plugin::component_name() const -> std::string {
   return this->name();
 }
 
@@ -475,11 +486,11 @@ auto saver_parser_plugin::supported_uri_schemes() const
 
 // -- store plugin -------------------------------------------------------------
 
-caf::expected<store_actor_plugin::builder_and_header>
-store_plugin::make_store_builder(filesystem_actor fs,
-                                 const tenzir::uuid& id) const {
+auto store_plugin::make_store_builder(filesystem_actor fs,
+                                      const tenzir::uuid& id) const
+  -> caf::expected<store_actor_plugin::builder_and_header> {
   auto store = make_active_store();
-  if (!store) {
+  if (not store) {
     return store.error();
   }
   auto db_dir = std::filesystem::path{
@@ -494,11 +505,11 @@ store_plugin::make_store_builder(filesystem_actor fs,
   return builder_and_header{store_builder, header};
 }
 
-caf::expected<store_actor>
-store_plugin::make_store(filesystem_actor fs,
-                         std::span<const std::byte> header) const {
+auto store_plugin::make_store(filesystem_actor fs,
+                              std::span<const std::byte> header) const
+  -> caf::expected<store_actor> {
   auto store = make_passive_store();
-  if (!store) {
+  if (not store) {
     return store.error();
   }
   if (header.size() != uuid::num_bytes) {
@@ -546,8 +557,8 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
     TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
     TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
-    auto null_batch = arrow::RecordBatch::Make(
-      last.schema().to_arrow_schema(), 1, null_array->Flatten().ValueOrDie());
+    auto null_batch = arrow::RecordBatch::Make(last.schema().to_arrow_schema(),
+                                               1, check(null_array->Flatten()));
     last
       = concatenate({std::move(last), table_slice{null_batch, last.schema()}});
   };
@@ -591,26 +602,26 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
   result.reserve(output.size());
   for (auto&& slice : output) {
     result.emplace_back(slice.schema(),
-                        to_record_batch(slice)->ToStructArray().ValueOrDie());
+                        check(to_record_batch(slice)->ToStructArray()));
   }
   return result;
 }
 
 // -- plugin_ptr ---------------------------------------------------------------
 
-caf::expected<plugin_ptr>
-plugin_ptr::make_dynamic(const char* filename,
-                         caf::actor_system_config& cfg) noexcept {
+auto plugin_ptr::make_dynamic(const char* filename,
+                              caf::actor_system_config& cfg) noexcept
+  -> caf::expected<plugin_ptr> {
   TENZIR_DISABLE_LEAK_SANITIZER();
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
   TENZIR_ENABLE_LEAK_SANITIZER();
-  if (!library) {
+  if (not library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());
   }
   auto libtenzir_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_libtenzir_version"));
-  if (!libtenzir_version) {
+  if (not libtenzir_version) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol "
                            "tenzir_libtenzir_version in",
@@ -622,7 +633,7 @@ plugin_ptr::make_dynamic(const char* filename,
   }
   auto libtenzir_build_tree_hash = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_libtenzir_build_tree_hash"));
-  if (!libtenzir_build_tree_hash) {
+  if (not libtenzir_build_tree_hash) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol "
                            "tenzir_libtenzir_build_tree_hash in",
@@ -714,20 +725,20 @@ plugin_ptr::make_dynamic(const char* filename,
   };
 }
 
-plugin_ptr
-plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
-                        const char* version,
-                        std::vector<std::string> dependencies) noexcept {
+auto plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
+                             const char* version,
+                             std::vector<std::string> dependencies) noexcept
+  -> plugin_ptr {
   return plugin_ptr{
     std::make_shared<control_block>(nullptr, instance, deleter, version,
                                     std::move(dependencies), type::static_),
   };
 }
 
-plugin_ptr
-plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
-                         const char* version,
-                         std::vector<std::string> dependencies) noexcept {
+auto plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
+                              const char* version,
+                              std::vector<std::string> dependencies) noexcept
+  -> plugin_ptr {
   return plugin_ptr{
     std::make_shared<control_block>(nullptr, instance, deleter, version,
                                     std::move(dependencies), type::builtin),
@@ -737,37 +748,38 @@ plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
 plugin_ptr::plugin_ptr() noexcept = default;
 plugin_ptr::~plugin_ptr() noexcept = default;
 plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept = default;
-plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept = default;
+auto plugin_ptr::operator=(plugin_ptr&& rhs) noexcept -> plugin_ptr& = default;
 
 plugin_ptr::operator bool() const noexcept {
-  return ctrl_ and ctrl_->instance;
+  return ctrl_ and (ctrl_->instance != nullptr);
 }
 
-const plugin* plugin_ptr::operator->() const noexcept {
+auto plugin_ptr::operator->() const noexcept -> const plugin* {
   return ctrl_->instance;
 }
 
-plugin* plugin_ptr::operator->() noexcept {
+auto plugin_ptr::operator->() noexcept -> plugin* {
   return ctrl_->instance;
 }
 
-const plugin& plugin_ptr::operator*() const noexcept {
+auto plugin_ptr::operator*() const noexcept -> const plugin& {
   return *ctrl_->instance;
 }
 
-plugin& plugin_ptr::operator&() noexcept {
+auto plugin_ptr::operator&() noexcept -> plugin& {
   return *ctrl_->instance;
 }
 
-const char* plugin_ptr::version() const noexcept {
+auto plugin_ptr::version() const noexcept -> const char* {
   return ctrl_->version;
 }
 
-const std::vector<std::string>& plugin_ptr::dependencies() const noexcept {
+auto plugin_ptr::dependencies() const noexcept
+  -> const std::vector<std::string>& {
   return ctrl_->dependencies;
 }
 
-enum plugin_ptr::type plugin_ptr::type() const noexcept {
+auto plugin_ptr::type() const noexcept -> enum plugin_ptr::type {
   return ctrl_->type;
 }
 
@@ -781,43 +793,43 @@ auto plugin_ptr::reference_dependencies() noexcept -> void {
   }
 }
 
-std::strong_ordering
-operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
+auto operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept
+  -> std::strong_ordering {
   if (&lhs == &rhs) {
     return std::strong_ordering::equal;
   }
-  if (!lhs && !rhs) {
+  if (not lhs && not rhs) {
     return std::strong_ordering::equal;
   }
-  if (!lhs) {
+  if (not lhs) {
     return std::strong_ordering::less;
   }
-  if (!rhs) {
+  if (not rhs) {
     return std::strong_ordering::greater;
   }
   return lhs <=> rhs->name();
 }
 
-bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
+auto operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept -> bool {
   if (&lhs == &rhs) {
     return true;
   }
-  if (!lhs && !rhs) {
+  if (not lhs && not rhs) {
     return true;
   }
   return lhs == rhs->name();
 }
 
-std::strong_ordering
-operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
-  if (!lhs) {
+auto operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept
+  -> std::strong_ordering {
+  if (not lhs) {
     return std::strong_ordering::less;
   }
   auto lhs_name = lhs->name();
   // TODO: Replace implementation with `std::lexicographical_compare_three_way`
   // once that is implemented for all compilers we need to support. This does
   // the same thing essentially, just a lot less generic.
-  while (!lhs_name.empty() && !rhs.empty()) {
+  while (not lhs_name.empty() && not rhs.empty()) {
     const auto lhs_normalized
       = std::tolower(static_cast<unsigned char>(lhs_name[0]));
     const auto rhs_normalized
@@ -831,13 +843,13 @@ operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
     lhs_name = lhs_name.substr(1);
     rhs = rhs.substr(1);
   }
-  return !lhs_name.empty() ? std::strong_ordering::greater
-         : !rhs.empty()    ? std::strong_ordering::less
-                           : std::strong_ordering::equivalent;
+  return not lhs_name.empty() ? std::strong_ordering::greater
+         : not rhs.empty()    ? std::strong_ordering::less
+                              : std::strong_ordering::equivalent;
 }
 
-bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept {
-  if (!lhs) {
+auto operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept -> bool {
+  if (not lhs) {
     return false;
   }
   const auto lhs_name = lhs->name();

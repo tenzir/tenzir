@@ -222,31 +222,40 @@ namespace {
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
 using property_map = std::map<std::string, std::string>;
 
-inline auto to_property_map(const std::optional<tenzir::record>& rec)
-  -> property_map {
-  auto res = property_map{};
-  if (not rec) {
-    return res;
-  }
-  for (const auto& [key, value] : *rec) {
+inline void to_property_map_or_request(const located<tenzir::record>& rec,
+                                       property_map& map,
+                                       std::vector<secret_request>& requests,
+                                       diagnostic_handler& dh) {
+  for (const auto& [key, value] : rec.inner) {
     // Avoid double quotes around strings.
     if (const auto* str = try_as<std::string>(&value)) {
-      const auto [it, inserted] = res.try_emplace(key, *str);
+      const auto [it, inserted] = map.try_emplace(key, *str);
       TENZIR_ASSERT(inserted);
       continue;
     }
-    const auto [it, inserted] = res.try_emplace(key, fmt::format("{}", value));
+    if (const auto* s = try_as<secret>(value)) {
+      requests.emplace_back(*s, rec.source,
+                            [key, loc = rec.source, &dh, &map](
+                              resolved_secret_value v) -> failure_or<void> {
+                              TRY(auto str, v.utf8_view(key, loc, dh));
+                              const auto [it, inserted]
+                                = map.try_emplace(key, std::string{str});
+                              TENZIR_ASSERT(inserted);
+                              return {};
+                            });
+      continue;
+    }
+    const auto [it, inserted] = map.try_emplace(key, fmt::format("{}", value));
     TENZIR_ASSERT(inserted);
   }
-  return res;
 }
 
 /// The arguments passed to the operator.
 struct operator_args {
   located<std::string> plugin;                  ///< Fluent Bit plugin name.
   std::chrono::milliseconds poll_interval{250}; ///< Engine poll interval.
-  property_map service_properties;              ///< The global service options.
-  property_map args;                            ///< The plugin arguments.
+  located<record> service_properties;           ///< The global service options.
+  located<record> args;                         ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
@@ -276,15 +285,17 @@ class engine {
 
 public:
   /// Constructs a Fluent Bit engine for use as "source" in a pipeline.
-  static auto make_source(const operator_args& args,
-                          const record& plugin_config, diagnostic_handler& dh)
+  static auto
+  make_source(const operator_args& args, const record& global_config,
+              const property_map& fluent_bit_args,
+              const property_map& plugin_args, diagnostic_handler& dh)
     -> std::unique_ptr<engine> {
-    auto result = make_engine(plugin_config, args.poll_interval,
-                              args.service_properties, dh);
+    auto result
+      = make_engine(global_config, args.poll_interval, fluent_bit_args, dh);
     if (not result) {
       return result;
     }
-    if (auto error = result->input(args.plugin.inner, args.args)) {
+    if (auto error = result->input(args.plugin.inner, plugin_args)) {
       error->annotations.emplace_back(true, "", args.plugin.source);
       dh.emit(std::move(*error));
       return {};
@@ -311,9 +322,11 @@ public:
 
   /// Constructs a Fluent Bit engine for use as "sink" in a pipeline.
   static auto make_sink(const operator_args& args, const record& plugin_config,
-                        diagnostic_handler& dh) -> std::unique_ptr<engine> {
-    auto result = make_engine(plugin_config, args.poll_interval,
-                              args.service_properties, dh);
+                        const property_map& fluent_bit_args,
+                        const property_map& plugin_args, diagnostic_handler& dh)
+    -> std::unique_ptr<engine> {
+    auto result
+      = make_engine(plugin_config, args.poll_interval, fluent_bit_args, dh);
     if (not result) {
       return result;
     }
@@ -321,7 +334,7 @@ public:
       dh.emit(std::move(*error));
       return {};
     }
-    if (auto error = result->output(args.plugin.inner, args.args)) {
+    if (auto error = result->output(args.plugin.inner, plugin_args)) {
       error->annotations.emplace_back(true, "", args.plugin.source);
       dh.emit(std::move(*error));
       return {};
@@ -335,11 +348,6 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
-      // Workaround an uninitialized thread-local pointer that causes a bad
-      // `free`.
-      if (not started_) {
-        start();
-      }
       stop();
       flb_destroy(ctx_);
     }
@@ -392,10 +400,20 @@ public:
   }
 
   /// Pushes data into Fluent Bit.
-  auto push(std::string_view data) -> bool {
+  auto push(std::string_view data) -> failure_or<void> {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_ASSERT(ffd_ >= 0);
-    return flb_lib_push(ctx_, ffd_, data.data(), data.size()) != FLB_LIB_ERROR;
+    auto written = size_t{};
+    while (written != data.size()) {
+      auto ret = flb_lib_push(ctx_, ffd_, data.data() + written,
+                              data.size() - written);
+      if (ret == FLB_LIB_ERROR) {
+        return failure::promise();
+      }
+      TENZIR_ASSERT(ret >= 0);
+      written += ret;
+    }
+    return {};
   }
 
 private:
@@ -408,6 +426,9 @@ private:
       diagnostic::error("failed to create Fluent Bit context").emit(dh);
       return {};
     }
+    // Initialize some TLS variables. If we don't do this we get a bad `free`
+    // call in flb_destroy in case we try to use a plugin that does not exists.
+    flb_sched_ctx_init();
     // Start with a less noisy log level.
     if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
       diagnostic::error("failed to adjust Fluent Bit log_level").emit(dh);
@@ -500,10 +521,10 @@ private:
     TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
     if (ret == 0) {
-      started_ = true;
+      running_ = true;
       return {};
     }
-    return diagnostic::error("failed to start engine")
+    return diagnostic::error("failed to start fluentbit engine")
       .note("return code `{}`", ret)
       .done();
   }
@@ -511,8 +532,9 @@ private:
   /// Stops the engine.
   auto stop() -> bool {
     TENZIR_ASSERT(ctx_ != nullptr);
-    if (not started_) {
-      TENZIR_DEBUG("discarded attempt to stop unstarted engine");
+    if (not running_) {
+      TENZIR_DEBUG(
+        "ignoring `stop()` for since the engine was not started successfully");
       return false;
     }
     TENZIR_DEBUG("stopping Fluent Bit engine");
@@ -522,15 +544,15 @@ private:
     }
     auto ret = flb_stop(ctx_);
     if (ret == 0) {
-      started_ = false;
+      running_ = false;
       return true;
     }
-    TENZIR_ERROR("failed to stop engine ({})", ret);
+    TENZIR_ERROR("failed to stop fluentbit engine ({})", ret);
     return false;
   }
 
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
-  bool started_{false};     ///< Engine started/stopped status.
+  bool running_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
   size_t num_stop_polls_{0};      ///< Number of polls in the destructor
@@ -639,12 +661,20 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<table_slice>
     requires enable_source
   {
-    auto engine
-      = engine::make_source(operator_args_, config_, ctrl.diagnostics());
+    co_yield {};
+    auto requests = std::vector<secret_request>{};
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    to_property_map_or_request(operator_args_.service_properties,
+                               fluent_bit_args, requests, ctrl.diagnostics());
+    to_property_map_or_request(operator_args_.args, plugin_args, requests,
+                               ctrl.diagnostics());
+    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    auto engine = engine::make_source(operator_args_, config_, fluent_bit_args,
+                                      plugin_args, ctrl.diagnostics());
     if (not engine) {
       co_return;
     }
-    co_yield {};
     auto dh = transforming_diagnostic_handler{
       ctrl.diagnostics(),
       [&](diagnostic d) {
@@ -786,12 +816,20 @@ public:
     -> generator<std::monostate>
     requires enable_sink
   {
-    auto engine
-      = engine::make_sink(operator_args_, config_, ctrl.diagnostics());
+    co_yield {};
+    auto requests = std::vector<secret_request>{};
+    auto fluent_bit_args = property_map{};
+    auto plugin_args = property_map{};
+    to_property_map_or_request(operator_args_.service_properties,
+                               fluent_bit_args, requests, ctrl.diagnostics());
+    to_property_map_or_request(operator_args_.args, plugin_args, requests,
+                               ctrl.diagnostics());
+    co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    auto engine = engine::make_sink(operator_args_, config_, fluent_bit_args,
+                                    plugin_args, ctrl.diagnostics());
     if (not engine) {
       co_return;
     }
-    co_yield {};
     engine->max_wait_before_stop(std::chrono::seconds(1));
     auto event = std::string{};
     for (auto&& slice : input) {
@@ -801,11 +839,10 @@ public:
       }
       // Print table slice as JSON.
       auto resolved_slice = resolve_enumerations(slice);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto it = std::back_inserter(event);
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       auto failed = false;
       for (const auto& row : values3(*array)) {
+        auto it = std::back_inserter(event);
         TENZIR_ASSERT(row);
         auto printer = json_printer{{
           .oneline = true,
@@ -814,7 +851,7 @@ public:
         TENZIR_ASSERT(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (not engine->push(message)) {
+        if (engine->push(message).is_error()) {
           failed = true;
         }
         event.clear();

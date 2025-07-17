@@ -306,6 +306,13 @@ struct index_state {
   /// The partitions currently being transformed.
   detail::stable_set<uuid> partitions_in_transformation = {};
 
+  /// The collection of currently active transformers. These need to be
+  /// explicitly shut down if the index actor exists.
+  /// The `disposable` refers to the monitor that would otherwise automatically
+  /// remove the actor from the list if it finished on its own. It must be
+  /// disposed of before shutdown.
+  std::unordered_map<caf::actor_addr, caf::disposable> active_transformers;
+
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};
 

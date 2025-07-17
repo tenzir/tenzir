@@ -1,0 +1,13 @@
+{
+  is_multicast_ipv4_224: true,
+  is_multicast_ipv4_239: true,
+  is_multicast_ipv4_private: false,
+  is_multicast_ipv6_ff02: true,
+  is_multicast_ipv6_ff05: true,
+  is_multicast_ipv6_global: false,
+  is_multicast_broadcast: false,
+  is_multicast_loopback_v4: false,
+  is_multicast_loopback_v6: false,
+  is_multicast_invalid: null,
+  is_multicast_null: null,
+}

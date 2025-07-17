@@ -9,9 +9,16 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/zip_iterator.hpp>
+#include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <boost/process/environment.hpp>
+#include <boost/process/v2/environment.hpp>
+#if __has_include(<boost/process/v1/environment.hpp>)
+#  include <boost/process/v1/environment.hpp>
+#else
+#  include <boost/process/environment.hpp>
+#endif
 
 #include <ranges>
 
@@ -23,6 +30,10 @@ class type_id final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.type_id";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -50,82 +61,35 @@ public:
   }
 };
 
-class secret final : public function_plugin {
+class type_of final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.secret";
+    return "type_of";
   }
 
-  auto initialize(const record& plugin_config, const record& global_config)
-    -> caf::error override {
-    TENZIR_UNUSED(plugin_config);
-    auto secrets = try_get_or(global_config, "tenzir.secrets", record{});
-    if (not secrets) {
-      return diagnostic::error(secrets.error())
-        .note("configuration key `tenzir.secrets` must be a record")
-        .to_error();
-    }
-    for (const auto& [key, value] : *secrets) {
-      const auto* str = try_as<std::string>(&value);
-      if (not str) {
-        return diagnostic::error("secrets must be strings")
-          .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
-                type::infer(value).value_or(type{}).kind())
-          .to_error();
-      }
-      secrets_.emplace(key, *str);
-    }
-    return {};
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("secret")
-          .positional("key", expr, "string")
+    TRY(argument_parser2::function("type_of")
+          .positional("x", expr, "any")
           .parse(inv, ctx));
     return function_use::make(
-      [this, expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::StringBuilder{};
-        check(b.Reserve(eval.length()));
-        for (auto& value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              for (auto i = int64_t{0}; i < array.length(); ++i) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
-                }
-                const auto it = secrets_.find(array.GetView(i));
-                if (it == secrets_.end()) {
-                  diagnostic::warning("unknown secret `{}`", array.GetView(i))
-                    .primary(expr)
-                    .emit(ctx);
-                  check(b.AppendNull());
-                  continue;
-                }
-                check(b.Append(it->second));
-              }
-            },
-            [&](const arrow::NullArray&) {
-              check(b.AppendNulls(value.length()));
-            },
-            [&](const auto&) {
-              diagnostic::warning("expected `string`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b.AppendNulls(value.length()));
-            },
-          };
-          match(*value.array, f);
-        }
-        return series{string_type{}, finish(b)};
+      [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        return map_series(eval(expr), [](auto&& x) {
+          auto builder = series_builder{};
+          auto definition = x.type.to_definition();
+          for (auto i = int64_t{0}; i < x.length(); ++i) {
+            builder.data(definition);
+          }
+          return builder.finish_assert_one_array();
+        });
       });
   }
-
-private:
-  detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
 };
 
 class env final : public function_plugin {
@@ -144,12 +108,40 @@ public:
     return {};
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("env")
           .positional("key", expr, "string")
           .parse(inv, ctx));
+    if (auto key = try_const_eval(expr, ctx)) {
+      auto value = std::optional<std::string>{};
+      const auto* typed_key = try_as<std::string>(*key);
+      if (not typed_key) {
+        diagnostic::warning("expected `string`, got `{}`",
+                            type::infer(key).value_or(type{}).kind())
+          .primary(expr)
+          .emit(ctx);
+      } else if (auto it = env_.find(*typed_key); it != env_.end()) {
+        value = it->second;
+      }
+      return function_use::make(
+        [value = std::move(value)](evaluator eval, session ctx) -> series {
+          TENZIR_UNUSED(ctx);
+          if (not value) {
+            return series::null(string_type{}, eval.length());
+          }
+          return {
+            string_type{},
+            check(arrow::MakeArrayFromScalar(arrow::StringScalar{*value},
+                                             eval.length())),
+          };
+        });
+    }
     return function_use::make(
       [this, expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = arrow::StringBuilder{};
@@ -195,6 +187,10 @@ class length final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "length";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -244,6 +240,10 @@ class network final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "network";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -297,47 +297,158 @@ public:
     return "has";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto needle = located<std::string>{};
+    auto needle = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "record")
-          .positional("field", needle)
+          .positional("field", needle, "string")
+          .parse(inv, ctx));
+    if (auto const_needle = try_const_eval(needle, ctx)) {
+      auto* str = try_as<std::string>(*const_needle);
+      if (not str) {
+        diagnostic::error("expected `string`, but got `{}`",
+                          type::infer(*const_needle).value_or(type{}).kind())
+          .primary(needle)
+          .emit(ctx);
+      }
+      return function_use::make(
+        [needle = located{std::move(*str), needle.get_location()},
+         expr = std::move(expr)](evaluator eval, session ctx) -> series {
+          auto b = arrow::BooleanBuilder{};
+          check(b.Reserve(eval.length()));
+          for (auto value : eval(expr)) {
+            auto f = detail::overload{
+              [&](const arrow::NullArray& array) {
+                check(b.AppendNulls(array.length()));
+              },
+              [&](const arrow::StructArray& array) {
+                const auto names = array.struct_type()->fields()
+                                   | std::views::transform(&arrow::Field::name);
+                const auto result
+                  = std::ranges::find(names, needle.inner) != std::end(names);
+                for (auto i = int64_t{0}; i < array.length(); i++) {
+                  if (array.IsNull(i)) {
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  check(b.Append(result));
+                }
+              },
+              [&](const auto& array) {
+                diagnostic::warning("expected `record`, got `{}`",
+                                    value.type.kind())
+                  .primary(expr)
+                  .emit(ctx);
+                check(b.AppendNulls(array.length()));
+              }};
+            match(*value.array, f);
+          }
+          return series{bool_type{}, finish(b)};
+        });
+    }
+    return function_use::make([needle = std::move(needle), expr
+                                                           = std::move(expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      TENZIR_UNUSED(ctx);
+      const auto expr_location = expr.get_location();
+      const auto needle_location = needle.get_location();
+      auto builder = arrow::BooleanBuilder{};
+      check(builder.Reserve(eval.length()));
+      for (auto split : split_multi_series(eval(expr), eval(needle))) {
+        const auto& expr = split[0];
+        const auto& needle = split[1];
+        const auto* expr_type = try_as<record_type>(expr.type);
+        if (not expr_type) {
+          if (not is<null_type>(expr.type)) {
+            diagnostic::warning("expected `record`, got `{}`", expr.type.kind())
+              .primary(expr_location)
+              .emit(ctx);
+          }
+          check(builder.AppendNulls(expr.length()));
+          continue;
+        }
+        const auto typed_needle = needle.as<string_type>();
+        if (not typed_needle) {
+          diagnostic::warning("expected `string`, got `{}`", needle.type.kind())
+            .primary(needle_location)
+            .emit(ctx);
+          check(builder.AppendNulls(expr.length()));
+          continue;
+        }
+        if (typed_needle->array->null_count() > 0) {
+          diagnostic::warning("expected `string`, got `null`")
+            .primary(needle_location)
+            .emit(ctx);
+        }
+        for (auto value : *typed_needle->array) {
+          if (not value) {
+            check(builder.AppendNull());
+            continue;
+          }
+          check(builder.Append(expr_type->has_field(*value)));
+        }
+      }
+      return series{bool_type{}, finish(builder)};
+    });
+  }
+};
+
+class keys final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "keys";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "record")
           .parse(inv, ctx));
     return function_use::make(
-      [needle = std::move(needle),
-       expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::BooleanBuilder{};
-        check(b.Reserve(eval.length()));
-        for (auto value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::NullArray& array) {
-              check(b.AppendNulls(array.length()));
+      [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
+        const auto result_type = list_type{string_type{}};
+        return map_series(eval(expr), [&](auto&& subject) -> series {
+          return match(
+            subject.type,
+            [&](const null_type&) {
+              return series::null(result_type, eval.length());
             },
-            [&](const arrow::StructArray& array) {
-              const auto names = array.struct_type()->fields()
-                                 | std::views::transform(&arrow::Field::name);
-              const auto result
-                = std::ranges::find(names, needle.inner) != std::end(names);
-              for (auto i = int64_t{0}; i < array.length(); i++) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
-                }
-                check(b.Append(result));
+            [&](const record_type& type) {
+              auto keys_builder = arrow::StringBuilder{};
+              check(keys_builder.Reserve(
+                detail::narrow<int64_t>(type.num_fields())));
+              for (const auto& field : type.fields()) {
+                check(keys_builder.Append(field.name));
               }
+              return series{
+                result_type,
+                check(arrow::MakeArrayFromScalar(
+                  arrow::ListScalar{
+                    finish(keys_builder),
+                    result_type.to_arrow_type(),
+                  },
+                  eval.length())),
+              };
             },
-            [&](const auto& array) {
+            [&](const auto&) {
               diagnostic::warning("expected `record`, got `{}`",
-                                  value.type.kind())
+                                  subject.type.kind())
                 .primary(expr)
                 .emit(ctx);
-              check(b.AppendNulls(array.length()));
-            }};
-          match(*value.array, f);
-        }
-        return series{bool_type{}, finish(b)};
+              return series::null(result_type, eval.length());
+            });
+        });
       });
   }
 };
@@ -349,6 +460,10 @@ public:
 
   auto name() const -> std::string override {
     return select_ ? "select_matching" : "drop_matching";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -409,6 +524,10 @@ public:
     return "merge";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto record1 = ast::expression{};
@@ -438,16 +557,67 @@ public:
   }
 };
 
+class get final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "get";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject = ast::expression{};
+    auto field = ast::expression{};
+    auto fallback = std::optional<ast::expression>{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject, "record|list")
+          .positional("field", field, "string|int")
+          .positional("fallback", fallback, "any")
+          .parse(inv, ctx));
+    return function_use::make(
+      [subject = std::move(subject), field = std::move(field),
+       fallback = std::move(fallback)](evaluator eval,
+                                       session ctx) mutable -> multi_series {
+        TENZIR_UNUSED(ctx);
+        auto expr = ast::expression{
+          ast::index_expr{
+            subject,
+            location::unknown,
+            field,
+            location::unknown,
+            // We suppress warnings iff there is a fallback value provided.
+            fallback.has_value(),
+          },
+        };
+        if (fallback) {
+          expr = ast::expression{
+            ast::binary_expr{
+              std::move(expr),
+              located{ast::binary_op::else_, location::unknown},
+              std::move(*fallback),
+            },
+          };
+        }
+        return eval(expr);
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::misc
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_of)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::keys)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::merge)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::get)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})

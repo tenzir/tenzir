@@ -1,0 +1,32 @@
+from {
+  ts1: 2024-06-15T14:30:45.123456,
+  ts2: 2020-01-01T00:00:00.000000,
+  ts3: 2023-12-31T23:59:59.999999,
+  ts4: null
+}
+
+// Basic date formatting
+ts1_date = ts1.format_time("%Y-%m-%d")
+ts1_time = ts1.format_time("%H:%M:%S")
+ts1_datetime = ts1.format_time("%Y-%m-%d %H:%M:%S")
+
+// Different format styles
+ts1_us_date = ts1.format_time("%m/%d/%Y")
+ts1_eu_date = ts1.format_time("%d.%m.%Y")
+ts1_iso = ts1.format_time("%F")
+
+// Format with text
+ts1_text = ts1.format_time("The date is %A, %B %d, %Y")
+
+// Special formats
+ts1_unix = ts1.format_time("%s")
+
+// Edge cases
+ts2_midnight = ts2.format_time("%I:%M %p")
+ts3_end_of_day = ts3.format_time("%H:%M:%S")
+
+// Full format with various specifiers
+ts1_full = ts1.format_time("%Y-%m-%d %H:%M:%S")
+
+// Null handling
+ts4_format = ts4.format_time("%Y-%m-%d")

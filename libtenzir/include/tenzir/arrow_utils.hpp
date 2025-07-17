@@ -40,12 +40,15 @@ template <std::derived_from<arrow::ArrayBuilder> T>
 [[nodiscard]] auto
 finish(T& x, std::source_location location = std::source_location::current()) {
   auto array = check(x.Finish(), location);
-  auto cast
-    = std::dynamic_pointer_cast<type_to_arrow_array_t<type_from_arrow_t<T>>>(
-      std::move(array));
-  TENZIR_ASSERT(cast);
-  return cast;
+  using concrete_array_type = type_to_arrow_array_t<type_from_arrow_t<T>>;
+  /// Using a `dynamic_pointer_cast` here sometimes fails on using MacOS llvm.
+  /// A `static_cast` is save here, because we statically know the concrete type
+  /// from the builder.
+  return std::static_pointer_cast<concrete_array_type>(array);
 }
+
+auto data_to_series(const data& value, int64_t length) -> series;
+auto data_to_series(const data& value, uint64_t length) -> series;
 
 // -- column builder helpers --------------------------------------------------
 
@@ -116,6 +119,11 @@ arrow::Status
 append_builder(const record_type& hint,
                type_to_arrow_builder_t<record_type>& builder,
                const view<type_to_data_t<record_type>>& view) noexcept;
+
+arrow::Status
+append_builder(const secret_type& hint,
+               type_to_arrow_builder_t<secret_type>& builder,
+               const view<type_to_data_t<secret_type>>& view) noexcept;
 
 template <type_or_concrete_type Type>
 arrow::Status

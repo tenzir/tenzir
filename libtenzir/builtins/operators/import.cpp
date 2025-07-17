@@ -44,6 +44,13 @@ public:
         co_yield {};
         continue;
       }
+      auto has_secrets = false;
+      std::tie(has_secrets, slice) = replace_secrets(std::move(slice));
+      if (has_secrets) {
+        diagnostic::warning("`secret` cannot imported as secrets")
+          .note("fields will be `\"***\"`")
+          .emit(ctrl.diagnostics());
+      }
       // The current catalog assumes that all events have at least one field.
       // This check guards against that. We should remove it once we get to
       // rewriting our catalog.
@@ -145,14 +152,7 @@ public:
       "https://docs.tenzir.com/operators/import",
     };
     parser.parse(p);
-    auto pipe = pipeline::internal_parse("batch --timeout 1s");
-    if (not pipe) {
-      diagnostic::error(pipe.error())
-        .note("failed to parse `batch` operator")
-        .throw_();
-    }
-    pipe->append(std::make_unique<import_operator>());
-    return std::make_unique<pipeline>(std::move(*pipe));
+    return std::make_unique<import_operator>();
   }
 
   auto make(invocation inv, session ctx) const

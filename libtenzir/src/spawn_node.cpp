@@ -8,13 +8,10 @@
 
 #include "tenzir/spawn_node.hpp"
 
-#include "tenzir/concept/parseable/tenzir/time.hpp"
-#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/pid_file.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/node.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/scope_linked.hpp"
 
 #include <caf/actor_registry.hpp>
@@ -26,17 +23,19 @@
 #include <string>
 #include <system_error>
 #include <unistd.h>
-#include <vector>
 
 namespace tenzir {
 
-caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
+auto spawn_node(caf::scoped_actor& self)
+  -> caf::expected<scope_linked<node_actor>> {
   using namespace std::string_literals;
   const auto& opts = content(self->system().config());
   // Fetch values from config.
-  auto id = get_or(opts, "tenzir.node-id", defaults::node_id.data());
   auto db_dir
     = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
+  auto disable_pipeline_subprocesses
+    = get_or(opts, "tenzir.disable-pipeline-subprocesses",
+             defaults::disable_pipeline_subprocesses);
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err) {
@@ -81,8 +80,10 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
   self->mail(atom::subscribe_v).send(signal_reflector);
   // Wipe the contents of the old cache directory.
   {
-    auto cache_directory = get_if<std::string>(&opts, "tenzir.cache-directory");
-    if (cache_directory && std::filesystem::exists(*cache_directory)) {
+    const auto* cache_directory
+      = get_if<std::string>(&opts, "tenzir.cache-directory");
+    if (cache_directory != nullptr
+        && std::filesystem::exists(*cache_directory)) {
       for (auto const& item :
            std::filesystem::directory_iterator{*cache_directory}) {
         std::filesystem::remove_all(item.path(), err);
@@ -94,9 +95,7 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
     }
   }
   // Spawn the node.
-  TENZIR_DEBUG("{} spawns local node: {}", __func__, id);
-  // Pointer to the root command to node.
-  auto actor = self->spawn(node, id, abs_dir);
+  auto actor = self->spawn(node, abs_dir, disable_pipeline_subprocesses);
   actor->attach_functor(
     [=, pid_file = std::move(pid_file),
      &system = self->system()](const caf::error&) -> caf::result<void> {

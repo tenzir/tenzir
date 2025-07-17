@@ -13,6 +13,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metric_handler.hpp"
+#include "tenzir/secret_resolution.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <caf/typed_actor.hpp>
@@ -28,6 +29,9 @@ struct operator_control_plane {
 
   /// Returns the hosting actor.
   virtual auto self() noexcept -> exec_node_actor::base& = 0;
+
+  /// Returns the pipeline's definition.
+  virtual auto definition() const noexcept -> std::string_view = 0;
 
   /// Returns a unique id for the current run.
   virtual auto run_id() const noexcept -> uuid = 0;
@@ -61,9 +65,62 @@ struct operator_control_plane {
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;
 
+  static auto noop_final_callback(bool /*success*/) -> failure_or<void> {
+    return {};
+  }
+
+  using final_callback_t = std::function<failure_or<void>(bool success)>;
+
+  /// The return type of `resolve_secrets_must_yield`. This type ensures a user
+  /// yields it by ensuring the conversion operator is called at least once.
+  class secret_resolution_sentinel {
+  public:
+    template <concepts::one_of<std::monostate, chunk_ptr, table_slice> T>
+    explicit(false) operator T() && {
+      has_yielded_ = true;
+      return T{};
+    }
+
+    secret_resolution_sentinel() = default;
+
+    secret_resolution_sentinel(const secret_resolution_sentinel&) = delete;
+    secret_resolution_sentinel(secret_resolution_sentinel&&) = delete;
+    secret_resolution_sentinel& operator=(const secret_resolution_sentinel&)
+      = delete;
+    secret_resolution_sentinel& operator=(secret_resolution_sentinel&&)
+      = delete;
+
+    ~secret_resolution_sentinel() {
+      TENZIR_ASSERT_ALWAYS(has_yielded_);
+    }
+
+  private:
+    bool has_yielded_ = false;
+  };
+
+  /// Resolves multiple secrets. The implementation in the
+  /// `exec_node_control_plane` will first check the config and then try and
+  /// dispatch to the platform plugin. The platform query is async, so this
+  /// function will perform `set_waiting(true)`, and only re-schedule the actor
+  /// after the request has been successfully fulfilled.
+  /// @param requests the requests to resolve
+  /// @param final_callback the callback to invoke after all secrets are
+  ///        resolved and their callback have been invoked. The `bool` parameter
+  ///        will indicate whether resolution was successful so far.
+  ///        It is undefined behaviour to do `set_waiting(false)` if resolution
+  ///        failed.
+  /// @returns a `secret_resolution_sentinel` that must be `co_yield`ed by the
+  ///          caller
+  [[nodiscard]] virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request> requests,
+                             final_callback_t final_callback
+                             = noop_final_callback)
+    -> secret_resolution_sentinel
+    = 0;
+
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
-  /// erorr via the shared diagnostic handler does not shut down the operator
+  /// error via the shared diagnostic handler does not shut down the operator
   /// immediately.
   inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
     return shared_diagnostic_handler{exec_node_actor{&(self())}};

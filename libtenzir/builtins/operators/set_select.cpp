@@ -18,7 +18,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto usage = "set <path>=<expr>...";
-    auto docs = "https://docs.tenzir.com/operators/set";
+    auto docs = "https://docs.tenzir.com/reference/operators/set";
     auto assignments = std::vector<ast::assignment>{};
     for (auto& arg : inv.args) {
       arg.match(
@@ -48,11 +48,11 @@ public:
     auto assignments = std::vector<ast::assignment>{};
     assignments.reserve(1 + inv.args.size());
     assignments.emplace_back(
-      ast::simple_selector::try_from(ast::this_{}).value(), location::unknown,
+      ast::field_path::try_from(ast::this_{}).value(), location::unknown,
       ast::record{location::unknown, {}, location::unknown});
     for (auto& arg : inv.args) {
       if (auto assignment = std::get_if<ast::assignment>(&*arg.kind)) {
-        auto selector = std::get_if<ast::simple_selector>(&assignment->left);
+        auto selector = std::get_if<ast::field_path>(&assignment->left);
         if (not selector) {
           diagnostic::error("expected selector")
             .primary(assignment->left)
@@ -61,7 +61,7 @@ public:
         }
         assignments.push_back(std::move(*assignment));
       } else {
-        auto selector = ast::simple_selector::try_from(arg);
+        auto selector = ast::field_path::try_from(arg);
         if (not selector) {
           diagnostic::error("expected selector").primary(arg).emit(ctx);
           continue;

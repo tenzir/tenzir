@@ -1,8 +1,8 @@
  {
    lets: [
 -    {
--      ident: `$foo` @ 4..8,
--      expr: constant int64 1 @ 11..12,
+-      ident: `$foo` @ 28..32,
+-      expr: constant int64 1 @ 35..36,
 -      id: 1
 -    }
 +    
@@ -26,70 +26,82 @@
        }
      },
      if_ir {
-       if_kw: 21..23,
+       if_kw: 45..47,
        condition: binary_expr {
--        left: dollar_var `$foo` -> 1 @ 24..28,
-+        left: constant int64 1 @ 24..28,
-         op: "eq" @ 29..31,
-         right: constant int64 1 @ 32..33
+-        left: dollar_var `$foo` -> 1 @ 48..52,
++        left: constant int64 1 @ 48..52,
+         op: "eq" @ 53..55,
+         right: constant int64 1 @ 56..57
        },
        then: {
          lets: [
 -          {
--            ident: `$bar` @ 42..46,
--            expr: constant int64 2 @ 49..50,
+-            ident: `$bar` @ 66..70,
+-            expr: constant int64 2 @ 73..74,
 -            id: 2
 -          }
 +          
          ],
          operators: [
            where_ir {
-             self: 53..58,
+             self: 77..82,
              predicate: binary_expr {
                left: binary_expr {
-                 left: root_field `foo` @ 59..62,
-                 op: "eq" @ 63..65,
--                right: dollar_var `$foo` -> 1 @ 66..70
-+                right: constant int64 1 @ 66..70
+                 left: root_field {
+                   id: `foo` @ 83..86,
+                   has_question_mark: false
+                 },
+                 op: "eq" @ 87..89,
+-                right: dollar_var `$foo` -> 1 @ 90..94
++                right: constant int64 1 @ 90..94
                },
-               op: "and_" @ 71..74,
+               op: "and_" @ 95..98,
                right: binary_expr {
-                 left: root_field `bar` @ 75..78,
-                 op: "eq" @ 79..81,
--                right: dollar_var `$bar` -> 2 @ 82..86
-+                right: constant int64 2 @ 82..86
+                 left: root_field {
+                   id: `bar` @ 99..102,
+                   has_question_mark: false
+                 },
+                 op: "eq" @ 103..105,
+-                right: dollar_var `$bar` -> 2 @ 106..110
++                right: constant int64 2 @ 106..110
                }
              }
            }
          ]
        },
        else: {
-         keyword: 89..93,
+         keyword: 113..117,
          pipe: {
            lets: [
 -            {
--              ident: `$bar` @ 102..106,
--              expr: constant int64 3 @ 109..110,
+-              ident: `$bar` @ 126..130,
+-              expr: constant int64 3 @ 133..134,
 -              id: 3
 -            }
 +            
            ],
            operators: [
              where_ir {
-               self: 113..118,
+               self: 137..142,
                predicate: binary_expr {
                  left: binary_expr {
-                   left: root_field `foo` @ 119..122,
-                   op: "eq" @ 123..125,
--                  right: dollar_var `$foo` -> 1 @ 126..130
-+                  right: constant int64 1 @ 126..130
+                   left: root_field {
+                     id: `foo` @ 143..146,
+                     has_question_mark: false
+                   },
+                   op: "eq" @ 147..149,
+-                  right: dollar_var `$foo` -> 1 @ 150..154
++                  right: constant int64 1 @ 150..154
                  },
-                 op: "and_" @ 131..134,
+                 op: "and_" @ 155..158,
                  right: binary_expr {
-                   left: root_field `bar` @ 135..138,
-                   op: "eq" @ 139..141,
--                  right: dollar_var `$bar` -> 3 @ 142..146
-+                  right: constant int64 3 @ 142..146
+                   left: root_field {
+                     id: `bar` @ 159..162,
+                     has_question_mark: false
+                   },
+                   op: "eq" @ 163..165,
+-                  right: dollar_var `$bar` -> 3 @ 166..170
++                  right: constant int64 3 @ 166..170
                  }
                }
              }

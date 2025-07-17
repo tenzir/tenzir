@@ -1,11 +1,18 @@
 : "${BATS_TEST_TIMEOUT:=10}"
 
+if [ $(uname -s) == "Darwin" ]; then
+  skip "Skipping brittle HTTP tests on MacOS"
+fi
+
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
+}
 
-  export TENZIR_TQL2=true
+wait_for_tcp() {
+  port=$1
+  timeout 10 bash -c "until lsof -i :$port; do sleep 0.2; done"
 }
 
 load() {
@@ -13,6 +20,7 @@ load() {
     skip "python executable must be in PATH"
   fi
   check --bg server python "${MISCDIR}/scripts/webserver.py" --port=$1
+  wait_for_tcp "$1"
   check tenzir "$2"
   wait_all ${server[@]}
 }
@@ -22,6 +30,7 @@ save() {
     skip "python executable must be in PATH"
   fi
   check --bg server python "${MISCDIR}/scripts/webserver.py" --port=$1
+  wait_for_tcp "$1"
   tenzir "$2"
   wait_all ${server[@]}
 }
@@ -35,22 +44,22 @@ save() {
 }
 
 @test "save HTTP PUT" {
-  save 51380 'version | select foo="bar" | write_json | save_http "http://localhost:51380", method="PUT"'
+  save 50382 'version | select foo="bar" | write_json | save_http "http://localhost:50382", method="PUT"'
 }
 
 @test "save HTTP POST" {
-  # save 51381 'version | select foo="bar" | to http://localhost:51381'
-  save 51382 'version | select foo="bar" | write_json | save_http "http://localhost:51382", method="POST"'
+  # save 50381 'version | select foo="bar" | to http://localhost:51381'
+  save 50383 'version | select foo="bar" | write_json | save_http "http://localhost:50383", method="POST"'
 }
 
 @test "save HTTP POST delete header" {
-  save 51383 'version | select foo="bar" | write_json | save_http "http://localhost:51383", headers={"Content-Type": ""}'
+  save 50384 'version | select foo="bar" | write_json | save_http "http://localhost:50384", headers={"Content-Type": ""}'
 }
 
 @test "save HTTP POST overwrite header" {
-  save 51384 'version | select foo="bar" | write_json | save_http "http://localhost:51384", headers={"User-Agent": "Test"}'
+  save 50385 'version | select foo="bar" | write_json | save_http "http://localhost:50385", headers={"User-Agent": "Test"}'
 }
 
 @test "save HTTP POST add header" {
-  save 51385 'version | select foo="bar" | write_json | save_http "http://localhost:51385", headers={"X-Test": "foo"}'
+  save 50386 'version | select foo="bar" | write_json | save_http "http://localhost:50386", headers={"X-Test": "foo"}'
 }

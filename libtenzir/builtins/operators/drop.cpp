@@ -17,6 +17,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/type.h>
@@ -143,7 +144,7 @@ public:
     const auto p = required_ws_or_comment >> extractor_list
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto config = configuration{};
-    if (!p(f, l, config.fields)) {
+    if (! p(f, l, config.fields)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse drop "
@@ -162,7 +163,7 @@ class drop_operator2 final : public crtp_operator<drop_operator2> {
 public:
   drop_operator2() = default;
 
-  explicit drop_operator2(std::vector<ast::simple_selector> selectors)
+  explicit drop_operator2(std::vector<ast::field_path> selectors)
     : selectors_{std::move(selectors)} {
   }
 
@@ -178,34 +179,7 @@ public:
         co_yield {};
         continue;
       }
-      auto transformations = std::vector<indexed_transformation>{};
-      for (auto& sel : selectors_) {
-        auto resolved = resolve(sel, slice.schema());
-        std::move(resolved).match(
-          [&](offset off) {
-            TENZIR_ASSERT(not off.empty());
-            transformations.emplace_back(
-              std::move(off),
-              [](struct record_type::field, std::shared_ptr<arrow::Array>) {
-                return indexed_transformation::result_type{};
-              });
-          },
-          [&](resolve_error err) {
-            err.reason.match(
-              [&](resolve_error::field_not_found&) {
-                diagnostic::warning("could not find field `{}`", err.ident.name)
-                  .primary(err.ident)
-                  .emit(ctrl.diagnostics());
-              },
-              [&](resolve_error::field_of_non_record& reason) {
-                diagnostic::warning("type `{}` has no field `{}`",
-                                    reason.type.kind(), err.ident.name)
-                  .primary(err.ident)
-                  .emit(ctrl.diagnostics());
-              });
-          });
-      }
-      co_yield transform_columns(slice, std::move(transformations));
+      co_yield tenzir::drop(slice, selectors_, ctrl.diagnostics(), true);
     }
   }
 
@@ -220,7 +194,7 @@ public:
   }
 
 private:
-  std::vector<ast::simple_selector> selectors_;
+  std::vector<ast::field_path> selectors_;
 };
 
 class plugin2 final : public virtual operator_plugin2<drop_operator2> {
@@ -228,9 +202,9 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("drop");
-    auto selectors = std::vector<ast::simple_selector>{};
+    auto selectors = std::vector<ast::field_path>{};
     for (auto& arg : inv.args) {
-      auto selector = ast::simple_selector::try_from(arg);
+      auto selector = ast::field_path::try_from(arg);
       if (selector) {
         if (selector->path().empty()) {
           diagnostic::error("cannot drop `this`").primary(*selector).emit(ctx);
@@ -246,38 +220,6 @@ public:
           .emit(ctx.dh());
       }
     }
-    std::ranges::sort(selectors);
-    auto dropped_children = std::vector<ast::simple_selector>{};
-    for (auto it = selectors.begin(); it != selectors.end(); ++it) {
-      const auto parent
-        = std::ranges::find_if(selectors.begin(), it, [&](const auto& x) {
-            const auto [mismatch, _]
-              = std::ranges::mismatch(x.path(), it->path());
-            return mismatch == x.path().end();
-          });
-      if (parent != it) {
-        if (*parent == *it) {
-          diagnostic::warning("ignoring duplicate field")
-            .primary(*it)
-            .primary(*parent)
-            .emit(ctx.dh());
-        } else {
-          diagnostic::warning("ignoring field within dropped record")
-            .primary(*it, "ignoring this field")
-            .secondary(*parent, "because it is already dropped here")
-            .emit(ctx.dh());
-          dropped_children.push_back(*it);
-        }
-      }
-    }
-    // Remove all the duplicates found.
-    selectors.erase(std::unique(selectors.begin(), selectors.end()),
-                    selectors.end());
-    // Then remove all the children of dropped fields.
-    std::erase_if(selectors, [&](const auto& selector) {
-      return std::ranges::find(dropped_children, selector)
-             != dropped_children.end();
-    });
     return std::make_unique<drop_operator2>(std::move(selectors));
   }
 };

@@ -11,6 +11,7 @@
 #include <concepts>
 #include <limits>
 #include <optional>
+#include <type_traits>
 
 namespace tenzir {
 

@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/aggregation_function.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
@@ -24,40 +23,6 @@ namespace {
 enum class mode {
   max,
   min,
-};
-
-template <mode Mode, basic_type Type>
-class min_max_function final : public aggregation_function {
-public:
-  explicit min_max_function(type input_type) noexcept
-    : aggregation_function(std::move(input_type)) {
-    // nop
-  }
-
-private:
-  auto output_type() const -> type override {
-    TENZIR_ASSERT(is<Type>(input_type()));
-    return input_type();
-  }
-
-  void add(const data_view& view) override {
-    using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (is<caf::none_t>(view)) {
-      return;
-    }
-    const auto comp = [](const auto& lhs, const auto& rhs) {
-      return Mode == mode::min ? lhs < rhs : lhs > rhs;
-    };
-    if (not result_ or comp(as<view_type>(view), *result_)) {
-      result_ = materialize(as<view_type>(view));
-    }
-  }
-
-  auto finish() && -> caf::expected<data> override {
-    return data{result_};
-  }
-
-  std::optional<type_to_data_t<Type>> result_ = {};
 };
 
 template <mode Mode>
@@ -249,30 +214,14 @@ private:
 };
 
 template <mode Mode>
-class plugin : public virtual aggregation_function_plugin,
-               public virtual aggregation_plugin {
+class plugin : public virtual aggregation_plugin {
 public:
   auto name() const -> std::string override {
     return Mode == mode::min ? "min" : "max";
   };
 
-  auto make_aggregation_function(const type& input_type) const
-    -> caf::expected<std::unique_ptr<aggregation_function>> override {
-    auto f = detail::overload{
-      [&]<basic_type Type>(
-        const Type&) -> caf::expected<std::unique_ptr<aggregation_function>> {
-        return std::make_unique<min_max_function<Mode, Type>>(input_type);
-      },
-      []<complex_type Type>(const Type& type)
-        -> caf::expected<std::unique_ptr<aggregation_function>> {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("max aggregation function does "
-                                           "not "
-                                           "support complex type {}",
-                                           type));
-      },
-    };
-    return match(input_type, f);
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const
@@ -282,10 +231,6 @@ public:
           .positional("x", expr, "number|duration|time")
           .parse(inv, ctx));
     return std::make_unique<min_max_instance<Mode>>(std::move(expr));
-  }
-
-  auto aggregation_default() const -> data override {
-    return caf::none;
   }
 };
 

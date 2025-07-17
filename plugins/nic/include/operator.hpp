@@ -65,133 +65,134 @@ auto make_file_header(int snaplen, int linktype) -> pcap::file_header {
   };
 };
 
-class nic_loader final : public plugin_loader {
+class nic_loader final : public crtp_operator<nic_loader> {
 public:
   nic_loader() = default;
 
   explicit nic_loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
-    TENZIR_ASSERT(!args_.iface.inner.empty());
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // We yield here, because otherwise the error is terminal to a node on
+    // startup.
+    co_yield {};
+    TENZIR_ASSERT(! args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
     TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
                  snaplen);
-    auto make = [](auto& ctrl, auto iface, auto snaplen,
-                   bool emit_file_headers) mutable -> generator<chunk_ptr> {
-      auto put_iface_in_promiscuous_mode = 1;
-      // The packet buffer timeout functions much like a read timeout: It
-      // describes the number of milliseconds to wait at most until returning
-      // from pcap_next_ex.
-      auto packet_buffer_timeout_ms
-        = std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
-            defaults::import::read_timeout)
-            .count();
-      auto error = std::array<char, PCAP_ERRBUF_SIZE>{};
-      auto* ptr
-        = pcap_open_live(iface.c_str(), detail::narrow_cast<int>(snaplen),
-                         put_iface_in_promiscuous_mode,
-                         packet_buffer_timeout_ms, error.data());
-      if (!ptr) {
-        diagnostic::error("failed to open interface: {}",
-                          std::string_view{error.data()})
+
+    auto put_iface_in_promiscuous_mode = 1;
+    // The packet buffer timeout functions much like a read timeout: It
+    // describes the number of milliseconds to wait at most until returning
+    // from pcap_next_ex.
+    auto packet_buffer_timeout_ms
+      = std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
+          defaults::import::read_timeout)
+          .count();
+    auto error = std::array<char, PCAP_ERRBUF_SIZE>{};
+    auto* ptr = pcap_open_live(args_.iface.inner.c_str(),
+                               detail::narrow_cast<int>(snaplen),
+                               put_iface_in_promiscuous_mode,
+                               packet_buffer_timeout_ms, error.data());
+    if (! ptr) {
+      diagnostic::error("failed to open interface: {}",
+                        std::string_view{error.data()})
+        .note("from `nic`")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
+                                          pcap_close(p);
+                                        }};
+    auto linktype = pcap_datalink(pcap.get());
+    TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
+    auto num_packets = size_t{0};
+    auto num_buffered_packets = size_t{0};
+    auto buffer = std::vector<std::byte>{};
+    auto last_finish = std::chrono::steady_clock::now();
+    while (true) {
+      const auto now = std::chrono::steady_clock::now();
+      if (num_buffered_packets >= defaults::import::table_slice_size
+          or last_finish + defaults::import::batch_timeout < now) {
+        TENZIR_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
+                     tenzir::data{now - last_finish}, num_buffered_packets,
+                     buffer.size());
+        last_finish = now;
+        co_yield chunk::make(std::exchange(buffer, {}));
+        // Reduce number of small allocations based on what we've seen
+        // previously.
+        auto avg_packet_size = buffer.size() / num_buffered_packets;
+        buffer.reserve(avg_packet_size * defaults::import::table_slice_size);
+        num_buffered_packets = 0;
+      }
+      const u_char* pkt_data = nullptr;
+      pcap_pkthdr* pkt_hdr = nullptr;
+      auto r = ::pcap_next_ex(pcap.get(), &pkt_hdr, &pkt_data);
+      if (r == 0) {
+        // Timeout
+        if (last_finish != now) {
+          co_yield {};
+        }
+        continue;
+      }
+      if (r == -2) {
+        TENZIR_DEBUG("reached end of trace with {} packets", num_packets);
+        break;
+      }
+      if (r == PCAP_ERROR) {
+        auto error = std::string_view{::pcap_geterr(pcap.get())};
+        diagnostic::error("failed to get next packet: {}", error)
           .note("from `nic`")
           .emit(ctrl.diagnostics());
-        co_return;
+        break;
       }
-      auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
-                                            pcap_close(p);
-                                          }};
-      auto linktype = pcap_datalink(pcap.get());
-      TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
-      // We yield once initially to signal that the operator successfully
-      // started.
-      co_yield {};
-      auto num_packets = size_t{0};
-      auto num_buffered_packets = size_t{0};
-      auto buffer = std::vector<std::byte>{};
-      auto last_finish = std::chrono::steady_clock::now();
-      while (true) {
-        const auto now = std::chrono::steady_clock::now();
-        if (num_buffered_packets >= defaults::import::table_slice_size
-            or last_finish + defaults::import::batch_timeout < now) {
-          TENZIR_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
-                       tenzir::data{now - last_finish}, num_buffered_packets,
-                       buffer.size());
-          last_finish = now;
-          co_yield chunk::make(std::exchange(buffer, {}));
-          // Reduce number of small allocations based on what we've seen
-          // previously.
-          auto avg_packet_size = buffer.size() / num_buffered_packets;
-          buffer.reserve(avg_packet_size * defaults::import::table_slice_size);
-          num_buffered_packets = 0;
-        }
-        const u_char* pkt_data = nullptr;
-        pcap_pkthdr* pkt_hdr = nullptr;
-        auto r = ::pcap_next_ex(pcap.get(), &pkt_hdr, &pkt_data);
-        if (r == 0) {
-          // Timeout
-          if (last_finish != now) {
-            co_yield {};
-          }
-          continue;
-        }
-        if (r == -2) {
-          TENZIR_DEBUG("reached end of trace with {} packets", num_packets);
-          break;
-        }
-        if (r == PCAP_ERROR) {
-          auto error = std::string_view{::pcap_geterr(pcap.get())};
-          diagnostic::error("failed to get next packet: {}", error)
-            .note("from `nic`")
-            .emit(ctrl.diagnostics());
-          break;
-        }
-        // Emit a PCAP file header, either with every chunk or once initially as
-        // separate chunk. This results in a packet stream that looks like a
-        // standard PCAP file downstream, allowing users to use the `pcap`
-        // format to parse the byte stream.
-        if (emit_file_headers) {
-          if (buffer.empty()) {
-            auto header = make_file_header(snaplen, linktype);
-            auto bytes = as_bytes(header);
-            buffer.insert(buffer.end(), bytes.begin(), bytes.end());
-          }
-        } else if (num_packets == 0) {
-          auto linktype = pcap_datalink(pcap.get());
-          TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
+      // Emit a PCAP file header, either with every chunk or once initially as
+      // separate chunk. This results in a packet stream that looks like a
+      // standard PCAP file downstream, allowing users to use the `pcap`
+      // format to parse the byte stream.
+      if (args_.emit_file_headers) {
+        if (buffer.empty()) {
           auto header = make_file_header(snaplen, linktype);
-          co_yield chunk::copy(as_bytes(header));
+          auto bytes = as_bytes(header);
+          buffer.insert(buffer.end(), bytes.begin(), bytes.end());
         }
-        auto header = pcap::packet_header{
-          .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_sec),
-          .timestamp_fraction
-          = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_usec),
-          .captured_packet_length = pkt_hdr->caplen,
-          .original_packet_length = pkt_hdr->len,
-        };
-        auto data = std::span<const std::byte>{
-          reinterpret_cast<const std::byte*>(pkt_data),
-          static_cast<size_t>(pkt_hdr->caplen)};
-        auto buffer_size = buffer.size();
-        buffer.resize(buffer_size + sizeof(pcap::packet_header) + data.size());
-        std::memcpy(buffer.data() + buffer_size, &header, sizeof(header));
-        std::memcpy(buffer.data() + buffer_size + sizeof(pcap::packet_header),
-                    data.data(), data.size());
-        ++num_buffered_packets;
-        ++num_packets;
+      } else if (num_packets == 0) {
+        auto linktype = pcap_datalink(pcap.get());
+        TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
+        auto header = make_file_header(snaplen, linktype);
+        co_yield chunk::copy(as_bytes(header));
       }
-    };
-    return make(ctrl, args_.iface.inner, snaplen, !!args_.emit_file_headers);
+      auto header = pcap::packet_header{
+        .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_sec),
+        .timestamp_fraction
+        = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_usec),
+        .captured_packet_length = pkt_hdr->caplen,
+        .original_packet_length = pkt_hdr->len,
+      };
+      auto data = std::span<const std::byte>{
+        reinterpret_cast<const std::byte*>(pkt_data),
+        static_cast<size_t>(pkt_hdr->caplen)};
+      auto buffer_size = buffer.size();
+      buffer.resize(buffer_size + sizeof(pcap::packet_header) + data.size());
+      std::memcpy(buffer.data() + buffer_size, &header, sizeof(header));
+      std::memcpy(buffer.data() + buffer_size + sizeof(pcap::packet_header),
+                  data.data(), data.size());
+      ++num_buffered_packets;
+      ++num_packets;
+    }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
   }
 
   auto name() const -> std::string override {
-    return "nic";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "pcap";
+    return "load_nic";
   }
 
   friend auto inspect(auto& f, nic_loader& x) -> bool {
@@ -211,6 +212,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    co_yield {};
     auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
     pcap_if_t* devices = nullptr;
     auto result = pcap_findalldevs(&devices, err.data());

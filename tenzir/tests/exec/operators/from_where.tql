@@ -1,0 +1,5 @@
+// We need a diagnostic from `where`. Our current optimizations operate on
+// legacy expressions which do not have diagnostics. This tests whether we
+// preserve the original `where` here.
+from {}, {foo: 42}
+where foo == 42

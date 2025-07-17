@@ -45,6 +45,7 @@ if (NOT tsl-robin-map_FOUND)
   string(APPEND TENZIR_EXTRA_TARGETS_FILES
          "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
   add_dependencies(robin_map tsl-robin-map-targets-link)
+  TenzirSystemizeTarget(robin_map)
 endif ()
 
 # -- flatbuffers ---------------------------------------------------------------
@@ -99,16 +100,20 @@ else ()
               Azure::azure-storage-files-datalake)
 endif ()
 
-# -- boost --------------------------------------------------------------------
+# -- boost ---------------------------------------------------------------------
 
 find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 
-# -- re2 ----------------------------------------------------------------------
+# -- re2 -----------------------------------------------------------------------
 
 find_package(re2 REQUIRED)
 provide_find_module(re2)
 
-# -- libmaxminddb -------------------------------------------------------------
+# -- reproc --------------------------------------------------------------------
+
+find_package(reproc++ REQUIRED)
+
+# -- libmaxminddb --------------------------------------------------------------
 
 find_package(libmaxminddb REQUIRED)
 provide_find_module(libmaxminddb)
@@ -229,6 +234,11 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
+# We need to resolve this in find_packge(Tenzir) for because the
+# libtenzir_builtins target needs to be installed for plugins.
+# See the comment above `install(TARGETS` for details.
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(yaml-cpp 0.6.2 REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
   target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
   target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp::yaml-cpp)
@@ -281,8 +291,8 @@ endif ()
 dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 
 # Link against fmt.
-find_package(fmt 7.1.3 REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(fmt 7.1.3 REQUIRED)")
+find_package(fmt 10.0.0 REQUIRED)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(fmt 10.0.0 REQUIRED)")
 target_link_libraries(libtenzir PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt "Dependencies")
 
@@ -365,16 +375,21 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
-target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem Boost::url)
+target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
+                                       Boost::url)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
 target_link_libraries(libtenzir PUBLIC re2::re2)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-  "\nfind_package(re2 REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
+
+# Link against reproc.
+target_link_libraries(libtenzir PUBLIC reproc++)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
+dependency_summary("reproc++" reproc+++ "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
@@ -428,18 +443,33 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   target_link_libraries(libtenzir PRIVATE pfs)
 endif ()
 
-# Link against a boost backtrace
-find_package(Boost REQUIRED COMPONENTS stacktrace_basic)
-dependency_summary("Boost" Boost::stacktrace_basic "Dependencies")
-find_package(Boost COMPONENTS stacktrace_backtrace)
-if (${Boost_STACKTRACE_BACKTRACE_FOUND})
-  dependency_summary("Boost" Boost::stacktrace_backtrace "Dependencies")
-  target_link_libraries(libtenzir PRIVATE ${Boost_STACKTRACE_BACKTRACE_LIBRARY} backtrace dl)
-  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+if (LINUX)
+  find_package(Boost COMPONENTS stacktrace_backtrace)
+  # Use a compiled stacktrace_backtrace if available, otherwise use header only
+  # mode.
+  if (TARGET Boost::stacktrace_backtrace)
+    target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
+    target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+  else ()
+    find_path(libbacktrace_INCLUDE_DIR NAMES backtrace.h)
+    find_library(libbacktrace_LIBRARY NAMES backtrace)
+    target_include_directories(libtenzir PRIVATE "${libbacktrace_INCLUDE_DIR}")
+    target_link_libraries(libtenzir PRIVATE "${libbacktrace_LIBRARY}" dl)
+    target_compile_definitions(libtenzir
+                               PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+  endif ()
 else ()
-  target_link_libraries(libtenzir PRIVATE ${Boost_STACKTRACE_BASIC_LIBRARY} dl)
+  find_package(Boost COMPONENTS stacktrace_basic)
+  target_link_libraries(libtenzir PRIVATE Boost::stacktrace_basic dl)
+  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
 endif ()
-target_compile_definitions(libtenzir PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
+target_compile_definitions(libtenzir
+                           PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
+
+if (NOT APPLE)
+  target_link_libraries(libtenzir PRIVATE atomic)
+  target_link_libraries(libtenzir_builtins PRIVATE atomic)
+endif ()
 
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
@@ -517,7 +547,8 @@ endif ()
 # install the static libtenzir_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson} ${_tenzir_bundled_pfs}
+  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
+          ${_tenzir_bundled_pfs}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime

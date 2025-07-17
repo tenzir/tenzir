@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
@@ -508,7 +509,7 @@ public:
       };
     }
     auto context_array = std::static_pointer_cast<arrow::Array>(
-      to_record_batch(slice)->ToStructArray().ValueOrDie());
+      check(to_record_batch(slice)->ToStructArray()));
     auto context_values = values(slice.schema(), *context_array);
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();

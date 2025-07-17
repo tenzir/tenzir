@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/aggregation_function.hpp>
 #include <tenzir/detail/passthrough.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
@@ -33,7 +32,7 @@ struct heterogeneous_data_hash {
   [[nodiscard]] auto
 
   operator()(const type_to_data_t<Type>& value) const -> size_t
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+    requires(! std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return hash(make_view(value));
   }
@@ -50,55 +49,16 @@ struct heterogeneous_data_equal {
 
   [[nodiscard]] auto operator()(const type_to_data_t<Type>& lhs,
                                 view<type_to_data_t<Type>> rhs) const -> bool
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+    requires(! std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return make_view(lhs) == rhs;
   }
 };
 
-template <concrete_type Type>
-class distinct_function final : public aggregation_function {
-public:
-  explicit distinct_function(type input_type) noexcept
-    : aggregation_function(std::move(input_type)) {
-    // nop
-  }
-
-private:
-  [[nodiscard]] auto output_type() const -> type override {
-    return type{list_type{input_type()}};
-  }
-
-  void add(const data_view& view) override {
-    using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (is<caf::none_t>(view)) {
-      return;
-    }
-    const auto& typed_view = as<view_type>(view);
-    if (!distinct_.contains(typed_view)) {
-      const auto [it, inserted] = distinct_.insert(materialize(typed_view));
-      TENZIR_ASSERT(inserted);
-    }
-  }
-
-  [[nodiscard]] auto finish() && -> caf::expected<data> override {
-    auto result = list{};
-    result.reserve(distinct_.size());
-    for (auto& value : distinct_) {
-      result.emplace_back(std::move(value));
-    }
-    std::sort(result.begin(), result.end());
-    return data{std::move(result)};
-  }
-
-  tsl::robin_set<type_to_data_t<Type>, heterogeneous_data_hash<Type>,
-                 heterogeneous_data_equal<Type>>
-    distinct_ = {};
-};
-
 class distinct_instance final : public aggregation_instance {
 public:
-  explicit distinct_instance(ast::expression expr) : expr_{std::move(expr)} {
+  explicit distinct_instance(ast::expression expr, bool count_only)
+    : expr_{std::move(expr)}, count_only_{count_only} {
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
@@ -121,6 +81,9 @@ public:
   }
 
   auto get() const -> data override {
+    if (count_only_) {
+      return detail::narrow<int64_t>(distinct_.size());
+    }
     return list{distinct_.begin(), distinct_.end()};
   }
 
@@ -181,27 +144,16 @@ public:
 private:
   ast::expression expr_;
   tsl::robin_set<data> distinct_;
+  bool count_only_ = false;
 };
 
-class plugin : public virtual aggregation_function_plugin,
-               public virtual aggregation_plugin {
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  [[nodiscard]] auto name() const -> std::string override {
+class distinct_plugin : public virtual aggregation_plugin {
+  auto name() const -> std::string override {
     return "distinct";
   };
 
-  [[nodiscard]] auto make_aggregation_function(const type& input_type) const
-    -> caf::expected<std::unique_ptr<aggregation_function>> override {
-    auto f = [&]<concrete_type Type>(
-               const Type&) -> std::unique_ptr<aggregation_function> {
-      return std::make_unique<distinct_function<Type>>(input_type);
-    };
-    return match(input_type, f);
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const
@@ -210,11 +162,26 @@ class plugin : public virtual aggregation_function_plugin,
     TRY(argument_parser2::function(name())
           .positional("x", expr, "any")
           .parse(inv, ctx));
-    return std::make_unique<distinct_instance>(std::move(expr));
+    return std::make_unique<distinct_instance>(std::move(expr), false);
+  }
+};
+
+class count_distinct_plugin : public virtual aggregation_plugin {
+  auto name() const -> std::string override {
+    return "count_distinct";
+  };
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
-  auto aggregation_default() const -> data override {
-    return list{};
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
+    return std::make_unique<distinct_instance>(std::move(expr), true);
   }
 };
 
@@ -222,4 +189,5 @@ class plugin : public virtual aggregation_function_plugin,
 
 } // namespace tenzir::plugins::distinct
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::distinct::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::distinct::distinct_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::distinct::count_distinct_plugin)

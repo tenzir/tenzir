@@ -882,7 +882,7 @@ public:
     if (not write_timeout) {
       write_timeout.emplace(duration::zero(), inv.self.get_location());
     } else if (mode and mode->inner == "read") {
-      diagnostic::warning("ignoring argument `create_timeout` in `read` mode")
+      diagnostic::warning("ignoring argument `write_timeout` in `read` mode")
         .primary(write_timeout->source)
         .emit(ctx);
     } else if (write_timeout->inner <= duration::zero()) {

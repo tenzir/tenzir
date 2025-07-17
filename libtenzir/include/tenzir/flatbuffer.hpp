@@ -245,6 +245,13 @@ public:
     return *this;
   }
 
+  [[nodiscard]] auto as_child() const
+    -> flatbuffer<Table, Identifier, flatbuffer_type::child>
+    requires(Type != flatbuffer_type::child)
+  {
+    return this->slice(*this->root());
+  }
+
   // -- operators -------------------------------------------------------------
 
   explicit operator bool() const noexcept {
@@ -390,6 +397,13 @@ template <class Table, class ParentTable,
           flatbuffer_identifier ParentIdentifier, flatbuffer_type ParentType>
 flatbuffer(flatbuffer<ParentTable, ParentIdentifier, ParentType>, const Table*)
   -> flatbuffer<Table, nullptr, flatbuffer_type::child>;
+
+template <class Table, flatbuffer_identifier ParentIdentifier,
+          flatbuffer_type ParentType>
+auto as_bytes(const flatbuffer<Table, ParentIdentifier, ParentType> fb)
+  -> std::span<const std::byte> {
+  return {fb.chunk()->data(), fb.chunk()->size()};
+}
 
 } // namespace tenzir
 

@@ -1,4 +1,5 @@
-{ lib,
+{
+  lib,
   stdenvNoCC,
   fetchurl,
 }:
@@ -27,9 +28,12 @@ stdenvNoCC.mkDerivation {
   meta = {
     description = "Extremely fast Python package installer and resolver";
     homepage = "https://astral.sh/";
-    license = with lib.licenses; [ asl20 mit ];
+    license = with lib.licenses; [
+      asl20
+      mit
+    ];
     mainProgram = "uv";
-    maintainers = with lib.maintainers; [tobim];
+    maintainers = with lib.maintainers; [ tobim ];
     platforms = lib.attrNames sources;
     sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
   };

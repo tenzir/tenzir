@@ -1,0 +1,2 @@
+from_file env("INPUTS") + "/from_file/foo/*.json", path_field=path
+sort path

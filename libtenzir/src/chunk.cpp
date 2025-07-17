@@ -8,6 +8,7 @@
 
 #include "tenzir/chunk.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/tracepoint.hpp"
@@ -281,12 +282,9 @@ chunk::mmap(const std::filesystem::path& filename, size_type size,
 caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
   // Creating the codec cannot fail; we test that it works in Tenzir's main
   // function to catch this early.
-  auto codec
-    = arrow::util::Codec::Create(
-        arrow::Compression::ZSTD,
-        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie())
-        .ValueOrDie();
+  auto codec = check(arrow::util::Codec::Create(
+    arrow::Compression::ZSTD, check(arrow::util::Codec::DefaultCompressionLevel(
+                                arrow::Compression::ZSTD))));
   const auto bytes_size = detail::narrow_cast<int64_t>(bytes.size());
   const auto* bytes_data = reinterpret_cast<const uint8_t*>(bytes.data());
   const auto max_length = codec->MaxCompressedLen(bytes_size, bytes_data);
@@ -307,12 +305,9 @@ caf::expected<chunk_ptr>
 chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
   // Creating the codec cannot fail; we test that it works in Tenzir's main
   // function to catch this early.
-  auto codec
-    = arrow::util::Codec::Create(
-        arrow::Compression::ZSTD,
-        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie())
-        .ValueOrDie();
+  auto codec = check(arrow::util::Codec::Create(
+    arrow::Compression::ZSTD, check(arrow::util::Codec::DefaultCompressionLevel(
+                                arrow::Compression::ZSTD))));
   const auto bytes_size = detail::narrow_cast<int64_t>(bytes.size());
   const auto* bytes_data = reinterpret_cast<const uint8_t*>(bytes.data());
   auto buffer = std::vector<uint8_t>{};

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iterator>
 
 namespace tenzir::detail {
 

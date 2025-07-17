@@ -264,7 +264,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"
-tenzir -q 'version | write json'
+tenzir -q 'version | select version | write_ndjson'
 
 # Inform about next steps.
 action "Providing guidance"

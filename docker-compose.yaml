@@ -9,14 +9,13 @@ services:
       - TENZIR_PLATFORM_CONTROL_ENDPOINT=${TENZIR_PLATFORM_CONTROL_ENDPOINT:-}
       - TENZIR_TOKEN=${TENZIR_TOKEN:-}
       - TENZIR_ENDPOINT=tenzir-node:5158
-      - TENZIR_TQL2=true
     entrypoint:
       - tenzir-node
     volumes:
       - tenzir-lib:/var/lib/tenzir/
       - tenzir-log:/var/log/tenzir/
     healthcheck:
-      test: tenzir --connection-timeout=30s --connection-retry-delay=1s 'api /ping'
+      test: tenzir --connection-timeout=30s --connection-retry-delay=1s 'api "/ping"'
       interval: 30s
       retries: 1
 

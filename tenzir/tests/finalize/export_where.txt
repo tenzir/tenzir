@@ -32,8 +32,14 @@
     }
   },
   where_exec binary_expr {
-    left: root_field `bar` @ 26..29,
-    op: "eq" @ 30..32,
-    right: root_field `baz` @ 33..36
+    left: root_field {
+      id: `bar` @ 45..48,
+      has_question_mark: false
+    },
+    op: "eq" @ 49..51,
+    right: root_field {
+      id: `baz` @ 52..55,
+      has_question_mark: false
+    }
   }
 ]

@@ -3,12 +3,12 @@
   y: 3.0,
 }
 {
-  x: 4,
-  y: 4.0,
-}
-{
   x: 5,
   y: 2.0,
+}
+{
+  x: 6,
+  y: 5.0,
 }
 warning: got more than 3 data points
  --> exec/chart/limit.tql:2:13

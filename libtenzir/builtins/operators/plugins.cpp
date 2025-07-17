@@ -37,7 +37,6 @@ public:
       types.data(name);                                                        \
     }                                                                          \
   } while (false)
-      TENZIR_ADD_PLUGIN_TYPE(aggregation_function, "aggregation_function");
       TENZIR_ADD_PLUGIN_TYPE(aspect, "aspect");
       TENZIR_ADD_PLUGIN_TYPE(command, "command");
       TENZIR_ADD_PLUGIN_TYPE(component, "component");

@@ -221,7 +221,7 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 
 /// Timeout after which an active partition is forcibly flushed.
 inline constexpr caf::timespan active_partition_timeout
-  = std::chrono::seconds{30};
+  = std::chrono::minutes{5};
 
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{120};
@@ -282,5 +282,13 @@ inline constexpr auto metrics_interval = std::chrono::seconds{1};
 ///
 inline constexpr auto packaged_pipeline_restart_on_error
   = std::chrono::minutes{1};
+
+/// Whether to disable pipeline subprocesses.
+inline constexpr bool disable_pipeline_subprocesses =
+#if TENZIR_LINUX
+  false;
+#else
+  true;
+#endif
 
 } // namespace tenzir::defaults

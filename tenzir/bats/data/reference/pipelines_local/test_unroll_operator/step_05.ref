@@ -1,8 +1,0 @@
-{"foo":1,"bar":{"baz":2}}
-{"foo":3,"bar":{"baz":null}}
-{"foo":4,"bar":{"baz":4}}
-{"foo":5,"bar":{"baz":5}}
-{"foo":1,"bar":{"qux":3}}
-{"foo":3,"bar":{"qux":3}}
-{"foo":4,"bar":{"qux":null}}
-{"foo":5,"bar":{"qux":6}}

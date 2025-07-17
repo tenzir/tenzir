@@ -14,6 +14,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/legacy_type.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
@@ -21,15 +22,16 @@
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/signal_reflector.hpp"
-#include "tenzir/tql/parser.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
 
 #include <arrow/util/compression.h>
+#include <arrow/util/utf8.h>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/anon_mail.hpp>
 #include <caf/fwd.hpp>
+#include <caf/telemetry/metric_family_impl.hpp>
 #include <sys/resource.h>
 
 #include <csignal>
@@ -54,6 +56,7 @@ auto is_server_from_app_path(std::string_view app_path) {
 
 auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
+  arrow::util::InitializeUTF8();
   // Set a signal handler for fatal conditions. Prints a backtrace if support
   // for that is enabled.
   if (SIG_ERR == std::signal(SIGSEGV, fatal_handler)) [[unlikely]] {
@@ -64,9 +67,13 @@ auto main(int argc, char** argv) -> int try {
     fmt::print(stderr, "failed to set signal handler for SIGABRT\n");
     return EXIT_FAILURE;
   }
+  // Tweak CAF parameters in case we're running a client command.
+  const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
   auto sigset = termsigset();
-  pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
+  if (is_server) {
+    pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
+  }
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
@@ -74,7 +81,7 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
   auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
-  if (!loaded_plugin_paths) {
+  if (not loaded_plugin_paths) {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
     return EXIT_FAILURE;
   }
@@ -87,13 +94,13 @@ auto main(int argc, char** argv) -> int try {
   });
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
-  if (!root) {
+  if (not root) {
     return EXIT_FAILURE;
   }
   // Parse the CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
-  if (!invocation) {
+  if (not invocation) {
     if (invocation.error()) {
       render_error(*root, invocation.error(), std::cerr);
       return EXIT_FAILURE;
@@ -106,17 +113,15 @@ auto main(int argc, char** argv) -> int try {
   // From here on, options from the command line can be used.
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
-  // Tweak CAF parameters in case we're running a client command.
-  const auto is_server = is_server_from_app_path(argv[0]);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
-  if (!log_context) {
+  if (not log_context) {
     return EXIT_FAILURE;
   }
-  if (!is_server) {
+  if (not is_server) {
     // Force the use of $TMPDIR as cache directory when running as a client.
     auto ec = std::error_code{};
-    auto previous_value
+    const auto* previous_value
       = get_if<std::string>(&cfg.content, "tenzir.cache-directory");
     auto tmp = std::filesystem::temp_directory_path(ec);
     if (ec) {
@@ -132,7 +137,7 @@ auto main(int argc, char** argv) -> int try {
     }
   }
 #if TENZIR_POSIX
-  struct rlimit rlimit {};
+  struct rlimit rlimit{};
   if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
     TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
     return -errno;
@@ -173,7 +178,7 @@ auto main(int argc, char** argv) -> int try {
   {
     const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
-    if (!default_compression_level.ok()) {
+    if (not default_compression_level.ok()) {
       TENZIR_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
                    default_compression_level.status().ToString());
       return EXIT_FAILURE;
@@ -185,12 +190,12 @@ auto main(int argc, char** argv) -> int try {
       = arrow::util::Codec::MinimumCompressionLevel(arrow::Compression::ZSTD);
     auto max_level
       = arrow::util::Codec::MaximumCompressionLevel(arrow::Compression::ZSTD);
-    if (!min_level.ok()) {
+    if (not min_level.ok()) {
       TENZIR_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
                    min_level.status().ToString());
       return EXIT_FAILURE;
     }
-    if (!max_level.ok()) {
+    if (not max_level.ok()) {
       TENZIR_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
                    max_level.status().ToString());
       return EXIT_FAILURE;
@@ -204,16 +209,16 @@ auto main(int argc, char** argv) -> int try {
     }
     auto codec
       = arrow::util::Codec::Create(arrow::Compression::ZSTD, compression_level);
-    if (!codec.ok()) {
+    if (not codec.ok()) {
       TENZIR_ERROR("failed to create Zstd codec for Apache Arrow: {}",
                    codec.status().ToString());
       return EXIT_FAILURE;
     }
   }
   // Set up the modules singleton.
-  auto module = load_module(cfg);
-  if (not module) {
-    TENZIR_ERROR("failed to read schema dirs: {}", module.error());
+  auto symbols = load_symbols(cfg);
+  if (not symbols) {
+    TENZIR_ERROR("failed to read schema dirs: {}", symbols.error());
     return EXIT_FAILURE;
   }
   auto taxonomies = load_taxonomies(cfg);
@@ -221,54 +226,47 @@ auto main(int argc, char** argv) -> int try {
     TENZIR_ERROR("failed to load concepts: {}", taxonomies.error());
     return EXIT_FAILURE;
   }
-  modules::init(*module, std::move(taxonomies->concepts));
+  modules::init(std::move(*symbols), std::move(taxonomies->concepts));
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};
   if (auto const* settings
       = caf::get_if<caf::settings>(&cfg, "tenzir.operators")) {
     auto r = to<record>(*settings);
-    if (!r) {
+    if (not r) {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
-    auto force_tql2 = get_or(cfg, "tenzir.tql2", false);
     auto dh = make_diagnostic_printer(std::nullopt, color_diagnostics::yes,
                                       std::cerr);
     auto provider = session_provider::make(*dh);
     auto ctx = provider.as_session();
-    auto tql2_udos = std::unordered_map<std::string, ast::pipeline>{};
+    auto udos = std::unordered_map<std::string, ast::pipeline>{};
     for (auto&& [name, value] : *r) {
       auto* definition = try_as<std::string>(&value);
-      if (!definition) {
+      if (not definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
                      "resolve to a string",
                      name);
         return EXIT_FAILURE;
       }
-      auto use_tql2 = force_tql2 or definition->starts_with("// tql2");
-      if (use_tql2) {
-        auto pipe = parse_pipeline_with_bad_diagnostics(*definition, ctx);
-        if (not pipe) {
-          TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
-          return EXIT_FAILURE;
-        }
-        TENZIR_ASSERT(not tql2_udos.contains(name));
-        tql2_udos[name] = std::move(*pipe);
-      } else {
-        aliases.emplace(std::move(name), *definition);
+      auto pipe = parse_pipeline_with_bad_diagnostics(*definition, ctx);
+      if (not pipe) {
+        TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
+        return EXIT_FAILURE;
       }
+      TENZIR_ASSERT(not udos.contains(name));
+      udos[name] = std::move(*pipe);
     }
-    tql::set_operator_aliases(std::move(aliases));
     // We parse user-defined operators in a loop; if in one iteration not a
     // single operator resolved, we know that the definition is invalid.
     // Note that this algorithm has a worst-case complexity of O(n^2), but that
     // should be a non-issue in practice as the number of UDOs defined is
     // usually rather small.
-    while (not tql2_udos.empty()) {
+    while (not udos.empty()) {
       auto resolved = std::vector<std::string>{};
       auto unresolved_diags = std::vector<diagnostic>{};
-      for (auto it = tql2_udos.begin(); it != tql2_udos.end(); ++it) {
+      for (auto& udo : udos) {
         auto resolve_dh = collecting_diagnostic_handler{};
         auto resolve_provider = session_provider::make(resolve_dh);
         auto resolve_ctx = resolve_provider.as_session();
@@ -276,7 +274,7 @@ auto main(int argc, char** argv) -> int try {
         // earlier errors, but that it's impossible to form cyclic references.
         // We do not resolve `let` bindings yet in order to delay their
         // evaluation in cases such as `let $t = now()`.
-        if (not resolve_entities(it->second, resolve_ctx)) {
+        if (not resolve_entities(udo.second, resolve_ctx)) {
           std::ranges::move(std::move(resolve_dh).collect(),
                             std::back_inserter(unresolved_diags));
           continue;
@@ -284,20 +282,20 @@ auto main(int argc, char** argv) -> int try {
         for (auto diag : std::move(resolve_dh).collect()) {
           dh->emit(std::move(diag));
         }
-        resolved.push_back(it->first);
-        global_registry_mut().add(entity_pkg::cfg, it->first,
-                                  user_defined_operator{std::move(it->second)});
+        resolved.push_back(udo.first);
+        global_registry_mut().add(entity_pkg::cfg, udo.first,
+                                  user_defined_operator{std::move(udo.second)});
       }
       if (resolved.empty()) {
         for (auto& diag : unresolved_diags) {
           dh->emit(std::move(diag));
         }
         TENZIR_ERROR("failed to resolve user-defined operators: `{}`",
-                     fmt::join(tql2_udos | std::ranges::views::keys, "`, `"));
+                     fmt::join(udos | std::ranges::views::keys, "`, `"));
         return EXIT_FAILURE;
       }
       for (const auto& name : std::exchange(resolved, {})) {
-        tql2_udos.erase(name);
+        udos.erase(name);
       }
     }
   }
@@ -305,47 +303,82 @@ auto main(int argc, char** argv) -> int try {
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
   auto sys = caf::actor_system{cfg};
-  // The reflector scope variable cleans up the reflector on destruction.
-  scope_linked<signal_reflector_actor> reflector{
-    sys.spawn<caf::detached>(signal_reflector)};
-  std::atomic<bool> stop = false;
-  // clang-format off
-  auto signal_monitoring_thread = std::thread([&]()
-#if TENZIR_GCC
-      // Workaround for an ASAN bug that only occurs with GCC.
-      // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
-      __attribute__((no_sanitize_address))
-#endif
-      {
-        int signum = 0;
-        sigwait(&sigset, &signum);
-        TENZIR_DEBUG("received signal {}", signum);
-        if (!stop) {
-          caf::anon_mail(atom::internal_v, atom::signal_v, signum)
-            .urgent().send(reflector.get());
-        }
-      });
-  auto signal_monitoring_joiner = detail::scope_guard{[&]() noexcept {
-    stop = true;
-    if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
-      TENZIR_ERROR("failed to cancel signal monitoring thread");
-    }
-    signal_monitoring_thread.join();
-  }};
-  // clang-format on
-  // Put it into the actor registry so any actor can communicate with it.
-  sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
-  if (auto result = run(*invocation, sys, root_factory); !result) {
-    run_error = std::move(result.error());
+  if (is_server) {
+    // The reflector scope variable cleans up the reflector on destruction.
+    scope_linked<signal_reflector_actor> reflector{
+      sys.spawn<caf::detached + caf::hidden>(signal_reflector)};
+    std::atomic<bool> stop = false;
+    // clang-format off
+    auto signal_monitoring_thread = std::thread([&]()
+#if TENZIR_GCC
+        // Workaround for an ASAN bug that only occurs with GCC.
+        // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
+        __attribute__((no_sanitize_address))
+#endif
+        {
+          int signum = 0;
+          sigwait(&sigset, &signum);
+          TENZIR_DEBUG("received signal {}", signum);
+          if (!stop) {
+            caf::anon_mail(atom::internal_v, atom::signal_v, signum)
+              .urgent().send(reflector.get());
+          }
+        });
+    auto signal_monitoring_joiner = detail::scope_guard{[&]() noexcept {
+      stop = true;
+      if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
+        TENZIR_ERROR("failed to cancel signal monitoring thread");
+      }
+      signal_monitoring_thread.join();
+    }};
+    // clang-format on
+    // Put it into the actor registry so any actor can communicate with it.
+    sys.registry().put("signal-reflector", reflector.get());
+    if (auto result = run(*invocation, sys, root_factory); not result) {
+      run_error = std::move(result.error());
+    } else {
+      caf::message_handler{[&](caf::error& err) {
+        run_error = std::move(err);
+      }}(*result);
+    }
+    signal_monitoring_joiner.trigger();
+    sys.registry().erase("signal-reflector");
+    pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
+    sys.await_actors_before_shutdown(false);
+    auto actors_gone
+      = sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    std::unordered_map<std::string, int64_t> zombies = {};
+    auto collector = [&](const caf::telemetry::metric_family* /*family*/,
+                         const caf::telemetry::metric* instance,
+                         const caf::telemetry::int_gauge* wrapped) {
+      if (wrapped->value() != 0) {
+        zombies[std::string{instance->labels()[0].value()}] = wrapped->value();
+      }
+    };
+    for (int cnt = 10; cnt > 0 and not actors_gone; cnt--) {
+      zombies.clear();
+      sys.base_metrics().running_actors_by_name->collect(collector);
+      TENZIR_INFO("waiting {} more seconds for leftover components to "
+                  "terminate: {}",
+                  cnt, zombies);
+      actors_gone
+        = sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    }
+    if (not actors_gone) {
+      zombies.clear();
+      sys.base_metrics().running_actors_by_name->collect(collector);
+      TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
+    }
   } else {
-    caf::message_handler{[&](caf::error& err) {
-      run_error = std::move(err);
-    }}(*result);
+    if (auto result = run(*invocation, sys, root_factory); not result) {
+      run_error = std::move(result.error());
+    } else {
+      caf::message_handler{[&](caf::error& err) {
+        run_error = std::move(err);
+      }}(*result);
+    }
   }
-  sys.registry().erase("signal-reflector");
-  signal_monitoring_joiner.trigger();
-  pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
@@ -368,7 +401,7 @@ auto main(int argc, char** argv) -> int try {
     if (not string.empty() and string.back() == '\n') {
       string.pop_back();
     }
-    TENZIR_ERROR(string);
+    fmt::println(stderr, "{}", string);
   }
   return EXIT_FAILURE;
 }

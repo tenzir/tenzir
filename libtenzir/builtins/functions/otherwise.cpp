@@ -19,6 +19,10 @@ public:
     return "otherwise";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto primary = ast::expression{};

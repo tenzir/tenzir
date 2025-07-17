@@ -14,6 +14,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http_api.hpp"
+#include "tenzir/secret_store.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
@@ -36,6 +37,11 @@ struct typed_actor_fwd {
 
   template <class... Gs>
   struct extend_with_helper<caf::typed_actor<Gs...>> {
+    using type = typed_actor_fwd<Fs..., Gs...>;
+  };
+
+  template <class... Gs>
+  struct extend_with_helper<caf::type_list<Gs...>> {
     using type = typed_actor_fwd<Fs..., Gs...>;
   };
 
@@ -136,12 +142,8 @@ using partition_creation_listener_actor = typed_actor_fwd<
 
 /// The CATALOG actor interface.
 using catalog_actor = typed_actor_fwd<
-  // Reinitialize the catalog from a set of partition synopses. Used at
-  // startup, so the map is expected to be huge and we use a shared_ptr
-  // to be sure it's not accidentally copied.
-  auto(atom::merge,
-       std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>)
-    ->caf::result<atom::ok>,
+  // Reinitialize the catalog from a set of partition synopses.
+  auto(atom::start, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
   // Merge a set of partition synopses.
   auto(atom::merge, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
   // Get *ALL* partition synopses stored in the catalog, optionally filtered
@@ -166,17 +168,20 @@ using catalog_actor = typed_actor_fwd<
   ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of an IMPORTER actor.
-using importer_actor = typed_actor_fwd<
-  // Register a subscriber for table slices, returning the currently unpersisted
-  // events immediately.
-  auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
-    ->caf::result<std::vector<table_slice>>,
-  // Push buffered slices downstream to make the data available.
-  auto(atom::flush)->caf::result<void>,
-  // Import a batch of data.
-  auto(table_slice)->caf::result<void>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+struct importer_actor_traits {
+  using signatures = caf::type_list<
+    // Register a subscriber for table slices, returning the currently
+    // unpersisted events immediately.
+    auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
+      ->caf::result<std::vector<table_slice>>,
+    // Push buffered slices downstream to make the data available.
+    auto(atom::flush)->caf::result<void>,
+    // Import a batch of data.
+    auto(table_slice)->caf::result<void>,
+    // Conform to the protocol of the STATUS CLIENT actor.
+    auto(atom::status, status_verbosity, duration)->caf::result<record>>;
+};
+using importer_actor = caf::typed_actor<importer_actor_traits>;
 
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
@@ -201,8 +206,8 @@ using index_actor = typed_actor_fwd<
   // Erases the given set of partitions from the INDEX.
   auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
   // Applies the given pipelineation to the partition.
-  // When keep_original_partition is yes: merges the transformed partitions with
-  // the original ones and returns the new partition infos. When
+  // When keep_original_partition is yes: merges the transformed partitions
+  // with the original ones and returns the new partition infos. When
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them.
   auto(atom::apply, pipeline, std::vector<tenzir::partition_info>,
@@ -296,8 +301,6 @@ using exec_node_sink_actor = caf::typed_actor<exec_node_sink_actor_traits>;
 /// The interface of a EXEC NODE actor.
 struct exec_node_actor_traits {
   using signatures = caf::type_list<
-    // Resume the internal event loop.
-    auto(atom::internal, atom::run)->caf::result<void>,
     // Start an execution node. Returns after the operator has yielded for the
     // first time.
     auto(atom::start, std::vector<caf::actor> all_previous)->caf::result<void>,
@@ -318,19 +321,31 @@ using exec_node_actor = caf::typed_actor<exec_node_actor_traits>;
 /// The interface of the METRICS RECEIVER actor.
 using metrics_receiver_actor = typed_actor_fwd<
   // Register a custom metric type for the metrics of an operator.
-  auto(uint64_t op_index, uint64_t metric_index, type)->caf::result<void>,
+  auto(uint64_t op_index, uuid metrics_id, type)->caf::result<void>,
   // Receive custom metrics of an operator.
-  auto(uint64_t op_index, uint64_t metric_index, record)->caf::result<void>,
+  auto(uint64_t op_index, uuid metrics_id, record)->caf::result<void>,
   // Receive the standard execution node metrics.
   auto(operator_metric)->caf::result<void>>::unwrap;
+
+/// The interface of the PIPELINE SHELL actor.
+struct pipeline_shell_actor_traits {
+  using signatures = caf::type_list<
+    // Spawn a set of execution nodes for a given pipeline. Does not start the
+    // execution nodes.
+    auto(atom::spawn, operator_box, operator_type, std::string definition,
+         receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
+         bool is_hidden, uuid run_id)
+      ->caf::result<exec_node_actor>>;
+};
+using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;
 
 /// The interface of the NODE actor.
 struct node_actor_traits {
   using signatures = caf::type_list<
     // Execute a REST endpoint on this node.
-    // Note that nodes connected via CAF trust each other completely,
-    // so this skips all authorization and access control mechanisms
-    // that come with HTTP(s).
+    // Note that nodes connected via CAF trust each other
+    // completely, so this skips all authorization and access
+    // control mechanisms that come with HTTP(s).
     auto(atom::proxy, http_request_description, std::string)
       ->caf::result<rest_response>,
     // Retrieve components by their label from the component registry.
@@ -338,11 +353,18 @@ struct node_actor_traits {
       ->caf::result<std::vector<caf::actor>>,
     // Retrieve the version of the process running the NODE.
     auto(atom::get, atom::version)->caf::result<record>,
-    // Spawn a set of execution nodes for a given pipeline. Does not start the
-    // execution nodes.
-    auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-         metrics_receiver_actor, int index, bool is_hidden, uuid run_id)
-      ->caf::result<exec_node_actor>>;
+    // Set the listening endpoint of the tenzir-node.
+    auto(atom::set, endpoint)->caf::result<void>,
+    // Spawn a pipeline_shell subprocess.
+    auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
+    // Callback from subprocess when shell actor is ready.
+    auto(atom::connect, atom::shell, uint32_t child_id, pipeline_shell_actor)
+      ->caf::result<void>>
+    // Allow spawning exec nodes inside of the node process.
+    ::append_from<pipeline_shell_actor_traits::signatures>
+    // Enable secret resolution through the node actor. It will first check the
+    // node config and then dispatch to the platform actor if necessary/possible.
+    ::append_from<secret_store_actor_traits::signatures>;
 };
 using node_actor = caf::typed_actor<node_actor_traits>;
 
@@ -410,6 +432,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::pipeline_shell_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))

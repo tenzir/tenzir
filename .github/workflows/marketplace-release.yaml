@@ -1,0 +1,103 @@
+name: AWS Marketplace Release
+
+on:
+  release:
+    types: [published]
+
+  # Manual dispatch for testing.
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Tenzir Node Version to publish'
+        required: true
+        type: string
+
+jobs:
+  marketplace-release:
+    name: Build and Push AWS Marketplace Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository at version tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
+
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive libtenzir
+          git submodule update --init --recursive plugins
+          git submodule update --init --recursive tenzir
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::622024652768:role/ecr-tenzir-ce-github-access
+          aws-region: us-east-1
+
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Marketplace Image
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
+        run: |
+          docker buildx build . \
+            -t 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG} \
+            --target tenzir-node \
+            --platform linux/amd64,linux/arm64 \
+            --push
+
+      - name: Add new version to AWS Marketplace
+        env:
+          AWS_REGION: us-east-1
+          PRODUCT_ID: prod-ygvc26drdwwlq
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
+        # This is following the process described here:
+        # https://docs.aws.amazon.com/marketplace/latest/APIReference/work-with-container-products.html#working-with-container-products
+        run: |
+          cat > add-version.json <<EOF
+          {
+            "Catalog": "AWSMarketplace",
+            "ChangeSet": [
+              {
+                "ChangeType": "AddDeliveryOptions",
+                "Entity": {
+                  "Identifier": "$PRODUCT_ID",
+                  "Type": "ContainerProduct@1.0"
+                },
+                "DetailsDocument": {
+                  "Version": {
+                    "VersionTitle": "Tenzir Node $RELEASE_TAG",
+                    "ReleaseNotes": "See https://docs.tenzir.com/changelog/node/ for release notes."
+                  },
+                  "DeliveryOptions": [
+                    {
+                      "DeliveryOptionTitle": "ECS Container image only delivery option",
+                      "Details": {
+                        "EcrDeliveryOptionDetails": {
+                          "ContainerImages": [
+                            "709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:$RELEASE_TAG"
+                          ],
+                          "CompatibleServices": ["ECS"],
+                          "Description": "Tenzir Node container image for AWS Marketplace (ECS)",
+                          "UsageInstructions": "docker pull 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:$RELEASE_TAG"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+          EOF
+          aws marketplace-catalog start-change-set \
+            --region "$AWS_REGION" \
+            --cli-input-json file://add-version.json
