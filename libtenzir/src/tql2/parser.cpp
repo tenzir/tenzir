@@ -181,6 +181,10 @@ public:
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
     auto alternative = std::optional<ast::if_stmt::else_t>{};
+    // We allow newlines before `else`. However, if there is no `else`, then we
+    // don't want to consume them.
+    auto stash = next_;
+    consume_trivia_with_newlines();
     if (auto else_kw = accept(tk::else_)) {
       alternative.emplace(else_kw.location, ast::pipeline{});
       if (peek(tk::if_)) {
@@ -192,6 +196,8 @@ public:
         alternative->pipe = parse_pipeline();
         expect(tk::rbrace);
       }
+    } else {
+      next_ = stash;
     }
     return if_stmt{
       if_kw.location,
