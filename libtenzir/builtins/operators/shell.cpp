@@ -61,6 +61,8 @@ namespace bp = boost::process;
 namespace tenzir::plugins::shell {
 namespace {
 
+namespace bp = boost::process;
+
 using namespace tenzir::binary_byte_literals;
 
 /// The block size when reading from the child's stdin.
