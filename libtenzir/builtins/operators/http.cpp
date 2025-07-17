@@ -501,8 +501,9 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
   });
   pipe.inner.prepend(std::make_unique<internal_source>(std::move(ptr)));
   // Only append internal_sink if the pipeline doesn't already end with a sink
-  auto output_type = pipe.inner.infer_type(tag_v<chunk_ptr>);
-  if (output_type and output_type->is_not<void>()) {
+  auto output_type = pipe.inner.infer_type<void>();
+  TENZIR_ASSERT(output_type);
+  if (output_type->is_not<void>()) {
     pipe.inner.append(
       std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
   }
@@ -522,9 +523,12 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
       [] {
         TENZIR_DEBUG("[http] subpipeline started");
       },
-      [&](const caf::error& e) {
+      [&ctrl, is_warning, loc = pipe.source](const caf::error& e) {
         TENZIR_DEBUG("[http] failed to start subpipeline: {}", e);
-        diagnostic::error(e).primary(pipe).emit(ctrl.diagnostics());
+        diagnostic::error(e)
+          .primary(loc)
+          .severity(is_warning ? severity::warning : severity::error)
+          .emit(ctrl.diagnostics());
       });
   return ha;
 }
@@ -1414,7 +1418,7 @@ struct from_http final : public virtual operator_factory_plugin {
         subpipeline_is_sink = true;
       }
     }
-    operator_ptr op;
+    auto op = operator_ptr{};
     if (args.server) {
       op = std::make_unique<from_http_server_operator>(std::move(args));
     } else {
