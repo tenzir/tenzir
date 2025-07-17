@@ -1,8 +1,4 @@
-pipeline [
-  write json {
-    tql: false
-  },
-  save file {
-    path: "xyz.json" @ 8..16
-  }
-] @ 0..16
+{"b":true,"e":"A"}
+{"b":false,"e":"B"}
+{"b":false,"e":"C"}
+{"b":false,"e":"D"}

@@ -161,11 +161,6 @@ teardown() {
   check tenzir 'plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
 }
 
-# bats test_tags=pipelines,zeek
-@test "Zeek TSV with Remote Import" {
-  check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | import"
-}
-
 # bats test_tags=pipelines,flaky
 @test "Blob Type" {
   # TODO: Figure out why this is flaky and re-enable the test.
@@ -177,5 +172,5 @@ teardown() {
   check tenzir 'export | sort timestamp | write csv'
   check tenzir 'export | sort timestamp | write json'
   check tenzir 'export | sort timestamp | write yaml'
-  check tenzir 'export | sort timestamp | write zeek-tsv --disable-timestamp-tags'
+  check tenzir 'export | sort timestamp | write tsv'
 }

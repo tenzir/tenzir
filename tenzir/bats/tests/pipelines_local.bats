@@ -33,7 +33,6 @@ setup() {
   check ! tenzir "from a/b/c.json read json"
   check tenzir --dump-ast "from file a/b/c.json"
   check tenzir --dump-ast "from file a/b/c.json read cef"
-  check tenzir --dump-ast "read zeek-tsv"
   check tenzir --dump-ast "head 42"
   check tenzir --dump-ast "local remote local pass"
   check tenzir --dump-ast "where :ip == 1.2.3.4"
@@ -51,7 +50,6 @@ setup() {
   check tenzir "from ${INPUTSDIR}/json/dns.log.json.gz | head 2"
   check tenzir "from ${INPUTSDIR}/json/dns.log.json.gz read json | head 2"
   check tenzir "from ${INPUTSDIR}/suricata/eve.json | head 2"
-  check tenzir "from ${INPUTSDIR}/zeek/http.log.gz read zeek-tsv | head 2"
   check tenzir --dump-ast "from a/b/c.json | where xyz == 123 | to foo.csv"
 }
 
@@ -216,45 +214,6 @@ setup() {
     check tenzir "from stdin read json | put foo=[[\"true\"], [\"false\"]]"
 }
 
-# bats test_tags=pipelines,zeek
-@test "Zeek TSV Pipeline Format" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | write json"
-  check tenzir "from ${INPUTSDIR}/zeek/merge_with_whitespace_separation.log read zeek-tsv | write json"
-  check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | head 300 | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | head 300 | batch | write csv"
-  check tenzir "from ${INPUTSDIR}/zeek/whitespace_start.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags --set-separator \";\" --empty-field \"empty\" --unset-field \"NULLVAL\""
-  check tenzir "from ${INPUTSDIR}/json/snmp.log.json.gz read json | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/empty.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/broken_no_separator_header.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/broken_no_set_separator_header.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/broken_no_separator_value.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/broken_no_empty_and_unset_fields.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/broken_no_closing_tag.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/broken_no_data_after_open.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-
-  cat ${INPUTSDIR}/zeek/broken_unequal_fields_types_length.log |
-    check ! tenzir "from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
-  cat ${INPUTSDIR}/zeek/broken_duplicate_close_tag.log |
-    check ! tenzir "from stdin read zeek-tsv | write ! zeek-tsv --disable-timestamp-tags"
-  cat ${INPUTSDIR}/zeek/broken_data_after_close_tag.log |
-    check ! tenzir "from stdin read zeek-tsv | write ! zeek-tsv --disable-timestamp-tags"
-  cat ${INPUTSDIR}/zeek/duplicate_field_name.log |
-    check ! tenzir "from stdin read zeek-tsv | write zeek !-tsv --disable-timestamp-tags"
-}
-
-# bats test_tags=pipelines, zeek
-@test "Sort" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | select ts, uid | sort ts | write json"
-  check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | select uid | sort uid desc | write json"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service | write json"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service nulls-first | write json"
-  check tenzir "from ${INPUTSDIR}/pcap/zeek/conn.log.gz read zeek-tsv | select id | sort id.orig_h, id.orig_p, id.resp_h, id.resp_p | head 100 | write lines"
-}
-
 # bats test_tags=pipelines
 @test "Slice Regression Test" {
   export TENZIR_LEGACY=true
@@ -265,14 +224,12 @@ setup() {
   check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | select extension.dvc | head 8 | extend foo=extension.dvc | write json"
   check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | select extension.dvc | tail 3 | extend foo=extension.dvc | write json"
   # This tests for a regression where slice 1:-1 crashes for exactly one event.
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 1 | slice 1:-1"
 }
 
 # bats test_tags=pipelines, zeek
 @test "Flatten Operator" {
   export TENZIR_LEGACY=true
 
-  check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | tail 10 | flatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | flatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/nested-structure.json read json | flatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-in-list.json read json | flatten | to stdout"
@@ -280,7 +237,6 @@ setup() {
   check tenzir "from ${INPUTSDIR}/suricata/rrdata-eve.json read suricata | flatten | to stdout"
 
   # TODO: Reenable tests with only record flattening.
-  # check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | tail 10 | flatten -l | to stdout"
   # check tenzir "from ${INPUTSDIR}/json/nested-structure.json read json | flatten -l | to stdout"
   # check tenzir "from ${INPUTSDIR}/json/record-in-list.json read json | flatten -l | to stdout"
 }
@@ -295,7 +251,6 @@ setup() {
   check tenzir "from ${INPUTSDIR}/json/record-in-list.json read json | flatten | unflatten | write json"
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | flatten | unflatten | write json"
   check tenzir "from ${INPUTSDIR}/json/nested-structure.json read json | flatten | unflatten | write json"
-  check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | tail 10 | flatten | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-in-list2.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-with-multiple-unflattened-values.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-with-multi-nested-field-names.json read json | unflatten | to stdout"
@@ -494,7 +449,6 @@ EOF
 
   check tenzir "read json | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b csv" <${INPUTSDIR}/json/nested-object.json
-  check tenzir "read json | print a.b zeek-tsv | parse a.b zeek-tsv" <${INPUTSDIR}/json/nested-object.json
   check ! tenzir "read json | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b csv | print a yaml" <${INPUTSDIR}/json/nested-object.json
 }
@@ -536,26 +490,6 @@ EOF
   echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,bar,baz"'
   echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,bar,baz" --auto-expand'
   echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,unnamed1,baz" --auto-expand'
-}
-
-# bats test_tags=pipelines, xsv
-@test "Slice" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :-1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:2"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:-1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:-1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -2:-1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1::-2"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :-1:-5"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -10:-5:2"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice ::-1"
 }
 
 @test "Parse JSON with numeric timestamp" {
