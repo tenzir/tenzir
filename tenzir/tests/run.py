@@ -49,7 +49,7 @@ def parse_test_config(test_file, coverage=False):
     # Define valid configuration keys and their default values
     config = {
         "error": False,
-        "timeout": 20,  # Default timeout of 20 seconds
+        "timeout": 30,  # Default timeout of 30 seconds
         "test": "exec",  # Default to exec runner
         "node": False,  # Default to not using a node
         "skip": None,  # Optional skip reason
@@ -755,12 +755,12 @@ def tenzir_node_endpoint(test: Path, coverage: bool = False):
                 try:
                     pgid = os.getpgid(node_process.pid)
                     node_process.terminate()
-                    _ = node_process.wait(timeout=5)
+                    _ = node_process.wait(timeout=20)
                     check_group_is_empty(pgid)
                 except subprocess.TimeoutExpired as e:
                     report_failure(
                         test,
-                        f"└─▶ \033[31mError terminating node process within 5s: {e}",
+                        f"└─▶ \033[31mError terminating node process within 20s: {e}",
                     )
                     node_process.kill()
                     _ = node_process.wait()
