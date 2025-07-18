@@ -107,6 +107,10 @@ struct basic_series {
     }
   }
 
+  /// Returns the flattened values referenced by this list series.
+  auto list_values() const -> series
+    requires(std::same_as<Type, list_type>);
+
   auto field(std::string_view name) const -> std::optional<series>
     requires(std::same_as<Type, record_type>);
 
@@ -261,9 +265,8 @@ auto make_record_series(std::span<const series_field> fields,
 
 /// Returns a list series with the given inner values, and the list structure
 /// derived from an existing `arrow::ListArray`.
-/// BE CAREFUL WHEN USING THIS FUNCTION.
-/// `values` must be directly derived from `origin.values()` with no slicing.
-/// Otherwise this breaks for a sliced `origin`
+/// The values may either be derived from `origin.values()` or from the
+/// flattened values referenced by `origin`.
 auto make_list_series(const series& values, const arrow::ListArray& origin)
   -> basic_series<list_type>;
 

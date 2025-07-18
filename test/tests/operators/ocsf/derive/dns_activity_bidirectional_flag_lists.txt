@@ -1,0 +1,25 @@
+{
+  metadata: {
+    version: "1.5.0",
+  },
+  class_name: "DNS Activity",
+  class_uid: 4003,
+  activity_id: 2,
+  activity_name: "Response",
+  answers: [
+    {
+      rdata: "192.168.1.1",
+      flag_ids: [
+        1,
+        2,
+        4,
+      ],
+      flags: [
+        "Authoritative Answer",
+        "Truncated Response",
+        "Recursion Available",
+      ],
+      ttl: 300,
+    },
+  ],
+}

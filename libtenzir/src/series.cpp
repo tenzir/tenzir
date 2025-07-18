@@ -27,6 +27,16 @@ auto flatten(series s, std::string_view flatten_separator)
 }
 
 template <class Type>
+auto basic_series<Type>::list_values() const -> series
+  requires(std::same_as<Type, list_type>)
+{
+  const auto begin = array->value_offset(0);
+  const auto end = array->value_offset(array->length());
+  return {type.value_type(),
+          check(array->values()->SliceSafe(begin, end - begin))};
+}
+
+template <class Type>
 auto basic_series<Type>::field(std::string_view name) const
   -> std::optional<series>
   requires(std::same_as<Type, record_type>)
@@ -46,6 +56,7 @@ auto basic_series<Type>::fields() const -> generator<series_field>
 }
 
 template struct basic_series<record_type>;
+template struct basic_series<list_type>;
 
 auto make_record_series(std::span<const series_field> fields,
                         const arrow::StructArray& origin)
@@ -76,8 +87,20 @@ auto make_record_series(std::span<const series_field> fields,
 
 auto make_list_series(const series& values, const arrow::ListArray& origin)
   -> basic_series<list_type> {
-  /// If this triggers, most likely your `values` were not directly generated
-  /// from `origin.values()`.
+  const auto begin = origin.value_offset(0);
+  const auto end = origin.value_offset(origin.length());
+  if (values.array->length() == end - begin) {
+    auto [offsets, null_bitmap] = rebase_list_array_buffers(origin);
+    return {
+      list_type{values.type},
+      std::make_shared<arrow::ListArray>(
+        arrow::list(values.type.to_arrow_type()), origin.length(),
+        std::move(offsets), values.array, std::move(null_bitmap),
+        origin.null_count(), 0),
+    };
+  }
+  // If this triggers, most likely your `values` were not directly generated
+  // from `origin.values()`.
   TENZIR_ASSERT_GEQ(values.array->length(), origin.values()->length());
   return {
     list_type{values.type},
