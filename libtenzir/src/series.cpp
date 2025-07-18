@@ -25,6 +25,15 @@ auto flatten(series s, std::string_view flatten_separator)
   return {series{std::move(t), std::move(arr)}, std::move(renames)};
 }
 
+// TODO: Offset and length?
+
+template <class Type>
+auto basic_series<Type>::list_values() const -> series
+  requires(std::same_as<Type, list_type>)
+{
+  return {type.value_type(), array->values()};
+}
+
 template <class Type>
 auto basic_series<Type>::field(std::string_view name) const
   -> std::optional<series>
@@ -45,6 +54,7 @@ auto basic_series<Type>::fields() const -> generator<series_field>
 }
 
 template struct basic_series<record_type>;
+template struct basic_series<list_type>;
 
 auto make_record_series(std::span<const series_field> fields,
                         const arrow::StructArray& origin)

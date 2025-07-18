@@ -93,6 +93,10 @@ struct basic_series {
     }
   }
 
+  // TODO: Offset and length?
+  auto list_values() const -> series
+    requires(std::same_as<Type, list_type>);
+
   auto field(std::string_view name) const -> std::optional<series>
     requires(std::same_as<Type, record_type>);
 
