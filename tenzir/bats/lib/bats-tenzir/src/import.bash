@@ -10,32 +10,39 @@ import_data() {
     pipeline+=" | $input_filter"
   fi
   pipeline+=" | import"
-
+  # This is not checked, but putting `check` here seems to revert `TENZIR_LEGACY`.
   tenzir "$pipeline"
 }
 
+import_data_tql2() {
+  local tenzir_legacy=$TENZIR_LEGACY
+  unset TENZIR_LEGACY
+  import_data "$@"
+  export TENZIR_LEGACY=$tenzir_legacy
+}
+
 import_zeek_conn() {
-  local load_statement="// tql2\nfrom \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { read_zeek_tsv }"
+  local load_statement="from \"${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz\" { decompress_gzip | read_zeek_tsv }"
   local input_filter=${1:-}
-  import_data "$load_statement" "$input_filter"
+  import_data_tql2 "$load_statement" "$input_filter"
 }
 
 import_zeek_dns() {
-  local load_statement="// tql2\nfrom \"${BATS_TENZIR_DATADIR}/inputs/zeek/dns.log.gz\" { read_zeek_tsv }"
+  local load_statement="from \"${BATS_TENZIR_DATADIR}/inputs/zeek/dns.log.gz\" { decompress_gzip | read_zeek_tsv }"
   local input_filter=${1:-}
-  import_data "$load_statement" "$input_filter"
+  import_data_tql2 "$load_statement" "$input_filter"
 }
 
 import_zeek_http() {
-  local load_statement="// tql2\nfrom \"${BATS_TENZIR_DATADIR}/inputs/zeek/http.log.gz\" { read_zeek_tsv }"
+  local load_statement="from \"${BATS_TENZIR_DATADIR}/inputs/zeek/http.log.gz\" { decompress_gzip | read_zeek_tsv }"
   local input_filter=${1:-}
-  import_data "$load_statement" "$input_filter"
+  import_data_tql2 "$load_statement" "$input_filter"
 }
 
 import_zeek_snmp() {
-  local load_statement="// tql2\nfrom \"${BATS_TENZIR_DATADIR}/inputs/zeek/snmp.log.gz\" { read_zeek_tsv }"
+  local load_statement="from \"${BATS_TENZIR_DATADIR}/inputs/zeek/snmp.log.gz\" { decompress_gzip | read_zeek_tsv }"
   local input_filter=${1:-}
-  import_data "$load_statement" "$input_filter"
+  import_data_tql2 "$load_statement" "$input_filter"
 }
 
 import_zeek_json() {
