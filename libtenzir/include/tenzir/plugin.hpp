@@ -202,13 +202,24 @@ auto plugin_serialize(Inspector& f, const Base& x) -> bool {
   static_assert(not Inspector::is_loading);
   auto name = x.name();
   auto const* p = plugins::find<serialization_plugin<Base>>(name);
+  if (auto dbg = as_debug_writer(f)) {
+    if (not dbg->prepend("{} ", name)) {
+      return false;
+    }
+    // Workaround for debug formatting non-serializable plugins. In that case we
+    // only print the name instead of throwing an exception.
+    if (not p) {
+      return true;
+    }
+  } else {
+    if (not f.apply(name)) {
+      return false;
+    }
+  }
   TENZIR_ASSERT(p,
                 fmt::format("serialization plugin `{}` for `{}` not found",
                             name, caf::detail::pretty_type_name(typeid(Base))));
-  if (auto dbg = as_debug_writer(f)) {
-    return dbg->prepend("{} ", name) && p->serialize(std::ref(f), x);
-  }
-  return f.apply(name) && p->serialize(std::ref(f), x);
+  return p->serialize(std::ref(f), x);
 }
 
 /// Inspects a polymorphic object `x` by using the serialization plugin with the

@@ -1,1 +1,8 @@
-where (:ip == 1.2.3.4 @ 6..20) @ 0..20
+pipeline [
+  write json {
+    tql: false
+  },
+  save file {
+    path: "xyz.json" @ 8..16
+  }
+] @ 0..16

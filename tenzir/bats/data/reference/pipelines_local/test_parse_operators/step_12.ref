@@ -1,4 +1,6 @@
-{"b":true,"e":"A"}
-{"b":false,"e":"B"}
-{"b":false,"e":"C"}
-{"b":false,"e":"D"}
+error: the file `/foo.json` does not exist
+ --> <input>:1:13
+  |
+1 | from file:///foo.json read json
+  |             ^^^^^^^^^ 
+  |

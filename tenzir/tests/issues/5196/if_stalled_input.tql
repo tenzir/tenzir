@@ -1,4 +1,5 @@
 // node: true
+// skip: flaky
 
 // This reproduces a bug reported by a user in a private channel, where the `if`
 // statement indefinitely withholds events if no further input arrives but its

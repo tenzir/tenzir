@@ -1,6 +1,1 @@
-internal-local-remote {
-  op: pass {
-    
-  },
-  location: "local"
-} @ 0..23
+where (:ip == 1.2.3.4 @ 6..20) @ 0..20

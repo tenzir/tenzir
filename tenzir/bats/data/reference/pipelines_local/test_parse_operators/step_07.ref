@@ -1,5 +1,6 @@
-pipeline [
-  slice {
-    end: 42
-  }
-] @ 0..7
+internal-local-remote {
+  op: pass {
+    
+  },
+  location: "local"
+} @ 0..23

@@ -769,7 +769,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
 class zeek_tsv_parser final : public plugin_parser {
 public:
   auto name() const -> std::string override {
-    return "zeek-tsv";
+    return "zeek_tsv";
   }
 
   auto
@@ -859,7 +859,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "zeek-tsv";
+    return "zeek_tsv";
   }
 
   friend auto inspect(auto& f, zeek_tsv_printer& x) -> bool {
@@ -870,57 +870,8 @@ private:
   args args_;
 };
 
-class plugin final : public virtual parser_plugin<zeek_tsv_parser>,
-                     public virtual printer_plugin<zeek_tsv_printer> {
-public:
-  auto name() const -> std::string override {
-    return "zeek-tsv";
-  }
-
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    argument_parser{"zeek-tsv", "https://docs.tenzir.com/formats/zeek-tsv"}
-      .parse(p);
-    return std::make_unique<zeek_tsv_parser>();
-  }
-
-  auto parse_printer(parser_interface& p) const
-    -> std::unique_ptr<plugin_printer> override {
-    auto args = zeek_tsv_printer::args{};
-    auto set_separator = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"zeek-tsv", "https://docs.tenzir.com/"
-                                              "formats/zeek-tsv"};
-    parser.add("-s,--set-separator", set_separator, "<sep>");
-    parser.add("-e,--empty-field", args.empty_field, "<str>");
-    parser.add("-u,--unset-field", args.unset_field, "<str>");
-    parser.add("-d,--disable-timestamp-tags", args.disable_timestamp_tags);
-    parser.parse(p);
-    if (set_separator) {
-      auto converted = to_xsv_sep(set_separator->inner);
-      if (!converted) {
-        diagnostic::error("`{}` is not a valid separator", set_separator->inner)
-          .primary(set_separator->source)
-          .note(fmt::to_string(converted.error()))
-          .throw_();
-      }
-      if (*converted == '\t') {
-        diagnostic::error("the `\\t` separator is not allowed here",
-                          set_separator->inner)
-          .primary(set_separator->source)
-          .throw_();
-      }
-      args.set_sep = *converted;
-    }
-    return std::make_unique<zeek_tsv_printer>(std::move(args));
-  }
-
-  auto initialize(const record&, const record&) -> caf::error override {
-    return caf::none;
-  }
-};
-
-using zeek_tsv_parser_adapter = parser_adapter<zeek_tsv_parser, "zeek_tsv">;
-using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer, "zeek_tsv">;
+using zeek_tsv_parser_adapter = parser_adapter<zeek_tsv_parser>;
+using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer>;
 
 class read_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_parser_adapter> {
@@ -970,6 +921,5 @@ class write_zeek_tsv final
 
 } // namespace tenzir::plugins::zeek_tsv
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::read_zeek_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::write_zeek_tsv)

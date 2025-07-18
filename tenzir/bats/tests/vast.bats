@@ -66,7 +66,7 @@ teardown() {
   import_suricata_eve 'where #schema != "suricata.stats" and event_type != "flow"'
 
   check tenzir "export | where src_ip == 147.32.84.165 | sort timestamp"
-  check tenzir "export | where #schema == /suricata.alert/ | sort timestamp | write zeek-tsv --disable-timestamp-tags"
+  check tenzir "export | where #schema == /suricata.alert/ | sort timestamp | write tsv"
   check tenzir "export | sort timestamp | write json --omit-nulls --omit-empty-objects"
 }
 
