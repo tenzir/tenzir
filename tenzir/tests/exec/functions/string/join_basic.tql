@@ -1,0 +1,17 @@
+// Basic join functionality tests
+from {
+  // Basic join with comma separator
+  basic: ["a", "b", "c"].join(","),
+  
+  // Join with no separator (default empty string)
+  no_sep: ["x", "y", "z"].join(),
+  
+  // Join single element
+  single: ["only"].join(),
+  
+  // Join empty list
+  empty_list: [].join(),
+  
+  // Join with space separator
+  space: ["one", "two", "three"].join(" "),
+}
