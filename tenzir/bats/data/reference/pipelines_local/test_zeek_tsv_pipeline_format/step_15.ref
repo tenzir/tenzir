@@ -1,8 +1,0 @@
-error: printer `!` could not be found
- --> <input>:1:34
-  |
-1 | from stdin read zeek-tsv | write ! zeek-tsv --disable-timestamp-tags
-  |                                  ^ 
-  |
-  = hint: must be one of bitz, csv, feather, json, lines, pcap, ssv, tsv, xsv, yaml, zeek-tsv
-  = docs: https://docs.tenzir.com/formats
