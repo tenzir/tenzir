@@ -709,84 +709,84 @@ public:
           .positional("x", subject_expr, "list")
           .positional("separator", separator)
           .parse(inv, ctx));
-    return function_use::make([subject_expr = std::move(subject_expr),
-                               separator = std::move(separator)](evaluator eval,
-                                                                 session ctx) {
-      static const auto result_type = type{string_type{}};
-      static const auto result_arrow_type = result_type.to_arrow_type();
-      return map_series(eval(subject_expr), [&](series subject) {
-        auto f = detail::overload{
-          [&](const arrow::ListArray& array) {
-            auto emit_null_warning = [&, warned = false]() mutable {
-              if (not warned) {
-                diagnostic::warning("found `null` in list passed to `join`")
-                  .primary(subject_expr)
-                  .hint("consider using `.where(x => x != null)` before")
-                  .emit(ctx);
-                warned = true;
+    return function_use::make(
+      [subject_expr = std::move(subject_expr),
+       separator = std::move(separator)](evaluator eval, session ctx) {
+        static const auto result_type = type{string_type{}};
+        static const auto result_arrow_type = result_type.to_arrow_type();
+        return map_series(eval(subject_expr), [&](series subject) {
+          auto f = detail::overload{
+            [&](const arrow::ListArray& array) {
+              auto emit_null_warning = [&, warned = false]() mutable {
+                if (not warned) {
+                  diagnostic::warning("found `null` in list passed to `join`")
+                    .primary(subject_expr)
+                    .hint("consider using `.where(x => x != null)` before")
+                    .emit(ctx);
+                  warned = true;
+                }
+              };
+              if (is<arrow::NullArray>(*array.values())) {
+                auto b = arrow::StringBuilder{};
+                check(b.Reserve(array.length()));
+                for (auto i = 0; i < array.length(); ++i) {
+                  if (array.IsNull(i)) {
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  if (array.value_length(i) == 0) {
+                    check(b.Append(""));
+                  } else {
+                    emit_null_warning();
+                    check(b.AppendNull());
+                  }
+                }
+                return series{result_type, finish(b)};
               }
-            };
-            if (is<arrow::NullArray>(*array.values())) {
-              auto b = arrow::StringBuilder{};
-              check(b.Reserve(array.length()));
+              if (not is<arrow::StringArray>(*array.values())) {
+                diagnostic::warning(
+                  "`join` expected `list<string>`, but got `list<{}>`",
+                  as<list_type>(subject.type).value_type().kind())
+                  .primary(subject_expr)
+                  .emit(ctx);
+                return series::null(result_type, subject.length());
+              }
+              // Arrow just silently uses `null` as the result if any element of
+              // the list is `null`, but we want to inform the user, hence we
+              // check it ourselves here.
               for (auto i = 0; i < array.length(); ++i) {
                 if (array.IsNull(i)) {
-                  check(b.AppendNull());
                   continue;
                 }
-                if (array.value_length(i) == 0) {
-                  check(b.Append(""));
-                } else {
-                  emit_null_warning();
-                  check(b.AppendNull());
+                auto begin = array.value_offset(i);
+                auto end = begin + array.value_length(i);
+                for (; begin < end; ++begin) {
+                  if (array.values()->IsNull(begin)) {
+                    emit_null_warning();
+                  }
                 }
               }
-              return series{result_type, finish(b)};
-            }
-            if (not is<arrow::StringArray>(*array.values())) {
-              diagnostic::warning(
-                "`join` expected `list<string>`, but got `list<{}>`",
-                as<list_type>(subject.type).value_type().kind())
+              auto result = check(arrow::compute::CallFunction(
+                "binary_join",
+                {array, std::make_shared<arrow::StringScalar>(
+                          separator ? separator->inner : "")},
+                nullptr, nullptr));
+              return series{result_type, result.make_array()};
+            },
+            [&](const arrow::NullArray& array) {
+              return series::null(result_type, array.length());
+            },
+            [&](const auto&) {
+              diagnostic::warning("`join` expected `list`, but got `{}`",
+                                  subject.type.kind())
                 .primary(subject_expr)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            }
-            // Arrow just silently uses `null` as the result if any element of
-            // the list is `null`, but we want to inform the user, hence we
-            // check it ourselves here.
-            for (auto i = 0; i < array.length(); ++i) {
-              if (array.IsNull(i)) {
-                continue;
-              }
-              auto begin = array.value_offset(i);
-              auto end = begin + array.value_length(i);
-              for (; begin < end; ++begin) {
-                if (array.values()->IsNull(begin)) {
-                  emit_null_warning();
-                }
-              }
-            }
-            auto result = check(arrow::compute::CallFunction(
-              "binary_join",
-              {array, std::make_shared<arrow::StringScalar>(
-                        separator ? separator->inner : "")},
-              nullptr, nullptr));
-            return series{result_type, result.make_array()};
-          },
-          [&](const arrow::NullArray& array) {
-            return series::null(result_type, array.length());
-          },
-          [&](const auto&) {
-            diagnostic::warning("`join` expected `list`, but got `{}`",
-                                subject.type.kind())
-              .primary(subject_expr)
-              .emit(ctx);
-            return series::null(result_type, subject.length());
-          },
-        };
-        return match(*subject.array, f);
+            },
+          };
+          return match(*subject.array, f);
+        });
       });
-    });
   }
 };
 
