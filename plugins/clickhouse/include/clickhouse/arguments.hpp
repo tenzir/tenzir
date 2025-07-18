@@ -74,7 +74,40 @@ struct operator_arguments {
     parser.named("primary", primary_selector, "field");
     res.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
-    if (not validate_identifier(res.table.inner)) {
+    const auto quoting = detail::quoting_escaping_policy{.quotes = "\""};
+    const auto dot = quoting.find_first_of_not_in_quotes(res.table.inner, ".");
+    if (dot != std::string::npos) {
+      if (dot == res.table.inner.size() - 1) {
+        diagnostic::error("expected database name after `.`")
+          .primary(res.table)
+          .emit(ctx);
+        return failure::promise();
+      }
+      const auto dot2
+        = quoting.find_first_of_not_in_quotes(res.table.inner, ".", dot + 1);
+      if (dot2 != std::string::npos) {
+        diagnostic::error("`table` may contain at most one `.`")
+          .note("the `.` separates database and table name")
+          .hint("quote the identifiers if you want the `.` to be part of the "
+                "identifier")
+          .primary(res.table)
+          .emit(ctx);
+        return failure::promise();
+      }
+      const auto database_name
+        = std::string_view{res.table.inner}.substr(0, dot);
+      const auto table_name = std::string_view{res.table.inner}.substr(dot + 1);
+      if (not validate_identifier(database_name)) {
+        emit_invalid_identifier("database-part", database_name,
+                                res.table.source, ctx);
+        return failure::promise();
+      }
+      if (not validate_identifier(table_name)) {
+        emit_invalid_identifier("table-part", table_name, res.table.source,
+                                ctx);
+        return failure::promise();
+      }
+    } else if (not validate_identifier(res.table.inner)) {
       emit_invalid_identifier("table", res.table.inner, res.table.source, ctx);
       return failure::promise();
     }
