@@ -12,6 +12,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view3.hpp"
 
@@ -770,23 +771,34 @@ private:
       if (enum_attr) {
         // This is an enum field with a sibling.
         auto int_name = field_name;
-        TENZIR_ASSERT(field_ty.kind().is<int64_type>());
+        auto is_list = std::invoke([&] {
+          if (field_ty.kind().is<int64_type>()) {
+            return false;
+          }
+          TENZIR_ASSERT(is<int64_type>(as<list_type>(field_ty).value_type()));
+          return true;
+        });
         auto sibling_attr = field_ty.attribute("sibling");
         TENZIR_ASSERT(sibling_attr);
         auto string_name = *sibling_attr;
         auto string_ty = ty.field(string_name);
         TENZIR_ASSERT(string_ty);
-        TENZIR_ASSERT(string_ty->kind().is<string_type>());
+        if (is_list) {
+          TENZIR_ASSERT(
+            is<string_type>(as<list_type>(*string_ty).value_type()));
+        } else {
+          TENZIR_ASSERT(is<string_type>(*string_ty));
+        }
         auto int_field = input_fields.find(int_name);
         auto string_field = input_fields.find(string_name);
         if (int_field != input_fields.end()
             and string_field != input_fields.end()) {
           // Both exist - derive bidirectionally.
-          auto [derived_enum, derived_sibling]
+          auto [derived_int, derived_string]
             = derive_bidirectionally(int_field->second, string_field->second,
                                      *enum_attr, int_name, string_name);
-          fields.emplace_back(int_name, std::move(derived_enum));
-          fields.emplace_back(string_name, std::move(derived_sibling));
+          fields.emplace_back(int_name, std::move(derived_int));
+          fields.emplace_back(string_name, std::move(derived_string));
         } else if (int_field != input_fields.end()) {
           // Only enum exists - derive sibling.
           auto derived_sibling
@@ -825,6 +837,48 @@ private:
       }
     }
     return make_record_series(fields, *input.array);
+  }
+
+  auto derive_bidirectionally_list(const series& int_field,
+                                   const series& string_field,
+                                   std::string_view enum_id,
+                                   std::string_view int_name,
+                                   std::string_view string_name)
+    -> std::pair<series, series> {
+    auto int_list = int_field.as<list_type>();
+    if (not int_list) {
+      if (int_field.as<null_type>()) {
+        TENZIR_TODO();
+      }
+      diagnostic::warning("field `{}` must be `list`, but got `{}`", int_name,
+                          int_field.type.kind())
+        .primary(self_)
+        .emit(dh_);
+      return {int_field, string_field};
+    }
+    auto int_values = int_list->list_values();
+    auto int_array = int_values.as<int64_type>();
+    if (not int_array) {
+      if (int_values.as<null_type>()) {
+        TENZIR_TODO();
+      }
+      diagnostic::warning("field `{}` must be `list<int>`, but got `list<{}>`",
+                          int_name, int_field.type.kind())
+        .primary(self_)
+        .emit(dh_);
+      return {int_field, string_field};
+    }
+    // TODO: String.
+    auto int_builder = series_builder{type{list_type{int64_type{}}}};
+    auto string_builder = series_builder{type{list_type{string_type{}}}};
+    auto int_count = int_list->array->value_offset(int_list->array->length())
+                     - int_list->array->value_offset(0);
+    auto count = int_count;
+    for (auto i = 0; i < int_list->length(); ++i) {
+      int_list->array->value_offset(0);
+      auto int2 = int_builder.list();
+      int2.data(0);
+    }
   }
 
   auto
