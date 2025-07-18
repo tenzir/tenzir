@@ -12,6 +12,7 @@ import_data() {
   pipeline+=" | import"
   # This is not checked, but putting `check` here seems to revert `TENZIR_LEGACY`.
   tenzir "$pipeline"
+  [ $? -eq 0 ] || fail "tenzir command failed with exit code $?"
 }
 
 import_data_tql2() {
