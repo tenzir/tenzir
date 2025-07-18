@@ -770,6 +770,10 @@ private:
       if (enum_attr) {
         // This is an enum field with a sibling.
         auto int_name = field_name;
+        if (is<list_type>(field_ty)) {
+          // Enum lists are not supported yet.
+          continue;
+        }
         TENZIR_ASSERT(field_ty.kind().is<int64_type>());
         auto sibling_attr = field_ty.attribute("sibling");
         TENZIR_ASSERT(sibling_attr);
