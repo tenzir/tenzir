@@ -1,0 +1,11 @@
+// Test join function with null values (should produce warning)
+from {
+  // Join with null values - should trigger warning
+  with_nulls: [null, "b", "c"].join(","),
+
+  // Join with all nulls
+  all_nulls: [null, null, null].join(","),
+
+  // Try to join null
+  null_input: null.join(","),
+}

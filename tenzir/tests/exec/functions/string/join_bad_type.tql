@@ -1,0 +1,11 @@
+// Test join function with wrong input types
+from {
+  // Try to join a string instead of list
+  wrong_type: "not a list".join(","),
+
+  // Try to join a number instead of list
+  number_type: 123.join(","),
+
+  // Try to join a list of numbers instead of strings
+  number_list: [1, 2, 3].join(","),
+}

@@ -1,0 +1,7 @@
+{
+  basic: "a,b,c",
+  no_sep: "xyz",
+  single: "only",
+  empty_list: "",
+  space: "one two three",
+}
