@@ -81,7 +81,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
+      - name: Fetch to merge-base with origin/main
+        run: |
+          git fetch origin main
+          git fetch origin $(git merge-base origin/main HEAD)
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
