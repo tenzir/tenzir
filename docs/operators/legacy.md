@@ -10,7 +10,7 @@ Provides a compatibility fallback to TQL1 pipelines.
 legacy definition:string
 ```
 
-:::warning[Migrate to TQL2]
+:::caution[Migrate to TQL2]
 The `legacy` operator is deprecated and will be removed in a future release.
 TQL1 features will be removed as-needed without further notice.
 :::

@@ -66,7 +66,7 @@ The schema of the record `params` depends on the API endpoint used. Refer to the
 
 Contains metrics about the CAF (C++ Actor Framework) runtime system.
 
-:::warning[Aimed at Developers]
+:::caution[Aimed at Developers]
 CAF metrics primarily exist for debugging purposes. Actor names and other
 details contained in these metrics are documented only in source code, and we
 may change them without notice. Do not rely on specific actor names or metrics
@@ -253,7 +253,7 @@ Contains a measurement of the available memory on the host.
 Contains input and output measurements over some amount of time for a single
 operator instantiation.
 
-:::warning[Deprecation Notice]
+:::caution[Deprecation Notice]
 Operator metrics are deprecated and will be removed in a future release. Use
 [pipeline metrics](#tenzirmetricspipeline) instead. While they offered great
 insight into the performance of operators, they were not as useful as pipeline

@@ -17,7 +17,7 @@ returns when the pipeline has finished.
 
 Note that pipelines may emit diagnostics after they have finished.
 
-:::warning[Subject to Change]
+:::caution[Subject to Change]
 This operator primarily exists for testing purposes, where it is often required
 to run pipelines with an explicitly specified pipeline id.
 :::

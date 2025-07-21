@@ -31,7 +31,7 @@ Use null byte (`\0`) as the delimiter instead of newline characters.
 
 ### `split_at_regex = string (optional)`
 
-:::warning Deprecated
+:::caution[Deprecated]
 This option is deprecated. Use
 [`read_delimited_regex`](/reference/operators/read_delimited_regex) instead.
 :::

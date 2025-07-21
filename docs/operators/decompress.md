@@ -10,7 +10,7 @@ Decompresses a stream of bytes.
 decompress codec:string
 ```
 
-:::warning[Deprecated]
+:::caution[Deprecated]
 The `decompress` operator is deprecated. You should use the
 [bespoke operators](/reference/operators#encode--decode) instead.
 :::

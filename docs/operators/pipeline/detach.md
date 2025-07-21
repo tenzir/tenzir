@@ -15,7 +15,7 @@ pipeline::detach { … }, [id=string]
 The `pipeline::detach` operator starts a hidden managed pipeline in the node,
 and returns as soon as the pipeline has started.
 
-:::warning[Subject to Change]
+:::caution[Subject to Change]
 This operator primarily exists for testing purposes, where it is often required
 to run pipelines in the background, but to be able to wait until the pipeline
 has started. The operator may change without further notice.
