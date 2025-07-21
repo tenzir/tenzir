@@ -114,6 +114,73 @@ if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   endif ()
 endif ()
 
+# -- schemas -------------------------------------------------------------------
+
+option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
+add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
+                 "install bundled schemas with Tenzir.")
+if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
+  # Collect all schema files to monitor for changes
+  file(GLOB_RECURSE SCHEMA_FILES CONFIGURE_DEPENDS
+       "${CMAKE_SOURCE_DIR}/schema/*.yaml"
+       "${CMAKE_SOURCE_DIR}/schema/*.schema")
+
+  # Create a custom command that generates the schema.bin file with proper dependencies
+  add_custom_command(
+    OUTPUT
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/schema.bin"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema"
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/schema/concepts"
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/concepts/"
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/schema/taxonomy"
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/taxonomy/"
+    COMMAND
+      $<TARGET_FILE:tenzir> --bare-mode
+      "--schema-dirs=${CMAKE_SOURCE_DIR}/schema" "_compile_schemas" >
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/schema.bin"
+    DEPENDS ${SCHEMA_FILES}
+    COMMENT "Compiling schemas")
+
+  # Create the tenzir-schema target that depends on tenzir and the schema.bin output
+  add_custom_target(
+    tenzir-schema
+    DEPENDS
+      tenzir
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/schema.bin"
+    COMMENT "Ensuring schemas are compiled")
+
+  # Create an ALL target that automatically builds schemas after tenzir
+  add_custom_target(
+    tenzir-auto-schemas ALL
+    DEPENDS
+      tenzir
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/schema.bin"
+    COMMENT "Building tenzir with automatic schema compilation")
+endif ()
+
+if (TENZIR_ENABLE_BUNDLED_SCHEMAS)
+  install(
+    FILES
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/schema.bin"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
+    COMPONENT Runtime)
+  install(
+    DIRECTORY
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/concepts"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/schema/concepts/"
+    COMPONENT Runtime)
+  install(
+    DIRECTORY
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/taxonomy"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/schema/taxonomy/"
+    COMPONENT Runtime)
+endif ()
+
 # -- integration tests ---------------------------------------------------------
 
 add_test(NAME build-tenzir

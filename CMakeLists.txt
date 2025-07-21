@@ -668,29 +668,6 @@ endif ()
 # Disable module scanning.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-# -- schemas -------------------------------------------------------------------
-
-option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
-add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
-                 "install bundled schemas with Tenzir.")
-if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
-  add_custom_target(
-    tenzir-schema
-    COMMAND ${CMAKE_COMMAND} -E remove_directory
-            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
-    COMMENT "Copying schema directory")
-endif ()
-
-if (TENZIR_ENABLE_BUNDLED_SCHEMAS)
-  install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
-    COMPONENT Runtime)
-endif ()
-
 # -- manpages ------------------------------------------------------------------
 
 option(TENZIR_ENABLE_MANPAGES "Generate manpages for binaries" ON)

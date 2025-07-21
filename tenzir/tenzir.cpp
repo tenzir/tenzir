@@ -226,7 +226,7 @@ auto main(int argc, char** argv) -> int try {
     TENZIR_ERROR("failed to load concepts: {}", taxonomies.error());
     return EXIT_FAILURE;
   }
-  modules::init(std::move(*symbols), std::move(taxonomies->concepts));
+  modules::init(cfg, std::move(*symbols), std::move(taxonomies->concepts));
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};
