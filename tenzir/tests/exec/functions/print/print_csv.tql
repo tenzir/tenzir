@@ -1,2 +1,4 @@
-from {str:"hello world", int: 42, duration:10s, time: 2025-02-17, nested:{ x: 0}}
-this = { result: this.print_csv()}
+from \
+  {str:"hello world", int: 42, duration:10s, time: 2025-02-17, nested:{ x: 0}},
+  { a:"hi", l:[1,2]}
+this = { result: this.print_csv(list_separator=";") }

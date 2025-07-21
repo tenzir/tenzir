@@ -53,7 +53,7 @@ struct xsv_printer_options {
     } else {
       /// Configured case
       TENZIR_ASSERT(not list_separator.inner.empty());
-      parser.named_optional("field_separator", list_separator);
+      parser.named_optional("list_separator", list_separator);
       parser.named_optional("null_value", null_value);
     }
     if (not no_header) {
