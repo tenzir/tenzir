@@ -286,7 +286,7 @@ inline constexpr auto packaged_pipeline_restart_on_error
 /// Whether to disable pipeline subprocesses.
 inline constexpr bool disable_pipeline_subprocesses =
 #if TENZIR_LINUX
-  false;
+  true;
 #else
   true;
 #endif
