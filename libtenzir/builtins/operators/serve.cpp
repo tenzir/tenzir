@@ -77,6 +77,7 @@
 namespace tenzir::plugins::serve {
 
 TENZIR_ENUM(serve_state, running, completed, failed);
+TENZIR_ENUM(schema, legacy, exact, never);
 
 namespace {
 
@@ -237,8 +238,6 @@ struct request_limits {
   uint64_t min_events = defaults::api::serve::min_events;
   duration timeout = defaults::api::serve::timeout;
 };
-
-TENZIR_ENUM(schema, legacy, exact, never);
 
 struct serve_request {
   std::string serve_id = {};

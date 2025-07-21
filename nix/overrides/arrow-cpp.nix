@@ -63,6 +63,9 @@
         "arrow-azurefs-test"
         "arrow-gcsfs-test"
         "arrow-flight-integration-test"
+        # File already exists in database: orc_proto.proto
+        "arrow-orc-adapter-test"
+        "parquet-encryption-key-management-test"
       ];
     in
     ''

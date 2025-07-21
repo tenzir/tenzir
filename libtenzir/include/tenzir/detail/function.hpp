@@ -10,7 +10,7 @@
 //
 // Original Author: Denis Blank <denis.blank@outlook.com>
 // Original License: Boost Software License, Version 1.0
-// Original Revision: 87b28ccd33203e81ea30f1f706400b11bb2fe5ec
+// Original Revision: 43fc0ca473ecb081918709bd7d524d84c2ff8dce
 // Includes code from https://github.com/Naios/function2
 
 #pragma once
@@ -46,10 +46,15 @@
 #    endif
 #  endif
 #endif // FU2_WITH_DISABLED_EXCEPTIONS
+// - FU2_HAS_LIMITED_EMPTY_PROPAGATION
+#if defined(FU2_WITH_LIMITED_EMPTY_PROPAGATION)
+#  define FU2_HAS_LIMITED_EMPTY_PROPAGATION
+#endif // FU2_WITH_NO_EMPTY_PROPAGATION
 // - FU2_HAS_NO_FUNCTIONAL_HEADER
-#if !defined(FU2_WITH_NO_FUNCTIONAL_HEADER)                                    \
-  && !defined(FU2_NO_FUNCTIONAL_HEADER)                                        \
-  && !defined(FU2_HAS_DISABLED_EXCEPTIONS)
+#if ! defined(FU2_WITH_NO_FUNCTIONAL_HEADER)                                   \
+  && ! defined(FU2_NO_FUNCTIONAL_HEADER)                                       \
+  && (! defined(FU2_HAS_DISABLED_EXCEPTIONS)                                   \
+      || defined(FU2_HAS_LIMITED_EMPTY_PROPAGATION))
 #  include <functional>
 #else
 #  define FU2_HAS_NO_FUNCTIONAL_HEADER
@@ -148,6 +153,19 @@ struct identity {};
 
 template <typename T>
 using unrefcv_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+template <typename...>
+struct lazy_and;
+
+template <typename B1>
+struct lazy_and<B1> : B1 {};
+
+template <typename B1, typename B2>
+struct lazy_and<B1, B2> : std::conditional<B1::value, B2, B1>::type {};
+
+// template <typename B1, typename B2, typename B3, typename... Bn>
+// struct lazy_and<B1, B2, B3, Bn...>
+//     : std::conditional<B1::value, lazy_and<B2, B3, Bn...>, B1>::type {};
 
 // Copy enabler helper class
 template <bool /*Copyable*/>
@@ -275,8 +293,9 @@ template <bool RequiresNoexcept, typename T, typename Args>
 struct is_noexcept_correct : std::true_type {};
 template <typename T, typename... Args>
 struct is_noexcept_correct<true, T, identity<Args...>>
-  : std::bool_constant<noexcept(
-      invoke(std::declval<T>(), std::declval<Args>()...))> {};
+  : std::integral_constant<bool,
+                           noexcept(tenzir::detail::fu2::invocation::invoke(
+                             std::declval<T>(), std::declval<Args>()...))> {};
 } // end namespace invocation
 
 /// Declares the namespace which provides the functionality to work with a
@@ -286,7 +305,7 @@ namespace type_erasure {
 template <typename T, typename = void>
 struct address_taker {
   template <typename O>
-  static void* take(O&& obj) {
+  static auto take(O&& obj) {
     return std::addressof(obj);
   }
   static T& restore(void* ptr) {
@@ -324,8 +343,8 @@ struct box : private Allocator {
 
   T value_;
 
-  explicit box(T value, Allocator allocator)
-    : Allocator(std::move(allocator)), value_(std::move(value)) {
+  explicit box(T value, Allocator allocator_)
+    : Allocator(std::move(allocator_)), value_(std::move(value)) {
   }
 
   box(box&&) = default;
@@ -340,8 +359,8 @@ struct box<false, T, Allocator> : private Allocator {
 
   T value_;
 
-  explicit box(T value, Allocator allocator)
-    : Allocator(std::move(allocator)), value_(std::move(value)) {
+  explicit box(T value, Allocator allocator_)
+    : Allocator(std::move(allocator_)), value_(std::move(value)) {
   }
 
   box(box&&) = default;
@@ -360,27 +379,27 @@ struct box_factory<box<IsCopyable, T, Allocator>> {
   /// Allocates space through the boxed allocator
   static box<IsCopyable, T, Allocator>*
   box_allocate(box<IsCopyable, T, Allocator> const* me) {
-    real_allocator allocator(*static_cast<Allocator const*>(me));
+    real_allocator allocator_(*static_cast<Allocator const*>(me));
 
     return static_cast<box<IsCopyable, T, Allocator>*>(
-      std::allocator_traits<real_allocator>::allocate(allocator, 1U));
+      std::allocator_traits<real_allocator>::allocate(allocator_, 1U));
   }
 
   /// Destroys the box through the given allocator
   static void box_deallocate(box<IsCopyable, T, Allocator>* me) {
-    real_allocator allocator(*static_cast<Allocator const*>(me));
+    real_allocator allocator_(*static_cast<Allocator const*>(me));
 
     me->~box();
-    std::allocator_traits<real_allocator>::deallocate(allocator, me, 1U);
+    std::allocator_traits<real_allocator>::deallocate(allocator_, me, 1U);
   }
 };
 
 /// Creates a box containing the given value and allocator
 template <bool IsCopyable, typename T, typename Allocator>
 auto make_box(std::bool_constant<IsCopyable>, T&& value,
-              Allocator&& allocator) {
+              Allocator&& allocator_) {
   return box<IsCopyable, std::decay_t<T>, std::decay_t<Allocator>>(
-    std::forward<T>(value), std::forward<Allocator>(allocator));
+    std::forward<T>(value), std::forward<Allocator>(allocator_));
 }
 
 template <typename T>
@@ -395,6 +414,16 @@ union data_accessor {
   explicit constexpr data_accessor(std::nullptr_t) noexcept : ptr_(nullptr) {
   }
   explicit constexpr data_accessor(void* ptr) noexcept : ptr_(ptr) {
+  }
+  explicit constexpr data_accessor(void const* ptr) noexcept
+    : data_accessor(const_cast<void*>(ptr)) {
+  }
+
+  constexpr void assign_ptr(void* ptr) noexcept {
+    ptr_ = ptr;
+  }
+  constexpr void assign_ptr(void const* ptr) noexcept {
+    ptr_ = const_cast<void*>(ptr);
   }
 
   /// The pointer we use if the object is on the heap
@@ -758,12 +787,12 @@ FU2_DETAIL_EXPAND_QUALIFIERS(FU2_DEFINE_FUNCTION_TRAIT)
 namespace tables {
 /// Identifies the action which is dispatched on the erased object
 enum class opcode {
-  op_move,         //< Move the object and set the vtable
-  op_copy,         //< Copy the object and set the vtable
-  op_destroy,      //< Destroy the object and reset the vtable
-  op_weak_destroy, //< Destroy the object without resetting the vtable
-  op_fetch_empty,  //< Stores true or false into the to storage
-                   //< to indicate emptiness
+  op_move,         ///< Move the object and set the vtable
+  op_copy,         ///< Copy the object and set the vtable
+  op_destroy,      ///< Destroy the object and reset the vtable
+  op_weak_destroy, ///< Destroy the object without resetting the vtable
+  op_fetch_empty,  ///< Stores true or false into the to storage
+                   ///< to indicate emptiness
 };
 
 /// Abstraction for a vtable together with a command table
@@ -1094,12 +1123,12 @@ public:
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
   FU2_DETAIL_CXX14_CONSTEXPR
   erasure(std::false_type /*use_bool_op*/, T&& callable,
-          Allocator&& allocator = Allocator{}) {
+          Allocator&& allocator_ = Allocator{}) {
     vtable_t::init(
       vtable_,
       type_erasure::make_box(std::bool_constant<Config::is_copyable>{},
                              std::forward<T>(callable),
-                             std::forward<Allocator>(allocator)),
+                             std::forward<Allocator>(allocator_)),
       this->opaque_ptr(), capacity());
   }
 
@@ -1110,13 +1139,13 @@ public:
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
   FU2_DETAIL_CXX14_CONSTEXPR
   erasure(std::true_type /*use_bool_op*/, T&& callable,
-          Allocator&& allocator = Allocator{}) {
-    if (bool(callable)) {
+          Allocator&& allocator_ = Allocator{}) {
+    if (not not callable) {
       vtable_t::init(
         vtable_,
         type_erasure::make_box(std::bool_constant<Config::is_copyable>{},
                                std::forward<T>(callable),
-                               std::forward<Allocator>(allocator)),
+                               std::forward<Allocator>(allocator_)),
         this->opaque_ptr(), capacity());
     } else {
       vtable_.set_empty();
@@ -1162,22 +1191,22 @@ public:
 
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
   void assign(std::false_type /*use_bool_op*/, T&& callable,
-              Allocator&& allocator = {}) {
+              Allocator&& allocator_ = {}) {
     vtable_.weak_destroy(this->opaque_ptr(), capacity());
     vtable_t::init(
       vtable_,
       type_erasure::make_box(std::bool_constant<Config::is_copyable>{},
                              std::forward<T>(callable),
-                             std::forward<Allocator>(allocator)),
+                             std::forward<Allocator>(allocator_)),
       this->opaque_ptr(), capacity());
   }
 
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
   void assign(std::true_type /*use_bool_op*/, T&& callable,
-              Allocator&& allocator = {}) {
-    if (bool(callable)) {
+              Allocator&& allocator_ = {}) {
+    if (not not callable) {
       assign(std::false_type{}, std::forward<T>(callable),
-             std::forward<Allocator>(allocator));
+             std::forward<Allocator>(allocator_));
     } else {
       operator=(nullptr);
     }
@@ -1291,12 +1320,12 @@ public:
   constexpr void assign(std::false_type /*use_bool_op*/, T&& callable) {
     invoke_table_
       = invoke_table_t::template get_invocation_view_table_of<std::decay_t<T>>();
-    view_.ptr_
-      = address_taker<std::decay_t<T>>::take(std::forward<T>(callable));
+    view_.assign_ptr(
+      address_taker<std::decay_t<T>>::take(std::forward<T>(callable)));
   }
   template <typename T>
   constexpr void assign(std::true_type /*use_bool_op*/, T&& callable) {
-    if (bool(callable)) {
+    if (not not callable) {
       assign(std::false_type{}, std::forward<T>(callable));
     } else {
       operator=(nullptr);
@@ -1322,12 +1351,12 @@ template <typename T, typename Signature,
           typename Trait
           = type_erasure::invocation_table::function_trait<Signature>>
 struct accepts_one
-  : std::bool_constant<
+  : lazy_and< // both are std::integral_constant
       invocation::can_invoke<typename Trait::template callable<T>,
-                             typename Trait::arguments>::value
-      && invocation::is_noexcept_correct<Trait::is_noexcept::value,
-                                         typename Trait::template callable<T>,
-                                         typename Trait::arguments>::value> {};
+                             typename Trait::arguments>,
+      invocation::is_noexcept_correct<Trait::is_noexcept::value,
+                                      typename Trait::template callable<T>,
+                                      typename Trait::arguments>> {};
 
 /// Deduces to a true_type if the type T provides all signatures
 template <typename T, typename Signatures, typename = void>
@@ -1337,13 +1366,29 @@ struct accepts_all<T, identity<Signatures...>,
                    std::void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
   : std::true_type {};
 
-/// Deduces to a true_type if the type T is implementing operator bool()
-/// or if the type is convertible to bool directly, this also implements an
-/// optimizations for function references `void(&)()` which are can never
-/// be null and for such a conversion to bool would never return false.
 #if defined(FU2_HAS_NO_EMPTY_PROPAGATION)
 template <typename T>
 struct use_bool_op : std::false_type {};
+#elif defined(FU2_HAS_LIMITED_EMPTY_PROPAGATION)
+/// Implementation for use_bool_op based on the behaviour of std::function,
+/// propagating empty state for pointers, `std::function` and
+/// `fu2::detail::function` types only.
+template <typename T>
+struct use_bool_op : std::false_type {};
+
+#  if ! defined(FU2_HAS_NO_FUNCTIONAL_HEADER)
+template <typename Signature>
+struct use_bool_op<std::function<Signature>> : std::true_type {};
+#  endif
+
+template <typename Config, typename Property>
+struct use_bool_op<function<Config, Property>> : std::true_type {};
+
+template <typename T>
+struct use_bool_op<T*> : std::true_type {};
+
+template <typename Class, typename T>
+struct use_bool_op<T Class::*> : std::true_type {};
 #else
 template <typename T, typename = void>
 struct has_bool_op : std::false_type {};
@@ -1356,6 +1401,10 @@ struct has_bool_op<T, std::void_t<decltype(bool(std::declval<T>()))>>
 #  endif
 };
 
+/// Deduces to a true_type if the type T is implementing operator bool()
+/// or if the type is convertible to bool directly, this also implements an
+/// optimizations for function references `void(&)()` which are can never
+/// be null and for such a conversion to bool would never return false.
 template <typename T>
 struct use_bool_op : has_bool_op<T> {};
 
@@ -1502,9 +1551,9 @@ public:
             enable_if_owning_t<T>* = nullptr,
             assert_wrong_copy_assign_t<T>* = nullptr,
             assert_no_strong_except_guarantee_t<T>* = nullptr>
-  FU2_DETAIL_CXX14_CONSTEXPR function(T&& callable, Allocator&& allocator)
+  FU2_DETAIL_CXX14_CONSTEXPR function(T&& callable, Allocator&& allocator_)
     : erasure_(use_bool_op<unrefcv_t<T>>{}, std::forward<T>(callable),
-               std::forward<Allocator>(allocator)) {
+               std::forward<Allocator>(allocator_)) {
   }
 
   /// Empty constructs the function
@@ -1566,9 +1615,9 @@ public:
             enable_if_can_accept_all_t<T>* = nullptr,
             assert_wrong_copy_assign_t<T>* = nullptr,
             assert_no_strong_except_guarantee_t<T>* = nullptr>
-  void assign(T&& callable, Allocator&& allocator = Allocator{}) {
+  void assign(T&& callable, Allocator&& allocator_ = Allocator{}) {
     erasure_.assign(use_bool_op<unrefcv_t<T>>{}, std::forward<T>(callable),
-                    std::forward<Allocator>(allocator));
+                    std::forward<Allocator>(allocator_));
   }
 
   /// Swaps this function with the given function
@@ -1717,6 +1766,12 @@ using fu2::type_erasure::invocation_table::bad_function_call;
 #endif
 
 } // namespace tenzir::detail
+
+namespace std {
+template <typename Config, typename Property, typename Alloc>
+struct uses_allocator<tenzir::detail::fu2::function<Config, Property>, Alloc>
+  : std::true_type {};
+} // namespace std
 
 #undef FU2_DETAIL_EXPAND_QUALIFIERS
 #undef FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT
