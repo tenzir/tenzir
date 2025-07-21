@@ -131,6 +131,24 @@ auto to_field_extractor(const ast::expression& x)
       TRY(auto left, to_field_extractor(x.left));
       return std::move(left.field) + "." + x.name.name;
     },
+    [&](const ast::index_expr& x) -> std::optional<field_extractor> {
+      // Legacy expressions do not differentiate between `this["a.b"]` and
+      // `a.b`. We are thus slightly changing the semantics, but this seems fine
+      // considering the current alternative of not optimizing such queries.
+      auto index = try_as<ast::constant>(x.index);
+      if (not index) {
+        return std::nullopt;
+      }
+      auto string = try_as<std::string>(index->value);
+      if (not string) {
+        return std::nullopt;
+      }
+      if (is<ast::this_>(x.expr)) {
+        return field_extractor{*string};
+      }
+      TRY(auto expr, to_field_extractor(x.expr));
+      return fmt::format("{}.{}", expr.field, *string);
+    },
     [](const auto&) -> std::optional<field_extractor> {
       return std::nullopt;
     });
