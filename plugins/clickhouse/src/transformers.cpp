@@ -77,7 +77,7 @@ auto transformer_record::update_dropmask(
   my_array = &array;
   const auto* rt = try_as<record_type>(type);
   if (not rt) {
-    diagnostic::warning("incompatible type for column `{}",
+    diagnostic::warning("incompatible type for column `{}`",
                         fmt::join(path, "."))
       .note("expected `{}`, got `{}`", type_kind{tag_v<record_type>},
             type.kind())
@@ -159,7 +159,7 @@ auto transformer_record::create_column(
   }
   auto* rt = try_as<record_type>(type);
   if (not rt) {
-    diagnostic::warning("incompatible type for column `{}",
+    diagnostic::warning("incompatible type for column `{}`",
                         fmt::join(path, "."))
       .note("expected `{}`, got `{}`", type_kind{tag_v<record_type>},
             type.kind())
@@ -382,7 +382,7 @@ struct transformer_from_trait : transformer {
       type,
       [&]<typename U>(const U&) {
         // error case. Potentially do more conversions?
-        diagnostic::warning("incompatible type for column `{}",
+        diagnostic::warning("incompatible type for column `{}`",
                             fmt::join(path, "."))
           .note("expected `{}`, got `{}`\n", type_kind{tag_v<T>},
                 type_kind{tag_v<U>})
@@ -434,7 +434,7 @@ struct transformer_from_trait : transformer {
       },
       [&]<typename U>(const U&) -> std::shared_ptr<Column> {
         // error case. Potentially do more conversions?
-        diagnostic::warning("incompatible type for column `{}",
+        diagnostic::warning("incompatible type for column `{}`",
                             fmt::join(path, "."))
           .note("expected `{}`, got `{}`\n", type_kind{tag_v<T>},
                 type_kind{tag_v<U>})
@@ -601,7 +601,7 @@ struct transformer_array : transformer {
     }
     const auto* lt = try_as<list_type>(type);
     if (not lt) {
-      diagnostic::warning("incompatible type for column `{}",
+      diagnostic::warning("incompatible type for column `{}`",
                           fmt::join(path, "."))
         .note("expected `{}`, got `{}`", type_kind{tag_v<list_type>},
               type.kind())
@@ -694,7 +694,7 @@ struct transformer_array : transformer {
     }
     const auto* lt = try_as<list_type>(type);
     if (not lt) {
-      diagnostic::warning("incompatible type for column `{}",
+      diagnostic::warning("incompatible type for column `{}`",
                           fmt::join(path, "."))
         .note("expected `{}`, got `{}`", type_kind{tag_v<list_type>},
               type.kind())
@@ -898,15 +898,15 @@ auto emit_unsupported_clickhouse_type_diagnostic(
                                 fmt::join(path, "."), clickhouse_typename);
   // A few helpful suggestions for the types that we do support
   if (clickhouse_typename.starts_with("Date")) {
-    diag = std::move(diag).note("use `DateTime64(8)` instead");
+    diag = std::move(diag).hint("use `DateTime64(9)` instead");
   } else if (clickhouse_typename.starts_with("UInt")) {
-    diag = std::move(diag).note("use `UInt64` instead");
+    diag = std::move(diag).hint("use `UInt64` instead");
   } else if (clickhouse_typename.starts_with("Int")) {
-    diag = std::move(diag).note("use `Int64` instead");
+    diag = std::move(diag).hint("use `Int64` instead");
   } else if (clickhouse_typename.starts_with("Float")) {
-    diag = std::move(diag).note("use `Float64` instead");
+    diag = std::move(diag).hint("use `Float64` instead");
   } else if (clickhouse_typename == "IPv4") {
-    diag = std::move(diag).note("use `IPv6` instead");
+    diag = std::move(diag).hint("use `IPv6` instead");
   }
   std::move(diag).emit(dh);
 }
