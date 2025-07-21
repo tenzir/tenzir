@@ -9,9 +9,10 @@ Sends HTTP/1.1 requests and forwards the response.
 ```tql
 http url:string, [method=string, body=record|string|blob, encode=string,
      headers=record, response_field=field, metadata_field=field,
-     paginate=record->string, paginate_delay=duration, parallel=int, tls=bool,
-     certfile=string, keyfile=string, password=string,
-     connection_timeout=duration, max_retry_count=int, retry_delay=duration { … }]
+     error_field=field, paginate=record->string, paginate_delay=duration,
+     parallel=int, tls=bool, certfile=string, keyfile=string, password=string,
+     connection_timeout=duration, max_retry_count=int, retry_delay=duration
+     { … }]
 ```
 
 ## Description
@@ -81,6 +82,14 @@ The metadata has the following schema:
 | :------------------- | :------- | :------------------------------------ |
 | `code`               | `uint64` | The HTTP status code of the response. |
 | `headers`            | `record` | The response headers.                 |
+
+### `error_field = field (optional)`
+
+Field to insert the response body for HTTP error responses (status codes not in the 2xx or 3xx range).
+
+When set, any HTTP response with a status code outside the 200–399 range will
+have its body stored in this field as a `blob`. Otherwise, error responses,
+alongside the original event, are skipped and a warning is emitted.
 
 ### `paginate = record -> string (optional)`
 

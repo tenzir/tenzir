@@ -610,6 +610,7 @@ struct from_http_args {
   std::optional<located<std::string>> encode;
   std::optional<located<record>> headers;
   std::optional<ast::field_path> metadata_field;
+  std::optional<ast::field_path> error_field;
   std::optional<ast::lambda_expr> paginate;
   std::optional<located<duration>> paginate_delay;
   std::optional<located<duration>> connection_timeout;
@@ -631,6 +632,7 @@ struct from_http_args {
     p.named("encode", encode);
     p.named("headers", headers);
     p.named("metadata_field", metadata_field);
+    p.named("error_field", error_field);
     p.named("paginate", paginate, "record->string");
     p.named("paginate_delay", paginate_delay);
     p.named("connection_timeout", connection_timeout);
@@ -711,7 +713,7 @@ struct from_http_args {
       return (check_option(is_server, xs).is_success() && ...);
     };
     if (server) {
-      check_options(true, method, body, encode, headers, paginate,
+      check_options(true, method, body, encode, headers, error_field, paginate,
                     paginate_delay, connection_timeout, max_retry_count,
                     retry_delay);
       TRY(validate_server_opts(dh));
@@ -723,6 +725,23 @@ struct from_http_args {
   }
 
   auto validate_client_opts(diagnostic_handler& dh) -> failure_or<void> {
+    if (error_field and metadata_field) {
+      auto ep = std::views::transform(error_field->path(),
+                                      &ast::field_path::segment::id)
+                | std::views::transform(&ast::identifier::name);
+      auto mp = std::views::transform(metadata_field->path(),
+                                      &ast::field_path::segment::id)
+                | std::views::transform(&ast::identifier::name);
+      auto [ei, mi] = std::ranges::mismatch(ep, mp);
+      if (ei == end(ep) or mi == end(mp)) {
+        diagnostic::error("`error_field` and `metadata_field` must not "
+                          "point to same or nested field")
+          .primary(*error_field)
+          .primary(*metadata_field)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
     if (headers) {
       for (const auto& [_, v] : headers->inner) {
         if (not is<std::string>(v) and not is<secret>(v)) {
@@ -935,7 +954,7 @@ struct from_http_args {
       f.field("method", x.method), f.field("body", x.body),
       f.field("encode", x.encode), f.field("headers", x.headers),
       f.field("metadata_field", x.metadata_field),
-      f.field("paginate", x.paginate),
+      f.field("error_field", x.error_field), f.field("paginate", x.paginate),
       f.field("paginate_delay", x.paginate_delay),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
@@ -1156,42 +1175,65 @@ public:
       url.insert(4, "s");
     }
     const auto handle_response = [&](caf::uri uri) {
-      return
-        [&, hdrs = headers, uri = std::move(uri)](const http::response& r) {
-          ctrl.set_waiting(false);
-          TENZIR_DEBUG("[http] handling response with size: {}B",
-                       r.body().size_bytes());
-          if (const auto code = std::to_underlying(r.code());
-              code < 200 or 399 < code) {
+      return [&, hdrs = headers,
+              uri = std::move(uri)](const http::response& r) {
+        ctrl.set_waiting(false);
+        TENZIR_DEBUG("[http] handling response with size: {}B",
+                     r.body().size_bytes());
+        const auto& headers = r.header_fields();
+        const auto* eit = std::ranges::find_if(headers, [](const auto& x) {
+          return caf::icase_equal(x.first, "content-encoding");
+        });
+        const auto encoding
+          = eit != std::ranges::end(headers) ? eit->first : "";
+        const auto make_chunk = [&] -> chunk_ptr {
+          if (auto body = try_decompress_body(encoding, r.body(), dh)) {
+            return chunk::make(std::move(*body));
+          }
+          return chunk::copy(r.body());
+        };
+        const auto make_blob = [&] -> blob {
+          if (auto body = try_decompress_body(encoding, r.body(), dh)) {
+            return std::move(*body);
+          }
+          return blob{r.body()};
+        };
+        if (const auto code = std::to_underlying(r.code());
+            code < 200 or 399 < code) {
+          if (not args_.error_field) {
             diagnostic::error("received erroneous http status code: `{}`", code)
               .primary(args_.op)
+              .hint("specify `error_field` to keep the event")
               .emit(dh);
             return;
           }
-          if (r.body().empty()) {
-            --awaiting;
-            return;
+          auto sb = series_builder{};
+          std::ignore = sb.record();
+          auto error = series_builder{};
+          error.data(make_blob());
+          auto slice
+            = assign(*args_.error_field, error.finish_assert_one_array(),
+                     sb.finish_assert_one_slice(), dh);
+          if (args_.metadata_field) {
+            auto sb = make_metadata(r, slice.rows());
+            slice = assign(*args_.metadata_field, sb.finish_assert_one_array(),
+                           slice, ctrl.diagnostics());
           }
-          const auto& headers = r.header_fields();
-          const auto* eit = std::ranges::find_if(headers, [](const auto& x) {
-            return caf::icase_equal(x.first, "content-encoding");
-          });
-          const auto encoding
-            = eit != std::ranges::end(headers) ? eit->first : "";
-          const auto make_chunk = [&] {
-            if (auto body = try_decompress_body(encoding, r.body(), dh)) {
-              return chunk::make(std::move(*body));
-            }
-            return chunk::copy(r.body());
-          };
-          auto pipe = make_pipeline(args_.parse, uri, r, args_.op, dh);
-          if (not pipe) {
-            return;
-          }
-          const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
-                                            args_.filter, make_chunk(), false);
-          std::invoke([&, &args_ = args_, r, actor,
-                       hdrs](this const auto& pull) -> void {
+          slices.push_back(std::move(slice));
+          return;
+        }
+        if (r.body().empty()) {
+          --awaiting;
+          return;
+        }
+        auto pipe = make_pipeline(args_.parse, uri, r, args_.op, dh);
+        if (not pipe) {
+          return;
+        }
+        const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
+                                          args_.filter, make_chunk(), false);
+        std::invoke(
+          [&, &args_ = args_, r, actor, hdrs](this const auto& pull) -> void {
             TENZIR_DEBUG("[http] requesting slice");
             ctrl.self()
               .mail(atom::pull_v)
@@ -1249,8 +1291,8 @@ public:
                     .emit(ctrl.diagnostics());
                 });
           });
-          TENZIR_DEBUG("[http] handled response");
-        };
+        TENZIR_DEBUG("[http] handled response");
+      };
     };
     auto uri = caf::make_uri(url);
     if (not uri) {
@@ -1379,11 +1421,11 @@ private:
 
 void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
                              session ctx) {
-  for (auto& arg : inv.args) {
+  for (const auto& arg : inv.args) {
     match(
       arg,
       [&](const ast::assignment& arg) {
-        auto name = try_as<ast::field_path>(arg.left);
+        const auto* name = try_as<ast::field_path>(arg.left);
         if (name and name->path().size() == 1
             and name->path()[0].id.name == "payload") {
           diagnostic::warning(
@@ -1451,7 +1493,7 @@ struct from_http final : public virtual operator_factory_plugin {
   }
 };
 
-// --------------------------------------- http ----------------------------------
+//------------------------------------ http ------------------------------------
 
 struct http_args {
   tenzir::location op;
@@ -1462,6 +1504,7 @@ struct http_args {
   std::optional<ast::expression> headers;
   std::optional<ast::field_path> response_field;
   std::optional<ast::field_path> metadata_field;
+  std::optional<ast::field_path> error_field;
   std::optional<ast::lambda_expr> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
@@ -1483,6 +1526,7 @@ struct http_args {
     p.named("headers", headers, "record");
     p.named("response_field", response_field);
     p.named("metadata_field", metadata_field);
+    p.named("error_field", error_field);
     p.named("paginate", paginate, "record->string");
     p.named_optional("paginate_delay", paginate_delay);
     p.named_optional("parallel", parallel);
@@ -1525,6 +1569,23 @@ struct http_args {
         diagnostic::error("`response_field` and `metadata_field` must not "
                           "point to same or nested field")
           .primary(*response_field)
+          .primary(*metadata_field)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (error_field and metadata_field) {
+      auto ep = std::views::transform(error_field->path(),
+                                      &ast::field_path::segment::id)
+                | std::views::transform(&ast::identifier::name);
+      auto mp = std::views::transform(metadata_field->path(),
+                                      &ast::field_path::segment::id)
+                | std::views::transform(&ast::identifier::name);
+      auto [ei, mi] = std::ranges::mismatch(ep, mp);
+      if (ei == end(ep) or mi == end(mp)) {
+        diagnostic::error("`error_field` and `metadata_field` must not "
+                          "point to same or nested field")
+          .primary(*error_field)
           .primary(*metadata_field)
           .emit(dh);
         return failure::promise();
@@ -1599,15 +1660,17 @@ struct http_args {
     return f.object(x).fields(
       f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
       f.field("body", x.body), f.field("encode", x.encode),
-      f.field("headers", x.headers), f.field("tls", x.tls),
-      f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
-      f.field("password", x.password),
+      f.field("headers", x.headers),
+      f.field("response_field", x.response_field),
       f.field("metadata_field", x.metadata_field),
+      f.field("error_field", x.error_field), f.field("paginate", x.paginate),
+      f.field("paginate_delay", x.paginate_delay),
+      f.field("parallel", x.parallel), f.field("tls", x.tls),
+      f.field("keyfile", x.keyfile), f.field("certfile", x.certfile),
+      f.field("password", x.password),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
-      f.field("retry_delay", x.retry_delay), f.field("parallel", x.parallel),
-      f.field("paginate", x.paginate),
-      f.field("paginate_delay", x.paginate_delay), f.field("parse", x.parse),
+      f.field("retry_delay", x.retry_delay), f.field("parse", x.parse),
       f.field("filter", x.filter));
   }
 };
@@ -1650,14 +1713,50 @@ public:
             TENZIR_DEBUG("[http] handling response with size: {}B",
                          r.body().size_bytes());
             ctrl.set_waiting(false);
+            const auto& headers = r.header_fields();
+            const auto* it = std::ranges::find_if(headers, [](const auto& x) {
+              return caf::icase_equal(x.first, "content-encoding");
+            });
+            const auto encoding
+              = it != std::ranges::end(headers) ? it->first : "";
+            const auto make_chunk = [&] -> chunk_ptr {
+              if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
+                return chunk::make(std::move(*body));
+              }
+              return chunk::copy(r.body());
+            };
+            const auto make_blob = [&] -> blob {
+              if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
+                return std::move(*body);
+              }
+              return blob{r.body()};
+            };
             if (const auto code = std::to_underlying(r.code());
                 code < 200 or 399 < code) {
               --awaiting;
-              diagnostic::warning("received erroneous http status code: `{}`",
-                                  code)
-                .primary(args_.op)
-                .note("skipping response handling")
-                .emit(dh);
+              if (not args_.error_field) {
+                diagnostic::warning("received erroneous http status code: `{}`",
+                                    code)
+                  .primary(args_.op)
+                  .note("skipping response handling")
+                  .hint("specify `error_field` to keep the event")
+                  .emit(dh);
+                return;
+              }
+              auto sb = series_builder{};
+              sb.data(og);
+              auto error = series_builder{};
+              error.data(make_blob());
+              auto slice
+                = assign(*args_.error_field, error.finish_assert_one_array(),
+                         sb.finish_assert_one_slice(), dh);
+              if (args_.metadata_field) {
+                auto sb = make_metadata(r, slice.rows());
+                slice
+                  = assign(*args_.metadata_field, sb.finish_assert_one_array(),
+                           slice, ctrl.diagnostics());
+              }
+              slices.push_back(std::move(slice));
               return;
             }
             if (r.body().empty()) {
@@ -1669,18 +1768,6 @@ public:
               --awaiting;
               return;
             }
-            const auto& headers = r.header_fields();
-            const auto* it = std::ranges::find_if(headers, [](const auto& x) {
-              return caf::icase_equal(x.first, "content-encoding");
-            });
-            const auto encoding
-              = it != std::ranges::end(headers) ? it->first : "";
-            const auto make_chunk = [&] {
-              if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
-                return chunk::make(std::move(*body));
-              }
-              return chunk::copy(r.body());
-            };
             const auto actor
               = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
             std::invoke([&, &args_ = args_, r, og, hdrs,
