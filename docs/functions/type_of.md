@@ -14,7 +14,7 @@ type_of(x:any) -> record
 
 The `type_of` function returns the type definition of the given value `x`.
 
-:::warning Subject to change
+:::caution[Subject to change]
 This function is designed for internal use of the Tenzir Platform and its output
 format is subject to change without notice.
 :::

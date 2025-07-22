@@ -25,7 +25,7 @@ recommend passing the `mmap=true` option to `load_file` to give the parser full 
 over the reads, which leads to better performance and memory usage.
 :::
 
-:::warning[Limitation]
+:::caution[Limitation]
 Tenzir currently assumes that all Parquet files use metadata recognized by
 Tenzir. We plan to lift this restriction in the future.
 :::
