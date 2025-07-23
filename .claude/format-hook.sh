@@ -15,3 +15,13 @@ if [[ "$FILE_PATH" =~ \.(cpp|hpp|cpp\.in|hpp\.in)$ ]]; then
     echo "📝 Running clang-format on $FILE_PATH" >&2
     clang-format -i "$FILE_PATH"
 fi
+
+# Run markdownlint for Markdown files
+if [[ "$FILE_PATH" =~ \.(md)$ ]]; then
+    echo "📝 Running markdownlint on $FILE_PATH" >&2
+    if command -v markdownlint &> /dev/null; then
+        markdownlint "$FILE_PATH" --fix
+    else
+        echo "⚠️  markdownlint not found, skipping" >&2
+    fi
+fi

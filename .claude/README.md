@@ -6,25 +6,29 @@ codebase.
 ## Files
 
 - `settings.json` - Hook configuration
-- `format-hook.sh` - Shell script that runs clang-format on C++ files
+- `format-hook.sh` - Shell script that runs formatters on files
 
 ## Current Hooks
 
-### Clang Format Hook
+### Auto-Format Hook
 
-Automatically formats C++ files (`.cpp`, `.hpp`, `.cpp.in`, `.hpp.in`) using
-clang-format after they are written or edited. This ensures all C++ code follows
-the project's formatting standards defined in `.clang-format`.
+Automatically formats files after they are written or edited to ensure code
+follows project standards.
+
+Supported file types:
+- **C++ files** (`.cpp`, `.hpp`, `.cpp.in`, `.hpp.in`) - Uses `clang-format`
+- **Markdown files** (`.md`) - Uses `markdownlint --fix`
 
 The hook:
 - Triggers after `Edit`, `MultiEdit`, and `Write` operations
 - Reads JSON from stdin and extracts the file path using `jq`
-- Only formats C++ source and header files
+- Runs the appropriate formatter based on file extension
 - Provides visual feedback via stderr
+- Gracefully handles missing tools with warnings
 
 ## How It Works
 
 1. Claude sends JSON to the hook's stdin containing tool input/output
 2. The hook uses `jq` to extract the file path from the JSON
-3. If the file is a C++ file, it runs `clang-format -i` on it
+3. Based on the file extension, it runs the appropriate formatter
 4. Status messages are sent to stderr for visibility
