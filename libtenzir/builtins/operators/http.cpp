@@ -939,7 +939,7 @@ struct from_http_args {
   }
 
   auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
-    return ssl::context::enable(tls.inner)
+    return ssl::context::enable(tls.inner or uri.scheme() == "https")
       .and_then(ssl::emplace_context(ssl::tls::any))
       .and_then(ssl::enable_default_verify_paths())
       .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
@@ -1647,7 +1647,7 @@ struct http_args {
   }
 
   auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
-    return ssl::context::enable(tls.has_value())
+    return ssl::context::enable(tls.has_value() or uri.scheme() == "https")
       .and_then(ssl::emplace_context(ssl::tls::any))
       .and_then(ssl::enable_default_verify_paths())
       .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
