@@ -17,6 +17,12 @@ Without arguments, it removes all fields with `null` values from the entire
 event. When provided with specific field paths, it only considers those fields
 for removal.
 
+:::note[Behavior with Lists]
+The `drop_nulls` operator only removes top-level fields that contain `null`.
+It does not remove `null` values from within lists or arrays. A field
+containing a list with `null` elements is not considered a null field.
+:::
+
 ## Examples
 
 ### Drop all null fields from the input
@@ -68,6 +74,48 @@ drop_nulls dst, info.id
   },
 }
 ```
+
+### Behavior with records inside lists
+
+The `drop_nulls` operator does not remove `null` values from within lists,
+even when those lists contain records with null fields:
+
+```tql
+from {
+  id: 1,
+  items: [{name: "a", value: 1}, {name: "b", value: null}],
+  metadata: null,
+  tags: ["x", null, "y"]
+}
+drop_nulls
+```
+
+```tql
+{
+  id: 1,
+  items: [
+    {
+      name: "a",
+      value: 1,
+    },
+    {
+      name: "b",
+      value: null,
+    },
+  ],
+  tags: [
+    "x",
+    null,
+    "y",
+  ],
+}
+```
+
+In this example:
+- The `metadata` field is removed because it contains `null`
+- The `items` field is kept even though it contains records with `null` values
+- The `tags` field is kept even though it contains `null` elements
+- `null` values within the lists remain unchanged
 
 ## See Also
 
