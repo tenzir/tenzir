@@ -8,10 +8,11 @@ Sends and receives HTTP/1.1 requests.
 
 ```tql
 from_http url:string, [method=string, body=record|string|blob, encode=string,
-          headers=record, metadata_field=field, paginate=record->string,
-          paginate_delay=duration, connection_timeout=duration,
-          max_retry_count=int, retry_delay=duration, tls=bool, certfile=string,
-          keyfile=string, password=string { … }]
+          headers=record, metadata_field=field, error_field=field,
+          paginate=record->string, paginate_delay=duration,
+          connection_timeout=duration, max_retry_count=int,
+          retry_delay=duration, tls=bool, certfile=string, keyfile=string,
+          password=string { … }]
 from_http url:string, server=true, [metadata_field=field, responses=record,
           max_request_size=int, tls=bool, certfile=string, keyfile=string,
           password=string { … }]
@@ -92,6 +93,14 @@ The request metadata (when using the server mode) has the following schema:
 | `fragment`           | `string` | The URI fragment of the request.      |
 | `method`             | `string` | The HTTP method of the request.       |
 | `version`            | `string` | The HTTP version of the request.      |
+
+### `error_field = field (optional)`
+
+Field to insert the response body for HTTP error responses (status codes not in the 2xx or 3xx range).
+
+When set, any HTTP response with a status code outside the 200–399 range will
+have its body stored in this field as a `blob`. Otherwise, error responses,
+alongside the original event, are skipped and an error is emitted.
 
 ### `paginate = record -> string (optional)`
 
