@@ -46,22 +46,25 @@ auto compute_null_pattern(const table_slice& slice, size_t row_index,
       // Navigate to the column using the offset
       const auto* array = batch->column((*field_offset)[0]).get();
       // For nested fields, navigate deeper
+      bool navigation_failed = false;
       for (size_t i = 1; i < field_offset->size(); ++i) {
         if (auto* struct_array = dynamic_cast<const arrow::StructArray*>(array)) {
           array = struct_array->field((*field_offset)[i]).get();
         } else {
           // Can't navigate deeper, treat as not null
           pattern.push_back(false);
-          goto next_field;
+          navigation_failed = true;
+          break;
         }
       }
-      // Check if this specific row is null
-      pattern.push_back(array->IsNull(row_index));
+      if (! navigation_failed) {
+        // Check if this specific row is null
+        pattern.push_back(array->IsNull(row_index));
+      }
     } else {
       // Field doesn't exist, treat as not null
       pattern.push_back(false);
     }
-    next_field:;
   }
   return pattern;
 }
@@ -118,11 +121,11 @@ auto get_all_field_paths(const type& schema,
   return result;
 }
 
-class drop_nulls_operator2 final : public crtp_operator<drop_nulls_operator2> {
+class drop_nulls_operator final : public crtp_operator<drop_nulls_operator> {
 public:
-  drop_nulls_operator2() = default;
+  drop_nulls_operator() = default;
 
-  explicit drop_nulls_operator2(std::vector<ast::field_path> selectors)
+  explicit drop_nulls_operator(std::vector<ast::field_path> selectors)
     : selectors_{std::move(selectors)} {
   }
 
@@ -195,7 +198,7 @@ public:
     return do_not_optimize(*this);
   }
 
-  friend auto inspect(auto& f, drop_nulls_operator2& x) -> bool {
+  friend auto inspect(auto& f, drop_nulls_operator& x) -> bool {
     return f.apply(x.selectors_);
   }
 
@@ -203,7 +206,7 @@ private:
   std::vector<ast::field_path> selectors_;
 };
 
-class plugin2 final : public virtual operator_plugin2<drop_nulls_operator2> {
+class plugin final : public virtual operator_plugin2<drop_nulls_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -226,7 +229,7 @@ public:
         return failure::promise();
       }
     }
-    return std::make_unique<drop_nulls_operator2>(std::move(selectors));
+    return std::make_unique<drop_nulls_operator>(std::move(selectors));
   }
 };
 
@@ -234,4 +237,4 @@ public:
 
 } // namespace tenzir::plugins::drop_nulls
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop_nulls::plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop_nulls::plugin)
