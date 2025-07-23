@@ -163,4 +163,7 @@ GitHub Actions workflows in `.github/workflows/`:
 4. Create a changelog entry for new features, bugfixes, or changes using
    `changelog/add.py` before creating a PR. Write changelog entries like
    micro blog posts—always include examples to illustrate the feature or fix.
-   Format Markdown files with 80-character line lengths
+   Format Markdown files with 80-character line lengths. For TQL examples:
+   - Use ```tql blocks for both input pipelines and output
+   - Show realistic, practical examples that demonstrate the feature
+   - Include output that shows what users will actually see

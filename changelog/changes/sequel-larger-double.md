@@ -9,21 +9,58 @@ The new `drop_nulls` operator removes fields containing null values from
 events. Without arguments, it drops all fields with null values. With field
 arguments, it drops only the specified fields if they contain null values.
 
-## Examples
+### Drop all null fields
 
-Drop all fields with null values:
+Clean up events by removing all fields with null values:
+
 ```tql
-from [{a: 1, b: null, c: 3}, {a: null, b: 2, c: null}]
+from {
+  timestamp: 2025-01-23T10:00:00,
+  src_ip: 192.168.1.5,
+  dst_ip: null,
+  username: "alice",
+  session_id: null,
+  bytes: 1024
+}
 drop_nulls
-// [{a: 1, c: 3}, {b: 2}]
 ```
 
-Drop specific fields only if they contain null:
 ```tql
-from [{a: 1, b: null, c: 3}, {a: null, b: 2, c: null}]
-drop_nulls a, b
-// [{c: 3}, {b: 2, c: null}]
+{
+  timestamp: 2025-01-23T10:00:00Z,
+  src_ip: 192.168.1.5,
+  username: "alice",
+  bytes: 1024,
+}
 ```
 
-The operator maximizes performance by batching rows with identical null
-patterns together, avoiding unnecessary memory allocations.
+### Drop specific null fields
+
+Target specific fields for removal only when they contain null:
+
+```tql
+from {
+  event_id: 42,
+  user: {name: "bob", email: null},
+  metadata: null,
+  tags: ["security", "audit"]
+}
+drop_nulls metadata, user.email
+```
+
+```tql
+{
+  event_id: 42,
+  user: {
+    name: "bob",
+  },
+  tags: [
+    "security",
+    "audit",
+  ],
+}
+```
+
+The `metadata` field is removed because it's null at the top level. The
+`user.email` field is also removed even though it's nested, showing that
+`drop_nulls` can target specific nested fields when explicitly named.
