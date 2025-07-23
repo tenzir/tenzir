@@ -12,7 +12,7 @@ drop_nulls [field...]
 
 ## Description
 
-The `drop_nulls` operator removes fields that have `null` values from events. 
+The `drop_nulls` operator removes fields that have `null` values from events.
 Without arguments, it removes all fields with `null` values from the entire event.
 When provided with specific field paths, it only considers those fields for removal.
 
