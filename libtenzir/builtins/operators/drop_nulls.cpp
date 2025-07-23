@@ -38,16 +38,13 @@ auto compute_null_pattern(const table_slice& slice, size_t row_index,
   -> null_pattern {
   auto pattern = null_pattern{};
   pattern.reserve(fields_to_check.size());
-  
   const auto& batch = to_record_batch(slice);
-  
   for (const auto& field : fields_to_check) {
     // Resolve the field path to get the column
     auto resolved = resolve(field, slice.schema());
     if (auto* field_offset = std::get_if<offset>(&resolved)) {
       // Navigate to the column using the offset
       const auto* array = batch->column((*field_offset)[0]).get();
-      
       // For nested fields, navigate deeper
       for (size_t i = 1; i < field_offset->size(); ++i) {
         if (auto* struct_array = dynamic_cast<const arrow::StructArray*>(array)) {
@@ -58,7 +55,6 @@ auto compute_null_pattern(const table_slice& slice, size_t row_index,
           goto next_field;
         }
       }
-      
       // Check if this specific row is null
       pattern.push_back(array->IsNull(row_index));
     } else {
@@ -67,7 +63,6 @@ auto compute_null_pattern(const table_slice& slice, size_t row_index,
     }
     next_field:;
   }
-  
   return pattern;
 }
 
@@ -83,16 +78,13 @@ auto get_all_field_paths(const type& schema,
                          std::vector<ast::field_path::segment> prefix = {})
   -> std::vector<ast::field_path> {
   auto result = std::vector<ast::field_path>{};
-  
   const auto* record = try_as<record_type>(schema);
   if (!record) {
     return result;
   }
-  
   for (const auto& field : record->fields()) {
     auto segments = prefix;
     segments.push_back({ast::identifier{field.name, location::unknown}, false});
-    
     // Create field path expression
     ast::expression expr;
     if (segments.size() == 1) {
@@ -114,18 +106,15 @@ auto get_all_field_paths(const type& schema,
         };
       }
     }
-    
     if (auto fp = ast::field_path::try_from(std::move(expr))) {
       result.push_back(std::move(*fp));
     }
-    
     // Recurse for nested records
     if (try_as<record_type>(field.type)) {
       auto nested_paths = get_all_field_paths(field.type, segments);
       result.insert(result.end(), nested_paths.begin(), nested_paths.end());
     }
   }
-  
   return result;
 }
 
@@ -149,26 +138,21 @@ public:
         co_yield {};
         continue;
       }
-      
       // Determine which fields to check
       auto fields_to_check = selectors_.empty() 
         ? get_all_field_paths(slice.schema())
         : selectors_;
-      
       if (fields_to_check.empty()) {
         // No fields to check, yield unchanged
         co_yield std::move(slice);
         continue;
       }
-      
       // Group consecutive rows by their null pattern
       auto groups = std::vector<row_group>{};
       size_t current_start = 0;
       auto current_pattern = compute_null_pattern(slice, 0, fields_to_check);
-      
       for (size_t row = 1; row < slice.rows(); ++row) {
         auto pattern = compute_null_pattern(slice, row, fields_to_check);
-        
         if (pattern != current_pattern) {
           // Pattern changed, save the current group
           auto fields_to_drop = std::vector<ast::field_path>{};
@@ -177,13 +161,11 @@ public:
               fields_to_drop.push_back(fields_to_check[i]);
             }
           }
-          
           groups.push_back({current_start, row, std::move(fields_to_drop)});
           current_start = row;
           current_pattern = std::move(pattern);
         }
       }
-      
       // Add the last group
       auto fields_to_drop = std::vector<ast::field_path>{};
       for (size_t i = 0; i < fields_to_check.size(); ++i) {
@@ -192,11 +174,9 @@ public:
         }
       }
       groups.push_back({current_start, slice.rows(), std::move(fields_to_drop)});
-      
       // Process each group
       for (const auto& group : groups) {
         auto group_slice = subslice(slice, group.start, group.end);
-        
         if (group.fields_to_drop.empty()) {
           // No fields to drop in this group
           co_yield std::move(group_slice);
