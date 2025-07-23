@@ -17,14 +17,19 @@ follows project standards.
 
 Supported file types:
 - **C++ files** (`.cpp`, `.hpp`, `.cpp.in`, `.hpp.in`) - Uses `clang-format`
-- **Markdown files** (`.md`) - Uses `markdownlint --fix`
+- **Markdown files** (`.md`) - Uses `markdownlint --fix` and `prettier`
+- **JSON files** (`.json`) - Uses `prettier`
+- **YAML files** (`.yaml`, `.yml`) - Uses `prettier`
 
 The hook:
 - Triggers after `Edit`, `MultiEdit`, and `Write` operations
 - Reads JSON from stdin and extracts the file path using `jq`
-- Runs the appropriate formatter based on file extension
+- Runs the appropriate formatter(s) based on file extension
 - Provides visual feedback via stderr
 - Gracefully handles missing tools with warnings
+
+Note: For Markdown files, both markdownlint and prettier will run if available,
+ensuring comprehensive formatting.
 
 ## How It Works
 

@@ -25,3 +25,13 @@ if [[ "$FILE_PATH" =~ \.(md)$ ]]; then
         echo "⚠️  markdownlint not found, skipping" >&2
     fi
 fi
+
+# Run prettier on supported files
+if [[ "$FILE_PATH" =~ \.(md|json|yaml|yml)$ ]]; then
+    echo "✨ Running prettier on $FILE_PATH" >&2
+    if command -v prettier &> /dev/null; then
+        prettier --write "$FILE_PATH"
+    else
+        echo "⚠️  prettier not found, skipping" >&2
+    fi
+fi
