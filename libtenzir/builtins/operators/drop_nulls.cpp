@@ -200,6 +200,8 @@ private:
   std::vector<ast::field_path> selectors_;
 };
 
+} // namespace
+
 class plugin final : public virtual operator_plugin2<drop_nulls_operator> {
 public:
   auto make(invocation inv, session ctx) const
@@ -226,8 +228,6 @@ public:
     return std::make_unique<drop_nulls_operator>(std::move(selectors));
   }
 };
-
-} // namespace
 
 } // namespace tenzir::plugins::drop_nulls
 
