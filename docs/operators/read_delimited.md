@@ -86,6 +86,7 @@ read_delimited "\x00\x01", binary=true
 
 ## See Also
 
+[`read_all`](/reference/operators/read_all),
 [`read_delimited_regex`](/reference/operators/read_delimited_regex),
 [`read_lines`](/reference/operators/read_lines),
 [`read_ssv`](/reference/operators/read_ssv),
