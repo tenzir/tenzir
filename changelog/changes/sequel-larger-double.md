@@ -5,7 +5,9 @@ authors: mavam
 pr: 5370
 ---
 
-The new `drop_nulls` operator removes fields containing null values from events. Without arguments, it drops all fields with null values. With field arguments, it drops only the specified fields if they contain null values.
+The new `drop_nulls` operator removes fields containing null values from
+events. Without arguments, it drops all fields with null values. With field
+arguments, it drops only the specified fields if they contain null values.
 
 ## Examples
 
@@ -23,4 +25,5 @@ drop_nulls a, b
 // [{c: 3}, {b: 2, c: null}]
 ```
 
-The operator maximizes performance by batching rows with identical null patterns together, avoiding unnecessary memory allocations.
+The operator maximizes performance by batching rows with identical null
+patterns together, avoiding unnecessary memory allocations.
