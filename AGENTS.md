@@ -77,6 +77,15 @@ Build the project as follows:
 cmake --build build
 ```
 
+### Run pipelines
+
+Use the `tenzir` binary to execute a TQL program:
+
+- The first argument is the pipeline definition.
+- Alternatively, pass the pipeline defintion as file via `-f <path>`.
+- The pipeline may read stdin as data, based on the first operator.
+- The pipeline may produce data on stdout, based on the last operator.
+
 ### Testing
 
 Tenzir has both C++ *unit tests* and TQL *integration tests*.
@@ -94,16 +103,17 @@ ctest --test-dir build
 The integration tests are in `tenzir/tests`. Read `tenzir/tests/README.md` for
 detailed instructions on how to exeucte and write tests.
 
-TL;DR: run all integration tests via CMake:
+TL;DR: run all integration tests via `uv`:
 
 ```sh
-cmake --build build --target integration
+uv run tenzir/tests/run.py
 ```
 
-Or manually via `uv`:
+Test the changed/new functionality selectively by passing the test files as
+arguments, e.g.:
 
 ```sh
-uv run --python=>=3.12 tenzir/tests/run.py
+uv run tenzir/tests/run.py tenzir/tests/exec/drop/*.tql
 ```
 
 ### Code Quality
