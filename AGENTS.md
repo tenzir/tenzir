@@ -160,3 +160,5 @@ GitHub Actions workflows in `.github/workflows/`:
 2. Write integration tests for new TQL features, such as functions and
    operators.
 3. Update documentation when adding new features
+4. Create a changelog entry for new features, bugfixes, or changes using
+   `changelog/add.py` before creating a PR
