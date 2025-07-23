@@ -48,7 +48,8 @@ auto compute_null_pattern(const table_slice& slice, size_t row_index,
       // For nested fields, navigate deeper
       bool navigation_failed = false;
       for (size_t i = 1; i < field_offset->size(); ++i) {
-        if (auto* struct_array = dynamic_cast<const arrow::StructArray*>(array)) {
+        if (auto* struct_array
+            = dynamic_cast<const arrow::StructArray*>(array)) {
           array = struct_array->field((*field_offset)[i]).get();
         } else {
           // Can't navigate deeper, treat as not null
@@ -77,12 +78,12 @@ struct row_group {
 };
 
 /// Finds all fields in the schema (for when no specific fields are given)
-auto get_all_field_paths(const type& schema, 
+auto get_all_field_paths(const type& schema,
                          std::vector<ast::field_path::segment> prefix = {})
   -> std::vector<ast::field_path> {
   auto result = std::vector<ast::field_path>{};
   const auto* record = try_as<record_type>(schema);
-  if (!record) {
+  if (! record) {
     return result;
   }
   for (const auto& field : record->fields()) {
@@ -92,21 +93,14 @@ auto get_all_field_paths(const type& schema,
     ast::expression expr;
     if (segments.size() == 1) {
       expr = ast::expression{
-        ast::root_field{segments[0].id, segments[0].has_question_mark}
-      };
+        ast::root_field{segments[0].id, segments[0].has_question_mark}};
     } else {
       expr = ast::expression{
-        ast::root_field{segments[0].id, segments[0].has_question_mark}
-      };
+        ast::root_field{segments[0].id, segments[0].has_question_mark}};
       for (size_t i = 1; i < segments.size(); ++i) {
         expr = ast::expression{
-          ast::field_access{
-            std::move(expr),
-            location::unknown,
-            segments[i].has_question_mark,
-            segments[i].id
-          }
-        };
+          ast::field_access{std::move(expr), location::unknown,
+                            segments[i].has_question_mark, segments[i].id}};
       }
     }
     if (auto fp = ast::field_path::try_from(std::move(expr))) {
@@ -142,9 +136,8 @@ public:
         continue;
       }
       // Determine which fields to check
-      auto fields_to_check = selectors_.empty() 
-        ? get_all_field_paths(slice.schema())
-        : selectors_;
+      auto fields_to_check
+        = selectors_.empty() ? get_all_field_paths(slice.schema()) : selectors_;
       if (fields_to_check.empty()) {
         // No fields to check, yield unchanged
         co_yield std::move(slice);
@@ -176,7 +169,8 @@ public:
           fields_to_drop.push_back(fields_to_check[i]);
         }
       }
-      groups.push_back({current_start, slice.rows(), std::move(fields_to_drop)});
+      groups.push_back(
+        {current_start, slice.rows(), std::move(fields_to_drop)});
       // Process each group
       for (const auto& group : groups) {
         auto group_slice = subslice(slice, group.start, group.end);
@@ -185,7 +179,7 @@ public:
           co_yield std::move(group_slice);
         } else {
           // Drop the null fields from this group
-          co_yield tenzir::drop(group_slice, group.fields_to_drop, 
+          co_yield tenzir::drop(group_slice, group.fields_to_drop,
                                 ctrl.diagnostics(), false);
         }
       }
