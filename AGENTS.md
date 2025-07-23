@@ -161,4 +161,5 @@ GitHub Actions workflows in `.github/workflows/`:
    operators.
 3. Update documentation when adding new features
 4. Create a changelog entry for new features, bugfixes, or changes using
-   `changelog/add.py` before creating a PR
+   `changelog/add.py` before creating a PR. Write changelog entries like
+   micro blog posts—always include examples to illustrate the feature or fix
