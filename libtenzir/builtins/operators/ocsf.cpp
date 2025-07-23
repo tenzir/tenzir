@@ -13,6 +13,7 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/value_path.hpp"
 #include "tenzir/view3.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
@@ -97,7 +98,7 @@ public:
     auto result
       = cast(series{slice.schema(),
                     std::static_pointer_cast<arrow::Array>(std::move(array))},
-             ty, "");
+             ty, value_path{});
     auto schema = type{name, result.type};
     auto arrow_schema = schema.to_arrow_schema();
     return table_slice{
@@ -149,13 +150,13 @@ private:
   }
 
   template <basic_type Type>
-  auto cast(basic_series<Type> input, const Type&, std::string_view path)
+  auto cast(basic_series<Type> input, const Type&, value_path path)
     -> basic_series<Type> {
     (void)path;
     return input;
   }
 
-  auto cast(series input, const type& ty, std::string_view path) -> series {
+  auto cast(series input, const type& ty, value_path path) -> series {
     auto nullify_empty_records
       = ty.attribute("nullify_empty_records").has_value();
     if (ty.attribute("variant")) {
@@ -214,20 +215,20 @@ private:
     return result;
   }
 
-  auto cast(basic_series<enumeration_type>, const enumeration_type&,
-            std::string_view) -> basic_series<enumeration_type> {
+  auto cast(basic_series<enumeration_type>, const enumeration_type&, value_path)
+    -> basic_series<enumeration_type> {
     TENZIR_UNREACHABLE();
   }
 
-  auto cast(basic_series<map_type>, const map_type&, std::string_view)
+  auto cast(basic_series<map_type>, const map_type&, value_path)
     -> basic_series<map_type> {
     TENZIR_UNREACHABLE();
   }
 
-  auto cast(basic_series<list_type> input, const list_type& ty,
-            std::string_view path) -> basic_series<list_type> {
+  auto cast(basic_series<list_type> input, const list_type& ty, value_path path)
+    -> basic_series<list_type> {
     auto values = cast(series{input.type.value_type(), input.array->values()},
-                       ty.value_type(), std::string{path} + "[]");
+                       ty.value_type(), path.list());
     return make_list_series(values, *input.array);
   }
 
@@ -246,7 +247,7 @@ private:
   }
 
   auto cast(basic_series<record_type> input, const record_type& ty,
-            std::string_view path) -> basic_series<record_type> {
+            value_path path) -> basic_series<record_type> {
     auto fields = std::vector<record_type::field_view>{};
     auto field_arrays = arrow::ArrayVector{};
     for (auto&& field : ty.fields()) {
@@ -262,22 +263,14 @@ private:
           cast_ty.to_arrow_type(), input.array->length())));
         continue;
       }
-      auto field_path = std::string{path};
-      if (not field_path.empty()) {
-        field_path += '.';
-      }
-      field_path += field.name;
-      auto casted = cast(std::move(*field_series), field.type, field_path);
+      auto casted
+        = cast(std::move(*field_series), field.type, path.field(field.name));
       field_arrays.push_back(std::move(casted.array));
       fields.emplace_back(field.name, std::move(casted.type));
     }
     for (auto& field : input.array->struct_type()->fields()) {
       // Warn for fields that do not exist in the target type.
-      auto field_path = std::string{path};
-      if (not field_path.empty()) {
-        field_path += '.';
-      }
-      field_path += field->name();
+      auto field_path = path.field(field->name());
       auto field_index = ty.resolve_field(field->name());
       if (field_index) {
         auto field_type = ty.field(*field_index).type;
@@ -692,7 +685,7 @@ public:
   }
 
   auto derive(const table_slice& slice, const type& ty) -> table_slice {
-    auto result = derive(series{slice}, ty);
+    auto result = derive(series{slice}, ty, value_path{});
     auto arrow_schema = result.type.to_arrow_schema();
     return table_slice{
       arrow::RecordBatch::Make(arrow_schema, result.length(),
@@ -704,25 +697,26 @@ public:
 private:
   template <class Type>
     requires(basic_type<Type> or std::same_as<Type, enumeration_type>)
-  auto derive(basic_series<Type> input, const Type& ty) -> basic_series<Type> {
-    (void)ty;
+  auto derive(basic_series<Type> input, const Type& ty, value_path path)
+    -> basic_series<Type> {
+    (void)ty, void(path);
     return input;
   }
 
-  auto derive(basic_series<map_type> input, const map_type& ty)
+  auto derive(basic_series<map_type> input, const map_type& ty, value_path path)
     -> basic_series<map_type> {
-    (void)input, (void)ty;
+    (void)input, (void)ty, (void)path;
     TENZIR_UNREACHABLE();
   }
 
-  auto derive(basic_series<list_type> input, const list_type& ty)
-    -> basic_series<list_type> {
+  auto derive(basic_series<list_type> input, const list_type& ty,
+              value_path path) -> basic_series<list_type> {
     auto values = derive(series{input.type.value_type(), input.array->values()},
-                         ty.value_type());
+                         ty.value_type(), path.list());
     return make_list_series(values, *input.array);
   }
 
-  auto derive(series input, const type& ty) -> series {
+  auto derive(series input, const type& ty, value_path path) -> series {
     if (ty.attribute("variant")) {
       // Do not attempt derivation in variant fields.
       return input;
@@ -732,7 +726,7 @@ private:
     return match(
       std::tie(input, ty),
       [&]<class Type>(basic_series<Type> input, const Type& ty) -> series {
-        auto result = derive(std::move(input), ty);
+        auto result = derive(std::move(input), ty, path);
         return series{
           type{name, result.type, std::move(attributes)},
           std::move(result.array),
@@ -745,8 +739,8 @@ private:
       });
   }
 
-  auto derive(basic_series<record_type> input, const record_type& ty)
-    -> basic_series<record_type> {
+  auto derive(basic_series<record_type> input, const record_type& ty,
+              value_path path) -> basic_series<record_type> {
     auto fields = std::vector<series_field>{};
     // Collect all input fields for fast lookup.
     auto input_fields = boost::unordered_flat_map<std::string_view, series>{};
@@ -769,15 +763,17 @@ private:
       auto enum_attr = field_ty.attribute("enum");
       if (enum_attr) {
         // This is an enum field with a sibling.
-        auto int_name = field_name;
         if (is<list_type>(field_ty)) {
           // Enum lists are not supported yet.
           continue;
         }
+        auto int_name = field_name;
+        auto int_path = path.field(int_name);
         TENZIR_ASSERT(field_ty.kind().is<int64_type>());
         auto sibling_attr = field_ty.attribute("sibling");
         TENZIR_ASSERT(sibling_attr);
         auto string_name = *sibling_attr;
+        auto string_path = path.field(string_name);
         auto string_ty = ty.field(string_name);
         TENZIR_ASSERT(string_ty);
         TENZIR_ASSERT(string_ty->kind().is<string_type>());
@@ -788,19 +784,19 @@ private:
           // Both exist - derive bidirectionally.
           auto [derived_enum, derived_sibling]
             = derive_bidirectionally(int_field->second, string_field->second,
-                                     *enum_attr, int_name, string_name);
+                                     *enum_attr, int_path, string_path);
           fields.emplace_back(int_name, std::move(derived_enum));
           fields.emplace_back(string_name, std::move(derived_sibling));
         } else if (int_field != input_fields.end()) {
           // Only enum exists - derive sibling.
           auto derived_sibling
-            = string_from_int(int_field->second, *enum_attr, int_name);
+            = string_from_int(int_field->second, *enum_attr, int_path);
           fields.emplace_back(int_name, std::move(int_field->second));
           fields.emplace_back(string_name, std::move(derived_sibling));
         } else if (string_field != input_fields.end()) {
           // Only sibling exists - derive enum.
           auto derived_enum
-            = int_from_string(string_field->second, *enum_attr, string_name);
+            = int_from_string(string_field->second, *enum_attr, string_path);
           fields.emplace_back(int_name, std::move(derived_enum));
           fields.emplace_back(string_name, std::move(string_field->second));
         } else {
@@ -814,7 +810,8 @@ private:
         auto field_iter = input_fields.find(field_name);
         if (field_iter != input_fields.end()) {
           fields.emplace_back(field_name,
-                              derive(std::move(field_iter->second), field_ty));
+                              derive(std::move(field_iter->second), field_ty,
+                                     path.field(field_name)));
         }
         skip.insert(field_name);
       }
@@ -833,18 +830,17 @@ private:
 
   auto
   derive_bidirectionally(const series& int_field, const series& string_field,
-                         std::string_view enum_id, std::string_view int_name,
-                         std::string_view string_name)
-    -> std::pair<series, series> {
+                         std::string_view enum_id, value_path int_path,
+                         value_path string_path) -> std::pair<series, series> {
     auto int_array = int_field.as<int64_type>();
     if (not int_array) {
       if (int_field.as<null_type>()) {
         return {
-          int_from_string(string_field, enum_id, string_name),
+          int_from_string(string_field, enum_id, string_path),
           string_field,
         };
       }
-      diagnostic::warning("field `{}` must be `int`, but got `{}`", int_name,
+      diagnostic::warning("field `{}` must be `int`, but got `{}`", int_path,
                           int_field.type.kind())
         .primary(self_)
         .emit(dh_);
@@ -855,24 +851,23 @@ private:
       if (string_field.as<null_type>()) {
         return {
           int_field,
-          string_from_int(int_field, enum_id, int_name),
+          string_from_int(int_field, enum_id, int_path),
         };
       }
-      diagnostic::warning("field `{}` must be `int`, but got `{}`", int_name,
+      diagnostic::warning("field `{}` must be `int`, but got `{}`", int_path,
                           int_field.type.kind())
         .primary(self_)
         .emit(dh_);
       return {int_field, string_field};
     }
-    return derive_bidirectionally(*int_array, *string_array, enum_id, int_name,
-                                  string_name);
+    return derive_bidirectionally(*int_array, *string_array, enum_id, int_path,
+                                  string_path);
   }
 
-  auto
-  derive_bidirectionally(const basic_series<int64_type>& int_field,
-                         const basic_series<string_type>& string_field,
-                         std::string_view enum_id, std::string_view int_name,
-                         std::string_view string_name)
+  auto derive_bidirectionally(const basic_series<int64_type>& int_field,
+                              const basic_series<string_type>& string_field,
+                              std::string_view enum_id, value_path int_path,
+                              value_path string_path)
     -> std::pair<basic_series<int64_type>, basic_series<string_type>> {
     auto& enum_lookup = check(get_ocsf_int_to_string(enum_id)).get();
     auto& reverse_lookup = check(get_ocsf_string_to_int(enum_id)).get();
@@ -890,14 +885,14 @@ private:
         // Both present - just validate consistency
         auto expected_string = enum_lookup.find(*int_value);
         if (expected_string == enum_lookup.end()) {
-          diagnostic::warning("found invalid value for {}", int_name)
+          diagnostic::warning("found invalid value for `{}`", int_path)
             .primary(self_)
             .note("got {}", *int_value)
             .emit(dh_);
         }
         auto expected_int = reverse_lookup.find(*string_value);
         if (expected_int == reverse_lookup.end()) {
-          diagnostic::warning("found invalid value for {}", string_name)
+          diagnostic::warning("found invalid value for `{}`", string_path)
             .primary(self_)
             .note("got {:?}", *string_value)
             .emit(dh_);
@@ -907,7 +902,7 @@ private:
           if (*int_value != expected_int->second
               or *string_value != expected_string->second) {
             diagnostic::warning("found inconsistency between `{}` and `{}`",
-                                int_name, string_name)
+                                int_path, string_path)
               .primary(self_)
               .note("got {} ({:?}) and {:?} ({})", *int_value,
                     expected_string->second, *string_value,
@@ -922,7 +917,7 @@ private:
           string_result = it->second;
         } else {
           diagnostic::warning("found invalid value for field `{}`", *int_value,
-                              int_name)
+                              int_path)
             .primary(self_)
             .note("got {}", *int_value)
             .emit(dh_);
@@ -933,7 +928,7 @@ private:
         if (it != reverse_lookup.end()) {
           int_result = it->second;
         } else {
-          diagnostic::warning("found invalid value for field `{}`", string_name)
+          diagnostic::warning("found invalid value for field `{}`", string_path)
             .primary(self_)
             .note("got {:?}", *string_value)
             .emit(dh_);
@@ -956,14 +951,14 @@ private:
   }
 
   auto string_from_int(const series& int_field, std::string_view enum_id,
-                       std::string_view int_name) -> basic_series<string_type> {
+                       value_path int_path) -> basic_series<string_type> {
     if (int_field.as<null_type>()) {
       return basic_series<string_type>::null(int_field.length());
     }
     auto enum_int_array = int_field.as<int64_type>();
     if (not enum_int_array) {
       diagnostic::warning("expected field `{}` to be `int`, but got `{}`",
-                          int_name, int_field.type.kind())
+                          int_path, int_field.type.kind())
         .primary(self_)
         .emit(dh_);
       return basic_series<string_type>::null(int_field.length());
@@ -977,7 +972,7 @@ private:
         if (it != int_to_string.end()) {
           check(string_builder.Append(it->second));
         } else {
-          diagnostic::warning("found invalid value for `{}`", int_name)
+          diagnostic::warning("found invalid value for `{}`", int_path)
             .primary(self_)
             .note("got {}", *value)
             .emit(dh_);
@@ -991,15 +986,14 @@ private:
   }
 
   auto int_from_string(const series& string_field, std::string_view enum_id,
-                       std::string_view string_name)
-    -> basic_series<int64_type> {
+                       value_path string_path) -> basic_series<int64_type> {
     if (string_field.as<null_type>()) {
       return basic_series<int64_type>::null(string_field.length());
     }
     auto sibling_string_array = string_field.as<string_type>();
     if (not sibling_string_array) {
       diagnostic::warning("expected field `{}` to be `string`, but got `{}`",
-                          string_name, string_field.type.kind())
+                          string_path, string_field.type.kind())
         .primary(self_)
         .emit(dh_);
       return basic_series<int64_type>::null(string_field.length());
@@ -1013,7 +1007,7 @@ private:
         if (it != string_to_int.end()) {
           check(int_builder.Append(it->second));
         } else {
-          diagnostic::warning("found invalid value for `{}`", string_name)
+          diagnostic::warning("found invalid value for `{}`", string_path)
             .primary(self_)
             .note("got {:?}", *value)
             .emit(dh_);
