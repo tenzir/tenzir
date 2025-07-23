@@ -1,0 +1,15 @@
+// test: exec
+
+from {
+  a: null,
+  b: 42,
+  c: null,
+  d: "hello",
+  e: {
+    f: null,
+    g: 100,
+    h: null
+  },
+  i: null
+}
+drop_nulls a, c, e.f
