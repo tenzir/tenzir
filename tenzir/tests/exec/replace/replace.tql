@@ -1,0 +1,9 @@
+from {x: 1, y: 2},
+{x: 1, y: 3},
+{x: null.int(), y: 4},
+{x: "", z: "2"},
+{x: 1.uint(), z: 1},
+{y: {a: 1, b: 1, z: null, x: {k: 1}}, a: {}},
+{}
+replace what=1, with="REDACTED"
+replace y.x, what="REDACTED", with="REDACTED TWICE"
