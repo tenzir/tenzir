@@ -18,8 +18,11 @@ event. When provided with specific field paths, it only considers those fields
 for removal.
 
 :::note[Behavior with Lists]
-The `drop_null_fields` operator only removes top-level fields that contain `null`.
-It does not remove `null` values from within lists or arrays. A field
+The `drop_null_fields` operator does not currently support dropping fields from
+records that are inside lists. It only removes fields that are `null` at the
+top level of the event structure.
+
+The operator does not remove `null` values from within lists. A field
 containing a list with `null` elements is not considered a null field.
 :::
 
@@ -77,8 +80,8 @@ drop_null_fields dst, info.id
 
 ### Behavior with records inside lists
 
-The `drop_null_fields` operator does not remove `null` values from within lists,
-even when those lists contain records with null fields:
+The `drop_null_fields` operator does not remove fields from records that are
+inside lists:
 
 ```tql
 from {
@@ -113,9 +116,9 @@ drop_null_fields
 
 In this example:
 - The `metadata` field is removed because it contains `null`
-- The `items` field is kept even though it contains records with `null` values
+- The `items` field is kept with all its internal structure intact
 - The `tags` field is kept even though it contains `null` elements
-- `null` values within the lists remain unchanged
+- Fields within records inside lists (like `value`) are not dropped even if they contain `null`
 
 ## See Also
 
