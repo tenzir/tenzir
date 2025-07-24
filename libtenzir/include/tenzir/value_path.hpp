@@ -20,15 +20,15 @@ class value_path {
 public:
   value_path() = default;
 
-  auto field(std::string_view name) -> value_path {
+  auto field(std::string_view name) const -> value_path {
     return {*this, field_t{name}};
   }
 
-  auto list() -> value_path {
+  auto list() const -> value_path {
     return {*this, list_t{}};
   }
 
-  auto index(int64_t index) -> value_path {
+  auto index(int64_t index) const -> value_path {
     return {*this, index_t{index}};
   }
 

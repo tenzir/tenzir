@@ -152,7 +152,7 @@ private:
   template <basic_type Type>
   auto cast(basic_series<Type> input, const Type&, value_path path)
     -> basic_series<Type> {
-    (void)path;
+    TENZIR_UNUSED(path);
     return input;
   }
 
@@ -466,13 +466,13 @@ private:
   template <class Type>
     requires(basic_type<Type> or std::same_as<Type, enumeration_type>)
   auto trim(basic_series<Type> input, const Type& ty) -> basic_series<Type> {
-    (void)ty;
+    TENZIR_UNUSED(ty);
     return input;
   }
 
   auto trim(basic_series<map_type> input, const map_type& ty)
     -> basic_series<map_type> {
-    (void)input, (void)ty;
+    TENZIR_UNUSED(input, ty);
     TENZIR_UNREACHABLE();
   }
 
@@ -699,13 +699,13 @@ private:
     requires(basic_type<Type> or std::same_as<Type, enumeration_type>)
   auto derive(basic_series<Type> input, const Type& ty, value_path path)
     -> basic_series<Type> {
-    (void)ty, void(path);
+    TENZIR_UNUSED(ty, path);
     return input;
   }
 
   auto derive(basic_series<map_type> input, const map_type& ty, value_path path)
     -> basic_series<map_type> {
-    (void)input, (void)ty, (void)path;
+    TENZIR_UNUSED(input, ty, path);
     TENZIR_UNREACHABLE();
   }
 
