@@ -33,7 +33,8 @@ the `binary` option defaults to `true`.
 ### `binary = bool (optional)`
 
 Treat the input as binary data instead of UTF-8 text. When enabled, invalid
-UTF-8 sequences will not cause warnings.
+UTF-8 sequences will not cause warnings, and the resulting `data` field will be
+of type `blob` instead of `string`.
 
 ### `include_separator = bool (optional)`
 
@@ -86,6 +87,7 @@ read_delimited "\x00\x01", binary=true
 
 ## See Also
 
+[`read_all`](/reference/operators/read_all),
 [`read_delimited_regex`](/reference/operators/read_delimited_regex),
 [`read_lines`](/reference/operators/read_lines),
 [`read_ssv`](/reference/operators/read_ssv),

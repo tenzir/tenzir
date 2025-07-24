@@ -36,7 +36,8 @@ When a blob literal is provided (e.g., `b"\\x00\\x01"`), the `binary` option def
 ### `binary = bool (optional)`
 
 Treat the input as binary data instead of UTF-8 text. When enabled, invalid
-UTF-8 sequences will not cause warnings.
+UTF-8 sequences will not cause warnings, and the resulting `data` field will be
+of type `blob` instead of `string`.
 
 ### `include_separator = bool (optional)`
 
@@ -90,6 +91,7 @@ read_delimited_regex b"\\xFF\\xFE", include_separator=true
 
 ## See Also
 
+[`read_all`](/reference/operators/read_all),
 [`read_delimited`](/reference/operators/read_delimited),
 [`read_lines`](/reference/operators/read_lines),
 [`read_ssv`](/reference/operators/read_ssv),
