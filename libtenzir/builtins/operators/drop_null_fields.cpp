@@ -86,15 +86,12 @@ auto get_all_field_paths(const record_type& record,
     // Create field path expression
     ast::expression expr;
     if (segments.size() == 1) {
-      expr = ast::expression{
-        ast::root_field{segments[0].id, segments[0].has_question_mark}};
+      expr = ast::expression{ast::root_field{segments[0].id, false}};
     } else {
-      expr = ast::expression{
-        ast::root_field{segments[0].id, segments[0].has_question_mark}};
+      expr = ast::expression{ast::root_field{segments[0].id, false}};
       for (size_t i = 1; i < segments.size(); ++i) {
-        expr = ast::expression{
-          ast::field_access{std::move(expr), location::unknown,
-                            segments[i].has_question_mark, segments[i].id}};
+        expr = ast::expression{ast::field_access{
+          std::move(expr), location::unknown, false, segments[i].id}};
       }
     }
     if (auto fp = ast::field_path::try_from(std::move(expr))) {
