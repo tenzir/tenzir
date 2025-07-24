@@ -31,40 +31,39 @@ namespace {
 /// Represents which fields are null in a row
 using null_pattern = std::vector<bool>;
 
+/// Resolves field paths to offsets
+auto resolve_field_paths(const std::vector<ast::field_path>& fields,
+                         const type& schema) -> std::vector<offset> {
+  auto result = std::vector<offset>{};
+  result.reserve(fields.size());
+  for (const auto& field : fields) {
+    auto resolved = resolve(field, schema);
+    if (auto* field_offset = std::get_if<offset>(&resolved)) {
+      result.push_back(*field_offset);
+    } else {
+      // Field doesn't exist, use empty offset
+      result.push_back(offset{});
+    }
+  }
+  return result;
+}
+
 /// Computes the null pattern for a specific row in a table slice
 auto compute_null_pattern(const table_slice& slice, size_t row_index,
-                          const std::vector<ast::field_path>& fields_to_check)
+                          const std::vector<offset>& field_offsets)
   -> null_pattern {
   auto pattern = null_pattern{};
-  pattern.reserve(fields_to_check.size());
-  const auto& batch = to_record_batch(slice);
-  for (const auto& field : fields_to_check) {
-    // Resolve the field path to get the column
-    auto resolved = resolve(field, slice.schema());
-    if (auto* field_offset = std::get_if<offset>(&resolved)) {
-      // Navigate to the column using the offset
-      const auto* array = batch->column((*field_offset)[0]).get();
-      // For nested fields, navigate deeper
-      bool navigation_failed = false;
-      for (size_t i = 1; i < field_offset->size(); ++i) {
-        if (auto* struct_array
-            = dynamic_cast<const arrow::StructArray*>(array)) {
-          array = struct_array->field((*field_offset)[i]).get();
-        } else {
-          // Can't navigate deeper, treat as not null
-          pattern.push_back(false);
-          navigation_failed = true;
-          break;
-        }
-      }
-      if (! navigation_failed) {
-        // Check if this specific row is null
-        pattern.push_back(array->IsNull(row_index));
-      }
-    } else {
+  pattern.reserve(field_offsets.size());
+  for (const auto& field_offset : field_offsets) {
+    if (field_offset.empty()) {
       // Field doesn't exist, treat as not null
       pattern.push_back(false);
+      continue;
     }
+    // Navigate to the field using series constructor
+    auto ser = series{slice, field_offset};
+    // Check if this specific row is null
+    pattern.push_back(ser.array->IsNull(row_index));
   }
   return pattern;
 }
@@ -145,12 +144,14 @@ public:
         co_yield std::move(slice);
         continue;
       }
+      // Resolve field paths to offsets once per slice
+      auto field_offsets = resolve_field_paths(fields_to_check, slice.schema());
       // Group consecutive rows by their null pattern
       auto groups = std::vector<row_group>{};
       size_t current_start = 0;
-      auto current_pattern = compute_null_pattern(slice, 0, fields_to_check);
+      auto current_pattern = compute_null_pattern(slice, 0, field_offsets);
       for (size_t row = 1; row < slice.rows(); ++row) {
-        auto pattern = compute_null_pattern(slice, row, fields_to_check);
+        auto pattern = compute_null_pattern(slice, row, field_offsets);
         if (pattern != current_pattern) {
           // Pattern changed, save the current group
           auto fields_to_drop = std::vector<ast::field_path>{};
