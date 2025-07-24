@@ -6,7 +6,8 @@ the Tenzir codebase.
 ## Project Overview
 
 Tenzir is a low-code data pipeline solution that helps security teams to
-collect, normalize, enrich, optimize, and route their data.
+collect, normalize, enrich, optimize, and route their data. The Tenzir Query
+Language (TQL) is domain-specific language to write data pipelines.
 
 ### Project Structure
 
@@ -83,6 +84,7 @@ Use the `tenzir` binary to execute a TQL program:
 
 - The first argument is the pipeline definition.
 - Alternatively, pass the pipeline defintion as file via `-f <path>`.
+- TQL files typically end with `.tql`.
 - The pipeline may read stdin as data, based on the first operator.
 - The pipeline may produce data on stdout, based on the last operator.
 
@@ -154,22 +156,46 @@ GitHub Actions workflows in `.github/workflows/`:
   - `regression-tests.sh` - Regression testing
   - Platform-specific dependency installers
 
-## Development Guidelines
+## Best Practices
 
-1. Follow the existing code style and conventions.
-2. Write integration tests for new TQL features, such as functions and
-   operators.
-3. Update documentation when adding new features
-4. Create a changelog entry for new features, bugfixes, or changes using
-   `changelog/add.py` before creating a PR. Write changelog entries like
-   micro blog posts—always include examples to illustrate the feature or fix.
-   Format Markdown files with 80-character line lengths. For TQL examples:
-   - Use ```tql blocks for both input pipelines and output
-   - Show realistic, practical examples that demonstrate the feature
-   - Include output that shows what users will actually see
-   
-   **Changelog titles should be user-focused**: Write titles that describe
-   the functionality from a user's perspective, not the technical
-   implementation. For example:
-   - Good: "Dropping null fields" (describes what users can do)
-   - Bad: "Add drop_null_fields operator" (describes technical implementation)
+- Follow the existing code style and conventions.
+- Write integration tests for new TQL features, such as functions and
+  operators.
+- Use Git to create self-contained commits.
+- Update documentation when adding new features.
+- Changelog:
+  - Create one or more a changelog entries for new features, bugfixes, or changes
+    using `changelog/add.py` before creating a PR.
+  - Write changelog entries like micro blog posts—always include examples to
+    illustrate the feature or fix. For TQL examples:
+    - Use ```tql blocks for both input pipelines and output
+    - Show realistic, practical examples that demonstrate the feature
+    - Include output that shows what users will actually see
+  - Changelog titles should be user-focused: Write titles that describe the
+    functionality from a user's perspective, not the technical implementation.
+
+## Development Workflow
+
+Follow these steps to contribute to Tenzir:
+
+### Planning Phase
+
+1. Begin with adapting and/or writing new user-facing documentation.
+   *Stop here and ask for feedback to ensure clarity and completeness.*
+2. Develop integration tests in the form of *.tql files along with their
+   expected output.
+   *Stop here and ask for feedback to ensure clarity and completeness.*
+3. Research the best strategy for implementing the feature or fix. In
+   particular, look at existing code and documentation to understand the best
+   approach.
+
+### Implementation Phase
+
+1. Make sure you are in a topic branch (e.g., `topic/feature-or-fix`).
+   Ask for confirmation in case the merge base is not `origin/main`.
+2. Prototype APIs and that fit into the overall architecture.
+3. Optional: consider writing unit tests for C++ code.
+4. Proceed with the implementation. Compile and test iteratively until it works.
+5. After all tests pass, write a changelog entry.
+6. Propose to submit a GitHub pull request via `gh`.
+   Ask for confirmation after presenting the pull request body.
