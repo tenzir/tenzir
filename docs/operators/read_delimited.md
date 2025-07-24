@@ -33,7 +33,8 @@ the `binary` option defaults to `true`.
 ### `binary = bool (optional)`
 
 Treat the input as binary data instead of UTF-8 text. When enabled, invalid
-UTF-8 sequences will not cause warnings.
+UTF-8 sequences will not cause warnings, and the resulting `data` field will be
+of type `blob` instead of `string`.
 
 ### `include_separator = bool (optional)`
 
