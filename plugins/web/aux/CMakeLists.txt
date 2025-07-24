@@ -25,7 +25,7 @@ list(TRANSFORM restinio_sources_patched
 
 add_custom_command(
   OUTPUT ${restinio_sources_patched}
-  DEPENDS "${CMAKE_CURRENT_LIST_DIR}/restinio.patch"
+  DEPENDS "${CMAKE_CURRENT_LIST_DIR}/expected.patch"
           ${restinio_sources_original}
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio"
   # Copy the patched restinio library to the binary directory.
@@ -34,8 +34,6 @@ add_custom_command(
     "${CMAKE_CURRENT_LIST_DIR}/restinio/dev/"
     "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio"
   # Apply a patch to the restinio library that makes some changes.
-  COMMAND "${PATCH_EXECUTABLE}" -p2 -i
-          "${CMAKE_CURRENT_LIST_DIR}/restinio.patch"
   COMMAND "${PATCH_EXECUTABLE}" -p2 -i
           "${CMAKE_CURRENT_LIST_DIR}/expected.patch")
 
@@ -49,12 +47,13 @@ find_package(Boost REQUIRED COMPONENTS headers)
 find_package(OpenSSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(http_parser REQUIRED)
+add_subdirectory(llhttp)
 
 # Create an interface library for the modified restinio sources.
 target_include_directories(
   restinio INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
 target_link_libraries(
   restinio INTERFACE fmt::fmt Boost::headers OpenSSL::SSL OpenSSL::Crypto
-                     http_parser::http_parser)
+                     http_parser::http_parser llhttp::llhttp)
 
 add_library(restinio::restinio ALIAS restinio)
