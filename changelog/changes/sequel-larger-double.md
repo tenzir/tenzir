@@ -1,11 +1,11 @@
 ---
-title: "Add drop_nulls operator"
+title: "Add drop_null_fields operator"
 type: feature
 authors: mavam
 pr: 5370
 ---
 
-The new `drop_nulls` operator removes fields containing null values from
+The new `drop_null_fields` operator removes fields containing null values from
 events. Without arguments, it drops all fields with null values. With field
 arguments, it drops only the specified fields if they contain null values.
 
@@ -22,7 +22,7 @@ from {
   session_id: null,
   bytes: 1024
 }
-drop_nulls
+drop_null_fields
 ```
 
 ```tql
@@ -45,7 +45,7 @@ from {
   metadata: null,
   tags: ["security", "audit"]
 }
-drop_nulls metadata, user.email
+drop_null_fields metadata, user.email
 ```
 
 ```tql
@@ -63,4 +63,4 @@ drop_nulls metadata, user.email
 
 The `metadata` field is removed because it's null at the top level. The
 `user.email` field is also removed even though it's nested, showing that
-`drop_nulls` can target specific nested fields when explicitly named.
+`drop_null_fields` can target specific nested fields when explicitly named.

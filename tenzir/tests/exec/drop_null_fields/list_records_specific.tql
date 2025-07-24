@@ -9,4 +9,4 @@ from {
     settings: null
   }
 }
-drop_nulls metadata, config.settings
+drop_null_fields metadata, config.settings

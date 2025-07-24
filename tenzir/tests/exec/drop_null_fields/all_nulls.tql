@@ -12,4 +12,4 @@ from {
   },
   i: null
 }
-drop_nulls
+drop_null_fields

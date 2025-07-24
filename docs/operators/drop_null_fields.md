@@ -1,24 +1,24 @@
 ---
-title: drop_nulls
+title: drop_null_fields
 category: Modify
-example: 'drop_nulls name, metadata.id'
+example: 'drop_null_fields name, metadata.id'
 ---
 
 Removes fields containing null values from the event.
 
 ```tql
-drop_nulls [field...]
+drop_null_fields [field...]
 ```
 
 ## Description
 
-The `drop_nulls` operator removes fields that have `null` values from events.
+The `drop_null_fields` operator removes fields that have `null` values from events.
 Without arguments, it removes all fields with `null` values from the entire
 event. When provided with specific field paths, it only considers those fields
 for removal.
 
 :::note[Behavior with Lists]
-The `drop_nulls` operator only removes top-level fields that contain `null`.
+The `drop_null_fields` operator only removes top-level fields that contain `null`.
 It does not remove `null` values from within lists or arrays. A field
 containing a list with `null` elements is not considered a null field.
 :::
@@ -37,7 +37,7 @@ from {
     msg: 8411,
   },
 }
-drop_nulls
+drop_null_fields
 ```
 
 ```tql
@@ -62,7 +62,7 @@ from {
     msg: 8411,
   },
 }
-drop_nulls dst, info.id
+drop_null_fields dst, info.id
 ```
 
 ```tql
@@ -77,7 +77,7 @@ drop_nulls dst, info.id
 
 ### Behavior with records inside lists
 
-The `drop_nulls` operator does not remove `null` values from within lists,
+The `drop_null_fields` operator does not remove `null` values from within lists,
 even when those lists contain records with null fields:
 
 ```tql
@@ -87,7 +87,7 @@ from {
   metadata: null,
   tags: ["x", null, "y"]
 }
-drop_nulls
+drop_null_fields
 ```
 
 ```tql

@@ -6,4 +6,4 @@ from {
   c: null,
   d: "hello"
 }
-drop_nulls b, d
+drop_null_fields b, d

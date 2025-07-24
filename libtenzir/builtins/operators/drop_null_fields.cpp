@@ -25,7 +25,7 @@
 #include <bitset>
 #include <unordered_map>
 
-namespace tenzir::plugins::drop_nulls {
+namespace tenzir::plugins::drop_null_fields {
 
 namespace {
 
@@ -115,16 +115,17 @@ auto get_all_field_paths(const type& schema,
   return result;
 }
 
-class drop_nulls_operator final : public crtp_operator<drop_nulls_operator> {
+class drop_null_fields_operator final
+  : public crtp_operator<drop_null_fields_operator> {
 public:
-  drop_nulls_operator() = default;
+  drop_null_fields_operator() = default;
 
-  explicit drop_nulls_operator(std::vector<ast::field_path> selectors)
+  explicit drop_null_fields_operator(std::vector<ast::field_path> selectors)
     : selectors_{std::move(selectors)} {
   }
 
   auto name() const -> std::string override {
-    return "tql2.drop_nulls";
+    return "tql2.drop_null_fields";
   }
 
   auto
@@ -192,7 +193,7 @@ public:
     return do_not_optimize(*this);
   }
 
-  friend auto inspect(auto& f, drop_nulls_operator& x) -> bool {
+  friend auto inspect(auto& f, drop_null_fields_operator& x) -> bool {
     return f.apply(x.selectors_);
   }
 
@@ -202,11 +203,12 @@ private:
 
 } // namespace
 
-class plugin final : public virtual operator_plugin2<drop_nulls_operator> {
+class plugin final
+  : public virtual operator_plugin2<drop_null_fields_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_("drop_nulls");
+    auto parser = argument_parser2::operator_("drop_null_fields");
     auto selectors = std::vector<ast::field_path>{};
     for (auto& arg : inv.args) {
       auto selector = ast::field_path::try_from(arg);
@@ -225,10 +227,10 @@ public:
         return failure::promise();
       }
     }
-    return std::make_unique<drop_nulls_operator>(std::move(selectors));
+    return std::make_unique<drop_null_fields_operator>(std::move(selectors));
   }
 };
 
-} // namespace tenzir::plugins::drop_nulls
+} // namespace tenzir::plugins::drop_null_fields
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop_nulls::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop_null_fields::plugin)

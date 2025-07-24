@@ -6,4 +6,4 @@ from {
   metadata: null,
   tags: ["x", null, "y"]
 }
-drop_nulls
+drop_null_fields

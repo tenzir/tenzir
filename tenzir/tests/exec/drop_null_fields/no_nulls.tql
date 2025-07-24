@@ -9,4 +9,4 @@ from {
     f: 3.14
   }
 }
-drop_nulls
+drop_null_fields
