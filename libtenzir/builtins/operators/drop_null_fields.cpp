@@ -68,13 +68,6 @@ auto compute_null_pattern(const table_slice& slice, size_t row_index,
   return pattern;
 }
 
-/// Groups consecutive rows with the same null pattern
-struct row_group {
-  size_t start;
-  size_t end;
-  std::vector<ast::field_path> fields_to_drop;
-};
-
 /// Finds all fields in the schema (for when no specific fields are given)
 auto get_all_field_paths(const record_type& record,
                          std::vector<ast::field_path::segment> prefix = {})
@@ -143,45 +136,43 @@ public:
       }
       // Resolve field paths to offsets once per slice
       auto field_offsets = resolve_field_paths(fields_to_check, slice.schema());
-      // Group consecutive rows by their null pattern
-      auto groups = std::vector<row_group>{};
+      // Process consecutive rows by their null pattern
       size_t current_start = 0;
       auto current_pattern = compute_null_pattern(slice, 0, field_offsets);
       for (size_t row = 1; row < slice.rows(); ++row) {
         auto pattern = compute_null_pattern(slice, row, field_offsets);
         if (pattern != current_pattern) {
-          // Pattern changed, save the current group
+          // Pattern changed, process the current group
           auto fields_to_drop = std::vector<ast::field_path>{};
           for (size_t i = 0; i < fields_to_check.size(); ++i) {
             if (current_pattern[i]) {
               fields_to_drop.push_back(fields_to_check[i]);
             }
           }
-          groups.push_back({current_start, row, std::move(fields_to_drop)});
+          auto group_slice = subslice(slice, current_start, row);
+          if (fields_to_drop.empty()) {
+            co_yield std::move(group_slice);
+          } else {
+            co_yield tenzir::drop(group_slice, fields_to_drop,
+                                  ctrl.diagnostics(), false);
+          }
           current_start = row;
           current_pattern = std::move(pattern);
         }
       }
-      // Add the last group
+      // Process the last group
       auto fields_to_drop = std::vector<ast::field_path>{};
       for (size_t i = 0; i < fields_to_check.size(); ++i) {
         if (current_pattern[i]) {
           fields_to_drop.push_back(fields_to_check[i]);
         }
       }
-      groups.push_back(
-        {current_start, slice.rows(), std::move(fields_to_drop)});
-      // Process each group
-      for (const auto& group : groups) {
-        auto group_slice = subslice(slice, group.start, group.end);
-        if (group.fields_to_drop.empty()) {
-          // No fields to drop in this group
-          co_yield std::move(group_slice);
-        } else {
-          // Drop the null fields from this group
-          co_yield tenzir::drop(group_slice, group.fields_to_drop,
-                                ctrl.diagnostics(), false);
-        }
+      auto group_slice = subslice(slice, current_start, slice.rows());
+      if (fields_to_drop.empty()) {
+        co_yield std::move(group_slice);
+      } else {
+        co_yield tenzir::drop(group_slice, fields_to_drop, ctrl.diagnostics(),
+                              false);
       }
     }
   }
