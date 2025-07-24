@@ -11,48 +11,21 @@ arguments, it drops only the specified fields if they contain null values.
 
 ### Drop all null fields
 
-Clean up events by removing all fields with null values:
-
 ```tql
 from {
-  timestamp: 2025-01-23T10:00:00,
-  src_ip: 192.168.1.5,
-  dst_ip: null,
-  username: "alice",
-  session_id: null,
-  bytes: 1024
+  id: 42,
+  user: {name: "alice", email: null},
+  status: null,
+  tags: ["security", "audit"]
 }
 drop_null_fields
 ```
 
 ```tql
 {
-  timestamp: 2025-01-23T10:00:00Z,
-  src_ip: 192.168.1.5,
-  username: "alice",
-  bytes: 1024,
-}
-```
-
-### Drop specific null fields
-
-Target specific fields for removal only when they contain null:
-
-```tql
-from {
-  event_id: 42,
-  user: {name: "bob", email: null},
-  metadata: null,
-  tags: ["security", "audit"]
-}
-drop_null_fields metadata, user.email
-```
-
-```tql
-{
-  event_id: 42,
+  id: 42,
   user: {
-    name: "bob",
+    name: "alice",
   },
   tags: [
     "security",
@@ -61,6 +34,30 @@ drop_null_fields metadata, user.email
 }
 ```
 
-The `metadata` field is removed because it's null at the top level. The
-`user.email` field is also removed even though it's nested, showing that
-`drop_null_fields` can target specific nested fields when explicitly named.
+### Drop specific null fields
+
+```tql
+from {
+  id: 42,
+  user: {name: "alice", email: null},
+  status: null,
+  tags: ["security", "audit"]
+}
+drop_null_fields user.email
+```
+
+```tql
+{
+  id: 42,
+  user: {
+    name: "alice",
+  },
+  status: null,
+  tags: [
+    "security",
+    "audit",
+  ],
+}
+```
+
+Note that `status` remains because it wasn't specified in the field list.
