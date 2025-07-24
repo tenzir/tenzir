@@ -46,7 +46,6 @@
 // multiple times. We should revisit this in the future.
 
 #include <tenzir/actors.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
@@ -971,8 +970,7 @@ private:
 
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
-                     public virtual operator_plugin<serve_operator>,
-                     public virtual operator_factory_plugin,
+                     public virtual operator_plugin2<serve_operator>,
                      public virtual aspect_plugin {
 public:
   auto component_name() const -> std::string override {
@@ -1069,33 +1067,6 @@ public:
   auto handler(caf::actor_system& system, node_actor node) const
     -> rest_handler_actor override {
     return system.spawn(serve_handler, node);
-  }
-
-  auto signature() const -> operator_signature override {
-    return {.sink = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto buffer_size
-      = located<uint64_t>{defaults::api::serve::max_events, location::unknown};
-    auto id = located<std::string>{};
-    auto parser = argument_parser{"serve", "https://docs.tenzir.com/"
-                                           "operators/serve"};
-    parser.add("--buffer-size", buffer_size, "<size>");
-    parser.add(id, "<id>");
-    parser.parse(p);
-    if (id.inner.empty()) {
-      diagnostic::error("serve id must not be empty")
-        .primary(id.source)
-        .throw_();
-    }
-    if (buffer_size.inner == 0) {
-      diagnostic::error("buffer size must not be zero")
-        .primary(buffer_size.source)
-        .throw_();
-    }
-    return std::make_unique<serve_operator>(std::move(id.inner),
-                                            buffer_size.inner);
   }
 
   auto make(invocation inv, session ctx) const
