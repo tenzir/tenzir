@@ -1,0 +1,32 @@
+{
+  x: "REDACTED",
+  y: 2,
+}
+{
+  x: "REDACTED",
+  y: 3,
+}
+{
+  x: null,
+  y: 4,
+}
+{
+  x: "",
+  z: "2",
+}
+{
+  x: "REDACTED",
+  z: "REDACTED",
+}
+{
+  y: {
+    a: "REDACTED",
+    b: "REDACTED",
+    z: null,
+    x: {
+      k: "REDACTED TWICE",
+    },
+  },
+  a: {},
+}
+{}

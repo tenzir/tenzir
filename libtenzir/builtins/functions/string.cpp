@@ -434,6 +434,10 @@ public:
   }
 
   auto name() const -> std::string override {
+    return regex_ ? "tql2.replace_regex" : "tql2.replace_fn";
+  }
+
+  auto function_name() const -> std::string override {
     return regex_ ? "tql2.replace_regex" : "tql2.replace";
   }
 
