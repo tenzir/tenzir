@@ -1,13 +1,5 @@
 cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
-if (APPLE)
-  message(
-    WARNING
-      "The http_parser library is unmaintained and no longer available on macOS; disabling the web plugin"
-  )
-  return()
-endif ()
-
 project(
   web
   DESCRIPTION "Web plugin for Tenzir"
