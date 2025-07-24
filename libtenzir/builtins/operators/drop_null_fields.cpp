@@ -203,7 +203,7 @@ public:
     for (auto& arg : inv.args) {
       auto selector = ast::field_path::try_from(arg);
       if (selector) {
-        if (selector->path().empty()) {
+        if (selector->has_this()) {
           diagnostic::error("cannot drop `this`").primary(*selector).emit(ctx);
           return failure::promise();
         }
