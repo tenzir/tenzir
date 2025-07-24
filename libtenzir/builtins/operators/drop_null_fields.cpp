@@ -77,15 +77,11 @@ struct row_group {
 };
 
 /// Finds all fields in the schema (for when no specific fields are given)
-auto get_all_field_paths(const type& schema,
+auto get_all_field_paths(const record_type& record,
                          std::vector<ast::field_path::segment> prefix = {})
   -> std::vector<ast::field_path> {
   auto result = std::vector<ast::field_path>{};
-  const auto* record = try_as<record_type>(schema);
-  if (! record) {
-    return result;
-  }
-  for (const auto& field : record->fields()) {
+  for (const auto& field : record.fields()) {
     auto segments = prefix;
     segments.push_back({ast::identifier{field.name, location::unknown}, false});
     // Create field path expression
@@ -106,8 +102,8 @@ auto get_all_field_paths(const type& schema,
       result.push_back(std::move(*fp));
     }
     // Recurse for nested records
-    if (try_as<record_type>(field.type)) {
-      auto nested_paths = get_all_field_paths(field.type, segments);
+    if (auto* nested_record = try_as<record_type>(field.type)) {
+      auto nested_paths = get_all_field_paths(*nested_record, segments);
       result.insert(result.end(), nested_paths.begin(), nested_paths.end());
     }
   }
@@ -136,8 +132,14 @@ public:
         continue;
       }
       // Determine which fields to check
-      auto fields_to_check
-        = selectors_.empty() ? get_all_field_paths(slice.schema()) : selectors_;
+      auto fields_to_check = std::vector<ast::field_path>{};
+      if (selectors_.empty()) {
+        if (auto* record = try_as<record_type>(slice.schema())) {
+          fields_to_check = get_all_field_paths(*record);
+        }
+      } else {
+        fields_to_check = selectors_;
+      }
       if (fields_to_check.empty()) {
         // No fields to check, yield unchanged
         co_yield std::move(slice);
