@@ -1,5 +1,5 @@
 ---
-title: "Add drop_null_fields operator"
+title: "Dropping null fields"
 type: feature
 authors: mavam
 pr: 5370
