@@ -7,7 +7,7 @@
     version: "1.5.0",
   },
 }
-warning: found invalid value for activity_name
+warning: found invalid value for `activity_name`
   --> ocsf/derive/bidirectional_invalid_string.tql:13:1
    |
 13 | ocsf::derive
