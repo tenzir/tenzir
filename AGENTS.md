@@ -167,3 +167,9 @@ GitHub Actions workflows in `.github/workflows/`:
    - Use ```tql blocks for both input pipelines and output
    - Show realistic, practical examples that demonstrate the feature
    - Include output that shows what users will actually see
+   
+   **Changelog titles should be user-focused**: Write titles that describe
+   the functionality from a user's perspective, not the technical
+   implementation. For example:
+   - Good: "Dropping null fields" (describes what users can do)
+   - Bad: "Add drop_null_fields operator" (describes technical implementation)
