@@ -1,7 +1,7 @@
 ---
 title: drop_null_fields
 category: Modify
-example: 'drop_null_fields name, metadata.id'
+example: "drop_null_fields name, metadata.id"
 ---
 
 Removes fields containing null values from the event.
@@ -16,6 +16,12 @@ The `drop_null_fields` operator removes fields that have `null` values from even
 Without arguments, it removes all fields with `null` values from the entire
 event. When provided with specific field paths, it only considers those fields
 for removal.
+
+### `field...`
+
+A comma-separated list of field paths to check for null values. When specified,
+only these fields will be removed if they contain null values. Other null fields
+in the event will be preserved.
 
 :::note[Behavior with Lists]
 The `drop_null_fields` operator does not currently support dropping fields from
@@ -115,6 +121,7 @@ drop_null_fields
 ```
 
 In this example:
+
 - The `metadata` field is removed because it contains `null`
 - The `items` field is kept with all its internal structure intact
 - The `tags` field is kept even though it contains `null` elements
