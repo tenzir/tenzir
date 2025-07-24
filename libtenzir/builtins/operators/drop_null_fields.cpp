@@ -23,7 +23,6 @@
 #include <fmt/format.h>
 
 #include <bitset>
-#include <unordered_map>
 
 namespace tenzir::plugins::drop_null_fields {
 
