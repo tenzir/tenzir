@@ -127,7 +127,40 @@ public:
           fields_to_check = get_all_field_paths(*record);
         }
       } else {
-        fields_to_check = selectors_;
+        // When selectors are provided, we need to check both the selectors
+        // themselves and all nested fields within them if they are records
+        for (const auto& selector : selectors_) {
+          // First add the selector itself
+          fields_to_check.push_back(selector);
+
+          // Then check if it's a record and add its nested fields
+          auto resolved = resolve(selector, slice.schema());
+          if (auto* field_offset = std::get_if<offset>(&resolved)) {
+            if (! field_offset->empty()) {
+              // Get the type at this offset
+              auto field_type = slice.schema();
+              for (const auto& idx : *field_offset) {
+                if (auto* rec = try_as<record_type>(field_type)) {
+                  if (idx < rec->num_fields()) {
+                    field_type = rec->field(idx).type;
+                  }
+                }
+              }
+              // If the field is a record, get all its nested paths
+              if (auto* record = try_as<record_type>(field_type)) {
+                // Build the prefix from the selector
+                auto prefix = std::vector<ast::field_path::segment>{};
+                for (const auto& seg : selector.path()) {
+                  prefix.push_back(seg);
+                }
+                auto nested_paths = get_all_field_paths(*record, prefix);
+                fields_to_check.insert(fields_to_check.end(),
+                                       nested_paths.begin(),
+                                       nested_paths.end());
+              }
+            }
+          }
+        }
       }
       if (fields_to_check.empty()) {
         // No fields to check, yield unchanged

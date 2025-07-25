@@ -14,14 +14,16 @@ drop_null_fields [field...]
 
 The `drop_null_fields` operator removes fields that have `null` values from events.
 Without arguments, it removes all fields with `null` values from the entire
-event. When provided with specific field paths, it only considers those fields
-for removal.
+event. When provided with specific field paths, it removes those fields if they
+contain null values, and for record fields, it also recursively removes any
+null fields within them.
 
 ### `field...` (optional)
 
-A comma-separated list of field paths to check for null values. When specified,
-only these fields will be removed if they contain null values. Other null fields
-in the event will be preserved.
+A comma-separated list of field paths to process. When specified:
+- If a field contains `null`, it will be removed
+- If a field is a record, all null fields within it will be removed recursively
+- Other null fields outside the specified paths will be preserved
 
 :::note[Behavior with Lists]
 The `drop_null_fields` operator does not currently support dropping fields from
@@ -82,6 +84,41 @@ drop_null_fields dst, info.id
   },
 }
 ```
+
+### Drop null fields within a record field
+
+When specifying a record field, all null fields within it are removed recursively:
+
+```tql
+from {
+  metadata: {
+    created: "2024-01-01",
+    updated: null,
+    tags: null,
+    author: "admin"
+  },
+  data: {
+    value: 42,
+    comment: null
+  }
+}
+drop_null_fields metadata
+```
+
+```tql
+{
+  metadata: {
+    created: "2024-01-01",
+    author: "admin",
+  },
+  data: {
+    value: 42,
+    comment: null,
+  },
+}
+```
+
+Note that `data.comment` remains null because only `metadata` was specified.
 
 ### Behavior with records inside lists
 
