@@ -21,6 +21,7 @@ null fields within them.
 ### `field...` (optional)
 
 A comma-separated list of field paths to process. When specified:
+
 - If a field contains `null`, it will be removed
 - If a field is a record, all null fields within it will be removed recursively
 - Other null fields outside the specified paths will be preserved

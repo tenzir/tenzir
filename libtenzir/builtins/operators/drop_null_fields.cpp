@@ -132,7 +132,6 @@ public:
         for (const auto& selector : selectors_) {
           // First add the selector itself
           fields_to_check.push_back(selector);
-
           // Then check if it's a record and add its nested fields
           auto resolved = resolve(selector, slice.schema());
           if (auto* field_offset = std::get_if<offset>(&resolved)) {
@@ -233,6 +232,15 @@ public:
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("drop_null_fields");
     auto selectors = std::vector<ast::field_path>{};
+    // Special case: allow "drop_null_fields this" to behave like no arguments
+    if (inv.args.size() == 1) {
+      auto selector = ast::field_path::try_from(inv.args[0]);
+      if (selector && selector->has_this() && selector->path().empty()) {
+        // "this" with no path - treat as no arguments
+        return std::make_unique<drop_null_fields_operator>(
+          std::move(selectors));
+      }
+    }
     for (auto& arg : inv.args) {
       auto selector = ast::field_path::try_from(arg);
       if (selector) {
