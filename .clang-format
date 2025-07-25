@@ -1,5 +1,7 @@
 ---
 AccessModifierOffset: -2
+InsertNewlineAtEOF: true
+KeepEmptyLinesAtEOF: false
 AlignAfterOpenBracket: Align
 AlignEscapedNewlines: Right
 AlignOperands: true
