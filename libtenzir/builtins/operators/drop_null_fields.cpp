@@ -82,7 +82,7 @@ auto get_all_field_paths(const record_type& record,
       expr = ast::expression{ast::root_field{segments[0].id, false}};
     } else {
       expr = ast::expression{ast::root_field{segments[0].id, false}};
-      for (size_t i = 1; i < segments.size(); ++i) {
+      for (auto i = 1uz; i < segments.size(); ++i) {
         expr = ast::expression{ast::field_access{
           std::move(expr), location::unknown, false, segments[i].id}};
       }
@@ -137,14 +137,14 @@ public:
       // Resolve field paths to offsets once per slice
       auto field_offsets = resolve_field_paths(fields_to_check, slice.schema());
       // Process consecutive rows by their null pattern
-      size_t current_start = 0;
+      auto current_start = 0uz;
       auto current_pattern = compute_null_pattern(slice, 0, field_offsets);
-      for (size_t row = 1; row < slice.rows(); ++row) {
+      for (auto row = 1uz; row < slice.rows(); ++row) {
         auto pattern = compute_null_pattern(slice, row, field_offsets);
         if (pattern != current_pattern) {
           // Pattern changed, process the current group
           auto fields_to_drop = std::vector<ast::field_path>{};
-          for (size_t i = 0; i < fields_to_check.size(); ++i) {
+          for (auto i = 0uz; i < fields_to_check.size(); ++i) {
             if (current_pattern[i]) {
               fields_to_drop.push_back(fields_to_check[i]);
             }
@@ -162,7 +162,7 @@ public:
       }
       // Process the last group
       auto fields_to_drop = std::vector<ast::field_path>{};
-      for (size_t i = 0; i < fields_to_check.size(); ++i) {
+      for (auto i = 0uz; i < fields_to_check.size(); ++i) {
         if (current_pattern[i]) {
           fields_to_drop.push_back(fields_to_check[i]);
         }
