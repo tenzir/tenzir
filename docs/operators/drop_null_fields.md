@@ -17,7 +17,7 @@ Without arguments, it removes all fields with `null` values from the entire
 event. When provided with specific field paths, it only considers those fields
 for removal.
 
-### `field...`
+### `field...` (optional)
 
 A comma-separated list of field paths to check for null values. When specified,
 only these fields will be removed if they contain null values. Other null fields
@@ -25,8 +25,7 @@ in the event will be preserved.
 
 :::note[Behavior with Lists]
 The `drop_null_fields` operator does not currently support dropping fields from
-records that are inside lists. It only removes fields that are `null` at the
-top level of the event structure.
+records that are inside lists.
 
 The operator does not remove `null` values from within lists. A field
 containing a list with `null` elements is not considered a null field.
