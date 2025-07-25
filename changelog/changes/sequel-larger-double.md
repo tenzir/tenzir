@@ -10,7 +10,7 @@ events. Without arguments, it drops all fields with null values. With field
 arguments, it drops the specified fields if they contain null values, and for
 record fields, it also recursively drops all null fields within them.
 
-### Drop all null fields
+Drop all null fields:
 
 ```tql
 from {
@@ -35,7 +35,7 @@ drop_null_fields
 }
 ```
 
-### Drop specific null fields
+Drop specific null fields:
 
 ```tql
 from {
@@ -62,8 +62,6 @@ drop_null_fields user.email
 ```
 
 Note that `status` remains because it wasn't specified in the field list.
-
-### Drop null fields recursively within records
 
 When specifying a record field, all null fields within it are removed:
 
