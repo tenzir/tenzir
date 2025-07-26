@@ -1,0 +1,36 @@
+{
+  host: "one.one.one.one",
+  dns_lookup: {
+    records: {
+      address: 2606:4700:4700::1001,
+      type: "AAAA",
+    },
+  },
+}
+{
+  host: "one.one.one.one",
+  dns_lookup: {
+    records: {
+      address: 2606:4700:4700::1111,
+      type: "AAAA",
+    },
+  },
+}
+{
+  host: "one.one.one.one",
+  dns_lookup: {
+    records: {
+      address: 1.0.0.1,
+      type: "A",
+    },
+  },
+}
+{
+  host: "one.one.one.one",
+  dns_lookup: {
+    records: {
+      address: 1.1.1.1,
+      type: "A",
+    },
+  },
+}

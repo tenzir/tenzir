@@ -1,0 +1,7 @@
+{
+  ip: 1.1.1.1,
+  name: "test",
+  dns_lookup: {
+    hostname: "one.one.one.one",
+  },
+}

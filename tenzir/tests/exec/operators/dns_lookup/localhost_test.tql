@@ -1,0 +1,8 @@
+// test: exec
+from {
+  // Root DNS server A - one of the most stable DNS names
+  host: "a.root-servers.net"
+}
+dns_lookup host
+unroll dns_lookup.records
+drop dns_lookup.records.ttl
