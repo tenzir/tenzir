@@ -130,6 +130,11 @@ find_package(reproc++ REQUIRED)
 find_package(libmaxminddb REQUIRED)
 provide_find_module(libmaxminddb)
 
+# -- c-ares --------------------------------------------------------------------
+
+find_package(c-ares REQUIRED)
+provide_find_module(c-ares)
+
 # -- libsystemd ----------------------------------------------------------------
 
 option(TENZIR_ENABLE_JOURNALD_LOGGING
@@ -402,6 +407,11 @@ dependency_summary("re2" re2::re2 "Dependencies")
 target_link_libraries(libtenzir PUBLIC reproc++)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
 dependency_summary("reproc++" reproc+++ "Dependencies")
+
+# Link against c-ares.
+target_link_libraries(libtenzir PUBLIC c-ares::cares)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
+dependency_summary("c-ares" c-ares::cares "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)

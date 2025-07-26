@@ -1,0 +1,108 @@
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 2600:1406:3a00:21::173e:2e66,
+      type: "AAAA",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 2600:1406:bc00:53::b81e:94c8,
+      type: "AAAA",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 2600:1406:bc00:53::b81e:94ce,
+      type: "AAAA",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 2600:1408:ec00:36::1736:7f24,
+      type: "AAAA",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 2600:1408:ec00:36::1736:7f31,
+      type: "AAAA",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 2600:1406:3a00:21::173e:2e65,
+      type: "AAAA",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 23.192.228.84,
+      type: "A",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 23.215.0.136,
+      type: "A",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 23.215.0.138,
+      type: "A",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 96.7.128.175,
+      type: "A",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 96.7.128.198,
+      type: "A",
+    },
+  },
+}
+{
+  domain: "example.com",
+  dns_lookup: {
+    records: {
+      address: 23.192.228.80,
+      type: "A",
+    },
+  },
+}

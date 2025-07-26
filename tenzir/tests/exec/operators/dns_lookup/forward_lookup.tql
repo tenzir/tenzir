@@ -1,0 +1,8 @@
+// test: exec
+from {
+  // Cloudflare DNS - stable hostname
+  host: "one.one.one.one"
+}
+dns_lookup host
+unroll dns_lookup.records
+drop dns_lookup.records.ttl

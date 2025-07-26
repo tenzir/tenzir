@@ -1,0 +1,6 @@
+{
+  ip: 8.8.8.8,
+  dns_lookup: {
+    hostname: "dns.google",
+  },
+}
