@@ -1,0 +1,6 @@
+{
+  invalid_domain: "this-domain-should-not-exist-12345.invalid",
+  not_string_or_ip: 42,
+  result1: null,
+  result2: null,
+}
