@@ -41,8 +41,8 @@ if [[ "$FILE_PATH" =~ \.(cmake|CMakeLists\.txt)$ ]]; then
     echo "🔧 Running cmake-format on $FILE_PATH" >&2
     if command -v cmake-format &> /dev/null; then
         cmake-format --in-place "$FILE_PATH"
-    elif [ -f "$HOME/Library/Python/3.9/bin/cmake-format" ]; then
-        "$HOME/Library/Python/3.9/bin/cmake-format" --in-place "$FILE_PATH"
+    elif command -v uv &> /dev/null; then
+        uv tool run cmake-format --in-place "$FILE_PATH"
     else
         echo "⚠️  cmake-format not found, skipping" >&2
     fi
