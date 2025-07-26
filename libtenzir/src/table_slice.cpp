@@ -93,31 +93,102 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   return result;
 }
 
-[[maybe_unused]] bool
-verify_record_batch(const arrow::RecordBatch& record_batch) {
-  auto check_col
-    = [](auto&& check_col, const arrow::Array& column) noexcept -> void {
-    auto f = detail::overload{
-      [&](const arrow::StructArray& sa) noexcept {
-        for (const auto& column : sa.fields()) {
-          check_col(check_col, *column);
-        }
-      },
-      [&](const arrow::ListArray& la) noexcept {
-        check_col(check_col, *la.values());
-      },
-      [&](const arrow::MapArray& ma) noexcept {
-        check_col(check_col, *ma.keys());
-        check_col(check_col, *ma.items());
-      },
-      [](const arrow::Array&) noexcept {},
-    };
-    match(column, f);
-  };
-  for (const auto& column : record_batch.columns()) {
-    check_col(check_col, *column);
+/// Verifies that an arrays type is supported by tenzir
+/// @param arr the array to validate
+/// @param[out] an error message on failure. If the array is invalid, `error`
+///             will have a value.
+/// @returns true if the array is supported, false otherwise. If false, `error`
+///          will have a value.
+auto verify_column(const arrow::Array& arr,
+                   std::optional<table_slice::creation_error>& error) -> bool;
+
+template <concrete_type T>
+auto verify_column_impl(const type_to_arrow_array_t<T>* arr,
+                        std::optional<table_slice::creation_error>&) -> bool {
+  if (not arr) {
+    return false;
   }
   return true;
+}
+
+template <>
+auto verify_column_impl<tenzir::record_type>(
+  const arrow::StructArray* arr,
+  std::optional<table_slice::creation_error>& error) -> bool {
+  if (not arr) {
+    return false;
+  }
+  for (const auto& column : arr->fields()) {
+    if (not verify_column(*column, error)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <>
+auto verify_column_impl<tenzir::list_type>(
+  const arrow::ListArray* arr,
+  std::optional<table_slice::creation_error>& error) -> bool {
+  if (not arr) {
+    return false;
+  }
+  return verify_column(*arr->values(), error);
+}
+
+template <>
+auto verify_column_impl<tenzir::map_type>(
+  const arrow::MapArray*, std::optional<table_slice::creation_error>&) -> bool {
+  return false;
+}
+
+template <size_t I>
+using type_type = typename caf::detail::tl_at<concrete_types, I>::type;
+
+template <size_t I>
+using array_type = type_to_arrow_array_t<type_type<I>>;
+
+template <size_t... Is>
+auto verify_column_fold(const arrow::Array& arr,
+                        std::optional<table_slice::creation_error>& error,
+                        std::index_sequence<Is...>) -> bool {
+  return (verify_column_impl<type_type<Is>>(
+            dynamic_cast<const array_type<Is>*>(&arr), error)
+          or ...);
+};
+
+auto verify_column(const arrow::Array& arr,
+                   std::optional<table_slice::creation_error>& error) -> bool {
+  const auto valid = verify_column_fold(
+    arr, error,
+    std::make_index_sequence<caf::detail::tl_size_v<concrete_types>>{});
+  if (valid) {
+    return true;
+  }
+  // If it is not valid, we need to check if an error was set.
+  // An error could already be set if we are further down in the recursion
+  // stack. If there is no error, then our own array itself is the issue, and we
+  // set an error.
+  if (not error) {
+    error.emplace(table_slice::creation_error{
+      .message
+      = fmt::format("unsupported arrow type `{}`", arr.type()->name())});
+  }
+  return false;
+}
+
+/// Verifies that an `arrow::RecordBatch`'s types are supported by Tenzir.
+[[maybe_unused]] auto
+verify_record_batch(const arrow::RecordBatch& record_batch)
+  -> std::expected<void, table_slice::creation_error> {
+  auto error = std::optional<table_slice::creation_error>{};
+  for (const auto& column : record_batch.columns()) {
+    if (not verify_column(*column, error)) {
+      TENZIR_ASSERT(error);
+      return std::unexpected(*error);
+    }
+  }
+  return {};
 }
 
 /// Visits a FlatBuffers table slice to dispatch to its specific encoding.
@@ -244,6 +315,18 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
   auto builder = flatbuffers::FlatBufferBuilder{};
   *this
     = create_table_slice(record_batch, builder, std::move(schema), serialize);
+}
+
+auto table_slice::try_from(
+  const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
+  enum serialize serialize) -> std::expected<table_slice, creation_error> {
+  auto valid = verify_record_batch(*record_batch);
+  if (not valid) {
+    return std::unexpected(valid.error());
+  }
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  return create_table_slice(record_batch, builder, std::move(schema),
+                            serialize);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;
