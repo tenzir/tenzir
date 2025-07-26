@@ -1,7 +1,7 @@
 ---
 title: write_json
 category: Printing
-example: 'write_json'
+example: "write_json"
 ---
 
 Transforms the input event stream to a JSON byte stream.
@@ -81,6 +81,7 @@ save_file "output.json"
 from { yes: 1, no: null}
 write_json strip_null_fields=true
 ```
+
 ```json
 {
   "yes": 1

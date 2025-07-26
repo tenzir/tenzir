@@ -1,7 +1,7 @@
 ---
 title: deduplicate
 category: Filter
-example: 'deduplicate src_ip'
+example: "deduplicate src_ip"
 ---
 
 Removes duplicate events based on a common key.
@@ -65,41 +65,41 @@ The read timeout must be smaller than the write and create timeouts.
 
 Consider the following data:
 
-```json
-{"foo": 1, "bar": "a"}
-{"foo": 1, "bar": "a"}
-{"foo": 1, "bar": "a"}
-{"foo": 1, "bar": "b"}
-{"foo": null, "bar": "b"}
-{"bar": "b"}
-{"foo": null, "bar": "b"}
-{"foo": null, "bar": "b"}
+```tql
+{foo: 1, bar: "a"}
+{foo: 1, bar: "a"}
+{foo: 1, bar: "a"}
+{foo: 1, bar: "b"}
+{foo: null, bar: "b"}
+{bar: "b"}
+{foo: null, bar: "b"}
+{foo: null, bar: "b"}
 ```
 
 For `deduplicate`, all duplicate events are removed:
 
-```json
-{"foo": 1, "bar": "a"}
-{"foo": 1, "bar": "b"}
-{"foo": null, "bar": "b"}
-{"bar": "b"}
+```tql
+{foo: 1, bar: "a"}
+{foo: 1, bar: "b"}
+{foo: null, bar: "b"}
+{bar: "b"}
 ```
 
 If `deduplicate bar` is used, only the field `bar` is considered when
 determining whether an event is a duplicate:
 
-```json
-{"foo": 1, "bar": "a"}
-{"foo": 1, "bar": "b"}
+```tql
+{foo: 1, bar: "a"}
+{foo: 1, bar: "b"}
 ```
 
 And for `deduplicate foo`, only the field `foo` is considered. Note, how the
 missing `foo` field is treated as if it had the value `null`, i.e., it's not
 included in the output.
 
-```json
-{"foo": 1, "bar": "a"}
-{"foo": null, "bar": "b"}
+```tql
+{foo: 1, bar: "a"}
+{foo: null, bar: "b"}
 ```
 
 ### Get up to 10 warnings per hour for each run of a pipeline
