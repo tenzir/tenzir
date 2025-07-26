@@ -918,7 +918,6 @@ struct from_http_args {
           [](const auto&) {
             TENZIR_UNREACHABLE();
           });
-        hdrs.emplace(k, as<std::string>(v));
       }
     }
     if (insert_content_type) {
