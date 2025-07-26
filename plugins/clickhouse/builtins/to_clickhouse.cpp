@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "clickhouse/easy_client.hpp"
+#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 using namespace clickhouse;
@@ -72,6 +73,12 @@ public:
     if (not client) {
       co_return;
     }
+    detail::weak_run_delayed_loop(
+      &ctrl.self(), std::chrono::minutes{10},
+      [&client]() {
+        client->ping();
+      },
+      false);
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

@@ -252,4 +252,8 @@ auto easy_client::insert(const table_slice& slice) -> bool {
   }
   return true;
 }
+
+void easy_client::ping() {
+  client_.Ping();
+}
 } // namespace tenzir::plugins::clickhouse

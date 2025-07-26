@@ -83,6 +83,8 @@ public:
   static auto make(arguments args, diagnostic_handler& dh)
     -> std::unique_ptr<easy_client>;
 
+  void ping();
+
   auto insert(const table_slice& slice) -> bool;
 
 private:
