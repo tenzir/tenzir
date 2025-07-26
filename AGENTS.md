@@ -172,8 +172,11 @@ GitHub Actions workflows in `.github/workflows/`:
     - Use ```tql blocks for both input pipelines and output
     - Show realistic, practical examples that demonstrate the feature
     - Include output that shows what users will actually see
+    - All examples must use literal output from running the `tenzir` binary
   - Changelog titles should be user-focused: Write titles that describe the
     functionality from a user's perspective, not the technical implementation.
+  - Do not use markdown headings (##) in changelog entries—keep the content flat.
+  - Break markdown text paragraphs at 80 characters for better readability.
 
 ### Adding a dependency
 
