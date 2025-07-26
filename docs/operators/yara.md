@@ -27,7 +27,7 @@ option `compiled_rules=true`. To quote from the above link:
 > rules coming from a third-party. Using compiled rules from untrusted sources
 > can lead to the execution of malicious code in your computer.
 
-The operator uses a YARA *scanner* under the hood that buffers blocks of bytes
+The operator uses a YARA _scanner_ under the hood that buffers blocks of bytes
 incrementally. Even though the input arrives in non-contiguous blocks of
 memories, the YARA scanner engine support matching across block boundaries. For
 continuously running pipelines, use the `blockwise=true` option that considers each
@@ -104,38 +104,38 @@ rule test {
 You can produce test matches by feeding bytes into the `yara` operator.
 You will get one `yara.match` per matching rule:
 
-```json
+```tql
 {
-  "rule": {
-    "identifier": "test",
-    "namespace": "default",
-    "tags": [],
-    "meta": {
-      "string": "string meta data",
-      "integer": 42,
-      "boolean": true
+  rule: {
+    identifier: "test",
+    namespace: "default",
+    tags: [],
+    meta: {
+      string: "string meta data",
+      integer: 42,
+      boolean: true
     },
-    "strings": {
+    strings: {
       "$foo": "foo",
       "$bar": "bar",
       "$baz": "baz"
     }
   },
-  "matches": {
+  matches: {
     "$foo": [
       {
-        "data": "Zm9v",
-        "base": 0,
-        "offset": 0,
-        "match_length": 3
+        data: "Zm9v",
+        base: 0,
+        offset: 0,
+        match_length: 3
       }
     ],
     "$bar": [
       {
-        "data": "YmFy",
-        "base": 0,
-        "offset": 4,
-        "match_length": 3
+        data: "YmFy",
+        base: 0,
+        offset: 4,
+        match_length: 3
       }
     ]
   }

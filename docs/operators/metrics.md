@@ -492,7 +492,7 @@ sort timestamp
 select timestamp, used_bytes
 ```
 
-```json
+```tql
 {timestamp: 2023-12-21T12:52:32.900086, used_bytes: 461834444800}
 {timestamp: 2023-12-21T12:53:32.905548, used_bytes: 461834584064}
 {timestamp: 2023-12-21T12:54:32.910918, used_bytes: 461840302080}
