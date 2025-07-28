@@ -35,3 +35,15 @@ if [[ "$FILE_PATH" =~ \.(md|json|yaml|yml)$ ]]; then
         echo "⚠️  prettier not found, skipping" >&2
     fi
 fi
+
+# Run cmake-format for CMake files
+if [[ "$FILE_PATH" =~ \.(cmake|CMakeLists\.txt)$ ]]; then
+    echo "🔧 Running cmake-format on $FILE_PATH" >&2
+    if command -v cmake-format &> /dev/null; then
+        cmake-format --in-place "$FILE_PATH"
+    elif command -v uv &> /dev/null; then
+        uv tool run cmake-format --in-place "$FILE_PATH"
+    else
+        echo "⚠️  cmake-format not found, skipping" >&2
+    fi
+fi
