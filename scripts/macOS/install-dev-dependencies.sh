@@ -9,6 +9,7 @@ brew install --overwrite \
     bash \
     bats \
     boost \
+    c-ares \
     ccache \
     coreutils \
     cppzmq \
