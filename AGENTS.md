@@ -178,6 +178,31 @@ GitHub Actions workflows in `.github/workflows/`:
   - Do not use markdown headings (##) in changelog entries—keep the content flat.
   - Break markdown text paragraphs at 80 characters for better readability.
 
+### Adding a dependency
+
+When adding a new dependency (like c-ares for the dns_lookup operator), update all build systems:
+
+1. **CMake** (`libtenzir/CMakeLists.txt`):
+
+   - Add `find_package(PackageName REQUIRED)`
+   - Add `provide_find_module(PackageName)` if needed
+   - Link with `target_link_libraries(libtenzir PUBLIC package::target)`
+   - Update `TENZIR_FIND_DEPENDENCY_LIST` for downstream users
+   - Add `dependency_summary()` call
+
+2. **Nix** (`nix/tenzir/default.nix`):
+
+   - Add package to function parameters (around line 50)
+   - Add to `buildInputs` list (around line 230)
+
+3. **Homebrew** (`scripts/macOS/install-dev-dependencies.sh`):
+
+   - Add package name to the `brew install` list
+
+4. **Docker/Linux** (`scripts/debian/install-dev-dependencies.sh`):
+   - Add `-dev` package to the `apt-get install` list
+   - Docker builds use this script directly
+
 ## Development Workflow
 
 Follow these steps to contribute to Tenzir:
