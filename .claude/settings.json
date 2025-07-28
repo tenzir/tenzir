@@ -2,29 +2,11 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit",
+        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/format-hook.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/format-hook.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/format-hook.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/format-hook.sh"
           }
         ]
       }
