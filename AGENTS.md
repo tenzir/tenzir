@@ -21,7 +21,7 @@ Language (TQL) is domain-specific language to write data pipelines.
   - `add.py` - Script to add new changelog entries
   - `release.py` - Script to generate release notes
 - `cmake/` - CMake build system modules and utilities
-  - Various Find*.cmake modules for dependencies
+  - Various Find\*.cmake modules for dependencies
   - TenzirConfig.cmake.in - CMake configuration template
   - TenzirRegisterPlugin.cmake - Plugin registration utilities
 - `docs/` - Documentation for functions and operators
@@ -90,7 +90,7 @@ Use the `tenzir` binary to execute a TQL program:
 
 ### Testing
 
-Tenzir has both C++ *unit tests* and TQL *integration tests*.
+Tenzir has both C++ _unit tests_ and TQL _integration tests_.
 
 #### Unit Tests
 
@@ -125,6 +125,7 @@ Tenzir maintains code quality through several mechanisms:
 #### Code Formatting
 
 - **C++ Code**: Uses clang-format with a custom `.clang-format` configuration
+
   - 2-space indentation
   - Attach braces style
   - Sorted includes with grouping
@@ -171,8 +172,11 @@ GitHub Actions workflows in `.github/workflows/`:
     - Use ```tql blocks for both input pipelines and output
     - Show realistic, practical examples that demonstrate the feature
     - Include output that shows what users will actually see
+    - All examples must use literal output from running the `tenzir` binary
   - Changelog titles should be user-focused: Write titles that describe the
     functionality from a user's perspective, not the technical implementation.
+  - Do not use markdown headings (##) in changelog entries—keep the content flat.
+  - Break markdown text paragraphs at 80 characters for better readability.
 
 ## Development Workflow
 
@@ -181,10 +185,10 @@ Follow these steps to contribute to Tenzir:
 ### Planning Phase
 
 1. Begin with adapting and/or writing new user-facing documentation.
-   *Stop here and ask for feedback to ensure clarity and completeness.*
+   _Stop here and ask for feedback to ensure clarity and completeness._
 2. Develop integration tests in the form of *.tql files along with their
    expected output.
-   *Stop here and ask for feedback to ensure clarity and completeness.*
+   *Stop here and ask for feedback to ensure clarity and completeness.\*
 3. Research the best strategy for implementing the feature or fix. In
    particular, look at existing code and documentation to understand the best
    approach.
