@@ -24,6 +24,7 @@ apt-get -y --no-install-recommends install \
     libboost-filesystem-dev \
     libboost-url-dev \
     libboost-stacktrace-dev \
+    libc-ares-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libgrpc-dev \
