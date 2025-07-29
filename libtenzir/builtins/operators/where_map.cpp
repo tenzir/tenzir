@@ -483,7 +483,9 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
       auto list_values
         = series{field_list->type.value_type(), field_list->array->values()};
       if (list_values.length() == 0) {
-        return field;
+        return make_list_series(
+          series::null(null_type{}, field_list->array->values()->length()),
+          *field_list->array);
       }
       auto ms = tenzir::eval(args.lambda, list_values, ctx);
       TENZIR_ASSERT(not ms.parts().empty());
