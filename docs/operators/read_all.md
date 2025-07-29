@@ -4,7 +4,7 @@ category: Parsing
 example: 'read_all binary=true'
 ---
 
-Parses an incoming bytes stream into a single events.
+Parses an incoming bytes stream into a single event.
 
 ```tql
 read_all [binary=bool]
@@ -30,12 +30,18 @@ of type `blob` instead of `string`.
 load_file "data.txt"
 read_all
 ```
+```tql
+{data: "<file contents>"}
+```
 
 ### Read an entire binary file into a single event
 
 ```tql
 load_file "data.bin"
 read_all binary=true
+```
+```tql
+{data: b"<file contents>"}
 ```
 
 ## See Also
