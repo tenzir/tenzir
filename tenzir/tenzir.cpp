@@ -55,6 +55,7 @@ auto is_server_from_app_path(std::string_view app_path) {
   return app_name == "tenzir-node";
 }
 
+/// A faster alternative to the built-in actor clock.
 class actor_clock final : public caf::actor_clock {
 public:
   // We currently just use a single thread for our actor clock. If it ever turns
@@ -87,7 +88,7 @@ public:
   }
 
   auto schedule(time_point t, caf::action f) -> caf::disposable override {
-    TENZIR_ASSERT(t != time_point::min());
+    TENZIR_ASSERT(f);
     auto lock = std::unique_lock{mutex_};
     // We only need to notify threads if they are waiting without a timeout, or
     // if the new timeout would be smaller than the old one.
@@ -153,8 +154,9 @@ private:
         }
       }
       auto& job = queue_.front();
-      if (job.time == time_point::min()) {
+      if (not job.fn) {
         // Our signal to exit.
+        TENZIR_ASSERT(job.time == time_point::min());
         return;
       }
       auto fn = std::move(job.fn);
