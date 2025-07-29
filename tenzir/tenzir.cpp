@@ -122,11 +122,6 @@ private:
     std::push_heap(queue_.begin(), queue_.end());
   }
 
-  auto top() -> entry& {
-    TENZIR_ASSERT(not queue_.empty());
-    return queue_.front();
-  }
-
   void pop() {
     std::pop_heap(queue_.begin(), queue_.end());
     queue_.pop_back();
@@ -143,11 +138,11 @@ private:
         auto timeout = std::optional<time_point>{};
         auto now = this->now();
         if (not queue_.empty()) {
-          if (now >= top().time) {
+          if (now >= queue_.front().time) {
             // Found something to execute!
             break;
           }
-          timeout = top().time;
+          timeout = queue_.front().time;
         }
         // Do not simplify this into using `time_point::max()` as the default.
         // On some systems, this does not work correctly.
@@ -157,16 +152,16 @@ private:
           cv_.wait(lock);
         }
       }
-      auto& job_ref = top();
-      if (job_ref.time == time_point::min()) {
+      auto& job = queue_.front();
+      if (job.time == time_point::min()) {
         // Our signal to exit.
         return;
       }
-      auto job = std::move(job_ref);
+      auto fn = std::move(job.fn);
       pop();
       lock.unlock();
-      TENZIR_ASSERT(job.fn);
-      job.fn.run();
+      TENZIR_ASSERT(fn);
+      fn.run();
     }
   };
 
