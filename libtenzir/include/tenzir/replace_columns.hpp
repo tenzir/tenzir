@@ -41,8 +41,8 @@ TENZIR_ENUM(
   /* merge the metadata of old and new, using the new entries on conflict */
   merge_replace);
 
-auto transfer_metadata(const type& old, type replacement,
-                       transfer_metadata_strategy metadata) -> type {
+inline auto transfer_metadata(const type& old, type replacement,
+                              transfer_metadata_strategy metadata) -> type {
   switch (metadata) {
     using enum transfer_metadata_strategy;
     case preserve: {
@@ -61,7 +61,7 @@ auto transfer_metadata(const type& old, type replacement,
           new_meta.emplace_back(k, v);
         }
       }
-      return type{std::move(replacement), std::move(new_meta)};
+      return type{replacement, std::move(new_meta)};
     }
     case merge_replace: {
       auto new_meta = collect(old.attributes());
@@ -74,7 +74,7 @@ auto transfer_metadata(const type& old, type replacement,
           it->value = v;
         }
       }
-      return type{std::move(replacement), std::move(new_meta)};
+      return type{replacement, std::move(new_meta)};
     }
   }
   TENZIR_UNREACHABLE();
@@ -132,8 +132,8 @@ struct replace_visitor {
                   "{} != {}", r.type.num_fields(), fields.size());
     TENZIR_ASSERT(r.type.num_fields()
                   == static_cast<size_t>(r.array->num_fields()));
-    for (auto i = 0l; i < static_cast<uint32_t>(fields.size()); ++i) {
-      fields[i].data.array = r.array->field(i);
+    for (auto i = uint32_t{}; i < static_cast<uint32_t>(fields.size()); ++i) {
+      fields[i].data.array = r.array->field(detail::narrow_cast<int>(i));
     }
     auto any_replacement = false;
     for (auto& field : fields) {
@@ -177,7 +177,7 @@ auto replace(basic_series<T> s, F transform,
 /// @relates `replace_visitor`
 template <typename F>
   requires(replacer_for_erased_series<F> or replacer_for_typed_series<F>)
-auto replace(table_slice slice, F transform,
+auto replace(const table_slice& slice, F transform,
              transfer_metadata_strategy metadata
              = transfer_metadata_strategy::preserve)
   -> std::pair<bool, table_slice> {
@@ -189,13 +189,15 @@ auto replace(table_slice slice, F transform,
   if (not transformed) {
     return {false, slice};
   }
-  auto& transformed_type = transformed->type;
+  auto attrs = std::vector<tenzir::type::attribute_view>{};
+  auto transformed_type = transformed->type;
+  transformed_type.assign_metadata(slice.schema());
   auto& transformed_array = as<arrow::StructArray>(*transformed->array);
   auto output_batch
     = arrow::RecordBatch::Make(transformed_type.to_arrow_schema(),
                                transformed_array.length(),
                                transformed_array.fields());
-  auto result = table_slice{output_batch, std::move(transformed->type)};
+  auto result = table_slice{output_batch, std::move(transformed_type)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());
   return {true, result};

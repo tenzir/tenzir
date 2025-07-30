@@ -43,6 +43,7 @@ public:
     TRY(argument_parser2::operator_(this->name())
           .named("compression_level", options.compression_level)
           .named("compression_type", options.compression_type)
+          .named("_times_in_milliseconds", options.times_in_milliseconds)
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<parquet_printer>>(
       parquet_printer{options});

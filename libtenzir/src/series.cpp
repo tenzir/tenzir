@@ -59,7 +59,7 @@ auto make_record_series(std::span<const series_field> fields,
     children.push_back(field.data.array);
   }
   auto null_bitmap = origin.null_bitmap();
-  if (origin.offset() != 0) {
+  if (origin.offset() != 0 and origin.null_bitmap_data()) {
     null_bitmap
       = check(arrow::internal::CopyBitmap(arrow::default_memory_pool(),
                                           origin.null_bitmap_data(),
