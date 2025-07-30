@@ -1,7 +1,7 @@
 ---
 title: write_ndjson
 category: Printing
-example: 'write_ndjson'
+example: "write_ndjson"
 ---
 
 Transforms the input event stream to a Newline-Delimited JSON byte stream.
@@ -82,7 +82,7 @@ write_ndjson strip_null_fields=true
 ```
 
 ```json
-{"yes": 1}
+{ "yes": 1 }
 ```
 
 ## See Also

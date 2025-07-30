@@ -129,7 +129,6 @@ auto easy_client::create_table(const tenzir::record_type& schema)
   -> failure_or<void> {
   TENZIR_ASSERT(args_.primary);
   auto columns = std::string{};
-  auto trafos = transformer_record::schema_transformations{};
   auto primary_found = false;
   auto path = path_type{};
   /// TODO: This should really be merged with the transformer itself. Its an
@@ -144,15 +143,8 @@ auto easy_client::create_table(const tenzir::record_type& schema)
     TRY(auto clickhouse_typename,
         type_to_clickhouse_typename(path, t, not is_primary, dh_));
     TENZIR_ASSERT(not clickhouse_typename.empty());
-    auto functions
-      = make_functions_from_clickhouse(path, clickhouse_typename, dh_);
     path.pop_back();
-    TENZIR_ASSERT(functions,
-                  "expected to get functions for top level columns {}", k);
     primary_found |= is_primary;
-    const auto [it, success]
-      = trafos.try_emplace(std::string{k}, std::move(functions));
-    TENZIR_ASSERT(success);
   }
   if (not primary_found) {
     diagnostic::error(
@@ -162,18 +154,21 @@ auto easy_client::create_table(const tenzir::record_type& schema)
       .emit(dh_);
     return failure::promise();
   }
-  transformations_ = transformer_record{"UNUSED", std::move(trafos)};
   constexpr static std::string_view engine = "MergeTree";
   TRY(auto clickhouse_columns,
       plain_clickhouse_tuple_elements(path, schema, dh_, args_.primary->inner));
-  auto query_text = fmt::format("CREATE TABLE {}"
-                                " {}"
-                                " ENGINE = {}"
-                                " ORDER BY {}",
-                                args_.table.inner, clickhouse_columns, engine,
-                                args_.primary->inner);
+  const auto creation_modifier
+    = args_.mode.inner == mode::create_append ? "IF NOT EXISTS" : "";
+  auto query_text
+    = fmt::format("CREATE TABLE {} {}"
+                  " {}"
+                  " ENGINE = {}"
+                  " ORDER BY {}",
+                  creation_modifier, args_.table.inner, clickhouse_columns,
+                  engine, args_.primary->inner);
   auto query = Query{query_text};
   client_.Execute(query);
+  TRY(get_schema_transformations());
   return {};
 }
 
@@ -256,5 +251,9 @@ auto easy_client::insert(const table_slice& slice) -> bool {
     client_.Insert(args_.table.inner, block);
   }
   return true;
+}
+
+void easy_client::ping() {
+  client_.Ping();
 }
 } // namespace tenzir::plugins::clickhouse

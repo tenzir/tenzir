@@ -1,0 +1,18 @@
+{
+  id: 1,
+  items: [
+    {
+      name: "a",
+      value: 1,
+    },
+    {
+      name: "b",
+      value: null,
+    },
+  ],
+  tags: [
+    "x",
+    null,
+    "y",
+  ],
+}

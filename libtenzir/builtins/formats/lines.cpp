@@ -337,6 +337,7 @@ class read_lines final
 
 class write_lines final
   : public virtual operator_plugin2<writer_adapter<lines_printer>> {
+public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
@@ -344,8 +345,8 @@ class write_lines final
   }
 };
 
-class read_delimited_regex final
-  : public virtual operator_plugin2<parser_adapter<lines_parser>> {
+class read_delimited_regex final : public virtual operator_factory_plugin {
+public:
   auto name() const -> std::string override {
     return "read_delimited_regex";
   }
@@ -356,12 +357,11 @@ class read_delimited_regex final
     args.field_name = "data";
     auto regex = ast::expression{};
     auto binary_flag = std::optional<located<bool>>{};
-    argument_parser2::operator_(name())
-      .positional("regex", regex, "string")
-      .named("binary", binary_flag)
-      .named("include_separator", args.include_separator)
-      .parse(inv, ctx)
-      .ignore();
+    TRY(argument_parser2::operator_(name())
+          .positional("regex", regex, "string")
+          .named("binary", binary_flag)
+          .named("include_separator", args.include_separator)
+          .parse(inv, ctx));
     TRY(auto result, const_eval(regex, ctx));
     auto failed = false;
     match(
@@ -391,8 +391,8 @@ class read_delimited_regex final
   }
 };
 
-class read_delimited final
-  : public virtual operator_plugin2<parser_adapter<lines_parser>> {
+class read_delimited final : public virtual operator_factory_plugin {
+public:
   auto name() const -> std::string override {
     return "read_delimited";
   }
@@ -403,12 +403,11 @@ class read_delimited final
     args.field_name = "data";
     auto separator = ast::expression{};
     auto binary_flag = std::optional<located<bool>>{};
-    argument_parser2::operator_(name())
-      .positional("separator", separator, "string")
-      .named("binary", binary_flag)
-      .named("include_separator", args.include_separator)
-      .parse(inv, ctx)
-      .ignore();
+    TRY(argument_parser2::operator_(name())
+          .positional("separator", separator, "string")
+          .named("binary", binary_flag)
+          .named("include_separator", args.include_separator)
+          .parse(inv, ctx));
     TRY(auto result, const_eval(separator, ctx));
     auto failed = false;
     match(
@@ -442,6 +441,27 @@ class read_delimited final
   }
 };
 
+class read_all final : public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "read_all";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto binary_flag = std::optional<located<bool>>{};
+    TRY(argument_parser2::operator_(name())
+          .named("binary", binary_flag)
+          .parse(inv, ctx));
+    auto args = parser_args{inv.self.get_location()};
+    args.field_name = "data";
+    args.split_at_regex = located{"(?!)", location::unknown};
+    args.binary = binary_flag ? binary_flag->inner : false;
+    return std::make_unique<parser_adapter<lines_parser>>(
+      lines_parser{std::move(args)});
+  }
+};
+
 } // namespace tenzir::plugins::lines
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
@@ -449,3 +469,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::write_lines)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_delimited_regex)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_delimited)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_all)

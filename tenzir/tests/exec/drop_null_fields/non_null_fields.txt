@@ -1,0 +1,6 @@
+{
+  a: null,
+  b: 42,
+  c: null,
+  d: "hello",
+}

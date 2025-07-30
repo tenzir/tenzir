@@ -1,0 +1,3 @@
+{
+  data: b"foo\u0000\u0001bar\u0000\u0001baz\nfoo\u0000\u0001bar\u0000\u0001baz\n",
+}

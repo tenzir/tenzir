@@ -1,0 +1,6 @@
+from {
+  x: ["test"].where(x => false)
+}
+before = type_of(x)
+x = x.map(y => 42)
+after = type_of(x)

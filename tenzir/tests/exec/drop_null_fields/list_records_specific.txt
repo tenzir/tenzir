@@ -1,0 +1,25 @@
+{
+  id: 1,
+  items: [
+    {
+      name: "a",
+      value: 1,
+    },
+    {
+      name: "b",
+      value: null,
+    },
+  ],
+  config: {
+    options: [
+      {
+        key: "opt1",
+        value: null,
+      },
+      {
+        key: "opt2",
+        value: "test",
+      },
+    ],
+  },
+}

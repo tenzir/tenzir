@@ -617,15 +617,6 @@ jobs:
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
-      - name: Run BATS Tests
-        run: |
-          VERBOSE=1 cmake --build "$BUILD_DIR" --target diff-bats -j 1
-      - name: Publish BATS Test Report
-        uses: mikepenz/action-junit-report@v5
-        if: always()
-        with:
-          report_paths: report.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Package
         env:
           DESTDIR: ${{ env.PWD }}
