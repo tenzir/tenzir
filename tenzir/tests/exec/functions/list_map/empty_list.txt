@@ -1,0 +1,29 @@
+{
+  x: [],
+  before: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "string",
+        attributes: [],
+        state: null,
+      },
+    },
+  },
+  after: {
+    name: null,
+    kind: "list",
+    attributes: [],
+    state: {
+      type: {
+        name: null,
+        kind: "null",
+        attributes: [],
+        state: null,
+      },
+    },
+  },
+}
