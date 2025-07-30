@@ -44,7 +44,7 @@ def report_failure(test, message):
             print(message)
 
 
-def parse_test_config(test_file, coverage=False):
+def parse_test_config(test_file:Path, coverage=False):
     """Parse test configuration from TQL comments at the beginning of the file."""
     # Define valid configuration keys and their default values
     config = {
@@ -57,13 +57,19 @@ def parse_test_config(test_file, coverage=False):
 
     valid_keys = set(config.keys())
 
+    is_tql=test_file.suffix == ".tql"
+    is_py=test_file.suffix== ".py"
+
     with open(test_file, "r", errors="ignore") as f:
         line_number = 0
         for line in f:
             line_number += 1
             line = line.strip()
-            if not line.startswith("//"):
-                break  # End of frontmatter
+             # End of frontmatter
+            if not line.startswith("//") and is_tql :
+                break
+            if not line.startswith("#") and is_py :
+                break
 
             # Remove the comment prefix and strip whitespace
             content = line[2:].strip()
@@ -940,10 +946,38 @@ class CustomFixture(ExtRunner):
         success(test)
         return True
 
+class CustomPythonFixtureWithNode(ExtRunner):
+    def __init__(self):
+        super().__init__(prefix="python_node", ext="py")
+
+    @override
+    def run(self, test: Path, update: bool,coverage:bool) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
+        with tenzir_node_endpoint(test,coverage=coverage) as endpoint :
+            try:
+                cmd = ["python", str(test), "--endpoint", endpoint, "--binary", TENZIR_BINARY]
+                completed = subprocess.run(
+                    cmd,
+                    timeout=test_config["timeout"],
+                    stdout=subprocess.PIPE,
+                    env={"PYTHONPATH": os.path.dirname(os.path.realpath(__file__))}
+                )
+                print(completed.stdout)
+            except subprocess.CalledProcessError as e:
+                with stdout_lock:
+                    fail(test)
+                    sys.stdout.buffer.write(e.stdout)
+                    sys.stdout.buffer.write(e.output)
+                    sys.stdout.buffer.write(e.stderr)
+                return False
+        success(test)
+        return True
+
 
 RUNNERS = [
     AstRunner(),
     CustomFixture(),
+    CustomPythonFixtureWithNode(),
     ExecRunner(),
     FinalizeRunner(),
     InstantiationRunner(),
@@ -956,6 +990,10 @@ RUNNERS = [
 runners = {}
 for runner in RUNNERS:
     runners[runner.prefix] = runner
+
+allowed_extensions = set()
+for runner in RUNNERS:
+    allowed_extensions.add(runner._ext)
 
 
 class Worker:
@@ -1073,7 +1111,7 @@ def main() -> None:
                     sys.exit(f"error: {e}")
         # If it's a file, determine the runner from its configuration
         elif resolved.is_file():
-            if resolved.suffix == ".tql":
+            if resolved.suffix[1:] in allowed_extensions :
                 try:
                     runner = get_runner_for_test(resolved)
                     todo.add((runner, resolved))
@@ -1082,7 +1120,7 @@ def main() -> None:
             else:
                 # Error for non-TQL files
                 sys.exit(
-                    f"error: unsupported file type {resolved.suffix} for {resolved} - only .tql files are supported"
+                    f"error: unsupported file type {resolved.suffix} for {resolved} - only {allowed_extensions} files are supported"
                 )
         else:
             sys.exit(f"error: `{test}` is neither a file nor a directory")
