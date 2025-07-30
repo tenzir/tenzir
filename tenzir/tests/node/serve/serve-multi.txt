@@ -1,0 +1,15 @@
+query 0
+id: serve-1
+{'s': 'Hello World 1'}
+{'s': 'Hiya 1'}
+id: serve-2
+{'s': 'Hello World 2'}
+{'s': 'Hiya 2'}
+
+query 1
+id: serve-1
+{'i': 42, 's': None}
+{'i': 0, 's': 'str 1'}
+id: serve-2
+{'i': 43, 's': None}
+{'i': 1, 's': 'str 2'}

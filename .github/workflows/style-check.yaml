@@ -46,7 +46,7 @@ jobs:
           # Note: black fails when it doesn't have to do anything.
           git add --intent-to-add --all
           git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
-            tr '\\n' '\\0' |
+            tr '\n' '\0' |
             grep '\.py$' |
             xargs -0 --no-run-if-empty black || true
           git diff --submodule=diff --exit-code
