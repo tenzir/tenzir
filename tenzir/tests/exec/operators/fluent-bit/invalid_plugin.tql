@@ -1,4 +1,4 @@
 // error: true
 
 from_fluent_bit "does-not-exist"
-to_fluent_bit "does-not-exist-2"
+discard

@@ -46,7 +46,6 @@ target_compile_definitions(restinio INTERFACE RESTINIO_USE_BOOST_ASIO)
 find_package(Boost REQUIRED COMPONENTS headers)
 find_package(OpenSSL REQUIRED)
 find_package(fmt REQUIRED)
-find_package(http_parser REQUIRED)
 add_subdirectory(llhttp)
 
 # Create an interface library for the modified restinio sources.
@@ -54,6 +53,6 @@ target_include_directories(
   restinio INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
 target_link_libraries(
   restinio INTERFACE fmt::fmt Boost::headers OpenSSL::SSL OpenSSL::Crypto
-                     http_parser::http_parser llhttp::llhttp)
+                     llhttp::llhttp)
 
 add_library(restinio::restinio ALIAS restinio)
