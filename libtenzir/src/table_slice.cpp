@@ -23,10 +23,12 @@
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/compute/cast.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
@@ -91,6 +93,157 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                             std::move(schema)};
   result.import_time(time{});
   return result;
+}
+
+/// @returns the type that `t` should be cast to, or `nullptr` if no casting
+/// should take place.
+auto target_type_for(const arrow::DataType& t)
+  -> std::shared_ptr<arrow::DataType> {
+  switch (t.id()) {
+    case arrow::Type::INT8:
+    case arrow::Type::INT16:
+    case arrow::Type::INT32:
+      return arrow::int64();
+    case arrow::Type::UINT8:
+    case arrow::Type::UINT16:
+    case arrow::Type::UINT32:
+      return arrow::uint64();
+    case arrow::Type::FLOAT:
+      return arrow::float64();
+    case arrow::Type::DURATION: {
+      const auto& type = static_cast<const arrow::DurationType&>(t);
+      if (type.unit() == arrow::TimeUnit::NANO) {
+        return nullptr;
+      }
+      return arrow::duration(arrow::TimeUnit::NANO);
+    }
+    case arrow::Type::TIMESTAMP: {
+      const auto& type = static_cast<const arrow::TimestampType&>(t);
+      if (type.unit() == arrow::TimeUnit::NANO) {
+        return nullptr;
+      }
+      return arrow::timestamp(arrow::TimeUnit::NANO);
+    }
+    default:
+      return nullptr;
+  }
+}
+
+auto try_convert_map_to_struct_array(std::shared_ptr<arrow::MapArray> map)
+  -> std::shared_ptr<arrow::StructArray> {
+  const auto& keys = map->keys();
+  if (keys->type_id() != arrow::Type::STRING) {
+    return nullptr;
+  }
+  const auto& values = map->items();
+  if (values->type_id() != arrow::Type::STRING) {
+    return nullptr;
+  }
+  auto keys_string = std::static_pointer_cast<arrow::StringArray>(keys);
+  auto values_string = std::static_pointer_cast<arrow::StringArray>(values);
+  auto builder = series_builder{};
+  for (auto i = int64_t{0}; i < map->length(); ++i) {
+    const auto start = map->value_offset(i);
+    const auto end = start + map->value_length(i);
+    if (map->IsNull(i)) {
+      builder.null();
+      continue;
+    }
+    auto rec = builder.record();
+    for (auto j = start; j < end; ++j) {
+      if (keys_string->IsNull(j)) {
+        continue;
+      }
+      const auto key = keys_string->Value(j);
+      if (values_string->IsNull(j)) {
+        rec.field(key, caf::none);
+        continue;
+      }
+      const auto value = values_string->Value(j);
+      rec.field(key, value);
+    }
+  }
+  auto s = builder.finish_assert_one_array();
+  auto r = std::dynamic_pointer_cast<arrow::StructArray>(s.array);
+  TENZIR_ASSERT(r);
+  return r;
+};
+
+/// Tries to upgrade some column types to types supported by Tenzir, by
+/// recursively checking their types and casting.
+auto upgrade_arrays(const std::shared_ptr<arrow::Array>& array)
+  -> std::shared_ptr<arrow::Array> {
+  array->type();
+  switch (array->type_id()) {
+    case arrow::Type::MAP: {
+      const auto map_array = std::static_pointer_cast<arrow::MapArray>(array);
+      auto as_struct = try_convert_map_to_struct_array(map_array);
+      if (as_struct) {
+        return as_struct;
+      }
+      return array;
+    }
+    case arrow::Type::STRUCT: {
+      auto struct_array = std::static_pointer_cast<arrow::StructArray>(array);
+      auto new_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
+      auto new_fields = std::vector<std::shared_ptr<arrow::Field>>{};
+      new_arrays.reserve(struct_array->num_fields());
+      for (int i = 0; i < struct_array->num_fields(); ++i) {
+        const auto& array = struct_array->field(i);
+        const auto& field = struct_array->struct_type()->field(i);
+        auto new_array = upgrade_arrays(struct_array->field(i));
+        auto new_field = field;
+        if (new_array != array) {
+          new_field = new_field->WithType(new_array->type());
+        }
+        new_arrays.push_back(std::move(new_array));
+        new_fields.push_back(std::move(new_field));
+      }
+      return make_struct_array(struct_array->length(),
+                               struct_array->null_bitmap(),
+                               std::move(new_fields), std::move(new_arrays));
+    }
+    case arrow::Type::LIST: {
+      auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
+      auto values = upgrade_arrays(list_array->values());
+      return check(arrow::ListArray::FromArrays(
+        *list_array->offsets(), *values, arrow::default_memory_pool(),
+        list_array->null_bitmap(), list_array->data()->null_count));
+    }
+    default: {
+      if (auto target = target_type_for(*array->type())) {
+        auto result = check(arrow::compute::Cast(array, target));
+        return result.make_array();
+      }
+      return array;
+    }
+  }
+  return array;
+}
+
+/// Tries to upgrade some column types to types supported by Tenzir, by
+/// recursively checking their types and casting.
+auto upgrade_record_batch(const std::shared_ptr<arrow::RecordBatch>& batch)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto new_columns = std::vector<std::shared_ptr<arrow::Array>>{};
+  auto new_fields = std::vector<std::shared_ptr<arrow::Field>>{};
+  new_columns.reserve(batch->num_columns());
+  new_fields.reserve(batch->num_columns());
+  for (auto i = 0; i < batch->num_columns(); ++i) {
+    auto array = batch->column(i);
+    const auto& field = batch->schema()->field(i);
+    auto new_array = upgrade_arrays(array);
+    auto new_field = field;
+    if (array->type() != new_array->type()) {
+      new_field = new_field->WithType(new_array->type());
+    }
+    new_columns.push_back(std::move(new_array));
+    new_fields.push_back(std::move(new_field));
+  }
+  auto new_schema = std::make_shared<arrow::Schema>(
+    new_fields, batch->schema()->endianness(), batch->schema()->metadata());
+  return arrow::RecordBatch::Make(std::move(new_schema), batch->num_rows(),
+                                  std::move(new_columns));
 }
 
 /// Verifies that an arrays type is supported by tenzir
@@ -172,7 +325,7 @@ auto verify_column(const arrow::Array& arr,
   if (not error) {
     error.emplace(table_slice::creation_error{
       .message
-      = fmt::format("unsupported arrow type `{}`", arr.type()->name())});
+      = fmt::format("unsupported arrow type `{}`", arr.type()->ToString())});
   }
   return false;
 }
@@ -320,12 +473,13 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
 auto table_slice::try_from(
   const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
   enum serialize serialize) -> std::expected<table_slice, creation_error> {
-  auto valid = verify_record_batch(*record_batch);
+  auto converted_batch = upgrade_record_batch(record_batch);
+  auto valid = verify_record_batch(*converted_batch);
   if (not valid) {
     return std::unexpected(valid.error());
   }
   auto builder = flatbuffers::FlatBufferBuilder{};
-  return create_table_slice(record_batch, builder, std::move(schema),
+  return create_table_slice(converted_batch, builder, std::move(schema),
                             serialize);
 }
 
