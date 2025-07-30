@@ -46,7 +46,12 @@ target_compile_definitions(restinio INTERFACE RESTINIO_USE_BOOST_ASIO)
 find_package(Boost REQUIRED COMPONENTS headers)
 find_package(OpenSSL REQUIRED)
 find_package(fmt REQUIRED)
+
+# Backup and set CMAKE_CONFIGURATION_TYPES to bypass llhttp's build type validation
+set(CMAKE_CONFIGURATION_TYPES_BACKUP "${CMAKE_CONFIGURATION_TYPES}")
+set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING "" FORCE)
 add_subdirectory(llhttp)
+set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES_BACKUP}" CACHE STRING "" FORCE)
 
 # Create an interface library for the modified restinio sources.
 target_include_directories(
