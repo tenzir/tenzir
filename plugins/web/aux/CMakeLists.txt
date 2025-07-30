@@ -50,7 +50,14 @@ find_package(fmt REQUIRED)
 # Backup and set CMAKE_CONFIGURATION_TYPES to bypass llhttp's build type validation
 set(CMAKE_CONFIGURATION_TYPES_BACKUP "${CMAKE_CONFIGURATION_TYPES}")
 set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING "" FORCE)
+# Force llhttp to build as static library to avoid runtime dependency issues
+set(BUILD_SHARED_LIBS_BACKUP "${BUILD_SHARED_LIBS}")
+set(BUILD_STATIC_LIBS_BACKUP "${BUILD_STATIC_LIBS}")
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_STATIC_LIBS ON)
 add_subdirectory(llhttp)
+set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_BACKUP}")
+set(BUILD_STATIC_LIBS "${BUILD_STATIC_LIBS_BACKUP}")
 set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES_BACKUP}" CACHE STRING "" FORCE)
 
 # Create an interface library for the modified restinio sources.
