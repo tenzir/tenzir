@@ -47,7 +47,7 @@ find_package(Boost REQUIRED COMPONENTS headers)
 find_package(OpenSSL REQUIRED)
 find_package(fmt REQUIRED)
 
-# Backup and set CMAKE_CONFIGURATION_TYPES to bypass llhttp's build type validation
+# Set CMAKE_CONFIGURATION_TYPES to bypass llhttp's build type validation
 set(CMAKE_CONFIGURATION_TYPES_BACKUP "${CMAKE_CONFIGURATION_TYPES}")
 set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING "" FORCE)
 # Force llhttp to build as static library to avoid runtime dependency issues
@@ -55,7 +55,12 @@ set(BUILD_SHARED_LIBS_BACKUP "${BUILD_SHARED_LIBS}")
 set(BUILD_STATIC_LIBS_BACKUP "${BUILD_STATIC_LIBS}")
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_STATIC_LIBS ON)
+# Enable position-independent code for shared library compatibility
+set(CMAKE_POSITION_INDEPENDENT_CODE_BACKUP "${CMAKE_POSITION_INDEPENDENT_CODE}")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(llhttp)
+# Restore everything afterwards
+set(CMAKE_POSITION_INDEPENDENT_CODE "${CMAKE_POSITION_INDEPENDENT_CODE_BACKUP}")
 set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_BACKUP}")
 set(BUILD_STATIC_LIBS "${BUILD_STATIC_LIBS_BACKUP}")
 set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES_BACKUP}" CACHE STRING "" FORCE)
