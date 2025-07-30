@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/secret_resolution.hpp"
+
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -18,6 +20,17 @@
 
 namespace tenzir::plugins::abs {
 
+struct load_abs_args {
+  location op;
+  located<secret> uri;
+  std::optional<located<secret>> account_key;
+
+  friend auto inspect(auto& f, load_abs_args& x) -> bool {
+    return f.object(x).fields(f.field("op", x.op), f.field("uri", x.uri),
+                              f.field("account_key", x.account_key));
+  }
+};
+
 // We use 2^20 for the upper bound of a chunk size, which exactly matches the
 // upper limit defined by execution nodes for transporting events.
 // TODO: Get the backpressure-adjusted value at runtime from the execution node.
@@ -27,13 +40,21 @@ class load_abs_operator final : public crtp_operator<load_abs_operator> {
 public:
   load_abs_operator() = default;
 
-  explicit load_abs_operator(located<secret> uri) : uri_{std::move(uri)} {
+  explicit load_abs_operator(load_abs_args args) : args_{std::move(args)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto uri = arrow::util::Uri{};
-    co_yield ctrl.resolve_secrets_must_yield(
-      {make_uri_request(uri_, "", uri, ctrl.diagnostics())});
+    auto account_key = std::string{};
+    auto reqs = std::vector{
+      make_uri_request(args_.uri, "", uri, ctrl.diagnostics()),
+    };
+    if (args_.account_key) {
+      reqs.emplace_back(make_secret_request("account_key",
+                                            args_.account_key.value(),
+                                            account_key, ctrl.diagnostics()));
+    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
     auto path = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri, &path);
     if (not opts.ok()) {
@@ -42,6 +63,16 @@ public:
                         opts.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
+    }
+    if (args_.account_key) {
+      auto status = opts->ConfigureAccountKeyCredential(account_key);
+      if (not status.ok()) {
+        diagnostic::error("failed to set account key: {}",
+                          status.ToStringWithoutContextLines())
+          .primary(*args_.account_key)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
     }
     auto fs = arrow::fs::AzureFileSystem::Make(*opts);
     if (not fs.ok()) {
@@ -55,7 +86,7 @@ public:
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info from path {}",
                         file_info.status().ToStringWithoutContextLines())
-        .primary(uri_)
+        .primary(args_.op)
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -63,7 +94,7 @@ public:
     if (not input_stream.ok()) {
       diagnostic::error("failed to open input stream: {}",
                         input_stream.status().ToStringWithoutContextLines())
-        .primary(uri_)
+        .primary(args_.op)
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -72,7 +103,7 @@ public:
       if (not input_stream.ok()) {
         diagnostic::error("failed to read from input stream: {}",
                           buffer.status().ToStringWithoutContextLines())
-          .primary(uri_)
+          .primary(args_.op)
           .emit(ctrl.diagnostics());
         co_return;
       }
@@ -95,29 +126,30 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const&, event_order) const
     -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
 
   friend auto inspect(auto& f, load_abs_operator& x) -> bool {
-    return f.apply(x.uri_);
+    return f.apply(x.args_);
   }
 
 private:
-  located<secret> uri_;
+  load_abs_args args_;
 };
 
 class load_abs_plugin final : public operator_plugin2<load_abs_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto uri = located<secret>{};
+    auto args = load_abs_args{};
+    args.op = inv.self.get_location();
     TRY(argument_parser2::operator_("load_azure_blob_storage")
-          .named("uri", uri)
+          .named("uri", args.uri)
+          .named("account_key", args.account_key)
           .parse(inv, ctx));
-    return std::make_unique<load_abs_operator>(std::move(uri));
+    return std::make_unique<load_abs_operator>(std::move(args));
   }
 
   auto load_properties() const -> load_properties_t override {

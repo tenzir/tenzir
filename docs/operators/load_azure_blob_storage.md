@@ -7,7 +7,7 @@ example: 'load_azure_blob_storage "abfs://container/file"'
 Loads bytes from Azure Blob Storage.
 
 ```tql
-load_azure_blob_storage uri:string
+load_azure_blob_storage uri:string, [account_key=string]
 ```
 
 ## Description
@@ -43,6 +43,10 @@ version of (1) and (2).
 Run `az login` on the command-line to authenticate the current user with Azure's
 command-line arguments.
 :::
+
+### `account_key = string (optional)`
+
+Account key to authenticate with.
 
 ## Examples
 

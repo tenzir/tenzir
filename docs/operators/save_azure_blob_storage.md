@@ -7,7 +7,7 @@ example: 'save_azure_blob_storage "abfs://container/file"'
 Saves bytes to Azure Blob Storage.
 
 ```tql
-save_azure_blob_storage uri:string
+save_azure_blob_storage uri:string, [account_key=string]
 ```
 
 ## Description
@@ -45,6 +45,10 @@ version of (1) and (2).
 Run `az login` on the command-line to authenticate the current user with Azure's
 command-line arguments.
 :::
+
+### `account_key = string (optional)`
+
+Account key to authenticate with.
 
 ## Examples
 
