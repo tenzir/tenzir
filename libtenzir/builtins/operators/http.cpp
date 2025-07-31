@@ -1129,6 +1129,11 @@ private:
   from_http_args args_;
 };
 
+struct pagination_request {
+  caf::uri uri;
+  std::unordered_map<std::string, std::string> headers;
+};
+
 class from_http_client_operator final
   : public crtp_operator<from_http_client_operator> {
 public:
@@ -1143,8 +1148,7 @@ public:
     auto& dh = ctrl.diagnostics();
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
-    auto paginate_queue = std::vector<
-      std::pair<caf::uri, std::unordered_map<std::string, std::string>>>{};
+    auto paginate_queue = std::vector<pagination_request>{};
     auto reqs = std::vector<secret_request>{};
     auto url = std::string{};
     auto [headers, secrets] = args_.make_headers();
@@ -1670,11 +1674,6 @@ struct http_args {
       f.field("retry_delay", x.retry_delay), f.field("parse", x.parse),
       f.field("filter", x.filter));
   }
-};
-
-struct pagination_request {
-  caf::uri uri;
-  std::unordered_map<std::string, std::string> headers;
 };
 
 class http_operator final : public crtp_operator<http_operator> {
