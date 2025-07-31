@@ -1,0 +1,9 @@
+{
+  whitespace: "hello",
+  slash: "path/to/file",
+  dash: "hello--world",
+  no_match: "hello world",
+  empty: "",
+  complex: "hello",
+  multiple: "path",
+}
