@@ -30,6 +30,8 @@ jobs:
   create:
     name: Create
     runs-on: ubuntu-latest
+    outputs:
+      is_latest: ${{ steps.release_type.outputs.is_latest }}
     permissions:
       contents: write
       pull-requests: write
@@ -241,3 +243,28 @@ jobs:
           echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
           echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
           echo "📋 Release file copied to main branch"
+
+  trigger-marketplace-release:
+    name: Trigger AWS Marketplace Release
+    runs-on: ubuntu-latest
+    needs: create
+    if: needs.create.outputs.is_latest == 'true'  # Only run for latest releases
+    permissions:
+      actions: write
+    steps:
+      - name: Generate an app token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
+          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Trigger marketplace release workflow
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          gh workflow run marketplace-release.yaml \
+            --repo ${{ github.repository }} \
+            --field version_tag="${{ github.event.inputs.version }}" \
+            --field image="ghcr.io/tenzir/tenzir:${{ github.event.inputs.version }}"
