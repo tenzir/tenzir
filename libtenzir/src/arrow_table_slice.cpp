@@ -146,8 +146,11 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     }
     if (schema) {
       state_.schema = std::move(schema);
-      TENZIR_ASSERT_EXPENSIVE(
-        state_.schema == type::from_arrow(*state_.record_batch->schema()));
+#if TENZIR_ENABLE_ASSERTIONS
+      auto from_arrow = type::from_arrow(*state_.record_batch->schema());
+      TENZIR_ASSERT_EXPENSIVE(state_.schema == from_arrow, "{} == {}",
+                              state_.schema, from_arrow);
+#endif
     } else {
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
