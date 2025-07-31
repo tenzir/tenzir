@@ -120,6 +120,14 @@ public:
 
   // -- overrides --------------------------------------------------------------
 
+  void set_error(caf::error stop_reason) override;
+
+  caf::error& get_error() noexcept override;
+
+  caf::actor_system* sys() const noexcept override;
+
+  bool has_human_readable_format() const noexcept override;
+
   bool begin_object(type_id_t type, std::string_view name) override;
 
   bool end_object() override;
@@ -312,6 +320,9 @@ private:
   bool skip_empty_fields_ = skip_empty_fields_default;
 
   std::string_view field_type_suffix_ = field_type_suffix_default;
+
+  // Error handling
+  caf::error err_;
 };
 
 template <class T>

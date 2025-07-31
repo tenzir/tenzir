@@ -469,8 +469,7 @@ auto main(int argc, char** argv) -> int try {
     sys.registry().erase("signal-reflector");
     pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
     sys.await_actors_before_shutdown(false);
-    auto actors_gone
-      = sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
     std::unordered_map<std::string, int64_t> zombies = {};
     auto collector = [&](const caf::telemetry::metric_family* /*family*/,
                          const caf::telemetry::metric* instance,
@@ -479,18 +478,17 @@ auto main(int argc, char** argv) -> int try {
         zombies[std::string{instance->labels()[0].value()}] = wrapped->value();
       }
     };
-    for (int cnt = 10; cnt > 0 and not actors_gone; cnt--) {
+    for (int cnt = 10; cnt > 0 and sys.registry().running() > 0; cnt--) {
       zombies.clear();
-      sys.base_metrics().running_actors_by_name->collect(collector);
+      sys.running_actors_metric_family()->collect(collector);
       TENZIR_INFO("waiting {} more seconds for leftover components to "
                   "terminate: {}",
                   cnt, zombies);
-      actors_gone
-        = sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+      sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
     }
-    if (not actors_gone) {
+    if (sys.registry().running() > 0) {
       zombies.clear();
-      sys.base_metrics().running_actors_by_name->collect(collector);
+      sys.running_actors_metric_family()->collect(collector);
       TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
     }
   } else {

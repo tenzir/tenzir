@@ -14,6 +14,7 @@
 
 #include <arrow/util/utf8.h>
 
+#include <stack>
 #include <string_view>
 
 namespace tenzir {

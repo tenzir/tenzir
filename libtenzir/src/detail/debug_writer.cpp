@@ -80,6 +80,22 @@ void debug_writer::reset() {
 
 // -- overrides ----------------------------------------------------------------
 
+void debug_writer::set_error(caf::error stop_reason) {
+  err_ = std::move(stop_reason);
+}
+
+caf::error& debug_writer::get_error() noexcept {
+  return err_;
+}
+
+caf::actor_system* debug_writer::sys() const noexcept {
+  return nullptr;
+}
+
+bool debug_writer::has_human_readable_format() const noexcept {
+  return true;
+}
+
 bool debug_writer::begin_object(type_id_t id, std::string_view name) {
   (void)id;
   (void)name;
@@ -104,7 +120,7 @@ bool debug_writer::begin_field(std::string_view name) {
 }
 
 bool debug_writer::begin_field(std::string_view name, bool is_present) {
-  if (skip_empty_fields_ && !is_present) {
+  if (skip_empty_fields_ && ! is_present) {
     auto t = top();
     switch (t) {
       case type::object:
@@ -123,7 +139,7 @@ bool debug_writer::begin_field(std::string_view name, bool is_present) {
     add(": ");
     pop();
     CAF_ASSERT(top() == type::element);
-    if (!is_present) {
+    if (! is_present) {
       add("null");
       pop();
     }
@@ -142,10 +158,11 @@ bool debug_writer::begin_field(std::string_view name,
 
 bool debug_writer::begin_field(std::string_view name, bool is_present,
                                span<const type_id_t> types, size_t index) {
-  if (is_present)
+  if (is_present) {
     return begin_field(name, types, index);
-  else
+  } else {
     return begin_field(name, is_present);
+  }
 }
 
 bool debug_writer::end_field() {
@@ -236,8 +253,9 @@ bool debug_writer::end_associative_array() {
     --indentation_level_;
     nl();
     add('}');
-    if (!stack_.empty())
+    if (! stack_.empty()) {
       stack_.back().filled = true;
+    }
     return true;
   } else {
     return false;
@@ -250,10 +268,11 @@ bool debug_writer::value(std::byte x) {
 
 bool debug_writer::value(bool x) {
   auto add_str = [this, x] {
-    if (x)
+    if (x) {
       add("true");
-    else
+    } else {
       add("false");
+    }
   };
   switch (top()) {
     case type::element:
@@ -385,7 +404,6 @@ bool debug_writer::value(span<const std::byte> x) {
 // -- state management ---------------------------------------------------------
 
 void debug_writer::init() {
-  has_human_readable_format_ = true;
   // Reserve some reasonable storage for the character buffer. JSON grows
   // quickly, so we can start at 1kb to avoid a couple of small allocations in
   // the beginning.
@@ -397,10 +415,11 @@ void debug_writer::init() {
 }
 
 debug_writer::type debug_writer::top() {
-  if (!stack_.empty())
+  if (! stack_.empty()) {
     return stack_.back().t;
-  else
+  } else {
     return type::null;
+  }
 }
 
 // Enters a new level of nesting.
@@ -410,7 +429,7 @@ void debug_writer::push(type t) {
 
 // Backs up one level of nesting.
 bool debug_writer::pop() {
-  if (!stack_.empty()) {
+  if (! stack_.empty()) {
     stack_.pop_back();
     return true;
   } else {
@@ -421,7 +440,7 @@ bool debug_writer::pop() {
 }
 
 bool debug_writer::pop_if(type t) {
-  if (!stack_.empty() && stack_.back() == t) {
+  if (! stack_.empty() && stack_.back() == t) {
     stack_.pop_back();
     return true;
   } else {
@@ -466,7 +485,7 @@ bool debug_writer::morph(type t) {
 }
 
 bool debug_writer::morph(type t, type& prev) {
-  if (!stack_.empty()) {
+  if (! stack_.empty()) {
     if (can_morph(stack_.back().t, t)) {
       prev = stack_.back().t;
       stack_.back().t = t;
