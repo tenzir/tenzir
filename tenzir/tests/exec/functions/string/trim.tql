@@ -13,4 +13,16 @@ from {
   complex: "/-/hello/-/".trim("/-"),
   // Test trim removes all matching chars from both ends
   multiple: "///path///".trim("/"),
+  
+  // Clarify that chars is a collection of characters, not a string
+  // If it were a string match, this would return "abcdefg" unchanged
+  // But as a char collection, it removes 'a', 'e', 'g' from ends
+  char_collection: "abcdefg".trim("aeg"),
+  
+  // This demonstrates each character in "hello" is removed individually
+  // Not looking for the string "hello", but any of 'h','e','l','o'
+  individual_chars: "helloworldhello".trim("hello"),
+  
+  // Order doesn't matter in the character set
+  order_invariant: "xyzabcxyz".trim("zyx"),
 }

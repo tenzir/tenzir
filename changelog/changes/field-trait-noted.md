@@ -7,7 +7,7 @@ pr: 5389
 
 The `trim()`, `trim_start()`, and `trim_end()` functions can now remove
 specific characters from strings, not just whitespace. Pass a second argument
-containing the characters to remove:
+containing a string where each character represents a character to remove:
 
 ```tql
 from {
@@ -22,6 +22,25 @@ from {
   path: "path/to/file",
   decorated: "hello--world",
   complex: "data"
+}
+```
+
+Each character in the second argument is treated individually, not as a complete
+string to match:
+
+```tql
+from {
+  // Removes 'a', 'e', and 'g' from both ends
+  chars: "abcdefg".trim("aeg"),
+  // Removes any 'h', 'e', 'l', or 'o' from both ends
+  word: "helloworldhello".trim("hello")
+}
+```
+
+```tql
+{
+  chars: "bcdf",
+  word: "wr"
 }
 ```
 

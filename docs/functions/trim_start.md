@@ -24,7 +24,8 @@ The string to trim.
 
 ### `chars: string` (optional)
 
-The characters to remove.
+A string where each character represents a character to remove. Any character
+found in this string will be trimmed from the start.
 
 Defaults to whitespace characters.
 
