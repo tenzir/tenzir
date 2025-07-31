@@ -6,4 +6,7 @@
   empty: "",
   complex: "hello",
   multiple: "path",
+  char_collection: "bcdf",
+  individual_chars: "wr",
+  order_invariant: "abc",
 }
