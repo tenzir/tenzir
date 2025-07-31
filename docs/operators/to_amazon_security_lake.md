@@ -7,7 +7,8 @@ example: 'to_amazon_security_lake "s3://…"'
 Sends events to Amazon Security Lake.
 
 ```tql
-to_amazon_security_lake s3_uri:string, region=string, account_id=string, [timeout=duration]
+to_amazon_security_lake s3_uri:string, region=string, account_id=string,
+                       [timeout=duration, role=string, external_id=string]
 ```
 
 ## Description
@@ -61,6 +62,16 @@ A duration after which the operator will write to ASL, regardless of file size.
 ASL specifies this should be between `5min` and `1d`.
 
 The default is `5min`.
+
+## `role = string (optional)`
+
+A role to assume when writing to S3.
+
+## `external_id = string (optional)`
+
+The external ID to use when assuming the `role`.
+
+Defaults to no ID.
 
 ## Examples
 

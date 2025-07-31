@@ -24,10 +24,11 @@
 namespace tenzir::plugins::s3 {
 
 namespace {
+
 struct s3_config {
-  std::string access_key = {};
-  std::string secret_key = {};
-  std::string session_token = {};
+  std::string access_key;
+  std::string secret_key;
+  std::string session_token;
 
   friend auto inspect(auto& f, s3_config& x) -> bool {
     return f.object(x)
@@ -38,16 +39,28 @@ struct s3_config {
   }
 };
 
+struct s3_assume_role {
+  std::string role;
+  std::string external_id;
+
+  friend auto inspect(auto& f, s3_assume_role& x) -> bool {
+    return f.object(x)
+      .pretty_name("s3_config")
+      .fields(f.field("role", x.role), f.field("external_id", x.external_id));
+  }
+};
+
 struct s3_args {
   bool anonymous = {};
-  located<secret> uri = {};
-  std::optional<s3_config> config = {};
+  located<secret> uri;
+  std::optional<s3_config> config;
+  std::optional<s3_assume_role> role;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, s3_args& x) -> bool {
     return f.object(x).pretty_name("s3_args").fields(
       f.field("anonymous", x.anonymous), f.field("uri", x.uri),
-      f.field("config", x.config));
+      f.field("config", x.config), f.field("role", x.role));
   }
 };
 
@@ -61,6 +74,9 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri)
   }
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
+  } else if (args.role) {
+    opts->ConfigureAssumeRoleCredentials(args.role->role, {},
+                                         args.role->external_id);
   } else if (args.config) {
     opts->ConfigureAccessKey(args.config->access_key, args.config->secret_key,
                              args.config->session_token);
@@ -88,7 +104,7 @@ public:
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
       co_return;
     }
-    auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
+    auto fs = arrow::fs::S3FileSystem::Make(*opts);
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 filesystem: {}",
                         fs.status().ToStringWithoutContextLines())
@@ -166,7 +182,7 @@ public:
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
     }
-    auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
+    auto fs = arrow::fs::S3FileSystem::Make(*opts);
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 "
                         "filesystem: {}",
@@ -196,8 +212,8 @@ public:
               .emit(ctrl.diagnostics());
           }
         });
-    for (auto chunk : input) {
-      if (! chunk || chunk->size() == 0) {
+    for (const auto& chunk : input) {
+      if (not chunk || chunk->size() == 0) {
         co_yield {};
         continue;
       }
