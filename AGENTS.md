@@ -52,31 +52,32 @@ Language (TQL) is domain-specific language to write data pipelines.
   - `tests/` - TQL test files and expected outputs
   - `services/` - System service configurations
 
+## Available Sub-Agents
+
+### compiler
+
+The **compiler** sub-agent sets up the build tree and compiles the Tenzir
+executable.
+
+Use it to perform the following tasks:
+
+- Configure the build using CMake
+- Compile Tenzir to obtain the `tenzir` executable
+
+### integration-tester
+
+The **integration-tester** sub-agent writes and executes TQL integration tests.
+
+Specifically, it performs the following tasks:
+
+- Create new *.tql files to test TQL programs
+- Run existing integration tests
+
 ## Key Tasks
 
-### Setup
+### Build Tenzir
 
-Make sure submodules are initialized and updated:
-
-```sh
-git submodule update --init --recursive
-```
-
-### Build
-
-Configure the build:
-
-```sh
-cmake -B build -D CMAKE_BUILD_TYPE=RelWithDebInfo
-```
-
-Use `CMAKE_BUILD_TYPE=Debug` only when in need of advanced debugging.
-
-Build the project as follows:
-
-```bash
-cmake --build build
-```
+Use the **compiler** sub-agent to compile Tenzir.
 
 ### Run pipelines
 
@@ -88,11 +89,9 @@ Use the `tenzir` binary to execute a TQL program:
 - The pipeline may read stdin as data, based on the first operator.
 - The pipeline may produce data on stdout, based on the last operator.
 
-### Testing
+### Test funtionality
 
 Tenzir has both C++ _unit tests_ and TQL _integration tests_.
-
-#### Unit Tests
 
 Run the unit tests via CTest:
 
@@ -100,23 +99,7 @@ Run the unit tests via CTest:
 ctest --test-dir build
 ```
 
-#### Integration Tests
-
-The integration tests are in `tenzir/tests`. Read `tenzir/tests/README.md` for
-detailed instructions on how to exeucte and write tests.
-
-TL;DR: run all integration tests via `uv`:
-
-```sh
-uv run tenzir/tests/run.py
-```
-
-Test the changed/new functionality selectively by passing the test files as
-arguments, e.g.:
-
-```sh
-uv run tenzir/tests/run.py tenzir/tests/exec/drop/*.tql
-```
+Use the **integration-tester** sub-agent to run TQL integration tests.
 
 ### Code Quality
 
