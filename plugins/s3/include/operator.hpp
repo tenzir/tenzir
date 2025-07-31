@@ -39,11 +39,22 @@ struct s3_config {
   }
 };
 
+struct s3_assume_role {
+  std::string role;
+  std::string external_id;
+
+  friend auto inspect(auto& f, s3_assume_role& x) -> bool {
+    return f.object(x)
+      .pretty_name("s3_config")
+      .fields(f.field("role", x.role), f.field("external_id", x.external_id));
+  }
+};
+
 struct s3_args {
   bool anonymous = {};
   located<secret> uri;
   std::optional<s3_config> config;
-  std::optional<located<std::string>> role;
+  std::optional<s3_assume_role> role;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, s3_args& x) -> bool {
@@ -64,7 +75,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri)
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (args.role) {
-    opts->ConfigureAssumeRoleCredentials(args.role->inner);
+    opts->ConfigureAssumeRoleCredentials(args.role->role, {},
+                                         args.role->external_id);
   } else if (args.config) {
     opts->ConfigureAccessKey(args.config->access_key, args.config->secret_key,
                              args.config->session_token);

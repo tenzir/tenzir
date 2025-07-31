@@ -77,12 +77,29 @@ public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = s3_args{};
+    auto role = std::optional<located<std::string>>{};
+    auto external_id = std::optional<located<std::string>>{};
     TRY(argument_parser2::operator_(this->name())
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
-          .named("role", args.role)
+          .named("role", role)
+          .named("external_id", external_id)
           .parse(inv, ctx));
     args.config = config_;
+    if (role) {
+      auto& r = args.role.emplace();
+      r.role = role->inner;
+    }
+    if (external_id) {
+      if (not role) {
+        diagnostic::error(
+          "cannot specify `external_id` without specifying `role`")
+          .primary(external_id->source)
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.role->external_id = external_id->inner;
+    }
     return std::make_unique<Operator>(std::move(args));
   }
 
