@@ -80,6 +80,7 @@ public:
     TRY(argument_parser2::operator_(this->name())
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
+          .named("role", args.role)
           .parse(inv, ctx));
     args.config = config_;
     return std::make_unique<Operator>(std::move(args));
