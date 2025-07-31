@@ -18,9 +18,94 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
-#include <arrow/util/tdigest.h>
+#include <arrow/util/logging.h>
+#include <arrow/util/macros.h>
+#include <arrow/util/visibility.h>
 
+#include <cmath>
+#include <memory>
 #include <random>
+#include <vector>
+
+namespace arrow {
+
+class Status;
+
+namespace internal {
+
+class ARROW_EXPORT TDigest {
+public:
+  explicit TDigest(uint32_t delta = 100, uint32_t buffer_size = 500);
+  ~TDigest();
+  TDigest(TDigest&&);
+  TDigest& operator=(TDigest&&);
+
+  // reset and re-use this tdigest
+  void Reset();
+
+  // validate data integrity
+  Status Validate() const;
+
+  // dump internal data, only for debug
+  void Dump() const;
+
+  // buffer a single data point, consume internal buffer if full
+  // this function is intensively called and performance critical
+  // call it only if you are sure no NAN exists in input data
+  void Add(double value) {
+    ARROW_DCHECK(! std::isnan(value)) << "cannot add NAN";
+    if (ARROW_PREDICT_FALSE(input_.size() == input_.capacity())) {
+      MergeInput();
+    }
+    input_.push_back(value);
+  }
+
+  // skip NAN on adding
+  template <typename T>
+  typename std::enable_if<std::is_floating_point<T>::value>::type
+  NanAdd(T value) {
+    if (! std::isnan(value)) {
+      Add(value);
+    }
+  }
+
+  template <typename T>
+  typename std::enable_if<std::is_integral<T>::value>::type NanAdd(T value) {
+    Add(static_cast<double>(value));
+  }
+
+  // merge with other t-digests, called infrequently
+  void Merge(const std::vector<TDigest>& others);
+  void Merge(const TDigest& other);
+
+  // calculate quantile
+  double Quantile(double q) const;
+
+  double Min() const {
+    return Quantile(0);
+  }
+  double Max() const {
+    return Quantile(1);
+  }
+  double Mean() const;
+
+  // check if this tdigest contains no valid data points
+  bool is_empty() const;
+
+private:
+  // merge input data with current tdigest
+  void MergeInput() const;
+
+  // input buffer, size = buffer_size * sizeof(double)
+  mutable std::vector<double> input_;
+
+  // hide other members with pimpl
+  class TDigestImpl;
+  std::unique_ptr<TDigestImpl> impl_;
+};
+
+} // namespace internal
+} // namespace arrow
 
 namespace tenzir::plugins::numeric {
 
