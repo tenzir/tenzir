@@ -10,7 +10,7 @@
 
 #include <tenzir/test/test.hpp>
 
-TEST(token validation) {
+TEST("token validation") {
   tenzir::plugins::web::authenticator_state state;
   auto token = state.generate();
   REQUIRE_NOERROR(token);

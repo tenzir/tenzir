@@ -33,7 +33,7 @@ tenzir::record extract_config(const std::string& config) {
 
 } // namespace
 
-TEST(dev mode config validation) {
+TEST("dev mode config validation") {
   auto record = extract_config(R"_(
 web:
   bind: localhost
@@ -77,7 +77,7 @@ web:
   CHECK_ERROR(convert(invalid_data2, invalid_config2));
 }
 
-TEST(tls mode config validation) {
+TEST("tls mode config validation") {
   auto data = extract_config(R"_(
 web:
   bind: localhost
