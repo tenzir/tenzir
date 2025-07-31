@@ -17,6 +17,7 @@
 #include "tenzir/view.hpp"
 
 #include <cstddef>
+#include <expected>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -80,9 +81,25 @@ public:
   /// @param record_batch The record batch containing the table slice data.
   /// @param Tenzir type for the provided record batch.
   /// @param serialize Whether to store IPC format as a backing.
+  /// @pre `record_batch` must be a RecordBatch that can be represented by
+  ///      Tenzir's type system.
   explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                        type schema = {},
                        enum serialize serialize = serialize::no);
+
+  struct creation_error {
+    std::string message;
+  };
+
+  /// Construct an Arrow-encoded table slice from an existing record batch.
+  /// Unlike the analogous constructor, this will check
+  /// @param record_batch The record batch containing the table slice data.
+  /// @param Tenzir type for the provided record batch.
+  /// @param serialize Whether to store IPC format as a backing.
+  static auto
+  try_from(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+           type schema = {}, enum serialize serialize = serialize::no)
+    -> std::expected<table_slice, creation_error>;
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.

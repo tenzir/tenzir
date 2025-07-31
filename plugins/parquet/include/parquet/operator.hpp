@@ -83,7 +83,14 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
         .emit(ctrl.diagnostics());
       co_return;
     }
-    co_yield table_slice(maybe_batch.MoveValueUnsafe());
+    auto maybe_slice = table_slice::try_from(maybe_batch.MoveValueUnsafe());
+    if (not maybe_slice) {
+      diagnostic::error("parquet file contains unsupported types")
+        .note("{}", maybe_slice.error().message)
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    co_yield std::move(*maybe_slice);
   }
 }
 
