@@ -69,7 +69,7 @@ A role to assume when writing to S3.
 
 ## `external_id = string (optional)`
 
-The external_id to use when assuming the `role`.
+The external ID to use when assuming the `role`.
 
 Defaults to no ID.
 
