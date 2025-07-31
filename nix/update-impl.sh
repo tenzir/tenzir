@@ -67,4 +67,4 @@ update-source() {
 
 git config --list --show-origin
 
-update-source caf "libtenzir/aux/caf" "1.0.2+g4a2fc51c09"
+update-source caf "libtenzir/aux/caf" "1.0.2+gc1ccf019d"
