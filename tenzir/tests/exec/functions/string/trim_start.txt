@@ -1,0 +1,8 @@
+{
+  whitespace: "hello",
+  slash: "path/to/file",
+  multiple_chars: "hello",
+  no_match: "hello/world/",
+  empty: "",
+  multiple: "path",
+}
