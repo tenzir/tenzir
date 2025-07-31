@@ -14,8 +14,6 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <arrow/util/tdigest.h>
-
 namespace tenzir::plugins::numeric {
 
 TENZIR_ENUM(mode, ceil, floor, round);
@@ -46,7 +44,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    return function_use::make([expr = std::move(expr), spec = std::move(spec),
+    return function_use::make([expr = std::move(expr), spec,
                                inv_loc = inv.call.get_location(),
                                this](evaluator eval, session ctx) {
       return map_series(eval(expr), [&](series value) {
