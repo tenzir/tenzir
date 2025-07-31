@@ -22,17 +22,15 @@
 #include "tenzir/operator.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 using namespace tenzir;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 
-TEST(list) {
+TEST("list") {
   REQUIRE((std::is_same_v<std::vector<data>, list>));
 }
 
-TEST(maps) {
+TEST("maps") {
   map ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
   auto i = ports.find("ssh");
@@ -45,7 +43,7 @@ TEST(maps) {
   CHECK(! ports.emplace("http", 8080u).second);
 }
 
-TEST(merge) {
+TEST("merge") {
   // clang-format off
   const auto xs = record{
     {"a", "foo"},
@@ -101,7 +99,7 @@ TEST(merge) {
   // clang-format on
 }
 
-TEST(strip) {
+TEST("strip") {
   auto xs = record{
     {"a", record{}},
     {"b", uint64_t{5u}},
@@ -119,7 +117,7 @@ TEST(strip) {
   CHECK_EQUAL(strip(xs), expected);
 }
 
-TEST(construction) {
+TEST("construction") {
   CHECK(is<caf::none_t>(data{}));
   CHECK(is<bool>(data{true}));
   CHECK(is<bool>(data{false}));
@@ -137,7 +135,7 @@ TEST(construction) {
   CHECK(is<map>(data{map{}}));
 }
 
-TEST(relational_operators) {
+TEST("relational_operators") {
   data d1;
   data d2;
   CHECK(d1 == d2);
@@ -169,7 +167,7 @@ TEST(relational_operators) {
   CHECK(! (d1 > d2));
 }
 
-TEST(evaluation) {
+TEST("evaluation") {
   MESSAGE("in");
   data lhs{"foo"};
   data rhs{"foobar"};
@@ -198,7 +196,7 @@ TEST(evaluation) {
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
 }
 
-TEST(evaluation - pattern matching) {
+TEST("evaluation - pattern matching") {
   CHECK(
     evaluate(unbox(to<pattern>("/f.*o/")), relational_operator::equal, "foo"));
   CHECK(
@@ -209,7 +207,7 @@ TEST(evaluation - pattern matching) {
     evaluate("FOO", relational_operator::equal, unbox(to<pattern>("/f.*o/i"))));
 }
 
-TEST(printable) {
+TEST("printable") {
   // Ensure that we don't produce trailing zeros for floating point data.
   auto x = data{-4.2};
   CHECK_EQUAL(to_string(x), "-4.2");
@@ -217,7 +215,7 @@ TEST(printable) {
   CHECK_EQUAL(to_string(x), "3.14");
 }
 
-TEST(parseable) {
+TEST("parseable") {
   auto p = make_parser<data>();
   data d;
   MESSAGE("bool");
@@ -283,7 +281,7 @@ TEST(parseable) {
   CHECK((d == map{{true, 1u}, {false, 0u}}));
 }
 
-TEST(convert - caf::config_value) {
+TEST("convert - caf::config_value") {
   // clang-format off
   auto x = record{
     {"x", "foo"},
@@ -324,7 +322,7 @@ TEST(convert - caf::config_value) {
   CHECK_EQUAL(unbox(to<dictionary<config_value>>(x)), y);
 }
 
-TEST(convert - caf::config_value - null) {
+TEST("convert - caf::config_value - null") {
   // clang-format off
   auto x = record{
     {"valid", "foo"},
@@ -346,7 +344,7 @@ TEST(convert - caf::config_value - null) {
 // We can't really test that a given call doesn't produce a stack overflow, so
 // instead we test here that the fields that are nested deeper than
 // `max_recursion_depth` are cut off during `flatten()`.
-TEST(nesting depth) {
+TEST("nesting depth") {
   auto x = record{{"leaf", int64_t{1}}};
   for (size_t i = 0; i < defaults::max_recursion; ++i) {
     auto tmp = record{{"nested", std::exchange(x, {})}};
@@ -358,7 +356,7 @@ TEST(nesting depth) {
   CHECK_EQUAL(depth(flattened), 1ull);
 }
 
-TEST(pack / unpack) {
+TEST("pack / unpack") {
   auto x = data{record{
     {"none", caf::none},
     {"bool", bool{true}},
@@ -392,7 +390,7 @@ TEST(pack / unpack) {
   CHECK_EQUAL(x, x2);
 }
 
-TEST(get_if) {
+TEST("get_if") {
   // clang-format off
   auto x = record{
     {"foo", "bar"},
@@ -424,7 +422,7 @@ TEST(get_if) {
   CHECK(! unknown);
 }
 
-TEST(get_or) {
+TEST("get_or") {
   auto x = record{{"foo", "bar"}};
   auto fallback = std::string{"fallback"};
   auto foo = get_or(x, "foo", fallback);

@@ -22,7 +22,7 @@
 
 namespace tenzir {
 
-TEST(null_type) {
+TEST("null_type") {
   static_assert(concrete_type<null_type>);
   // TODO: Add some more tests that cover the null type.
   auto t = type{};
@@ -43,7 +43,7 @@ TEST(null_type) {
   CHECK_EQUAL(*ltn.to_arrow_type(), *arrow::list(arrow::null()));
 }
 
-TEST(bool_type) {
+TEST("bool_type") {
   static_assert(concrete_type<bool_type>);
   static_assert(basic_type<bool_type>);
   static_assert(!complex_type<bool_type>);
@@ -62,7 +62,7 @@ TEST(bool_type) {
   CHECK(is<bool_type>(lbt));
 }
 
-TEST(int64_type) {
+TEST("int64_type") {
   static_assert(concrete_type<int64_type>);
   static_assert(basic_type<int64_type>);
   static_assert(!complex_type<int64_type>);
@@ -81,7 +81,7 @@ TEST(int64_type) {
   CHECK(is<int64_type>(lit));
 }
 
-TEST(uint64_type) {
+TEST("uint64_type") {
   static_assert(concrete_type<uint64_type>);
   static_assert(basic_type<uint64_type>);
   static_assert(!complex_type<uint64_type>);
@@ -100,7 +100,7 @@ TEST(uint64_type) {
   CHECK(is<uint64_type>(lct));
 }
 
-TEST(double_type) {
+TEST("double_type") {
   static_assert(concrete_type<double_type>);
   static_assert(basic_type<double_type>);
   static_assert(!complex_type<double_type>);
@@ -119,7 +119,7 @@ TEST(double_type) {
   CHECK(is<double_type>(lrt));
 }
 
-TEST(duration_type) {
+TEST("duration_type") {
   static_assert(concrete_type<duration_type>);
   static_assert(basic_type<duration_type>);
   static_assert(!complex_type<duration_type>);
@@ -138,7 +138,7 @@ TEST(duration_type) {
   CHECK(is<duration_type>(ldt));
 }
 
-TEST(time_type) {
+TEST("time_type") {
   static_assert(concrete_type<time_type>);
   static_assert(basic_type<time_type>);
   static_assert(!complex_type<time_type>);
@@ -157,7 +157,7 @@ TEST(time_type) {
   CHECK(is<time_type>(ltt));
 }
 
-TEST(string_type) {
+TEST("string_type") {
   static_assert(concrete_type<string_type>);
   static_assert(basic_type<string_type>);
   static_assert(!complex_type<string_type>);
@@ -176,7 +176,7 @@ TEST(string_type) {
   CHECK(is<string_type>(lst));
 }
 
-TEST(ip_type) {
+TEST("ip_type") {
   static_assert(concrete_type<ip_type>);
   static_assert(basic_type<ip_type>);
   static_assert(!complex_type<ip_type>);
@@ -195,7 +195,7 @@ TEST(ip_type) {
   CHECK(is<ip_type>(lat));
 }
 
-TEST(subnet_type) {
+TEST("subnet_type") {
   static_assert(concrete_type<subnet_type>);
   static_assert(basic_type<subnet_type>);
   static_assert(!complex_type<subnet_type>);
@@ -214,7 +214,7 @@ TEST(subnet_type) {
   CHECK(is<subnet_type>(lst));
 }
 
-TEST(enumeration_type) {
+TEST("enumeration_type") {
   static_assert(concrete_type<enumeration_type>);
   static_assert(!basic_type<enumeration_type>);
   static_assert(complex_type<enumeration_type>);
@@ -244,7 +244,7 @@ TEST(enumeration_type) {
   CHECK_EQUAL(as<enumeration_type>(let).field(3), "");
 }
 
-TEST(list_type) {
+TEST("list_type") {
   static_assert(concrete_type<list_type>);
   static_assert(!basic_type<list_type>);
   static_assert(complex_type<list_type>);
@@ -267,7 +267,7 @@ TEST(list_type) {
   CHECK_EQUAL(as<list_type>(llbt).value_type(), type{bool_type{}});
 }
 
-TEST(map_type) {
+TEST("map_type") {
   static_assert(concrete_type<map_type>);
   static_assert(!basic_type<map_type>);
   static_assert(complex_type<map_type>);
@@ -292,7 +292,7 @@ TEST(map_type) {
   CHECK_EQUAL(as<map_type>(lmabt).value_type(), type{bool_type{}});
 }
 
-TEST(record_type) {
+TEST("record_type") {
   static_assert(concrete_type<record_type>);
   static_assert(!basic_type<record_type>);
   static_assert(complex_type<record_type>);
@@ -320,7 +320,7 @@ TEST(record_type) {
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
 }
 
-TEST(record_type name resolving) {
+TEST("record_type name resolving") {
   const auto rt = record_type{
     {"i", int64_type{}},
     {"r",
@@ -402,7 +402,7 @@ TEST(record_type name resolving) {
     (std::vector<offset>{{5}}));
 }
 
-TEST(record_type type resolving) {
+TEST("record_type type resolving") {
   const auto layout = record_type{
     {"ts", type{"timestamp", time_type{}}},
     {"uid", type{"id", string_type{}, {{"index", "hash"}}}},
@@ -440,7 +440,7 @@ TEST(record_type type resolving) {
   // which we nede to fix as part of the planned unnesting effort.
 }
 
-TEST(record_type flat index computation) {
+TEST("record_type flat index computation") {
   auto x = record_type{
     {"x",
      record_type{
@@ -478,7 +478,7 @@ TEST(record_type flat index computation) {
   CHECK_EQUAL(x.flat_index(offset({1, 0})), 5u);
 }
 
-TEST(record type transformation) {
+TEST("record type transformation") {
   const auto old = record_type{
     {"x",
      record_type{
@@ -545,7 +545,7 @@ TEST(record type transformation) {
   CHECK_EQUAL(xyz.transform({{{0, 0, 0}, record_type::drop()}}), std::nullopt);
 }
 
-TEST(record_type merging) {
+TEST("record_type merging") {
   const auto lhs = record_type{
     {"x",
      record_type{
@@ -632,7 +632,7 @@ TEST(record_type merging) {
   CHECK_EQUAL(result_fail.error(), expected_result_fail);
 }
 
-TEST(type inference) {
+TEST("type inference") {
   CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
   CHECK_EQUAL(type::infer(int64_t{}), int64_type{});
@@ -683,7 +683,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(r), rt);
 }
 
-TEST(legacy_type conversion) {
+TEST("legacy_type conversion") {
   const auto rt = type{record_type{
     {"i", int64_type{}},
     {"r1",
@@ -723,7 +723,7 @@ TEST(legacy_type conversion) {
               fmt::format("{}", type::from_legacy_type(lrt)));
 }
 
-TEST(named types) {
+TEST("named types") {
   const auto at = type{"l1", bool_type{}};
   CHECK(is<bool_type>(at));
   CHECK_EQUAL(at.name(), "l1");
@@ -738,7 +738,7 @@ TEST(named types) {
   CHECK_EQUAL(fmt::format("{}", lat), "l3");
 }
 
-TEST(enriched types) {
+TEST("enriched types") {
   const auto at = type{"l1", bool_type{}, {{"first", "value"}, {"second"}}};
   CHECK(is<bool_type>(at));
   CHECK_EQUAL(at.name(), "l1");
@@ -761,7 +761,7 @@ TEST(enriched types) {
   CHECK_EQUAL(lat, at);
 }
 
-TEST(metadata layer merging) {
+TEST("metadata layer merging") {
   const auto t1 = type{
     "foo",
     bool_type{},
@@ -801,7 +801,7 @@ TEST(metadata layer merging) {
               (type{"x", bool_type{}, {{"second"}, {"first"}}}));
 }
 
-TEST(sorting) {
+TEST("sorting") {
   auto ts = std::vector<type>{
     type{},
     type{bool_type{}},
@@ -817,7 +817,7 @@ TEST(sorting) {
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
 }
 
-TEST(construct) {
+TEST("construct") {
   // This type is taking from the "tenzir import test" generator feature.
   // The default blueprint record type contains the duplicate field name
   // "s", for which we must still be able to correctly create a record.
@@ -851,7 +851,7 @@ TEST(construct) {
   CHECK_EQUAL(t.construct(), record::make_unsafe(expected));
 }
 
-TEST(sum type) {
+TEST("sum type") {
   // Returns a visitor that checks whether the expected concrete types are
   // the types resulting in the visitation.
   auto is_type = []<concrete_type... T>(const T&...) {
@@ -865,7 +865,7 @@ TEST(sum type) {
               is_type(bool_type{}, int64_type{})));
 }
 
-TEST(hashes) {
+TEST("hashes") {
   auto hash = []<type_or_concrete_type T>(const T& value) {
     auto hasher = std::hash<T>{};
     return hasher(value);
@@ -903,7 +903,7 @@ TEST(hashes) {
               "0xC262CE1B00968C16");
 }
 
-TEST(congruence) {
+TEST("congruence") {
   auto i = type{int64_type{}};
   auto j = type{int64_type{}};
   CHECK(i == j);
@@ -941,7 +941,7 @@ TEST(congruence) {
   CHECK(congruent(a, r0));
 }
 
-TEST(compatibility) {
+TEST("compatibility") {
   CHECK(
     compatible(type{ip_type{}}, relational_operator::in, type{subnet_type{}}));
   CHECK(compatible(type{ip_type{}}, relational_operator::in, subnet{}));
@@ -950,7 +950,7 @@ TEST(compatibility) {
   CHECK(compatible(type{subnet_type{}}, relational_operator::in, subnet{}));
 }
 
-TEST(subset) {
+TEST("subset") {
   auto i = type{int64_type{}};
   auto j = type{int64_type{}};
   CHECK(is_subset(i, j));

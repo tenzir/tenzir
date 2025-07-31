@@ -18,7 +18,7 @@ constexpr auto padding_val = 'S';
 using sut_type = tenzir::detail::padded_buffer<padding_len, padding_val>;
 } // namespace
 
-TEST(Append a string_view with correct padding) {
+TEST("Append a string_view with correct padding") {
   auto sut = sut_type{};
   constexpr auto input = std::string_view{"in poot"};
   sut.append(input);
@@ -32,7 +32,7 @@ TEST(Append a string_view with correct padding) {
   CHECK(sut.view().empty());
 }
 
-TEST(Append a string_view twice) {
+TEST("Append a string_view twice") {
   auto sut = sut_type{};
   sut.append("one");
   sut.append("two");
@@ -42,7 +42,7 @@ TEST(Append a string_view twice) {
   CHECK(sut.view().empty());
 }
 
-TEST(truncate) {
+TEST("truncate") {
   auto sut = sut_type{};
   sut.append("one");
   sut.append("two");

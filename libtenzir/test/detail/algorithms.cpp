@@ -22,17 +22,17 @@ using iset = std::set<int>;
 
 using ivec = std::vector<int>;
 
-TEST(contains) {
+TEST("contains") {
   CHECK(contains(iset({1, 2, 3, 4}), 2));
   CHECK(contains(ivec({1, 2, 3, 4}), 2));
   CHECK(!contains(iset({1, 2, 3, 4}), 5));
   CHECK(!contains(ivec({1, 2, 3, 4}), 5));
 }
 
-TEST(empty collection values) {
+TEST("empty collection values") {
   CHECK_EQUAL(unique_values(imap()), ivec());
 }
 
-TEST(unique collection values) {
+TEST("unique collection values") {
   CHECK_EQUAL(unique_values(imap({{1, 10}, {2, 30}, {3, 30}})), ivec({10, 30}));
 }

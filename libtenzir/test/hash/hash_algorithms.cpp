@@ -40,18 +40,18 @@ auto byte_hash(std::string_view bytes) {
 
 } // namespace
 
-TEST(crc32 oneshot) {
+TEST("crc32 oneshot") {
   CHECK_EQUAL(hash<crc32>('f'), 1993550816u);
   CHECK_EQUAL(hash<crc32>('o'), 252678980u);
 }
 
-TEST(crc32 incremental) {
+TEST("crc32 incremental") {
   crc32 crc;
   crc.add(chop("foo"));
   CHECK_EQUAL(crc.finish(), 2356372769u);
 }
 
-TEST(crc32 hash_append) {
+TEST("crc32 hash_append") {
   crc32 foo;
   hash_append(foo, 'f');
   CHECK_EQUAL(foo.finish(), 1993550816u);
@@ -64,7 +64,7 @@ TEST(crc32 hash_append) {
 // FNV test values taken from the canonical reference over at
 // http://www.isthe.com/chongo/src/fnv/test_fnv.c.
 
-TEST(fnv1 - 32bit) {
+TEST("fnv1 - 32bit") {
   using hasher_type = fnv1<32>;
   auto h = byte_hash<hasher_type>;
   CHECK_EQUAL(h(""), hasher_type::offset_basis());
@@ -73,7 +73,7 @@ TEST(fnv1 - 32bit) {
   CHECK_EQUAL(h("foobar"), 0x31f0b262UL);
 }
 
-TEST(fnv1a - 32bit) {
+TEST("fnv1a - 32bit") {
   using hasher_type = fnv1a<32>;
   auto h = byte_hash<hasher_type>;
   CHECK_EQUAL(h(""), hasher_type::offset_basis());
@@ -82,7 +82,7 @@ TEST(fnv1a - 32bit) {
   CHECK_EQUAL(h("foobar"), 0xbf9cf968UL);
 }
 
-TEST(fnv1 - 64bit) {
+TEST("fnv1 - 64bit") {
   using hasher_type = fnv1<64>;
   auto h = byte_hash<hasher_type>;
   CHECK_EQUAL(h(""), hasher_type::offset_basis());
@@ -91,12 +91,12 @@ TEST(fnv1 - 64bit) {
   CHECK_EQUAL(h("foobar"), 0x340d8765a4dda9c2ULL);
 }
 
-TEST(xxh64 oneshot with seed) {
+TEST("xxh64 oneshot with seed") {
   char forty_two[3] = "42"; // incl. NUL byte
   CHECK_EQUAL(xxh64::make(as_bytes(forty_two), 42), 7873697032674743835ul);
 }
 
-TEST(xxh64 incremental) {
+TEST("xxh64 incremental") {
   xxh64 h;
   h.add(chop("foo"));
   CHECK_EQUAL(h.finish(), 3728699739546630719ul);
@@ -106,7 +106,7 @@ TEST(xxh64 incremental) {
   CHECK_EQUAL(h.finish(), 6505385152087097371ul);
 }
 
-TEST(xxh64 zero bytes) {
+TEST("xxh64 zero bytes") {
   const std::byte* ptr = nullptr;
   auto bytes = std::span<const std::byte, 0>{ptr, ptr};
   xxh64 h;
@@ -114,19 +114,19 @@ TEST(xxh64 zero bytes) {
   h.add(bytes);
 }
 
-TEST(md5 validity) {
+TEST("md5 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<md5>(foo));
   CHECK_EQUAL(digest, "acbd18db4cc2f85cedef654fccc4a4d8");
 }
 
-TEST(sha1 validity) {
+TEST("sha1 validity") {
   std::array<char, 2> forty_two = {'4', '2'};
   auto digest = hexify(hash<sha1>(forty_two));
   CHECK_EQUAL(digest, "92cfceb39d57d914ed8b14d0e37643de0797ae56");
 }
 
-TEST(sha1 incremental) {
+TEST("sha1 incremental") {
   sha1 sha;
   sha.add(chop("foo"));
   sha.add(chop("bar"));
@@ -136,28 +136,28 @@ TEST(sha1 incremental) {
   CHECK_EQUAL(digest, "4cbfb91f23be76f0836c3007c1b3c8d8c2eacdd1");
 }
 
-TEST(sha224 validity) {
+TEST("sha224 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha224>(foo));
   CHECK_EQUAL(digest,
               "0808f64e60d58979fcb676c96ec938270dea42445aeefcd3a4e6f8db");
 }
 
-TEST(sha256 validity) {
+TEST("sha256 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha256>(foo));
   CHECK_EQUAL(digest, "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e88"
                       "6266e7ae");
 }
 
-TEST(sha384 validity) {
+TEST("sha384 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha384>(foo));
   CHECK_EQUAL(digest, "98c11ffdfdd540676b1a137cb1a22b2a70350c9a44171d6b1180c6be"
                       "5cbb2ee3f79d532c8a1dd9ef2e8e08e752a3babb");
 }
 
-TEST(sha512 validity) {
+TEST("sha512 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha512>(foo));
   CHECK_EQUAL(digest, "f7fbba6e0636f890e56fbbf3283e524c6fa3204ae298382d624741d0"

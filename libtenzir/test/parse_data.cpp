@@ -10,8 +10,6 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 
 using namespace tenzir;
@@ -21,14 +19,15 @@ namespace {
 
 data to_data(std::string_view str) {
   data x;
-  if (!parsers::data(str, x))
-    FAIL("failed to parse data from " << str);
+  if (! parsers::data(str, x)) {
+    FAIL("failed to parse data from {}", str);
+  }
   return x;
 }
 
 } // namespace
 
-TEST(data) {
+TEST("data") {
   MESSAGE("null");
   CHECK_EQUAL(to_data("null"), caf::none);
   MESSAGE("bool");

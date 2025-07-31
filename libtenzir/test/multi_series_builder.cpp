@@ -139,7 +139,7 @@ auto schema_fn(std::vector<type> schemas)
   };
 }
 
-TEST(empty builder) {
+TEST("empty builder") {
   multi_series_builder b{
     multi_series_builder::policy_default{},
     multi_series_builder::settings_type{.merge = true},
@@ -148,7 +148,7 @@ TEST(empty builder) {
   CHECK_EQUAL(b.yield_ready().size(), size_t{0});
 }
 
-TEST(merging records) {
+TEST("merging records") {
   multi_series_builder b{
     multi_series_builder::policy_default{},
     multi_series_builder::settings_type{.merge = true},
@@ -202,7 +202,7 @@ TEST(merging records) {
   check_outcome(res2, expected_result2);
 }
 
-TEST(merging records with seed) {
+TEST("merging records with seed") {
   const type seed_schema = {
     "seed",
     record_type{
@@ -271,7 +271,7 @@ TEST(merging records with seed) {
   check_outcome(res2, expected_result2);
 }
 
-TEST(merging records with seed and raw) {
+TEST("merging records with seed and raw") {
   const type seed_schema = {
     "seed",
     record_type{
@@ -382,7 +382,7 @@ TEST(merging records with seed and raw) {
   check_outcome(res2, expected_result2);
 }
 
-TEST(precise ordered) {
+TEST("precise ordered") {
   multi_series_builder b{
     multi_series_builder::policy_default{},
     multi_series_builder::settings_type{},
@@ -417,7 +417,7 @@ TEST(precise ordered) {
   check_outcome(res, expected_result);
 }
 
-TEST(precise unordered) {
+TEST("precise unordered") {
   multi_series_builder b{
     multi_series_builder::policy_default{},
     multi_series_builder::settings_type{
@@ -480,7 +480,7 @@ TEST(precise unordered) {
   check_outcome(res, expected_result);
 }
 
-TEST(precise unordered with seed) {
+TEST("precise unordered with seed") {
   const type seed_schema = {
     "seed",
     record_type{
@@ -563,7 +563,7 @@ TEST(precise unordered with seed) {
   check_outcome(res, expected_result);
 }
 
-TEST(selector) {
+TEST("selector") {
   const type seed_schema_1 = {
     "prefix.seed1",
     record_type{
@@ -631,7 +631,7 @@ TEST(selector) {
   check_outcome(res, expected_result);
 }
 
-TEST(selector unordered) {
+TEST("selector unordered") {
   const type seed_schema_1 = {
     "prefix.seed1",
     record_type{
@@ -711,7 +711,7 @@ TEST(selector unordered) {
   check_outcome(res, expected_result);
 }
 
-TEST(selector unordered schema_only) {
+TEST("selector unordered schema_only") {
   const type seed_schema_1 = {
     "prefix.seed1",
     record_type{

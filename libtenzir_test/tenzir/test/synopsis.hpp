@@ -11,6 +11,8 @@
 #include "tenzir/synopsis.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <fmt/format.h>
+
 #include <optional>
 
 namespace tenzir::test {
@@ -29,25 +31,25 @@ struct verifier {
     auto to_string = [](std::optional<bool> x) -> std::string {
       return x ? *x ? "T" : "F" : "N";
     };
-    MESSAGE(materialize(rhs) << " in syn: " << to_string(ref[0]));
+    MESSAGE("{} in syn: {}", materialize(rhs), to_string(ref[0]));
     CHECK_EQUAL(syn->lookup(relational_operator::in, rhs), ref[0]);
-    MESSAGE(materialize(rhs) << " !in syn: " << to_string(ref[1]));
+    MESSAGE("{} !in syn: {}", materialize(rhs), to_string(ref[1]));
     CHECK_EQUAL(syn->lookup(relational_operator::not_in, rhs), ref[1]);
-    MESSAGE(materialize(rhs) << " ni syn: " << to_string(ref[2]));
+    MESSAGE("{} ni syn: {}", materialize(rhs), to_string(ref[2]));
     CHECK_EQUAL(syn->lookup(relational_operator::ni, rhs), ref[2]);
-    MESSAGE(materialize(rhs) << " !ni syn: " << to_string(ref[3]));
+    MESSAGE("{} !ni syn: {}", materialize(rhs), to_string(ref[3]));
     CHECK_EQUAL(syn->lookup(relational_operator::not_ni, rhs), ref[3]);
-    MESSAGE(materialize(rhs) << " == syn: " << to_string(ref[4]));
+    MESSAGE("{} == syn: {}", materialize(rhs), to_string(ref[4]));
     CHECK_EQUAL(syn->lookup(relational_operator::equal, rhs), ref[4]);
-    MESSAGE(materialize(rhs) << " != syn: " << to_string(ref[5]));
+    MESSAGE("{} != syn: {}", materialize(rhs), to_string(ref[5]));
     CHECK_EQUAL(syn->lookup(relational_operator::not_equal, rhs), ref[5]);
-    MESSAGE(materialize(rhs) << " < syn: " << to_string(ref[6]));
+    MESSAGE("{} < syn: {}", materialize(rhs), to_string(ref[6]));
     CHECK_EQUAL(syn->lookup(relational_operator::less, rhs), ref[6]);
-    MESSAGE(materialize(rhs) << " <= syn: " << to_string(ref[7]));
+    MESSAGE("{} <= syn: {}", materialize(rhs), to_string(ref[7]));
     CHECK_EQUAL(syn->lookup(relational_operator::less_equal, rhs), ref[7]);
-    MESSAGE(materialize(rhs) << " > syn: " << to_string(ref[8]));
+    MESSAGE("{} > syn: {}", materialize(rhs), to_string(ref[8]));
     CHECK_EQUAL(syn->lookup(relational_operator::greater, rhs), ref[8]);
-    MESSAGE(materialize(rhs) << " >= syn: " << to_string(ref[9]));
+    MESSAGE("{} >= syn: {}", materialize(rhs), to_string(ref[9]));
     CHECK_EQUAL(syn->lookup(relational_operator::greater_equal, rhs), ref[9]);
   }
 };

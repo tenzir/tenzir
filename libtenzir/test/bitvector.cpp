@@ -17,13 +17,13 @@
 
 using namespace tenzir;
 
-TEST(default construction) {
+TEST("default construction") {
   bitvector<uint8_t> x;
   CHECK(x.empty());
   CHECK_EQUAL(x.size(), 0u);
 }
 
-TEST(copy construction) {
+TEST("copy construction") {
   bitvector<uint8_t> x{false, true, true, false, false, false, true};
   bitvector<uint8_t> y{x};
   REQUIRE_EQUAL(x, y);
@@ -33,10 +33,10 @@ TEST(copy construction) {
   CHECK_EQUAL(x, y);
 }
 
-TEST(size construction) {
+TEST("size construction") {
   bitvector<uint8_t> x(42);
   CHECK_EQUAL(x.size(), 42u);
-  CHECK(!x[41]);
+  CHECK(! x[41]);
   bitvector<uint8_t> y(42, true);
   CHECK_EQUAL(y.size(), 42u);
   CHECK(y[3]);
@@ -44,20 +44,23 @@ TEST(size construction) {
   CHECK(y[41]);
 }
 
-TEST(initializer_list construction) {
-  bitvector<uint8_t> x{false, false, false, true, false, true}; // implicitly tests assign(f, l).
+TEST("initializer_list construction") {
+  bitvector<uint8_t> x{false, false, false,
+                       true,  false, true}; // implicitly tests assign(f, l).
   REQUIRE_EQUAL(x.size(), 6u);
-  CHECK(!x[0]);
-  CHECK(!x[1]);
-  CHECK(!x[2]);
+  CHECK(! x[0]);
+  CHECK(! x[1]);
+  CHECK(! x[2]);
   CHECK(x[3]);
-  CHECK(!x[4]);
+  CHECK(! x[4]);
   CHECK(x[5]);
 }
 
-TEST(iterator) {
+TEST("iterator") {
   bitvector<uint8_t> x(25, true);
-  CHECK(std::all_of(x.begin(), x.end(), [](auto bit) { return bit; }));
+  CHECK(std::all_of(x.begin(), x.end(), [](auto bit) {
+    return bit;
+  }));
   // Ensure that we do N iterations for bitvector of size N.
   auto n = 0u;
   auto f = x.cbegin();
@@ -69,7 +72,9 @@ TEST(iterator) {
   x[23] = false;
   // Use iterators to convert to string.
   std::string str;
-  auto bit_to_char = [](auto bit) { return bit ? '1' : '0'; };
+  auto bit_to_char = [](auto bit) {
+    return bit ? '1' : '0';
+  };
   std::transform(x.begin(), x.end(), std::back_inserter(str), bit_to_char);
   CHECK_EQUAL(str, "1111011111111111111111101");
   // Reverse
@@ -79,7 +84,7 @@ TEST(iterator) {
   CHECK_EQUAL(str, rts);
 }
 
-TEST(modifiers) {
+TEST("modifiers") {
   bitvector<uint8_t> x;
   CHECK(x.empty());
   CHECK_EQUAL(x.size(), 0u);
@@ -89,7 +94,7 @@ TEST(modifiers) {
   x.push_back(true);
   REQUIRE_EQUAL(x.size(), 3u);
   CHECK(x[0]);
-  CHECK(!x[1]);
+  CHECK(! x[1]);
   CHECK(x[2]);
   x.push_back(false);
   x.push_back(true);
@@ -100,15 +105,15 @@ TEST(modifiers) {
   CHECK(x[7]);
   x.push_back(false); // overflow into next word
   REQUIRE_EQUAL(x.size(), 9u);
-  CHECK(!x[8]);
+  CHECK(! x[8]);
   x.pop_back(); // previous word again
   CHECK_EQUAL(x.size(), 8u);
-  CHECK(!x.empty());
+  CHECK(! x.empty());
   x.clear();
   CHECK(x.empty());
 }
 
-TEST(resize) {
+TEST("resize") {
   bitvector<uint8_t> x;
   x.resize(20);
   CHECK_EQUAL(to_string(x), "00000000000000000000");
@@ -136,7 +141,7 @@ TEST(resize) {
   CHECK_EQUAL(to_string(x), "");
 }
 
-TEST(flip) {
+TEST("flip") {
   bitvector<uint8_t> x(23);
   x.flip();
   CHECK_EQUAL(to_string(x), "11111111111111111111111");
@@ -147,7 +152,7 @@ TEST(flip) {
   CHECK_EQUAL(to_string(x), "00000000001000000000010");
 }
 
-TEST(relational operators) {
+TEST("relational operators") {
   bitvector<uint16_t> x, y;
   CHECK_EQUAL(x, y);
   x.push_back(true);
@@ -168,7 +173,7 @@ TEST(relational operators) {
   CHECK_EQUAL(x, y);
 }
 
-TEST(append_block) {
+TEST("append_block") {
   bitvector<uint8_t> x;
   x.append_block(0b01111011);
   CHECK_EQUAL(to_string(x), "11011110");
@@ -182,7 +187,7 @@ TEST(append_block) {
   CHECK_EQUAL(to_string(x), "11011110101111010010101010101010");
 }
 
-TEST(append_blocks) {
+TEST("append_blocks") {
   MESSAGE("block-wise copy");
   bitvector<uint8_t> x;
   std::vector<uint8_t> blocks = {1, 2, 4};
@@ -197,7 +202,7 @@ TEST(append_blocks) {
   CHECK_EQUAL(to_string(y), "100100000000100000000100000");
 }
 
-TEST(serializable) {
+TEST("serializable") {
   bitvector<uint64_t> x, y;
   x.resize(1024, false);
   x[1000] = true;
@@ -208,7 +213,7 @@ TEST(serializable) {
   CHECK(y[1000]);
 }
 
-TEST(printable) {
+TEST("bitvector printable") {
   bitvector<uint32_t> a;
   CHECK_EQUAL(to_string(a), "");
   bitvector<uint32_t> b(10);
@@ -230,7 +235,7 @@ TEST(printable) {
   str.clear();
 }
 
-TEST(rank) {
+TEST("rank") {
   bitvector<uint64_t> x(1024, true);
   CHECK_EQUAL(rank<0>(x), 0u);
   CHECK_EQUAL(rank<1>(x), 1024u);

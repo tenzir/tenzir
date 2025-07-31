@@ -26,7 +26,7 @@ const tenzir::time epoch;
 
 } // namespace
 
-TEST(min - max synopsis) {
+TEST("min - max synopsis") {
   using tenzir::time;
   using namespace nft;
   factory<synopsis>::initialize();
@@ -63,10 +63,10 @@ TEST(min - max synopsis) {
   auto zero_nine_view = make_view(zero_nine);
   verify(zero_nine_view, {F, T, N, N, N, N, N, N, N, N});
   // Check that we don't do any implicit conversions.
-  MESSAGE("[4,7] op count{5}");
+  MESSAGE("[4,7] op count{{5}}");
   uint64_t c = 5;
   verify(c, {N, N, N, N, N, N, N, N, N, N});
-  MESSAGE("[4,7] op [count{5}, 7]");
+  MESSAGE("[4,7] op [count{{5}}, 7]");
   auto heterogeneous = data{list{c, seven}};
   auto heterogeneous_view = make_view(heterogeneous);
   verify(heterogeneous_view, {T, F, N, N, N, N, N, N, N, N});

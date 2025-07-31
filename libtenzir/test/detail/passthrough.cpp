@@ -13,7 +13,7 @@
 
 namespace tenzir {
 
-TEST(passthrough) {
+TEST("passthrough") {
   {
     MESSAGE("non-visitable types can be passed through");
     int i = 42;

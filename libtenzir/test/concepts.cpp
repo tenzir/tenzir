@@ -14,7 +14,7 @@
 #include <array>
 #include <type_traits>
 
-TEST(transparent) {
+TEST("transparent") {
   struct with {
     using is_transparent = std::true_type;
   };
@@ -23,7 +23,7 @@ TEST(transparent) {
   static_assert(!tenzir::concepts::transparent<without>);
 }
 
-TEST(container) {
+TEST("container") {
   static_assert(tenzir::concepts::container<std::array<int, 1>>);
   struct empty {};
   static_assert(!tenzir::concepts::container<empty>);
@@ -38,7 +38,7 @@ TEST(container) {
   static_assert(tenzir::concepts::container<user_defined_type>);
 }
 
-TEST(byte_container) {
+TEST("byte_container") {
   using byte_array = std::array<std::uint8_t, 2>;
   static_assert(tenzir::concepts::byte_container<byte_array>);
   using u32_array = std::array<std::uint32_t, 2>;
@@ -66,7 +66,7 @@ auto inspect(I& i, inspect_free& x) {
   return i.apply(x);
 }
 
-TEST(inspectable) {
+TEST("inspectable") {
   static_assert(tenzir::concepts::inspectable<inspect_friend>);
   static_assert(tenzir::concepts::inspectable<inspect_free>);
   static_assert(!tenzir::concepts::inspectable<std::array<bool, 2>>);
@@ -97,13 +97,13 @@ struct monoid_bad {
   }
 };
 
-TEST(monoid) {
+TEST("monoid") {
   static_assert(tenzir::concepts::monoid<monoid_friend>);
   static_assert(tenzir::concepts::monoid<monoid_free>);
   static_assert(!tenzir::concepts::monoid<monoid_bad>);
 }
 
-TEST(sameish) {
+TEST("sameish") {
   static_assert(tenzir::concepts::sameish<int, int&>);
   static_assert(tenzir::concepts::sameish<int&, int>);
   static_assert(tenzir::concepts::sameish<const int, int>);

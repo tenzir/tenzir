@@ -20,13 +20,13 @@ using namespace tenzir::detail;
 //   printf "The quick brown fox jumps over the lazy dog" | base58
 //   7DdiPPYtxLjCD3wA1po2rvZHTDYjkZYiEtazrfiwJcwnKCizhGFhBGHeRdx
 
-TEST(encode) {
+TEST("base58 encode") {
   auto dec = "The quick brown fox jumps over the lazy dog"sv;
   auto enc = "7DdiPPYtxLjCD3wA1po2rvZHTDYjkZYiEtazrfiwJcwnKCizhGFhBGHeRdx"sv;
   CHECK_EQUAL(base58::encode(dec), enc);
 }
 
-TEST(decode) {
+TEST("base58 decode") {
   auto enc = "7DdiPPYtxLjCD3wA1po2rvZHTDYjkZYiEtazrfiwJcwnKCizhGFhBGHeRdx"sv;
   auto dec = "The quick brown fox jumps over the lazy dog"sv;
   auto base58_dec = base58::decode(enc);

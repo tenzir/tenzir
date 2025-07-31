@@ -78,7 +78,7 @@ struct is_uniquely_represented<fixed_and_unique> : std::true_type {};
 
 } // namespace tenzir
 
-TEST(hash via oneshot hashing) {
+TEST("hash via oneshot hashing") {
   uint16_t u16 = 0;
   static_assert(uniquely_hashable<decltype(u16), oneshot>);
   static_assert(uniquely_hashable<decltype(u16), incremental>);
@@ -86,7 +86,7 @@ TEST(hash via oneshot hashing) {
   CHECK_EQUAL(hash<incremental>(u16), 0u);
 }
 
-TEST(prefer fast path when both is available) {
+TEST("prefer fast path when both is available") {
   auto u16 = uint16_t{0};
   auto f64 = double{4.2};
   static_assert(uniquely_hashable<decltype(u16), oneshot_and_incremental>);
@@ -95,12 +95,12 @@ TEST(prefer fast path when both is available) {
   CHECK_EQUAL(hash<oneshot_and_incremental>(f64), 0u);          // incremental
 }
 
-TEST(hash fixed byte sequences in one shot) {
+TEST("hash fixed byte sequences in one shot") {
   CHECK_EQUAL(as_bytes(fixed{}).size(), 1u);
   CHECK_EQUAL(hash<oneshot_and_incremental>(fixed{}), 1u);
 }
 
-TEST(hash byte sequence that is fixed and unique) {
+TEST("hash byte sequence that is fixed and unique") {
   // Make sure we're not going via as_bytes when we can take the address.
   static_assert(sizeof(fixed_and_unique) == 64u);
   CHECK_EQUAL(hash<oneshot_and_incremental>(fixed_and_unique{}), 64u);

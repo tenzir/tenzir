@@ -17,8 +17,6 @@
 #include <tenzir/expression.hpp>
 #include <tenzir/test/test.hpp>
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 
 using namespace std::string_literals;
@@ -42,7 +40,7 @@ expression to_expr(std::string_view expr) {
 
 } // namespace
 
-TEST(wildcard unescaping) {
+TEST("wildcard unescaping") {
   auto check_pattern_equality
     = [](std::string_view sigma, std::string_view pattern) {
         // Patterns generated from Sigma glob strings are case-insensitive.
@@ -62,28 +60,28 @@ TEST(wildcard unescaping) {
   check_pattern_equality("x: 'f\\\\?bar'", "x == /f\\\\.bar/");
 }
 
-TEST(maps - single value) {
+TEST("maps - single value") {
   auto yaml = "foo: 42";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == 42");
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(maps - empty value) {
+TEST("maps - empty value") {
   auto yaml = "foo: ''";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == //i");
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(maps - null value) {
+TEST("maps - null value") {
   auto yaml = "foo: null";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == null");
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(maps - multiple values) {
+TEST("maps - multiple values") {
   auto yaml = R"__(
     foo: 42
     bar: 43
@@ -93,7 +91,7 @@ TEST(maps - multiple values) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(list - single value) {
+TEST("list - single value") {
   auto yaml = R"__(
     foo:
       - 42
@@ -103,7 +101,7 @@ TEST(list - single value) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(lists - multiple values) {
+TEST("lists - multiple values") {
   auto yaml = R"__(
     foo:
       - 42
@@ -114,7 +112,7 @@ TEST(lists - multiple values) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(list of maps) {
+TEST("list of maps") {
   auto yaml = R"__(
     - foo: 42
     - bar: 43
@@ -124,7 +122,7 @@ TEST(list of maps) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - all) {
+TEST("modifier - all") {
   auto yaml = R"__(
     foo|all:
       - 42
@@ -135,7 +133,7 @@ TEST(modifier - all) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - sequenced all) {
+TEST("modifier - sequenced all") {
   auto yaml = R"__(
     foo|all:
       - 42
@@ -147,7 +145,7 @@ TEST(modifier - sequenced all) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - contains) {
+TEST("modifier - contains") {
   auto yaml = R"__(
     foo|contains: "10.0.0.0/8"
   )__";
@@ -156,7 +154,7 @@ TEST(modifier - contains) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - re) {
+TEST("modifier - re") {
   auto yaml = R"__(
     foo|re: "^.*$"
   )__";
@@ -165,7 +163,7 @@ TEST(modifier - re) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - re 2) {
+TEST("modifier - re 2") {
   auto yaml = R"__(
     foo|re: '.*foobar.*'
   )__";
@@ -174,7 +172,7 @@ TEST(modifier - re 2) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - re - no wildcards) {
+TEST("modifier - re - no wildcards") {
   auto yaml = R"__(
     foo|re: 'foobar'
   )__";
@@ -183,7 +181,7 @@ TEST(modifier - re - no wildcards) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - startswith) {
+TEST("modifier - startswith") {
   auto yaml = R"__(
     foo|startswith: "x"
   )__";
@@ -192,7 +190,7 @@ TEST(modifier - startswith) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - startswith - proper backslash escaping) {
+TEST("modifier - startswith - proper backslash escaping") {
   auto yaml = R"__(
     foo|startswith: "C:\rundll32"
   )__";
@@ -203,7 +201,7 @@ TEST(modifier - startswith - proper backslash escaping) {
   CHECK_EQUAL(str, R"(foo == /^C:\\rundll32.*/i)");
 }
 
-TEST(modifier - startswith - wildcards) {
+TEST("modifier - startswith - wildcards") {
   auto yaml = R"__(
     foo|startswith: "f*b?r"
   )__";
@@ -212,7 +210,7 @@ TEST(modifier - startswith - wildcards) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - endswith) {
+TEST("modifier - endswith") {
   auto yaml = R"__(
     foo|endswith: "x"
   )__";
@@ -221,7 +219,7 @@ TEST(modifier - endswith) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - endswith - proper backslash escaping) {
+TEST("modifier - endswith - proper backslash escaping") {
   auto yaml = R"__(
     foo|endswith: "\rundll32.exe"
   )__";
@@ -232,7 +230,7 @@ TEST(modifier - endswith - proper backslash escaping) {
   CHECK_EQUAL(str, R"(foo == /.*\\rundll32\.exe$/i)");
 }
 
-TEST(modifier - endswith - wildcards) {
+TEST("modifier - endswith - wildcards") {
   auto yaml = R"__(
     foo|endswith: "f*b?r"
   )__";
@@ -241,7 +239,7 @@ TEST(modifier - endswith - wildcards) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - lt) {
+TEST("modifier - lt") {
   auto yaml = R"__(
     foo|lt: 42
   )__";
@@ -250,7 +248,7 @@ TEST(modifier - lt) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - lte) {
+TEST("modifier - lte") {
   auto yaml = R"__(
     foo|lte: 42
   )__";
@@ -259,7 +257,7 @@ TEST(modifier - lte) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - gt) {
+TEST("modifier - gt") {
   auto yaml = R"__(
     foo|gt: 42
   )__";
@@ -268,7 +266,7 @@ TEST(modifier - gt) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - gte) {
+TEST("modifier - gte") {
   auto yaml = R"__(
     foo|gte: 42
   )__";
@@ -277,7 +275,7 @@ TEST(modifier - gte) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - base64) {
+TEST("modifier - base64") {
   auto yaml = R"__(
     foo|base64: value
   )__";
@@ -288,7 +286,7 @@ TEST(modifier - base64) {
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - double base64) {
+TEST("modifier - double base64") {
   auto yaml = R"__(
     foo|base64|base64: value
   )__";
@@ -317,7 +315,7 @@ TEST(modifier - double base64) {
 // Note the following sub-expression: *aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v*.
 // This is a combination of 'base64offset' and 'contains'. Without the contains
 // modifier, it would look like this: aHR0cDovL OR h0dHA6Ly OR odHRwOi8v.
-TEST(modifier - base64offset) {
+TEST("modifier - base64offset") {
   auto yaml = R"__(
     foo|base64offset: "http://"
   )__";
@@ -327,7 +325,7 @@ TEST(modifier - base64offset) {
   CHECK_EQUAL(search_id, to_expr(expr));
 }
 
-TEST(modifier - base64offset and contains) {
+TEST("modifier - base64offset and contains") {
   auto yaml = R"__(
     foo|base64offset|contains: "http://"
   )__";
@@ -337,7 +335,7 @@ TEST(modifier - base64offset and contains) {
   CHECK_EQUAL(search_id, to_expr(expr));
 }
 
-TEST(modifier - cidr) {
+TEST("modifier - cidr") {
   auto yaml = R"__(
     foo|cidr: 192.168.0.0/24
   )__";
@@ -348,16 +346,16 @@ TEST(modifier - cidr) {
 
 // FIXME: The expression parser doesn't handle escaped strings properly, so we
 // can't include NUL bytes in a query string yet. Once this is possible.
-TEST_DISABLED(modifier - wide) {
-  auto yaml = R"__(
-    foo|wide: abc
-  )__";
-  auto search_id = to_search_id(yaml);
-  auto expected = to_expr(R"__(foo == "a\x00b\x00c\x00")__"s);
-  CHECK_EQUAL(search_id, expected);
-}
+// TEST("modifier - wide") {
+//   auto yaml = R"__(
+//     foo|wide: abc
+//   )__";
+//   auto search_id = to_search_id(yaml);
+//   auto expected = to_expr(R"__(foo == "a\x00b\x00c\x00")__"s);
+//   CHECK_EQUAL(search_id, expected);
+// }
 
-TEST(search id selection - exact match) {
+TEST("search id selection - exact match") {
   auto yaml = R"__(
     detection:
       test:
@@ -370,7 +368,7 @@ TEST(search id selection - exact match) {
   CHECK_EQUAL(rule, expected);
 }
 
-TEST(search id selection - boolean algebra 1) {
+TEST("search id selection - boolean algebra 1") {
   auto yaml = R"__(
     detection:
       a:
@@ -386,7 +384,7 @@ TEST(search id selection - boolean algebra 1) {
   CHECK_EQUAL(rule, expected);
 }
 
-TEST(search id selection - boolean algebra - nested) {
+TEST("search id selection - boolean algebra - nested") {
   auto yaml = R"__(
     detection:
       a:
@@ -405,7 +403,7 @@ TEST(search id selection - boolean algebra - nested) {
   CHECK_EQUAL(rule, expected);
 }
 
-TEST(search id selection - 1 of them) {
+TEST("search id selection - 1 of them") {
   auto yaml = R"__(
     detection:
       selection1:
@@ -419,7 +417,7 @@ TEST(search id selection - 1 of them) {
   CHECK_EQUAL(rule, expected);
 }
 
-TEST(search id selection - 1 of pattern) {
+TEST("search id selection - 1 of pattern") {
   auto yaml = R"__(
     detection:
       selection1:
@@ -435,7 +433,7 @@ TEST(search id selection - 1 of pattern) {
   CHECK_EQUAL(rule, expected);
 }
 
-TEST(search id selection - all of pattern) {
+TEST("search id selection - all of pattern") {
   auto yaml = R"__(
     detection:
       selection1:
@@ -451,7 +449,7 @@ TEST(search id selection - all of pattern) {
   CHECK_EQUAL(rule, expected);
 }
 
-TEST(search id selection - flip to AND) {
+TEST("search id selection - flip to AND") {
   auto yaml = R"__(
     detection:
       test:
@@ -516,7 +514,7 @@ falsepositives:
 level: critical
 )__";
 
-TEST(real example) {
+TEST("real example") {
   auto expr = to_rule(unc2452);
   // clang-format off
   auto selection1 = R"__(CommandLine == /.*7z\.exe a -v500m -mx9 -r0 -p.*/i)__"s;
@@ -564,21 +562,21 @@ auto modifier_test = R"__(
 )__";
 
 // TODO: For this to run through we need to implement the utf* modifiers.
-TEST_DISABLED(modifier test rule) {
-  auto expr = to_rule(modifier_test);
-  auto field = R"__(field|re: '.*foobar.*')__"s;
-  auto encoded = R"__(encoded|wide|base64: 'This string is Base64 encoded')__"s;
-  auto obfuscated
-    = R"__(obfuscated|base64offset|contains: ['http://', 'https://'])__"s;
-  auto allmatch = R"__(allmatch|contains|all: [foo, bar, bla])__"s;
-  auto end = R"__(end|endswith: test)__"s;
-  auto start = R"__(start|startswith: test)__"s;
-  conjunction expected;
-  expected.emplace_back(to_expr(field));
-  expected.emplace_back(to_expr(encoded));
-  expected.emplace_back(to_expr(obfuscated));
-  expected.emplace_back(to_expr(allmatch));
-  expected.emplace_back(to_expr(end));
-  expected.emplace_back(to_expr(start));
-  CHECK_EQUAL(expr, expression{expected});
-}
+// TEST("modifier test rule") {
+//   auto expr = to_rule(modifier_test);
+//   auto field = R"__(field|re: '.*foobar.*')__"s;
+//   auto encoded = R"__(encoded|wide|base64: 'This string is Base64
+//   encoded')__"s; auto obfuscated
+//     = R"__(obfuscated|base64offset|contains: ['http://', 'https://'])__"s;
+//   auto allmatch = R"__(allmatch|contains|all: [foo, bar, bla])__"s;
+//   auto end = R"__(end|endswith: test)__"s;
+//   auto start = R"__(start|startswith: test)__"s;
+//   conjunction expected;
+//   expected.emplace_back(to_expr(field));
+//   expected.emplace_back(to_expr(encoded));
+//   expected.emplace_back(to_expr(obfuscated));
+//   expected.emplace_back(to_expr(allmatch));
+//   expected.emplace_back(to_expr(end));
+//   expected.emplace_back(to_expr(start));
+//   CHECK_EQUAL(expr, expression{expected});
+// }

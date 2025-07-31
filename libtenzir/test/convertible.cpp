@@ -16,8 +16,6 @@
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <iterator>
 
 using namespace tenzir;
@@ -59,7 +57,7 @@ auto test_basic = [](auto v) {
 };
 
 #define BASIC(type, v)                                                         \
-  TEST(basic - type) { /* NOLINT */                                            \
+  TEST("basic - " #type) { /* NOLINT */                                        \
     test_basic<type>(v);                                                       \
   }
 
@@ -84,7 +82,7 @@ auto test_narrow = [](auto v) {
 };
 
 #define NARROW(from_, to_, v)                                                  \
-  TEST(narrow - from_ to to_) { /* NOLINT */                                   \
+  TEST("narrow - " #from_ " to " #to_) { /* NOLINT */                          \
     test_narrow<from_, to_>(v);                                                \
   }
 
@@ -107,7 +105,7 @@ auto test_oob = [](auto v) {
 };
 
 #define OUT_OF_BOUNDS(from_, to_, v)                                           \
-  TEST(oob - from_ to to_ `v`) { /* NOLINT */                                  \
+  TEST("oob - " #from_ " to " #to_ " with " #v) { /* NOLINT */                 \
     test_oob<from_, to_>(v);                                                   \
   }
 
@@ -122,7 +120,7 @@ OUT_OF_BOUNDS(uint64_t, uint16_t, 1u << 16)
 OUT_OF_BOUNDS(uint64_t, uint32_t, 1ull << 32)
 #undef OUT_OF_BOUNDS
 
-TEST(data overload) {
+TEST("data overload") {
   auto val = int64_t{42};
   auto x = X<int64_t, int>{};
   auto d = data{record{{"value", val}}};
@@ -131,7 +129,7 @@ TEST(data overload) {
   CHECK_EQUAL(convert(d, x), ec::convert_error);
 }
 
-TEST(integer conversion) {
+TEST("integer conversion") {
   auto r = record{{"value", int64_t{42}}};
   auto x = X<int64_t>{};
   x.value = 1337;
@@ -167,7 +165,7 @@ struct MultiMember {
   };
 };
 
-TEST(multiple members) {
+TEST("multiple members") {
   using namespace std::chrono_literals;
   auto x = MultiMember{};
   auto r = record{{"x", int64_t{42}}, {"y", bool{true}}, {"z", duration{42ns}}};
@@ -193,7 +191,7 @@ struct Nest {
   }
 };
 
-TEST(nested struct) {
+TEST("nested struct") {
   auto x = Nest{};
   auto r = record{{"inner", record{{"value", int64_t{23}}}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
@@ -243,7 +241,7 @@ struct Complex {
   }
 };
 
-TEST(nested struct - single schema) {
+TEST("nested struct - single schema") {
   auto x = Complex{};
   auto r = record{{"a", "c3po"},
                   {"b", record{{"c", int64_t{23}}, {"d", list{1u, 2u, 3u}}}}};
@@ -271,14 +269,14 @@ struct Enum {
   }
 };
 
-TEST(complex - enum) {
+TEST("complex - enum") {
   auto x = Enum{};
   auto r = record{{"value", "baz"}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value, Enum::baz);
 }
 
-TEST(parser - duration) {
+TEST("parser - duration") {
   using namespace std::chrono_literals;
   auto x = duration{};
   const auto* r = "10 minutes";
@@ -286,7 +284,7 @@ TEST(parser - duration) {
   CHECK_EQUAL(x, duration{10min});
 }
 
-TEST(parser - list<subnet>) {
+TEST("parser - list<subnet>") {
   auto x = std::vector<subnet>{};
   auto schema = list_type{subnet_type{}};
   auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
@@ -313,7 +311,7 @@ struct EC {
   }
 };
 
-TEST(complex - enum class) {
+TEST("complex - enum class") {
   auto x = EC{};
   auto r = record{{"value", "baz"}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
@@ -336,7 +334,7 @@ struct StdOpt {
   }
 };
 
-TEST(std::optional member variable) {
+TEST("std::optional member variable") {
   auto x = StdOpt{int64_t{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
@@ -348,7 +346,7 @@ TEST(std::optional member variable) {
 
 struct Derived : X<int64_t> {};
 
-TEST(inherited member variable) {
+TEST("inherited member variable") {
   auto d = Derived{};
   auto r = record{{"value", int64_t{42}}};
   REQUIRE_EQUAL(convert(r, d), ec::no_error);
@@ -371,7 +369,7 @@ struct Vec {
   }
 };
 
-TEST(list to vector of unsigned) {
+TEST("list to vector of unsigned") {
   auto x = Vec{};
   auto r
     = record{{"xs", list{1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u,
@@ -399,7 +397,7 @@ struct VecS {
   }
 };
 
-TEST(list to vector of struct) {
+TEST("list to vector of struct") {
   auto x = VecS{};
   auto r = record{{"xs", list{record{{"value", int64_t{-42}}},
                               record{{"value", int64_t{1337}}}}}};
@@ -409,7 +407,7 @@ TEST(list to vector of struct) {
   CHECK_EQUAL(x.xs[1].value, 1337);
 }
 
-TEST(map to map) {
+TEST("map to map") {
   using Map = tenzir::detail::flat_map<uint64_t, std::string>;
   auto x = Map{};
   auto schema = map_type{uint64_type{}, string_type{}};
@@ -421,7 +419,7 @@ TEST(map to map) {
   CHECK_EQUAL(x[997], "baz");
 }
 
-TEST(record to map) {
+TEST("record to map") {
   using Map = tenzir::detail::stable_map<std::string, X<int64_t>>;
   auto x = Map{};
   auto schema = map_type{string_type{}, record_type{{"value", int64_type{}}}};
@@ -435,7 +433,7 @@ TEST(record to map) {
   CHECK_EQUAL(x["baz"].value, 997);
 }
 
-TEST(list of record to map) {
+TEST("list of record to map") {
   using T = X<int64_t>;
   auto x = tenzir::detail::stable_map<std::string, T>{};
   auto schema = map_type{
@@ -505,7 +503,7 @@ struct iList {
   }
 };
 
-TEST(list of record to map monoid) {
+TEST("list of record to map monoid") {
   auto x = tenzir::detail::stable_map<std::string, iList>{};
   auto schema = map_type{
     type{string_type{}, {{"key", "outer.name"}}},
@@ -595,7 +593,7 @@ struct SMap {
   }
 };
 
-TEST(record with list to optional vector) {
+TEST("record with list to optional vector") {
   auto x = SMap{};
   auto r = record{{"xs", record{{"foo", record{{"ovs", list{"a", "b", "c"}},
                                                {"ou", caf::none}}},
@@ -611,11 +609,11 @@ TEST(record with list to optional vector) {
   CHECK(x.xs["bar"].ovs);
   CHECK_EQUAL(x.xs["bar"].ou, uint64_t{0});
   CHECK_EQUAL(x.xs["bar"].ovs->size(), 3u);
-  CHECK(!x.xs["baz"].ovs);
+  CHECK(! x.xs["baz"].ovs);
   CHECK_EQUAL(*x.xs["baz"].ou, 42u);
 }
 
-TEST(conversion to float) {
+TEST("conversion to float") {
   float fdest = 0;
   double ddest = 0;
   CHECK_EQUAL(convert(int64_t{42}, fdest, double_type{}), caf::none);

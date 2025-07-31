@@ -10,13 +10,13 @@
 
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 using namespace std::string_literals;
 using namespace tenzir;
 
-TEST(to_string) {
-  auto str = [](auto x) { return to_string(x); };
+TEST("error to_string") {
+  auto str = [](auto x) {
+    return to_string(x);
+  };
   CHECK_EQUAL(str(ec::no_error), "no_error"s);
   CHECK_EQUAL(str(ec::unspecified), "unspecified"s);
   CHECK_EQUAL(str(ec::filesystem_error), "filesystem_error"s);
@@ -47,7 +47,7 @@ TEST(to_string) {
   CHECK_EQUAL(str(ec::out_of_memory), "out_of_memory"s);
 }
 
-TEST(render) {
+TEST("render") {
   CHECK_EQUAL(render(caf::make_error(ec::unspecified)), "!! unspecified");
   CHECK_EQUAL(render(caf::make_error(ec::syntax_error, "msg")),
               "!! syntax_error: msg");

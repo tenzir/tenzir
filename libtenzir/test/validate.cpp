@@ -49,7 +49,7 @@ auto test_layout3 = record_type{
 
 } // namespace
 
-TEST(exhaustive validation) {
+TEST("exhaustive validation") {
   auto data = tenzir::from_yaml(R"_(
     time:
       interval: 24 hours
@@ -69,7 +69,7 @@ TEST(exhaustive validation) {
               valid);
 }
 
-TEST(no rules configured) {
+TEST("no rules configured") {
   auto data = tenzir::from_yaml(R"_(
     time:
       interval: 1 day
@@ -86,7 +86,7 @@ TEST(no rules configured) {
               valid);
 }
 
-TEST(extra field) {
+TEST("extra field") {
   auto data = tenzir::from_yaml(R"_(
     time:
       rules:
@@ -104,7 +104,7 @@ TEST(extra field) {
                   valid);
 }
 
-TEST(incompatible field) {
+TEST("incompatible field") {
   auto data = tenzir::from_yaml(R"_(
     space:
       weights:
@@ -121,7 +121,7 @@ TEST(incompatible field) {
                   valid);
 }
 
-TEST(required field) {
+TEST("required field") {
   auto data = tenzir::from_yaml(R"_(
     struct:
       bar: no
@@ -137,7 +137,7 @@ TEST(required field) {
                   valid);
 }
 
-TEST(opaque fields) {
+TEST("opaque fields") {
   auto data = tenzir::from_yaml(R"_(
     struct:
       bar: no

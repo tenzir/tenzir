@@ -23,7 +23,7 @@ using namespace tenzir;
 
 namespace {
 
-TEST(dcso bloom parameterization) {
+TEST("dcso bloom parameterization") {
   // Lower bound on number of cells. Indeed, 1-bit filter is technically
   // possible.
   CHECK_EQUAL(dcso_bloom_filter::m(1, 0.9), 0u);
@@ -36,7 +36,7 @@ TEST(dcso bloom parameterization) {
   CHECK_EQUAL(dcso_bloom_filter::k(1, 0.5), 1u);
 }
 
-TEST(dcso bloom default construction) {
+TEST("dcso bloom default construction") {
   dcso_bloom_filter filter;
   CHECK_EQUAL(filter.parameters().m, 0u);
   CHECK_EQUAL(filter.parameters().n, 0u);
@@ -45,7 +45,7 @@ TEST(dcso bloom default construction) {
 }
 
 // https://github.com/DCSO/bloom/blob/9240e18c9363ee935edbdf025c07e4f3cca43b1d/bloom_test.go#L18
-TEST(dcso bloom fingerprinting) {
+TEST("dcso bloom fingerprinting") {
   dcso_bloom_hasher<fnv1<64>> hasher{7};
   auto digests = hasher("bar"s);
   auto expected
@@ -60,7 +60,7 @@ TEST(dcso bloom fingerprinting) {
 }
 
 // https://github.com/DCSO/bloom/blob/9240e18c9363ee935edbdf025c07e4f3cca43b1d/bloom_test.go#L31
-TEST(dcso bloom initialization) {
+TEST("dcso bloom initialization") {
   dcso_bloom_filter filter{10'000, 0.001};
   auto params = filter.parameters();
   CHECK_EQUAL(*params.n, 10'000u);
@@ -103,17 +103,17 @@ auto generate_example_filter(uint64_t capacity, double p, size_t num_samples)
 }
 
 // https://github.com/DCSO/bloom/blob/9240e18c9363ee935edbdf025c07e4f3cca43b1d/bloom_test.go#L244
-TEST(dcso bloom checking) {
+TEST("dcso bloom checking") {
   auto [filter, values] = generate_example_filter(100'000, 0.001, 100'000);
   for (const auto& value : values) {
-    if (!filter.lookup(value)) {
-      FAIL("expected value not present in filter:" << value);
+    if (! filter.lookup(value)) {
+      FAIL("expected value not present in filter:{}", value);
     }
   }
 }
 
 // https://github.com/DCSO/bloom/blob/9240e18c9363ee935edbdf025c07e4f3cca43b1d/bloom_test.go#L91
-TEST(dcso bloom serialization) {
+TEST("dcso bloom serialization") {
   auto [x, _] = generate_example_filter(100'000, 0.01, 1'000);
   x.data() = {std::byte{'\x2a'}, std::byte{'\x2a'}, std::byte{'\x2a'}};
   dcso_bloom_filter y;
@@ -131,7 +131,7 @@ TEST(dcso bloom serialization) {
   CHECK_EQUAL(x, y);
 }
 
-TEST(dcso bloom binary equivalence) {
+TEST("dcso bloom binary equivalence") {
   // Generated the baseline as follows:
   // - bloom create -p 0.1 -n 100 ns.bloom
   // - echo "1.1.1.1,8.8.8.8" | bloom -s insert ns.bloom

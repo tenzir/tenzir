@@ -37,6 +37,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/flow/observable_builder.hpp>
+#include <caf/net/http/client.hpp>
 #include <caf/net/http/method.hpp>
 #include <caf/net/http/server.hpp>
 #include <caf/net/http/with.hpp>
@@ -1128,6 +1129,11 @@ private:
   from_http_args args_;
 };
 
+struct pagination_request {
+  caf::uri uri;
+  std::unordered_map<std::string, std::string> headers;
+};
+
 class from_http_client_operator final
   : public crtp_operator<from_http_client_operator> {
 public:
@@ -1142,8 +1148,7 @@ public:
     auto& dh = ctrl.diagnostics();
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
-    auto paginate_queue
-      = std::vector<std::pair<http::client_factory, caf::uri>>{};
+    auto paginate_queue = std::vector<pagination_request>{};
     auto reqs = std::vector<secret_request>{};
     auto url = std::string{};
     auto [headers, secrets] = args_.make_headers();
@@ -1267,17 +1272,7 @@ public:
                         .primary(args_.op)
                         .emit(ctrl.diagnostics());
                     }
-                    paginate_queue.emplace_back(
-                      std::move(
-                        http::with(ctrl.self().system())
-                          .context(args_.make_ssl_context(*uri))
-                          .connect(*uri)
-                          .max_response_size(max_response_size)
-                          .connection_timeout(args_.connection_timeout->inner)
-                          .max_retry_count(args_.max_retry_count->inner)
-                          .retry_delay(args_.retry_delay->inner)
-                          .add_header_fields(hdrs)),
-                      std::move(*uri));
+                    paginate_queue.emplace_back(std::move(*uri), hdrs);
                   } else {
                     TENZIR_DEBUG("[http] done paginating");
                   }
@@ -1363,8 +1358,15 @@ public:
         ctrl.self().run_delayed(
           args_.paginate_delay->inner,
           [&, preq = std::move(paginate_queue[i])] mutable {
-            auto& [req, uri] = preq;
-            std::move(req)
+            auto& [uri, hdrs] = preq;
+            http::with(ctrl.self().system())
+              .context(args_.make_ssl_context(uri))
+              .connect(uri)
+              .max_response_size(max_response_size)
+              .connection_timeout(args_.connection_timeout->inner)
+              .max_retry_count(args_.max_retry_count->inner)
+              .retry_delay(args_.retry_delay->inner)
+              .add_header_fields(hdrs)
               .get()
               .or_else([&](const caf::error& e) {
                 diagnostic::error("failed to make http request: {}", e)
@@ -1674,12 +1676,6 @@ struct http_args {
   }
 };
 
-struct pagination_request {
-  http::client_factory factory;
-  caf::uri uri;
-  std::unordered_map<std::string, std::string> headers;
-};
-
 class http_operator final : public crtp_operator<http_operator> {
 public:
   http_operator() = default;
@@ -1815,17 +1811,8 @@ public:
                           .note("skipping request")
                           .emit(dh);
                       } else {
-                        pagination_queue.emplace_back(
-                          std::move(http::with(ctrl.self().system())
-                                      .context(args_.make_ssl_context(*caf_uri))
-                                      .connect(*caf_uri)
-                                      .max_response_size(max_response_size)
-                                      .connection_timeout(
-                                        args_.connection_timeout.inner)
-                                      .max_retry_count(args_.max_retry_count)
-                                      .retry_delay(args_.retry_delay.inner)
-                                      .add_header_fields(hdrs)),
-                          std::move(*caf_uri), std::move(hdrs));
+                        pagination_queue.emplace_back(pagination_request{
+                          std::move(*caf_uri), std::move(hdrs)});
                       }
                     } else {
                       TENZIR_DEBUG("[http] done paginating");
@@ -2044,8 +2031,15 @@ public:
           ctrl.self().run_delayed(
             args_.paginate_delay.inner,
             [&, preq = std::move(pagination_queue[i])] mutable {
-              auto& [req, uri, hdrs] = preq;
-              std::move(req)
+              auto& [uri, hdrs] = preq;
+              http::with(ctrl.self().system())
+                .context(args_.make_ssl_context(uri))
+                .connect(uri)
+                .max_response_size(max_response_size)
+                .connection_timeout(args_.connection_timeout.inner)
+                .max_retry_count(args_.max_retry_count)
+                .retry_delay(args_.retry_delay.inner)
+                .add_header_fields(hdrs)
                 .get()
                 .or_else([&](const caf::error& e) {
                   --awaiting;

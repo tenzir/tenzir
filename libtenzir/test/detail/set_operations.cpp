@@ -30,28 +30,26 @@ struct fixture {
 
 } // namespace
 
-FIXTURE_SCOPE(set_operations_tests, fixture)
+WITH_FIXTURE(fixture) {
+  TEST("intersect") {
+    auto result = intersect(xs, ys);
+    CHECK_EQUAL(result, intersection);
+  }
 
-TEST(intersect) {
-  auto result = intersect(xs, ys);
-  CHECK_EQUAL(result, intersection);
+  TEST("inplace_intersect") {
+    auto result = xs;
+    inplace_intersect(result, ys);
+    CHECK_EQUAL(result, intersection);
+  }
+
+  TEST("unify") {
+    auto result = unify(xs, ys);
+    CHECK_EQUAL(result, unification);
+  }
+
+  TEST("inplace_unify") {
+    auto result = xs;
+    inplace_unify(result, ys);
+    CHECK_EQUAL(result, unification);
+  }
 }
-
-TEST(inplace_intersect) {
-  auto result = xs;
-  inplace_intersect(result, ys);
-  CHECK_EQUAL(result, intersection);
-}
-
-TEST(unify) {
-  auto result = unify(xs, ys);
-  CHECK_EQUAL(result, unification);
-}
-
-TEST(inplace_unify) {
-  auto result = xs;
-  inplace_unify(result, ys);
-  CHECK_EQUAL(result, unification);
-}
-
-FIXTURE_SCOPE_END()

@@ -11,7 +11,7 @@
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/test/test.hpp"
 
-TEST(roundtrip) {
+TEST("roundtrip") {
   // Explicitly append null bytes so the string considers them
   // part of its data.
   auto test_data0 = std::string{"ottos mops klopft"} + '\0';

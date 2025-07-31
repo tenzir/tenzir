@@ -17,7 +17,7 @@
 
 using namespace tenzir;
 
-TEST(failed construction) {
+TEST("failed construction") {
   // If there's no type attribute with Bloom filter parameters present,
   // construction fails.
   auto x = make_ip_synopsis<legacy_hash>(type{ip_type{}}, caf::settings{});

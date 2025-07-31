@@ -15,7 +15,7 @@
 using namespace tenzir;
 using namespace tenzir::detail;
 
-TEST(range_map insertion) {
+TEST("range_map insertion") {
   range_map<int, std::string> rm;
   CHECK(rm.insert(42, 84, "foo"));
   auto foo = rm.lookup(42);
@@ -52,7 +52,7 @@ TEST(range_map insertion) {
   CHECK(*std::get<2>(t) == "foo");
 }
 
-TEST(range_map injection) {
+TEST("range_map injection") {
   range_map<size_t, char> rm;
   CHECK(rm.inject(50, 60, 'a'));
   CHECK(rm.inject(80, 90, 'b'));
@@ -124,7 +124,7 @@ TEST(range_map injection) {
   CHECK(std::get<1>(i) == 99);
 }
 
-TEST(range_map erasure) {
+TEST("range_map erasure") {
   range_map<size_t, char> rm;
   rm.insert(50, 60, 'a');
   rm.insert(80, 90, 'b');
@@ -176,7 +176,7 @@ TEST(range_map erasure) {
   CHECK(!i);
 }
 
-TEST(range_map serialization) {
+TEST("range_map serialization") {
   range_map<size_t, char> x, y;
   x.insert(50, 60, 'a');
   x.insert(80, 90, 'b');

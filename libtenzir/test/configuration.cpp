@@ -55,7 +55,7 @@ struct fixture {
   T get(std::string_view name) {
     auto x = caf::get_if<T>(&cfg, name);
     if (not x) {
-      FAIL("no such config entry: " << name);
+      FAIL("no such config entry: {}", name);
     }
     return *x;
   }
@@ -64,7 +64,7 @@ struct fixture {
   std::vector<T> get_vec(std::string_view name) {
     auto x = detail::unpack_config_list_to_vector<T>(cfg, name);
     if (not x) {
-      FAIL("failed to unpack " << name << " to vector");
+      FAIL("failed to unpack {} to vector", name);
     }
     return *x;
   }
@@ -98,77 +98,77 @@ struct fixture {
 
 } // namespace
 
-FIXTURE_SCOPE(configuration_tests, fixture)
+WITH_FIXTURE(fixture) {
+  TEST("environment key mangling and value parsing") {
+    env("TENZIR_ENDPOINT", ""); // empty values are not considered.
+    env("TENZIR_NODE", "true"); // bool parsed late (via automatic conversion)
+    env("TENZIR_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
+    env("TENZIR_PLUGINS", "foo,bar");       // list parsed manually
+    env("TENZIR_INVALID", "foo,bar");       // list parsed late
+    parse();
+    CHECK(not holds_alternative<std::string>("tenzir.endpoint"));
+    CHECK(get<bool>("tenzir.bare-mode"));
+    CHECK(get<bool>("tenzir.node"));
+    CHECK_EQUAL(get<caf::config_value::integer>("tenzir.import.batch-size"),
+                42);
+    auto foo_bar = std::vector<std::string>{"foo", "bar"};
+    CHECK_EQUAL(get_vec<std::string>("tenzir.plugins"), foo_bar);
+    CHECK_EQUAL(get_vec<std::string>("tenzir.invalid"), foo_bar);
+  }
 
-TEST(environment key mangling and value parsing) {
-  env("TENZIR_ENDPOINT", ""); // empty values are not considered.
-  env("TENZIR_NODE", "true"); // bool parsed late (via automatic conversion)
-  env("TENZIR_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
-  env("TENZIR_PLUGINS", "foo,bar");       // list parsed manually
-  env("TENZIR_INVALID", "foo,bar");       // list parsed late
-  parse();
-  CHECK(not holds_alternative<std::string>("tenzir.endpoint"));
-  CHECK(get<bool>("tenzir.bare-mode"));
-  CHECK(get<bool>("tenzir.node"));
-  CHECK_EQUAL(get<caf::config_value::integer>("tenzir.import.batch-size"), 42);
-  auto foo_bar = std::vector<std::string>{"foo", "bar"};
-  CHECK_EQUAL(get_vec<std::string>("tenzir.plugins"), foo_bar);
-  CHECK_EQUAL(get_vec<std::string>("tenzir.invalid"), foo_bar);
+  TEST("environment only") {
+    env("TENZIR_ENDPOINT", "1.2.3.4");
+    parse();
+    CHECK(get<bool>("tenzir.bare-mode"));
+    CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "1.2.3.4");
+  }
+
+  TEST("command line overrides environment") {
+    env("TENZIR_ENDPOINT", "1.2.3.4");
+    parse("--endpoint=5.6.7.8");
+    CHECK(get<bool>("tenzir.bare-mode"));
+    fmt::print("{}\n", deep_to_string(content(cfg)));
+    CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "5.6.7.8");
+  }
+
+  TEST("command line no value for list generates empty list value") {
+    parse("--plugins=");
+    CHECK(get_vec<std::string>("tenzir.plugins").empty());
+  }
+
+  TEST("command line empty list value for list generates empty list value") {
+    parse("--plugins=");
+    CHECK(get_vec<std::string>("tenzir.plugins").empty());
+  }
+
+  TEST("environment key no value for plugin list generates empty list value") {
+    env("TENZIR_PLUGINS", "");
+    parse();
+    CHECK(get_vec<std::string>("tenzir.plugins").empty());
+  }
+
+  TEST(
+    "environment key empty value for plugin list generates empty list value") {
+    env("TENZIR_PLUGINS", "");
+    parse();
+    CHECK(get_vec<std::string>("tenzir.plugins").empty());
+  }
+
+  TEST("command line overrides environment even for plugins") {
+    env("TENZIR_PLUGINS", "plugin1");
+    parse("--plugins=plugin2");
+    CHECK_EQUAL(get_vec<std::string>("tenzir.plugins"),
+                std::vector<std::string>{"plugin2"});
+  }
+
+  TEST("command line no value for timespan value generates default value") {
+    parse("--active-partition-timeout=");
+    CHECK_EQUAL(get<caf::timespan>("tenzir.active-partition-timeout").count(),
+                std::chrono::milliseconds{0}.count());
+  }
+
+  TEST("command line no value for bool value generates default true value") {
+    parse(std::vector<std::string>{"rebuild", "--all="});
+    CHECK_EQUAL(get<bool>("tenzir.rebuild.all"), true);
+  }
 }
-
-TEST(environment only) {
-  env("TENZIR_ENDPOINT", "1.2.3.4");
-  parse();
-  CHECK(get<bool>("tenzir.bare-mode"));
-  CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "1.2.3.4");
-}
-
-TEST(command line overrides environment) {
-  env("TENZIR_ENDPOINT", "1.2.3.4");
-  parse("--endpoint=5.6.7.8");
-  CHECK(get<bool>("tenzir.bare-mode"));
-  fmt::print("{}\n", deep_to_string(content(cfg)));
-  CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "5.6.7.8");
-}
-
-TEST(command line no value for list generates empty list value) {
-  parse("--plugins=");
-  CHECK(get_vec<std::string>("tenzir.plugins").empty());
-}
-
-TEST(command line empty list value for list generates empty list value) {
-  parse("--plugins=");
-  CHECK(get_vec<std::string>("tenzir.plugins").empty());
-}
-
-TEST(environment key no value for plugin list generates empty list value) {
-  env("TENZIR_PLUGINS", "");
-  parse();
-  CHECK(get_vec<std::string>("tenzir.plugins").empty());
-}
-
-TEST(environment key empty value for plugin list generates empty list value) {
-  env("TENZIR_PLUGINS", "");
-  parse();
-  CHECK(get_vec<std::string>("tenzir.plugins").empty());
-}
-
-TEST(command line overrides environment even for plugins) {
-  env("TENZIR_PLUGINS", "plugin1");
-  parse("--plugins=plugin2");
-  CHECK_EQUAL(get_vec<std::string>("tenzir.plugins"),
-              std::vector<std::string>{"plugin2"});
-}
-
-TEST(command line no value for timespan value generates default value) {
-  parse("--active-partition-timeout=");
-  CHECK_EQUAL(get<caf::timespan>("tenzir.active-partition-timeout").count(),
-              std::chrono::milliseconds{0}.count());
-}
-
-TEST(command line no value for bool value generates default true value) {
-  parse(std::vector<std::string>{"rebuild", "--all="});
-  CHECK_EQUAL(get<bool>("tenzir.rebuild.all"), true);
-}
-
-FIXTURE_SCOPE_END()

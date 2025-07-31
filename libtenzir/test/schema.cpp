@@ -18,8 +18,6 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/variant_traits.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 #include <variant>
 
@@ -27,7 +25,7 @@ using namespace tenzir;
 
 using namespace std::string_literals;
 
-TEST(offset finding) {
+TEST("offset finding") {
   std::string str = R"__(
     type a = int64
     type inner = record{ x: int64, y: double }
@@ -57,7 +55,7 @@ TEST(offset finding) {
   CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, double_type{});
 }
 
-TEST(combining) {
+TEST("combining") {
   auto x = unbox(to<module>(R"__(
     type b = double
     type int_custom = int64
@@ -76,7 +74,7 @@ TEST(combining) {
   CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
 }
 
-TEST(merging) {
+TEST("merging") {
   std::string str = R"__(
     type a = int64
     type inner = record{ x: int64, y: double }
@@ -94,7 +92,7 @@ TEST(merging) {
   CHECK(merged->find("inner"));
 }
 
-TEST(parseable - simple sequential) {
+TEST("parseable - simple sequential") {
   auto str = "type a = int64 type b = string type c = a"s;
   module mod;
   CHECK(parsers::module(str, mod));
@@ -103,7 +101,7 @@ TEST(parseable - simple sequential) {
   CHECK(mod.find("c"));
 }
 
-TEST(parseable - toplevel comments) {
+TEST("parseable - toplevel comments") {
   std::string_view str = R"__(
     // A comment at the beginning.
     type foo = int64
@@ -114,7 +112,7 @@ TEST(parseable - toplevel comments) {
   CHECK(mod.find("foo"));
 }
 
-TEST(parseable - inline comments) {
+TEST("parseable - inline comments") {
   std::string_view str = R"__(
     type foo = record{  // so
       ts: time,         // much
@@ -128,7 +126,7 @@ TEST(parseable - inline comments) {
   CHECK(mod.find("bar"));
 }
 
-TEST(module : zeek - style) {
+TEST("module : zeek - style") {
   std::string str = R"__(
     type port = uint64
     type zeek.ssl = record{
@@ -159,7 +157,7 @@ TEST(module : zeek - style) {
   CHECK(is<record_type>(r->field(*id).type));
 }
 
-TEST(schema : aliases) {
+TEST("schema : aliases") {
   auto str = R"__(
                type foo = ip
                type bar = foo
@@ -176,7 +174,7 @@ TEST(schema : aliases) {
   CHECK(mod.find("x"));
 }
 
-TEST(parseable - basic types global) {
+TEST("parseable - basic types global") {
   auto str = R"__(
     type t1 = bool
     type t2 = int64
@@ -214,7 +212,7 @@ TEST(parseable - basic types global) {
   CHECK(is<string_type>(r->field(*t8).type));
 }
 
-TEST(parseable - basic types local) {
+TEST("parseable - basic types local") {
   auto str = R"__(
     type foo = record{
       a1: bool,
@@ -240,7 +238,7 @@ TEST(parseable - basic types local) {
   CHECK(is<subnet_type>(r->field(*p).type));
 }
 
-TEST(parseable - complex types global) {
+TEST("parseable - complex types global") {
   auto str = R"__(
     type enum_t = enum{x, y, z}
     type list_t = list<ip>
@@ -263,7 +261,7 @@ TEST(parseable - complex types global) {
   CHECK(r->field(*e).type == *enum_t);
 }
 
-TEST(parseable - out of order definitions) {
+TEST("parseable - out of order definitions") {
   using namespace std::string_view_literals;
   auto str = R"__(
     type baz = list<bar>
@@ -290,7 +288,7 @@ TEST(parseable - out of order definitions) {
   CHECK_EQUAL(baz, expected);
 }
 
-TEST(parseable - with context) {
+TEST("parseable - with context") {
   using namespace std::string_view_literals;
   MESSAGE("prepare the context");
   auto global = symbol_map{};
@@ -577,7 +575,7 @@ TEST(parseable - with context) {
   }
 }
 
-TEST(parseable - overwriting with self reference) {
+TEST("parseable - overwriting with self reference") {
   using namespace std::string_view_literals;
   auto global = symbol_map{};
   {

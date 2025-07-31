@@ -13,15 +13,13 @@
 #include "tenzir/test/fixtures/filesystem.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <cstddef>
 #include <span>
 #include <string_view>
 
 using namespace tenzir;
 
-TEST(deleter) {
+TEST("deleter") {
   char buf[100] = {};
   auto i = 42;
   MESSAGE("owning chunk");
@@ -35,7 +33,7 @@ TEST(deleter) {
   i = 42;
 }
 
-TEST(deletion_step) {
+TEST("deletion_step") {
   char buf[100] = {};
   auto i = 0;
   MESSAGE("owning chunk");
@@ -54,7 +52,7 @@ TEST(deletion_step) {
   CHECK_EQUAL(i, 42);
 }
 
-TEST(access) {
+TEST("chunk access") {
   auto xs = std::vector<char>{'f', 'o', 'o'};
   auto chk = chunk::make(std::move(xs));
   REQUIRE_NOT_EQUAL(chk, nullptr);
@@ -63,7 +61,7 @@ TEST(access) {
   CHECK_EQUAL(*x.begin(), static_cast<std::byte>('f'));
 }
 
-TEST(slicing) {
+TEST("slicing") {
   std::array<char, 100> buf = {};
   auto x = chunk::copy(buf);
   auto y = x->slice(50);
@@ -72,7 +70,7 @@ TEST(slicing) {
   CHECK_EQUAL(z->size(), 5u);
 }
 
-TEST(compression) {
+TEST("compression") {
   // We assemble a large test string with many repetitions for compression
   // tests.
   const auto piece = std::string_view{"foobarbaz"};
@@ -95,7 +93,7 @@ TEST(compression) {
   CHECK_ERROR(decompressed_undersized);
 }
 
-TEST(as_bytes) {
+TEST("as_bytes") {
   std::string str = "foobarbaz";
   auto copy = str;
   auto bytes
@@ -113,18 +111,16 @@ struct fixture : public fixtures::filesystem {
 
 } // namespace
 
-FIXTURE_SCOPE(chunk_tests, fixture)
-
-TEST(read / write) {
-  std::string str = "foobarbaz";
-  auto x = chunk::make(std::move(str));
-  const auto filename = directory / "chunk";
-  auto err = write(filename, x);
-  CHECK_EQUAL(err, caf::none);
-  chunk_ptr y;
-  err = read(filename, y);
-  CHECK_EQUAL(err, caf::none);
-  CHECK_EQUAL(as_bytes(x), as_bytes(y));
+WITH_FIXTURE(fixture) {
+  TEST("read / write") {
+    std::string str = "foobarbaz";
+    auto x = chunk::make(std::move(str));
+    const auto filename = directory / "chunk";
+    auto err = write(filename, x);
+    CHECK_EQUAL(err, caf::none);
+    chunk_ptr y;
+    err = read(filename, y);
+    CHECK_EQUAL(err, caf::none);
+    CHECK_EQUAL(as_bytes(x), as_bytes(y));
+  }
 }
-
-FIXTURE_SCOPE_END()

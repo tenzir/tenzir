@@ -18,21 +18,19 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/variant_traits.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 using namespace tenzir;
 
-TEST(default construction) {
+TEST("legacy type default construction") {
   legacy_type t;
-  CHECK(!t);
-  CHECK(!is<legacy_bool_type>(t));
+  CHECK(! t);
+  CHECK(! is<legacy_bool_type>(t));
 }
 
-TEST(construction) {
+TEST("legacy type construction") {
   auto s = legacy_string_type{};
   auto t = legacy_type{s};
   CHECK(t);
@@ -40,7 +38,7 @@ TEST(construction) {
   CHECK(try_as<legacy_string_type>(&t) != nullptr);
 }
 
-TEST(assignment) {
+TEST("assignment") {
   auto t = legacy_type{legacy_string_type{}};
   CHECK(t);
   CHECK(is<legacy_string_type>(t));
@@ -48,20 +46,20 @@ TEST(assignment) {
   CHECK(t);
   CHECK(is<legacy_real_type>(t));
   t = {};
-  CHECK(!t);
-  CHECK(!is<legacy_real_type>(t));
+  CHECK(! t);
+  CHECK(! is<legacy_real_type>(t));
   auto u = legacy_type{legacy_none_type{}};
   CHECK(u);
   CHECK(is<legacy_none_type>(u));
 }
 
-TEST(copying) {
+TEST("copying") {
   auto t = legacy_type{legacy_string_type{}};
   auto u = t;
   CHECK(is<legacy_string_type>(u));
 }
 
-TEST(names) {
+TEST("names") {
   legacy_type t;
   t.name("foo");
   CHECK(t.name().empty());
@@ -70,7 +68,7 @@ TEST(names) {
   CHECK_EQUAL(t.name(), "foo");
 }
 
-TEST(equality comparison) {
+TEST("equality comparison") {
   MESSAGE("type-erased comparison");
   CHECK(legacy_type{} == legacy_type{});
   CHECK(legacy_type{legacy_bool_type{}} != legacy_type{});
@@ -92,14 +90,14 @@ TEST(equality comparison) {
         == legacy_real_type{}.attributes(attrs));
 }
 
-TEST(less - than comparison) {
-  CHECK(!(legacy_type{} < legacy_type{}));
-  CHECK(!(legacy_real_type{} < legacy_real_type{}));
+TEST("less - than comparison") {
+  CHECK(! (legacy_type{} < legacy_type{}));
+  CHECK(! (legacy_real_type{} < legacy_real_type{}));
   CHECK(legacy_string_type{}.name("a") < legacy_string_type{}.name("b"));
   CHECK(legacy_record_type{}.name("a") < legacy_record_type{}.name("b"));
 }
 
-TEST(strict weak ordering) {
+TEST("strict weak ordering") {
   std::vector<legacy_type> xs{legacy_string_type{}, legacy_address_type{},
                               legacy_pattern_type{}};
   std::vector<legacy_type> ys{legacy_string_type{}, legacy_pattern_type{},
@@ -109,7 +107,7 @@ TEST(strict weak ordering) {
   CHECK(xs == ys);
 }
 
-TEST(parseable) {
+TEST("legacy type parseable") {
   MESSAGE("basic");
   {
     auto t = legacy_type{};
@@ -193,5 +191,7 @@ TEST(parseable) {
     CHECK_EQUAL(unbox(to<legacy_type>(str)), r);
   }
   MESSAGE("invalid");
-  { CHECK_ERROR(parsers::legacy_type(":bool")); }
+  {
+    CHECK_ERROR(parsers::legacy_type(":bool"));
+  }
 }
