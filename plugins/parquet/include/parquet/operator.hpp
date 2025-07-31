@@ -207,7 +207,8 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
     if (const auto* timestamp = try_as<arrow::TimestampArray>(array.get());
         timestamp and ms_timestamps) {
       auto target = arrow::timestamp(arrow::TimeUnit::MILLI);
-      auto result = check(arrow::compute::Cast(array, target));
+      auto result = check(arrow::compute::Cast(
+        array, target, arrow::compute::CastOptions::Unsafe()));
       return result.make_array();
     }
     return array;
