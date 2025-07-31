@@ -16,6 +16,7 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
 
+#include <arrow/compute/cast.h>
 #include <arrow/io/file.h>
 #include <arrow/table.h>
 #include <caf/expected.hpp>
@@ -90,10 +91,13 @@ class parquet_options {
 public:
   std::optional<located<int64_t>> compression_level{};
   std::optional<located<std::string>> compression_type{};
+  std::optional<location> times_in_milliseconds{};
 
   friend auto inspect(auto& f, parquet_options& x) -> bool {
     return f.object(x).fields(f.field("compression_level", x.compression_level),
-                              f.field("compression_type", x.compression_type));
+                              f.field("compression_type", x.compression_type),
+                              f.field("times_in_milliseconds",
+                                      x.times_in_milliseconds));
   }
 };
 
@@ -116,10 +120,11 @@ public:
   }
 };
 
-auto remove_empty_records(std::shared_ptr<arrow::Schema> schema,
+auto remove_empty_records(std::shared_ptr<arrow::Schema> schema, bool ms_times,
                           diagnostic_handler& dh)
   -> std::shared_ptr<arrow::Schema> {
-  auto impl = [](const auto& impl, std::shared_ptr<arrow::DataType> type,
+  auto impl
+    = [ms_times](const auto& impl, std::shared_ptr<arrow::DataType> type,
                  diagnostic_handler& dh,
                  std::string_view path) -> std::shared_ptr<arrow::DataType> {
     TENZIR_ASSERT(type);
@@ -141,6 +146,10 @@ auto remove_empty_records(std::shared_ptr<arrow::Schema> schema,
       }
       return arrow::struct_(fields);
     }
+    if (const auto* timestamp = try_as<arrow::TimestampType>(type.get());
+        timestamp and ms_times) {
+      return arrow::timestamp(arrow::TimeUnit::MILLI);
+    }
     return type;
   };
   for (auto i = 0; i < schema->num_fields(); ++i) {
@@ -151,18 +160,20 @@ auto remove_empty_records(std::shared_ptr<arrow::Schema> schema,
   return schema;
 }
 
-auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch)
+auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
+                          bool ms_timestamps)
   -> std::shared_ptr<arrow::RecordBatch> {
   auto impl
-    = [](const auto& impl,
-         std::shared_ptr<arrow::Array> array) -> std::shared_ptr<arrow::Array> {
+    = [ms_timestamps](
+        this const auto& self,
+        std::shared_ptr<arrow::Array> array) -> std::shared_ptr<arrow::Array> {
     TENZIR_ASSERT(array);
     if (const auto* list_array = try_as<arrow::ListArray>(array.get())) {
-      auto values = impl(impl, list_array->values());
-      return std::make_shared<arrow::ListArray>(arrow::list(values->type()),
-                                                list_array->length(),
-                                                list_array->value_offsets(),
-                                                values);
+      auto values = self(list_array->values());
+      return std::make_shared<arrow::ListArray>(
+        arrow::list(values->type()), list_array->length(),
+        list_array->value_offsets(), values, array->null_bitmap(),
+        array->data()->null_count, array->offset());
     }
     if (const auto* struct_array = try_as<arrow::StructArray>(array.get())) {
       if (struct_array->num_fields() == 0) {
@@ -173,16 +184,29 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch)
       auto fields = struct_array->struct_type()->fields();
       TENZIR_ASSERT(arrays.size() == fields.size());
       for (auto i = size_t{0}; i < arrays.size(); ++i) {
-        arrays[i] = impl(impl, std::move(arrays[i]));
+        arrays[i] = self(std::move(arrays[i]));
         fields[i] = fields[i]->WithType(arrays[i]->type());
       }
+      auto null_bitmap = array->null_bitmap();
+      if (array->offset() != 0 and array->null_bitmap_data()) {
+        null_bitmap = check(arrow::internal::CopyBitmap(
+          arrow::default_memory_pool(), array->null_bitmap_data(),
+          array->offset(), array->length()));
+      }
       return std::make_shared<arrow::StructArray>(
-        arrow::struct_(fields), struct_array->length(), arrays);
+        arrow::struct_(fields), struct_array->length(), arrays,
+        std::move(null_bitmap), array->data()->null_count, 0);
+    }
+    if (const auto* timestamp = try_as<arrow::TimestampArray>(array.get());
+        timestamp and ms_timestamps) {
+      auto target = arrow::timestamp(arrow::TimeUnit::MILLI);
+      auto result = check(arrow::compute::Cast(array, target));
+      return result.make_array();
     }
     return array;
   };
   for (auto i = 0; i < batch->num_columns(); ++i) {
-    auto column = impl(impl, batch->column(i));
+    auto column = impl(batch->column(i));
     batch = check(batch->SetColumn(
       i, batch->schema()->field(i)->WithType(column->type()), column));
   }
@@ -238,8 +262,7 @@ public:
         if (options.compression_type->inner == "brotli"
             && (options.compression_level->inner < 1
                 || options.compression_level->inner > 11)) {
-          return diagnostic::error("")
-            .note("invalid compression level")
+          return diagnostic::error("invalid compression level")
             .note("must be a value between 1 and 11")
             .primary(options.compression_level->source)
             .to_error();
@@ -247,8 +270,7 @@ public:
         if (options.compression_type->inner == "gzip"
             && (options.compression_level->inner < 1
                 || options.compression_level->inner > 9)) {
-          return diagnostic::error("")
-            .note("invalid compression level")
+          return diagnostic::error("invalid compression level")
             .note("must be a value between 1 and 9")
             .primary(options.compression_level->source)
             .to_error();
@@ -276,8 +298,10 @@ public:
       parquet_writer_props_builder.version(
         ::parquet::ParquetVersion::PARQUET_2_LATEST);
       auto parquet_writer_props = parquet_writer_props_builder.build();
-      const auto schema = remove_empty_records(input_schema.to_arrow_schema(),
-                                               ctrl.diagnostics());
+      const auto schema
+        = remove_empty_records(input_schema.to_arrow_schema(),
+                               options.times_in_milliseconds.has_value(),
+                               ctrl.diagnostics());
       auto out_buffer = std::make_shared<chunked_buffer_output_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer,
@@ -289,10 +313,9 @@ public:
           .to_error();
       }
       auto writer = file_result.MoveValueUnsafe();
-      return std::make_unique<parquet_printer_instance>(ctrl,
-                                                        std::move(input_schema),
-                                                        std::move(out_buffer),
-                                                        std::move(writer));
+      return std::make_unique<parquet_printer_instance>(
+        ctrl, std::move(input_schema), std::move(out_buffer), std::move(writer),
+        options.times_in_milliseconds.has_value());
     }
 
     auto process(table_slice input) -> generator<chunk_ptr> override {
@@ -309,7 +332,8 @@ public:
           .note("fields will be `\"***\"`")
           .emit(ctrl_.diagnostics());
       }
-      auto record_batch = remove_empty_records(to_record_batch(input));
+      auto record_batch
+        = remove_empty_records(to_record_batch(input), ms_timestamps_);
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (! record_batch_status.ok()) {
         diagnostic::error("{}",
@@ -335,11 +359,12 @@ public:
     parquet_printer_instance(
       operator_control_plane& ctrl, type input_schema,
       std::shared_ptr<chunked_buffer_output_stream> out_buffer,
-      std::unique_ptr<::parquet::arrow::FileWriter> writer)
+      std::unique_ptr<::parquet::arrow::FileWriter> writer, bool ms_timestamps)
       : ctrl_{ctrl},
         writer_{std::move(writer)},
         out_buffer_{std::move(out_buffer)},
-        input_schema_{std::move(input_schema)} {
+        input_schema_{std::move(input_schema)},
+        ms_timestamps_{ms_timestamps} {
     }
 
   private:
@@ -347,6 +372,7 @@ public:
     std::unique_ptr<::parquet::arrow::FileWriter> writer_;
     std::shared_ptr<chunked_buffer_output_stream> out_buffer_;
     type input_schema_;
+    bool ms_timestamps_;
   };
 
   friend auto inspect(auto& f, parquet_printer& x) -> bool {
