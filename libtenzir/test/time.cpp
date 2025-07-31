@@ -33,7 +33,7 @@ void check_duration(const Input& str, T x) {
 
 } // namespace
 
-TEST(positive durations) {
+TEST("positive durations") {
   MESSAGE("nanoseconds");
   check_duration("42 nanoseconds", 42ns);
   check_duration("42 nanosecond", 42ns);
@@ -86,17 +86,17 @@ TEST(positive durations) {
   check_duration("1y", years(1));
 }
 
-TEST(negative durations) {
+TEST("negative durations") {
   check_duration("-42ns", -42ns);
   check_duration("-42h", -42h);
 }
 
-TEST(fractional durations) {
+TEST("fractional durations") {
   check_duration("3.54s", 3540ms);
   check_duration("-42.001ms", -42001us);
 }
 
-TEST(compound durations) {
+TEST("compound durations") {
   check_duration("3m42s10ms", 3min + 42s + 10ms);
   check_duration("3s42s10ms", 3s + 42s + 10ms);
   check_duration("42s3m10ms", 3min + 42s + 10ms);
@@ -131,7 +131,7 @@ tenzir::duration to_microseconds(tenzir::duration ts) {
   return duration_cast<microseconds>(ts) % 1'000'000;
 }
 
-TEST(ymdshms time parser) {
+TEST("ymdshms time parser") {
   tenzir::time ts;
   MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss+HH");
   CHECK(parsers::time("2012-08-12+23:55:04.001234-01", ts));
@@ -218,7 +218,7 @@ TEST(ymdshms time parser) {
   CHECK(to_seconds(t) == seconds{0});
 }
 
-TEST(unix epoch time parser) {
+TEST("unix epoch time parser") {
   tenzir::time ts;
   CHECK(parsers::time("@1444040673", ts));
   CHECK(ts.time_since_epoch() == 1444040673s);
@@ -226,7 +226,7 @@ TEST(unix epoch time parser) {
   CHECK(ts.time_since_epoch() == double_seconds{1398933902.686337});
 }
 
-TEST(now time parser) {
+TEST("now time parser") {
   tenzir::time ts;
   CHECK(parsers::time("now", ts));
   CHECK(ts > time::clock::now() - minutes{1});
@@ -237,13 +237,13 @@ TEST(now time parser) {
   CHECK(ts > time::clock::now());
 }
 
-TEST(ago time parser) {
+TEST("ago time parser") {
   tenzir::time ts;
   CHECK(parsers::time("10 days ago", ts));
   CHECK(ts < time::clock::now());
 }
 
-TEST(in time parser) {
+TEST("in time parser") {
   tenzir::time ts;
   CHECK(parsers::time("in 1 year", ts));
   CHECK(ts > time::clock::now());

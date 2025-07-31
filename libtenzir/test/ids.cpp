@@ -12,7 +12,7 @@
 
 using namespace tenzir;
 
-TEST(make ids) {
+TEST("make ids") {
   ids xs;
   xs.append_bit(false);
   xs.append_bit(true);

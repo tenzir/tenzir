@@ -10,16 +10,16 @@
 
 #include "tenzir/test/test.hpp"
 
-TEST(return error when passed config value is not a list type) {
+TEST("return error when passed config value is not a list type") {
   caf::config_value in{caf::config_value::integer{5}};
   const auto out
     = tenzir::detail::unpack_config_list_to_vector<caf::config_value::integer>(
       in);
-  CHECK(!out);
+  CHECK(! out);
 }
 
-TEST(return error when passed config value list has different type than
-       passed template param) {
+TEST("return error when passed config value list has different type than "
+     "passed template param") {
   std::vector list_values{caf::config_value{caf::config_value::integer{5}},
                           caf::config_value{caf::config_value::string{"strr"}}};
   caf::config_value in{list_values};
@@ -27,10 +27,10 @@ TEST(return error when passed config value list has different type than
   const auto out
     = tenzir::detail::unpack_config_list_to_vector<caf::config_value::integer>(
       in);
-  CHECK(!out);
+  CHECK(! out);
 }
 
-TEST(unpack list properly) {
+TEST("unpack list properly") {
   std::vector list_values{caf::config_value{caf::config_value::integer{5}},
                           caf::config_value{caf::config_value::integer{15}}};
   caf::config_value in{list_values};
@@ -44,7 +44,7 @@ TEST(unpack list properly) {
   CHECK_EQUAL(out->back(), caf::config_value::integer{15});
 }
 
-TEST(unpack nested settings properly) {
+TEST("unpack nested settings properly") {
   caf::settings settings;
   caf::config_value::list list{caf::config_value{20}};
   caf::put(settings, "outer.inner", list);

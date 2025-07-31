@@ -8,11 +8,9 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 using namespace tenzir;
 
-TEST(concepts - convert from data) {
+TEST("concepts - convert from data") {
   auto x = data{list{
     record{{"concept", record{{"name", "foo"},
                               {"fields", list{"a.fo0", "b.foO", "x.foe"}}}}},
@@ -25,7 +23,7 @@ TEST(concepts - convert from data) {
   CHECK_EQUAL(test, ref);
 }
 
-TEST(concepts - simple) {
+TEST("concepts - simple") {
   auto c = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                          {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
   {
@@ -56,7 +54,7 @@ TEST(concepts - simple) {
   }
 }
 
-TEST(concepts - cyclic definition) {
+TEST("concepts - cyclic definition") {
   // Concepts can reference other concepts in their definition. Two concepts
   // referencing each other create a cycle. This test makes sure that the
   // resolve function does not go into an infinite loop and the result is

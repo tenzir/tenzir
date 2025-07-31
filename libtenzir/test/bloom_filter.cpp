@@ -18,7 +18,6 @@
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
-#include <caf/test/dsl.hpp>
 
 #include <cmath>
 #include <string>
@@ -55,7 +54,7 @@ namespace {
 constexpr const int precision_bits = 20;
 }
 
-TEST(bloom filter parameters : mnk) {
+TEST("bloom filter parameters : mnk") {
   bloom_filter_parameters xs;
   xs.m = 42_k;
   xs.n = 5_k;
@@ -72,7 +71,7 @@ TEST(bloom filter parameters : mnk) {
   CHECK_ALMOST_EQUAL(*ys->p, 0.018471419, precision_bits);
 }
 
-TEST(bloom filter parameters : np) {
+TEST("bloom filter parameters : np") {
   bloom_filter_parameters xs;
   xs.n = 1_M;
   xs.p = 0.01;
@@ -88,7 +87,7 @@ TEST(bloom filter parameters : np) {
   CHECK_ALMOST_EQUAL(*ys->p, 0.010039215, precision_bits);
 }
 
-TEST(bloom filter parameters : mn) {
+TEST("bloom filter parameters : mn") {
   bloom_filter_parameters xs;
   xs.m = 20_M;
   xs.n = 7_M;
@@ -104,7 +103,7 @@ TEST(bloom filter parameters : mn) {
   CHECK_ALMOST_EQUAL(*ys->p, 0.253426356, precision_bits);
 }
 
-TEST(bloom filter parameters : mp) {
+TEST("bloom filter parameters : mp") {
   bloom_filter_parameters xs;
   xs.m = 10_M;
   xs.p = 0.001;
@@ -120,12 +119,12 @@ TEST(bloom filter parameters : mp) {
   CHECK_ALMOST_EQUAL(*ys->p, 0.001000025, precision_bits);
 }
 
-TEST(bloom filter parameters : from string) {
+TEST("bloom filter parameters : from string") {
   auto xs = tenzir::test::unbox(parse_parameters("bloomfilter(1000,0.01)"));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);
-  CHECK(!xs.m);
-  CHECK(!xs.k);
+  CHECK(! xs.m);
+  CHECK(! xs.k);
   auto ys = evaluate(xs);
   CHECK_EQUAL(*ys->m, 9586u);
   CHECK_EQUAL(*ys->n, 1000u);
@@ -133,7 +132,7 @@ TEST(bloom filter parameters : from string) {
   CHECK_ALMOST_EQUAL(*ys->p, 0.010034532, precision_bits);
 }
 
-TEST(simple_hasher) {
+TEST("simple_hasher") {
   auto h = simple_hasher<xxh64>{2, {0, 1}};
   auto& xs = h(42);
   REQUIRE_EQUAL(h.size(), 2u);
@@ -149,7 +148,7 @@ TEST(simple_hasher) {
   CHECK(h == g);
 }
 
-TEST(double_hasher) {
+TEST("double_hasher") {
   auto h = double_hasher<xxh64>{4, {1337, 4711}};
   auto& xs = h(42);
   REQUIRE_EQUAL(h.size(), 4u);
@@ -167,12 +166,12 @@ TEST(double_hasher) {
   CHECK(h == g);
 }
 
-TEST(bloom filter - default - constructed) {
+TEST("bloom filter - default - constructed") {
   bloom_filter<xxh64> x;
   CHECK(x.size() == 0u);
 }
 
-TEST(bloom filter - constructed from parameters) {
+TEST("bloom filter - constructed from parameters") {
   bloom_filter_parameters xs;
   xs.m = 10_M;
   xs.p = 0.001;
@@ -186,7 +185,7 @@ TEST(bloom filter - constructed from parameters) {
   CHECK(x.lookup(3.14));
 }
 
-TEST(bloom filter - simple hasher and partitioning) {
+TEST("bloom filter - simple hasher and partitioning") {
   bloom_filter_parameters xs;
   xs.m = 10_M;
   xs.p = 0.001;
@@ -209,14 +208,14 @@ TEST(bloom filter - simple hasher and partitioning) {
   CHECK(x == y);
 }
 
-TEST(bloom filter - duplicate tracking) {
+TEST("bloom filter - duplicate tracking") {
   bloom_filter_parameters xs;
   xs.m = 1_M;
   xs.p = 0.1;
   auto x = tenzir::test::unbox(
     make_bloom_filter<xxh64, double_hasher, policy::partitioning::no>(xs));
-  CHECK(!x.lookup(42));
+  CHECK(! x.lookup(42));
   CHECK(x.add(42));
   CHECK(x.lookup(42));
-  CHECK(!x.add(42));
+  CHECK(! x.add(42));
 }

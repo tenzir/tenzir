@@ -17,14 +17,14 @@ using namespace tenzir;
 using namespace si_literals;
 using namespace test;
 
-TEST(bloom filter parameters : from type) {
+TEST("bloom filter parameters : from type") {
   auto t = type{ip_type{}, {{"synopsis", "bloomfilter(1000,0.01)"}}};
   auto xs = unbox(parse_parameters(t));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);
 }
 
-TEST(bloom filter synopsis) {
+TEST("bloom filter synopsis") {
   using namespace nft;
   bloom_filter_parameters xs;
   xs.m = 1_k;
@@ -35,14 +35,14 @@ TEST(bloom filter synopsis) {
   x.add(make_data_view(int64_t{1}));
   x.add(make_data_view(int64_t{2}));
   auto verify = verifier{&x};
-  MESSAGE("{0, 1, 2}");
+  MESSAGE("{{0, 1, 2}}");
   verify(make_data_view(int64_t{0}), {N, N, N, N, T, N, N, N, N, N});
   verify(make_data_view(int64_t{1}), {N, N, N, N, T, N, N, N, N, N});
   verify(make_data_view(int64_t{2}), {N, N, N, N, T, N, N, N, N, N});
   verify(make_data_view(int64_t{42}), {N, N, N, N, F, N, N, N, N, N});
 }
 
-TEST(bloom filter synopsis - wrong lookup type) {
+TEST("bloom filter synopsis - wrong lookup type") {
   bloom_filter_parameters xs;
   xs.m = 1_k;
   xs.p = 0.1;

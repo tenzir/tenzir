@@ -11,7 +11,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/test/test.hpp"
 
-TEST(parse list option with no character after equality sign) {
+TEST("parse list option with no character after equality sign") {
   tenzir::config_options sut;
   sut.add<std::vector<std::string>>("opt", "desc");
   auto settings = caf::settings{};
@@ -25,7 +25,7 @@ TEST(parse list option with no character after equality sign) {
   CHECK(out->empty());
 }
 
-TEST(parse list option with one arg) {
+TEST("parse list option with one arg") {
   tenzir::config_options sut;
   sut.add<std::vector<std::string>>("opt", "desc");
   auto settings = caf::settings{};
@@ -40,7 +40,7 @@ TEST(parse list option with one arg) {
   CHECK_EQUAL(out->front(), "opt1");
 }
 
-TEST(parse list option with one arg in qoutation marks) {
+TEST("parse list option with one arg in qoutation marks") {
   tenzir::config_options sut;
   sut.add<std::vector<std::string>>("opt", "desc");
   auto settings = caf::settings{};
@@ -55,7 +55,7 @@ TEST(parse list option with one arg in qoutation marks) {
   CHECK_EQUAL(out->front(), "opt1");
 }
 
-TEST(parse list option with comma separated format) {
+TEST("parse list option with comma separated format") {
   tenzir::config_options sut;
   sut.add<std::vector<std::string>>("opt", "desc");
   auto settings = caf::settings{};
@@ -71,7 +71,7 @@ TEST(parse list option with comma separated format) {
   CHECK_EQUAL(out->back(), "opt2");
 }
 
-TEST(parse list option with comma separated format in qoutation marks) {
+TEST("parse list option with comma separated format in qoutation marks") {
   tenzir::config_options sut;
   sut.add<std::vector<std::string>>("opt", "desc");
   auto settings = caf::settings{};

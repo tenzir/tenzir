@@ -24,65 +24,65 @@ using w64 = bits64::word_type;
 
 } // namespace
 
-TEST(construction) {
+TEST("bits construction") {
   CHECK(bits8{}.empty());
   CHECK_EQUAL(bits8{}.size(), 0u);
   CHECK_EQUAL(bits8(w8::all, 7), bits8(0b01111111, 7));
 }
 
-TEST(access) {
+TEST("access") {
   auto x = bits8{0b10110010};
-  CHECK(!x[0]);
+  CHECK(! x[0]);
   CHECK(x[1]);
-  CHECK(!x[2]);
-  CHECK(!x[3]);
+  CHECK(! x[2]);
+  CHECK(! x[3]);
   CHECK(x[4]);
   CHECK(x[5]);
-  CHECK(!x[6]);
+  CHECK(! x[6]);
   CHECK(x[7]);
   x = bits8{0b10110010, 5};
   CHECK(x[4]);
-  CHECK(!(x.data() & w8::mask(5)));
-  CHECK(!(x.data() & w8::mask(6)));
-  CHECK(!(x.data() & w8::mask(7)));
+  CHECK(! (x.data() & w8::mask(5)));
+  CHECK(! (x.data() & w8::mask(6)));
+  CHECK(! (x.data() & w8::mask(7)));
   x = bits8{w8::all, 1337};
   CHECK(x[0]);
   CHECK(x[1000]);
   CHECK(x[1336]);
   x = bits8{w8::none, 1337};
-  CHECK(!x[0]);
-  CHECK(!x[1000]);
-  CHECK(!x[1336]);
+  CHECK(! x[0]);
+  CHECK(! x[1000]);
+  CHECK(! x[1336]);
 }
 
-TEST(introspection) {
+TEST("introspection") {
   auto x = bits8{};
   CHECK(x.is_partial_word());
-  CHECK(!x.is_complete_word());
-  CHECK(!x.is_run());
+  CHECK(! x.is_complete_word());
+  CHECK(! x.is_run());
   x = bits8{0b10110010, 3};
   CHECK(x.is_partial_word());
-  CHECK(!x.is_complete_word());
-  CHECK(!x.is_run());
+  CHECK(! x.is_complete_word());
+  CHECK(! x.is_run());
   x = bits8{0b10110010};
-  CHECK(!x.is_partial_word());
+  CHECK(! x.is_partial_word());
   CHECK(x.is_complete_word());
-  CHECK(!x.is_run());
+  CHECK(! x.is_run());
   x = bits8{w8::all, 42};
-  CHECK(!x.is_partial_word());
-  CHECK(!x.is_complete_word());
+  CHECK(! x.is_partial_word());
+  CHECK(! x.is_complete_word());
   CHECK(x.is_run());
 }
 
-TEST(homogeneity) {
-  CHECK(!bits8{0b10110000}.homogeneous());
+TEST("homogeneity") {
+  CHECK(! bits8{0b10110000}.homogeneous());
   CHECK((bits8{0b10110000, 4}.homogeneous()));
   CHECK((bits8{0b10111111, 6}.homogeneous()));
   CHECK((bits8{w8::all}.homogeneous()));
   CHECK((bits8{w8::none}.homogeneous()));
 }
 
-TEST(slice) {
+TEST("slice") {
   MESSAGE("blocks");
   auto xs = bits8{0b00000001};
   CHECK_EQUAL(xs.slice(0), xs);
@@ -103,7 +103,7 @@ TEST(slice) {
   CHECK_EQUAL(xs.slice(5), bits8(w8::all, 5));
 }
 
-TEST(subsetting) {
+TEST("subsetting") {
   auto xs = bits8{0b11110000};
   MESSAGE("drop");
   auto ys = drop(xs, 6);
@@ -127,7 +127,7 @@ TEST(subsetting) {
   CHECK_EQUAL(take_right(xs, 42), xs);
 }
 
-TEST(finding - block) {
+TEST("finding - block") {
   MESSAGE("8 bits");
   auto x = bits8{0b00000001};
   CHECK_EQUAL(find_first<1>(x), 0u);
@@ -170,14 +170,14 @@ TEST(finding - block) {
   CHECK_EQUAL(find_next<0>(x, 4), w8::npos);
   CHECK_EQUAL(find_next<0>(x, 5), w8::npos);
   MESSAGE("64 bits");
-  auto y =
-    bits64{0b0000000001010100010101000101010001010100010101000101010000000000};
+  auto y = bits64{
+    0b0000000001010100010101000101010001010100010101000101010000000000};
   CHECK_EQUAL(find_first<1>(y), 10u);
   CHECK_EQUAL(find_last<1>(y), 54u);
   CHECK_EQUAL(find_first<0>(y), 0u);
   CHECK_EQUAL(find_last<0>(y), 63u);
-  y =
-    bits64{0b1111111111111110000000000000000000000000000000000000000011111111};
+  y = bits64{
+    0b1111111111111110000000000000000000000000000000000000000011111111};
   CHECK_EQUAL(find_first<1>(y), 0u);
   CHECK_EQUAL(find_last<1>(y), 63u);
   CHECK_EQUAL(find_first<0>(y), 8u);
@@ -190,7 +190,7 @@ TEST(finding - block) {
   CHECK_EQUAL(find_last<0>(y), 47u);
 }
 
-TEST(finding - sequence) {
+TEST("finding - sequence") {
   MESSAGE("all");
   auto x = bits8{w8::all, 666};
   CHECK_EQUAL(find_first<1>(x), 0u);
@@ -213,7 +213,7 @@ TEST(finding - sequence) {
   CHECK_EQUAL(find_last<1>(x), w8::npos);
 }
 
-TEST(counting) {
+TEST("bits counting") {
   CHECK_EQUAL(rank(bits8{w8::all}, 0), 1u);
   CHECK_EQUAL(rank(bits8{w8::all}, 1), 2u);
   CHECK_EQUAL(rank(bits8{w8::all}, 2), 3u);

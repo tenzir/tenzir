@@ -25,7 +25,7 @@ using U = uint64_t;
   CHECK_EQUAL(x, y);
 #define BAD(x) CHECK_EQUAL(x, std::nullopt);
 
-TEST(checked_add) {
+TEST("checked_add") {
   // unsigned
   GOOD(checked_add(U(0), U(0)), U(0));
   GOOD(checked_add(max<U>, U(0)), max<U>);
@@ -49,7 +49,7 @@ TEST(checked_add) {
   GOOD(checked_add(max<U> - U(max<S>), max<S>), max<U>);
 }
 
-TEST(checked_sub) {
+TEST("checked_sub") {
   // unsigned - unsigned
   GOOD(checked_sub(U(0), U(0)), U(0));
   BAD(checked_sub(U(0), U(1)));
@@ -86,7 +86,7 @@ TEST(checked_sub) {
   GOOD(checked_sub(U(max<S>), min<S>), max<U>);
 }
 
-TEST(checked_mul) {
+TEST("checked_mul") {
   // unsigned * unsigned
   GOOD(checked_mul(U(0), U(0)), U(0));
   GOOD(checked_mul(U(1), U(0)), U(0));

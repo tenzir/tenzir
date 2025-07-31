@@ -12,14 +12,12 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <string>
 #include <string_view>
 
 using namespace tenzir;
 
-TEST(optimize now) {
+TEST("optimize now") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto s = session{provider};

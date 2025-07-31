@@ -14,20 +14,20 @@
 
 using namespace tenzir;
 
-TEST(is subset) {
+TEST("is subset") {
   CHECK(is_subset(make_ids({{10, 20}}), make_ids({{10, 20}})));
   CHECK(is_subset(make_ids({{11, 20}}), make_ids({{10, 20}})));
   CHECK(is_subset(make_ids({{10, 19}}), make_ids({{10, 20}})));
   CHECK(is_subset(make_ids({{10, 19}}), make_ids({{10, 20}})));
 }
 
-TEST(is not subset) {
+TEST("is not subset") {
   CHECK(!is_subset(make_ids({{9, 19}}), make_ids({{10, 20}})));
   CHECK(!is_subset(make_ids({{11, 21}}), make_ids({{10, 20}})));
   CHECK(!is_subset(make_ids({5, 15, 25}), make_ids({{10, 20}})));
 }
 
-TEST(bitwise_range select) {
+TEST("bitwise_range select") {
   auto bm = make_ids({{0, 1}, {50000, 50001}, {100000, 100003}});
   CHECK_EQUAL(rank(bm), 5ull);
   auto rng0 = each(bm);
@@ -43,7 +43,7 @@ TEST(bitwise_range select) {
   CHECK_EQUAL(rng3.get(), 100001ull);
 }
 
-TEST(select runs) {
+TEST("select runs") {
   auto bm = make_ids({{0, 1}, {50000, 50001}, {100000, 100003}});
   {
     auto ranges = collect(select_runs(bm));

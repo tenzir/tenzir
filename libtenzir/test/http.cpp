@@ -27,7 +27,7 @@ auto make_item = [](std::string_view str) {
 
 } // namespace
 
-TEST(parse HTTP request item) {
+TEST("parse HTTP request item") {
   auto separators = std::array{":=@", ":=", "==", "=@", "@", "=", ":"};
   auto types = std::array{
     http::request_item::file_data_json, http::request_item::data_json,
@@ -53,7 +53,7 @@ TEST(parse HTTP request item) {
   }
 }
 
-TEST(HTTP request items - JSON) {
+TEST("HTTP request items - JSON") {
   auto request = http::request{};
   auto items = std::vector<http::request_item>{
     make_item("Content-Type:application/json"),
@@ -73,7 +73,7 @@ TEST(HTTP request items - JSON) {
   CHECK_EQUAL(request.body, "{\"foo\":42}");
 }
 
-TEST(HTTP request items - JSON without content type) {
+TEST("HTTP request items - JSON without content type") {
   auto request = http::request{};
   auto items = std::vector<http::request_item>{
     make_item("foo:=42"),
@@ -91,7 +91,7 @@ TEST(HTTP request items - JSON without content type) {
   CHECK_EQUAL(request.body, "{\"foo\":42}");
 }
 
-TEST(HTTP request items - urlencoded) {
+TEST("HTTP request items - urlencoded") {
   auto request = http::request{};
   auto items = std::vector<http::request_item>{
     make_item("Content-Type:application/x-www-form-urlencoded"),
@@ -108,7 +108,7 @@ TEST(HTTP request items - urlencoded) {
   CHECK_EQUAL(request.body, "foo=42&bar=true");
 }
 
-TEST(HTTP request items - URL param) {
+TEST("HTTP request items - URL param") {
   auto request = http::request{};
   auto items = std::vector<http::request_item>{
     make_item("foo==42"),
@@ -124,7 +124,7 @@ TEST(HTTP request items - URL param) {
   CHECK_EQUAL(request.uri, "https://example.org/?foo=42&bar=true");
 }
 
-TEST(HTTP response) {
+TEST("HTTP response") {
   http::response r;
   r.status_code = 200;
   r.status_text = "OK";
@@ -138,7 +138,7 @@ TEST(HTTP response) {
   CHECK_EQUAL(to_string(r), ok);
 }
 
-TEST(HTTP header) {
+TEST("HTTP header") {
   auto p = make_parser<http::header>();
   auto str = "foo: bar"s;
   auto f = str.begin();

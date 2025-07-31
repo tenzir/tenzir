@@ -48,20 +48,20 @@ auto inspect(Inspector& f, foo& x) {
 
 } // namespace
 
-TEST(lvalue tuple) {
+TEST("lvalue tuple") {
   fake_hasher h{};
   const auto t = std::tuple{42, 'A'};
   hash_append(h, t);
   CHECK(h.finish() == sizeof(int) + sizeof(char));
 }
 
-TEST(rvalue tuple) {
+TEST("rvalue tuple") {
   fake_hasher h{};
   hash_append(h, std::tuple{42, 'A'});
   CHECK(h.finish() == sizeof(int) + sizeof(char));
 }
 
-TEST(hashing an inspectable type) {
+TEST("hashing an inspectable type") {
   // Manual hashing two values...
   auto a = 42;
   auto b = 1337;

@@ -16,8 +16,6 @@
 #include "tenzir/error.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 using namespace tenzir;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
@@ -73,31 +71,31 @@ qux:
 
 } // namespace
 
-TEST(from_yaml - basic) {
+TEST("from_yaml - basic") {
   auto yaml = unbox(from_yaml("{a: 4.2, b: [foo, bar]}"));
   CHECK_EQUAL(yaml, (record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
 }
 
-TEST(from_yaml - invalid yaml) {
+TEST("from_yaml - invalid yaml") {
   auto yaml = from_yaml("@!#$%^&*()_+");
-  REQUIRE(!yaml);
+  REQUIRE(! yaml);
   CHECK_EQUAL(yaml.error(), ec::parse_error);
 }
 
-TEST(to_yaml - basic) {
+TEST("to_yaml - basic") {
   auto yaml = unbox(to_yaml(record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
   auto str = "a: 4.2\nb:\n  - foo\n  - bar";
   CHECK_EQUAL(yaml, str);
 }
 
-TEST(to_yaml - time types) {
+TEST("to_yaml - time types") {
   auto t = unbox(to<tenzir::time>("2021-01-01"));
   auto yaml = unbox(to_yaml(record{{"d", 12ms}, {"t", t}}));
   auto str = "d: 12ms\nt: 2021-01-01T00:00:00Z";
   CHECK_EQUAL(yaml, str);
 }
 
-TEST(to_yaml - invalid data) {
+TEST("to_yaml - invalid data") {
   // We tried a lot of weird combinations of invalid data values, but none of
   // them triggered a failure in the emitter logic.
   CHECK(to_yaml(caf::none).has_value());
@@ -106,22 +104,20 @@ TEST(to_yaml - invalid data) {
   CHECK(to_yaml(record{{"", caf::none}}).has_value());
 }
 
-TEST(parseable) {
+TEST("yaml parseable") {
   data yaml;
   CHECK(parsers::yaml("[1, 2, 3]", yaml));
   CHECK_EQUAL(yaml, (list{1u, 2u, 3u}));
 }
 
-FIXTURE_SCOPE(yaml_tests, fixture)
+WITH_FIXTURE(fixture) {
+  TEST("from_yaml - nested") {
+    auto x = from_yaml(str);
+    CHECK_EQUAL(x, rec);
+  }
 
-TEST(from_yaml - nested) {
-  auto x = from_yaml(str);
-  CHECK_EQUAL(x, rec);
+  TEST("to_yaml - nested") {
+    auto yaml = unbox(to_yaml(rec));
+    CHECK_EQUAL(yaml, str);
+  }
 }
-
-TEST(to_yaml - nested) {
-  auto yaml = unbox(to_yaml(rec));
-  CHECK_EQUAL(yaml, str);
-}
-
-FIXTURE_SCOPE_END()

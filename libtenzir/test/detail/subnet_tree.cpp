@@ -16,7 +16,7 @@
 using namespace tenzir;
 using namespace tenzir::detail;
 
-TEST(prefix matching) {
+TEST("prefix matching") {
   auto xs = detail::subnet_tree{};
   auto sn_0_24 = *to<subnet>("192.168.0.0/24");
   auto sn_0_25 = *to<subnet>("192.168.0.0/25");

@@ -66,13 +66,13 @@ auto compare_signatures(const data_builder::signature_type& expected,
   return true;
 }
 
-TEST(empty) {
+TEST("empty") {
   auto b = data_builder{};
 
   CHECK(not b.has_elements());
 }
 
-TEST(materialization record) {
+TEST("materialization record") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -92,7 +92,7 @@ TEST(materialization record) {
   CHECK(not b.has_elements());
 }
 
-TEST(materialization list) {
+TEST("materialization list") {
   auto b = data_builder{};
   auto* r = b.record();
   auto* l = r->field("int list")->list();
@@ -111,7 +111,7 @@ TEST(materialization list) {
   CHECK(not b.has_elements());
 }
 
-TEST(materialization nested record) {
+TEST("materialization nested record") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->record()->field("1")->null();
@@ -127,7 +127,7 @@ TEST(materialization nested record) {
   CHECK(not b.has_elements());
 }
 
-TEST(materialization record list record) {
+TEST("materialization record list record") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->list()->record()->field("1")->data(uint64_t{0});
@@ -148,7 +148,7 @@ TEST(materialization record list record) {
   CHECK(not b.has_elements());
 }
 
-TEST(overwrite record fields) {
+TEST("overwrite record fields") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -178,7 +178,7 @@ TEST(overwrite record fields) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record empty) {
+TEST("signature record empty") {
   auto b = data_builder{};
   (void)b.record();
 
@@ -195,7 +195,7 @@ TEST(signature record empty) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record simple) {
+TEST("signature record simple") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -228,7 +228,7 @@ TEST(signature record simple) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature list) {
+TEST("signature list") {
   auto b = data_builder{};
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
@@ -261,7 +261,7 @@ TEST(signature list) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature list records) {
+TEST("signature list records") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
     detail::data_builder::basic_parser,
@@ -289,7 +289,7 @@ TEST(signature list records) {
   CHECK_EQUAL(dh.warnings, size_t{0});
 }
 
-TEST(signature list with null) {
+TEST("signature list with null") {
   auto b = data_builder{};
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
@@ -315,7 +315,7 @@ TEST(signature list with null) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature list numeric unification) {
+TEST("signature list numeric unification") {
   auto b = data_builder{};
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
@@ -342,7 +342,7 @@ TEST(signature list numeric unification) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature list mismatch) {
+TEST("signature list mismatch") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
     detail::data_builder::basic_parser,
@@ -374,7 +374,7 @@ TEST(signature list mismatch) {
   CHECK_EQUAL(dh.warnings, size_t{1});
 }
 
-TEST(signature record seeding matching) {
+TEST("signature record seeding matching") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -413,7 +413,7 @@ TEST(signature record seeding matching) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding field not in data) {
+TEST("signature record seeding field not in data") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -451,7 +451,7 @@ TEST(signature record seeding field not in data) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding nested record) {
+TEST("signature record seeding nested record") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
     detail::data_builder::basic_parser,
@@ -552,7 +552,7 @@ TEST(signature record seeding nested record) {
   CHECK_EQUAL(dh.warnings, size_t{2});
 }
 
-TEST(signature record seeding nested list) {
+TEST("signature record seeding nested list") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
     detail::data_builder::basic_parser,
@@ -605,7 +605,7 @@ TEST(signature record seeding nested list) {
   CHECK_EQUAL(dh.warnings, size_t{3});
 }
 
-TEST(signature record seeding field not in data schema_only) {
+TEST("signature record seeding field not in data schema_only") {
   auto b = data_builder{
     detail::data_builder::basic_parser,
     nullptr,
@@ -647,7 +647,7 @@ TEST(signature record seeding field not in data schema_only) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding data - field not in seed) {
+TEST("signature record seeding data - field not in seed") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("1")->data(int64_t{0});
@@ -685,7 +685,7 @@ TEST(signature record seeding data - field not in seed) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding data - field not in seed schema_only) {
+TEST("signature record seeding data - field not in seed schema_only") {
   auto b = data_builder{
     detail::data_builder::basic_parser,
     nullptr,
@@ -720,7 +720,7 @@ TEST(signature record seeding data - field not in seed schema_only) {
   CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding numeric mismatch) {
+TEST("signature record seeding numeric mismatch") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});

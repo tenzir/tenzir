@@ -17,7 +17,7 @@
 
 namespace tenzir {
 
-TEST(lifetime) {
+TEST("lifetime") {
   auto fbt = flatbuffer<fbs::Type>{};
   int counter = 0;
   {

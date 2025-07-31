@@ -17,8 +17,6 @@
 #include "tenzir/null_bitmap.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 using namespace tenzir;
 using namespace std::string_literals;
 
@@ -26,13 +24,6 @@ namespace {
 
 template <class Bitmap>
 struct bitmap_test_harness {
-  bitmap_test_harness() {
-    CHECK(x.empty());
-    CHECK(y.empty());
-    CHECK_EQUAL(x.size(), 0u);
-    CHECK_EQUAL(y.size(), 0u);
-  }
-
   void test_construction() {
     MESSAGE("copy construction");
     Bitmap a{x};
@@ -438,6 +429,10 @@ struct bitmap_test_harness {
   }
 
   void execute() {
+    CHECK(x.empty());
+    CHECK(y.empty());
+    CHECK_EQUAL(x.size(), 0u);
+    CHECK_EQUAL(y.size(), 0u);
     test_append();
     test_construction();
     test_bitwise_simple();
@@ -462,37 +457,29 @@ struct bitmap_test_harness {
 
 } // namespace
 
-FIXTURE_SCOPE(null_bitmap_tests, bitmap_test_harness<null_bitmap>)
-
-TEST(null_bitmap) {
-  execute();
+WITH_FIXTURE(bitmap_test_harness<null_bitmap>) {
+  TEST("null_bitmap") {
+    execute();
+  }
 }
 
-FIXTURE_SCOPE_END()
-
-FIXTURE_SCOPE(ewah_bitmap_tests, bitmap_test_harness<ewah_bitmap>)
-
-TEST(ewah_bitmap) {
-  execute();
+WITH_FIXTURE(bitmap_test_harness<ewah_bitmap>) {
+  TEST("ewah_bitmap") {
+    execute();
+  }
 }
 
-FIXTURE_SCOPE_END()
-
-FIXTURE_SCOPE(wah_bitmap_tests, bitmap_test_harness<wah_bitmap>)
-
-TEST(wah_bitmap) {
-  execute();
+WITH_FIXTURE(bitmap_test_harness<wah_bitmap>) {
+  TEST("wah_bitmap") {
+    execute();
+  }
 }
 
-FIXTURE_SCOPE_END()
-
-FIXTURE_SCOPE(bitmap_tests, bitmap_test_harness<bitmap>)
-
-TEST(bitmap) {
-  execute();
+WITH_FIXTURE(bitmap_test_harness<bitmap>) {
+  TEST("bitmap") {
+    execute();
+  }
 }
-
-FIXTURE_SCOPE_END()
 
 namespace {
 
@@ -512,8 +499,9 @@ ewah_bitmap make_ewah1() {
   bm.append_bits(true, 64ull * ((1ull << 32) - 1));
   bm.append_bit(false);
   bm.append_bits(true, 63);
-  for (auto i = 0; i < 64; ++i)
+  for (auto i = 0; i < 64; ++i) {
     bm.append_bit(i % 2 == 0);
+  }
   bm.append_bits(false, (1ull << (32 + 3)) * 64);
   bm.append_bit(true);
   return bm;
@@ -543,21 +531,25 @@ ewah_bitmap make_ewah3() {
 std::string to_block_string(const ewah_bitmap& bm) {
   using word_type = ewah_bitmap::word_type;
   std::string str;
-  if (bm.blocks().empty())
+  if (bm.blocks().empty()) {
     return str;
+  }
   auto last = bm.blocks().end() - 1;
   auto partial = bm.size() % word_type::width;
-  if (partial == 0)
+  if (partial == 0) {
     ++last;
+  }
   for (auto i = bm.blocks().begin(); i != last; ++i) {
-    for (auto b = 0u; b < word_type::width; ++b)
+    for (auto b = 0u; b < word_type::width; ++b) {
       str += word_type::test(*i, word_type::width - b - 1) ? '1' : '0';
+    }
     str += '\n';
   }
   if (partial > 0) {
     str.append(word_type::width - partial, ' ');
-    for (auto b = 0u; b < partial; ++b)
+    for (auto b = 0u; b < partial; ++b) {
       str += word_type::test(*last, partial - b - 1) ? '1' : '0';
+    }
     str += '\n';
   }
   return str;
@@ -565,7 +557,7 @@ std::string to_block_string(const ewah_bitmap& bm) {
 
 } // namespace
 
-TEST(EWAH construction 1) {
+TEST("EWAH construction 1") {
   ewah_bitmap bm;
   bm.append_bits(true, 10);
   bm.append_bits(false, 20);
@@ -651,8 +643,9 @@ TEST(EWAH construction 1) {
   bm.append_bits(true, 63);
   /// Create another full dirty block, just so that we can check that the
   /// dirty counter works properly.
-  for (auto i = 0; i < 64; ++i)
+  for (auto i = 0; i < 64; ++i) {
     bm.append_bit(i % 2 == 0);
+  }
   CHECK_EQUAL(bm.size(), 274877908352ull);
   // Now we add 2^3 full markers. Because the maximum clean count is 2^32-1,
   // we end up with 8 full markers and 7 clean blocks.
@@ -703,7 +696,7 @@ TEST(EWAH construction 1) {
   REQUIRE(bm == make_ewah1());
 }
 
-TEST(EWAH construction 2) {
+TEST("EWAH construction 2") {
   ewah_bitmap bm;
   bm.append_bit(false);
   bm.append_bit(true);
@@ -719,7 +712,7 @@ TEST(EWAH construction 2) {
   REQUIRE(bm == make_ewah2());
 }
 
-TEST(EWAH construction 3) {
+TEST("EWAH construction 3") {
   ewah_bitmap bm;
   bm.append_bits(true, 222);
   bm.append_bit(false);
@@ -736,33 +729,33 @@ TEST(EWAH construction 3) {
   REQUIRE(bm == make_ewah3());
 }
 
-TEST(EWAH element access 1) {
+TEST("EWAH element access 1") {
   auto bm = make_ewah1();
   CHECK(bm[0]);
   CHECK(bm[9]);
-  CHECK(!bm[10]);
+  CHECK(! bm[10]);
   CHECK(bm[64]);
-  CHECK(!bm[1024]);
+  CHECK(! bm[1024]);
   CHECK(bm[1344]);
   CHECK(bm[2473901163905 - 1]);
 }
 
-TEST(EWAH element access 2) {
+TEST("EWAH element access 2") {
   auto bm = make_ewah2();
-  CHECK(!bm[0]);
+  CHECK(! bm[0]);
   CHECK(bm[1]);
-  CHECK(!bm[2]);
-  CHECK(!bm[63]);
-  CHECK(!bm[64]);
-  CHECK(!bm[65]);
-  CHECK(!bm[384]);
-  CHECK(!bm[385]);
-  CHECK(!bm[422]);
+  CHECK(! bm[2]);
+  CHECK(! bm[63]);
+  CHECK(! bm[64]);
+  CHECK(! bm[65]);
+  CHECK(! bm[384]);
+  CHECK(! bm[385]);
+  CHECK(! bm[422]);
   CHECK(bm[423]);
   CHECK(bm[424]);
 }
 
-TEST(EWAH bitwise NOT) {
+TEST("EWAH bitwise NOT") {
   ewah_bitmap bm;
   bm.append_bit(true);
   bm.append_bit(false);
@@ -808,7 +801,7 @@ TEST(EWAH bitwise NOT) {
   CHECK_EQUAL(~complete_block, complement);
 }
 
-TEST(EWAH bitwise AND) {
+TEST("EWAH bitwise AND") {
   auto bm2 = make_ewah2();
   auto bm3 = make_ewah3();
   auto str
@@ -822,7 +815,7 @@ TEST(EWAH bitwise AND) {
   CHECK((bm3 & bm2).size() == max_size);
 }
 
-TEST(EWAH bitwise OR) {
+TEST("EWAH bitwise OR") {
   auto bm2 = make_ewah2();
   auto bm3 = make_ewah3();
   auto expected = make_ewah3();
@@ -840,7 +833,7 @@ TEST(EWAH bitwise OR) {
   CHECK_EQUAL(to_block_string(bm3 | bm2), str);
 }
 
-TEST(EWAH bitwise XOR) {
+TEST("EWAH bitwise XOR") {
   auto bm2 = make_ewah2();
   auto bm3 = make_ewah3();
   auto str
@@ -854,7 +847,7 @@ TEST(EWAH bitwise XOR) {
   CHECK_EQUAL(to_block_string(bm2 ^ bm3), str);
 }
 
-TEST(EWAH bitwise NAND) {
+TEST("EWAH bitwise NAND") {
   auto bm2 = make_ewah2();
   auto bm3 = make_ewah3();
   auto str
@@ -863,17 +856,17 @@ TEST(EWAH bitwise NAND) {
   CHECK_EQUAL(to_block_string(bm2 - bm3), str);
 }
 
-TEST(EWAH block append) {
+TEST("EWAH block append") {
   ewah_bitmap bm;
   bm.append_bits(true, 10);
   bm.append_block(0xf00);
   CHECK_EQUAL(bm.size(), 10 + ewah_bitmap::word_type::width);
-  CHECK(!bm[17]);
+  CHECK(! bm[17]);
   CHECK(bm[18]);
   CHECK(bm[19]);
   CHECK(bm[20]);
   CHECK(bm[21]);
-  CHECK(!bm[22]);
+  CHECK(! bm[22]);
   bm.append_bits(true, 2048);
   bm.append_block(0xff00);
   auto str
@@ -886,7 +879,7 @@ TEST(EWAH block append) {
   CHECK_EQUAL(to_block_string(bm), str);
 }
 
-TEST(EWAH RLE print 1) {
+TEST("EWAH RLE print 1") {
   ewah_bitmap bm;
   bm.append_bit(false);
   bm.append_block(0b0111000, 7);
@@ -899,7 +892,7 @@ TEST(EWAH RLE print 1) {
   CHECK_EQUAL(str, "4F3T1F21T3F3T1F20T");
 }
 
-TEST(EWAH RLE print 2) {
+TEST("EWAH RLE print 2") {
   ewah_bitmap bm;
   bm.append_bit(false);
   bm.append_bit(true);

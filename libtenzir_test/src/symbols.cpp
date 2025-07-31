@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define CAF_TEST_NO_MAIN
-#include <caf/test/unit_test_impl.hpp>
+#include <caf/test/test.hpp>
 
 namespace tenzir::test {
 

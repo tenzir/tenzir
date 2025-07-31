@@ -55,30 +55,26 @@ struct fixture {
 
 } // namespace
 
-FIXTURE_SCOPE(stable_set_tests, fixture<stable_set<int>>)
+WITH_FIXTURE(fixture<stable_set<int>>) {
+  TEST("stable_set") {
+    test();
+  }
 
-TEST(stable_set) {
-  test();
+  TEST("stable_set comparison") {
+    auto xs = stable_set<int>{1, 2, 3};
+    auto ys = stable_set<int>{2, 1, 3};
+    CHECK_NOT_EQUAL(xs, ys);
+  }
+
+  WITH_FIXTURE(fixture<flat_set<int>>) {
+    TEST("flat_set") {
+      test();
+    }
+
+    TEST("flat_set comparison") {
+      auto xs = flat_set<int>{1, 2, 3};
+      auto ys = flat_set<int>{2, 1, 3};
+      CHECK_EQUAL(xs, ys);
+    }
+  }
 }
-
-TEST(stable_set comparison) {
-  auto xs = stable_set<int>{1, 2, 3};
-  auto ys = stable_set<int>{2, 1, 3};
-  CHECK_NOT_EQUAL(xs, ys);
-}
-
-FIXTURE_SCOPE_END()
-
-FIXTURE_SCOPE(flat_set_tests, fixture<flat_set<int>>)
-
-TEST(flat_set) {
-  test();
-}
-
-TEST(flat_set comparison) {
-  auto xs = flat_set<int>{1, 2, 3};
-  auto ys = flat_set<int>{2, 1, 3};
-  CHECK_EQUAL(xs, ys);
-}
-
-FIXTURE_SCOPE_END()

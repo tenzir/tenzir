@@ -17,8 +17,6 @@
 #include <tenzir/expression.hpp>
 #include <tenzir/test/test.hpp>
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 
 using namespace std::string_literals;

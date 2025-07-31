@@ -29,7 +29,7 @@ using namespace tenzir::printer_literals;
 #define CHECK_TO_STRING(expr, str)                                             \
   {                                                                            \
     auto x = expr;                                                             \
-    if constexpr (!std::is_same_v<decltype(x), data>) {                        \
+    if constexpr (! std::is_same_v<decltype(x), data>) {                       \
       CHECK_EQUAL(to_string(x), str);                                          \
       CHECK_EQUAL(to_string(make_view(x)), str);                               \
     }                                                                          \
@@ -40,7 +40,7 @@ using namespace tenzir::printer_literals;
 
 // -- numeric -----------------------------------------------------------------
 
-TEST(signed integers) {
+TEST("signed integers") {
   MESSAGE("no sign");
   auto i = 42;
   std::string str;
@@ -57,14 +57,14 @@ TEST(signed integers) {
   CHECK_EQUAL(str, "-42");
 }
 
-TEST(unsigned integers) {
+TEST("unsigned integers") {
   auto i = 42u;
   std::string str;
   CHECK(printers::integral<unsigned>(str, i));
   CHECK_EQUAL(str, "42");
 }
 
-TEST(integral minimum digits) {
+TEST("integral minimum digits") {
   std::string str;
   auto i = 0;
   CHECK((printers::integral<int, policy::plain, 5>(str, i)));
@@ -75,7 +75,7 @@ TEST(integral minimum digits) {
   CHECK_EQUAL(str, "+0042");
 }
 
-TEST(floating point) {
+TEST("floating point") {
   std::string str;
   auto d = double{0.0};
   CHECK(printers::real(str, d));
@@ -134,7 +134,7 @@ TEST(floating point) {
 
 // -- string ------------------------------------------------------------------
 
-TEST(string) {
+TEST("string") {
   std::string str;
   CHECK(printers::str(str, "foo"));
   CHECK_EQUAL(str, "foo");
@@ -143,7 +143,7 @@ TEST(string) {
   CHECK_EQUAL(str, "foo");
 }
 
-TEST(escape) {
+TEST("escape") {
   std::string result;
   auto p = printers::escape(detail::hex_escaper);
   CHECK(p(result, "foo"));
@@ -152,14 +152,14 @@ TEST(escape) {
 
 // -- core --------------------------------------------------------------------
 
-TEST(literals) {
+TEST("literals") {
   std::string str;
   auto p = 42_P << " "_P << 3.14_P;
   CHECK(p(str, unused));
   CHECK_EQUAL(str, "42 3.14");
 }
 
-TEST(sequence tuple) {
+TEST("sequence tuple") {
   auto f = 'f';
   auto oo = "oo";
   auto bar = "bar"s;
@@ -169,7 +169,7 @@ TEST(sequence tuple) {
   CHECK_EQUAL(str, "foobar");
 }
 
-TEST(sequence pair) {
+TEST("sequence pair") {
   auto f = 'f';
   auto oo = "oo";
   std::string str;
@@ -178,7 +178,7 @@ TEST(sequence pair) {
   CHECK_EQUAL(str, "foo");
 }
 
-TEST(choice) {
+TEST("choice") {
   using namespace printers;
   auto x = variant<char, bool, int64_t>{true};
   auto p = any | tf | i64;
@@ -195,7 +195,7 @@ TEST(choice) {
   CHECK_EQUAL(str, "64");
 }
 
-TEST(kleene) {
+TEST("kleene") {
   auto xs = std::vector<char>{'f', 'o', 'o'};
   std::string str;
   auto p = *printers::any;
@@ -206,7 +206,7 @@ TEST(kleene) {
   CHECK(p(str, xs)); // 0 elements are allowed.
 }
 
-TEST(plus) {
+TEST("plus") {
   auto xs = std::vector<char>{'b', 'a', 'r'};
   std::string str;
   auto p = +printers::any;
@@ -214,10 +214,10 @@ TEST(plus) {
   CHECK_EQUAL(str, "bar");
   xs.clear();
   str.clear();
-  CHECK(!p(str, xs)); // 0 elements are *not* allowed!
+  CHECK(! p(str, xs)); // 0 elements are *not* allowed!
 }
 
-TEST(list) {
+TEST("printable list") {
   auto xs = std::vector<int>{1, 2, 4, 8};
   auto p = printers::integral<int> % ' ';
   std::string str;
@@ -231,7 +231,7 @@ TEST(list) {
   CHECK(p(str, xs));
 }
 
-TEST(optional) {
+TEST("optional") {
   std::optional<int> x;
   auto p = -printers::integral<int>;
   std::string str;
@@ -242,7 +242,7 @@ TEST(optional) {
   CHECK_EQUAL(str, "42");
 }
 
-TEST(action) {
+TEST("action") {
   auto flag = false;
   // no args, void result type
   auto p0 = printers::integral<int>->*[&] {
@@ -275,28 +275,28 @@ TEST(action) {
   CHECK_EQUAL(str, "42");
 }
 
-TEST(epsilon) {
+TEST("epsilon") {
   std::string str;
   CHECK(printers::eps(str, "whatever"));
 }
 
-TEST(guard) {
+TEST("guard") {
   std::string str;
   auto always_false = printers::eps.with([] {
     return false;
   });
-  CHECK(!always_false(str, 0));
+  CHECK(! always_false(str, 0));
   auto even = printers::integral<int>.with([](int i) {
     return i % 2 == 0;
   });
   CHECK(str.empty());
-  CHECK(!even(str, 41));
+  CHECK(! even(str, 41));
   CHECK(str.empty());
   CHECK(even(str, 42));
   CHECK_EQUAL(str, "42");
 }
 
-TEST(and) {
+TEST("and") {
   std::string str;
   auto flag = true;
   auto p = &printers::eps.with([&] {
@@ -306,17 +306,17 @@ TEST(and) {
   CHECK_EQUAL(str, "yoda");
   flag = false;
   str.clear();
-  CHECK(!p(str, "chewie"));
+  CHECK(! p(str, "chewie"));
   CHECK(str.empty());
 }
 
-TEST(not ) {
+TEST("not ") {
   std::string str;
   auto flag = true;
-  auto p = !printers::eps.with([&] {
+  auto p = ! printers::eps.with([&] {
     return flag;
   }) << printers::str;
-  CHECK(!p(str, "yoda"));
+  CHECK(! p(str, "yoda"));
   CHECK(str.empty());
   flag = false;
   CHECK(p(str, "chewie"));
@@ -325,7 +325,7 @@ TEST(not ) {
 
 // -- Tenzir types ---------------------------------------------------------------
 
-TEST(data) {
+TEST("printable data") {
   data r{double{12.21}};
   CHECK_TO_STRING(r, "12.21");
   data b{true};
@@ -344,7 +344,7 @@ TEST(data) {
 
 // -- std::chrono types -------------------------------------------------------
 
-TEST(duration) {
+TEST("duration") {
   using namespace std::chrono_literals;
   CHECK_TO_STRING(15ns, "15ns");
   CHECK_TO_STRING(15'450ns, "15.45us");
@@ -358,7 +358,7 @@ TEST(duration) {
   CHECK_TO_STRING(-2400h, "-100d");
 }
 
-TEST(time) {
+TEST("time") {
   using namespace std::chrono_literals;
   CHECK_TO_STRING(tenzir::time{0s}, "1970-01-01T00:00:00Z");
   CHECK_TO_STRING(tenzir::time{1ms}, "1970-01-01T00:00:00.001Z");
@@ -381,14 +381,14 @@ void check_to_json(Printer& p, const T& value, const char* expected) {
   };
   CHECK_EQUAL(to_json(value), expected);
   CHECK_EQUAL(to_json(make_view(value)), expected);
-  if constexpr (!std::is_same_v<T, data>) {
+  if constexpr (! std::is_same_v<T, data>) {
     data dx{value};
     CHECK_EQUAL(to_json(dx), expected);
     CHECK_EQUAL(to_json(make_view(dx)), expected);
   }
 }
 
-TEST(JSON - omit nulls) {
+TEST("JSON - omit nulls") {
   auto p = json_printer{json_printer_options{
     .oneline = true,
     .omit_null_fields = true,
@@ -409,7 +409,7 @@ TEST(JSON - omit nulls) {
                 R"__({"a":42,"b":{},"e":{"f":{}}})__");
 }
 
-TEST(JSON - omit empty records) {
+TEST("JSON - omit empty records") {
   auto p = json_printer{json_printer_options{
     .oneline = true,
     .omit_null_fields = true,
@@ -431,7 +431,7 @@ TEST(JSON - omit empty records) {
                 R"__({"a":42})__");
 }
 
-TEST(JSON - omit empty lists) {
+TEST("JSON - omit empty lists") {
   {
     auto p = json_printer{json_printer_options{
       .oneline = true,
@@ -487,7 +487,7 @@ TEST(JSON - omit empty lists) {
   }
 }
 
-TEST(JSON - remove trailing zeroes) {
+TEST("JSON - remove trailing zeroes") {
   auto p = json_printer{json_printer_options{
     .oneline = true,
     .omit_null_fields = true,
@@ -498,13 +498,13 @@ TEST(JSON - remove trailing zeroes) {
 
 // -- API ---------------------------------------------------------------------
 
-TEST(to) {
+TEST("to") {
   auto t = to<std::string>(true);
   REQUIRE(t);
   CHECK(*t == "true");
 }
 
-TEST(to_string) {
+TEST("to_string") {
   auto str = to_string(true);
   CHECK_EQUAL(str, "true");
 }

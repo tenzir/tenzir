@@ -50,7 +50,7 @@ static_assert(variable_byte_sequence<variable>);
 static_assert(fixed_byte_sequence<fixed>);
 static_assert(!fixed_byte_sequence<variable>);
 
-TEST(byte sequences) {
+TEST("byte sequences") {
   CHECK(as_bytes(invalid{}).empty());
   CHECK_EQUAL(as_bytes(fixed{}).size(), 42u);
   CHECK_EQUAL(as_bytes(variable{}).size(), 42u);

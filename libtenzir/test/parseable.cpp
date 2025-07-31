@@ -20,7 +20,6 @@
 #include "tenzir/si_literals.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
 #include <fmt/format.h>
 
 #include <array>
@@ -48,7 +47,7 @@ auto skip_to_eoi(Parser&& parser) {
 
 // -- core --------------------------------------------------------------------
 
-TEST(choice - LHS and RHS) {
+TEST("choice - LHS and RHS") {
   using namespace parsers;
   auto p = chr{'x'} | i32;
   variant<char, int32_t> x;
@@ -62,7 +61,7 @@ TEST(choice - LHS and RHS) {
   CHECK_EQUAL(*c, 'x');
 }
 
-TEST(choice - unused LHS) {
+TEST("choice - unused LHS") {
   using namespace parsers;
   auto p = 'x' | i32;
   int32_t i;
@@ -73,7 +72,7 @@ TEST(choice - unused LHS) {
   CHECK_EQUAL(i, 0); // didn't mess with i
 }
 
-TEST(choice triple) {
+TEST("choice triple") {
   using namespace parsers;
   auto fired = false;
   auto p = chr{'x'} | i32 | eps->*[&] {
@@ -84,7 +83,7 @@ TEST(choice triple) {
   CHECK(fired);
 }
 
-TEST(list) {
+TEST("parseable list") {
   auto p = parsers::alnum % '.';
   std::vector<char> xs;
   std::string str;
@@ -94,7 +93,7 @@ TEST(list) {
   CHECK_EQUAL(str, "abc");
 }
 
-TEST(maybe) {
+TEST("maybe") {
   using namespace parsers;
   auto maybe_x = ~chr{'x'};
   auto c = 'x';
@@ -112,14 +111,14 @@ TEST(maybe) {
   CHECK(result == '\0'); // Result not modified.
 }
 
-TEST(container attribute folding) {
+TEST("container attribute folding") {
   using namespace parsers;
   auto spaces = *' '_p;
   static_assert(std::is_same_v<decltype(spaces)::attribute, unused_type>,
                 "container attribute folding failed");
 }
 
-TEST(action) {
+TEST("parseable action") {
   auto make_v4 = [](uint32_t a) {
     return ip::v4(a);
   };
@@ -129,16 +128,16 @@ TEST(action) {
   CHECK_EQUAL(x, unbox(to<ip>("10.0.0.1")));
 }
 
-TEST(end of input) {
+TEST("end of input") {
   auto input = "foo"s;
-  CHECK(!parsers::eoi(input));
+  CHECK(! parsers::eoi(input));
   input.clear();
   CHECK(parsers::eoi(input));
 }
 
 // -- string ------------------------------------------------------------------
 
-TEST(char) {
+TEST("char") {
   using namespace parsers;
   MESSAGE("equality");
   auto character = '.';
@@ -152,11 +151,11 @@ TEST(char) {
   MESSAGE("inequality");
   character = 'x';
   f = &character;
-  CHECK(!chr{'y'}(f, l, c));
+  CHECK(! chr{'y'}(f, l, c));
   CHECK(f != l);
 }
 
-TEST(char class) {
+TEST("char class") {
   using namespace parsers;
   MESSAGE("xdigit");
   auto str = "deadbeef"s;
@@ -176,68 +175,68 @@ TEST(char class) {
   CHECK(p(f, l, attr));
   CHECK(attr == "dead");
   CHECK(f == str.begin() + 4);
-  CHECK(!p(f, l, attr));
+  CHECK(! p(f, l, attr));
   ++f;
   CHECK(p(f, l, attr));
   CHECK(f == l);
   CHECK(attr == "deadbeef");
 }
 
-TEST(literal) {
+TEST("literal") {
   std::string_view attr;
   CHECK(parsers::lit{"foo"}("foo", attr));
   CHECK_EQUAL(attr, "foo"sv);
 }
 
-TEST(quoted string - empty) {
+TEST("quoted string - empty") {
   std::string attr;
   CHECK(parsers::qstr("''", attr));
   CHECK_EQUAL(attr, "");
 }
 
-TEST(quoted string - no escaped chars) {
+TEST("quoted string - no escaped chars") {
   std::string attr;
   CHECK(parsers::qstr("'foobar'", attr));
   CHECK_EQUAL(attr, "foobar");
 }
 
-TEST(quoted string - escaped char at beginning) {
+TEST("quoted string - escaped char at beginning") {
   std::string attr;
   CHECK(parsers::qstr("'\\'foobar'", attr));
   CHECK_EQUAL(attr, "'foobar");
 }
 
-TEST(quoted string - escaped char in middle) {
+TEST("quoted string - escaped char in middle") {
   std::string attr;
   CHECK(parsers::qstr("'foo\\'bar'", attr));
   CHECK_EQUAL(attr, "foo'bar");
 }
 
-TEST(quoted string - escaped char at end) {
+TEST("quoted string - escaped char at end") {
   std::string attr;
   CHECK(parsers::qstr("'foobar\\''", attr));
   CHECK_EQUAL(attr, "foobar'");
 }
 
-TEST(quoted string - missing trailing quote) {
+TEST("quoted string - missing trailing quote") {
   std::string attr;
-  CHECK(!parsers::qstr("'foobar", attr));
+  CHECK(! parsers::qstr("'foobar", attr));
   CHECK_EQUAL(attr, "foobar");
 }
 
-TEST(quoted string - missing trailing quote after escaped quote) {
+TEST("quoted string - missing trailing quote after escaped quote") {
   std::string attr;
-  CHECK(!parsers::qstr("'foobar\\'", attr));
+  CHECK(! parsers::qstr("'foobar\\'", attr));
   CHECK_EQUAL(attr, "foobar'");
 }
 
-TEST(quoted string - trailing quote after escaped escape) {
+TEST("quoted string - trailing quote after escaped escape") {
   std::string attr;
   CHECK(parsers::qstr("'foobar\\\\'", attr));
   CHECK_EQUAL(attr, "foobar\\\\");
 }
 
-TEST(symbol table) {
+TEST("symbol table") {
   symbol_table<int> sym{{"foo", 42}, {"bar", 84}, {"foobar", 1337}};
   int i = 0;
   CHECK(sym("foo", i));
@@ -247,11 +246,11 @@ TEST(symbol table) {
   CHECK(sym("foobar", i));
   CHECK(i == 1337);
   i = 0;
-  CHECK(!sym("baz", i));
+  CHECK(! sym("baz", i));
   CHECK(i == 0);
 }
 
-TEST(attribute compatibility with string) {
+TEST("attribute compatibility with string") {
   auto str = "..."s;
   auto attr = ""s;
   auto f = str.begin();
@@ -292,7 +291,7 @@ TEST(attribute compatibility with string) {
   CHECK(f == l);
 }
 
-TEST(attribute compatibility with pair) {
+TEST("attribute compatibility with pair") {
   using namespace parsers;
   auto str = "xy"s;
   auto attr = ""s;
@@ -314,7 +313,7 @@ TEST(attribute compatibility with pair) {
   CHECK(p1.second == "y");
 }
 
-TEST(attribute compatibility with map) {
+TEST("attribute compatibility with map") {
   using namespace parsers;
   auto str = "a->x,b->y,c->z"s;
   auto f = str.begin();
@@ -328,7 +327,7 @@ TEST(attribute compatibility with map) {
   CHECK(map['c'] == 'z');
 }
 
-TEST(attribute compatibility with string sequences) {
+TEST("attribute compatibility with string sequences") {
   using namespace parsers;
   auto p = alpha >> '-' >> alpha >> '-' >> alpha;
   std::string str;
@@ -336,7 +335,7 @@ TEST(attribute compatibility with string sequences) {
   CHECK(str == "xyz");
 }
 
-TEST(polymorphic) {
+TEST("polymorphic") {
   using namespace parsers;
   auto p = type_erased_parser<std::string::iterator>{'a'_p};
   MESSAGE("from construction");
@@ -402,7 +401,7 @@ private:
 
 } // namespace
 
-TEST(recursive rule) {
+TEST("recursive rule") {
   using namespace parsers;
   int num_wrappers = 0;
   { // lifetime scope of r
@@ -427,7 +426,7 @@ TEST(recursive rule) {
 
 // -- numeric -----------------------------------------------------------------
 
-TEST(bool) {
+TEST("bool") {
   auto p0 = single_char_bool_parser{};
   auto p1 = zero_one_bool_parser{};
   auto p2 = literal_bool_parser{};
@@ -442,25 +441,25 @@ TEST(bool) {
   CHECK(b);
   CHECK(i == f + 1);
   // Wrong parser
-  CHECK(!p0(i, l, b));
+  CHECK(! p0(i, l, b));
   CHECK(i == f + 1);
   // Correct parser
   CHECK(p1(i, l, b));
-  CHECK(!b);
+  CHECK(! b);
   CHECK(i == f + 2);
   CHECK(p2(i, l, b));
   CHECK(b);
   CHECK(i == f + 6);
   // Wrong parser
-  CHECK(!p2(i, l, b));
+  CHECK(! p2(i, l, b));
   CHECK(i == f + 6);
   // Correct parser
   CHECK(p0(i, l, b));
-  CHECK(!b);
+  CHECK(! b);
   CHECK(i == f + 7);
   b = true;
   CHECK(p2(i, l, b));
-  CHECK(!b);
+  CHECK(! b);
   CHECK(i == f + 12);
   CHECK(p1(i, l, b));
   CHECK(b);
@@ -473,7 +472,7 @@ TEST(bool) {
   CHECK(skip_to_eoi(p0)(str));
 }
 
-TEST(signed integral) {
+TEST("signed integral") {
   using namespace parsers;
   auto p = integral_parser<int>{};
   int x;
@@ -485,22 +484,22 @@ TEST(signed integral) {
   CHECK_EQUAL(x, 12);
 }
 
-TEST(unsigned integral) {
+TEST("unsigned integral") {
   using namespace parsers;
   auto p = integral_parser<unsigned>{};
   unsigned x;
-  CHECK(!p("-1024"));
+  CHECK(! p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
   CHECK(skip_to_eoi(p)("12.34", x));
   CHECK_EQUAL(x, 12u);
 }
 
-TEST(unsigned int16) {
+TEST("unsigned int16") {
   using namespace parsers;
   auto p = integral_parser<uint16_t>{};
   unsigned x;
-  CHECK(!p("-1024"));
+  CHECK(! p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
   CHECK(p("10000", x));
@@ -509,7 +508,7 @@ TEST(unsigned int16) {
   CHECK_EQUAL(x, 12u);
 }
 
-TEST(unsigned hexadecimal integral) {
+TEST("unsigned hexadecimal integral") {
   using namespace parsers;
   auto p = ignore(-hex_prefix) >> ux64;
   unsigned x = 0u;
@@ -529,13 +528,13 @@ TEST(unsigned hexadecimal integral) {
   CHECK_EQUAL(x, 0x0000aau);
 }
 
-TEST(signed integral with digit constraints) {
+TEST("signed integral with digit constraints") {
   constexpr auto max = 4;
   constexpr auto min = 2;
   auto p = integral_parser<int, max, min>{};
   int x;
   MESSAGE("not enough digits");
-  CHECK(!p("1"));
+  CHECK(! p("1"));
   MESSAGE("within range");
   CHECK(p("12", x));
   CHECK_EQUAL(x, 12);
@@ -544,7 +543,7 @@ TEST(signed integral with digit constraints) {
   CHECK(p("1234", x));
   CHECK_EQUAL(x, 1234);
   MESSAGE("sign doesn't count as digit");
-  CHECK(!p("-1"));
+  CHECK(! p("-1"));
   CHECK(p("-1234", x));
   CHECK_EQUAL(x, -1234);
   MESSAGE("partial match with additional digit");
@@ -565,7 +564,7 @@ TEST(signed integral with digit constraints) {
   CHECK_EQUAL(x, 678);
 }
 
-TEST(real) {
+TEST("real") {
   auto p = make_parser<double>{};
   MESSAGE("integral plus fractional part, negative");
   auto str = "-123.456789"s;
@@ -608,7 +607,7 @@ TEST(real) {
   //  CHECK(f == str.begin() + 4);
 }
 
-TEST(real - scientific) {
+TEST("real - scientific") {
   auto p = make_parser<double>{};
   {
     MESSAGE("null exponent");
@@ -654,7 +653,7 @@ TEST(real - scientific) {
 
 // This is commented out because it revealed bugs in both libstdc++ and fmt.
 // Both libraries format some values incorrectly.
-// TEST(real - scientific exhaustive) {
+// TEST("real - scientific exhaustive") {
 //   {
 //     auto p = make_parser<real>{};
 //     union real_cast {
@@ -695,7 +694,7 @@ TEST(real - scientific) {
 //   }
 // }
 
-TEST(byte) {
+TEST("byte") {
   using namespace parsers;
   auto str = "\x01\x02\x03\x04\x05\x06\x07\x08"s;
   MESSAGE("single byte");
@@ -790,7 +789,7 @@ TEST(byte) {
   CHECK(a16[15] == 0x28);
 }
 
-TEST(byte - type promotion regression) {
+TEST("byte - type promotion regression") {
   using namespace parsers;
   uint16_t x;
   CHECK(b16be("\x00\x8d"s, x));
@@ -809,7 +808,7 @@ TEST(byte - type promotion regression) {
   CHECK_EQUAL(z, 0x8dull);
 }
 
-TEST(dynamic bytes) {
+TEST("dynamic bytes") {
   using namespace parsers;
   std::string foo;
   auto three = 3;
@@ -823,19 +822,19 @@ TEST(dynamic bytes) {
   MESSAGE("input too large");
   foo.clear();
   auto seven = 7;
-  CHECK(!skip_to_eoi(nbytes<char>(seven))("foobar"s, foo));
+  CHECK(! skip_to_eoi(nbytes<char>(seven))("foobar"s, foo));
   CHECK_EQUAL(foo, "foobar"s);
 }
 
 // -- time --------------------------------------------------------------------
 
-TEST(time - now) {
+TEST("time - now") {
   tenzir::time ts;
   CHECK(parsers::time("now", ts));
   CHECK(ts > time::min()); // must be greater than the UNIX epoch
 }
 
-TEST(time - YMD) {
+TEST("time - YMD") {
   using namespace std::chrono;
   tenzir::time ts;
   CHECK(parsers::time("2017-08-13", ts));
@@ -860,15 +859,15 @@ T to_si(std::string_view str) {
     }
   };
   T x;
-  if (!parse_si(str, x)) {
-    FAIL("could not parse " << str << " as SI literal");
+  if (! parse_si(str, x)) {
+    FAIL("could not parse {} as SI literal", str);
   }
   return x;
 }
 
 } // namespace
 
-TEST(si count) {
+TEST("si count") {
   auto to_count = to_si<uint64_t>;
   using namespace si_literals;
   CHECK_EQUAL(to_count("42"), 42u);
@@ -887,7 +886,7 @@ TEST(si count) {
   CHECK_EQUAL(to_count("1  Mi"), 1_Mi);
 }
 
-TEST(si int) {
+TEST("si int") {
   auto to_int = to_si<int64_t>;
   auto as_int = [](auto x) {
     return int64_t{detail::narrow_cast<int64_t>(x)};
@@ -906,12 +905,12 @@ TEST(si int) {
   CHECK_EQUAL(to_int("-10Ei"), -as_int(10_Ei));
 }
 
-TEST(bytesize) {
+TEST("bytesize") {
   const auto parse = [](std::string_view str) {
     if (auto result = uint64_t{}; parsers::bytesize(str, result)) {
       return result;
     }
-    FAIL("failed to parse bytesize: " << str);
+    FAIL("failed to parse bytesize: {}", str);
   };
   using namespace si_literals;
   CHECK_EQUAL(parse("42"), 42u);
@@ -944,7 +943,7 @@ TEST(bytesize) {
 
 // -- option set --------------------------------------------------------------
 
-TEST(option set - no options defined) {
+TEST("option set - no options defined") {
   const auto options = option_set_parser{{}};
   auto pipeline_options = R"(--option="o" --invalid="i" field1)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -957,7 +956,7 @@ TEST(option set - no options defined) {
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }
 
-TEST(option set - long form options) {
+TEST("option set - long form options") {
   const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
   auto pipeline_options = R"(--option = "value" --valid=12345 field1)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -972,7 +971,7 @@ TEST(option set - long form options) {
   REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
 }
 
-TEST(option set - short form options) {
+TEST("option set - short form options") {
   const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
   auto pipeline_options = R"(-o "value" -v 12345 field1)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -987,7 +986,7 @@ TEST(option set - short form options) {
   REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
 }
 
-TEST(option set - long form options mixed with short form options) {
+TEST("option set - long form options mixed with short form options") {
   const auto options
     = option_set_parser{{{"option", 'o'}, {"valid", 'v'}, {"short", 's'}}};
   auto pipeline_options = R"(-o "value" --valid=12345 -s 2 field1)";
@@ -1004,7 +1003,7 @@ TEST(option set - long form options mixed with short form options) {
   REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("short"))), 2u);
 }
 
-TEST(option set - invalid long form option syntax) {
+TEST("option set - invalid long form option syntax") {
   const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
   auto pipeline_options = R"(--option "value" --valid=12345 field1)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -1012,12 +1011,12 @@ TEST(option set - invalid long form option syntax) {
   const auto* const l = pipeline_options_view.end();
   auto parsed_options = std::unordered_map<std::string, data>{};
   auto success = options(f, l, parsed_options);
-  REQUIRE(!success);
+  REQUIRE(! success);
   REQUIRE(parsed_options.empty());
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }
 
-TEST(option set - invalid short form option syntax) {
+TEST("option set - invalid short form option syntax") {
   const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
   auto pipeline_options = R"(-o="value" -v 12345 field1)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -1025,12 +1024,12 @@ TEST(option set - invalid short form option syntax) {
   const auto* const l = pipeline_options_view.end();
   auto parsed_options = std::unordered_map<std::string, data>{};
   auto success = options(f, l, parsed_options);
-  REQUIRE(!success);
+  REQUIRE(! success);
   REQUIRE(parsed_options.empty());
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }
 
-TEST(option set - option value defined twice gets overwritten) {
+TEST("option set - option value defined twice gets overwritten") {
   const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
   auto pipeline_options = R"(--option = "value" -o "value2" field1)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -1044,7 +1043,7 @@ TEST(option set - option value defined twice gets overwritten) {
   REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value2");
 }
 
-TEST(option set - missing option value) {
+TEST("option set - missing option value") {
   const auto options = option_set_parser{{{"option", 'o'}}};
   auto pipeline_options = R"(--option =)";
   auto pipeline_options_view = std::string_view{pipeline_options};
@@ -1052,14 +1051,14 @@ TEST(option set - missing option value) {
   const auto* const l = pipeline_options_view.end();
   auto parsed_options = std::unordered_map<std::string, data>{};
   auto success = options(f, l, parsed_options);
-  REQUIRE(!success);
+  REQUIRE(! success);
   REQUIRE(parsed_options.empty());
   REQUIRE_EQUAL(f, pipeline_options_view.begin());
 }
 
 // -- API ---------------------------------------------------------------------
 
-TEST(range) {
+TEST("range") {
   const auto s = "1,2,3"sv;
   offset xs;
   auto begin = s.begin();
@@ -1069,7 +1068,7 @@ TEST(range) {
   CHECK_EQUAL(xs, (offset{1, 2, 3}));
 }
 
-TEST(to) {
+TEST("parseable to") {
   auto xs = to<offset>("1,2,3");
   REQUIRE(xs);
   CHECK_EQUAL(*xs, (offset{1, 2, 3}));

@@ -13,8 +13,6 @@
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 using namespace tenzir;
 
 namespace {
@@ -40,7 +38,7 @@ const tenzir::type schema{
 
 } // namespace
 
-TEST(example configuration) {
+TEST("example configuration") {
   const auto yaml = unbox(from_yaml(example_index_config));
   index_config config;
   REQUIRE_EQUAL(convert(yaml, config), caf::none);
@@ -52,23 +50,23 @@ TEST(example configuration) {
   const auto& rule1 = config.rules[1];
   REQUIRE_EQUAL(rule1.targets.size(), 1u);
   CHECK_EQUAL(rule1.targets[0], "zeek.conn.id.orig_h");
-  CHECK_EQUAL(rule1.fp_rate, 0.01); // default
+  CHECK_EQUAL(rule1.fp_rate, 0.01);                // default
   CHECK_EQUAL(rule0.create_partition_index, true); // default
   CHECK_EQUAL(rule1.create_partition_index, false);
 }
 
-TEST(should_create_partition_index will return true for empty rules)
-{
+TEST("should_create_partition_index will return true for empty rules") {
   CHECK_EQUAL(should_create_partition_index({}, {}), true);
 }
 
-TEST(should_create_partition_index will return true if no field name in rules) {
+TEST("should_create_partition_index will return true if no field name in "
+     "rules") {
   qualified_record_field in{schema, {0u}};
   CHECK_EQUAL(should_create_partition_index(in, {}), true);
 }
 
-TEST(should_create_partition_index will use create_partition_index from
-       config if field name is in the rule) {
+TEST("should_create_partition_index will use create_partition_index from "
+     "config if field name is in the rule") {
   qualified_record_field in{schema, {0u}};
   auto rules = std::vector{
     index_config::rule{.targets = {"y.x"}, .create_partition_index = false}};
@@ -80,8 +78,8 @@ TEST(should_create_partition_index will use create_partition_index from
               rules.front().create_partition_index);
 }
 
-TEST(should_create_partition_index will will use create_partition_index from
-       config if type is in the rule) {
+TEST("should_create_partition_index will will use create_partition_index from "
+     "config if type is in the rule") {
   qualified_record_field in_x{schema, {0u}};
   qualified_record_field in_y{schema, {1u}};
   auto rules_x = std::vector{

@@ -88,41 +88,39 @@ struct fixture {
 
 } // namespace tenzir
 
-FIXTURE_SCOPE(factory_tests, fixture)
+WITH_FIXTURE(fixture) {
+  TEST("convenient interface for conrete type registration") {
+    CHECK_EQUAL(F::get<concrete>(), nullptr);     // not yet registered
+    CHECK(F::add<concrete>());                    // register first
+    CHECK(! F::add<concrete>());                  // works only once per key
+    CHECK_NOT_EQUAL(F::get<concrete>(), nullptr); // now we have function
+  }
 
-TEST(convenient interface for conrete type registration) {
-  CHECK_EQUAL(F::get<concrete>(), nullptr); // not yet registered
-  CHECK(F::add<concrete>());  // register first
-  CHECK(!F::add<concrete>()); // works only once per key
-  CHECK_NOT_EQUAL(F::get<concrete>(), nullptr); // now we have function
+  TEST("type-based factory retrieval and construction") {
+    REQUIRE(F::add<concrete>());
+    auto f = F::get<concrete>();
+    REQUIRE_NOT_EQUAL(f, nullptr);
+    auto x = f(1, 2);
+    REQUIRE_NOT_EQUAL(x, nullptr);
+    CHECK_EQUAL(x->f(), 1 * 2);
+  }
+
+  TEST("key-based registration and construction") {
+    auto k = F::traits::key<concrete>() + 1;
+    CHECK(F::add(k, double_make));
+    auto f = F::get(k);
+    REQUIRE_NOT_EQUAL(f, nullptr);
+    auto x = f(3, 7);
+    CHECK_EQUAL(x->f(), (2 * 3) * (2 * 7));
+    auto y = F::make(k, 2, 3);
+    REQUIRE_NOT_EQUAL(y, nullptr);
+    CHECK_EQUAL(y->f(), (2 * 2) * (2 * 3));
+  }
+
+  TEST("concstruction with a priori known type") {
+    REQUIRE(F::add<concrete>());
+    auto x = F::make<concrete>(2, 3);
+    REQUIRE_NOT_EQUAL(x, nullptr);
+    CHECK_EQUAL(x->f(), 2 * 3);
+  }
 }
-
-TEST(type-based factory retrieval and construction) {
-  REQUIRE(F::add<concrete>());
-  auto f = F::get<concrete>();
-  REQUIRE_NOT_EQUAL(f, nullptr);
-  auto x = f(1, 2);
-  REQUIRE_NOT_EQUAL(x, nullptr);
-  CHECK_EQUAL(x->f(), 1 * 2);
-}
-
-TEST(key-based registration and construction) {
-  auto k = F::traits::key<concrete>() + 1;
-  CHECK(F::add(k, double_make));
-  auto f = F::get(k);
-  REQUIRE_NOT_EQUAL(f, nullptr);
-  auto x = f(3, 7);
-  CHECK_EQUAL(x->f(), (2 * 3) * (2 * 7));
-  auto y = F::make(k, 2, 3);
-  REQUIRE_NOT_EQUAL(y, nullptr);
-  CHECK_EQUAL(y->f(), (2 * 2) * (2 * 3));
-}
-
-TEST(concstruction with a priori known type) {
-  REQUIRE(F::add<concrete>());
-  auto x = F::make<concrete>(2, 3);
-  REQUIRE_NOT_EQUAL(x, nullptr);
-  CHECK_EQUAL(x->f(), 2 * 3);
-}
-
-FIXTURE_SCOPE_END()

@@ -55,7 +55,7 @@ private:
   size_t i_ = N;
 };
 
-TEST(basic_custom_iterator) {
+TEST("basic_custom_iterator") {
   int a[5] = {1, 2, 3, 4, 5};
   iterator<int, 5> begin{a}, end;
 
@@ -79,7 +79,7 @@ TEST(basic_custom_iterator) {
   CHECK(begin <= end);
 }
 
-TEST(basic_custom_const_iterator) {
+TEST("basic_custom_const_iterator") {
   int a[5] = {1, 2, 3, 4, 5};
   iterator<const int, 5> begin{a}, end;
 

@@ -15,7 +15,7 @@
 
 namespace tenzir {
 
-TEST(enum extension type equality) {
+TEST("enum extension type equality") {
   enumeration_type::arrow_type t1{
     enumeration_type{{"one"}, {"two"}, {"three"}}};
   enumeration_type::arrow_type t2{
@@ -45,7 +45,7 @@ void serde_roundtrip(const Type& type,
   const auto& deserialized
     = stub->Deserialize(arrow_type->storage_type(), serialized);
   if (!deserialized.status().ok())
-    FAIL(deserialized.status().ToString());
+    FAIL("{}", deserialized.status().ToString());
   CHECK(arrow_type->Equals(*deserialized.ValueUnsafe(), true));
   CHECK(!stub->Deserialize(arrow::fixed_size_binary(23), serialized).ok());
 }
@@ -74,7 +74,7 @@ auto is_type() {
 
 } // namespace
 
-TEST(arrow enum parse error) {
+TEST("arrow enum parse error") {
   const auto& standin
     = enumeration_type::arrow_type(enumeration_type{{"stub"}});
   auto r = standin.Deserialize(arrow::dictionary(arrow::uint8(), arrow::utf8()),
@@ -82,21 +82,21 @@ TEST(arrow enum parse error) {
   CHECK(r.status().IsSerializationError());
 }
 
-TEST(enumeration type serde roundtrip) {
+TEST("enumeration type serde roundtrip") {
   auto stub = enumeration_type{{"stub"}}.to_arrow_type();
   serde_roundtrip(enumeration_type{{"true"}, {"false"}}, stub);
   serde_roundtrip(enumeration_type{{"1"}, {"2"}, {"3"}, {"4"}}, stub);
 }
 
-TEST(address type serde roundtrip) {
+TEST("address type serde roundtrip") {
   serde_roundtrip(ip_type{});
 }
 
-TEST(subnet type serde roundtrip) {
+TEST("subnet type serde roundtrip") {
   serde_roundtrip(subnet_type{});
 }
 
-TEST(arrow::DataType sum type) {
+TEST("arrow::DataType sum type") {
   CHECK(match(*arrow::int64(), is_type<arrow::Int64Type>()));
   CHECK(match(static_cast<const arrow::DataType&>(ip_type::arrow_type()), is_type<ip_type::arrow_type>()));
   CHECK(match(std::tie(*arrow::int64(), *arrow::uint64()), is_type<arrow::Int64Type, arrow::UInt64Type>()));
@@ -109,7 +109,7 @@ TEST(arrow::DataType sum type) {
   CHECK(!try_as<subnet_type::arrow_type>(et.get()));
 }
 
-TEST(arrow::Array sum type) {
+TEST("arrow::Array sum type") {
   auto str_arr
     = make_arrow_array<arrow::StringBuilder, std::string>({"a", "b"});
   auto uint_arr = make_arrow_array<arrow::UInt64Builder>({7, 8});

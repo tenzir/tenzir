@@ -14,7 +14,7 @@
 
 namespace tenzir {
 
-TEST(try_as) {
+TEST("try_as") {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
   auto ptr = try_as<std::unique_ptr<int>>(&v);
   REQUIRE(ptr);
@@ -22,7 +22,7 @@ TEST(try_as) {
   REQUIRE(**ptr == 42);
 }
 
-TEST(as) {
+TEST("as") {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
   auto& ref = as<std::unique_ptr<int>>(v);
   REQUIRE(ref);
@@ -30,7 +30,7 @@ TEST(as) {
   REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
 }
 
-TEST(as move) {
+TEST("as move") {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
   auto ref = as<std::unique_ptr<int>>(std::move(v));
   REQUIRE(ref);
@@ -38,14 +38,14 @@ TEST(as move) {
   REQUIRE(not as<std::unique_ptr<int>>(v));
 }
 
-TEST(as const ref) {
+TEST("as const ref") {
   const auto v = std::variant<int>{42};
   auto& x = as<int>(v);
   REQUIRE(x == 42);
   static_assert(std::same_as<decltype(x), const int&>);
 }
 
-TEST(try_as const ref) {
+TEST("try_as const ref") {
   const auto v = std::variant<int>{42};
   auto x = try_as<int>(v);
   REQUIRE(x);
@@ -53,7 +53,7 @@ TEST(try_as const ref) {
   static_assert(std::same_as<decltype(x), const int*>);
 }
 
-TEST(try_as const ptr) {
+TEST("try_as const ptr") {
   const auto v = std::variant<int>{42};
   auto x = try_as<int>(&v);
   REQUIRE(x);
@@ -61,7 +61,7 @@ TEST(try_as const ptr) {
   static_assert(std::same_as<decltype(x), const int*>);
 }
 
-TEST(match) {
+TEST("match") {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
   auto& result = match(
     v,
@@ -76,7 +76,7 @@ TEST(match) {
   REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
 }
 
-TEST(match const ref) {
+TEST("match const ref") {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
 // This `match` yields a `const unique_ptr&`, which correctly refers to the
 // value in `v`. For some reason GCC13 incorrectly diagnoses this as dangling.
@@ -98,7 +98,7 @@ TEST(match const ref) {
   REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
 }
 
-TEST(match move) {
+TEST("match move") {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
   auto moved = match(
     std::move(v),
@@ -113,7 +113,7 @@ TEST(match move) {
   REQUIRE(not as<std::unique_ptr<int>>(v));
 }
 
-TEST(match move closure) {
+TEST("match move closure") {
   auto v = std::variant<int, double>{42};
   auto result = match(
     v,
@@ -127,7 +127,7 @@ TEST(match move closure) {
   REQUIRE(result == 85);
 }
 
-TEST(match null type) {
+TEST("match null type") {
   auto ty = type{};
   auto is_null = match(
     ty,
@@ -140,7 +140,7 @@ TEST(match null type) {
   REQUIRE(is_null);
 }
 
-TEST(match int64 type) {
+TEST("match int64 type") {
   auto ty = type{int64_type{}};
   auto is_int64 = match(
     ty,
@@ -153,7 +153,7 @@ TEST(match int64 type) {
   REQUIRE(is_int64);
 }
 
-TEST(match ip type) {
+TEST("match ip type") {
   auto ty = type{ip_type{}};
   auto is_ip = match(
     ty,
@@ -167,7 +167,7 @@ TEST(match ip type) {
   REQUIRE(is_ip);
 }
 
-TEST(match null array) {
+TEST("match null array") {
   auto array = arrow::NullArray{42};
   auto length = match(
     static_cast<arrow::Array&>(array),
@@ -180,7 +180,7 @@ TEST(match null array) {
   REQUIRE(length == 42);
 }
 
-TEST(type modification through match) {
+TEST("type modification through match") {
   auto ty = type{list_type{int64_type{}}};
   match(
     ty,
@@ -191,7 +191,7 @@ TEST(type modification through match) {
   REQUIRE(as<list_type>(ty).value_type().kind().is<string_type>());
 }
 
-TEST(expression) {
+TEST("expression") {
   auto expr = ast::expression{
     ast::root_field{ast::identifier{"test", location::unknown}}};
   REQUIRE(try_as<ast::root_field>(&expr));
@@ -207,9 +207,15 @@ TEST(expression) {
     });
 }
 
-TEST(fail) {
+TEST("fail") {
   auto v = variant<int, double>{};
-  CAF_CHECK_THROWS_AS(as<double>(v), tenzir::panic_exception);
+  try {
+    as<double>(v);
+  } catch (const tenzir::panic_exception&) {
+    // all good
+    return;
+  }
+  FAIL("expected panic");
 }
 
 } // namespace tenzir

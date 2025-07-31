@@ -12,8 +12,6 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 
 using namespace tenzir;
@@ -45,7 +43,7 @@ FLOW_FACTORY(icmp6)
 //     commid.calc(flow)
 //     flow = FlowTuple(PROTO_UDP, "192.168.1.102", "192.168.1.1", 68, 67)
 
-TEST(UDP IPv4) {
+TEST("UDP IPv4") {
   auto x = make_udp_flow("192.168.1.102", "192.168.1.1", 68, 67);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -53,7 +51,7 @@ TEST(UDP IPv4) {
   CHECK_EQUAL(b64, "1:aWZfLIquYlCxKGuJ62fQGlgFzAI=");
 }
 
-TEST(UDP IPv6) {
+TEST("UDP IPv6") {
   auto x = make_udp_flow("fe80::2c23:b96c:78d:e116", "ff02::c", 58544, 3702);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -61,7 +59,7 @@ TEST(UDP IPv6) {
   CHECK_EQUAL(b64, "1:Zi9AdIwYvZnYvuObTPgGWCBSYRs=");
 }
 
-TEST(TCP IPv4) {
+TEST("TCP IPv4") {
   auto x = make_tcp_flow("192.168.1.102", "68.216.79.113", 1180, 37);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -69,7 +67,7 @@ TEST(TCP IPv4) {
   CHECK_EQUAL(b64, "1:9L/tZ1ebHzlWhzB/pJyS9AVJWy8=");
 }
 
-TEST(TCP IPv6) {
+TEST("TCP IPv6") {
   auto x = make_tcp_flow("fe80::219:e3ff:fee7:5d23", "ff02::fb", 5353, 53);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -77,7 +75,7 @@ TEST(TCP IPv6) {
   CHECK_EQUAL(b64, "1:A6qv/ihCkQJXov31L4YzlcuKR2k=");
 }
 
-TEST(ICMPv4) {
+TEST("ICMPv4") {
   auto x = make_icmp_flow("1.2.3.4", "5.6.7.8", 0, 8);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -85,7 +83,7 @@ TEST(ICMPv4) {
   CHECK_EQUAL(b64, "1:1vNr+cVw7bzZ+tGsh2H7voBwaaY=");
 }
 
-TEST(ICMPv4 oneway) {
+TEST("ICMPv4 oneway") {
   auto x = make_icmp_flow("192.168.0.89", "192.168.0.1", 128, 129);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -93,7 +91,7 @@ TEST(ICMPv4 oneway) {
   CHECK_EQUAL(b64, "1:hkWcHOHqTGWq/+fwHEim5e+g1fE=");
 }
 
-TEST(ICMPv6) {
+TEST("ICMPv6") {
   auto x = make_icmp6_flow("fe80::200:86ff:fe05:80da", "fe80::260", 135, 136);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);
@@ -101,7 +99,7 @@ TEST(ICMPv6) {
   CHECK_EQUAL(b64, "1:/7LYMhcIgEqIOsAv5sdmVUmbP/U=");
 }
 
-TEST(ICMPv6 oneway) {
+TEST("ICMPv6 oneway") {
   auto x = make_icmp6_flow("fe80::dead", "fe80::beef", 42, 84);
   auto hex = community_id::make<policy::ascii>(x);
   auto b64 = community_id::make<policy::base64>(x);

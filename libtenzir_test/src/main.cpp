@@ -14,7 +14,7 @@
 #include "tenzir/test/test.hpp"
 
 #include <caf/message_builder.hpp>
-#include <caf/test/unit_test.hpp>
+#include <caf/test/caf_test_main.hpp>
 
 #include <iostream>
 #include <set>
@@ -24,6 +24,8 @@
 namespace tenzir::test {
 
 extern std::set<std::string> config;
+
+CAF_TEST_MAIN()
 
 } // namespace tenzir::test
 
@@ -96,6 +98,6 @@ int main(int argc, char** argv) {
   // Initialize factories.
   [[maybe_unused]] auto config = tenzir::configuration{};
   // Run the unit tests.
-  auto result = caf::test::main(argc, argv);
+  auto result = tenzir::test::main(argc, argv);
   return result;
 }

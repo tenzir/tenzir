@@ -13,7 +13,7 @@
 
 using namespace tenzir;
 
-TEST(overwriting HTTP headers) {
+TEST("overwriting HTTP headers") {
   auto easy = curl::easy{};
   easy.set_http_header("Foo", "42");
   auto headers = collect(easy.headers());
@@ -26,7 +26,7 @@ TEST(overwriting HTTP headers) {
   CHECK_EQUAL(value, "Bar");
 }
 
-TEST(valid URL) {
+TEST("valid URL") {
   auto url = curl::url{};
   // Set URL.
   auto code = url.set(curl::url::part::url, "http://localhost");
@@ -43,13 +43,13 @@ TEST(valid URL) {
   CHECK_EQUAL(*full_url, "http://localhost/");
 }
 
-TEST(invalid URL) {
+TEST("invalid URL") {
   auto url = curl::url{};
   auto code = url.set(curl::url::part::url, "localhost");
   CHECK_EQUAL(code, curl::url::code::bad_scheme);
 }
 
-TEST(default scheme) {
+TEST("default scheme") {
   auto url = curl::url{};
   auto code = url.set(curl::url::part::url, "localhost",
                       curl::url::flags::default_scheme);

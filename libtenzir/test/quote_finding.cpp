@@ -14,7 +14,7 @@ using namespace std::string_view_literals;
 
 constexpr static auto npos = std::string_view::npos;
 
-TEST(default construction) {
+TEST("quoting policy default construction") {
   const auto q = detail::quoting_escaping_policy{};
   CHECK(q.is_quote_character('\''));
   CHECK(q.is_quote_character('\"'));
@@ -22,7 +22,7 @@ TEST(default construction) {
   CHECK_EQUAL(q.doubled_quotes_escape, false);
 }
 
-TEST(finding quotes no escaping) {
+TEST("finding quotes no escaping") {
   const auto q = detail::quoting_escaping_policy{
     .backslashes_escape = false,
     .doubled_quotes_escape = false,
@@ -47,7 +47,7 @@ TEST(finding quotes no escaping) {
   }
 }
 
-TEST(finding quotes basic escaping) {
+TEST("finding quotes basic escaping") {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
@@ -71,7 +71,7 @@ TEST(finding quotes basic escaping) {
   }
 }
 
-TEST(finding quotes doubled escaping) {
+TEST("finding quotes doubled escaping") {
   const auto q = detail::quoting_escaping_policy{
     .doubled_quotes_escape = true,
   };
@@ -97,7 +97,7 @@ TEST(finding quotes doubled escaping) {
   }
 }
 
-TEST(finding nonquoted characters basic escaping) {
+TEST("finding nonquoted characters basic escaping") {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
@@ -146,7 +146,7 @@ TEST(finding nonquoted characters basic escaping) {
   }
 }
 
-TEST(finding nonquoted characters doubled escaping) {
+TEST("finding nonquoted characters doubled escaping") {
   const auto q = detail::quoting_escaping_policy{
     .doubled_quotes_escape = true,
   };
@@ -197,7 +197,7 @@ TEST(finding nonquoted characters doubled escaping) {
   }
 }
 
-TEST(unquote basic quote escaping) {
+TEST("unquote basic quote escaping") {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
@@ -213,7 +213,7 @@ TEST(unquote basic quote escaping) {
   }
 }
 
-TEST(unquote doubled quote escaping) {
+TEST("unquote doubled quote escaping") {
   const auto q = detail::quoting_escaping_policy{.doubled_quotes_escape = true};
   {
     constexpr auto text = R"(text)"sv;
@@ -229,7 +229,7 @@ TEST(unquote doubled quote escaping) {
   }
 }
 
-TEST(unquote_unescape basic quote escaping) {
+TEST("unquote_unescape basic quote escaping") {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
@@ -253,7 +253,7 @@ TEST(unquote_unescape basic quote escaping) {
   }
 }
 
-TEST(unquote_unescape basic escape sequences) {
+TEST("unquote_unescape basic escape sequences") {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(\x)"sv;
@@ -277,7 +277,7 @@ TEST(unquote_unescape basic escape sequences) {
   }
 }
 
-TEST(unquote_unescape doubled quote escaping) {
+TEST("unquote_unescape doubled quote escaping") {
   const auto q = detail::quoting_escaping_policy{
     .doubled_quotes_escape = true,
   };

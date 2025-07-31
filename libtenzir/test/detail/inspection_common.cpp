@@ -25,8 +25,8 @@ using dummy_saving_inspector = dummy_inspector<false>;
 
 } // namespace
 
-TEST(callback is invoked and the fields invocation
-       returns true when all fields and callback return true) {
+TEST("callback is invoked and the fields invocation "
+     "returns true when all fields and callback return true") {
   dummy_saving_inspector inspector;
   std::size_t callback_calls_count{0u};
   bool field1_invoked = false;
@@ -41,14 +41,14 @@ TEST(callback is invoked and the fields invocation
   // create fields
   auto field1 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
-    REQUIRE(!field2_invoked);
+    REQUIRE(! field2_invoked);
     field1_invoked = true;
     return true;
   };
   auto field2 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
     REQUIRE(field1_invoked);
-    REQUIRE(!field2_invoked);
+    REQUIRE(! field2_invoked);
     field2_invoked = true;
     return true;
   };
@@ -57,8 +57,8 @@ TEST(callback is invoked and the fields invocation
   CHECK_EQUAL(callback_calls_count, 1u);
 }
 
-TEST(callback and second field arent invoked and the fields invocation
-       returns false when first field returned false) {
+TEST("callback and second field arent invoked and the fields invocation "
+     "returns false when first field returned false") {
   dummy_loading_inspector inspector;
   std::size_t callback_calls_count{0u};
   // create sut
@@ -72,7 +72,7 @@ TEST(callback and second field arent invoked and the fields invocation
   bool field2_invoked = false;
   auto field1 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
-    REQUIRE(!field2_invoked);
+    REQUIRE(! field2_invoked);
     field1_invoked = true;
     return false;
   };
@@ -80,13 +80,13 @@ TEST(callback and second field arent invoked and the fields invocation
     return true;
   };
   // verify
-  CHECK(!sut.fields(field1, field2));
+  CHECK(! sut.fields(field1, field2));
   CHECK_EQUAL(callback_calls_count, 0u);
   CHECK(field1_invoked);
-  CHECK(!field2_invoked);
+  CHECK(! field2_invoked);
 }
 
-TEST(fields invocation returns false when callback returns false) {
+TEST("fields invocation returns false when callback returns false") {
   dummy_saving_inspector inspector;
   std::size_t callback_calls_count{0u};
   auto callback = [&] {
@@ -94,13 +94,13 @@ TEST(fields invocation returns false when callback returns false) {
     return false;
   };
   auto sut = tenzir::detail::inspection_object{inspector}.on_save(callback);
-  CHECK(!sut.fields([&](auto&) {
+  CHECK(! sut.fields([&](auto&) {
     return true;
   }));
   CHECK_EQUAL(callback_calls_count, 1u);
 }
 
-TEST(on_save doesnt call callback when inspector has is_loading set to true) {
+TEST("on_save doesnt call callback when inspector has is_loading set to true") {
   dummy_loading_inspector inspector;
   std::size_t callback_calls_count{0u};
   auto callback = [&] {
@@ -118,7 +118,8 @@ TEST(on_save doesnt call callback when inspector has is_loading set to true) {
   CHECK_EQUAL(callback_calls_count, 0u);
 }
 
-TEST(on_load doesnt call callback when inspector has is_loading set to false) {
+TEST("on_load doesnt call callback when inspector has is_loading set to "
+     "false") {
   dummy_saving_inspector inspector;
   std::size_t callback_calls_count{0u};
   auto callback = [&] {
@@ -136,7 +137,7 @@ TEST(on_load doesnt call callback when inspector has is_loading set to false) {
   CHECK_EQUAL(callback_calls_count, 0u);
 }
 
-TEST(inspect_enum with caf binary inspectors) {
+TEST("inspect_enum with caf binary inspectors") {
   enum class enum_example { value_1 = 5201, value_2 = 8 };
   // serialize
   auto in = enum_example::value_1;

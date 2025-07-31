@@ -13,7 +13,7 @@
 using namespace tenzir;
 using namespace detail;
 
-TEST(string byte escaping) {
+TEST("string byte escaping") {
   // Identities.
   CHECK_EQUAL(byte_escape(""), "");
   CHECK_EQUAL(byte_escape("foo"), "foo");
@@ -39,7 +39,7 @@ TEST(string byte escaping) {
   CHECK_EQUAL(byte_unescape("foo\\"), ""); // Invalid '\' at end of string.
 }
 
-TEST(JSON string escaping) {
+TEST("JSON string escaping") {
   CHECK_EQUAL(json_escape(""), "\"\"");
   CHECK_EQUAL(json_escape("\r"), "\"\\r\"");
   CHECK_EQUAL(json_escape("\r\n"), "\"\\r\\n\"");
@@ -90,7 +90,7 @@ TEST(JSON string escaping) {
   CHECK_EQUAL(json_unescape("\"Hello®, world!\""), "Hello®, world!");
 }
 
-TEST(control character escaping) {
+TEST("control character escaping") {
   CHECK_EQUAL(control_char_escape(""), "");
   CHECK_EQUAL(control_char_escape("\r"), R"(\r)");
   CHECK_EQUAL(control_char_escape("\r\n"), R"(\r\n)");
@@ -110,7 +110,7 @@ TEST(control character escaping) {
   CHECK_EQUAL(control_char_escape("®"), R"(®)");
 }
 
-TEST(percent escaping) {
+TEST("percent escaping") {
   CHECK_EQUAL(percent_escape(""), "");
   CHECK_EQUAL(percent_unescape(""), "");
   CHECK_EQUAL(percent_escape("ABC"), "ABC");
@@ -129,7 +129,7 @@ TEST(percent escaping) {
   CHECK_EQUAL(percent_unescape(esc), "!*'();:@&=+$,/?#[]%\" ");
 }
 
-TEST(double escaping) {
+TEST("double escaping") {
   CHECK_EQUAL(double_escape("a|b|c", "|"), "a||b||c");
   CHECK_EQUAL(double_escape("a|b|", "|"), "a||b||");
   CHECK_EQUAL(double_escape("|b|c", "|"), "||b||c");
@@ -143,7 +143,7 @@ TEST(double escaping) {
   CHECK_EQUAL(double_unescape("|", "|"), "|");
 }
 
-TEST(splitting) {
+TEST("splitting") {
   using namespace std::string_literals;
   MESSAGE("split words");
   auto str = "Der Geist, der stets verneint."s;
@@ -225,7 +225,7 @@ TEST(splitting) {
   CHECK_EQUAL(s[2], "");
 }
 
-TEST(escaped splitting) {
+TEST("escaped splitting") {
   using namespace std::string_literals;
   MESSAGE("split with escaping");
   auto str = "a*,b,c"s;
@@ -350,7 +350,7 @@ TEST(escaped splitting) {
   CHECK_EQUAL(s[2], "baz");
 }
 
-TEST(join) {
+TEST("join") {
   std::vector<std::string> xs{"a", "-", "b", "-", "c*-d"};
   CHECK_EQUAL(join(xs, ""), "a-b-c*-d");
   CHECK_EQUAL(join(xs, " "), "a - b - c*-d");

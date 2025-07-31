@@ -13,17 +13,17 @@
 using namespace std::string_literals;
 using namespace tenzir::detail;
 
-TEST(empty) {
+TEST("strip indentation empty") {
   auto code = ""s;
   CHECK_EQUAL(strip_leading_indentation(std::string{code}), code);
 }
 
-TEST(no indentation - single line) {
+TEST("no indentation - single line") {
   auto code = "pass"s;
   CHECK_EQUAL(strip_leading_indentation(std::string{code}), code);
 }
 
-TEST(no indentation - multiline) {
+TEST("no indentation - multiline") {
   auto code = R"_(
 import math
 
@@ -34,7 +34,7 @@ def main():
   CHECK_EQUAL(strip_leading_indentation(std::string{code}), code);
 }
 
-TEST(indentation - spaces) {
+TEST("indentation - spaces") {
   auto code_indented = R"_(
         # :<
     import math
@@ -55,7 +55,7 @@ def main():
   CHECK_EQUAL(strip_leading_indentation(std::move(code_indented)), code);
 }
 
-TEST(indentation - tabs) {
+TEST("indentation - tabs") {
   auto code_indented = R"_(
 
 	import math

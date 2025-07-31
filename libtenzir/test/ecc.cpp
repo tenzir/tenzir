@@ -11,12 +11,11 @@
 #include <tenzir/data.hpp>
 #include <tenzir/ecc.hpp>
 
-#include <caf/test/dsl.hpp>
 #include <fmt/core.h>
 
 using namespace tenzir;
 
-TEST(round_trip) {
+TEST("round_trip") {
   constexpr static std::string_view in
     = "Dies ist ein grossartiger test, der bestimmt funktioniert.";
   const auto keys = ecc::generate_keypair();

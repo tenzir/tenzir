@@ -35,7 +35,7 @@ struct foo : addable<foo>,
 
 } // namespace
 
-TEST(commutative operators) {
+TEST("commutative operators") {
   auto x = foo{42};
   auto y = foo{-3};
   auto result = 1 + x + 1 + y + 1;

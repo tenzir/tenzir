@@ -12,7 +12,7 @@
 using namespace tenzir;
 using namespace std::string_view_literals;
 
-TEST(censor) {
+TEST("censor") {
   constexpr static auto needle_sv = "needle"sv;
   constexpr static auto noddle_sv = "noodle"sv;
   constexpr static auto stars_sv = "*** stars"sv;

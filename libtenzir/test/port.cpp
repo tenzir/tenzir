@@ -16,7 +16,7 @@
 using namespace tenzir;
 using namespace std::string_literals;
 
-TEST(ports) {
+TEST("ports") {
   port p;
   CHECK(p.number() == 0u);
   CHECK(p.type() == port_type::unknown);
@@ -33,7 +33,7 @@ TEST(ports) {
   CHECK(p < q);
 }
 
-TEST(printable) {
+TEST("port printable") {
   CHECK_EQUAL(to_string(port{42, port_type::unknown}), "42/?");
   CHECK_EQUAL(to_string(port{53, port_type::udp}), "53/udp");
   CHECK_EQUAL(to_string(port{80, port_type::tcp}), "80/tcp");
@@ -41,7 +41,7 @@ TEST(printable) {
   CHECK_EQUAL(to_string(port{7, port_type::icmp6}), "7/icmp6");
 }
 
-TEST(parseable) {
+TEST("port parseable") {
   port x;
   CHECK(parsers::port("42/?"s, x));
   CHECK((x == port{42, port_type::unknown}));

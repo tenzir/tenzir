@@ -20,7 +20,7 @@
 using namespace tenzir;
 using namespace std::string_literals;
 
-TEST(parseable / printable - predicate) {
+TEST("parseable / printable - predicate") {
   predicate pred;
   // LHS: schema, RHS: data
   MESSAGE("x.y.z == 42");
@@ -105,7 +105,7 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(":foo == -42"));
 }
 
-TEST(parseable - expression) {
+TEST("parseable - expression") {
   expression expr;
   predicate p1{field_extractor{"x"}, relational_operator::equal, data{42u}};
   predicate p2{type_extractor{type{double_type{}}}, relational_operator::equal,
@@ -156,7 +156,7 @@ TEST(parseable - expression) {
     expr));
 }
 
-TEST(parseable - value predicate) {
+TEST("parseable - value predicate") {
   expression expr;
   CHECK(parsers::expr("42"s, expr));
   auto disj = try_as<disjunction>(&expr);
@@ -194,7 +194,7 @@ TEST(parseable - value predicate) {
   }
 }
 
-TEST(parseable - field extractor predicate) {
+TEST("parseable - field extractor predicate") {
   expression expr;
   CHECK(parsers::expr("foo.bar"s, expr));
   auto pred = try_as<predicate>(&expr);
@@ -206,7 +206,7 @@ TEST(parseable - field extractor predicate) {
   CHECK_EQUAL(pred->rhs, operand{data{}});
 }
 
-TEST(parseable - type extractor predicate) {
+TEST("parseable - type extractor predicate") {
   expression expr;
   CHECK(parsers::expr(":ip"s, expr));
   auto pred = try_as<predicate>(&expr);
@@ -218,7 +218,7 @@ TEST(parseable - type extractor predicate) {
   CHECK_EQUAL(pred->rhs, operand{data{}});
 }
 
-TEST(parseable - custom type extractor predicate) {
+TEST("parseable - custom type extractor predicate") {
   expression expr;
   CHECK(parsers::expr(":foo.bar"s, expr));
   auto pred = try_as<predicate>(&expr);
@@ -231,7 +231,7 @@ TEST(parseable - custom type extractor predicate) {
   CHECK_EQUAL(pred->rhs, operand{data{}});
 }
 
-TEST(parseable - comments in expressions) {
+TEST("parseable - comments in expressions") {
   expression expected_expr;
   CHECK(parsers::expr(
     R"(#schema == "foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,

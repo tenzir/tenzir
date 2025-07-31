@@ -12,14 +12,12 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include <string_view>
 
 using namespace tenzir;
 using namespace std::literals;
 
-TEST(copying views) {
+TEST("copying views") {
   MESSAGE("calling view directly");
   CHECK_VARIANT_EQUAL(view<caf::none_t>{caf::none}, caf::none);
   CHECK_VARIANT_EQUAL(view<bool>{true}, true);
@@ -40,14 +38,14 @@ TEST(copying views) {
   CHECK_VARIANT_EQUAL(materialize(make_view(data{4.2})), double(4.2));
 }
 
-TEST(string literal view) {
+TEST("string literal view") {
   auto v = make_view("foobar");
   CHECK_EQUAL(v.size(), 6u);
   CHECK_EQUAL(v, "foobar"sv);
   CHECK_EQUAL(std::string{"foobar"}, materialize(v));
 }
 
-TEST(string view) {
+TEST("string view") {
   auto str = "foobar"s;
   auto v = make_view(str);
   CHECK_EQUAL(v, "foobar");
@@ -56,7 +54,7 @@ TEST(string view) {
   CHECK_EQUAL(str, materialize(v));
 }
 
-TEST(list view) {
+TEST("list view") {
   auto xs = list{int64_t{42}, true, "foo", 4.2};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
@@ -77,7 +75,7 @@ TEST(list view) {
   CHECK_EQUAL(xs, materialize(v));
 }
 
-TEST(map view) {
+TEST("map view") {
   auto xs = map{{int64_t{42}, true}, {int64_t{84}, false}};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
@@ -98,7 +96,7 @@ TEST(map view) {
   CHECK_EQUAL(xs, materialize(v));
 }
 
-TEST(make_data_view) {
+TEST("make_data_view") {
   auto x = make_data_view(true);
   CHECK(is<bool>(x));
   auto str = "foo"s;
@@ -116,15 +114,15 @@ TEST(make_data_view) {
   CHECK_EQUAL(xs, materialize(v));
 }
 
-TEST(comparison with data) {
+TEST("comparison with data") {
   auto x = data{true};
   auto y = make_view(x);
   CHECK(is_equal(x, y));
   CHECK(is_equal(y, x));
   y = make_data_view(false);
-  CHECK(!is_equal(x, y));
+  CHECK(! is_equal(x, y));
   y = caf::none;
-  CHECK(!is_equal(x, y));
+  CHECK(! is_equal(x, y));
   x = caf::none;
   CHECK(is_equal(x, y));
   x = list{int64_t{1}, "foo", 4.2};
@@ -132,7 +130,7 @@ TEST(comparison with data) {
   CHECK(is_equal(x, y));
 }
 
-TEST(increment decrement container_view_iterator) {
+TEST("increment decrement container_view_iterator") {
   auto xs = list{int64_t{42}, true, "foo", 4.2};
   auto v = make_view(xs);
   auto it1 = v->begin();
@@ -144,11 +142,11 @@ TEST(increment decrement container_view_iterator) {
   CHECK_EQUAL(it1.distance_to(it2), 0u);
 }
 
-TEST(container comparison) {
+TEST("container comparison") {
   data xs = list{int64_t{42}};
   data ys = list{int64_t{42}};
   CHECK(make_view(xs) == make_view(ys));
-  CHECK(!(make_view(xs) < make_view(ys)));
+  CHECK(! (make_view(xs) < make_view(ys)));
   as<list>(ys).push_back(int64_t{0});
   CHECK(make_view(xs) != make_view(ys));
   CHECK(make_view(xs) < make_view(ys));
@@ -159,7 +157,7 @@ TEST(container comparison) {
   CHECK(make_view(xs) > make_view(ys));
 }
 
-TEST(hashing views) {
+TEST("hashing views") {
   data i = int64_t{1};
   data c = "chars";
   data s = "string"s;

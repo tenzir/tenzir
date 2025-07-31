@@ -13,7 +13,7 @@ using namespace tenzir;
 
 using stack_vector = detail::stack_vector<int, 16>;
 
-TEST(default construction) {
+TEST("stack vector default construction") {
   stack_vector v;
   v.push_back(42);
   v.push_back(1337);
@@ -23,7 +23,7 @@ TEST(default construction) {
   CHECK(v[2] == 4711);
 }
 
-TEST(construction from initializer list) {
+TEST("construction from initializer list") {
   stack_vector v{1, 2, 3};
   REQUIRE(v.size() == 3);
   CHECK(v[0] == 1);
@@ -31,7 +31,7 @@ TEST(construction from initializer list) {
   CHECK(v[2] == 3);
 }
 
-TEST(copy construction) {
+TEST("stack vector copy construction") {
   stack_vector v{1, 2, 3};
   stack_vector copy{v};
   REQUIRE(copy.size() == 3);
@@ -39,7 +39,7 @@ TEST(copy construction) {
   CHECK(copy[1] == 2);
 }
 
-TEST(move construction) {
+TEST("move construction") {
   stack_vector v{1, 2, 3};
   stack_vector move{v};
   REQUIRE(move.size() == 3);
@@ -47,7 +47,7 @@ TEST(move construction) {
   CHECK(move[1] == 2);
 }
 
-TEST(copy assignment) {
+TEST("copy assignment") {
   stack_vector v{1, 2, 3};
   auto copy = v;
   CHECK(copy.size() == 3);
@@ -55,7 +55,7 @@ TEST(copy assignment) {
   CHECK(copy[1] == 2);
 }
 
-TEST(move assignment) {
+TEST("move assignment") {
   stack_vector v{1, 2};
   stack_vector w{3, 4, 5, 6, 7};
   v = std::move(w);
@@ -64,7 +64,7 @@ TEST(move assignment) {
   CHECK_EQUAL(v[4], 7);
 }
 
-TEST(insertion at end) {
+TEST("insertion at end") {
   stack_vector v;
   v.insert(v.end(), 42);
   REQUIRE(v.size() == 1);

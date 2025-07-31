@@ -20,13 +20,13 @@ using namespace tenzir::detail;
 //   printf "The quick brown fox jumps over the lazy dog" | base64
 //   VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==
 
-TEST(encode) {
+TEST("encode") {
   auto dec = "The quick brown fox jumps over the lazy dog"sv;
   auto enc = "VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw=="sv;
   CHECK_EQUAL(base64::encode(dec), enc);
 }
 
-TEST(decode) {
+TEST("decode") {
   auto enc = "VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw=="sv;
   auto dec = "The quick brown fox jumps over the lazy dog"sv;
   const auto decoded = base64::try_decode(enc);

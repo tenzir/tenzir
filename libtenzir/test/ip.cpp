@@ -48,27 +48,27 @@ void check_address_pseudonymization(
 
 } // namespace
 
-TEST(IPv4) {
+TEST("IPv4") {
   ip x;
   ip y;
   CHECK(x == y);
-  CHECK(!x.is_v4());
+  CHECK(! x.is_v4());
   CHECK(x.is_v6());
 
   auto a = *to<ip>("172.16.7.1");
   CHECK(to_string(a) == "172.16.7.1");
   CHECK(a.is_v4());
-  CHECK(!a.is_v6());
-  CHECK(!a.is_loopback());
-  CHECK(!a.is_multicast());
-  CHECK(!a.is_broadcast());
+  CHECK(! a.is_v6());
+  CHECK(! a.is_loopback());
+  CHECK(! a.is_multicast());
+  CHECK(! a.is_broadcast());
 
   auto localhost = *to<ip>("127.0.0.1");
   CHECK(to_string(localhost) == "127.0.0.1");
   CHECK(localhost.is_v4());
   CHECK(localhost.is_loopback());
-  CHECK(!localhost.is_multicast());
-  CHECK(!localhost.is_broadcast());
+  CHECK(! localhost.is_multicast());
+  CHECK(! localhost.is_broadcast());
 
   // Lexicalgraphical comparison.
   CHECK(localhost < a);
@@ -96,14 +96,14 @@ TEST(IPv4) {
   CHECK(to_string(b8n) == "192.168.0.171");
 }
 
-TEST(IPv6) {
+TEST("IPv6") {
   CHECK(ip() == *to<ip>("::"));
 
   auto a = *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   auto b = *to<ip>("2001:db8:0:0:202:b3ff:fe1e:8329");
   auto c = *to<ip>("2001:db8::202:b3ff:fe1e:8329");
   CHECK(a.is_v6() && b.is_v6() && c.is_v6());
-  CHECK(!(a.is_v4() || b.is_v4() || c.is_v4()));
+  CHECK(! (a.is_v4() || b.is_v4() || c.is_v4()));
   CHECK(a == b && b == c);
 
   auto d = *to<ip>("ff01::1");
@@ -126,7 +126,7 @@ TEST(IPv6) {
   CHECK(f == (a ^ d));
   CHECK(f == e);
 
-  CHECK(!a.mask(129));
+  CHECK(! a.mask(129));
   CHECK(a.mask(128)); // No modification
   CHECK(a == *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329"));
   CHECK(a.mask(112));
@@ -141,7 +141,7 @@ TEST(IPv6) {
   CHECK(a == *to<ip>("::"));
 }
 
-TEST(parseable) {
+TEST("ip parseable") {
   auto p = make_parser<ip>{};
   MESSAGE("IPv4");
   auto str = "192.168.0.1"s;
@@ -176,7 +176,7 @@ TEST(parseable) {
   CHECK(to_string(a) == str);
 }
 
-TEST(IPv4 pseudonymization - seed 1) {
+TEST("IPv4 pseudonymization - seed 1") {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -261,7 +261,7 @@ TEST(IPv4 pseudonymization - seed 1) {
   check_address_pseudonymization(addresses, seed_1);
 }
 
-TEST(IPv4 pseudonymization - seed 2) {
+TEST("IPv4 pseudonymization - seed 2") {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -271,7 +271,7 @@ TEST(IPv4 pseudonymization - seed 2) {
   check_address_pseudonymization(addresses, seed_2);
 }
 
-TEST(IPv4 pseudonymization - seed 3) {
+TEST("IPv4 pseudonymization - seed 3") {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -284,7 +284,7 @@ TEST(IPv4 pseudonymization - seed 3) {
   check_address_pseudonymization(addresses, seed_3);
 }
 
-TEST(IPv6 pseudonymization - seed 1) {
+TEST("IPv6 pseudonymization - seed 1") {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -297,7 +297,7 @@ TEST(IPv6 pseudonymization - seed 1) {
   check_address_pseudonymization(addresses, seed_1);
 }
 
-TEST(IPv6 pseudonymization - seed 2) {
+TEST("IPv6 pseudonymization - seed 2") {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -314,7 +314,7 @@ TEST(IPv6 pseudonymization - seed 2) {
   check_address_pseudonymization(addresses, seed_2);
 }
 
-TEST(IPv6 pseudonymization - seed 3) {
+TEST("IPv6 pseudonymization - seed 3") {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {

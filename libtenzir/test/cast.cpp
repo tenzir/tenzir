@@ -15,6 +15,8 @@
 
 #include <string_view>
 
+using namespace tenzir;
+
 namespace {
 
 struct fixture {};
@@ -24,10 +26,7 @@ constexpr auto max_loseless_double_integer
 
 } // namespace
 
-FIXTURE_SCOPE(cast_value_tests, fixture)
-
-TEST(int64 to uint64 works for positive values)
-{
+TEST("int64 to uint64 works for positive values") {
   constexpr auto in = std::numeric_limits<int64_t>::max();
   auto out
     = tenzir::cast_value(tenzir::int64_type{}, in, tenzir::uint64_type{});
@@ -35,16 +34,14 @@ TEST(int64 to uint64 works for positive values)
   CHECK_EQUAL(*out, static_cast<uint64_t>(in));
 }
 
-TEST(int64 to uint64 doesnt work for negative values)
-{
+TEST("int64 to uint64 doesnt work for negative values") {
   constexpr auto in = int64_t{-1};
   auto out
     = tenzir::cast_value(tenzir::int64_type{}, in, tenzir::uint64_type{});
   REQUIRE(not out);
 }
 
-TEST(uint64 to int64 works for max int64)
-{
+TEST("uint64 to int64 works for max int64") {
   constexpr auto in
     = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
   auto out
@@ -53,8 +50,7 @@ TEST(uint64 to int64 works for max int64)
   CHECK_EQUAL(*out, static_cast<int64_t>(in));
 }
 
-TEST(int64 to uint64 doesnt work for values bigger than int64 max)
-{
+TEST("int64 to uint64 doesnt work for values bigger than int64 max") {
   constexpr auto in
     = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1u;
   auto out
@@ -62,139 +58,121 @@ TEST(int64 to uint64 doesnt work for values bigger than int64 max)
   REQUIRE(not out);
 }
 
-TEST(int64 to bool works for 0)
-{
+TEST("int64 to bool works for 0") {
   constexpr auto in = int64_t{0};
   auto out = tenzir::cast_value(tenzir::int64_type{}, in, tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, false);
 }
 
-TEST(int64 to bool works for 1)
-{
+TEST("int64 to bool works for 1") {
   constexpr auto in = int64_t{1};
   auto out = tenzir::cast_value(tenzir::int64_type{}, in, tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, true);
 }
 
-TEST(int64 to bool doesnt work for negative value)
-{
+TEST("int64 to bool doesnt work for negative value") {
   constexpr auto in = int64_t{-1};
   auto out = tenzir::cast_value(tenzir::int64_type{}, in, tenzir::bool_type{});
   REQUIRE(not out);
 }
 
-TEST(int64 to bool doesnt work for value bigger than 1)
-{
+TEST("int64 to bool doesnt work for value bigger than 1") {
   constexpr auto in = int64_t{2};
   auto out = tenzir::cast_value(tenzir::int64_type{}, in, tenzir::bool_type{});
   REQUIRE(not out);
 }
 
-TEST(bool to int64 works for false)
-{
+TEST("bool to int64 works for false") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, false, tenzir::int64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, int64_t{0});
 }
 
-TEST(bool to int64 works for true)
-{
+TEST("bool to int64 works for true") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, true, tenzir::int64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, int64_t{1});
 }
 
-TEST(bool to uint64 works for false)
-{
+TEST("bool to uint64 works for false") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, false, tenzir::uint64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, uint64_t{0});
 }
 
-TEST(bool to uint64 works for true)
-{
+TEST("bool to uint64 works for true") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, true, tenzir::uint64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, uint64_t{1});
 }
 
-TEST(uint64_t to bool works for 0)
-{
+TEST("uint64_t to bool works for 0") {
   auto out = tenzir::cast_value(tenzir::uint64_type{}, uint64_t{0},
                                 tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, false);
 }
 
-TEST(uint64_t to bool works for 1)
-{
+TEST("uint64_t to bool works for 1") {
   auto out = tenzir::cast_value(tenzir::uint64_type{}, uint64_t{1},
                                 tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, true);
 }
 
-TEST(uint64 to bool doesnt work for value bigger than 1)
-{
+TEST("uint64 to bool doesnt work for value bigger than 1") {
   auto out = tenzir::cast_value(tenzir::uint64_type{}, uint64_t{2},
                                 tenzir::bool_type{});
   REQUIRE(not out);
 }
 
-TEST(bool to double works for false)
-{
+TEST("bool to double works for false") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, false, tenzir::double_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, double{0.0});
 }
 
-TEST(bool to double works for true)
-{
+TEST("bool to double works for true") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, true, tenzir::double_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, double{1.0});
 }
 
-TEST(double to bool works for 0.0)
-{
+TEST("double to bool works for 0.0") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{0.0},
                                 tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, false);
 }
 
-TEST(double to bool works for 1.0)
-{
+TEST("double to bool works for 1.0") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{1.0},
                                 tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, true);
 }
 
-TEST(double to bool doesnt work for integral value bigger than 1.0)
-{
+TEST("double to bool doesnt work for integral value bigger than 1.0") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{2.0},
                                 tenzir::bool_type{});
   REQUIRE(not out);
 }
 
-TEST(double to bool doesnt work for a value with fractional part)
-{
+TEST("double to bool doesnt work for a value with fractional part") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{0.1},
                                 tenzir::bool_type{});
   REQUIRE(not out);
 }
 
-TEST(int64_t to double works for max loseless integer)
-{
+TEST("int64_t to double works for max loseless integer") {
   auto out
     = tenzir::cast_value(tenzir::int64_type{},
                          static_cast<int64_t>(max_loseless_double_integer),
@@ -203,8 +181,7 @@ TEST(int64_t to double works for max loseless integer)
   CHECK_EQUAL(*out, static_cast<double>(max_loseless_double_integer));
 }
 
-TEST(int64_t to double works for negative max loseless integer)
-{
+TEST("int64_t to double works for negative max loseless integer") {
   auto out
     = tenzir::cast_value(tenzir::int64_type{},
                          -static_cast<int64_t>(max_loseless_double_integer),
@@ -213,39 +190,36 @@ TEST(int64_t to double works for negative max loseless integer)
   CHECK_EQUAL(*out, -static_cast<double>(max_loseless_double_integer));
 }
 
-TEST(double to int64_t works for positive value smaller than int64_t max)
-{
+TEST("double to int64_t works for positive value smaller than int64_t max") {
   auto out
     = tenzir::cast_value(tenzir::double_type{}, 1.0, tenzir::int64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, int64_t{1});
 }
 
-TEST(double to int64_t works for negative value bigger than int64_t min)
-{
+TEST("double to int64_t works for negative value bigger than int64_t min") {
   auto out
     = tenzir::cast_value(tenzir::double_type{}, -1.0, tenzir::int64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, int64_t{-1});
 }
 
-TEST(uint64_t to double works for max loseless integer)
-{
+TEST("uint64_t to double works for max loseless integer") {
   auto out = tenzir::cast_value(
     tenzir::uint64_type{}, max_loseless_double_integer, tenzir::double_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, static_cast<double>(max_loseless_double_integer));
 }
 
-TEST(double to uint64_t) {
+TEST("double to uint64_t") {
   auto out
     = tenzir::cast_value(tenzir::double_type{}, 15.0, tenzir::uint64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, uint64_t{15});
 }
 
-TEST(uint64_t to enumeration doesnt work if the input has values higher than
-       uint32_t max) {
+TEST("uint64_t to enumeration doesnt work if the input has values higher than "
+     "uint32_t max") {
   auto in = uint64_t{std::numeric_limits<uint32_t>::max()} + 1;
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 1}}};
@@ -253,8 +227,8 @@ TEST(uint64_t to enumeration doesnt work if the input has values higher than
   REQUIRE(not out);
 }
 
-TEST(uint64_t to enumeration doesnt work if the input doesnt have a
-       corresponding field) {
+TEST("uint64_t to enumeration doesnt work if the input doesnt have a "
+     "corresponding field") {
   auto in = uint64_t{1};
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 2}}};
@@ -262,7 +236,7 @@ TEST(uint64_t to enumeration doesnt work if the input doesnt have a
   REQUIRE(not out);
 }
 
-TEST(uint64_t to enumeration works if the input has a corresponding field) {
+TEST("uint64_t to enumeration works if the input has a corresponding field") {
   auto in = uint64_t{1};
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 1}}};
@@ -271,8 +245,8 @@ TEST(uint64_t to enumeration works if the input has a corresponding field) {
   CHECK_EQUAL(*out, enumeration{1});
 }
 
-TEST(int64_t to enumeration doesnt work if the input has values higher than
-       uint32_t max) {
+TEST("int64_t to enumeration doesnt work if the input has values higher than "
+     "uint32_t max") {
   auto in = int64_t{std::numeric_limits<uint32_t>::max()} + 1;
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 1}}};
@@ -280,7 +254,7 @@ TEST(int64_t to enumeration doesnt work if the input has values higher than
   REQUIRE(not out);
 }
 
-TEST(int64_t to enumeration doesnt work if the input is negative) {
+TEST("int64_t to enumeration doesnt work if the input is negative") {
   auto in = int64_t{-1};
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 1}}};
@@ -288,8 +262,9 @@ TEST(int64_t to enumeration doesnt work if the input is negative) {
   REQUIRE(not out);
 }
 
-TEST(int64_t to enumeration doesnt work if the input doesnt have a corresponding
-       field) {
+TEST("int64_t to enumeration doesnt work if the input doesnt have a "
+     "corresponding "
+     "field") {
   auto in = int64_t{5};
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 2}}};
@@ -297,7 +272,7 @@ TEST(int64_t to enumeration doesnt work if the input doesnt have a corresponding
   REQUIRE(not out);
 }
 
-TEST(int64_t to enumeration works if the input has a corresponding field) {
+TEST("int64_t to enumeration works if the input has a corresponding field") {
   auto in = int64_t{5};
   auto type
     = tenzir::enumeration_type{{tenzir::enumeration_type::field_view{"1", 5}}};
@@ -308,35 +283,35 @@ TEST(int64_t to enumeration works if the input has a corresponding field) {
 
 // TODO double to enum when double/integral is properly working
 
-TEST(positive int64_t to string) {
+TEST("positive int64_t to string") {
   auto out = tenzir::cast_value(tenzir::int64_type{}, int64_t{5},
                                 tenzir::string_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, "5");
 }
 
-TEST(negative int64_t to string) {
+TEST("negative int64_t to string") {
   auto out = tenzir::cast_value(tenzir::int64_type{}, int64_t{-5},
                                 tenzir::string_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, "-5");
 }
 
-TEST(positive uint64_t to string) {
+TEST("positive uint64_t to string") {
   auto out = tenzir::cast_value(tenzir::uint64_type{}, uint64_t{5},
                                 tenzir::string_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, "5");
 }
 
-TEST(positive double to string) {
+TEST("positive double to string") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{2352.1362},
                                 tenzir::string_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, "2352.1362");
 }
 
-TEST(negative double to string) {
+TEST("negative double to string") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{-12352.13623252},
                                 tenzir::string_type{});
   REQUIRE(out);
@@ -344,7 +319,7 @@ TEST(negative double to string) {
 }
 
 // todo handdle such values?
-// TEST(INF double to string)
+// TEST("INF double to string")
 // {
 //   auto out = tenzir::cast_value(tenzir::double_type{},
 //   std::numeric_limits<double>::infinity(), tenzir::string_type{});
@@ -352,7 +327,7 @@ TEST(negative double to string) {
 //   CHECK_EQUAL(*out, "-12352.13623252");
 // }
 
-TEST(bool to string) {
+TEST("bool to string") {
   auto out
     = tenzir::cast_value(tenzir::bool_type{}, false, tenzir::string_type{});
   REQUIRE(out);
@@ -362,7 +337,7 @@ TEST(bool to string) {
   CHECK_EQUAL(*out, "true");
 }
 
-TEST(duration to string) {
+TEST("duration to string") {
   auto out = tenzir::cast_value(tenzir::duration_type{},
                                 tenzir::duration{std::chrono::milliseconds{27}},
                                 tenzir::string_type{});
@@ -370,7 +345,7 @@ TEST(duration to string) {
   CHECK_EQUAL(*out, "27ms");
 }
 
-TEST(time to string) {
+TEST("time to string") {
   auto out = tenzir::cast_value(tenzir::time_type{},
                                 tenzir::time{std::chrono::milliseconds{27}},
                                 tenzir::string_type{});
@@ -378,7 +353,7 @@ TEST(time to string) {
   CHECK_EQUAL(*out, "1970-01-01T00:00:00.027Z");
 }
 
-TEST(string to string) {
+TEST("string to string") {
   constexpr auto in = std::string_view{"amazing_string!@#%Q@&*@"};
   auto out
     = tenzir::cast_value(tenzir::string_type{}, in, tenzir::string_type{});
@@ -386,14 +361,14 @@ TEST(string to string) {
   CHECK_EQUAL(out, in);
 }
 
-TEST(ip to string) {
+TEST("ip to string") {
   auto in = tenzir::ip::v4(uint32_t{0x01'02'03'04});
   auto out = tenzir::cast_value(tenzir::ip_type{}, in, tenzir::string_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, "1.2.3.4");
 }
 
-TEST(subnet to string) {
+TEST("subnet to string") {
   auto in = tenzir::subnet{tenzir::ip::v4(uint32_t{0x01'02'03'04}), 128};
   auto out
     = tenzir::cast_value(tenzir::subnet_type{}, in, tenzir::string_type{});
@@ -401,7 +376,7 @@ TEST(subnet to string) {
   CHECK_EQUAL(*out, "1.2.3.4/32");
 }
 
-TEST(enumeration to string) {
+TEST("enumeration to string") {
   auto type = tenzir::enumeration_type{
     {tenzir::enumeration_type::field_view{"enum_val_1", 1},
      tenzir::enumeration_type::field_view{"enum_val_3", 3}}};
@@ -411,7 +386,7 @@ TEST(enumeration to string) {
   CHECK_EQUAL(*out, "enum_val_3");
 }
 
-TEST(list to string) {
+TEST("list to string") {
   auto out = tenzir::cast_value(tenzir::list_type{tenzir::int64_type{}},
                                 tenzir::list{int64_t{1}, int64_t{-1}},
                                 tenzir::string_type{});
@@ -419,7 +394,7 @@ TEST(list to string) {
   CHECK_EQUAL(*out, "[1, -1]");
 }
 
-TEST(record to string) {
+TEST("record to string") {
   auto out = tenzir::cast_value(
     tenzir::record_type{
       {"int", tenzir::int64_type{}},
@@ -431,35 +406,34 @@ TEST(record to string) {
   CHECK_EQUAL(*out, R"(<int: 100, str: "strr">)");
 }
 
-TEST(string to time) {
+TEST("string to time") {
   auto out = tenzir::cast_value(
     tenzir::string_type{}, "1970-01-01T00:00:00.027000", tenzir::time_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, tenzir::time{std::chrono::milliseconds{27}});
 }
 
-TEST(string to time retruns an error for an input that doesnt resemble a time point)
-{
+TEST("string to time retruns an error for an input that doesnt resemble a time "
+     "point") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "10:00", tenzir::time_type{});
   REQUIRE(not out);
 }
 
-TEST(string to duration) {
+TEST("string to duration") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "30s", tenzir::duration_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, std::chrono::seconds{30});
 }
 
-TEST(string to duration retruns an error for an input doesnt have a unit)
-{
+TEST("string to duration retruns an error for an input doesnt have a unit") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "30", tenzir::duration_type{});
   REQUIRE(not out);
 }
 
-TEST(string to subnet) {
+TEST("string to subnet") {
   auto out = tenzir::cast_value(tenzir::string_type{}, "1.2.3.4/32",
                                 tenzir::subnet_type{});
   REQUIRE(out);
@@ -467,28 +441,28 @@ TEST(string to subnet) {
               (tenzir::subnet{tenzir::ip::v4(uint32_t{0x01'02'03'04}), 128}));
 }
 
-TEST(string to ip) {
+TEST("string to ip") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "1.2.3.4", tenzir::ip_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, tenzir::ip::v4(uint32_t{0x01'02'03'04}));
 }
 
-TEST(string to bool) {
+TEST("string to bool") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "true", tenzir::bool_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, true);
 }
 
-TEST(string to uint64_t) {
+TEST("string to uint64_t") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "3245", tenzir::uint64_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, uint64_t{3245});
 }
 
-TEST(string to uint64_t fails for string value that would overflow int64_t) {
+TEST("string to uint64_t fails for string value that would overflow int64_t") {
   auto out
     = tenzir::cast_value(tenzir::string_type{},
                          "322154326534213214123523523523623283409567843597"
@@ -497,13 +471,13 @@ TEST(string to uint64_t fails for string value that would overflow int64_t) {
   REQUIRE(not out);
 }
 
-TEST(string to uint64_t fails for negative string_value) {
+TEST("string to uint64_t fails for negative string_value") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "-1", tenzir::uint64_type{});
   REQUIRE(not out);
 }
 
-TEST(string to int64_t) {
+TEST("string to int64_t") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "3245", tenzir::int64_type{});
   REQUIRE(out);
@@ -514,7 +488,7 @@ TEST(string to int64_t) {
   CHECK_EQUAL(*out, int64_t{-3245});
 }
 
-TEST(string to int64_t fails for string value that would overflow int64_t) {
+TEST("string to int64_t fails for string value that would overflow int64_t") {
   auto out
     = tenzir::cast_value(tenzir::string_type{},
                          "322154326534213214123523523523623283409567843597"
@@ -528,7 +502,7 @@ TEST(string to int64_t fails for string value that would overflow int64_t) {
   REQUIRE(not out);
 }
 
-TEST(string to double) {
+TEST("string to double") {
   auto out = tenzir::cast_value(tenzir::string_type{}, "3245.85932",
                                 tenzir::double_type{});
   REQUIRE(out);
@@ -539,14 +513,14 @@ TEST(string to double) {
   CHECK_EQUAL(*out, -3245.3251);
 }
 
-TEST(string to scientific notation) {
+TEST("string to scientific notation") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, "3E8", tenzir::double_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, 3'000'000'00.0);
 }
 
-TEST(string to enumeration) {
+TEST("string to enumeration") {
   auto type = tenzir::enumeration_type{
     {tenzir::enumeration_type::field_view{"enum_val_1", 1},
      tenzir::enumeration_type::field_view{"enum_val_3", 3}}};
@@ -555,7 +529,8 @@ TEST(string to enumeration) {
   CHECK_EQUAL(*out, enumeration{3});
 }
 
-TEST(string to enumeration fails when a string doesnt represent any enum state) {
+TEST("string to enumeration fails when a string doesnt represent any enum "
+     "state") {
   auto type = tenzir::enumeration_type{
     {tenzir::enumeration_type::field_view{"enum_val_1", 1},
      tenzir::enumeration_type::field_view{"enum_val_3", 3}}};
@@ -563,14 +538,14 @@ TEST(string to enumeration fails when a string doesnt represent any enum state) 
   REQUIRE(not out);
 }
 
-TEST(string to list) {
+TEST("string to list") {
   auto out = tenzir::cast_value(tenzir::string_type{}, "[+1, -1]",
                                 tenzir::list_type{tenzir::int64_type{}});
   REQUIRE(out);
   CHECK_EQUAL(*out, (list{int64_t{1}, int64_t{-1}}));
 }
 
-TEST(string to record) {
+TEST("string to record") {
   auto out
     = tenzir::cast_value(tenzir::string_type{}, R"(<int: +100, str: "strr">)",
                          tenzir::record_type{
@@ -581,20 +556,20 @@ TEST(string to record) {
   CHECK_EQUAL(*out, (tenzir::record{{"int", int64_t{100}}, {"str", "strr"}}));
 }
 
-TEST(negative int64_t to duration results in error) {
+TEST("negative int64_t to duration results in error") {
   auto out = tenzir::cast_value(tenzir::int64_type{}, int64_t{-10},
                                 tenzir::duration_type{});
   REQUIRE(not out);
 }
 
-TEST(positive int64_t to duration with a custom unit) {
+TEST("positive int64_t to duration with a custom unit") {
   auto out = tenzir::cast_value(tenzir::int64_type{}, int64_t{10},
                                 tenzir::duration_type{}, "hours");
   REQUIRE(out);
   CHECK_EQUAL(*out, std::chrono::hours{10});
 }
 
-TEST(uint64_t to duration) {
+TEST("uint64_t to duration") {
   auto out = tenzir::cast_value(tenzir::uint64_type{}, uint64_t{120},
                                 tenzir::duration_type{});
   REQUIRE(out);
@@ -602,20 +577,20 @@ TEST(uint64_t to duration) {
   CHECK_EQUAL(*out, std::chrono::seconds{120});
 }
 
-TEST(negative double to duration results in error) {
+TEST("negative double to duration results in error") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{-120},
                                 tenzir::duration_type{});
   CHECK(not out);
 }
 
-TEST(positive double to duration) {
+TEST("positive double to duration") {
   auto out = tenzir::cast_value(tenzir::double_type{}, double{120},
                                 tenzir::duration_type{});
   REQUIRE(out);
   CHECK_EQUAL(*out, std::chrono::seconds{120});
 }
 
-TEST(cast value type erased) {
+TEST("cast value type erased") {
   auto type = tenzir::type{tenzir::int64_type{}};
   auto out
     = tenzir::cast_value(type, tenzir::data{int64_t{2}}, tenzir::string_type{});
@@ -623,7 +598,7 @@ TEST(cast value type erased) {
   CHECK_EQUAL(*out, "2");
 }
 
-TEST(cast value type erased 2) {
+TEST("cast value type erased 2") {
   auto type = tenzir::type{tenzir::ip_type{}};
   auto out
     = tenzir::cast_value(type,
@@ -633,7 +608,7 @@ TEST(cast value type erased 2) {
   CHECK_EQUAL(*out, "1.2.3.4");
 }
 
-TEST(cast value type erased 3) {
+TEST("cast value type erased 3") {
   auto type = tenzir::type{tenzir::ip_type{}};
   auto out
     = tenzir::cast_value(type,
@@ -643,7 +618,7 @@ TEST(cast value type erased 3) {
   CHECK_EQUAL(*out, "1.2.3.4");
 }
 
-TEST(cast lists) {
+TEST("cast lists") {
   auto in_type = tenzir::list_type{tenzir::ip_type{}};
   auto out_type = tenzir::list_type{tenzir::string_type{}};
   auto in_list = tenzir::list{tenzir::ip::v4(uint32_t{0x01'02'03'04}),
@@ -653,7 +628,7 @@ TEST(cast lists) {
   CHECK_EQUAL(*out, (tenzir::list{"1.2.3.4", "1.2.3.5"}));
 }
 
-TEST(cast record success) {
+TEST("cast record success") {
   auto in_type = tenzir::record_type{{"a", tenzir::ip_type{}}};
   auto out_type = tenzir::record_type{{"a", tenzir::string_type{}}};
   auto in_val = tenzir::record{{"a", tenzir::ip::v4(uint32_t{0x01'02'03'04})}};
@@ -662,7 +637,7 @@ TEST(cast record success) {
   CHECK_EQUAL(*out, (tenzir::record{{"a", "1.2.3.4"}}));
 }
 
-TEST(cast record inserts nulls for fields that dont exist in the input) {
+TEST("cast record inserts nulls for fields that dont exist in the input") {
   auto in_type = tenzir::record_type{{"a", tenzir::int64_type{}}};
   auto out_type = tenzir::record_type{{"a", tenzir::string_type{}},
                                       {"b", tenzir::int64_type{}}};
@@ -672,7 +647,7 @@ TEST(cast record inserts nulls for fields that dont exist in the input) {
   CHECK_EQUAL(*out, (tenzir::record{{"a", "-10"}, {"b", caf::none}}));
 }
 
-TEST(cast lists of records) {
+TEST("cast lists of records") {
   auto in_type
     = tenzir::list_type{tenzir::record_type{{"a", tenzir::ip_type{}}}};
   auto out_type
@@ -686,9 +661,7 @@ TEST(cast lists of records) {
                                   tenzir::record{{"a", "1.2.3.5"}}}));
 }
 
-FIXTURE_SCOPE_END()
-
-TEST(cast int64_t array to a string builder) {
+TEST("cast int64_t array to a string builder") {
   auto int_builder
     = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
   auto status = int_builder->Append(1);
@@ -712,7 +685,7 @@ TEST(cast int64_t array to a string builder) {
   CHECK_EQUAL(materialize(views[3]), "3");
 }
 
-TEST(casting builder with no compatible types results in an error) {
+TEST("casting builder with no compatible types results in an error") {
   auto int_builder
     = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
   auto status = int_builder->Append(1);
@@ -724,8 +697,8 @@ TEST(casting builder with no compatible types results in an error) {
   CHECK(not out);
 }
 
-TEST(
-  casting int64_t array to uint64_t builder works when all values can be cast) {
+TEST("casting int64_t array to uint64_t builder works when all values can be "
+     "cast") {
   auto int_builder
     = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
   auto status = int_builder->Append(1);
@@ -749,7 +722,7 @@ TEST(
   CHECK_EQUAL(materialize(views[2]), uint64_t{3});
 }
 
-TEST(casting int64_t array to uint64_t builder fails due to negative value) {
+TEST("casting int64_t array to uint64_t builder fails due to negative value") {
   auto int_builder
     = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
   auto status = int_builder->Append(-1);
@@ -761,21 +734,21 @@ TEST(casting int64_t array to uint64_t builder fails due to negative value) {
   CHECK(not out);
 }
 
-TEST(string to blob without padding) {
+TEST("string to blob without padding") {
   auto out = tenzir::cast_value(tenzir::string_type{}, "dGVuemly",
                                 tenzir::blob_type{});
   REQUIRE_NOERROR(out);
   CHECK_EQUAL(std::span{out.value()}, as_bytes("tenzir", 6));
 }
 
-TEST(string to blob with padding) {
+TEST("string to blob with padding") {
   auto out = tenzir::cast_value(tenzir::string_type{},
                                 "dmFzdA==", tenzir::blob_type{});
   REQUIRE_NOERROR(out);
   CHECK_EQUAL(std::span{out.value()}, as_bytes("vast", 4));
 }
 
-TEST(string to blob error) {
+TEST("string to blob error") {
   auto out = tenzir::cast_value(tenzir::string_type{}, "dmFzdA==!",
                                 tenzir::blob_type{});
   REQUIRE_ERROR(out);

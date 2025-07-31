@@ -23,8 +23,8 @@ constexpr auto check() {
 }
 } // namespace
 
-TEST(contains_type) {
-  check<std::variant>();
-  check<std::tuple>();
-  check<fake_list>();
+TEST("contains_type") {
+  ::check<std::variant>();
+  ::check<std::tuple>();
+  ::check<fake_list>();
 }
