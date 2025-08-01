@@ -32,8 +32,8 @@ string to match:
 from {
   // Removes 'a', 'e', and 'g' from both ends
   chars: "abcdefg".trim("aeg"),
-  // Removes any 'h', 'e', 'l', or 'o' from both ends
-  word: "helloworldhello".trim("hello")
+  // Removes any 'o', 'l', 'e', or 'h' from both ends
+  word: "helloworldhello".trim("olleh")
 }
 ```
 
@@ -49,7 +49,7 @@ This also works with `trim_start()` and `trim_end()` for one-sided trimming:
 ```tql
 from {
   start: "///api/v1/users".trim_start("/"),
-  end: "data.csv.tmp.bak".trim_end(".tmpbak")
+  end: "data.csv.tmp.....".trim_end(".")
 }
 ```
 
