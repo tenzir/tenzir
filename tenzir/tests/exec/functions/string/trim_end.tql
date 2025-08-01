@@ -1,0 +1,14 @@
+from {
+  // Test trim_end function with whitespace
+  whitespace: "hello ".trim_end(),
+  // Test trim_end function with specific characters
+  slash: "/path/to/file/".trim_end("/"),
+  // Test trim_end with multiple characters
+  multiple_chars: "hello/-/".trim_end("/-"),
+  // Test trim_end with characters not at end
+  no_match: "/hello/world".trim_end("/"),
+  // Test trim_end with empty string
+  empty: "".trim_end("/"),
+  // Test trim_end removes all matching chars from end
+  multiple: "path///".trim_end("/"),
+}

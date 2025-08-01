@@ -1,0 +1,20 @@
+from {
+  // Test trim function with whitespace
+  whitespace: " hello ".trim(),
+  // Test trim function with specific characters
+  slash: "/path/to/file/".trim("/"),
+  // Test trim with multiple characters
+  dash: "--hello--world--".trim("-"),
+  // Test trim with characters not at edges
+  no_match: "hello world".trim("/"),
+  // Test trim with empty string
+  empty: "".trim("/"),
+  // Test trim with complex characters
+  complex: "/-/hello/-/".trim("/-"),
+  // Test trim removes all matching chars from both ends
+  multiple: "///path///".trim("/"),
+  // Clarify that chars is a collection of characters, not a string
+  char_collection: "abcdefg".trim("aeg"),
+  // Order doesn't matter in the character set
+  order_invariant: "xyzabcxyz".trim("zyx"),
+}

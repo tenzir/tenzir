@@ -1,0 +1,14 @@
+from {
+  // Test trim_start function with whitespace
+  whitespace: " hello".trim_start(),
+  // Test trim_start function with specific characters
+  slash: "/path/to/file".trim_start("/"),
+  // Test trim_start with multiple characters
+  multiple_chars: "/-/hello".trim_start("/-"),
+  // Test trim_start with characters not at start
+  no_match: "hello/world/".trim_start("/"),
+  // Test trim_start with empty string
+  empty: "".trim_start("/"),
+  // Test trim_start removes all matching chars from start
+  multiple: "///path".trim_start("/"),
+}

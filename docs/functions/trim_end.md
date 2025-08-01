@@ -4,15 +4,30 @@ category: String/Transformation
 example: '"hello ".trim_end()'
 ---
 
-Trims whitespace from the end of a string.
+Trims whitespace or specified characters from the end of a string.
 
 ```tql
-trim_end(x:string) -> string
+trim_end(x:string, [chars:string]) -> string
 ```
 
 ## Description
 
-The `trim_end` function removes trailing whitespace from `x`.
+The `trim_end` function removes characters from the end of `x`.
+
+When called with one argument, it removes trailing whitespace.
+When called with two arguments, it removes any characters found in `chars` from
+the end of the string.
+
+### `x: string`
+
+The string to trim.
+
+### `chars: string (optional)`
+
+A string where each character represents a character to remove. Any character
+found in this string will be trimmed from the end.
+
+Defaults to whitespace characters.
 
 ## Examples
 
@@ -20,6 +35,26 @@ The `trim_end` function removes trailing whitespace from `x`.
 
 ```tql
 from {x: "hello ".trim_end()}
+```
+
+```tql
+{x: "hello"}
+```
+
+### Trim specific characters
+
+```tql
+from {x: "/path/to/file/".trim_end("/")}
+```
+
+```tql
+{x: "/path/to/file"}
+```
+
+### Trim multiple characters
+
+```tql
+from {x: "hello/-/".trim_end("/-")}
 ```
 
 ```tql
