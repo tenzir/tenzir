@@ -8,8 +8,6 @@ dir=$(dirname "$(readlink -f "$0")")
 toplevel=$(git -C "${dir}" rev-parse --show-toplevel)
 mainroot="$(git -C "${dir}" rev-parse --path-format=absolute --show-toplevel)"
 
-set -x
-
 get-submodule-rev() {
   local _submodule="$1"
   git -C "${toplevel}" submodule status -- "${_submodule}" | cut -c2- | cut -d' ' -f 1
@@ -65,6 +63,4 @@ update-source() {
   fi
 }
 
-git config --list --show-origin
-
-update-source caf "libtenzir/aux/caf" "1.0.2+gc1ccf019d"
+update-source caf "libtenzir/aux/caf" "1.0.2+g139f8e410"

@@ -4,10 +4,9 @@ set -eu
 
 dir=$(dirname "$(readlink -f "$0")")
 
-"${dir}"/update-plugins.sh
-
 command -v nix > /dev/null && {
   echo "Updating with the local Nix installation..."
+  "${dir}/update-plugins.sh"
   "${dir}/update-impl.sh"
   exit $?
 }
@@ -24,12 +23,12 @@ command -v docker > /dev/null && {
   if [ "$toplevel/.git" = "$gitdir" ]; then
     docker run \
       -v "${toplevel}:${toplevel}" \
-      nixos/nix "${toplevel}/nix/update-impl.sh"
+      nixos/nix "${toplevel}/nix/update.sh"
   else
     docker run \
       -v "${toplevel}:${toplevel}" \
       -v "${gitdir}:${gitdir}" \
-      nixos/nix "${toplevel}/nix/update-impl.sh"
+      nixos/nix "${toplevel}/nix/update.sh"
   fi
   exit $?
 }

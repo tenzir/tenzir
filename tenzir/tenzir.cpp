@@ -423,9 +423,10 @@ auto main(int argc, char** argv) -> int try {
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
+  cfg.set_clock_factory([](caf::actor_system& sys) {
+    return std::make_unique<actor_clock>(sys);
+  });
   auto sys = caf::actor_system{cfg};
-  caf::detail::actor_system_access{sys}.clock(
-    std::make_unique<actor_clock>(sys));
   auto run_error = caf::error{};
   if (is_server) {
     // The reflector scope variable cleans up the reflector on destruction.
