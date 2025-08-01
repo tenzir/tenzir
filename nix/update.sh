@@ -23,11 +23,15 @@ command -v docker > /dev/null && {
   if [ "$toplevel/.git" = "$gitdir" ]; then
     docker run \
       -v "${toplevel}:${toplevel}" \
+      -e GITHUB_TOKEN \
+      -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
   else
     docker run \
       -v "${toplevel}:${toplevel}" \
       -v "${gitdir}:${gitdir}" \
+      -e GITHUB_TOKEN \
+      -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
   fi
   exit $?
