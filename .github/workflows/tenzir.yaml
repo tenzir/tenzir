@@ -344,7 +344,7 @@ jobs:
           app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
           private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-      - name: Require an open PR for a submodule bump
+      - name: Require an open non-draft PR for a submodule bump
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
@@ -352,7 +352,8 @@ jobs:
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
 
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
-            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_sha --json number -q .[0].number)
+            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
+              --search $plugins_sha --json number -q ".[0].number")
             [ $pr_number ] # Assert the pr number was non-empty
           fi
 
