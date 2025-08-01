@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#!nix-shell -i bash -p coreutils git jq nix-prefetch-github
+#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/94035b482d181af0a0f8f77823a790b256b7c3cc.tar.gz
 
 : "${GH_TOKEN:=$GITHUB_TOKEN}"
 
