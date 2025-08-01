@@ -1,5 +1,5 @@
 ---
-title: "More supported types in `read_parquet"
+title: "More supported types in `read_parquet`"
 type: feature
 authors: IyeOnline
 pr: 5373
