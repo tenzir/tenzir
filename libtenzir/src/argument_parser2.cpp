@@ -325,8 +325,12 @@ auto argument_parser2::parse(const ast::entity& self,
             set(located{std::move(pipe).unwrap(), pipe_expr.get_location()});
           },
           [&](auto&) {
-            // FIXME: It looks like this is reachable.
-            TENZIR_UNREACHABLE();
+            // FIXME: This can lead to having two errors for a single parameter
+            // mismatch. But this was previously `TENZIR_UNREACHABLE` and I had
+            // to do a quick fix because it is reachable (e.g. with  `from_http
+            // server=true { read_all }`).
+            emit(diagnostic::error("parameter does not accept pipelines")
+                   .primary(pipe_expr));
           });
         ++positional_idx;
       },
