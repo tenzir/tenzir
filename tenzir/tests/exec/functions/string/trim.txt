@@ -6,6 +6,6 @@
   empty: "",
   complex: "hello",
   multiple: "path",
-  char_collection: "bcdf",
+  char_collection: "bcdef",
   order_invariant: "abc",
 }
