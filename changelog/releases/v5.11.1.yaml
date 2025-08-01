@@ -1,0 +1,5 @@
+title: "HTTP Fix and Compression for Azure Log Analytics"
+description: "This release introduces payload compression for Azure Log Analytics to reduce bandwidth usage, as well as an important fix for a `from_http` bug that was introduced with the previous release."
+changes:
+  - epoch-spoken-worst
+  - suffer-strain-floor
