@@ -22,7 +22,7 @@ the start of the string.
 
 The string to trim.
 
-### `chars: string` (optional)
+### `chars: string (optional)`
 
 A string where each character represents a character to remove. Any character
 found in this string will be trimmed from the start.

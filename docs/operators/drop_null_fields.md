@@ -18,7 +18,7 @@ event. When provided with specific field paths, it removes those fields if they
 contain null values, and for record fields, it also recursively removes any
 null fields within them.
 
-### `field...` (optional)
+### `field... (optional)`
 
 A comma-separated list of field paths to process. When specified:
 
