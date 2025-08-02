@@ -183,26 +183,16 @@ When adding a new dependency (like c-ares for the dns_lookup operator), update a
 
 ## Development Workflow
 
-Follow these steps to contribute to Tenzir:
+When contributing to the Tenzir code base, the development workflow typically
+follows these high-level steps:
 
-### Planning Phase
-
-1. Begin with adapting and/or writing new user-facing documentation.
-   _Stop here and ask for feedback to ensure clarity and completeness._
-2. Develop integration tests in the form of *.tql files along with their
-   expected output.
-   *Stop here and ask for feedback to ensure clarity and completeness.\*
-3. Research the best strategy for implementing the feature or fix. In
-   particular, look at existing code and documentation to understand the best
-   approach.
-
-### Implementation Phase
-
-1. Make sure you are in a topic branch (e.g., `topic/feature-or-fix`).
-   Ask for confirmation in case the merge base is not `origin/main`.
-2. Prototype APIs and that fit into the overall architecture.
-3. Optional: consider writing unit tests for C++ code.
-4. Proceed with the implementation. Compile and test iteratively until it works.
-5. After all tests pass, write a changelog entry.
-6. Propose to submit a GitHub pull request via `gh`.
-   Ask for confirmation after presenting the pull request body.
+- Create a new topic branch: `git switch -c topic/feature-or-fix`
+  - If you are already on a topic branch, ensure you are up-to-date with the
+    latest changes and understand the changes up to the merge base
+- Implement your changes
+  - Use the **compiler** sub-agent to compile Tenzir
+  - Use the **integration-tester** sub-agent to adapt integration tests
+- Create a draft GitHub pull request via `gh`
+- After the PR is open, write a changelog entry
+  - Use the **changelog-writer** sub-agent to create the entry
+  - Commit the changelog separately and push it to the topic branch
