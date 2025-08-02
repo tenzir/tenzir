@@ -30,6 +30,7 @@
 #include <fmt/format.h>
 
 #include <ares.h>
+#include <array>
 #include <chrono>
 #include <memory>
 #include <netdb.h>
@@ -54,11 +55,11 @@ public:
     if (ares_library_init(ARES_LIB_INIT_ALL) != ARES_SUCCESS) {
       return;
     }
-    ares_options options{};
+    auto options = ares_options{};
     options.timeout = 5000; // 5 second timeout
     options.tries = 2;
     options.evsys = ARES_EVSYS_DEFAULT;
-    int optmask = ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES | ARES_OPT_EVENT_THREAD;
+    auto optmask = ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES | ARES_OPT_EVENT_THREAD;
     if (ares_init_options(&channel_, &options, optmask) != ARES_SUCCESS) {
       ares_library_cleanup();
       channel_ = nullptr;
@@ -75,11 +76,11 @@ public:
   ares_channel_wrapper(const ares_channel_wrapper&) = delete;
   ares_channel_wrapper& operator=(const ares_channel_wrapper&) = delete;
 
-  operator ares_channel() const {
+  auto get() const -> ares_channel {
     return channel_;
   }
 
-  bool valid() const {
+  auto valid() const -> bool {
     return channel_ != nullptr;
   }
 
@@ -87,8 +88,8 @@ private:
   ares_channel channel_ = nullptr;
 };
 
-void a_callback(void* arg, int status, int /*timeouts*/,
-                struct ares_addrinfo* result) {
+auto a_callback(void* arg, int status, int /*timeouts*/,
+                struct ares_addrinfo* result) -> void {
   auto* dns_res = static_cast<dns_result*>(arg);
   if (status != ARES_SUCCESS) {
     return;
@@ -96,68 +97,67 @@ void a_callback(void* arg, int status, int /*timeouts*/,
   for (auto* node = result->nodes; node != nullptr; node = node->ai_next) {
     if (node->ai_family == AF_INET) {
       auto* addr = reinterpret_cast<struct sockaddr_in*>(node->ai_addr);
-      char ip_str[INET_ADDRSTRLEN];
-      if (inet_ntop(AF_INET, &addr->sin_addr, ip_str, sizeof(ip_str))) {
-        dns_res->addresses.push_back(ip_str);
-        dns_res->types.push_back("A");
-        dns_res->ttls.push_back(std::chrono::seconds(node->ai_ttl));
+      auto ip_str = std::array<char, INET_ADDRSTRLEN>{};
+      if (inet_ntop(AF_INET, &addr->sin_addr, ip_str.data(), ip_str.size())) {
+        dns_res->addresses.emplace_back(ip_str.data());
+        dns_res->types.emplace_back("A");
+        dns_res->ttls.emplace_back(node->ai_ttl);
       }
     } else if (node->ai_family == AF_INET6) {
       auto* addr = reinterpret_cast<struct sockaddr_in6*>(node->ai_addr);
-      char ip_str[INET6_ADDRSTRLEN];
-      if (inet_ntop(AF_INET6, &addr->sin6_addr, ip_str, sizeof(ip_str))) {
-        dns_res->addresses.push_back(ip_str);
-        dns_res->types.push_back("AAAA");
-        dns_res->ttls.push_back(std::chrono::seconds(node->ai_ttl));
+      auto ip_str = std::array<char, INET6_ADDRSTRLEN>{};
+      if (inet_ntop(AF_INET6, &addr->sin6_addr, ip_str.data(), ip_str.size())) {
+        dns_res->addresses.emplace_back(ip_str.data());
+        dns_res->types.emplace_back("AAAA");
+        dns_res->ttls.emplace_back(node->ai_ttl);
       }
     }
   }
   ares_freeaddrinfo(result);
 }
 
-void ptr_callback(void* arg, int status, int /*timeouts*/,
-                  struct hostent* host) {
+auto ptr_callback(void* arg, int status, int /*timeouts*/, struct hostent* host)
+  -> void {
   auto* dns_res = static_cast<dns_result*>(arg);
   if (status == ARES_SUCCESS && host && host->h_name) {
     dns_res->hostname = host->h_name;
   }
 }
 
-data perform_dns_lookup(const data& field_value,
-                        ares_channel_wrapper& channel) {
+auto perform_dns_lookup(const data& field_value, ares_channel_wrapper& channel)
+  -> data {
   if (! channel.valid()) {
     return data{};
   }
-  dns_result result;
-  if (const auto* addr = std::get_if<ip>(&field_value.get_data())) {
+  auto result = dns_result{};
+  if (const auto* addr = try_as<ip>(field_value)) {
     // Reverse DNS lookup
     result.is_reverse = true;
     if (addr->is_v4()) {
       auto bytes = as_bytes(*addr);
-      struct in_addr in4;
+      auto in4 = in_addr{};
       std::memcpy(&in4, bytes.data() + 12, 4);
-      ares_gethostbyaddr(channel, &in4, sizeof(in4), AF_INET, ptr_callback,
-                         &result);
+      ares_gethostbyaddr(channel.get(), &in4, sizeof(in4), AF_INET,
+                         ptr_callback, &result);
     } else {
       auto bytes = as_bytes(*addr);
-      struct in6_addr in6;
+      auto in6 = in6_addr{};
       std::memcpy(&in6, bytes.data(), 16);
-      ares_gethostbyaddr(channel, &in6, sizeof(in6), AF_INET6, ptr_callback,
-                         &result);
+      ares_gethostbyaddr(channel.get(), &in6, sizeof(in6), AF_INET6,
+                         ptr_callback, &result);
     }
-  } else if (const auto* str
-             = std::get_if<std::string>(&field_value.get_data())) {
+  } else if (const auto* str = try_as<std::string>(field_value)) {
     // Forward DNS lookup
-    struct ares_addrinfo_hints hints{};
+    auto hints = ares_addrinfo_hints{};
     hints.ai_family = AF_UNSPEC;
     hints.ai_flags = ARES_AI_CANONNAME;
-    ares_getaddrinfo(channel, str->c_str(), nullptr, &hints, a_callback,
+    ares_getaddrinfo(channel.get(), str->c_str(), nullptr, &hints, a_callback,
                      &result);
   } else {
     return data{};
   }
   // Wait for DNS queries to complete. This call blocks.
-  ares_queue_wait_empty(channel, -1);
+  ares_queue_wait_empty(channel.get(), -1);
   // Build result record
   if (result.is_reverse) {
     if (! result.hostname.empty()) {
@@ -165,14 +165,14 @@ data perform_dns_lookup(const data& field_value,
     }
   } else {
     if (! result.addresses.empty()) {
-      tenzir::list records;
+      auto records = tenzir::list{};
       records.reserve(result.addresses.size());
-      for (size_t i = 0; i < result.addresses.size(); ++i) {
+      for (auto i = 0uz; i < result.addresses.size(); ++i) {
         auto addr_result = to<ip>(result.addresses[i]);
         if (addr_result) {
-          records.push_back(record{{"address", *addr_result},
-                                   {"type", result.types[i]},
-                                   {"ttl", result.ttls[i]}});
+          records.emplace_back(record{{"address", *addr_result},
+                                      {"type", result.types[i]},
+                                      {"ttl", result.ttls[i]}});
         }
       }
       if (! records.empty()) {
@@ -306,7 +306,7 @@ public:
     // Get the field name as a string
     auto field_segments = std::vector<std::string>{};
     for (const auto& segment : field_path->path()) {
-      field_segments.push_back(segment.id.name);
+      field_segments.emplace_back(segment.id.name);
     }
     auto field_name = fmt::to_string(fmt::join(field_segments, "."));
     // Process optional result=field parameter
@@ -334,7 +334,7 @@ public:
           // Get the result field name as a string
           auto result_segments = std::vector<std::string>{};
           for (const auto& segment : result_path->path()) {
-            result_segments.push_back(segment.id.name);
+            result_segments.emplace_back(segment.id.name);
           }
           result_field = fmt::to_string(fmt::join(result_segments, "."));
         } else {
