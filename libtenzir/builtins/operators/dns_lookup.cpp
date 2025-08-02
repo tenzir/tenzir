@@ -216,11 +216,9 @@ public:
       }
       // Build DNS lookup results
       auto builder = series_builder{};
-      // Get the field array from the record batch
-      auto batch = to_record_batch(slice);
-      auto field_type = schema.field(*field_index).type;
-      auto field_array = batch->column(field_index->at(0));
-      // Process each value
+      // Get the field data using offset::get (handles nested fields)
+      auto [field_type, field_array] = field_index->get(slice);
+      // Iterate over the field values
       for (auto i = int64_t{0}; i < field_array->length(); ++i) {
         if (field_array->IsNull(i)) {
           builder.null();
