@@ -113,9 +113,9 @@ public:
     }
   }
 
-  auto optimize(expression const&, event_order order) const
+  auto optimize(expression const& filter, event_order) const
     -> optimize_result override {
-    return optimize_result::order_invariant(*this, order);
+    return optimize_result{filter, event_order::ordered, copy()};
   }
 
   friend auto inspect(auto& f, delay_operator& x) -> bool {
@@ -206,9 +206,9 @@ public:
     }
   }
 
-  auto optimize(expression const&, event_order order) const
+  auto optimize(expression const& filter, event_order) const
     -> optimize_result override {
-    return optimize_result::order_invariant(*this, order);
+    return optimize_result{filter, event_order::ordered, copy()};
   }
 
   friend auto inspect(auto& f, delay_operator2& x) -> bool {
