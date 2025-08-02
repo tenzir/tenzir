@@ -101,7 +101,7 @@ public:
     reset(0, nullptr);
   }
 
-  void reset(double total_weight, std::vector<centroid>* tdigest) {
+  auto reset(double total_weight, std::vector<centroid>* tdigest) -> void {
     total_weight_ = total_weight;
     tdigest_ = tdigest;
     if (tdigest_) {
@@ -112,15 +112,14 @@ public:
   }
 
   // merge one centroid from a sorted centroid stream
-  void add(const centroid& c) {
+  auto add(const centroid& c) -> void {
     auto& td = *tdigest_;
-    const double weight = weight_so_far_ + c.weight;
+    auto weight = weight_so_far_ + c.weight;
     if (weight <= weight_limit_) {
       td.back().merge(c);
     } else {
-      const double quantile = weight_so_far_ / total_weight_;
-      const double next_weight_limit
-        = total_weight_ * this->q(this->k(quantile) + 1);
+      auto quantile = weight_so_far_ / total_weight_;
+      auto next_weight_limit = total_weight_ * this->q(this->k(quantile) + 1);
       // weight limit should be strictly increasing, until the last centroid
       if (next_weight_limit <= weight_limit_) {
         weight_limit_ = total_weight_;
@@ -135,10 +134,11 @@ public:
   // validate k-size of a tdigest
   auto validate(const std::vector<centroid>& tdigest, double total_weight) const
     -> std::expected<void, std::string> {
-    double q_prev = 0, k_prev = this->k(0);
+    auto q_prev = 0.0;
+    auto k_prev = this->k(0);
     for (size_t i = 0; i < tdigest.size(); ++i) {
-      const double q = q_prev + tdigest[i].weight / total_weight;
-      const double k_val = this->k(q);
+      auto q = q_prev + tdigest[i].weight / total_weight;
+      auto k_val = this->k(q);
       if (tdigest[i].weight != 1 && (k_val - k_prev) > 1.001) {
         return std::unexpected(
           fmt::format("oversized centroid: {}", k_val - k_prev));
@@ -167,7 +167,7 @@ public:
     reset();
   }
 
-  void reset() {
+  auto reset() -> void {
     tdigests_[0].resize(0);
     tdigests_[1].resize(0);
     current_ = 0;
@@ -179,7 +179,8 @@ public:
 
   auto validate() const -> std::expected<void, std::string> {
     // check weight, centroid order
-    double total_weight = 0, prev_mean = std::numeric_limits<double>::lowest();
+    auto total_weight = 0.0;
+    auto prev_mean = std::numeric_limits<double>::lowest();
     for (const auto& c : tdigests_[current_]) {
       if (std::isnan(c.mean) || std::isnan(c.weight)) {
         return std::unexpected("NAN found in tdigest");
@@ -204,7 +205,7 @@ public:
     return merger_.validate(tdigests_[current_], total_weight_);
   }
 
-  void dump() const {
+  auto dump() const -> void {
     const auto& td = tdigests_[current_];
     for (size_t i = 0; i < td.size(); ++i) {
       std::cerr << i << ": mean = " << td[i].mean
@@ -214,7 +215,7 @@ public:
   }
 
   // merge with other tdigests
-  void merge(const std::vector<const tdigest_impl*>& tdigest_impls) {
+  auto merge(const std::vector<const tdigest_impl*>& tdigest_impls) -> void {
     // current and end iterator
     using centroid_iter = std::vector<centroid>::const_iterator;
     using centroid_iter_pair = std::pair<centroid_iter, centroid_iter>;
@@ -231,7 +232,6 @@ public:
     std::vector<centroid_iter_pair> queue_buffer;
     queue_buffer.reserve(tdigest_impls.size() + 1);
     centroid_queue queue(std::move(centroid_gt), std::move(queue_buffer));
-
     const auto& this_tdigest = tdigests_[current_];
     if (this_tdigest.size() > 0) {
       queue.emplace(this_tdigest.cbegin(), this_tdigest.cend());
@@ -245,7 +245,6 @@ public:
         max_ = std::max(max_, td->max_);
       }
     }
-
     merger_.reset(total_weight_, &tdigests_[1 - current_]);
     centroid_iter current_iter, end_iter;
     // do k-way merge till one buffer left
@@ -265,22 +264,20 @@ public:
       }
     }
     merger_.reset(0, nullptr);
-
     current_ = 1 - current_;
   }
 
   // merge input data with current tdigest
-  void merge_input(std::vector<double>& input) {
+  auto merge_input(std::vector<double>& input) -> void {
     total_weight_ += input.size();
-
     std::sort(input.begin(), input.end());
     min_ = std::min(min_, input.front());
     max_ = std::max(max_, input.back());
-
     // pick next minimal centroid from input and tdigest, feed to merger
     merger_.reset(total_weight_, &tdigests_[1 - current_]);
     const auto& td = tdigests_[current_];
-    uint32_t tdigest_index = 0, input_index = 0;
+    auto tdigest_index = uint32_t{0};
+    auto input_index = uint32_t{0};
     while (tdigest_index < td.size() && input_index < input.size()) {
       if (td[tdigest_index].mean < input[input_index]) {
         merger_.add(td[tdigest_index++]);
@@ -295,19 +292,17 @@ public:
       merger_.add(centroid{input[input_index++], 1});
     }
     merger_.reset(0, nullptr);
-
     input.resize(0);
     current_ = 1 - current_;
   }
 
   auto quantile(double q) const -> double {
     const auto& td = tdigests_[current_];
-
     if (q < 0 || q > 1 || td.size() == 0) {
       return NAN;
     }
 
-    const double index = q * total_weight_;
+    auto index = q * total_weight_;
     if (index <= 1) {
       return min_;
     } else if (index >= total_weight_ - 1) {
@@ -315,8 +310,8 @@ public:
     }
 
     // find centroid contains the index
-    uint32_t ci = 0;
-    double weight_sum = 0;
+    auto ci = uint32_t{0};
+    auto weight_sum = 0.0;
     for (; ci < td.size(); ++ci) {
       weight_sum += td[ci].weight;
       if (index <= weight_sum) {
@@ -324,22 +319,20 @@ public:
       }
     }
     TENZIR_ASSERT(ci < td.size());
-
     // deviation of index from the centroid center
-    double diff = index + td[ci].weight / 2 - weight_sum;
-
+    auto diff = index + td[ci].weight / 2 - weight_sum;
     // index happen to be in a unit weight centroid
     if (td[ci].weight == 1 && std::abs(diff) < 0.5) {
       return td[ci].mean;
     }
-
     // find adjacent centroids for interpolation
-    uint32_t ci_left = ci, ci_right = ci;
+    auto ci_left = ci;
+    auto ci_right = ci;
     if (diff > 0) {
       if (ci_right == td.size() - 1) {
         // index larger than center of last bin
         TENZIR_ASSERT(weight_sum == total_weight_);
-        const centroid* c = &td[ci_right];
+        auto c = &td[ci_right];
         TENZIR_ASSERT(c->weight >= 2);
         return lerp(c->mean, max_, diff / (c->weight / 2));
       }
@@ -347,21 +340,20 @@ public:
     } else {
       if (ci_left == 0) {
         // index smaller than center of first bin
-        const centroid* c = &td[0];
+        auto c = &td[0];
         TENZIR_ASSERT(c->weight >= 2);
         return lerp(min_, c->mean, index / (c->weight / 2));
       }
       --ci_left;
       diff += td[ci_left].weight / 2 + td[ci_right].weight / 2;
     }
-
     // interpolate from adjacent centroids
     diff /= (td[ci_left].weight / 2 + td[ci_right].weight / 2);
     return lerp(td[ci_left].mean, td[ci_right].mean, diff);
   }
 
   auto mean() const -> double {
-    double sum = 0;
+    auto sum = 0.0;
     for (const auto& c : tdigests_[current_]) {
       sum += c.mean * c.weight;
     }
@@ -379,7 +371,6 @@ private:
   tdigest_merger<> merger_;
   double total_weight_;
   double min_, max_;
-
   // ping-pong buffer holds two tdigests, size = 2 * delta * sizeof(centroid)
   std::vector<centroid> tdigests_[2];
   // index of active tdigest buffer, 0 or 1
@@ -396,7 +387,7 @@ tdigest::~tdigest() = default;
 tdigest::tdigest(tdigest&&) = default;
 tdigest& tdigest::operator=(tdigest&&) = default;
 
-void tdigest::reset() {
+auto tdigest::reset() -> void {
   input_.resize(0);
   impl_->reset();
 }
@@ -406,15 +397,14 @@ auto tdigest::validate() const -> std::expected<void, std::string> {
   return impl_->validate();
 }
 
-void tdigest::dump() const {
+auto tdigest::dump() const -> void {
   merge_input();
   impl_->dump();
 }
 
-void tdigest::merge(const std::vector<tdigest>& others) {
+auto tdigest::merge(const std::vector<tdigest>& others) -> void {
   merge_input();
-
-  std::vector<const tdigest_impl*> other_impls;
+  auto other_impls = std::vector<const tdigest_impl*>{};
   other_impls.reserve(others.size());
   for (auto& other : others) {
     other.merge_input();
@@ -423,7 +413,7 @@ void tdigest::merge(const std::vector<tdigest>& others) {
   impl_->merge(other_impls);
 }
 
-void tdigest::merge(const tdigest& other) {
+auto tdigest::merge(const tdigest& other) -> void {
   merge_input();
   other.merge_input();
   impl_->merge({other.impl_.get()});
@@ -443,7 +433,7 @@ auto tdigest::is_empty() const -> bool {
   return input_.size() == 0 && impl_->total_weight() == 0;
 }
 
-void tdigest::merge_input() const {
+auto tdigest::merge_input() const -> void {
   if (input_.size() > 0) {
     impl_->merge_input(input_); // will mutate input_
   }

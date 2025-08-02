@@ -53,18 +53,18 @@ public:
   tdigest& operator=(tdigest&&);
 
   // reset and re-use this tdigest
-  void reset();
+  auto reset() -> void;
 
   // validate data integrity
   auto validate() const -> std::expected<void, std::string>;
 
   // dump internal data, only for debug
-  void dump() const;
+  auto dump() const -> void;
 
   // buffer a single data point, consume internal buffer if full
   // this function is intensively called and performance critical
   // call it only if you are sure no NAN exists in input data
-  void add(double value) {
+  auto add(double value) -> void {
     TENZIR_ASSERT(! std::isnan(value), "cannot add NAN");
     if (input_.size() == input_.capacity()) [[unlikely]] {
       merge_input();
@@ -73,22 +73,21 @@ public:
   }
 
   // skip NAN on adding
-  template <typename T>
-  typename std::enable_if<std::is_floating_point<T>::value>::type
-  nan_add(T value) {
+  template <class T>
+  auto nan_add(T value) -> std::enable_if_t<std::is_floating_point_v<T>> {
     if (! std::isnan(value)) {
       add(value);
     }
   }
 
-  template <typename T>
-  typename std::enable_if<std::is_integral<T>::value>::type nan_add(T value) {
+  template <class T>
+  auto nan_add(T value) -> std::enable_if_t<std::is_integral_v<T>> {
     add(static_cast<double>(value));
   }
 
   // merge with other t-digests, called infrequently
-  void merge(const std::vector<tdigest>& others);
-  void merge(const tdigest& other);
+  auto merge(const std::vector<tdigest>& others) -> void;
+  auto merge(const tdigest& other) -> void;
 
   // calculate quantile
   auto quantile(double q) const -> double;
@@ -106,7 +105,7 @@ public:
 
 private:
   // merge input data with current tdigest
-  void merge_input() const;
+  auto merge_input() const -> void;
 
   // input buffer, size = buffer_size * sizeof(double)
   mutable std::vector<double> input_;
