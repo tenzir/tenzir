@@ -10,6 +10,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/tdigest.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/series_builder.hpp>
@@ -18,94 +19,10 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
-#include <arrow/util/logging.h>
-#include <arrow/util/macros.h>
-#include <arrow/util/visibility.h>
-
 #include <cmath>
 #include <memory>
 #include <random>
 #include <vector>
-
-namespace arrow {
-
-class Status;
-
-namespace internal {
-
-class ARROW_EXPORT TDigest {
-public:
-  explicit TDigest(uint32_t delta = 100, uint32_t buffer_size = 500);
-  ~TDigest();
-  TDigest(TDigest&&);
-  TDigest& operator=(TDigest&&);
-
-  // reset and re-use this tdigest
-  void Reset();
-
-  // validate data integrity
-  Status Validate() const;
-
-  // dump internal data, only for debug
-  void Dump() const;
-
-  // buffer a single data point, consume internal buffer if full
-  // this function is intensively called and performance critical
-  // call it only if you are sure no NAN exists in input data
-  void Add(double value) {
-    ARROW_DCHECK(! std::isnan(value)) << "cannot add NAN";
-    if (ARROW_PREDICT_FALSE(input_.size() == input_.capacity())) {
-      MergeInput();
-    }
-    input_.push_back(value);
-  }
-
-  // skip NAN on adding
-  template <typename T>
-  typename std::enable_if<std::is_floating_point<T>::value>::type
-  NanAdd(T value) {
-    if (! std::isnan(value)) {
-      Add(value);
-    }
-  }
-
-  template <typename T>
-  typename std::enable_if<std::is_integral<T>::value>::type NanAdd(T value) {
-    Add(static_cast<double>(value));
-  }
-
-  // merge with other t-digests, called infrequently
-  void Merge(const std::vector<TDigest>& others);
-  void Merge(const TDigest& other);
-
-  // calculate quantile
-  double Quantile(double q) const;
-
-  double Min() const {
-    return Quantile(0);
-  }
-  double Max() const {
-    return Quantile(1);
-  }
-  double Mean() const;
-
-  // check if this tdigest contains no valid data points
-  bool is_empty() const;
-
-private:
-  // merge input data with current tdigest
-  void MergeInput() const;
-
-  // input buffer, size = buffer_size * sizeof(double)
-  mutable std::vector<double> input_;
-
-  // hide other members with pimpl
-  class TDigestImpl;
-  std::unique_ptr<TDigestImpl> impl_;
-};
-
-} // namespace internal
-} // namespace arrow
 
 namespace tenzir::plugins::numeric {
 
@@ -362,7 +279,7 @@ public:
           auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
           for (auto value : values(ty, array)) {
             if (value) {
-              digest_.NanAdd(*value);
+              digest_.nan_add(*value);
             }
           }
         },
@@ -378,7 +295,7 @@ public:
           state_ = state::dur;
           for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
             if (value) {
-              digest_.Add(value->count());
+              digest_.add(value->count());
             }
           }
         },
@@ -406,9 +323,9 @@ public:
         return data{};
       case state::dur:
         return duration{
-          static_cast<duration::rep>(digest_.Quantile(quantile_))};
+          static_cast<duration::rep>(digest_.quantile(quantile_))};
       case state::numeric:
-        return digest_.Quantile(quantile_);
+        return digest_.quantile(quantile_);
     }
     TENZIR_UNREACHABLE();
   }
@@ -427,14 +344,14 @@ public:
   auto reset() -> void override {
     quantile_ = {};
     state_ = state::none;
-    digest_.Reset();
+    digest_.reset();
   }
 
 private:
   ast::expression expr_;
   double quantile_;
   enum class state { none, failed, dur, numeric } state_{};
-  arrow::internal::TDigest digest_;
+  detail::tdigest digest_;
 };
 
 class quantile final : public aggregation_plugin {
