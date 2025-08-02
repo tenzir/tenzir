@@ -128,11 +128,6 @@ GitHub Actions workflows in `.github/workflows/`:
 - `docker.yaml` - Container image builds
 - `release.yaml` - Release automation
 
-#### Linting Tools
-
-- **shellcheck** for shell scripts (via `scripts/shellcheck.bash`)
-- **clang-tidy** for C++ static analysis (when enabled)
-
 #### Additional Tools
 
 - `scripts/` directory contains various development utilities:
