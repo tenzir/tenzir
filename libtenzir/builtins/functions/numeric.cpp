@@ -10,6 +10,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/tdigest.hpp>
 #include <tenzir/fbs/aggregation.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/series_builder.hpp>
@@ -18,9 +19,10 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 
-#include <arrow/util/tdigest.h>
-
+#include <cmath>
+#include <memory>
 #include <random>
+#include <vector>
 
 namespace tenzir::plugins::numeric {
 
@@ -277,7 +279,7 @@ public:
           auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
           for (auto value : values(ty, array)) {
             if (value) {
-              digest_.NanAdd(*value);
+              digest_.nan_add(*value);
             }
           }
         },
@@ -293,7 +295,7 @@ public:
           state_ = state::dur;
           for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
             if (value) {
-              digest_.Add(value->count());
+              digest_.add(value->count());
             }
           }
         },
@@ -321,9 +323,9 @@ public:
         return data{};
       case state::dur:
         return duration{
-          static_cast<duration::rep>(digest_.Quantile(quantile_))};
+          static_cast<duration::rep>(digest_.quantile(quantile_))};
       case state::numeric:
-        return digest_.Quantile(quantile_);
+        return digest_.quantile(quantile_);
     }
     TENZIR_UNREACHABLE();
   }
@@ -342,14 +344,14 @@ public:
   auto reset() -> void override {
     quantile_ = {};
     state_ = state::none;
-    digest_.Reset();
+    digest_.reset();
   }
 
 private:
   ast::expression expr_;
   double quantile_;
   enum class state { none, failed, dur, numeric } state_{};
-  arrow::internal::TDigest digest_;
+  detail::tdigest digest_;
 };
 
 class quantile final : public aggregation_plugin {
