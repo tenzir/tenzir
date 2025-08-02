@@ -57,7 +57,8 @@ public:
     ares_options options{};
     options.timeout = 5000; // 5 second timeout
     options.tries = 2;
-    int optmask = ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+    options.evsys = ARES_EVSYS_DEFAULT;
+    int optmask = ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES | ARES_OPT_EVENT_THREAD;
     if (ares_init_options(&channel_, &options, optmask) != ARES_SUCCESS) {
       ares_library_cleanup();
       channel_ = nullptr;
@@ -155,31 +156,8 @@ data perform_dns_lookup(const data& field_value,
   } else {
     return data{};
   }
-
-  // Process DNS queries
-  fd_set read_fds, write_fds;
-  int nfds;
-  struct timeval tv;
-  struct timeval* tvp;
-  while (true) {
-    FD_ZERO(&read_fds);
-    FD_ZERO(&write_fds);
-    nfds = ares_fds(channel, &read_fds, &write_fds);
-    if (nfds == 0) {
-      break;
-    }
-    tvp = ares_timeout(channel, nullptr, &tv);
-    select(nfds, &read_fds, &write_fds, nullptr, tvp);
-    ares_process_fd(channel, ARES_SOCKET_BAD, ARES_SOCKET_BAD);
-    // Process all file descriptors
-    for (int fd = 0; fd < nfds; ++fd) {
-      ares_socket_t read_fd = FD_ISSET(fd, &read_fds) ? fd : ARES_SOCKET_BAD;
-      ares_socket_t write_fd = FD_ISSET(fd, &write_fds) ? fd : ARES_SOCKET_BAD;
-      if (read_fd != ARES_SOCKET_BAD || write_fd != ARES_SOCKET_BAD) {
-        ares_process_fd(channel, read_fd, write_fd);
-      }
-    }
-  }
+  // Wait for DNS queries to complete. This call blocks.
+  ares_queue_wait_empty(channel, -1);
   // Build result record
   if (result.is_reverse) {
     if (! result.hostname.empty()) {
@@ -279,6 +257,15 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     return optimize_result{filter, order, copy()};
+  }
+
+  auto detached() const -> bool override {
+    // While ARES_OPT_EVENT_THREAD handles DNS I/O asynchronously in a
+    // separate thread managed by c-ares, we still use ares_queue_wait_empty()
+    // which blocks the calling thread until all queries complete. To avoid
+    // blocking the actor system's thread pool, we mark this operator as
+    // detached so it runs in its own thread context.
+    return true;
   }
 
   friend auto inspect(auto& f, dns_lookup_operator& x) -> bool {
