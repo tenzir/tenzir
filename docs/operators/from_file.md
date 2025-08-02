@@ -4,10 +4,6 @@ category: Inputs/Events
 example: 'from_file "s3://data/**.json"'
 ---
 
-:::caution[Under Active Development]
-This operator is still under active development.
-:::
-
 Reads one or multiple files from a filesystem.
 
 ```tql
