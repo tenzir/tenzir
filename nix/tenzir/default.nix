@@ -49,6 +49,7 @@ let
       restinio,
       llhttp,
       pfs,
+      c-ares,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
       extraPlugins ? [ ],
@@ -228,6 +229,7 @@ let
                 with_boost_asio = true;
               })
               llhttp
+              c-ares
             ]
             ++ lib.optionals isStatic [
               azure-sdk-for-cpp
