@@ -21,7 +21,7 @@ Language (TQL) is domain-specific language to write data pipelines.
   - `add.py` - Script to add new changelog entries
   - `release.py` - Script to generate release notes
 - `cmake/` - CMake build system modules and utilities
-  - Various Find*.cmake modules for dependencies
+  - Various Find\*.cmake modules for dependencies
   - TenzirConfig.cmake.in - CMake configuration template
   - TenzirRegisterPlugin.cmake - Plugin registration utilities
 - `docs/` - Documentation for functions and operators
@@ -52,31 +52,32 @@ Language (TQL) is domain-specific language to write data pipelines.
   - `tests/` - TQL test files and expected outputs
   - `services/` - System service configurations
 
+## Available Sub-Agents
+
+### compiler
+
+The **compiler** sub-agent sets up the build tree and compiles the Tenzir
+executable.
+
+Use it to perform the following tasks:
+
+- Configure the build using CMake
+- Compile Tenzir to obtain the `tenzir` executable
+
+### integration-tester
+
+The **integration-tester** sub-agent writes and executes TQL integration tests.
+
+Specifically, it performs the following tasks:
+
+- Create new *.tql files to test TQL programs
+- Run existing integration tests
+
 ## Key Tasks
 
-### Setup
+### Build Tenzir
 
-Make sure submodules are initialized and updated:
-
-```sh
-git submodule update --init --recursive
-```
-
-### Build
-
-Configure the build:
-
-```sh
-cmake -B build -D CMAKE_BUILD_TYPE=RelWithDebInfo
-```
-
-Use `CMAKE_BUILD_TYPE=Debug` only when in need of advanced debugging.
-
-Build the project as follows:
-
-```bash
-cmake --build build
-```
+Use the **compiler** sub-agent to compile Tenzir.
 
 ### Run pipelines
 
@@ -88,11 +89,9 @@ Use the `tenzir` binary to execute a TQL program:
 - The pipeline may read stdin as data, based on the first operator.
 - The pipeline may produce data on stdout, based on the last operator.
 
-### Testing
+### Test funtionality
 
-Tenzir has both C++ *unit tests* and TQL *integration tests*.
-
-#### Unit Tests
+Tenzir has both C++ _unit tests_ and TQL _integration tests_.
 
 Run the unit tests via CTest:
 
@@ -100,23 +99,7 @@ Run the unit tests via CTest:
 ctest --test-dir build
 ```
 
-#### Integration Tests
-
-The integration tests are in `tenzir/tests`. Read `tenzir/tests/README.md` for
-detailed instructions on how to exeucte and write tests.
-
-TL;DR: run all integration tests via `uv`:
-
-```sh
-uv run tenzir/tests/run.py
-```
-
-Test the changed/new functionality selectively by passing the test files as
-arguments, e.g.:
-
-```sh
-uv run tenzir/tests/run.py tenzir/tests/exec/drop/*.tql
-```
+Use the **integration-tester** sub-agent to run TQL integration tests.
 
 ### Code Quality
 
@@ -125,6 +108,7 @@ Tenzir maintains code quality through several mechanisms:
 #### Code Formatting
 
 - **C++ Code**: Uses clang-format with a custom `.clang-format` configuration
+
   - 2-space indentation
   - Attach braces style
   - Sorted includes with grouping
@@ -143,11 +127,6 @@ GitHub Actions workflows in `.github/workflows/`:
 - `analysis.yaml` - Static analysis and security checks
 - `docker.yaml` - Container image builds
 - `release.yaml` - Release automation
-
-#### Linting Tools
-
-- **shellcheck** for shell scripts (via `scripts/shellcheck.bash`)
-- **clang-tidy** for C++ static analysis (when enabled)
 
 #### Additional Tools
 
@@ -171,31 +150,49 @@ GitHub Actions workflows in `.github/workflows/`:
     - Use ```tql blocks for both input pipelines and output
     - Show realistic, practical examples that demonstrate the feature
     - Include output that shows what users will actually see
+    - All examples must use literal output from running the `tenzir` binary
   - Changelog titles should be user-focused: Write titles that describe the
     functionality from a user's perspective, not the technical implementation.
+  - Do not use markdown headings (##) in changelog entries—keep the content flat.
+  - Break markdown text paragraphs at 80 characters for better readability.
+
+### Adding a dependency
+
+When adding a new dependency (like c-ares for the dns_lookup operator), update all build systems:
+
+1. **CMake** (`libtenzir/CMakeLists.txt`):
+
+   - Add `find_package(PackageName REQUIRED)`
+   - Add `provide_find_module(PackageName)` if needed
+   - Link with `target_link_libraries(libtenzir PUBLIC package::target)`
+   - Update `TENZIR_FIND_DEPENDENCY_LIST` for downstream users
+   - Add `dependency_summary()` call
+
+2. **Nix** (`nix/tenzir/default.nix`):
+
+   - Add package to function parameters (around line 50)
+   - Add to `buildInputs` list (around line 230)
+
+3. **Homebrew** (`scripts/macOS/install-dev-dependencies.sh`):
+
+   - Add package name to the `brew install` list
+
+4. **Docker/Linux** (`scripts/debian/install-dev-dependencies.sh`):
+   - Add `-dev` package to the `apt-get install` list
+   - Docker builds use this script directly
 
 ## Development Workflow
 
-Follow these steps to contribute to Tenzir:
+When contributing to the Tenzir code base, the development workflow typically
+follows these high-level steps:
 
-### Planning Phase
-
-1. Begin with adapting and/or writing new user-facing documentation.
-   *Stop here and ask for feedback to ensure clarity and completeness.*
-2. Develop integration tests in the form of *.tql files along with their
-   expected output.
-   *Stop here and ask for feedback to ensure clarity and completeness.*
-3. Research the best strategy for implementing the feature or fix. In
-   particular, look at existing code and documentation to understand the best
-   approach.
-
-### Implementation Phase
-
-1. Make sure you are in a topic branch (e.g., `topic/feature-or-fix`).
-   Ask for confirmation in case the merge base is not `origin/main`.
-2. Prototype APIs and that fit into the overall architecture.
-3. Optional: consider writing unit tests for C++ code.
-4. Proceed with the implementation. Compile and test iteratively until it works.
-5. After all tests pass, write a changelog entry.
-6. Propose to submit a GitHub pull request via `gh`.
-   Ask for confirmation after presenting the pull request body.
+- Create a new topic branch: `git switch -c topic/feature-or-fix`
+  - If you are already on a topic branch, ensure you are up-to-date with the
+    latest changes and understand the changes up to the merge base
+- Implement your changes
+  - Use the **compiler** sub-agent to compile Tenzir
+  - Use the **integration-tester** sub-agent to adapt integration tests
+- Create a draft GitHub pull request via `gh`
+- After the PR is open, write a changelog entry
+  - Use the **changelog-writer** sub-agent to create the entry
+  - Commit the changelog separately and push it to the topic branch
