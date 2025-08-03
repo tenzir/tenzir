@@ -213,8 +213,7 @@ private:
               check(int_builder.AppendNull());
             } else {
               auto value = array.Value(i);
-              if (value > static_cast<uint64_t>(
-                    std::numeric_limits<int64_t>::max())) {
+              if (not std::in_range<int64_t>(value)) {
                 if (not warned) {
                   diagnostic::warning("integer in `{}` exceeds maximum", path)
                     .note("found {}", value)
