@@ -516,8 +516,8 @@ private:
       // Do not attempt trimming in variant fields.
       return input;
     }
-    auto name = ty.name();
-    auto attributes = collect(ty.attributes());
+    auto name = input.type.name();
+    auto attributes = collect(input.type.attributes());
     return match(
       std::tie(input, ty),
       [&]<class Type>(basic_series<Type> input, const Type& ty) -> series {
