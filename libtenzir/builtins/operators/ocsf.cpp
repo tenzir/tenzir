@@ -19,6 +19,8 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
 
+#include <limits>
+
 namespace tenzir::plugins::ocsf {
 namespace {
 
@@ -200,7 +202,35 @@ private:
       [&]<class Array, class Type>(const Array& array, const Type& ty) -> series
         requires(not std::same_as<Array, type_to_arrow_array_t<Type>>)
       {
-        // TODO: Might want to try some conversions instead.
+        // Try some conversions before giving up.
+        if constexpr (std::same_as<Array, arrow::UInt64Array>
+                      and std::same_as<Type, int64_type>) {
+          // Cast uint64 to int64 if the values fit within int64 range.
+          auto uint_array = static_cast<const arrow::UInt64Array*>(&array);
+          auto int_builder = arrow::Int64Builder{};
+          check(int_builder.Reserve(array.length()));
+
+          for (auto i = int64_t{0}; i < array.length(); ++i) {
+            if (uint_array->IsNull(i)) {
+              check(int_builder.AppendNull());
+            } else {
+              auto value = uint_array->Value(i);
+              if (value > static_cast<uint64_t>(
+                    std::numeric_limits<int64_t>::max())) {
+                diagnostic::warning("uint64 value {} is too large for int64, "
+                                    "setting to null",
+                                    value)
+                  .primary(self_)
+                  .emit(dh_);
+                check(int_builder.AppendNull());
+              } else {
+                check(int_builder.Append(static_cast<int64_t>(value)));
+              }
+            }
+          }
+          return series{int64_type{}, finish(int_builder)};
+        }
+
         if constexpr (not std::same_as<Array, arrow::NullArray>) {
           diagnostic::warning("expected type `{}` for `{}`, but got `{}`",
                               type_kind::of<Type>, path,
