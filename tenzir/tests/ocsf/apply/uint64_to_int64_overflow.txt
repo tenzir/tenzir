@@ -60,9 +60,10 @@
   unmapped: null,
   url: null,
 }
-warning: uint64 value 18446744073709551615 is too large for int64, setting to null
+warning: integer in `severity_id` exceeds maximum
  --> ocsf/apply/uint64_to_int64_overflow.tql:2:1
   |
 2 | ocsf::apply
   | ~~~~~~~~~~~ 
   |
+  = note: found 18446744073709551615

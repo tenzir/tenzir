@@ -1,5 +1,5 @@
 ---
-title: "Automatic integer casting in ocsf::apply"
+title: "Automatic integer casting in `ocsf::apply`"
 type: change
 authors: jachris
 pr: 5401
@@ -8,9 +8,9 @@ pr: 5401
 The `ocsf::apply` operator now automatically casts `uint64` values to `int64`
 when the OCSF schema expects an integer field. This is important because the
 exact integer type is mostly considered an implementation detail. Unsigned
-integers are mostly produced when reading events for which a schema has been
+integers are mainly produced when reading events for which a schema has been
 defined. This change makes sure that OCSF mappings that use the resulting events
-successfully pass through `ocsf::apply`.
+can successfully pass through `ocsf::apply`.
 
 **Example:**
 
