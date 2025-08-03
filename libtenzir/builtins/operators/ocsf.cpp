@@ -516,8 +516,8 @@ private:
       // Do not attempt trimming in variant fields.
       return input;
     }
-    auto name = ty.name();
-    auto attributes = collect(ty.attributes());
+    auto name = input.type.name();
+    auto attributes = collect(input.type.attributes());
     return match(
       std::tie(input, ty),
       [&]<class Type>(basic_series<Type> input, const Type& ty) -> series {
@@ -749,8 +749,8 @@ private:
       // Do not attempt derivation in variant fields.
       return input;
     }
-    auto name = ty.name();
-    auto attributes = collect(ty.attributes());
+    auto name = input.type.name();
+    auto attributes = collect(input.type.attributes());
     return match(
       std::tie(input, ty),
       [&]<class Type>(basic_series<Type> input, const Type& ty) -> series {
@@ -944,8 +944,7 @@ private:
         if (it != enum_lookup.end()) {
           string_result = it->second;
         } else {
-          diagnostic::warning("found invalid value for field `{}`", *int_value,
-                              int_path)
+          diagnostic::warning("found invalid value for field `{}`", int_path)
             .primary(self_)
             .note("got {}", *int_value)
             .emit(dh_);
