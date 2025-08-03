@@ -19,6 +19,8 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
 
+#include <limits>
+
 namespace tenzir::plugins::ocsf {
 namespace {
 
@@ -200,7 +202,33 @@ private:
       [&]<class Array, class Type>(const Array& array, const Type& ty) -> series
         requires(not std::same_as<Array, type_to_arrow_array_t<Type>>)
       {
-        // TODO: Might want to try some conversions instead.
+        // Try a `uint64 -> int64` conversion before giving up.
+        if constexpr (std::same_as<Array, arrow::UInt64Array>
+                      and std::same_as<Type, int64_type>) {
+          auto int_builder = arrow::Int64Builder{};
+          check(int_builder.Reserve(array.length()));
+          auto warned = false;
+          for (auto i = int64_t{0}; i < array.length(); ++i) {
+            if (array.IsNull(i)) {
+              check(int_builder.AppendNull());
+            } else {
+              auto value = array.Value(i);
+              if (not std::in_range<int64_t>(value)) {
+                if (not warned) {
+                  diagnostic::warning("integer in `{}` exceeds maximum", path)
+                    .note("found {}", value)
+                    .primary(self_)
+                    .emit(dh_);
+                  warned = true;
+                }
+                check(int_builder.AppendNull());
+              } else {
+                check(int_builder.Append(static_cast<int64_t>(value)));
+              }
+            }
+          }
+          return series{int64_type{}, finish(int_builder)};
+        }
         if constexpr (not std::same_as<Array, arrow::NullArray>) {
           diagnostic::warning("expected type `{}` for `{}`, but got `{}`",
                               type_kind::of<Type>, path,
