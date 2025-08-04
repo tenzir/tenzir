@@ -63,11 +63,11 @@ ASL specifies this should be between `5min` and `1d`.
 
 The default is `5min`.
 
-## `role = string (optional)`
+### `role = string (optional)`
 
 A role to assume when writing to S3.
 
-## `external_id = string (optional)`
+### `external_id = string (optional)`
 
 The external ID to use when assuming the `role`.
 

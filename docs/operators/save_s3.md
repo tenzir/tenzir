@@ -57,11 +57,11 @@ Options can be appended to the path as query parameters, as per
 Whether to ignore any predefined credentials and try to save with anonymous
 credentials.
 
-## `role = string (optional)`
+### `role = string (optional)`
 
 A role to assume when writing to S3.
 
-## `external_id = string (optional)`
+### `external_id = string (optional)`
 
 The external ID to use when assuming the `role`.
 
