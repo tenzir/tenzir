@@ -1,7 +1,7 @@
 ---
 title: length
 category: List
-example: '[1,2,3].length()'
+example: "[1,2,3].length()"
 ---
 
 Retrieves the length of a list.
@@ -28,5 +28,6 @@ from {n: [1, 2, 3].length()}
 
 ## See Also
 
+[`is_empty`](/reference/functions/is_empty),
 [`length_bytes`](/reference/functions/length_bytes),
 [`length_chars`](/reference/functions/length_chars)

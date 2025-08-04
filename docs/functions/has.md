@@ -38,6 +38,8 @@ this = {
   has_z: false,
 }
 ```
+
 ## See Also
 
+[`is_empty`](/reference/functions/is_empty),
 [`keys`](/reference/functions/keys)
