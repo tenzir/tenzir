@@ -121,9 +121,9 @@ def object_prefix(schema: Schema) -> str:
     return class_prefix(schema) + "." + "object"
 
 
-def hash_enum(enum) -> str:
+def hash_enum(enum: dict[int, dict]) -> str:
     pairs = []
-    for num, info in enum.items():
+    for num, info in sorted(enum.items()):
         pairs.append((num, info["caption"]))
     return hashlib.sha1(json.dumps(pairs).encode()).hexdigest()[:8]
 
@@ -347,7 +347,7 @@ def delete_schemas() -> None:
 
 def main():
     versions = fetch_versions()
-    # delete_schemas()
+    delete_schemas()
     schemas = []
     for version in versions:
         with log_section(f"Processing version {version}"):
