@@ -13,7 +13,13 @@ is_empty(x:string|list|record) -> bool
 ## Description
 
 The `is_empty` function returns `true` if the input value is empty and `false`
-otherwise. The function works on three types:
+otherwise.
+
+### `x: string|list|record`
+
+The value to check for emptiness.
+
+The function works on three types:
 
 - **Strings**: Returns `true` for empty strings (`""`)
 - **Lists**: Returns `true` for empty lists (`[]`)
