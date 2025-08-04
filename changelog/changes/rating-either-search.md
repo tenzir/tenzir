@@ -5,6 +5,6 @@ authors: jachris
 pr: 5407
 ---
 
-The `ocsf::` family of operators now supports OCSF 1.6.0. 
+The `ocsf::` family of operators now supports OCSF 1.6.0.
 
-Furthermore, the version `1.7.0-dev` is also supported now. 
+Furthermore, the version `1.7.0-dev` is also supported now.
