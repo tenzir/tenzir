@@ -236,6 +236,75 @@ public:
   }
 };
 
+class is_empty final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "is_empty";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "string|list|record")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto b = arrow::BooleanBuilder{};
+        check(b.Reserve(eval.length()));
+        for (auto& value : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::StringArray& array) {
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                check(b.Append(array.value_length(i) == 0));
+              }
+            },
+            [&](const arrow::ListArray& array) {
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                check(b.Append(array.value_length(i) == 0));
+              }
+            },
+            [&](const arrow::StructArray& array) {
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                // Records are empty if they have no fields
+                check(b.Append(array.num_fields() == 0));
+              }
+            },
+            [&](const arrow::NullArray& array) {
+              check(b.AppendNulls(array.length()));
+            },
+            [&]<class T>(const T& array) {
+              diagnostic::warning("expected `string`, `list`, or `record`, got "
+                                  "`{}`",
+                                  value.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              check(b.AppendNulls(array.length()));
+            },
+          };
+          match(*value.array, f);
+        }
+        return series{bool_type{}, finish(b)};
+      });
+  }
+};
+
 class network final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -614,6 +683,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_of)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::is_empty)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::keys)

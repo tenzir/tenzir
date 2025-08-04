@@ -1,0 +1,30 @@
+// Test is_empty function with all types
+from {
+  // Test strings
+  empty_string: "".is_empty(),
+  non_empty_string: "hello".is_empty(),
+  space_string: " ".is_empty(),
+  
+  // Test lists
+  empty_list: [].is_empty(),
+  non_empty_list: [1, 2, 3].is_empty(),
+  single_element: [42].is_empty(),
+  
+  // Test records
+  empty_record: {}.is_empty(),
+  non_empty_record: {a: 1, b: 2}.is_empty(),
+  single_field: {x: null}.is_empty(),
+  
+  // Test null handling
+  null_value: null.is_empty(),
+  
+  // Test with unsupported types (should emit warning and return null)
+  integer: 42.is_empty(),
+  boolean: true.is_empty(),
+  double: 3.14.is_empty(),
+  
+  // Test with nested data structures
+  nested_empty_list: [[], [], []].is_empty(),
+  nested_empty_record: {a: {}, b: {}}.is_empty(),
+  complex_record: {name: "test", items: []}.is_empty(),
+}
