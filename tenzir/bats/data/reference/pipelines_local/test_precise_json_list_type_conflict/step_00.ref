@@ -1,2 +1,2 @@
-{"foo":["42","\"bar\""]}
+{"foo":["42","bar"]}
 warning: json parser: type mismatch between list elements
