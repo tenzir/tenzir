@@ -1,6 +1,17 @@
-error: could not parse data
+error: expected argument of type `duration`, but got `pipeline`
  --> <input>:1:7
   |
-1 | every version
-  |       ^ 
+1 | every { version }
+  |       ^^^^^^^^^^^ 
   |
+  = usage: every interval:duration { … }
+  = docs: https://docs.tenzir.com/reference/operators/every
+
+error: expected additional positional argument `{ … }`
+ --> <input>:1:1
+  |
+1 | every { version }
+  | ^^^^^ 
+  |
+  = usage: every interval:duration { … }
+  = docs: https://docs.tenzir.com/reference/operators/every

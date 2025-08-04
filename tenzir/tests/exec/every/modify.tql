@@ -1,0 +1,2 @@
+from {x: 0} 
+every 1s { pass }

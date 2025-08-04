@@ -1,0 +1,9 @@
+every 1s {
+  from {}
+}
+enumerate
+head 2
+every 1s {
+  write_tql
+  save_stdout
+}
