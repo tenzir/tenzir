@@ -1,0 +1,3 @@
+from {x: r#"{"y": [1, "2.3.4.5", "example.org", {"z": []}]}"#}
+write_lines
+read_json
