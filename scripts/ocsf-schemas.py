@@ -347,7 +347,7 @@ def delete_schemas() -> None:
 
 def main():
     versions = fetch_versions()
-    # delete_schemas()
+    delete_schemas()
     schemas = []
     for version in versions:
         with log_section(f"Processing version {version}"):

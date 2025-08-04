@@ -1442,7 +1442,7 @@ type _ocsf.v1_1_0.object.tls_extension = record{
 // href='https://d3fend.mitre.org/dao/artifact/d3f:URL/'>d3f:URL</a>.
 type _ocsf.v1_1_0.object.url = record{
   categories: list<string> #optional,
-  category_ids: list<int64> #recommended #enum=5ed457b5 #sibling=categories,
+  category_ids: list<int64> #recommended #enum=a4d04860 #sibling=categories,
   hostname: string #recommended,
   path: string #recommended,
   port: int64 #recommended,
@@ -1545,7 +1545,7 @@ type _ocsf.v1_1_0.object.win_resource = record{
   name: string #optional,
   svc_name: string #optional,
   type: string #optional,
-  type_id: int64 #required #enum=cb7d46cf #sibling=type,
+  type_id: int64 #required #enum=aa205518 #sibling=type,
   uid: string #optional,
 } #extension=win
 
