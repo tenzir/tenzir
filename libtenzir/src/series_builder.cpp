@@ -465,18 +465,30 @@ public:
       // different strategies here. For example, we could directly add string
       // values to the builder without JSON, such that they are preserved
       // without extra quotes.
-      auto printer = json_printer{{
-        .style = no_style(),
-        // TODO: We probably want to omit null fields here, but `omit_nulls`
-        // also omits nulls from list.
-        .oneline = true,
-      }};
-      auto string = std::string{};
-      auto out = std::back_inserter(string);
-      auto success
-        = printer.print(out, view_at(*arrays[discriminant].array, offset));
-      TENZIR_ASSERT(success);
-      check(builder.Append(string));
+      auto result = match(
+        view_at(*arrays[discriminant].array, offset),
+        [](caf::none_t) {
+          return std::string{"null"};
+        },
+        [](const auto& value) {
+          return fmt::to_string(value);
+        },
+        []<class T>(const T& value)
+          requires concepts::one_of<T, view3<record>, view3<list>>
+        {
+          auto printer = json_printer{{
+            .style = no_style(),
+            // TODO: We probably want to omit null fields here, but `omit_nulls`
+            // also omits nulls from list.
+            .oneline = true,
+          }};
+          auto result = std::string{};
+          auto out = std::back_inserter(result);
+          auto success = printer.print(out, value);
+          TENZIR_ASSERT(success);
+          return result;
+        });
+      check(builder.Append(result));
       variant_offsets[discriminant] += 1;
     }
     discriminants_.erase(discriminants_.begin(), end);
