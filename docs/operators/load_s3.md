@@ -7,7 +7,7 @@ example: 'load_s3 "s3://my-bucket/obj.csv"'
 Loads from an Amazon S3 object.
 
 ```tql
-load_s3 uri:str, [anonymous=bool]
+load_s3 uri:str, [anonymous=bool, role=string, external_id=string]
 ```
 
 ## Description
@@ -57,6 +57,16 @@ Options can be appended to the path as query parameters, as per
 
 Whether to ignore any predefined credentials and try to load with anonymous
 credentials.
+
+### `role = string (optional)`
+
+A role to assume when writing to S3.
+
+### `external_id = string (optional)`
+
+The external ID to use when assuming the `role`.
+
+Defaults to no ID.
 
 ## Examples
 
