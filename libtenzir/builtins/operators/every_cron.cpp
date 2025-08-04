@@ -316,7 +316,7 @@ public:
     return f.object(x).fields(f.field("cronexpr", get, set));
   }
 
-  static cron_scheduler parse(parser_interface& p) {
+  static auto parse(parser_interface& p) -> cron_scheduler {
     auto cronexpr_string = p.accept_shell_arg();
     if (not cronexpr_string) {
       diagnostic::error("expected cron expression")
@@ -457,41 +457,10 @@ private:
 
 using every_ir_plugin = inspection_plugin<ir::operator_base, every_ir>;
 
-class every_plugin2 final : public virtual operator_factory_plugin,
-                            public virtual operator_compiler_plugin {
+class every_compiler_plugin final : public operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.every";
-  }
-
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto interval = located<duration>{};
-    auto pipe = pipeline{};
-    TRY(argument_parser2::operator_("every")
-          .positional("interval", interval)
-          .positional("{ … }", pipe)
-          .parse(inv, ctx));
-    auto fail = std::optional<failure>{};
-    if (interval.inner <= duration::zero()) {
-      diagnostic::error("expected a positive duration, got {}", interval.inner)
-        .primary(interval)
-        .emit(ctx);
-      fail = failure::promise();
-    }
-    auto location = pipe.infer_location();
-    if (not location) {
-      diagnostic::error("pipeline contains both remote and local operators")
-        .primary(inv.self)
-        .note("this limitation will be lifted soon")
-        .emit(ctx);
-      fail = failure::promise();
-    }
-    if (fail) {
-      return *fail;
-    }
-    return std::make_unique<scheduled_execution_operator<every_scheduler>>(
-      std::move(pipe), every_scheduler{interval.inner}, *location);
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
@@ -511,61 +480,10 @@ public:
   }
 };
 
-class cron_plugin2 final : public virtual operator_factory_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.cron";
-  }
-
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto interval = located<std::string>{};
-    auto pipe = pipeline{};
-    TRY(argument_parser2::operator_(name())
-          .positional("interval", interval)
-          .positional("{ … }", pipe)
-          .parse(inv, ctx));
-    auto location = pipe.infer_location();
-    if (not location) {
-      diagnostic::error("pipeline contains both remote and local operators")
-        .primary(inv.self)
-        .note("this limitation will be lifted soon")
-        .emit(ctx);
-      return failure::promise();
-    }
-    try {
-      auto scheduler = cron_scheduler{detail::cron::make_cron(interval.inner)};
-      return std::make_unique<scheduled_execution_operator<cron_scheduler>>(
-        std::move(pipe), std::move(scheduler), *location);
-    } catch (const detail::cron::bad_cronexpr& ex) {
-      // The croncpp library re-throws the exception message from the
-      // `std::stoul` call on failure. This happens for most cases of invalid
-      // expressions, i.e. ones that do not contain unsigned integers or allowed
-      // literals. libstdc++ and libc++ exception messages both contain the
-      // string "stoul" in their what() strings. We can check for this and
-      // provide a slightly better error message back to the user.
-      if (std::string_view{ex.what()}.find("stoul") != std::string_view::npos) {
-        diagnostic::error(
-          "bad cron expression: invalid value for at least one field")
-          .primary(interval.source)
-          .emit(ctx);
-        return failure::promise();
-      }
-      diagnostic::error("bad cron expression: \"{}\"", ex.what())
-        .primary(interval.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-  }
-};
-
 } // namespace
 
 } // namespace tenzir::plugins::every_cron
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_exec_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_ir_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin2)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_compiler_plugin)

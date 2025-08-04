@@ -1,6 +1,6 @@
 error: the file `./this-file-does-not-exist.json` does not exist
- --> <input>:1:15
+ --> <input>:1:17
   |
-1 | every 1s from ./this-file-does-not-exist.json
-  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+1 | every 1s { from "./this-file-does-not-exist.json" }
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
