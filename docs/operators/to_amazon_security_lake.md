@@ -4,7 +4,7 @@ category: Outputs/Events
 example: 'to_amazon_security_lake "s3://…"'
 ---
 
-Sends events to Amazon Security Lake.
+Sends OCSF events to Amazon Security Lake.
 
 ```tql
 to_amazon_security_lake s3_uri:string, region=string, account_id=string,
@@ -13,17 +13,18 @@ to_amazon_security_lake s3_uri:string, region=string, account_id=string,
 
 ## Description
 
-The `to_amazon_security_lake` operator sends OCSF events to an [Amazon Security Lake][asl].
+The `to_amazon_security_lake` operator sends OCSF events to [Amazon Security
+Lake](https://aws.amazon.com/security-lake/), AWS's centralized security data
+repository that normalizes and stores security data from multiple sources.
 
-The events **must** match the Lakes selected OCSF event class. The operator does not
-perform any validation on the events.
-OCSF event classes supported by ASL can be found [here](https://docs.aws.amazon.com/security-lake/latest/userguide/adding-custom-sources.html#ocsf-eventclass).
+The operator automatically handles Amazon Security Lake's partitioning
+requirements and file size constraints, but does not validate the OCSF schema of
+the events. Consider [`ocsf::apply`](/reference/operators/ocsf/apply) in your
+pipeline to ensure schema compliance.
 
-The operator takes care of ASL's partitioning and file size requirements.
-The file names will be randomly generated UUIDs (v4) with a `.parquet` file
-extension.
-
-[asl]: https://aws.amazon.com/security-lake/
+For a list of OCSF event classes supported by Amazon Security Lake, see the [AWS
+documentation](https://docs.aws.amazon.com/security-lake/latest/userguide/adding-custom-sources.html#ocsf-eventclass).
+The operator generates random UUID (v7) file names with a `.parquet` extension.
 
 ### `s3_uri: string`
 
@@ -35,10 +36,10 @@ s3://<bucket>/ext/<custom-source-name>
 
 Replace the placeholders as follows:
 
-* `<bucket>`: the bucket associated with your lake
-* `<custom-source-name>`: the name of your custom ASL source
+- `<bucket>`: the bucket associated with your lake
+- `<custom-source-name>`: the name of your custom Amazon Security Lake source
 
-This URI can be directly copied from the AWS security lake custom source interface.
+You can copy this URI directly from the AWS Security Lake custom source interface.
 
 ### `region = string`
 
@@ -46,26 +47,45 @@ The region for partitioning.
 
 ### `account_id = string`
 
-The AWS accountID or external ID chosen when creating the ASL custom source.
+The AWS account ID or external ID you chose when creating the Amazon Security Lake
+custom source.
 
 :::note
-Be aware that the user running the Tenzir Node must have permissions to write to
-the given partition:
+The user running the Tenzir Node must have permissions to write to the given
+partition:
+
 ```
 {s3_uri}/region={region}/accountId={account_id}/
 ```
+
 :::
 
 ### `timeout = duration (optional)`
 
-A duration after which the operator will write to ASL, regardless of file size.
-ASL specifies this should be between `5min` and `1d`.
+A duration after which the operator will write to Amazon Security Lake,
+regardless of file size. Amazon Security Lake requires this to be between `5min`
+and `1d`.
 
-The default is `5min`.
+Defaults to `5min`.
 
 ### `role = string (optional)`
 
 A role to assume when writing to S3.
+
+When not specified, the operator automatically uses the standard Amazon Security
+Lake provider role based on your configuration:
+`arn:aws:iam::<account_id>:role/AmazonSecurityLake-Provider-<custom-source-name>-<region>`
+
+The operator extracts the custom source name from the provided S3 URI.
+
+For example, given:
+
+- `account_id`: `"123456789012"`
+- `s3_uri`: `"s3://aws-security-data-lake-…/ext/tnz-ocsf-4001/"`
+- `region`: `"eu-west-1"`
+
+The operator will use:
+`arn:aws:iam::123456789012:role/AmazonSecurityLake-Provider-tnz-ocsf-4001-eu-west-1`
 
 ### `external_id = string (optional)`
 
@@ -75,23 +95,24 @@ Defaults to no ID.
 
 ## Examples
 
-### Send OCSF Network Activity events to ASL
+### Send OCSF Network Activity events to Amazon Security Lake
 
-Given a AWS security lake running on `eu-west-2`, a custom source called
-`tenzir_network_activity` set up on that lake, and an account with id
-`123456789012`
-for it:
+This example shows how to send OCSF Network Activity events to an AWS Security
+Lake running on `eu-west-2` with a custom source called
+`tenzir_network_activity` and account ID `123456789012`:
 
 ```tql
-let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tenzir_network_activity/"
+let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tnz-ocsf-4001/"
 
-export
+subscribe "ocsf"
 where @name == "ocsf.network_activity"
+ocsf::apply
 to_amazon_security_lake $s3_uri,
   region="eu-west-2",
-  accountId="123456789012"
+  account_id="123456789012"
 ```
 
 ## See Also
 
+[`ocsf::apply`](/reference/operators/ocsf/apply),
 [`save_s3`](/reference/operators/save_s3)
