@@ -12,14 +12,18 @@ dns_lookup field, [result=field]
 
 ## Description
 
-The `dns_lookup` operator performs DNS resolution on the specified field. It automatically detects whether to perform a forward lookup (hostname to IP) or reverse lookup (IP to hostname) based on the field's content.
+The `dns_lookup` operator performs DNS resolution on the specified field. It
+automatically detects whether to perform a forward lookup (hostname to IP) or
+reverse lookup (IP to hostname) based on the field's content.
 
-- **Reverse lookup**: When the field contains an IP address, the operator performs a PTR query to find the associated hostname.
-- **Forward lookup**: When the field contains a string, the operator performs A and AAAA queries to find associated IP addresses.
+- **Reverse lookup**: When the field contains an IP address, the operator
+  performs a PTR query to find the associated hostname.
+- **Forward lookup**: When the field contains a string, the operator performs
+  A and AAAA queries to find associated IP addresses.
 
 The result is stored as a record in the specified result field.
 
-### `field`
+### `field: ip|string`
 
 The field containing either an IP address or hostname to look up.
 
@@ -42,9 +46,7 @@ For reverse lookups (IP to hostname):
 For forward lookups (hostname to IP):
 
 ```tql
-{
-  records: list<record>
-}
+list<record>
 ```
 
 Where each record has the structure:
@@ -60,24 +62,6 @@ Where each record has the structure:
 If the lookup fails or times out, the result field will be `null`.
 
 ## Examples
-
-### Using default result field
-
-When no result field is specified, the result is stored in `dns_lookup`:
-
-```tql
-from {ip: 8.8.8.8}
-dns_lookup ip
-```
-
-```tql
-{
-  ip: 8.8.8.8,
-  dns_lookup: {
-    hostname: "dns.google"
-  }
-}
-```
 
 ### Reverse DNS lookup
 
@@ -111,12 +95,10 @@ dns_lookup domain, result=ip_info
 {
   domain: "example.com",
   timestamp: 2024-01-15T10:30:00,
-  ip_info: {
-    records: [
-      {address: 93.184.215.14, type: "A", ttl: 5m},
-      {address: 2606:2800:21f:cb07:6820:80da:af6b:8b2c, type: "AAAA", ttl: 5m}
-    ]
-  }
+  ip_info: [
+    {address: 93.184.215.14, type: "A", ttl: 5m},
+    {address: 2606:2800:21f:cb07:6820:80da:af6b:8b2c, type: "AAAA", ttl: 5m}
+  ]
 }
 ```
 
@@ -154,14 +136,12 @@ dns_lookup destination, result=dest_ips
   source_dns: {
     hostname: "one.one.one.one"
   },
-  dest_ips: {
-    records: [
-      {address: 185.199.108.153, type: "A", ttl: 1h},
-      {address: 185.199.109.153, type: "A", ttl: 1h},
-      {address: 185.199.110.153, type: "A", ttl: 1h},
-      {address: 185.199.111.153, type: "A", ttl: 1h}
-    ]
-  }
+  dest_ips: [
+    {address: 185.199.108.153, type: "A", ttl: 1h},
+    {address: 185.199.109.153, type: "A", ttl: 1h},
+    {address: 185.199.110.153, type: "A", ttl: 1h},
+    {address: 185.199.111.153, type: "A", ttl: 1h}
+  ]
 }
 ```
 

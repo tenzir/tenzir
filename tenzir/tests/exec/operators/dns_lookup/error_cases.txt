@@ -4,3 +4,9 @@
   result1: null,
   result2: null,
 }
+warning: expected `ip` or `string`
+ --> exec/operators/dns_lookup/error_cases.tql:7:12
+  |
+7 | dns_lookup not_string_or_ip, result=result2
+  |            ~~~~~~~~~~~~~~~~ got int64
+  |

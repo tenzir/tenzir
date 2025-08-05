@@ -1,7 +1,7 @@
 ---
 title: "Perform inline DNS lookups"
 type: feature
-authors: mavam
+authors: [mavam,IyeOnline]
 pr: 5379
 ---
 

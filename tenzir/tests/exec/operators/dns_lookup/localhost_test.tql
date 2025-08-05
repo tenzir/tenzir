@@ -4,6 +4,6 @@ from {
   host: "a.root-servers.net"
 }
 dns_lookup host
-unroll dns_lookup.records
-drop dns_lookup.records.ttl
-sort dns_lookup.records.type, dns_lookup.records.address
+unroll dns_lookup
+drop dns_lookup.ttl
+sort dns_lookup.type, dns_lookup.address
