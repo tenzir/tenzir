@@ -39,3 +39,6 @@
 	path = plugins/clickhouse/aux/clickhouse-cpp
 	url = https://github.com/ClickHouse/clickhouse-cpp
 	shallow = true
+[submodule "plugins/web/aux/llhttp"]
+	path = plugins/web/aux/llhttp
+	url = https://github.com/nodejs/llhttp.git
