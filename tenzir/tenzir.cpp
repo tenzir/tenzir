@@ -25,6 +25,7 @@
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
 
+#include <arrow/compute/api.h>
 #include <arrow/util/compression.h>
 #include <arrow/util/utf8.h>
 #include <caf/actor_registry.hpp>
@@ -178,6 +179,13 @@ private:
 auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
   arrow::util::InitializeUTF8();
+#if ARROW_VERSION_MAJOR >= 21
+  if (auto status = arrow::compute::Initialize(); not status.ok()) {
+    fmt::println(stderr, "failed to initialize arrow compute functions: {}",
+                 status.message());
+    return EXIT_FAILURE;
+  }
+#endif
   // Set a signal handler for fatal conditions. Prints a backtrace if support
   // for that is enabled.
   if (SIG_ERR == std::signal(SIGSEGV, fatal_handler)) [[unlikely]] {

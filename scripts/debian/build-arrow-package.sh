@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${ARROW_TAG=apache-arrow-19.0.0}"
+: "${ARROW_TAG=apache-arrow-21.0.0}"
 : "${ARROW_VERSION=$(printf '%s' "$ARROW_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
@@ -24,6 +24,7 @@ apt-get install --no-install-recommends -y \
   libboost-system-dev \
   libcurl4-openssl-dev \
   libminizip-dev \
+  libre2-dev \
   libsasl2-dev \
   libssl-dev \
   libabsl-dev \
@@ -73,5 +74,5 @@ checkinstall \
   --pkgversion="${ARROW_VERSION}" \
   --pkgrelease="TENZIR" \
   --pkgname=arrow \
-  --requires="libc6,libboost-filesystem-dev,libboost-system-dev,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
+  --requires="libc6,libboost-filesystem-dev,libboost-system-dev,libcurl4,libgcc1,libre2-11,libssl3,libstdc++6,libxml2,zlib1g" \
   cmake --install build --strip
