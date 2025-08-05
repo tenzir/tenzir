@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include "tenzir/concept/printable/core.hpp"
-#include "tenzir/concept/printable/print.hpp"
-#include "tenzir/concept/printable/string/char.hpp"
-#include "tenzir/concept/printable/string/string.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/stable_set.hpp"
@@ -20,7 +16,6 @@
 #include <caf/expected.hpp>
 
 #include <filesystem>
-#include <string>
 #include <string_view>
 #include <vector>
 

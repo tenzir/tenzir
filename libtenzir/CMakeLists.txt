@@ -63,10 +63,10 @@ TenzirCompileFlatBuffers(
 # -- arrow ---------------------------------------------------------------------
 
 find_package(Arrow REQUIRED CONFIG)
-if (Arrow_VERSION_MAJOR LESS 13)
+if (Arrow_VERSION_MAJOR LESS 18)
   message(
     FATAL_ERROR
-      "Tenzir requires at least Arrow version 13.0, but found ${ARROW_VERSION}")
+      "Tenzir requires at least Arrow version 18.0, but found ${ARROW_VERSION}")
 endif ()
 mark_as_advanced(
   BROTLI_COMMON_LIBRARY
@@ -98,6 +98,18 @@ else ()
     Arrow::arrow_static
     INTERFACE Azure::azure-identity Azure::azure-storage-blobs
               Azure::azure-storage-files-datalake)
+endif ()
+if (ARROW_VERSION VERSION_GREATER_EQUAL "21.0.0")
+  find_package(ArrowCompute REQUIRED CONFIG)
+  string(
+    APPEND
+    TENZIR_FIND_DEPENDENCY_LIST
+    "\nfind_package(ArrowCompute REQUIRED CONFIG)")
+  if (BUILD_SHARED_LIBS)
+    set(ARROW_COMPUTE_LIBRARY ArrowCompute::arrow_compute_shared)
+  else ()
+    set(ARROW_COMPUTE_LIBRARY ArrowCompute::arrow_compute_static)
+  endif ()
 endif ()
 
 # -- boost ---------------------------------------------------------------------
@@ -371,7 +383,7 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
-target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
+target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY} ${ARROW_COMPUTE_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
