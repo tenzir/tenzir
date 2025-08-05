@@ -53,53 +53,53 @@ Parameters:
     Type: String
     Description: 'Tenzir Token for the Tenzir Platform'
     NoEcho: true
-  
+
   PlatformAPIEndpoint:
     Type: String
     Description: 'Tenzir Gateway Endpoint URL'
     Default: 'wss://ws.tenzir.app/production'
-  
+
   MarketplaceImageURL:
     Type: String
     Description: 'Full URL to the marketplace container image (e.g., 709825985650.dkr.ecr.us-east-1.amazonaws.com/vendor/product:version)'
     Default: '709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:v0.00.0'
-  
+
   ContainerName:
     Type: String
     Description: 'Name for the container'
     Default: 'tenzir-node'
     MinLength: 1
     MaxLength: 255
-  
+
   FargateCPU:
     Type: Number
     Description: 'CPU units for the Fargate task'
     Default: 8192
     AllowedValues: [256, 512, 1024, 2048, 4096, 8192]
-  
+
   FargateMemory:
     Type: Number
     Description: 'Memory (MB) for the Fargate task'
     Default: 32768
     AllowedValues: [512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 16384, 30720, 32768]
-  
+
   Environment:
     Type: String
     Description: 'Environment name for tagging'
     Default: 'demo'
-  
+
   VpcCidr:
     Type: String
     Description: 'CIDR block for the VPC'
     Default: '10.0.0.0/16'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
-  
+
   CreateECSServiceLinkedRole:
     Type: String
     Description: 'Set to true if this is the first time using ECS in this account'
     Default: 'false'
     AllowedValues: ['true', 'false']
-  
+
   TaskRole:
     Type: String
     Description: 'Optional ARN of an existing IAM role to use as the task role. If not provided, a default role with S3 read permissions will be created.'
@@ -393,7 +393,7 @@ Resources:
       Cpu: !Ref FargateCPU
       Memory: !Ref FargateMemory
       ExecutionRoleArn: !Ref TaskExecutionRole
-      TaskRoleArn: !If 
+      TaskRoleArn: !If
         - CreateDefaultTaskRole
         - !Ref DefaultTaskRole
         - !Ref TaskRole

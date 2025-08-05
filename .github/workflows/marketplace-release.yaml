@@ -8,6 +8,7 @@ on:
   workflow_run:
     workflows: ["Tenzir"]
     types: [completed]
+    branches: [main]
 
   # Manual dispatch for testing.
   workflow_dispatch:
@@ -50,8 +51,6 @@ jobs:
           fi
           echo "release_tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
           echo "image=${IMAGE}" >> $GITHUB_OUTPUT
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       # Login to ghcr to pull the existing image
       - name: Login to GitHub Container Registry
