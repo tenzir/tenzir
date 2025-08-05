@@ -14,7 +14,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/legacy_type.hpp"
+#include "tenzir/legacy_type.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
@@ -40,7 +40,6 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
-#include <queue>
 #include <ranges>
 #include <string_view>
 #include <thread>

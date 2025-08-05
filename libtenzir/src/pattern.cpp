@@ -29,7 +29,6 @@ auto pattern::make(std::string str, pattern_options options) noexcept
   -> caf::expected<pattern> {
   auto opts = re2::RE2::Options(re2::RE2::CannedOptions::Quiet);
   opts.set_case_sensitive(!options.case_insensitive);
-  auto regex = re2::RE2(str, opts);
   auto result = pattern{};
   result.str_ = std::move(str);
   result.options_ = options;
