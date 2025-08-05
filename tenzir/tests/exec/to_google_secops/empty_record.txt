@@ -1,0 +1,44 @@
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"tenzir","entries":[{"log_text":"CUSTOM_DNS_LOG"}]}
+warning: expected `string`, got `null`
+ --> exec/to_google_secops/empty_record.tql:3:77
+  |
+3 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
+  |                                                                             ~~~~ 
+  |
+
+warning: expected `string`, got `null`
+ --> exec/to_google_secops/empty_record.tql:3:61
+  |
+3 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
+  |                                                             ~~~~ 
+  |
+
+warning: `log_type` must be set to non-empty string
+ --> exec/to_google_secops/empty_record.tql:3:61
+  |
+3 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
+  |                                                             ~~~~ 
+  |
+  = note: skipping event
+
+warning: expected `string`, got `null`
+ --> exec/to_google_secops/empty_record.tql:7:77
+  |
+7 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
+  |                                                                             ~~~~ 
+  |
+
+warning: expected `string`, got `null`
+ --> exec/to_google_secops/empty_record.tql:7:61
+  |
+7 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
+  |                                                             ~~~~ 
+  |
+
+warning: `log_type` must be set to non-empty string
+ --> exec/to_google_secops/empty_record.tql:7:61
+  |
+7 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
+  |                                                             ~~~~ 
+  |
+  = note: skipping event

@@ -1,0 +1,7 @@
+from {type: "CUSTOM_DNS", text: "CUSTOM_DNS_LOG_0"},
+     {type: "CUSTOM_DNS", text: "CUSTOM_DNS_LOG_1"},
+     {type: "CUSTOM_DNS", text: "CUSTOM_DNS_LOG_2"},
+     {type: "BIND_DNS", text: "BIND_DNS_LOG_0"},
+     {type: "CUSTOM_DNS", text: "CUSTOM_DNS_LOG_0"}
+to_google_secops _dry_run =true, region="REGION", customer_id="CUSTOMER",
+  private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type, log_text=text
