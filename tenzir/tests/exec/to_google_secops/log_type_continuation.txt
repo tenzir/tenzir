@@ -1,0 +1,3 @@
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"tenzir","entries":[{"log_text":"CUSTOM_DNS_LOG_0"},{"log_text":"CUSTOM_DNS_LOG_1"},{"log_text":"CUSTOM_DNS_LOG_2"}]}
+{"customer_id":"CUSTOMER","log_type":"BIND_DNS","namespace":"tenzir","entries":[{"log_text":"BIND_DNS_LOG_0"}]}
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"tenzir","entries":[{"log_text":"CUSTOM_DNS_LOG_0"}]}
