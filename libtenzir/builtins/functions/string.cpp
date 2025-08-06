@@ -387,7 +387,10 @@ public:
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
                                 evaluator eval, session ctx) {
-      return map_series(eval(subject_expr), [&](series subject) {
+      auto subject = eval(subject_expr);
+      TENZIR_ASSERT(subject.length() == eval.length(), "{} != {}",
+                    subject.length(), eval.length());
+      auto result = map_series(std::move(subject), [&](series subject) {
         auto f = detail::overload{
           [&](const arrow::StringArray& array) {
             auto result = arrow::compute::CallFunction(fn_name_, {array});
@@ -397,12 +400,19 @@ public:
                 .emit(ctx);
               return series::null(result_ty_, subject.length());
             }
+            TENZIR_ASSERT(result->length() == array.length(), "{} != {}",
+                          result->length(), array.length());
             if (not result->type()->Equals(result_arrow_ty_)) {
               result = arrow::compute::Cast(result.MoveValueUnsafe(),
                                             result_arrow_ty_);
               TENZIR_ASSERT(result.ok(), result.status().ToString());
             }
-            return series{result_ty_, result.MoveValueUnsafe().make_array()};
+            TENZIR_ASSERT(result->length() == array.length(), "{} != {}",
+                          result->length(), array.length());
+            auto output = result.MoveValueUnsafe().make_array();
+            TENZIR_ASSERT(output->length() == array.length(), "{} != {}",
+                          output->length(), array.length());
+            return series{result_ty_, std::move(output)};
           },
           [&](const arrow::NullArray& array) {
             return series::null(result_ty_, array.length());
@@ -417,6 +427,9 @@ public:
         };
         return match(*subject.array, f);
       });
+      TENZIR_ASSERT(result.length() == eval.length(), "{} != {}",
+                    result.length(), eval.length());
+      return result;
     });
   }
 
