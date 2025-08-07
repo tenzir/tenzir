@@ -75,7 +75,7 @@ public:
                      sizeof(enable))
         < 0) {
       diagnostic::error("could not set socket to SO_REUSEADDR")
-        .note(detail::describe_errno())
+        .primary(args_.endpoint, detail::describe_errno())
         .emit(ctrl.diagnostics());
       co_return;
     }
