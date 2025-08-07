@@ -213,7 +213,6 @@ jobs:
           git push origin latest --force
 
       - name: Create GitHub Release
-        if: steps.release_type.outputs.is_latest == 'true'
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
           RELEASE_TITLE: ${{ github.event.inputs.title }}
@@ -237,7 +236,7 @@ jobs:
           gh release create "${{ github.event.inputs.version }}" \
             --title "$RELEASE_TITLE" \
             --notes-file /tmp/release-notes.md \
-            ${{ steps.release_type.outputs.is_latest && '--latest' || '--latest=false' }}
+            ${{ steps.release_type.outputs.is_latest == 'true' && '--latest' || '--latest=false' }}
 
       - name: Output success message (latest release)
         if: steps.release_type.outputs.is_latest == 'true'
