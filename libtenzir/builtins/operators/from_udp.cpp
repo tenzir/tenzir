@@ -119,7 +119,7 @@ public:
       auto ready = detail::rpoll(*socket.fd, usec);
       if (not ready) {
         diagnostic::error("failed to poll socket")
-          .note(detail::describe_errno())
+          .primary(args_.endpoint, detail::describe_errno())
           .note("{}", ready.error())
           .emit(ctrl.diagnostics());
         co_return;
