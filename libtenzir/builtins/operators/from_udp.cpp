@@ -82,7 +82,7 @@ public:
     TENZIR_DEBUG("binding to {}", args_.endpoint.inner);
     if (socket.bind(*endpoint) < 0) {
       diagnostic::error("failed to bind to socket")
-        .note(detail::describe_errno())
+        .primary(args_.endpoint, detail::describe_errno())
         .note("endpoint: {}", endpoint->addr)
         .emit(ctrl.diagnostics());
       co_return;
