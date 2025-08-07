@@ -140,7 +140,7 @@ public:
         = socket.recvfrom(as_writeable_bytes(buffer), sender_endpoint);
       if (received_bytes < 0) {
         diagnostic::error("failed to receive data from socket")
-          .note(detail::describe_errno())
+          .primary(args_.endpoint, detail::describe_errno())
           .emit(ctrl.diagnostics());
         co_return;
       }
