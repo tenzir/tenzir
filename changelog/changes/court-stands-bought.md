@@ -45,11 +45,3 @@ from_udp "0.0.0.0:1234", resolve_hostnames=true
   },
 }
 ```
-
-Filter UDP data by sender and parse as Syslog afterwards:
-
-```tql
-from_udp "0.0.0.0:514"
-where peer.ip in [192.168.1.0/24]
-syslog = data.parse_syslog()
-```
