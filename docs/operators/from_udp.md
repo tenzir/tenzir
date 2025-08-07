@@ -18,7 +18,7 @@ a structured event containing the data and peer information.
 Unlike [`load_udp`](/reference/operators/load_udp), which outputs raw bytes,
 `from_udp` produces structured events with metadata about the sender.
 
-### `endpoint: str`
+### `endpoint: string`
 
 The address to listen on. Must be of the format: `[udp://]host:port`.
 
