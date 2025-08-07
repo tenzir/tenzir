@@ -14,6 +14,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/socket.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try.hpp>
 
 #include <arpa/inet.h>
 #include <arrow/util/uri.h>
@@ -160,16 +161,12 @@ public:
       auto peer_ip = ip{};
       auto peer_port = uint64_t{0};
       std::optional<std::string> peer_hostname;
-      if (std::holds_alternative<sockaddr_in>(sender_endpoint.sock_addr)) {
-        const auto& addr_in = std::get<sockaddr_in>(sender_endpoint.sock_addr);
-        peer_ip = ip::v4(detail::to_host_order(addr_in.sin_addr.s_addr));
-        peer_port = ntohs(addr_in.sin_port);
-      } else if (std::holds_alternative<sockaddr_in6>(
-                   sender_endpoint.sock_addr)) {
-        const auto& addr_in6
-          = std::get<sockaddr_in6>(sender_endpoint.sock_addr);
-        peer_ip = ip::v6(as_bytes<16>(&addr_in6.sin6_addr, 16));
-        peer_port = ntohs(addr_in6.sin6_port);
+      if (auto* v4 = try_as<sockaddr_in>(sender_endpoint.sock_addr)) {
+        peer_ip = ip::v4(detail::to_host_order(v4->sin_addr.s_addr));
+        peer_port = ntohs(v4->sin_port);
+      } else if (auto* v6 = try_as<sockaddr_in6>(sender_endpoint.sock_addr)) {
+        peer_ip = ip::v6(as_bytes<16>(&v6->sin6_addr, 16));
+        peer_port = ntohs(v6->sin6_port);
       }
       TENZIR_TRACE("got {} bytes from {}:{}", received_bytes, peer_ip,
                    peer_port);

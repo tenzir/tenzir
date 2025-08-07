@@ -7,7 +7,7 @@ example: 'from_udp "0.0.0.0:8090"'
 Receives UDP datagrams and outputs structured events.
 
 ```tql
-from_udp endpoint:str, [resolve_hostnames=bool], [binary=bool]
+from_udp endpoint:string, [resolve_hostnames=bool], [binary=bool]
 ```
 
 ## Description
