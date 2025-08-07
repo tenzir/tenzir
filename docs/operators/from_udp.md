@@ -42,7 +42,7 @@ Each UDP datagram produces one event with the following structure:
   "peer": {
     "ip": <ip>,
     "port": <uint64>,
-    "hostname": <string> // null when resolve_hostnames=false
+    "hostname": <string> // Does not exist when `resolve_hostnames=false`
   }
 }
 ```
@@ -71,8 +71,7 @@ This might output events like:
 
 ```tql
 from_udp "127.0.0.1:8080"
-select data
-read_json
+select data = data.parse_json()
 ```
 
 ### Filter by sender and decode data
@@ -81,7 +80,6 @@ read_json
 from_udp "0.0.0.0:9999"
 where peer.ip == 192.168.1.100
 select data
-decode "utf8"
 ```
 
 ## See Also
