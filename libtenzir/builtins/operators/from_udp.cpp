@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -115,6 +116,11 @@ public:
       },
     };
     co_yield {};
+
+    // Create series builder outside the loop for better performance
+    auto builder = series_builder{output_type};
+    auto last_yield_time = std::chrono::steady_clock::now();
+
     while (true) {
       constexpr auto poll_timeout = 500ms;
       constexpr auto usec
@@ -179,7 +185,6 @@ public:
         }
       }
       // Build the output event
-      auto builder = series_builder{output_type};
       auto event = builder.record();
       // Add data field
       auto data_bytes = as_bytes(buffer).subspan(0, received_bytes);
@@ -196,8 +201,14 @@ public:
       if (args_.resolve_hostnames && peer_hostname) {
         peer.field("hostname").data(*peer_hostname);
       }
-      for (auto&& slice : builder.finish_as_table_slice()) {
-        co_yield std::move(slice);
+
+      // Check if we should yield based on timeout
+      auto now = std::chrono::steady_clock::now();
+      if (now - last_yield_time >= defaults::batch_timeout) {
+        for (auto&& slice : builder.finish_as_table_slice()) {
+          co_yield std::move(slice);
+        }
+        last_yield_time = now;
       }
     }
   }
