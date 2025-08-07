@@ -80,17 +80,19 @@ struct package_input final {
 };
 
 struct package_pipeline final {
-  std::optional<std::string> name = {};
-  std::optional<std::string> description = {};
-  std::string definition = {}; // required to be non-empty
+  std::optional<std::string> name;
+  std::optional<std::string> description;
+  std::string definition; // required to be non-empty
   bool disabled = false;
-  std::optional<duration> restart_on_error = {};
+  std::optional<duration> restart_on_error;
   bool unstoppable = false;
 
   auto to_record() const -> record;
 
   static auto parse(const view<record>& data)
     -> caf::expected<package_pipeline>;
+
+  static auto parse(std::string_view input) -> caf::expected<package_pipeline>;
 
   friend auto inspect(auto& f, package_pipeline& x) -> bool {
     return f.object(x)
@@ -124,13 +126,14 @@ struct package_context final {
 };
 
 struct package_example final {
-  std::optional<std::string> name = {};
-  std::optional<std::string> description = {};
-  std::string definition = {}; // required to be non-empty
+  std::optional<std::string> name;
+  std::optional<std::string> description;
+  std::string definition; // required to be non-empty
 
   auto to_record() const -> record;
 
   static auto parse(const view<record>& data) -> caf::expected<package_example>;
+  static auto parse(std::string_view input) -> caf::expected<package_example>;
 
   friend auto inspect(auto& f, package_example& x) -> bool {
     return f.object(x)
