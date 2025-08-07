@@ -202,7 +202,7 @@ public:
 
       // Check if we should yield based on timeout
       auto now = std::chrono::steady_clock::now();
-      if (now - last_yield_time >= defaults::batch_timeout) {
+      if (now - last_yield_time >= defaults::import::batch_timeout) {
         for (auto&& slice : builder.finish_as_table_slice()) {
           co_yield std::move(slice);
         }
