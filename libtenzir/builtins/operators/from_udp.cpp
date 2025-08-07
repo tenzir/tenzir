@@ -91,7 +91,7 @@ public:
     // doesn't deliver the data fast enough. We were always one datagram behind.
     if (auto err = detail::make_nonblocking(*socket.fd)) {
       diagnostic::error("failed to make socket nonblocking")
-        .note(detail::describe_errno())
+        .primary(args_.endpoint, detail::describe_errno())
         .note("{}", err)
         .emit(ctrl.diagnostics());
       co_return;
