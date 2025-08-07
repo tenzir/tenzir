@@ -31,12 +31,14 @@ namespace {
 struct args {
   located<std::string> endpoint;
   bool resolve_hostnames = false;
+  bool binary = false;
 
   friend auto inspect(auto& f, args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.from_udp.args")
       .fields(f.field("endpoint", x.endpoint.inner),
-              f.field("resolve_hostnames", x.resolve_hostnames));
+              f.field("resolve_hostnames", x.resolve_hostnames),
+              f.field("binary", x.binary));
   }
 };
 
@@ -97,16 +99,19 @@ public:
       co_return;
     }
     // Define schema for output events
+    auto peer_record_fields = std::vector<record_type::field_view>{
+      {"ip", ip_type{}},
+      {"port", uint64_type{}},
+    };
+    if (args_.resolve_hostnames) {
+      peer_record_fields.push_back({"hostname", string_type{}});
+    }
+
     auto output_type = type{
       "tenzir.from_udp",
       record_type{
-        {"data", blob_type{}},
-        {"peer",
-         record_type{
-           {"ip", ip_type{}},
-           {"port", uint64_type{}},
-           {"hostname", string_type{}},
-         }},
+        {"data", args_.binary ? type{blob_type{}} : type{string_type{}}},
+        {"peer", record_type{std::move(peer_record_fields)}},
       },
     };
     co_yield {};
@@ -178,15 +183,18 @@ public:
       auto event = builder.record();
       // Add data field
       auto data_bytes = as_bytes(buffer).subspan(0, received_bytes);
-      event.field("data").data(blob{data_bytes.begin(), data_bytes.end()});
+      if (args_.binary) {
+        event.field("data").data(blob{data_bytes.begin(), data_bytes.end()});
+      } else {
+        event.field("data").data(std::string{
+          reinterpret_cast<const char*>(data_bytes.data()), data_bytes.size()});
+      }
       // Add peer record
       auto peer = event.field("peer").record();
       peer.field("ip").data(peer_ip);
       peer.field("port").data(peer_port);
-      if (peer_hostname) {
+      if (args_.resolve_hostnames && peer_hostname) {
         peer.field("hostname").data(*peer_hostname);
-      } else {
-        peer.field("hostname").null();
       }
       for (auto&& slice : builder.finish_as_table_slice()) {
         co_yield std::move(slice);
@@ -225,6 +233,7 @@ class plugin final : public virtual operator_plugin2<from_udp_operator> {
     auto parser = argument_parser2::operator_(name());
     parser.positional("endpoint", args.endpoint);
     parser.named("resolve_hostnames", args.resolve_hostnames);
+    parser.named("binary", args.binary);
     TRY(parser.parse(inv, ctx));
     if (not args.endpoint.inner.starts_with("udp://")) {
       args.endpoint.inner.insert(0, "udp://");

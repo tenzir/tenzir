@@ -20,11 +20,10 @@ from_udp "0.0.0.0:1234"
 
 ```tql
 {
-  data: b"Hello, UDP!\n",
+  data: "Hello, UDP!\n",
   peer: {
     ip: 192.168.1.100,
     port: 54321,
-    hostname: null,
   },
 }
 ```
@@ -37,7 +36,7 @@ from_udp "0.0.0.0:1234", resolve_hostnames=true
 
 ```tql
 {
-  data: b"Hello, UDP!\n",
+  data: "Hello, UDP!\n",
   peer: {
     ip: 192.168.1.100,
     port: 54321,

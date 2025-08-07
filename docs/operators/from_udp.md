@@ -7,7 +7,7 @@ example: 'from_udp "0.0.0.0:8090"'
 Receives UDP datagrams and outputs structured events.
 
 ```tql
-from_udp endpoint:str, [resolve_hostnames=bool]
+from_udp endpoint:str, [resolve_hostnames=bool], [binary=bool]
 ```
 
 ## Description
@@ -32,13 +32,20 @@ Perform DNS lookups to resolve hostnames for sender IP addresses.
 Defaults to `false` since DNS lookups can be slow and may impact performance
 when receiving many datagrams.
 
+### `binary = bool (optional)`
+
+Output datagram data as binary (`blob`) instead of text (`string`).
+
+Defaults to `false`. When `false`, the data field contains a UTF-8 string.
+When `true`, the data field contains raw bytes as a blob.
+
 ## Output Schema
 
 Each UDP datagram produces one event with the following structure:
 
 ```json
 {
-  "data": <bytes>,
+  "data": <string|blob>, // string by default, blob when binary=true
   "peer": {
     "ip": <ip>,
     "port": <uint64>,
@@ -59,7 +66,7 @@ This might output events like:
 
 ```json
 {
-  "data": "SGVsbG8gV29ybGQ=",
+  "data": "Hello World",
   "peer": {
     "ip": "192.168.1.10",
     "port": 5678
