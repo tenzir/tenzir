@@ -29,13 +29,13 @@ namespace tenzir::plugins::from_udp {
 namespace {
 
 struct args {
-  std::string endpoint;
+  located<std::string> endpoint;
   bool resolve_hostnames = false;
 
   friend auto inspect(auto& f, args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.from_udp.args")
-      .fields(f.field("endpoint", x.endpoint),
+      .fields(f.field("endpoint", x.endpoint.inner),
               f.field("resolve_hostnames", x.resolve_hostnames));
   }
 };
@@ -55,17 +55,17 @@ public:
     // header − 20-byte IP header). At the moment we are not supporting IPv6
     // jumbograms, which in theory get up to 2^32 - 1 bytes.
     auto buffer = std::array<char, 65'536>{};
-    auto endpoint = socket_endpoint::parse(args_.endpoint);
+    auto endpoint = socket_endpoint::parse(args_.endpoint.inner);
     if (not endpoint) {
       diagnostic::error("invalid UDP endpoint")
-        .note("{}", endpoint.error())
+        .primary(args_.endpoint, "{}", endpoint.error())
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto socket = tenzir::socket{*endpoint};
     if (not socket) {
       diagnostic::error("failed to create UDP socket")
-        .note(detail::describe_errno())
+        .primary(args_.endpoint, detail::describe_errno())
         .note("endpoint: {}", endpoint->addr)
         .emit(ctrl.diagnostics());
       co_return;
@@ -79,7 +79,7 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    TENZIR_DEBUG("binding to {}", args_.endpoint);
+    TENZIR_DEBUG("binding to {}", args_.endpoint.inner);
     if (socket.bind(*endpoint) < 0) {
       diagnostic::error("failed to bind to socket")
         .note(detail::describe_errno())
@@ -226,8 +226,8 @@ class plugin final : public virtual operator_plugin2<from_udp_operator> {
     parser.positional("endpoint", args.endpoint);
     parser.named("resolve_hostnames", args.resolve_hostnames);
     TRY(parser.parse(inv, ctx));
-    if (not args.endpoint.starts_with("udp://")) {
-      args.endpoint.insert(0, "udp://");
+    if (not args.endpoint.inner.starts_with("udp://")) {
+      args.endpoint.inner.insert(0, "udp://");
     }
     return std::make_unique<from_udp_operator>(std::move(args));
   }
