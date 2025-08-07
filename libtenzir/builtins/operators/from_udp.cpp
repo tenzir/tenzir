@@ -59,6 +59,7 @@ public:
     // jumbograms, which in theory get up to 2^32 - 1 bytes.
     auto buffer = std::array<char, 65'536>{};
     auto endpoint = socket_endpoint::parse(args_.endpoint.inner);
+    co_yield {};
     if (not endpoint) {
       diagnostic::error("invalid UDP endpoint")
         .primary(args_.endpoint, "{}", endpoint.error())
