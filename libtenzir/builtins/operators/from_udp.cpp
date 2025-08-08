@@ -18,6 +18,7 @@
 
 #include <arpa/inet.h>
 #include <arrow/util/uri.h>
+#include <arrow/util/utf8.h>
 #include <caf/uri.hpp>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -32,13 +33,15 @@ namespace {
 
 struct args {
   located<std::string> endpoint;
+  location operator_location;
   bool resolve_hostnames = false;
   bool binary = false;
 
   friend auto inspect(auto& f, args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.from_udp.args")
-      .fields(f.field("endpoint", x.endpoint.inner),
+      .fields(f.field("endpoint", x.endpoint),
+              f.field("operator_location", x.operator_location),
               f.field("resolve_hostnames", x.resolve_hostnames),
               f.field("binary", x.binary));
   }
@@ -109,27 +112,28 @@ public:
     if (args_.resolve_hostnames) {
       peer_record_fields.push_back({"hostname", string_type{}});
     }
-
-    auto output_type = type{
+    const auto output_type = type{
       "tenzir.from_udp",
       record_type{
         {"data", args_.binary ? type{blob_type{}} : type{string_type{}}},
         {"peer", record_type{std::move(peer_record_fields)}},
       },
     };
-    co_yield {};
-
-    // Create series builder outside the loop for better performance
     auto builder = series_builder{output_type};
     auto last_yield_time = std::chrono::steady_clock::now();
-
     while (true) {
-      constexpr auto poll_timeout = 500ms;
       constexpr auto usec
-        = std::chrono::duration_cast<std::chrono::microseconds>(poll_timeout)
+        = std::chrono::duration_cast<std::chrono::microseconds>(
+            defaults::import::batch_timeout)
             .count();
-      TENZIR_TRACE("polling socket");
-      auto ready = detail::rpoll(*socket.fd, usec);
+      // Check if we should yield based on timeout
+      const auto now = std::chrono::steady_clock::now();
+      if (builder.length() > 0
+          and now - last_yield_time >= defaults::import::batch_timeout) {
+        co_yield builder.finish_assert_one_slice();
+        last_yield_time = now;
+      }
+      const auto ready = detail::rpoll(*socket.fd, usec);
       if (not ready) {
         diagnostic::error("failed to poll socket")
           .primary(args_.endpoint, detail::describe_errno())
@@ -149,7 +153,7 @@ public:
       } else {
         sender_endpoint.sock_addr = sockaddr_in6{};
       }
-      auto received_bytes
+      const auto received_bytes
         = socket.recvfrom(as_writeable_bytes(buffer), sender_endpoint);
       if (received_bytes < 0) {
         diagnostic::error("failed to receive data from socket")
@@ -160,7 +164,7 @@ public:
       // Extract peer information from the sockaddr structure
       auto peer_ip = ip{};
       auto peer_port = uint64_t{0};
-      std::optional<std::string> peer_hostname;
+      auto peer_hostname = std::optional<std::string>{};
       if (auto* v4 = try_as<sockaddr_in>(sender_endpoint.sock_addr)) {
         peer_ip = ip::v4(detail::to_host_order(v4->sin_addr.s_addr));
         peer_port = ntohs(v4->sin_port);
@@ -185,12 +189,25 @@ public:
       // Build the output event
       auto event = builder.record();
       // Add data field
-      auto data_bytes = as_bytes(buffer).subspan(0, received_bytes);
+      const auto data_bytes = as_bytes(buffer).subspan(0, received_bytes);
       if (args_.binary) {
         event.field("data").data(blob{data_bytes.begin(), data_bytes.end()});
       } else {
-        event.field("data").data(std::string{
-          reinterpret_cast<const char*>(data_bytes.data()), data_bytes.size()});
+        const auto valid = arrow::util::ValidateUTF8(
+          reinterpret_cast<const unsigned char*>(data_bytes.data()),
+          data_bytes.size());
+        if (not valid) {
+          diagnostic::warning("message is not valid UTF-8")
+            .primary(args_.operator_location)
+            .note("`data` will be dropped")
+            .emit(ctrl.diagnostics());
+          builder.remove_last();
+          continue;
+        } else {
+          event.field("data").data(
+            std::string{reinterpret_cast<const char*>(data_bytes.data()),
+                        data_bytes.size()});
+        }
       }
       // Add peer record
       auto peer = event.field("peer").record();
@@ -199,16 +216,11 @@ public:
       if (args_.resolve_hostnames && peer_hostname) {
         peer.field("hostname").data(*peer_hostname);
       }
-
-      // Check if we should yield based on timeout
-      auto now = std::chrono::steady_clock::now();
-      if (now - last_yield_time >= defaults::import::batch_timeout) {
-        for (auto&& slice : builder.finish_as_table_slice()) {
-          co_yield std::move(slice);
-        }
-        last_yield_time = now;
-      }
     }
+  }
+
+  auto detached() const -> bool override {
+    return true;
   }
 
   auto location() const -> operator_location override {
@@ -239,6 +251,7 @@ class plugin final : public virtual operator_plugin2<from_udp_operator> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_udp::args{};
+    args.operator_location = inv.self.get_location();
     auto parser = argument_parser2::operator_(name());
     parser.positional("endpoint", args.endpoint);
     parser.named("resolve_hostnames", args.resolve_hostnames);
