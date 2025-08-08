@@ -14,6 +14,7 @@
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/value_path.hpp"
 #include "tsl/robin_map.h"
 
 #include <caf/error.hpp>
@@ -56,12 +57,14 @@ auto best_effort_parser(std::string_view s) -> std::optional<data>;
 
 /// A very basic parser that only parses the string according to the `seed`
 /// type. This parser does not support the seed pointing to a structural type
-auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
+auto basic_seeded_parser(std::string_view s, const tenzir::type& seed,
+                         const value_path& path)
   -> detail::data_builder::data_parsing_result;
 
 /// A very basic parser that simply uses `tenzir::parsers` under the hood.
 /// This parser does not support the seed pointing to a structural type
-auto basic_parser(std::string_view s, const tenzir::type* seed)
+auto basic_parser(std::string_view s, const tenzir::type* seed,
+                  const value_path& path)
   -> detail::data_builder::data_parsing_result;
 
 /// A very basic parser that simply uses `tenzir::parsers` under the hood.
@@ -69,7 +72,8 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
 /// Its used for input formats that already are inherently aware of numbers,
 /// such as JSON or YAML.
 /// This parser does not support the seed pointing to a structural type
-auto non_number_parser(std::string_view s, const tenzir::type* seed)
+auto non_number_parser(std::string_view s, const tenzir::type* seed,
+                       const value_path& path)
   -> detail::data_builder::data_parsing_result;
 
 class node_record;
@@ -182,8 +186,8 @@ inline auto is_null(size_t idx) -> bool {
   return idx == detail::tl_index_of<field_type_list, caf::none_t>::value;
 }
 
-static inline auto
-update_type_index(size_t& old_index, size_t new_index) -> void {
+static inline auto update_type_index(size_t& old_index, size_t new_index)
+  -> void {
   if (old_index == type_index_generic_mismatch) {
     return;
   }
@@ -283,9 +287,9 @@ private:
   ///             to ensure that field types actually match it.
   /// @param mark_dead whether to mark the node (and its children) as
   ///                  `state::dead` afterwards
-  auto
-  commit_to(tenzir::record_ref r, class data_builder& rb,
-            const tenzir::record_type* seed, bool mark_dead = true) -> void;
+  auto commit_to(tenzir::record_ref r, class data_builder& rb,
+                 const tenzir::record_type* seed, value_path path,
+                 bool mark_dead = true) -> void;
 
   /// @brief writes the list into a series builder
   /// @param r The tenzir::record to write to.
@@ -294,16 +298,17 @@ private:
   ///             to ensure that field types actually match it.
   /// @param mark_dead whether to mark the node (and its children) as
   ///                  `state::dead` afterwards
-  auto
-  commit_to(tenzir::record& r, class data_builder& rb,
-            const tenzir::record_type* seed, bool mark_dead = true) -> void;
+  auto commit_to(tenzir::record& r, class data_builder& rb,
+                 const tenzir::record_type* seed, value_path path,
+                 bool mark_dead = true) -> void;
   /// @brief Append the signature of this field to `sig`.
   /// @param sig The out parameter
   /// @param rb The data_builder that is doing the writing.
   /// @param seed The seed to use. This is used both for parsing and
   ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
-                           const tenzir::record_type* seed) -> void;
+                           const tenzir::record_type* seed, value_path path)
+    -> void;
 
   /// @brief marks all fields in the record as dead.
   auto clear() -> void;
@@ -386,7 +391,8 @@ private:
   /// @param mark_dead whether to mark the node (and its children) as
   ///                  `state::dead` afterwards
   auto commit_to(tenzir::builder_ref r, class data_builder& rb,
-                 const tenzir::list_type* seed, bool mark_dead = true) -> void;
+                 const tenzir::list_type* seed, value_path path,
+                 bool mark_dead = true) -> void;
 
   /// @brief writes the list into a series builder
   /// @param r The tenzir::list to write to
@@ -396,14 +402,16 @@ private:
   /// @param mark_dead whether to mark the node (and its children) as
   ///                  `state::dead` afterwards
   auto commit_to(tenzir::list& r, class data_builder& rb,
-                 const tenzir::list_type* seed, bool mark_dead = true) -> void;
+                 const tenzir::list_type* seed, value_path path,
+                 bool mark_dead = true) -> void;
   /// @brief Append the signature of this field to `sig`.
   /// @param sig The out parameter
   /// @param rb The data_builder that is doing the writing.
   /// @param seed The seed to use. This is used both for parsing and
   ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
-                           const tenzir::list_type* seed) -> void;
+                           const tenzir::list_type* seed, value_path path)
+    -> void;
 
   /// @brief marks the list and all its contents as dead, resetting its size to 0
   auto clear() -> void;
@@ -466,19 +474,20 @@ private:
     return std::get_if<T>(&data_);
   }
 
-  auto
-  try_resolve_nonstructural_field_mismatch(class data_builder& rb,
-                                           const tenzir::type* seed) -> void;
+  auto try_resolve_nonstructural_field_mismatch(class data_builder& rb,
+                                                const tenzir::type* seed,
+                                                const value_path& path) -> void;
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
-  auto parse(class data_builder& rb, const tenzir::type* seed) -> void;
+  auto parse(class data_builder& rb, const tenzir::type* seed,
+             const value_path& path) -> void;
   /// @brief Append the signature of this field to `sig`.
   /// @param sig The out parameter
   /// @param rb The data_builder that is doing the writing.
   /// @param seed The seed to use. This is used both for parsing and
   ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
-                           const tenzir::type* seed) -> void;
+                           const tenzir::type* seed, value_path path) -> void;
 
   /// @brief writes the list into a series builder
   /// @param r The builder_ref to write to.
@@ -488,7 +497,8 @@ private:
   /// @param mark_dead whether to mark the node (and its children) as
   ///                  `state::dead` afterwards
   auto commit_to(tenzir::builder_ref r, class data_builder& rb,
-                 const tenzir::type* seed, bool mark_dead = true) -> void;
+                 const tenzir::type* seed, value_path path,
+                 bool mark_dead = true) -> void;
 
   /// @brief writes the list into a series builder
   /// @param r The tenzir::data to write to.
@@ -497,8 +507,9 @@ private:
   ///             to ensure that field types actually match it.
   /// @param mark_dead whether to mark the node (and its children) as
   ///                  `state::dead` afterwards
-  auto commit_to(tenzir::data& r, class data_builder& rb,
-                 const tenzir::type* seed, bool mark_dead = true) -> void;
+  auto
+  commit_to(tenzir::data& r, class data_builder& rb, const tenzir::type* seed,
+            value_path path, bool mark_dead = true) -> void;
   /// @brief marks the node and its contents as dead
   auto clear() -> void;
 
@@ -564,7 +575,7 @@ class data_builder {
 public:
   using data_parsing_function
     = std::function<detail::data_builder::data_parsing_result(
-      std::string_view str, const tenzir::type* seed)>;
+      std::string_view str, const tenzir::type* seed, const value_path& path)>;
   data_builder(data_parsing_function parser
                = detail::data_builder::basic_parser,
                diagnostic_handler* dh = nullptr, bool schema_only = false,
@@ -597,8 +608,8 @@ public:
   }
 
   /// tries to find a field with the given (nested) key
-  [[nodiscard]] auto
-  find_field_raw(std::string_view key) -> detail::data_builder::node_object*;
+  [[nodiscard]] auto find_field_raw(std::string_view key)
+    -> detail::data_builder::node_object*;
 
   /// tries to find a field with the given (nested) key for a data type
   // template <detail::data_builder::non_structured_data_type T>
@@ -616,8 +627,8 @@ public:
   /// materializes the currently build record
   /// @param mark_dead whether to mark nodes in the record builder as dead
   [[nodiscard]] auto
-  materialize(bool mark_dead = true, const tenzir::type* seed
-                                     = nullptr) -> tenzir::data;
+  materialize(bool mark_dead = true, const tenzir::type* seed = nullptr)
+    -> tenzir::data;
   /// commits the current record into the series builder
   /// @param mark_dead whether to mark nodes in the record builder as dead
   auto commit_to(series_builder&, bool mark_dead = true,
@@ -663,10 +674,8 @@ private:
 
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
   auto emit_or_throw(tenzir::diagnostic_builder&& builder) -> void;
-  auto
-  emit_mismatch_warning(const type& value_type, const type& seed_type) -> void;
-  auto emit_mismatch_warning(std::string_view value_type,
-                             const type& seed_type) -> void;
+  auto emit_mismatch_warning(const type_kind& value_type, const type& seed_type,
+                             const value_path& path) -> void;
 };
 
 namespace detail::data_builder {

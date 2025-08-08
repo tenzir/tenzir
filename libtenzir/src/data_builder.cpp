@@ -17,6 +17,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
@@ -82,13 +83,13 @@ auto data_builder::free() -> void {
 
 auto data_builder::commit_to(series_builder& builder, bool mark_dead,
                              const tenzir::type* seed) -> void {
-  root_.commit_to(builder_ref{builder}, *this, seed, mark_dead);
+  root_.commit_to(builder_ref{builder}, *this, seed, value_path{}, mark_dead);
 }
 
-auto data_builder::materialize(bool mark_dead,
-                               const tenzir::type* seed) -> tenzir::data {
+auto data_builder::materialize(bool mark_dead, const tenzir::type* seed)
+  -> tenzir::data {
   tenzir::data res;
-  root_.commit_to(res, *this, seed, mark_dead);
+  root_.commit_to(res, *this, seed, value_path{}, mark_dead);
   return res;
 }
 
@@ -128,7 +129,7 @@ auto data_builder::lookup_record_fields(
 
 auto data_builder::append_signature_to(signature_type& sig,
                                        const tenzir::type* seed) -> void {
-  root_.append_to_signature(sig, *this, seed);
+  root_.append_to_signature(sig, *this, seed, value_path{});
 }
 
 auto data_builder::emit_or_throw(tenzir::diagnostic&& diag) -> void {
@@ -147,18 +148,12 @@ auto data_builder::emit_or_throw(tenzir::diagnostic_builder&& builder) -> void {
   }
 }
 
-auto data_builder::emit_mismatch_warning(const type& value_type,
-                                         const type& seed_type) -> void {
-  emit_or_throw(diagnostic::warning("parsed field contains `{}`, but the "
+auto data_builder::emit_mismatch_warning(const type_kind& value_type,
+                                         const type& seed_type,
+                                         const value_path& path) -> void {
+  emit_or_throw(diagnostic::warning("parsed field `{}` contains `{}`, but the "
                                     "schema expects `{}`",
-                                    value_type.kind(), seed_type.kind()));
-}
-
-auto data_builder::emit_mismatch_warning(std::string_view value_type,
-                                         const type& seed_type) -> void {
-  emit_or_throw(diagnostic::warning("parsed field contains `{}`, but the "
-                                    "schema expects `{}`",
-                                    value_type, seed_type.kind()));
+                                    path, value_type, seed_type.kind()));
 }
 
 namespace {
@@ -228,8 +223,8 @@ auto parse_duration(std::string_view s, const type& seed)
   }
   return {*cast_res};
 }
-auto parse_time(std::string_view s,
-                const type& seed) -> detail::data_builder::data_parsing_result {
+auto parse_time(std::string_view s, const type& seed)
+  -> detail::data_builder::data_parsing_result {
   auto cast_res = cast_value(string_type{}, s, time_type{});
   if (cast_res) {
     return {*cast_res};
@@ -269,10 +264,11 @@ auto best_effort_parser(std::string_view s) -> std::optional<data> {
   return std::nullopt;
 }
 
-auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
+auto basic_seeded_parser(std::string_view s, const tenzir::type& seed,
+                         const value_path& path)
   -> detail::data_builder::data_parsing_result {
   const auto visitor = detail::overload{
-    [&s]<has_parser Type>(
+    [&s, &path]<has_parser Type>(
       const Type& t) -> detail::data_builder::data_parsing_result {
       using T = type_to_data_t<Type>;
       auto res = T{};
@@ -282,6 +278,7 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
       } else {
         return diagnostic::warning("failed to parse value as requested type")
           .hint("value was `{}`, desired type was `{}`", s, t)
+          .hint("field `{}`", path)
           .done();
       }
     },
@@ -307,20 +304,23 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
         return diagnostic::warning("base64 decode failure").done();
       }
     },
-    []<typename T>(const T& t) -> detail::data_builder::data_parsing_result {
+    [&path]<typename T>(
+      const T& t) -> detail::data_builder::data_parsing_result {
       return diagnostic::warning("schema expected `{}`, but the input "
                                  "contained a string",
                                  tenzir::type{t}.kind())
+        .hint("field `{}`", path)
         .done();
     },
   };
   return match(seed, visitor);
 }
 
-auto basic_parser(std::string_view s, const tenzir::type* seed)
+auto basic_parser(std::string_view s, const tenzir::type* seed,
+                  const value_path& path)
   -> detail::data_builder::data_parsing_result {
   if (seed) {
-    return basic_seeded_parser(s, *seed);
+    return basic_seeded_parser(s, *seed, path);
   }
   if (s.empty()) {
     return {};
@@ -333,10 +333,11 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
   }
 }
 
-auto non_number_parser(std::string_view s, const tenzir::type* seed)
+auto non_number_parser(std::string_view s, const tenzir::type* seed,
+                       const value_path& path)
   -> detail::data_builder::data_parsing_result {
   if (seed) {
-    return data_builder::basic_seeded_parser(s, *seed);
+    return data_builder::basic_seeded_parser(s, *seed, path);
   }
   if (s.empty()) {
     return tenzir::data{std::string{}};
@@ -448,7 +449,8 @@ auto node_record::at(std::string_view key) -> node_object* {
 
 auto node_record::append_to_signature(signature_type& sig,
                                       class data_builder& rb,
-                                      const tenzir::record_type* seed) -> void {
+                                      const tenzir::record_type* seed,
+                                      value_path path) -> void {
   sig.push_back(record_start_marker);
   // if we have a seed, we need too ensure that all fields exist first
   const field_type_lookup_map* seed_map = rb.lookup_record_fields(seed, this);
@@ -471,7 +473,7 @@ auto node_record::append_to_signature(signature_type& sig,
         const auto key_bytes = as_bytes(k);
         sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
 
-        field.append_to_signature(sig, rb, &(field_it->second));
+        field.append_to_signature(sig, rb, &(field_it->second), path.field(k));
         continue;
       }
       // break;
@@ -492,13 +494,13 @@ auto node_record::append_to_signature(signature_type& sig,
     }
     const auto key_bytes = as_bytes(k);
     sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
-    field.append_to_signature(sig, rb, nullptr);
+    field.append_to_signature(sig, rb, nullptr, path.field(k));
   }
   sig.push_back(record_end_marker);
 }
 
 auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
-                            const tenzir::record_type* seed,
+                            const tenzir::record_type* seed, value_path path,
                             bool mark_dead) -> void {
   auto field_map = rb.lookup_record_fields(seed, this);
   TENZIR_ASSERT(static_cast<bool>(field_map) == static_cast<bool>(seed));
@@ -510,7 +512,7 @@ auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
       auto it = field_map->find(k);
       // If the field is in the seed
       if (it != field_map->end()) {
-        v.commit_to(r.field(k), rb, &(it->second), mark_dead);
+        v.commit_to(r.field(k), rb, &(it->second), path.field(k), mark_dead);
         // No more work has to be done
         continue;
       }
@@ -525,7 +527,7 @@ auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
         continue;
       }
     }
-    v.commit_to(r.field(k), rb, nullptr, mark_dead);
+    v.commit_to(r.field(k), rb, nullptr, path.field(k), mark_dead);
   }
   if (mark_dead) {
     prune();
@@ -534,7 +536,7 @@ auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
 }
 
 auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
-                            const tenzir::record_type* seed,
+                            const tenzir::record_type* seed, value_path path,
                             bool mark_dead) -> void {
   auto field_map = rb.lookup_record_fields(seed, this);
   for (auto& [k, v] : data_) {
@@ -546,7 +548,8 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
       auto it = field_map->find(k);
       // If the field is in the seed
       if (it != field_map->end()) {
-        v.commit_to(entry_it->second, rb, &(it->second), mark_dead);
+        v.commit_to(entry_it->second, rb, &(it->second), path.field(k),
+                    mark_dead);
         // No more work has to be done
         continue;
       }
@@ -561,7 +564,7 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
         continue;
       }
     }
-    v.commit_to(entry_it->second, rb, nullptr, mark_dead);
+    v.commit_to(entry_it->second, rb, nullptr, path.field(k), mark_dead);
   }
   if (mark_dead) {
     prune();
@@ -650,8 +653,8 @@ auto node_object::list() -> node_list* {
   return &data_.emplace<node_list>();
 }
 
-auto node_object::parse(class data_builder& rb,
-                        const tenzir::type* seed) -> void {
+auto node_object::parse(class data_builder& rb, const tenzir::type* seed,
+                        const value_path& path) -> void {
   if (value_state_ != value_state_type::unparsed) {
     return;
   }
@@ -664,7 +667,7 @@ auto node_object::parse(class data_builder& rb,
   }
   TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
   std::string_view raw_data = std::get<std::string>(data_);
-  auto parse_result = rb.parser_(raw_data, seed);
+  auto parse_result = rb.parser_(raw_data, seed, path);
   auto& [value, diag] = parse_result;
   if (diag) {
     rb.emit_or_throw(std::move(*diag));
@@ -676,228 +679,115 @@ auto node_object::parse(class data_builder& rb,
 }
 
 auto node_object::try_resolve_nonstructural_field_mismatch(
-  class data_builder& rb, const tenzir::type* seed) -> void {
+  class data_builder& rb, const tenzir::type* seed, const value_path& path)
+  -> void {
   if (not seed) {
     return;
   }
   if (not is_alive()) {
     return;
   }
-  // TODO this should probably be a double visit on `data_` and `*seed`
-  // The double visit currently cant be done easily, because its std::variant &
-  // caf::variant. (`data_`vs `tenzir::type`).
-  // Below is a nice implementation that I wrote before realizing
-  // that I really dont want to deal with turning the `data_` member into a
-  // caf::variant. Once we update CAF, this will be easy to replace.
-  // Be aware that this double visit may be out of date with the behaviour
-  // below:
-  // * its at the very least not warning for double -> int conversions that
-  // loose precision const auto visitor2 = detail::overload{
-  //   // fallback
-  //   [&rb,seed]<non_structured_data_type T, typename S>(const T&, const S& s)
-  //   {
-  //     rb.emit_mismatch_warning( type{data_to_type_t<T>{}}, *seed );
-  //   },
-  //   // generic fallback
-  //   []( const auto&, const auto& ){
-  //     /* noop */
-  //   },
-  //   // null -> anything
-  //   [](const caf::none_t&, const auto&) {
-  //     /* noop */
-  //   },
-  //   // numeric -> double
-  //   [this]<numeric_data_type T>(const T& value, const double_type&) {
-  //     data(static_cast<double>(value));
-  //   },
-  //   // int -> uint
-  //   [this](const int64_t value, const uint64_type&) {
-  //     if (value < 0) {
-  //       null();
-  //     } else {
-  //       data(static_cast<uint64_t>(value));
-  //     }
-  //   },
-  //   // uint -> int
-  //   [this](const uint64_t& value, const int64_type&) {
-  //     if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-  //     {
-  //       null();
-  //     } else {
-  //       data(static_cast<int64_t>(value));
-  //     }
-  //   },
-  //   // numeric -> duration
-  //   [this,seed]<numeric_data_type T>(const T& value, const duration_type&) {
-  //     auto unit = seed->attribute("unit").value_or("s");
-  //     auto res = cast_value(data_to_type_t<T>{}, value, duration_type{},
-  //     unit); if (res) {
-  //       data(*res);
-  //       return;
-  //     }
-  //   },
-  //   // numeric -> time
-  //   [this, seed, &rb]<numeric_data_type T>(const T& value, const time_type&)
-  //   {
-  //     auto unit = seed->attribute("unit");
-  //     if (not unit) {
-  //       rb.emit_or_throw(
-  //         diagnostic::warning("could not parse value as `{}`", time_type{})
-  //           .note("the read value as a number, but the schema does not "
-  //                 "specify a unit"));
-  //       return;
-  //     }
-  //     auto res = cast_value(data_to_type_t<T>{}, value, duration_type{},
-  //     *unit); if (res) {
-  //       data(time{} + *res);
-  //       return;
-  //     }
-  //   },
-  //   // anything -> string
-  //   [this]<fmt_formattable T>(const T& value, const string_type&) {
-  //     data(fmt::format("{}", value));
-  //   },
-  // };
-  // caf::visit( visitor2, data_, *seed );
-  const auto visitor = detail::overload{
-    [](const auto&) {
-      /* noop */
+  // This is matching on (current_value, desired_tenzir_type)
+  const auto visitor2 = detail::overload{
+    [&rb, seed, &path]<non_structured_data_type T, typename S>(const T&,
+                                                               const S&) {
+      if constexpr (not std::same_as<data_to_type_t<T>, S>) {
+        rb.emit_mismatch_warning(tag_v<data_to_type_t<T>>, *seed, path);
+      }
     },
-    [](const caf::none_t&) {
-      /* noop */
+    // generic fallback
+    [](const auto&, const auto&) {
+      // noop: Mismatches involving structured types are handled in `commit_to`
+      // to avoid duplication of this warning
     },
-    [&rb, seed, this]<non_structured_data_type T>(const T& v) {
-      constexpr static auto type_idx
-        = detail::tl_index_of<field_type_list, T>::value;
-      const auto seed_idx = seed->type_index();
-      if (type_idx == seed_idx) {
+    // null -> anything
+    [](const caf::none_t&, const auto&) {
+      // noop: Null promotion happens in `commit_to`
+    },
+    // numeric -> double
+    [this]<concepts::one_of<int64_t, uint64_t> T>(const T& value,
+                                                  const double_type&) {
+      data(static_cast<double>(value));
+    },
+    // int -> uint
+    [this](const int64_t value, const uint64_type&) {
+      if (value < 0) {
+        null();
+      } else {
+        data(static_cast<uint64_t>(value));
+      }
+    },
+    // uint -> int
+    [this](const uint64_t& value, const int64_type&) {
+      if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        null();
+      } else {
+        data(static_cast<int64_t>(value));
+      }
+    },
+    // integral -> enumeration
+    [this, &rb, &path]<concepts::one_of<uint64_t, int64_t> T>(
+      const T& value, const enumeration_type& t) {
+      if (value < 0
+          or value > static_cast<T>(std::numeric_limits<enumeration>::max())) {
+        rb.emit_or_throw(diagnostic::warning("value is out of range "
+                                             "for expected type")
+                           .note("value `{}` does not fit into `{}`", value,
+                                 type_kind::of<enumeration_type>)
+                           .note("field `{}`", path));
+        null();
         return;
       }
-      if constexpr (is_numeric(type_idx)) {
-        // numeric conversion if possible
-        if (is_numeric(seed_idx)) {
-          switch (seed_idx) {
-            case detail::tl_index_of<field_type_list, int64_t>::value: {
-              if constexpr (std::same_as<uint64_t, T>) {
-                if (v > static_cast<uint64_t>(
-                      std::numeric_limits<int64_t>::max())) {
-                  null();
-                  rb.emit_or_throw(diagnostic::warning("value is out of range "
-                                                       "for expected type")
-                                     .note("value `{}` does not fit into `{}`",
-                                           v, seed->kind()));
-                  return;
-                }
-              } else if constexpr (std::same_as<double, T>) {
-                if (static_cast<double>(static_cast<int64_t>(v)) == v) {
-                  rb.emit_or_throw(diagnostic::warning("fractional value where "
-                                                       "integral was expected")
-                                     .note("value `{}` looses precision when "
-                                           "converted to `{}`",
-                                           v, seed->kind()));
-                }
-              }
-              data(static_cast<int64_t>(v));
-              return;
-            }
-            case detail::tl_index_of<field_type_list, uint64_t>::value: {
-              if (v < 0) {
-                null();
-                rb.emit_or_throw(diagnostic::warning("value is out of range "
-                                                     "for expected type")
-                                   .note("value `{}` does not fit into `{}`", v,
-                                         seed->kind()));
-                return;
-              }
-              if constexpr (std::same_as<double, T>) {
-                if (static_cast<double>(static_cast<int64_t>(v)) == v) {
-                  rb.emit_or_throw(diagnostic::warning("fractional value where "
-                                                       "integral was expected")
-                                     .note("value `{}` looses precision when "
-                                           "converted to `{}`",
-                                           v, seed->kind()));
-                }
-              }
-              data(static_cast<uint64_t>(v));
-              return;
-            }
-            case detail::tl_index_of<field_type_list, double>::value: {
-              data(static_cast<double>(v));
-              return;
-            }
-            case detail::tl_index_of<field_type_list, enumeration>::value: {
-              if (v < 0
-                  or v > static_cast<T>(
-                       std::numeric_limits<enumeration>::max())) {
-                rb.emit_or_throw(diagnostic::warning("value is out of range "
-                                                     "for expected type")
-                                   .note("value `{}` does not fit into `{}`", v,
-                                         seed->kind()));
-                null();
-                return;
-              }
-              auto enum_t = try_as<enumeration_type>(seed);
-              TENZIR_ASSERT(enum_t);
-              if (enum_t->field(static_cast<uint32_t>(v)).empty()) {
-                null();
-                rb.emit_or_throw(
-                  diagnostic::warning("unknown integral enumeration value")
-                    .note("value `{}` is not defined for `{}`", v, *enum_t));
-              }
-              data(static_cast<enumeration>(v));
-              return;
-            }
-            default:
-              TENZIR_UNREACHABLE();
-          }
-        } else if (seed_idx
-                   == detail::tl_index_of<field_type_list, duration>::value) {
-          auto unit = seed->attribute("unit").value_or("s");
-          auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, unit);
-          if (res) {
-            data(*res);
-            return;
-          }
-        } else if (seed_idx
-                   == detail::tl_index_of<field_type_list, time>::value) {
-          auto unit = seed->attribute("unit");
-          if (not unit) {
-            rb.emit_or_throw(
-              diagnostic::warning("could not parse value as `{}`", time_type{})
-                .note("the read value as a number, but the schema does not "
-                      "specify a unit"));
-            return;
-          }
-          auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, *unit);
-          if (res) {
-            data(time{} + *res);
-            return;
-          }
-        }
-      } else if (seed_idx == type_index_string) {
-        // stringify if possible
-        if constexpr (fmt::is_formattable<T>{}) {
-          data(fmt::format("{}", v));
-          return;
-        }
+      if (t.field(static_cast<uint32_t>(value)).empty()) {
+        null();
+        rb.emit_or_throw(
+          diagnostic::warning("unknown integral enumeration value")
+            .note("value `{}` is not defined for `{}`", value, t)
+            .note("field `{}`", path));
       }
-      // TODO this happens in our intentionally "broken" zeek.json event in the
-      // test input, where we have field `id : 0`, whereas the schema expects
-      // `id : zeek.conn_id` The resulting issue is that a protected/preparsed
-      // series_builder will reject the value. This could be resolved by
-      // not preparing any builders in the `multi_series_builder` and instead
-      // ensuring that all fields top level are written (as null) on commit.
-      // This is a non-trivial effort though and should be considered as a
-      // follow-up to precise parsing.
-      rb.emit_mismatch_warning(type{data_to_type_t<T>{}}, *seed);
+      data(static_cast<enumeration>(value));
     },
-  };
-  std::visit(visitor, data_);
+    // numeric -> duration
+    [this, seed]<numeric_data_type T>(const T& value, const duration_type&) {
+      auto unit = seed->attribute("unit").value_or("s");
+      auto res = cast_value(data_to_type_t<T>{}, value, duration_type{}, unit);
+      if (res) {
+        data(*res);
+        return;
+      }
+    },
+    // numeric -> time
+    [this, seed, &rb, &path]<numeric_data_type T>(const T& value,
+                                                  const time_type&) {
+      auto unit = seed->attribute("unit");
+      if (not unit) {
+        rb.emit_or_throw(
+          diagnostic::warning("could not parse value as `{}`", time_type{})
+            .note("the read value as a number, but the schema does not "
+                  "specify a unit")
+            .note("field `{}`", path));
+        return;
+      }
+      auto res = cast_value(data_to_type_t<T>{}, value, duration_type{}, *unit);
+      if (res) {
+        data(time{} + *res);
+        return;
+      }
+    },
+    // anything -> string
+    [this]<typename T>(const T& value, const string_type&)
+      requires(fmt::is_formattable<T>::value)
+    {
+      data(fmt::format("{}", value));
+    },
+    };
+  match(std::forward_as_tuple(data_, *seed), visitor2);
 }
 
 auto node_object::append_to_signature(signature_type& sig,
                                       class data_builder& rb,
-                                      const tenzir::type* seed) -> void {
+                                      const tenzir::type* seed, value_path path)
+  -> void {
   if (state_ == state::sentinel) {
     if (not seed) {
       return;
@@ -910,53 +800,53 @@ auto node_object::append_to_signature(signature_type& sig,
     }
     // Sentinel structural types get handled by the regular visit below
   }
-  parse(rb, seed);
-  try_resolve_nonstructural_field_mismatch(rb, seed);
+  parse(rb, seed, path);
+  try_resolve_nonstructural_field_mismatch(rb, seed, path);
   // This lambda handles the case where the node is either null, or its stored
   // type mismatches the given seed
   // In case of a mismatch, the node is nulled out and the visit is rerun.
   // Rerunning the visit then runs into the `caf::none_t` case, which correctly
   // re-creates the nodes contents according to the seed.
   const auto visitor = detail::overload{
-    [&sig, &rb, seed, this](node_list& v) {
+    [&sig, &rb, seed, this, &path](node_list& v) {
       const auto* ls = try_as<list_type>(seed);
       if (seed and not ls) {
-        rb.emit_mismatch_warning("list", *seed);
+        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
         null();
         return false;
       }
       if (v.affects_signature() or ls) {
-        v.append_to_signature(sig, rb, ls);
+        v.append_to_signature(sig, rb, ls, path);
       }
       return true;
     },
-    [&sig, &rb, seed, this](node_record& v) {
+    [&sig, &rb, seed, this, &path](node_record& v) {
       const auto* rs = try_as<record_type>(seed);
       if (seed and not rs) {
-        rb.emit_mismatch_warning(type{record_type{}}, *seed);
+        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
         null();
         return false;
       }
       if (v.affects_signature() or rs) {
-        v.append_to_signature(sig, rb, rs);
+        v.append_to_signature(sig, rb, rs, path);
       }
       return true;
     },
-    [&sig, &rb, seed, this](caf::none_t&) {
+    [&sig, &rb, seed, this, &path](caf::none_t&) {
       // none could be the result of pre-seeding or being built with a true
       // null via the API for the first case we need to ensure we continue
       // doing seeding if we have a seed
       if (seed) {
         if (auto sr = try_as<tenzir::record_type>(seed)) {
           auto r = record();
-          r->append_to_signature(sig, rb, sr);
+          r->append_to_signature(sig, rb, sr, path);
           r->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
           return true;
         }
         if (auto sl = try_as<tenzir::list_type>(seed)) {
           auto* l = list();
-          l->append_to_signature(sig, rb, sl);
+          l->append_to_signature(sig, rb, sl, path);
           l->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
           return true;
@@ -997,7 +887,8 @@ auto node_object::append_to_signature(signature_type& sig,
 }
 
 auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
-                            const tenzir::type* seed, bool mark_dead) -> void {
+                            const tenzir::type* seed, value_path path,
+                            bool mark_dead) -> void {
   if (rb.schema_only_ and not seed) {
     if (mark_dead) {
       mark_this_dead();
@@ -1012,16 +903,16 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
     }
     return;
   }
-  parse(rb, seed);
-  try_resolve_nonstructural_field_mismatch(rb, seed);
+  parse(rb, seed, path);
+  try_resolve_nonstructural_field_mismatch(rb, seed, path);
   const auto visitor = detail::overload{
-    [&builder, &rb, seed, mark_dead](node_list& v) {
+    [&builder, &rb, seed, mark_dead, &path](node_list& v) {
       if (v.is_dead()) {
         return;
       }
       const auto ls = try_as<tenzir::list_type>(seed);
       if (not ls and seed) {
-        rb.emit_mismatch_warning("list", *seed);
+        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
         builder.null();
         v.mark_this_dead();
         return;
@@ -1029,15 +920,15 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       // Because we ensured that the seed matches above, we can now safely
       // call `builder.list()`
       auto l = builder.list();
-      v.commit_to(std::move(l), rb, ls, mark_dead);
+      v.commit_to(std::move(l), rb, ls, path, mark_dead);
     },
-    [&builder, &rb, seed, mark_dead](node_record& v) {
+    [&builder, &rb, seed, mark_dead, &path](node_record& v) {
       if (v.is_dead()) {
         return;
       }
       const auto rs = try_as<tenzir::record_type>(seed);
       if (not rs and seed) {
-        rb.emit_mismatch_warning(type{record_type{}}, *seed);
+        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
         builder.null();
         v.mark_this_dead();
         return;
@@ -1045,18 +936,19 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       // Because we ensured that the seed matches above, we can now safely
       // call `builder.record()`
       auto r = builder.record();
-      v.commit_to(std::move(r), rb, rs, mark_dead);
+      v.commit_to(std::move(r), rb, rs, path, mark_dead);
     },
-    [&builder, seed, &rb]<non_structured_data_type T>(T& v) {
+    [&builder, seed, &rb, &path]<non_structured_data_type T>(T& v) {
       auto res = builder.try_data(v);
       if (not res) {
         const auto& err = res.error();
         if (tenzir::ec{err.code()} == ec::type_clash) {
-          rb.emit_mismatch_warning(type{data_to_type_t<T>{}}, *seed);
+          rb.emit_mismatch_warning(tag_v<data_to_type_t<T>>, *seed, path);
         } else {
           rb.emit_or_throw(
             diagnostic::warning("issue writing data into builder")
-              .note("{}", err));
+              .note("{}", err)
+              .note("field `{}`", path));
         }
       }
     },
@@ -1072,7 +964,8 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
 }
 
 auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
-                            const tenzir::type* seed, bool mark_dead) -> void {
+                            const tenzir::type* seed, value_path path,
+                            bool mark_dead) -> void {
   if (rb.schema_only_ and not seed) {
     if (mark_dead) {
       mark_this_dead();
@@ -1087,36 +980,36 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
     }
     return;
   }
-  parse(rb, seed);
-  try_resolve_nonstructural_field_mismatch(rb, seed);
+  parse(rb, seed, path);
+  try_resolve_nonstructural_field_mismatch(rb, seed, path);
   const auto visitor = detail::overload{
-    [&r, &rb, seed, mark_dead](node_list& v) {
+    [&r, &rb, seed, mark_dead, &path](node_list& v) {
       if (v.is_dead()) {
         return;
       }
       const auto ls = try_as<tenzir::list_type>(seed);
       if (not ls and seed) {
-        rb.emit_mismatch_warning("list", *seed);
+        rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
         r = caf::none;
         v.mark_this_dead();
         return;
       }
       r = tenzir::list{};
-      v.commit_to(as<tenzir::list>(r), rb, ls, mark_dead);
+      v.commit_to(as<tenzir::list>(r), rb, ls, path, mark_dead);
     },
-    [&r, &rb, seed, mark_dead](node_record& v) {
+    [&r, &rb, seed, mark_dead, &path](node_record& v) {
       if (v.is_dead()) {
         return;
       }
       const auto rs = try_as<tenzir::record_type>(seed);
       if (not rs and seed) {
-        rb.emit_mismatch_warning(type{record_type{}}, *seed);
+        rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
         r = caf::none;
         v.mark_this_dead();
         return;
       }
       r = tenzir::record{};
-      v.commit_to(as<tenzir::record>(r), rb, rs, mark_dead);
+      v.commit_to(as<tenzir::record>(r), rb, rs, path, mark_dead);
     },
     [&r, mark_dead]<non_structured_data_type T>(T& v) {
       if (mark_dead) {
@@ -1217,7 +1110,8 @@ auto node_list::list() -> node_list* {
 }
 
 auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
-                                    const tenzir::list_type* seed) -> void {
+                                    const tenzir::list_type* seed,
+                                    value_path path) -> void {
   sig.push_back(list_start_marker);
   // This has to be a local value because `list_type::value_type` returns a
   // value.
@@ -1235,7 +1129,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
   else if (seed) {
     node_object sentinel;
     sentinel.state_ = state::sentinel;
-    sentinel.append_to_signature(sig, rb, seed_type_ptr);
+    sentinel.append_to_signature(sig, rb, seed_type_ptr, path.list());
   } else if (not is_structural(type_index_)
              and type_index_ < type_index_empty) {
     sig.push_back(static_cast<std::byte>(type_index_));
@@ -1325,7 +1219,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     auto non_matching_signatures = false;
     auto has_list = false;
     auto has_record = false;
-    for (auto& v : alive_elements()) {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
       auto curr_sig_start_index = sig.size();
       if (v.current_index() == type_index_list) {
         sig.push_back(list_start_marker);
@@ -1336,7 +1230,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
       } else if (v.current_index() == type_index_null) {
         continue;
       } else {
-        v.append_to_signature(sig, rb, seed_type_ptr);
+        v.append_to_signature(sig, rb, seed_type_ptr, path.index(i));
       }
       if (last_sig_start_index == 0) {
         last_sig_start_index = curr_sig_start_index;
@@ -1366,18 +1260,19 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
       |= (has_record or has_list) and sig.size() > initial_sig_size + 2;
     if (non_matching_signatures) {
       rb.emit_or_throw(
-        diagnostic::warning("type mismatch between list elements"));
+        diagnostic::warning("type mismatch between list elements")
+          .note("field `{}`", path));
     }
   }
   sig.push_back(list_end_marker);
 }
 
 auto node_list::commit_to(builder_ref r, class data_builder& rb,
-                          const tenzir::list_type* seed,
+                          const tenzir::list_type* seed, value_path path,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto& v : alive_elements()) {
-    v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
+  for (auto [i, v] : detail::enumerate(alive_elements())) {
+    v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i), mark_dead);
   }
   TENZIR_ASSERT_EXPENSIVE(
     not mark_dead
@@ -1394,12 +1289,12 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
 }
 
 auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
-                          const tenzir::list_type* seed,
+                          const tenzir::list_type* seed, value_path path,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto& v : alive_elements()) {
+  for (auto [i, v] : detail::enumerate(alive_elements())) {
     auto& d = l.emplace_back();
-    v.commit_to(d, rb, seed ? &field_seed : nullptr, mark_dead);
+    v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i), mark_dead);
   }
   TENZIR_ASSERT_EXPENSIVE(
     not mark_dead
