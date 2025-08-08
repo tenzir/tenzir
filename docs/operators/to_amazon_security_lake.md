@@ -87,9 +87,15 @@ For example, given:
 The operator will use:
 `arn:aws:iam::123456789012:role/AmazonSecurityLake-Provider-tnz-ocsf-4001-eu-west-1`
 
+When defaulted, the operator requires an `external_id` to use the role.
+
+You can explicitly disable role authorization by setting `role=null`.
+
 ### `external_id = string (optional)`
 
 The external ID to use when assuming the `role`.
+
+This is required when using the default role for the custom source.
 
 Defaults to no ID.
 
