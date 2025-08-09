@@ -1,0 +1,9 @@
+// test: exec
+from {
+  // Reserved example domain per RFC 2606 - stable
+  domain: "example.com"
+}
+dns_lookup domain
+unroll dns_lookup
+drop dns_lookup.ttl
+sort dns_lookup.type, dns_lookup.address

@@ -1,0 +1,6 @@
+{
+  ip: 198.41.0.4,
+  dns_lookup: {
+    hostname: "a.root-servers.net",
+  },
+}

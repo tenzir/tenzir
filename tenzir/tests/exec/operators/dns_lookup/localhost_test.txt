@@ -1,0 +1,14 @@
+{
+  host: "a.root-servers.net",
+  dns_lookup: {
+    address: 198.41.0.4,
+    type: "A",
+  },
+}
+{
+  host: "a.root-servers.net",
+  dns_lookup: {
+    address: 2001:503:ba3e::2:30,
+    type: "AAAA",
+  },
+}
