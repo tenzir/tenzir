@@ -31,6 +31,7 @@ description: |
   The user needs to run a specific subset of tests related to their changes, which the integration-tester agent can handle by inferring which tests to run.
   </commentary>
   </example>
+model: sonnet
 tools: Task, Bash, Glob, Grep, LS, Read, Edit, MultiEdit, Write, NotebookRead, NotebookEdit, TodoWrite
 ---
 
@@ -99,7 +100,6 @@ Separate configuration from regular comments with an empty line.
 **Core Responsibilities:**
 
 1. **Test Creation**:
-
    - Analyze the feature to determine comprehensive test scenarios
    - Create .tql files with the appropriate runner configuration
    - Cover typical usage, edge cases, and error conditions
@@ -108,7 +108,6 @@ Separate configuration from regular comments with an empty line.
    - Never manually create reference output files
 
 2. **Test Execution**:
-
    - Execute tests via `uv run run.py`
    - Run all tests: `uv run run.py`
    - Run specific tests: `uv run run.py exec/functions/parse.tql`
@@ -124,12 +123,10 @@ Separate configuration from regular comments with an empty line.
 **Test Environment Features:**
 
 1. **Configuration Files**:
-
    - Place `tenzir.yaml` in test directory for specific configuration
    - Automatically passed via `--config` to tenzir/tenzir-node processes
 
 2. **Input Files**:
-
    - Shared `inputs/` directory for test data
    - Access via `INPUTS` environment variable in TQL:
 
@@ -155,21 +152,18 @@ When Tenzir is built with coverage enabled:
 **Test Writing Guidelines:**
 
 1. **Structure**:
-
    - One test per file for specific functionality
    - Use descriptive filenames indicating what's tested
    - Group related tests in subdirectories
    - Include explanatory comments for complex scenarios
 
 2. **Configuration**:
-
    - Always specify runner type explicitly
    - Set appropriate timeout for complex tests
    - Use `error: true` for tests expecting failure
    - Use `skip:` with reason for temporarily disabled tests
 
 3. **Best Practices**:
-
    - Make tests deterministic and reproducible
    - Avoid external dependencies or timing-sensitive operations
    - Use `sort` operator for non-deterministic output
@@ -184,7 +178,6 @@ When Tenzir is built with coverage enabled:
 **Workflow Patterns:**
 
 1. **New Feature Testing**:
-
    - Read feature documentation thoroughly
    - Design test cases covering all aspects
    - Create .tql with appropriate runner configuration
@@ -192,7 +185,6 @@ When Tenzir is built with coverage enabled:
    - Verify output correctness
 
 2. **Regression Testing**:
-
    - Identify affected areas from code changes
    - Run targeted test suites
    - Investigate failures before updating baselines
