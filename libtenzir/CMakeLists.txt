@@ -266,6 +266,11 @@ else ()
   dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 endif ()
 
+# Link against c-ares.
+target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
+dependency_summary("c-ares" c-ares::cares "Dependencies")
+
 # Link against xxHash.
 target_compile_definitions(
   libtenzir
@@ -407,11 +412,6 @@ dependency_summary("re2" re2::re2 "Dependencies")
 target_link_libraries(libtenzir PUBLIC reproc++)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
 dependency_summary("reproc++" reproc+++ "Dependencies")
-
-# Link against c-ares.
-target_link_libraries(libtenzir PUBLIC c-ares::cares)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
-dependency_summary("c-ares" c-ares::cares "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
