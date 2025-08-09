@@ -91,9 +91,16 @@ auto argument_parser2::parse(const ast::entity& self,
              .primary(self));
       break;
     }
-    auto& expr = *arg;
+    const auto& expr = *arg;
     positional.set.match(
       [&]<data_type T>(setter<located<T>>& set) {
+        if (is<ast::pipeline_expr>(expr)) {
+          emit(diagnostic::error("expected argument of type `{}`, but got "
+                                 "`pipeline`",
+                                 type_kind::of<data_to_type_t<T>>)
+                 .primary(expr));
+          return;
+        }
         auto value = const_eval(expr, ctx);
         if (not value) {
           result = value.error();
@@ -104,7 +111,7 @@ auto argument_parser2::parse(const ast::entity& self,
         auto cast = try_as<T>(&*value);
         if constexpr (std::same_as<T, uint64_t>) {
           if (not cast) {
-            auto other = try_as<int64_t>(&*value);
+            auto* other = try_as<int64_t>(&*value);
             if (other) {
               if (*other < 0) {
                 emit(diagnostic::error("expected positive integer, got `{}`",
@@ -162,7 +169,7 @@ auto argument_parser2::parse(const ast::entity& self,
         set(*lambda);
       },
       [&](setter<located<pipeline>>& set) {
-        auto pipe_expr = try_as<ast::pipeline_expr>(expr);
+        const auto* pipe_expr = try_as<ast::pipeline_expr>(expr);
         if (not pipe_expr) {
           emit(
             diagnostic::error("expected a pipeline expression").primary(expr));
@@ -180,7 +187,7 @@ auto argument_parser2::parse(const ast::entity& self,
   for (; arg != args.end(); ++arg) {
     arg->match(
       [&](const ast::assignment& assignment) {
-        auto* sel = try_as<ast::field_path>(assignment.left);
+        const auto* sel = try_as<ast::field_path>(assignment.left);
         if (not sel or sel->has_this() or sel->path().size() != 1
             or sel->path()[0].has_question_mark) {
           emit(diagnostic::error("invalid name").primary(assignment.left));
@@ -224,7 +231,7 @@ auto argument_parser2::parse(const ast::entity& self,
           return;
         }
         it->found = arg->get_location();
-        auto& expr = assignment.right;
+        const auto& expr = assignment.right;
         it->set.match(
           [&]<data_type T>(setter<located<T>>& set) {
             auto value = const_eval(expr, ctx);
@@ -235,7 +242,7 @@ auto argument_parser2::parse(const ast::entity& self,
             auto cast = try_as<T>(&*value);
             if constexpr (std::same_as<T, uint64_t>) {
               if (not cast) {
-                auto other = try_as<int64_t>(&*value);
+                auto* other = try_as<int64_t>(&*value);
                 if (other) {
                   if (*other < 0) {
                     emit(diagnostic::error(
@@ -459,6 +466,8 @@ auto argument_parser2::usage() const -> std::string {
         }
         usage_cache_ += '[';
         in_brackets = true;
+      } else if (std::exchange(has_previous, true)) {
+        usage_cache_ += " ";
       }
       usage_cache_ += "{ … }";
     }
@@ -475,7 +484,7 @@ auto argument_parser2::usage() const -> std::string {
 
 auto argument_parser2::docs() const -> std::string {
   auto name = name_;
-  auto category = std::invoke([&] {
+  const auto* category = std::invoke([&] {
     switch (kind_) {
       case kind::op:
         return "operators";
@@ -602,7 +611,7 @@ auto check_no_substrings(diagnostic_handler& dh,
       if (shorter.value.empty()) {
         continue;
       }
-      if (longer.value.find(shorter.value) != longer.value.npos) {
+      if (longer.value.find(shorter.value) != std::string_view::npos) {
         diagnostic::error("`{}` and `{}` conflict", shorter.name, longer.name)
           .note("`{}` is a substring of `{}`", shorter.value, longer.value)
           .primary(shorter.loc)

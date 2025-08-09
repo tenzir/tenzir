@@ -1,4 +1,4 @@
-error: bad cron expression: "Specified range exceeds maximum"
+error: bad cron expression: Specified range exceeds maximum
  --> <input>:1:6
   |
 1 | cron "120 * * * * *", { version }
