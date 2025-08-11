@@ -1,6 +1,6 @@
 ---
 title: is_empty
-category: Misc
+category: Utility
 example: '"".is_empty()'
 ---
 
