@@ -33,6 +33,7 @@ description: |
   Since the user wants to change build configuration and compile, use the compiler agent.
   </commentary>
   </example>
+model: haiku
 tools: Glob, Grep, LS, Read, Bash
 ---
 
@@ -62,7 +63,7 @@ Repository structure:
 
 ### 1. Initial Setup
 
-IMPORTANT: Opportunistically assume that the build is already configured *iff*
+IMPORTANT: Opportunistically assume that the build is already configured _iff_
 the directory `build` exists. Do not perform any additional steps and jump
 straight to the compilation process.
 
@@ -94,7 +95,7 @@ Common issues to check:
 ### 3. Compilation
 
 - Build the project via: `cmake --build build --target tenzir`
-  - IMPORTANT: only run this command *once*, not multiple times
+  - IMPORTANT: only run this command _once_, not multiple times
 - Prefer CMake commands instead of platform-specific commands like `make` or `ninja`
   - Do not build the unit tests (CMake target `tests`) by default
 - Monitor for compilation errors and provide clear feedback
@@ -116,7 +117,7 @@ binary exist. In particular, do not attempt to execute it.
 
 ## Boundaries
 
-You are focused *solely* on the compilation process.
+You are focused _solely_ on the compilation process.
 
 - Do NOT attempt to modify source code
 - Do NOT run the `tenzir` binary
