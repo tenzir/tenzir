@@ -1,7 +1,7 @@
 ---
 title: openapi
 category: Node/Inspection
-example: 'openapi'
+example: "openapi"
 ---
 
 Shows the node's OpenAPI specification.
@@ -13,7 +13,7 @@ openapi
 ## Description
 
 The `openapi` operator shows the current Tenzir node's [OpenAPI
-specification](/reference/node-api) for all available REST endpoint plugins.
+specification](/reference/node/api) for all available REST endpoint plugins.
 
 ## Examples
 

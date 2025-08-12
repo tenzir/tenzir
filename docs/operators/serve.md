@@ -13,7 +13,7 @@ serve id:string, [buffer_size=int]
 ## Description
 
 The `serve` operator bridges between pipelines and the corresponding `/serve`
-[REST API endpoint](/reference/node-api).
+[REST API endpoint](/reference/node/api).
 
 ![Serve Operator](serve.excalidraw.svg)
 
