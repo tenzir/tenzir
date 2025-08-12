@@ -1,0 +1,10 @@
+testing serve-1 with max 1
+{'s': 'Hello World 1'}
+{'s': 'Hiya 1'}
+{'i': 42}
+{'s': 'str 1', 'i': 0}
+testing serve-2 with max 5
+{'s': 'Hello World 2', 'i': None}
+{'s': 'Hiya 2', 'i': None}
+{'s': None, 'i': 43}
+{'s': 'str 2', 'i': 1}

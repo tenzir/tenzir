@@ -90,6 +90,8 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "exact_schema",
     // TQL2-only mode is enabled.
     "tql2_only",
+    // The `/serve-multi` is supported
+    "serve-multi",
   };
   return result;
 }

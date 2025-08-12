@@ -9,22 +9,23 @@
 // ARCHITECTURE
 //
 // The serve builtin contains three parts, namely the serve-manager component,
-// the serve operator, and the /serve endpoint.
+// the serve operator, and the /serve and /serve-multi endpoints.
 //
 // SERVE OPERATOR
 //
 // The serve operator is an event sink that exposes the events it receives
 // incrementally through a REST API.
 //
-// SERVE ENDPOINT
+// SERVE ENDPOINTS
 //
 // The /serve endpoint allows for fetching events from a pipeline that ended in
-// the serve operator incrementally.
+// the serve operator incrementally. The /serve-multi endpoint allows fetching
+// from multiple pipelines at the same time, producing a keyed result.
 //
 // SERVE-MANAGER COMPONENT
 //
 // The serve-manager component is invisible to the user. It is responsible for
-// bridging between the serve operator and the /serve endpoint, observing when
+// bridging between the serve operator and the endpoints, observing when
 // the operator is done, throttling the operator when events are being requested
 // too slowly, and managing request limits and timeouts.
 //
@@ -45,8 +46,9 @@
 // implicitly a component actor, and as such may run outside of the node or even
 // multiple times. We should revisit this in the future.
 
+#include "tenzir/detail/fanout_counter.hpp"
+
 #include <tenzir/actors.hpp>
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
@@ -81,9 +83,10 @@ TENZIR_ENUM(schema, legacy, exact, never);
 
 namespace {
 
-constexpr auto SERVE_ENDPOINT_ID = 0;
+constexpr auto serve_endpoint_id = 0;
+constexpr auto serve_multi_endpoint_id = 1;
 
-constexpr auto SPEC_V0 = R"_(
+constexpr auto serve_spec = R"_(
 /serve:
   post:
     summary: Return data from a pipeline
@@ -124,7 +127,7 @@ constexpr auto SPEC_V0 = R"_(
                 type: string
                 example: "exact"
                 default: "legacy"
-                description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema schema definitions from the output entirely.
+                description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema definitions from the output entirely.
     responses:
       200:
         description: Success.
@@ -214,8 +217,149 @@ constexpr auto SPEC_V0 = R"_(
                   example: "Invalid arguments"
                   description: The error message.
     )_";
+constexpr auto serve_multi_spec = R"_(
+/serve-multi:
+  post:
+    summary: Return data from multiple pipelines
+    description: "Returns events from existing pipelines. The pipeline definitions must include a serve operator. By default, the endpoint performs long polling (`timeout: 5s`) and returns events as soon as they are available (`min_events: 1`)."
+    requestBody:
+      description: Body for the serve-multi endpoint
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [requests]
+            properties:
+              requests:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    serve_id:
+                      type: string
+                      example: "query1"
+                      description: The id that was passed to the serve operator.
+                    continuation_token:
+                      type: string
+                      example: "340ce2j"
+                      description: The continuation token that was returned with the last response. For the initial request this is null.
+              max_events:
+                type: integer
+                example: 1024
+                default: 1024
+                description: The maximum number of events returned. This is split evenly for all serve_ids. If necessary, it is rounded up.
+              min_events:
+                type: integer
+                example: 1
+                default: 1
+                description: Wait for this number of events before returning. This is split evenly for all serve_ids. If necessary, it is rounded up.
+              timeout:
+                type: string
+                example: "200ms"
+                default: "5s"
+                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
+              schema:
+                type: string
+                example: "exact"
+                default: "legacy"
+                description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema definitions from the output entirely.
+    responses:
+      200:
+        description: Success.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+                description: The response is keyed by the serve-id
+                properties:
+                  next_continuation_token:
+                    type: string
+                    description: A token to access the next pipeline data batch, null if the pipeline is completed.
+                    example: "340ce2j"
+                  state:
+                    type: string
+                    description: The state of the corresponding pipeline at the time of the request. One of `running`, `completed`, or `failed`.
+                    example: "running"
+                  schemas:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        schema_id:
+                          type: string
+                          description: The unique schema identifier.
+                        definition:
+                          type: object
+                          description: The schema definition in JSON format.
+                    description: The schemas that the served events are based on.
+                    example:
+                    - schema_id: c631d301e4b18f4
+                      definition:
+                      - name: tenzir.summarize
+                        kind: record
+                        type: tenzir.summarize
+                        attributes: {}
+                        path: []
+                        fields:
+                        - name: severity
+                          kind: string
+                          type: string
+                          attributes: {}
+                          path:
+                          - 0
+                          fields: []
+                        - name: pipeline_id
+                          kind: string
+                          type: string
+                          attributes: {}
+                          path:
+                          - 1
+                          fields: []
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        schema_id:
+                          type: string
+                          description: The unique schema identifier.
+                        data:
+                          type: object
+                          description: The actual served data in JSON format.
+                    description: The served events.
+                    example:
+                    - schema_id: c631d301e4b18f4
+                      data:
+                        timestamp: "2023-04-26T12:00:00Z"
+                        schema: "zeek.conn"
+                        schema_id: "ab2371bas235f1"
+                        events: 50
+                    - schema_id: c631d301e4b18f4
+                      data:
+                        timestamp: "2023-04-26T12:05:00Z"
+                        schema: "suricata.dns"
+                        schema_id: "cd4771bas235f1"
+                        events: 50
+      400:
+        description: Invalid arguments.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "Invalid arguments"
+                  description: The error message.
+    )_";
 
 // -- serve manager -----------------------------------------------------------
+
+using serve_response = std::tuple<std::string, std::vector<table_slice>>;
 
 using serve_manager_actor = typed_actor_fwd<
   // Register a new serve operator.
@@ -229,21 +373,26 @@ using serve_manager_actor = typed_actor_fwd<
   // access token and the desired number of events.
   auto(atom::get, std::string serve_id, std::string continuation_token,
        uint64_t min_events, duration timeout, uint64_t max_events)
-    ->caf::result<std::tuple<std::string, std::vector<table_slice>>>>
+    ->caf::result<serve_response>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
-struct request_limits {
+struct request_meta {
   uint64_t max_events = defaults::api::serve::max_events;
   uint64_t min_events = defaults::api::serve::min_events;
   duration timeout = defaults::api::serve::timeout;
+  enum schema schema = schema::legacy;
 };
 
-struct serve_request {
+struct request_base {
   std::string serve_id = {};
   std::string continuation_token = {};
-  enum schema schema = schema::legacy;
-  request_limits limits = {};
+};
+
+struct single_serve_request : request_base, request_meta {};
+
+struct multi_serve_request : request_meta {
+  std::vector<request_base> requests;
 };
 
 /// A single serve operator as observed by the serve-manager.
@@ -278,9 +427,7 @@ struct managed_serve_operator {
   caf::disposable delayed_attempt = {};
   caf::typed_response_promise<void> put_rp = {};
   caf::typed_response_promise<void> stop_rp = {};
-  std::vector<caf::typed_response_promise<
-    std::tuple<std::string, std::vector<table_slice>>>>
-    get_rps = {};
+  std::vector<caf::typed_response_promise<serve_response>> get_rps = {};
 
   /// Attempt to deliver up to the number of requested results.
   /// @param force_underful Return underful result sets instead of failing when
@@ -468,8 +615,7 @@ struct serve_manager_state {
     return found->put_rp;
   }
 
-  auto get(serve_request request)
-    -> caf::result<std::tuple<std::string, std::vector<table_slice>>> {
+  auto get(single_serve_request request) -> caf::result<serve_response> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == request.serve_id;
@@ -495,7 +641,7 @@ struct serve_manager_state {
         and found->last_continuation_token == request.continuation_token) {
       return std::make_tuple(
         found->continuation_token,
-        split(found->last_results, request.limits.max_events).first);
+        split(found->last_results, request.max_events).first);
     }
     if (found->continuation_token != request.continuation_token) {
       return caf::make_error(
@@ -507,18 +653,17 @@ struct serve_manager_state {
     if (found->done) {
       return std::make_tuple(std::string{}, std::vector<table_slice>{});
     }
-    auto rp = self->make_response_promise<
-      std::tuple<std::string, std::vector<table_slice>>>();
+    auto rp = self->make_response_promise<serve_response>();
     found->get_rps.push_back(rp);
-    found->requested = request.limits.max_events;
-    found->min_events = request.limits.min_events;
+    found->requested = request.max_events;
+    found->min_events = request.min_events;
     const auto delivered = found->try_deliver_results(false);
     if (delivered) {
       return rp;
     }
     found->delayed_attempt.dispose();
     found->delayed_attempt = detail::weak_run_delayed(
-      self, request.limits.timeout,
+      self, request.timeout,
       [this, serve_id = request.serve_id,
        continuation_token = request.continuation_token]() mutable {
         const auto found
@@ -592,16 +737,19 @@ auto serve_manager(
       return self->state().put(std::move(serve_id), std::move(slice));
     },
     [self](atom::get, std::string& serve_id, std::string& continuation_token,
-           uint64_t min_events, duration timeout, uint64_t max_events)
-      -> caf::result<std::tuple<std::string, std::vector<table_slice>>> {
-      return self->state().get(
-        {.serve_id = std::move(serve_id),
-         .continuation_token = std::move(continuation_token),
-         .limits = {
-           .max_events = max_events,
-           .min_events = min_events,
-           .timeout = timeout,
-         }});
+           uint64_t min_events, duration timeout,
+           uint64_t max_events) -> caf::result<serve_response> {
+      return self->state().get({
+        {
+          .serve_id = std::move(serve_id),
+          .continuation_token = std::move(continuation_token),
+        },
+        {
+          .max_events = max_events,
+          .min_events = min_events,
+          .timeout = timeout,
+        },
+      });
     },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
@@ -615,6 +763,14 @@ auto serve_manager(
 using serve_handler_actor
   = typed_actor_fwd<>::extend_with<rest_handler_actor>::unwrap;
 
+auto round_up_to_multiple(size_t numToRound, size_t multiple) -> size_t {
+  const size_t remainder = numToRound % multiple;
+  if (remainder == 0) {
+    return numToRound;
+  }
+  return numToRound + multiple - remainder;
+}
+
 struct serve_handler_state {
   static constexpr auto name = "serve-handler";
 
@@ -626,11 +782,11 @@ struct serve_handler_state {
     caf::error detail;
   };
 
-  static auto try_parse_request(const tenzir::record& params)
-    // TODO: Switch to std::expected<serve_request, parse_error> after C++23.
-    -> std::variant<serve_request, parse_error> {
-    auto result = serve_request{};
-    auto serve_id = try_get<std::string>(params, "serve_id");
+  // Extracts `serve_id` and `continuation_token` by moving out of `params`
+  static auto try_extract_request_base(tenzir::record& params)
+    -> std::variant<request_base, parse_error> {
+    auto result = request_base{};
+    const auto serve_id = try_get_only<std::string>(params, "serve_id");
     if (not serve_id) {
       return parse_error{
         .message = "failed to read serve_id parameter",
@@ -638,7 +794,7 @@ struct serve_handler_state {
                                   fmt::format("{}; got parameters {}",
                                               serve_id.error(), params))};
     }
-    if (not*serve_id) {
+    if (not *serve_id) {
       return parse_error{
         .message = "serve_id must be specified",
         .detail = caf::make_error(ec::invalid_argument,
@@ -657,6 +813,12 @@ struct serve_handler_state {
     if (*continuation_token) {
       result.continuation_token = std::move(**continuation_token);
     }
+    return result;
+  }
+
+  static auto try_extract_request_meta(const tenzir::record& params)
+    -> std::variant<request_meta, parse_error> {
+    auto result = request_meta{};
     auto max_events = try_get<uint64_t>(params, "max_events");
     if (not max_events) {
       return parse_error{
@@ -666,7 +828,7 @@ struct serve_handler_state {
                                               max_events.error(), params))};
     }
     if (*max_events) {
-      result.limits.max_events = **max_events;
+      result.max_events = **max_events;
     }
     auto min_events = try_get<uint64_t>(params, "min_events");
     if (not min_events) {
@@ -677,7 +839,7 @@ struct serve_handler_state {
                                               max_events.error(), params))};
     }
     if (*min_events) {
-      result.limits.min_events = **min_events;
+      result.min_events = **min_events;
     }
     auto timeout = try_get<duration>(params, "timeout");
     if (not timeout) {
@@ -697,7 +859,7 @@ struct serve_handler_state {
         return parse_error{.message = std::move(message),
                            .detail = std::move(detail)};
       }
-      result.limits.timeout = **timeout;
+      result.timeout = **timeout;
     }
     auto schema = try_get<std::string>(params, "schema");
     if (not schema) {
@@ -721,6 +883,83 @@ struct serve_handler_state {
     return result;
   }
 
+  /// Validates a request to /serve and turns it into a structured form
+  static auto try_parse_single_request(tenzir::record params)
+    -> std::variant<single_serve_request, parse_error> {
+    auto base = try_extract_request_base(params);
+    if (auto* err = try_as<parse_error>(base)) {
+      return std::move(*err);
+    }
+    auto meta = try_extract_request_meta(params);
+    if (auto* err = try_as<parse_error>(meta)) {
+      return std::move(*err);
+    }
+    return single_serve_request{
+      std::move(as<request_base>(base)),
+      std::move(as<request_meta>(meta)),
+    };
+  }
+
+  /// Validates a request to /serve-multi and turns it into a structured form
+  static auto try_parse_multi_request(tenzir::record params)
+    -> std::variant<multi_serve_request, parse_error> {
+    auto meta = try_extract_request_meta(params);
+    if (auto* err = try_as<parse_error>(meta)) {
+      return std::move(*err);
+    }
+    auto requests = std::vector<request_base>{};
+    auto it = params.find("requests");
+    if (it == params.end()) {
+      return parse_error{
+        .message = "missing field `requests`",
+        .detail = caf::make_error(ec::invalid_argument),
+      };
+    }
+    auto* const l = try_as<tenzir::list>(it->second);
+    if (not l) {
+      return parse_error{
+        .message = "expected `requests` to be a list",
+        .detail = caf::make_error(ec::invalid_argument),
+      };
+    }
+    if (l->empty()) {
+      return parse_error{
+        .message = "expected `requests` to have at least one element",
+        .detail = caf::make_error(ec::invalid_argument),
+      };
+    }
+    requests.reserve(l->size());
+    for (auto& e : *l) {
+      auto* const r = try_as<tenzir::record>(e);
+      if (not r) {
+        return parse_error{
+          .message = "expected `requests` to be a list of records",
+          .detail = caf::make_error(ec::invalid_argument),
+        };
+      }
+      auto parsed = try_extract_request_base(*r);
+      if (auto* err = try_as<parse_error>(parsed)) {
+        return std::move(*err);
+      }
+      auto& new_request = as<request_base>(parsed);
+      const auto is_duplicate = std::ranges::contains(
+        requests, new_request.serve_id, &request_base::serve_id);
+      if (is_duplicate) {
+        return parse_error{
+          .message
+          = fmt::format("duplicate `serve_id`: `{}`", new_request.serve_id),
+          .detail = caf::make_error(ec::invalid_argument),
+        };
+      }
+      requests.push_back(std::move(new_request));
+    }
+    return multi_serve_request{
+      std::move(as<request_meta>(meta)),
+      std::move(requests),
+    };
+  }
+
+  /// Creates a response string for a single serve result
   static auto create_response(const std::string& next_continuation_token,
                               const std::vector<table_slice>& results,
                               serve_state state, enum schema schema)
@@ -795,31 +1034,26 @@ struct serve_handler_state {
     return result;
   }
 
-  auto http_request(uint64_t endpoint_id, tenzir::record params) const
+  /// Handles a request to /serve by
+  /// * "parsing" `params`
+  /// * Making a request to the serve-manager for events according to `params`
+  /// * Delivering a response based on the server-managers answer
+  auto handle_single_request(tenzir::record params) const
     -> caf::result<rest_response> {
-    if (endpoint_id != SERVE_ENDPOINT_ID) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("unepexted /serve endpoint id {}",
-                                         endpoint_id));
+    auto maybe_request = try_parse_single_request(params);
+    if (auto* err = try_as<parse_error>(maybe_request)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
     }
-    TENZIR_DEBUG("{} handles /serve request for endpoint id {} with params {}",
-                 *self, endpoint_id, params);
-    auto maybe_request = try_parse_request(params);
-    if (auto* error = std::get_if<parse_error>(&maybe_request)) {
-      return rest_response::make_error(400, std::move(error->message),
-                                       std::move(error->detail));
-    }
-    auto& request = std::get<serve_request>(maybe_request);
+    auto& request = as<single_serve_request>(maybe_request);
     auto rp = self->make_response_promise<rest_response>();
     self
-      ->mail(atom::get_v, request.serve_id, request.continuation_token,
-             request.limits.min_events, request.limits.timeout,
-             request.limits.max_events)
+      ->mail(atom::get_v, std::move(request.serve_id),
+             std::move(request.continuation_token), request.min_events,
+             request.timeout, request.max_events)
       .request(serve_manager, caf::infinite)
       .then(
-        [rp, schema = request.schema](
-          const std::tuple<std::string, std::vector<table_slice>>&
-            result) mutable {
+        [rp, schema = request.schema](const serve_response& result) mutable {
           const auto& [continuation_token, results] = result;
           rp.deliver(rest_response::from_json_string(
             create_response(continuation_token, results,
@@ -830,11 +1064,11 @@ struct serve_handler_state {
         [rp, schema = request.schema](const caf::error& err) mutable {
           if (err == caf::exit_reason::user_shutdown
               or err.context().match_elements<diagnostic>()) {
-            // The pipeline has either shut down naturally or we got an error
-            // that's a diagnostic. In either case, do not report the error as
-            // an internal error from the /serve endpoint, but rather report
-            // that we're done. The user must get the diagnostic from the
-            // `diagnostics` operator.
+            // The pipeline has either shut down naturally or we got an
+            // error that's a diagnostic. In either case, do not report the
+            // error as an internal error from the /serve endpoint, but
+            // rather report that we're done. The user must get the
+            // diagnostic from the `diagnostics` operator.
             rp.deliver(rest_response::from_json_string(create_response(
               {}, {},
               err == caf::exit_reason::user_shutdown ? serve_state::completed
@@ -845,6 +1079,104 @@ struct serve_handler_state {
           rp.deliver(rest_response::make_error(400, fmt::to_string(err), {}));
         });
     return rp;
+  }
+
+  struct serve_response_with_state {
+    serve_response response;
+    serve_state state;
+  };
+
+  /// Handles a request to /serve-multi by
+  /// * "parsing" `params`
+  /// * Performing a fanout over all `serve_id` in params.requests, making a
+  ///   request to the serve-manager for each
+  /// * Collecting all answers from the serve-manager
+  /// * Creating a response and delivering it.
+  auto handle_multi_request(tenzir::record params) const
+    -> caf::result<rest_response> {
+    auto maybe_requests = try_parse_multi_request(params);
+    if (auto* err = try_as<parse_error>(maybe_requests)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& request = as<multi_serve_request>(maybe_requests);
+    auto rp = self->make_response_promise<rest_response>();
+    const auto min_events_per_request
+      = round_up_to_multiple(request.min_events, request.requests.size())
+        / request.requests.size();
+    const auto max_events_per_request
+      = round_up_to_multiple(request.max_events, request.requests.size())
+        / request.requests.size();
+    auto result_map = std::make_shared<
+      std::unordered_map<std::string, serve_response_with_state>>();
+    auto fan = detail::make_fanout_counter(
+      request.requests.size(),
+      [rp, result_map, schema = request.schema]() mutable {
+        auto json_text = std::string{'{'};
+        auto first = true;
+        for (auto& [id, result] : *result_map) {
+          const auto& [response, state] = result;
+          const auto& [next_token, data] = response;
+          if (not first) {
+            json_text += ',';
+          }
+          first = false;
+          json_text += "\"" + id + "\":";
+          json_text += create_response(next_token, data, state, schema);
+        }
+        json_text += '}';
+        rp.deliver(rest_response::from_json_string(json_text));
+      },
+      [rp](caf::error e) mutable {
+        rp.deliver(rest_response::make_error(400, fmt::to_string(e), {}));
+      });
+    for (auto& r : request.requests) {
+      self
+        ->mail(atom::get_v, r.serve_id, r.continuation_token,
+               min_events_per_request, request.timeout, max_events_per_request)
+        .request(serve_manager, caf::infinite)
+        .then(
+          [fan, id = r.serve_id, result_map](serve_response& result) mutable {
+            const auto state = std::get<0>(result).empty()
+                                 ? serve_state::completed
+                                 : serve_state::running;
+            const auto [_, success] = result_map->try_emplace(
+              std::move(id), std::move(result), state);
+            TENZIR_ASSERT(success);
+            fan->receive_success();
+          },
+          [fan, id = r.serve_id, result_map](caf::error& err) mutable {
+            if (err == caf::exit_reason::user_shutdown
+                or err.context().match_elements<diagnostic>()) {
+              // The pipeline has either shut down naturally or we got an
+              // error that's a diagnostic. In either case, do not report
+              // the error as an internal error from the /serve endpoint,
+              // but rather report that we're done. The user must get the
+              // diagnostic from the `diagnostics` operator.
+              const auto state = err == caf::exit_reason::user_shutdown
+                                   ? serve_state::completed
+                                   : serve_state::failed;
+              const auto [_, success] = result_map->try_emplace(
+                std::move(id), serve_response{}, state);
+              TENZIR_ASSERT(success);
+              fan->receive_success();
+              return;
+            }
+            fan->receive_error(std::move(err));
+          });
+    }
+    return rp;
+  }
+
+  auto http_request(uint64_t endpoint_id, tenzir::record params) const
+    -> caf::result<rest_response> {
+    switch (endpoint_id) {
+      case serve_endpoint_id:
+        return handle_single_request(std::move(params));
+      case serve_multi_endpoint_id:
+        return handle_multi_request(std::move(params));
+    }
+    TENZIR_UNREACHABLE();
   }
 };
 
@@ -971,8 +1303,7 @@ private:
 
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
-                     public virtual operator_plugin<serve_operator>,
-                     public virtual operator_factory_plugin,
+                     public virtual operator_plugin2<serve_operator>,
                      public virtual aspect_plugin {
 public:
   auto component_name() const -> std::string override {
@@ -1039,21 +1370,53 @@ public:
     if (version != api_version::v0) {
       return tenzir::record{};
     }
-    auto result = from_yaml(SPEC_V0);
-    TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
-    TENZIR_ASSERT(is<record>(*result));
-    return as<record>(*result);
+    auto maybe_serve = from_yaml(serve_spec);
+    TENZIR_ASSERT(maybe_serve, fmt::to_string(maybe_serve.error()).c_str());
+    TENZIR_ASSERT(is<record>(*maybe_serve));
+    auto maybe_serve_multi = from_yaml(serve_multi_spec);
+    TENZIR_ASSERT(maybe_serve_multi,
+                  fmt::to_string(maybe_serve_multi.error()).c_str());
+    TENZIR_ASSERT(is<record>(*maybe_serve_multi));
+    auto res = record{};
+    for (auto& [k, v] : as<record>(*maybe_serve)) {
+      const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
+      TENZIR_ASSERT(success);
+    }
+    for (auto& [k, v] : as<record>(*maybe_serve_multi)) {
+      const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
+      TENZIR_ASSERT(success);
+    }
+    return res;
   }
 
   auto rest_endpoints() const -> const std::vector<rest_endpoint>& override {
-    static auto endpoints = std::vector<tenzir::rest_endpoint>{
+    const static auto endpoints = std::vector<tenzir::rest_endpoint>{
       {
-        .endpoint_id = SERVE_ENDPOINT_ID,
+        .endpoint_id = serve_endpoint_id,
         .method = http_method::post,
         .path = "/serve",
         .params = record_type{
-          {"serve_id", string_type{}},
+          {"serve_id", type{string_type{}, {{"required"}}}},
           {"continuation_token", string_type{}},
+          {"max_events", uint64_type{}},
+          {"min_events", uint64_type{}},
+          {"timeout", duration_type{}},
+          {"schema", string_type{}},
+        },
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = serve_multi_endpoint_id,
+        .method = http_method::post,
+        .path = "/serve-multi",
+        .params = record_type{
+          {"requests", type{list_type{
+            record_type{
+              {"serve_id", type{string_type{}, {{"required"}}}},
+              {"continuation_token", string_type{}},
+            },
+          },{{"required"}}}},
           {"max_events", uint64_type{}},
           {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
@@ -1069,33 +1432,6 @@ public:
   auto handler(caf::actor_system& system, node_actor node) const
     -> rest_handler_actor override {
     return system.spawn(serve_handler, node);
-  }
-
-  auto signature() const -> operator_signature override {
-    return {.sink = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto buffer_size
-      = located<uint64_t>{defaults::api::serve::max_events, location::unknown};
-    auto id = located<std::string>{};
-    auto parser = argument_parser{"serve", "https://docs.tenzir.com/"
-                                           "operators/serve"};
-    parser.add("--buffer-size", buffer_size, "<size>");
-    parser.add(id, "<id>");
-    parser.parse(p);
-    if (id.inner.empty()) {
-      diagnostic::error("serve id must not be empty")
-        .primary(id.source)
-        .throw_();
-    }
-    if (buffer_size.inner == 0) {
-      diagnostic::error("buffer size must not be zero")
-        .primary(buffer_size.source)
-        .throw_();
-    }
-    return std::make_unique<serve_operator>(std::move(id.inner),
-                                            buffer_size.inner);
   }
 
   auto make(invocation inv, session ctx) const
