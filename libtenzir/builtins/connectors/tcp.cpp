@@ -132,10 +132,13 @@ public:
   }
 
   ~tcp_bridge() noexcept {
+    TENZIR_ASSERT(io_ctx_);
     io_ctx_->stop();
     worker_.join();
     metrics_.emit();
-    retry_timer_->cancel();
+    if (retry_timer_) {
+      retry_timer_->cancel();
+    }
   }
 
   auto make_behavior() -> tcp_bridge_actor::behavior_type {
