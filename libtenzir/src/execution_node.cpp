@@ -913,6 +913,13 @@ struct exec_node_state {
       TENZIR_TRACE("{} {} processes", *self, op->name());
       auto output = std::move(*instance->it);
       const auto output_size = size(output);
+      if constexpr (std::same_as<Output, table_slice>) {
+        if (output.rows() > 0) {
+          const auto status = to_record_batch(output)->ValidateFull();
+          TENZIR_ASSERT(status.ok(), "failed result validation in {}: {}",
+                        op->name(), status.ToString());
+        }
+      }
       ++instance->it;
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
