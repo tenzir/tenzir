@@ -1,7 +1,8 @@
-error: pipeline contains both remote and local operators
- --> /dev/stdin:1:1
+error: 'import' does not accept bytes as input
+ --> /dev/stdin:1:12
   |
 1 | every 10ms {
-  | ^^^^^ 
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
-  = note: this limitation will be lifted soon
+  = note: source: libtenzir/builtins/operators/every_cron2.cpp:674
+  = note: failed type inference
