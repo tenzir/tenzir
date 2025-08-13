@@ -13,6 +13,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/compute/api_scalar.h>
 #include <boost/process/v2/environment.hpp>
 #if __has_include(<boost/process/v1/environment.hpp>)
 #  include <boost/process/v1/environment.hpp>
@@ -468,6 +469,86 @@ public:
   }
 };
 
+class contains_null final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "contains_null";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session) -> series {
+        auto b = arrow::BooleanBuilder{};
+        check(b.Reserve(eval.length()));
+        for (const auto& s : eval(expr)) {
+          const auto& array = *s.array;
+          auto mask = check(arrow::compute::IsNull(array));
+          update_mask(mask, array);
+          auto bool_array = mask.array_as<arrow::BooleanArray>();
+          check(append_array(b, bool_type{}, *bool_array));
+        }
+        return series{bool_type{}, finish(b)};
+      });
+  }
+
+  constexpr static auto
+  update_mask(arrow::Datum& mask, const arrow::Array& array) -> void {
+    if (const auto* sub = try_as<arrow::StructArray>(array)) {
+      for (const auto& field : sub->fields()) {
+        const auto fmask = check(arrow::compute::IsNull(*field));
+        mask = check(arrow::compute::Or(mask, fmask));
+        update_mask(mask, *field);
+      }
+      return;
+    }
+    if (const auto* sub = try_as<arrow::ListArray>(array)) {
+      auto b = arrow::BooleanBuilder{};
+      check(b.Reserve(sub->length()));
+      for (auto i = int64_t{}; i < sub->length(); ++i) {
+        if (sub->IsValid(i)) {
+          const auto& slice = sub->value_slice(i);
+          b.UnsafeAppend(has_null(*slice));
+          continue;
+        }
+        b.UnsafeAppend(true);
+      }
+      const auto lmask = finish(b);
+      mask = check(arrow::compute::Or(mask, *lmask));
+    }
+  }
+
+  constexpr static auto has_null(const arrow::Array& array) -> bool {
+    if (array.null_count() != 0) {
+      return true;
+    }
+    if (const auto* sub = try_as<arrow::StructArray>(array)) {
+      for (const auto& field : sub->fields()) {
+        if (has_null(*field)) {
+          return true;
+        }
+      }
+    }
+    if (const auto* sub = try_as<arrow::ListArray>(array)) {
+      for (auto i = int64_t{}; i < sub->length(); ++i) {
+        const auto& slice = (sub->value_slice(i));
+        if (has_null(*slice)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+};
+
 class keys final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -679,15 +760,16 @@ public:
 
 } // namespace tenzir::plugins::misc
 
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::get)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::contains_null)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::is_empty)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::keys)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::merge)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_of)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::is_empty)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::keys)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::merge)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::get)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})

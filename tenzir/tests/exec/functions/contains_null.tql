@@ -1,0 +1,11 @@
+from {},
+{ x: 1 },
+{ x: [] },
+{ x: {} },
+{ x: { y: 1 } },
+{ x: { y: null } },
+{ x: { y: { z: null } } },
+{ x: { y: { z: 1 } } },
+{ x: { y: { z: 1, w: null.int() } } },
+{ x: { y: [{z: 1}, {}] } }
+contains_null = x.contains_null()
