@@ -92,6 +92,8 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "tql2_only",
     // The `/serve-multi` is supported
     "serve-multi",
+    // High resolution pipeline activity info is available
+    "hr-pipeline-activity",
   };
   return result;
 }
