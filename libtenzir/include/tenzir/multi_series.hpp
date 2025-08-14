@@ -39,6 +39,11 @@ public:
     return tenzir::value_at(part.get().type, *part.get().array, part_row);
   }
 
+  auto view3_at(int64_t row) const -> data_view3 {
+    const auto [part, part_row] = resolve(row);
+    return view_at(*part.get().array, part_row);
+  }
+
   auto is_null(int64_t row) const -> bool {
     auto [part, part_row] = resolve(row);
     return part.get().array->IsNull(part_row);
