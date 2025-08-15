@@ -10,7 +10,6 @@ Checks: >
   -bugprone-switch-missing-default-case,
   -cert-dcl16-c,
   -cert-err58-cpp,
-  -clang-analyzer-alpha*,
   -cppcoreguidelines-avoid-const-or-ref-data-members,
   -cppcoreguidelines-avoid-do-while,
   -cppcoreguidelines-avoid-magic-numbers,
@@ -27,6 +26,7 @@ Checks: >
   -llvm-header-guard,
   -llvmlibc-*,
   -misc-no-recursion,
+  -modernize-use-designated-initializers,
   -modernize-use-nodiscard,
   -modernize-use-ranges,
   -performance-enum-size,
@@ -39,7 +39,6 @@ Checks: >
   -readability-named-parameter,
   -readability-redundant-inline-specifier,
   -readability-uppercase-literal-suffix,
-  -dummy-must-be-last-entry-without-trailing-comma
 WarningsAsErrors:      ''
 HeaderFilterRegex:     '/tenzir/'
 CheckOptions:

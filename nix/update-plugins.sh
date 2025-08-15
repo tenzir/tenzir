@@ -41,7 +41,7 @@ EOF
 echo "Updating contrib/tenzir-plugins"
 tenzir_plugins_rev="$(get-submodule-rev "${toplevel}/contrib/tenzir-plugins")"
 
-nix store prefetch-file \
+nix --extra-experimental-features nix-command store prefetch-file \
   --name "${name}" \
   --json \
   --netrc-file "$NETRC_DIR/netrc" \

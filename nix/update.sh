@@ -37,5 +37,24 @@ command -v docker > /dev/null && {
   exit $?
 }
 
-echo "Error: This update script requires either nix or docker."
+command -v podman > /dev/null && {
+  echo "Updating with with a nix container..."
+  if [ "$toplevel/.git" = "$gitdir" ]; then
+    podman run \
+      -v "${toplevel}:${toplevel}" \
+      -e GITHUB_TOKEN \
+      -e GH_TOKEN \
+      nixos/nix "${toplevel}/nix/update.sh"
+  else
+    podman run \
+      -v "${toplevel}:${toplevel}" \
+      -v "${gitdir}:${gitdir}" \
+      -e GITHUB_TOKEN \
+      -e GH_TOKEN \
+      nixos/nix "${toplevel}/nix/update.sh"
+  fi
+  exit $?
+}
+
+echo "Error: This update script requires either nix, docker or podman."
 exit 1
