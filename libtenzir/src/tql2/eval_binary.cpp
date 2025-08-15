@@ -718,19 +718,23 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
     if constexpr (Op == ast::binary_op::and_) {
       if (not typed_left) {
         short_circuit_eval_right.template operator()<false>();
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
       if (typed_left->array->false_count() == length) {
         check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
     } else if constexpr (Op == ast::binary_op::or_) {
       if (not typed_left) {
         short_circuit_eval_right.template operator()<true>();
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
       if (typed_left->array->true_count() == length) {
         check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
     } else {
@@ -741,6 +745,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       return typed_left->array->IsValid(i) and typed_left->array->GetView(i);
     };
     const auto eval_right = [&](int64_t start, int64_t end) -> void {
+      TENZIR_ASSERT(start < end);
       for (const auto& right :
            self.slice(left_begin + start, left_begin + end).eval(x.right)) {
         if (is<bool_type>(right.type)) {
@@ -760,6 +765,8 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
     auto range_offset = int64_t{0};
     auto range_current = get_left(0);
     const auto append_until = [&](int64_t end) {
+      TENZIR_ASSERT(end > range_offset);
+      TENZIR_ASSERT(range_offset < length);
       if constexpr (Op == ast::binary_op::and_ or Op == ast::binary_op::or_) {
         if (range_current == (Op == ast::binary_op::and_)) {
           eval_right(range_offset, end);
@@ -770,6 +777,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       } else {
         static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
       }
+      TENZIR_ASSERT_EQ(builder.length(), left_begin + end);
     };
     for (auto i = int64_t{1}; i < length; ++i) {
       if (range_current == get_left(i)) {
@@ -780,10 +788,13 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       range_current = not range_current;
     }
     append_until(length);
+    TENZIR_ASSERT_EQ(builder.length(), left_offset);
   }
+  auto result = finish(builder);
+  TENZIR_ASSERT_EQ(result->length(), self.length());
   return series{
     bool_type{},
-    finish(builder),
+    std::move(result),
   };
 }
 

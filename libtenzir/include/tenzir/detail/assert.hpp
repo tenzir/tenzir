@@ -12,29 +12,36 @@
 
 namespace tenzir::detail {
 
-template <typename... Ts>
+template <bool include_cond = false, typename... Ts>
   requires(sizeof...(Ts) > 0)
 [[noreturn]] TENZIR_NO_INLINE void
-assertion_failure(const char* cond, std::source_location location,
+assertion_failure(std::string_view cond, std::source_location location,
                   fmt::format_string<Ts...> string, Ts&&... args) {
-  TENZIR_UNUSED(cond);
   auto message = std::string{"assertion failed: "};
+  if constexpr (include_cond) {
+    message += cond;
+    message += ": ";
+  }
   fmt::format_to(std::back_inserter(message), string,
                  std::forward<Ts>(args)...);
   panic<1>(std::move(message), location);
 }
 
-template <typename T>
+template <bool include_cond = false, typename T>
 [[noreturn]] TENZIR_NO_INLINE void
-assertion_failure(const char* cond, std::source_location location, T&& x) {
-  TENZIR_UNUSED(cond);
+assertion_failure(std::string_view cond, std::source_location location, T&& x) {
   auto message = std::string{"assertion failed: "};
+  if constexpr (include_cond) {
+    message += cond;
+    message += ": ";
+  }
   fmt::format_to(std::back_inserter(message), "{}", std::forward<T>(x));
   panic<1>(std::move(message), location);
 }
 
+template <bool = false>
 [[noreturn]] TENZIR_NO_INLINE inline void
-assertion_failure(const char* cond, std::source_location location) {
+assertion_failure(std::string_view cond, std::source_location location) {
   panic<1>(fmt::format("assertion `{}` failed", cond), location);
 }
 
@@ -47,21 +54,38 @@ assertion_failure(const char* cond, std::source_location location) {
   }                                                                            \
   static_assert(true)
 
+#define TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, ...)                                 \
+  {                                                                            \
+    if (not static_cast<bool>(LHS == RHS)) [[unlikely]] {                      \
+      ::tenzir::detail::assertion_failure<true>(                               \
+        fmt::format("{} (" #LHS ") == {} (" #RHS ")", LHS, RHS),               \
+        std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);           \
+    }                                                                          \
+  }                                                                            \
+  static_assert(true)
+
 #if TENZIR_ENABLE_ASSERTIONS
 #  define TENZIR_ASSERT_EXPENSIVE(...) TENZIR_ASSERT_ALWAYS(__VA_ARGS__)
+#  define TENZIR_ASSERT_EQ_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, __VA_ARGS__)
 #else
 #  define TENZIR_ASSERT_EXPENSIVE(...) TENZIR_UNUSED(__VA_ARGS__)
+#  define TENZIR_ASSERT_EQ_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
 #endif
 
 #if TENZIR_ENABLE_ASSERTIONS_CHEAP
 #  define TENZIR_ASSERT(...) TENZIR_ASSERT_ALWAYS(__VA_ARGS__)
+#  define TENZIR_ASSERT_EQ(LHS, RHS, ...)                                      \
+    TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, __VA_ARGS__)
 #else
 #  define TENZIR_ASSERT(...) TENZIR_UNUSED(__VA_ARGS__)
+#  define TENZIR_ASSERT_EQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
 #endif
 
 /// Unlike `__builtin_unreachable()`, reaching this macro is not UB, it simply
 /// throws a panic.
-#define TENZIR_UNREACHABLE() ::tenzir::panic("unreachable")
+#define TENZIR_UNREACHABLE() ::tenzir::panic("unreachable");
 
 /// Used to mark code as unfinished. Reaching it throws a panic.
 #define TENZIR_TODO() ::tenzir::panic("todo")
