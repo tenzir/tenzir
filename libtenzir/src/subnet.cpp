@@ -53,12 +53,4 @@ bool subnet::debug(debug_writer& f) {
   return f.fmt_value("{}", to_string(*this));
 }
 
-bool operator==(const subnet& x, const subnet& y) {
-  return x.network_ == y.network_ && x.length_ == y.length_;
-}
-
-bool operator<(const subnet& x, const subnet& y) {
-  return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
-}
-
 } // namespace tenzir
