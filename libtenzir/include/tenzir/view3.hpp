@@ -49,6 +49,31 @@ using data_view_types
 
 using data_view3 = detail::tl_apply_t<data_view_types, variant>;
 
+/// There is two relations for `data_view3`: Partial and Weak, with generally
+/// shared sematics. Weak ordering only exists to be able to use it for sorting,
+/// which requires weak ordering.
+///
+/// * Null compares greater than any value, moving it to the end of a sort
+/// * NaN compares greater than any value, moving it to the end of a sort
+/// * Numbers are compared across types
+/// * Other values are compared as expected, potentially as unordered.
+/// * Lists are compared lexicographically, using this ordering on all values.
+/// * Records are compared by their sorted keys and respective values.
+///   * On matching keys, the values are compared.
+///   * On a key mismatch, the ordering is the lexicographic ordering of the keys
+///
+/// For the weak ordering,
+/// * Unordered objects of the same type are considered equivalent. This is of
+///   course not correct, but good enough for our purpose (sorting)
+/// * Objects of unrelated types are sorted by their type index.
+
+/// Establishes a partial ordering on data. See above for details.
+auto partial_order(const data_view3 l, const data_view3 r)
+  -> std::partial_ordering;
+/// Establishes a weak ordering, suitable for usage with sorting algorithms. See
+/// above for details.
+auto weak_order(const data_view3 l, const data_view3 r) -> std::weak_ordering;
+
 template <>
 struct view_trait3<data> {
   using type = data_view3;
@@ -99,6 +124,15 @@ public:
   auto end() const -> iterator {
     return iterator{&array_, index_, array_.num_fields()};
   }
+
+  template <typename Ordering>
+  friend auto order_impl(const record_view3 l, const record_view3 r)
+    -> Ordering;
+
+  friend auto partial_order(const record_view3 l, const record_view3 r)
+    -> std::partial_ordering;
+  friend auto weak_order(const record_view3 l, const record_view3 r)
+    -> std::weak_ordering;
 
 private:
   record_view3(const arrow::StructArray& array, int64_t index)
@@ -155,6 +189,18 @@ public:
   auto end() const -> iterator {
     return iterator{&array_, index_, array_.value_offset(index_ + 1)};
   }
+
+  auto size() const -> size_t {
+    return static_cast<size_t>(ssize());
+  }
+  auto ssize() const -> arrow::ListArray::offset_type {
+    return array_.value_length(index_);
+  }
+
+  friend auto partial_order(const list_view3 l, const list_view3 r)
+    -> std::partial_ordering;
+  friend auto weak_order(const list_view3 l, const list_view3 r)
+    -> std::weak_ordering;
 
 private:
   list_view3(const arrow::ListArray& array, int64_t index)
