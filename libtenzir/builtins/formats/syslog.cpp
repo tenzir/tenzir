@@ -404,9 +404,9 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
       // Even though alnum characters are the only one that the RFC specifies,
       // the reality is more diverse, e.g.,
       // Microsoft-Windows-Security-Mitigations[4340] is a thing.
-      const auto tag_id_parser
-        = +(parsers::alnum | parsers::ch<'-'> | parsers::ch<'_'>);
-      const auto process_id_parser = '[' >> +parsers::alnum >> ']';
+      const auto tag_id_parser = +(parsers::alnum | parsers::ch<'-'>
+                                   | parsers::ch<'_'> | parsers::ch<'.'>);
+      const auto process_id_parser = '[' >> +(parsers::printable - ']') >> ']';
       // To assess whether a TAG is present, we want at least one whitespace
       // character after the ":". Otherwise we may end up in a situation where
       // we eagerly grab characters from CONTENT when it has a prefix of alnum
@@ -1123,25 +1123,27 @@ public:
             },
             [&](const arrow::StringArray& arg) -> multi_series {
               auto msb = multi_series_builder{msb_opts, ctx};
-              auto msg = message{};
-              auto legacy_msg = legacy_message{};
               for (int64_t i = 0; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
                   msb.null();
                   continue;
                 }
+                auto msg = message{};
+                auto legacy_msg = legacy_message{};
                 auto v = arg.Value(i);
                 auto f = v.begin();
                 auto l = v.end();
                 if (auto parser = message_parser{}; parser(f, l, msg)) {
                   // This line is a valid new-RFC (5424) syslog message.
                   // Store it in the builder
-                  TENZIR_ASSERT(syslog_builder::finish_single(msg, msb));
+                  const auto success = syslog_builder::finish_single(msg, msb);
+                  TENZIR_ASSERT(success);
                 } else if (auto legacy_parser = legacy_message_parser{};
                            legacy_parser(f, l, legacy_msg)) {
                   // Same as above, except it's an old-RFC (3164) syslog
-                  TENZIR_ASSERT(
-                    legacy_syslog_builder::finish_single(legacy_msg, msb));
+                  const auto success
+                    = legacy_syslog_builder::finish_single(legacy_msg, msb);
+                  TENZIR_ASSERT(success);
                 } else {
                   diagnostic::warning("`input` is not valid syslog")
                     .primary(expr.get_location())
