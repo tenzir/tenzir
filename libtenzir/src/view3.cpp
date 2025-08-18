@@ -125,35 +125,21 @@ auto weak_order(const data_view3 l, const data_view3 r) -> std::weak_ordering {
   return order_impl<std::weak_ordering>(l, r);
 }
 
-struct field_info {
-  std::string_view name;
-  std::size_t index;
-};
-
-auto sorted_fields(const arrow::FieldVector& fields)
-  -> std::vector<field_info> {
-  auto res = std::vector<field_info>{};
-  res.reserve(fields.size());
-  for (auto i = 0uz; i < fields.size(); ++i) {
-    res.emplace_back(fields[i]->name(), i);
-  }
-  std::ranges::sort(res, {}, &field_info::name);
-  return res;
-}
-
 template <typename Ordering>
 auto order_impl(const record_view3 l, const record_view3 r) -> Ordering {
-  const auto l_fields = sorted_fields(l.array_.type()->fields());
-  const auto r_fields = sorted_fields(r.array_.type()->fields());
+  const auto& l_fields = l.array_.type()->fields();
+  const auto& r_fields = r.array_.type()->fields();
   for (auto i = 0uz; i < l_fields.size() and i < r_fields.size(); ++i) {
-    const auto& l_name = l_fields[i].name;
-    const auto& r_name = r_fields[i].name;
-    const auto l_value = view_at(*l.array_.field(l_fields[i].index), r.index_);
-    const auto r_value = view_at(*r.array_.field(r_fields[i].index), r.index_);
+    const auto& l_name = l_fields[i]->name();
+    const auto& r_name = r_fields[i]->name();
     const auto name_order = l_name <=> r_name;
     if (name_order != Ordering::equivalent) {
       return name_order;
     }
+    const auto l_value
+      = view_at(*l.array_.field(detail::narrow<int>(i)), r.index_);
+    const auto r_value
+      = view_at(*r.array_.field(detail::narrow<int>(i)), r.index_);
     const auto value_order = order_impl<Ordering>(l_value, r_value);
     if (value_order != Ordering::equivalent) {
       return value_order;

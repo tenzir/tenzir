@@ -1,0 +1,18 @@
+{
+  x: 0,
+  y: 100,
+}
+{
+  y: 10,
+  x: 1,
+}
+{
+  x: 42,
+}
+warning: field `y` not found
+ --> exec/operators/sort/multi_field.tql:2:10
+  |
+2 | sort x, -y
+  |          ~ 
+  |
+  = hint: append `?` to suppress this warning

@@ -451,8 +451,19 @@ public:
         TENZIR_ASSERT_EXPENSIVE(lhs.event < lhs_key.length(),
                                 "{} (lhs.event) < {} (lhs_key.length())",
                                 lhs.slice, lhs_key.length());
-        const auto& lhs_value = lhs_key.view3_at(lhs.event);
-        const auto& rhs_value = rhs_key.view3_at(rhs.event);
+        const auto lhs_value = lhs_key.view3_at(lhs.event);
+        const auto rhs_value = rhs_key.view3_at(rhs.event);
+        const auto lhs_null = is<caf::none_t>(lhs_value);
+        const auto rhs_null = is<caf::none_t>(rhs_value);
+        if (lhs_null and rhs_null) {
+          return false;
+        }
+        if (lhs_null) {
+          return false;
+        }
+        if (rhs_null) {
+          return true;
+        }
         const auto relation = weak_order(lhs_value, rhs_value);
         if (relation != std::weak_ordering::equivalent) {
           return (relation == std::weak_ordering::less) != sort_key.reverse;
