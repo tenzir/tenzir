@@ -32,7 +32,7 @@ TENZIR_ENUM(ip_address_class, unspecified, loopback, link_local, multicast,
             broadcast, private_, global);
 
 /// An IP address.
-class ip : detail::totally_ordered<ip>, detail::bitwise<ip> {
+class ip : detail::bitwise<ip> {
 public:
   using byte_type = uint8_t;
   using byte_array = std::array<byte_type, 16>;
@@ -196,8 +196,12 @@ public:
     return bytes_;
   }
 
-  friend auto operator==(const ip& x, const ip& y) -> bool;
-  friend auto operator<(const ip& x, const ip& y) -> bool;
+  friend auto operator<=>(const ip& x, const ip& y) -> std::strong_ordering {
+    return x.bytes_ <=> y.bytes_;
+  }
+  friend auto operator==(const ip& x, const ip& y) -> bool {
+    return (x <=> y) == std::strong_ordering::equal;
+  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, ip& x) {

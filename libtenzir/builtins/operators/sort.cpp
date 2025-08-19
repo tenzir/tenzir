@@ -437,53 +437,36 @@ public:
     std::ranges::sort(indices, [&](const sort_index& lhs,
                                    const sort_index& rhs) {
       for (const auto& sort_key : sort_keys) {
+        TENZIR_ASSERT_EXPENSIVE(rhs.slice < sort_key.chunks.size(),
+                                "{} (rhs.slice) < {} (sort_key.chunks.size())",
+                                rhs.slice, sort_key.chunks.size());
+        TENZIR_ASSERT_EXPENSIVE(lhs.slice < sort_key.chunks.size(),
+                                "{} (lhs.slice) < {} (sort_key.chunks.size())",
+                                lhs.slice, sort_key.chunks.size());
         const auto& lhs_key = sort_key.chunks[lhs.slice];
         const auto& rhs_key = sort_key.chunks[rhs.slice];
-        const auto lhs_null = lhs_key.is_null(lhs.event);
-        const auto rhs_null = rhs_key.is_null(rhs.event);
+        TENZIR_ASSERT_EXPENSIVE(rhs.event < rhs_key.length(),
+                                "{} (rhs.event) < {} (rhs_key.length())",
+                                rhs.event, rhs_key.length());
+        TENZIR_ASSERT_EXPENSIVE(lhs.event < lhs_key.length(),
+                                "{} (lhs.event) < {} (lhs_key.length())",
+                                lhs.slice, lhs_key.length());
+        const auto lhs_value = lhs_key.view3_at(lhs.event);
+        const auto rhs_value = rhs_key.view3_at(rhs.event);
+        const auto lhs_null = is<caf::none_t>(lhs_value);
+        const auto rhs_null = is<caf::none_t>(rhs_value);
         if (lhs_null and rhs_null) {
-          continue;
+          return false;
         }
-        if (lhs_null or rhs_null) {
-          // Nulls last, independent of sort order.
-          return rhs_null;
+        if (lhs_null) {
+          return false;
         }
-        const auto& lhs_value = lhs_key.value_at(lhs.event);
-        const auto& rhs_value = rhs_key.value_at(rhs.event);
-        // TODO: Implement this directly on data and data_view. That is
-        // non-trivial however.
-        // TODO: This does not do the correct recursive application of the
-        // comparator to nested structural types. It turns out that is a
-        // non-trivial task as well.
-        const auto cmp = detail::overload{
-          [](const concepts::integer auto& l, const concepts::integer auto& r) {
-            return std::cmp_less(l, r);
-          },
-          []<concepts::number L, concepts::number R>(const L& l, const R& r) {
-            if constexpr (std::same_as<L, double>) {
-              if (std::isnan(l)) {
-                return false;
-              }
-            }
-            if constexpr (std::same_as<R, double>) {
-              if (std::isnan(r)) {
-                return true;
-              }
-            }
-            return l < r;
-          },
-          [&](const auto& l, const auto& r) {
-            if constexpr (std::same_as<decltype(l), decltype(r)>) {
-              return l < r;
-            }
-            return lhs_value.index() < rhs_value.index();
-          },
-        };
-        if (match(std::tie(lhs_value, rhs_value), cmp)) {
-          return not sort_key.reverse;
+        if (rhs_null) {
+          return true;
         }
-        if (match(std::tie(rhs_value, lhs_value), cmp)) {
-          return sort_key.reverse;
+        const auto relation = weak_order(lhs_value, rhs_value);
+        if (relation != std::weak_ordering::equivalent) {
+          return (relation == std::weak_ordering::less) != sort_key.reverse;
         }
       }
       // If we're here then it's a tie.

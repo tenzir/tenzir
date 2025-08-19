@@ -17,7 +17,7 @@ namespace tenzir {
 class data;
 
 /// Stores IPv4 and IPv6 prefixes, e.g., `192.168.1.1/16` and `FD00::/8`.
-class subnet : detail::totally_ordered<subnet> {
+class subnet {
 public:
   /// Constructs the empty prefix, i.e., `::/0`.
   subnet();
@@ -50,8 +50,8 @@ public:
   /// @returns The prefix length.
   [[nodiscard]] uint8_t length() const;
 
-  friend bool operator==(const subnet& x, const subnet& y);
-  friend bool operator<(const subnet& x, const subnet& y);
+  friend auto operator<=>(const subnet&, const subnet&) -> std::strong_ordering
+    = default;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, subnet& x) {

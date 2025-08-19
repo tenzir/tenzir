@@ -302,14 +302,6 @@ auto ip::compare(const ip& other, size_t k) const -> bool {
   return (*x & mask) == (*y & mask);
 }
 
-auto operator==(const ip& x, const ip& y) -> bool {
-  return x.bytes_ == y.bytes_;
-}
-
-auto operator<(const ip& x, const ip& y) -> bool {
-  return x.bytes_ < y.bytes_;
-}
-
 } // namespace tenzir
 
 auto fmt::formatter<tenzir::ip>::format(const tenzir::ip& value,
