@@ -30,9 +30,7 @@
 
 // BEGIN Workaround https://github.com/abseil/abseil-cpp/issues/1747
 #include <absl/base/config.h>
-
-#if ABSL_LTS_RELEASE_VERSION == 20240722
-#  include <absl/log/internal/log_message.h>
+#include <absl/log/internal/log_message.h>
 
 namespace absl {
 
@@ -63,7 +61,6 @@ ABSL_NAMESPACE_END
 
 } // namespace absl
 
-#endif
 // END Workaround
 
 namespace tenzir::plugins::velociraptor {
@@ -222,8 +219,8 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     const auto* ca_certificate
       = get_if<std::string>(&config_, "ca_certificate");
     if (ca_certificate == nullptr) {
@@ -367,8 +364,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);
@@ -411,8 +408,8 @@ public:
     };
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = operator_args{};
     auto org_id = std::optional<located<std::string>>{};
     auto request_name = std::optional<located<std::string>>{};
