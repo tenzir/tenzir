@@ -386,6 +386,19 @@ public:
       return failure::promise();
     }
     args.binary = binary_flag ? binary_flag->inner : false;
+    try {
+      const auto expr = boost::regex{
+        args.split_at_regex->inner.data(),
+        args.split_at_regex->inner.size(),
+        boost::regex_constants::optimize,
+      };
+    } catch (const std::exception& e) {
+      diagnostic::error("Invalid regex: {}", e.what())
+        .primary(*args.split_at_regex)
+        .note("regex: {}", args.split_at_regex->inner)
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::make_unique<parser_adapter<lines_parser>>(
       lines_parser{std::move(args)});
   }
