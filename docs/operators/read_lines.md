@@ -29,7 +29,7 @@ Ignores empty lines in the input.
 
 :::caution[Deprecated]
 This option is deprecated. Use
-[`read_delimited_regex`](/reference/operators/read_delimited) instead.
+[`read_delimited`](/reference/operators/read_delimited) instead.
 :::
 
 Use null byte (`\0`) as the delimiter instead of newline characters.
