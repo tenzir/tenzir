@@ -14,11 +14,11 @@
 
 namespace tenzir {
 
-auto cast(table_slice from_slice, const type& to_schema) noexcept
-  -> table_slice {
+auto cast(table_slice from_slice, const type& to_schema) -> table_slice {
   TENZIR_ASSERT_EXPENSIVE(can_cast(from_slice.schema(), to_schema));
-  if (from_slice.schema() == to_schema)
+  if (from_slice.schema() == to_schema) {
     return from_slice;
+  }
   const auto from_batch = to_record_batch(from_slice);
   const auto from_struct_array = check(from_batch->ToStructArray());
   const auto to_struct_array

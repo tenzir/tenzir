@@ -28,8 +28,8 @@ namespace detail {
 
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
 struct cast_helper {
-  static auto can_cast(const FromType& from_type,
-                       const ToType& to_type) noexcept -> caf::expected<void> {
+  static auto can_cast(const FromType& from_type, const ToType& to_type)
+    -> caf::expected<void> {
     return caf::make_error(ec::convert_error,
                            fmt::format("cannot cast from '{}' to '{}': not "
                                        "implemented",
@@ -38,13 +38,12 @@ struct cast_helper {
 
   static auto
   cast(const FromType&, const std::shared_ptr<type_to_arrow_array_t<FromType>>&,
-       const ToType&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
+       const ToType&) -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
     TENZIR_UNIMPLEMENTED();
   }
 
   static auto cast_value(const FromType& from_type, auto&&,
-                         const ToType& to_type, auto&&...) noexcept
+                         const ToType& to_type, auto&&...)
     -> caf::expected<type_to_data_t<ToType>> {
     return caf::make_error(ec::convert_error,
                            fmt::format("cannot cast from '{}' to '{}': not "
@@ -54,21 +53,21 @@ struct cast_helper {
 };
 
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
-  requires(!concrete_type<FromType> || !concrete_type<ToType>)
+  requires(! concrete_type<FromType> || ! concrete_type<ToType>)
 struct cast_helper<FromType, ToType> {
   template <type_or_concrete_type Type>
-  static auto is_valid(const Type& type) noexcept {
-    if constexpr (!concrete_type<Type>) {
-      if (!type) {
+  static auto is_valid(const Type& type) {
+    if constexpr (! concrete_type<Type>) {
+      if (! type) {
         return false;
       }
     }
     return true;
   }
 
-  static auto can_cast(const FromType& from_type,
-                       const ToType& to_type) noexcept -> caf::expected<void> {
-    if (!is_valid(from_type) || !is_valid(to_type)) {
+  static auto can_cast(const FromType& from_type, const ToType& to_type)
+    -> caf::expected<void> {
+    if (! is_valid(from_type) || ! is_valid(to_type)) {
       return caf::make_error(ec::logic_error,
                              fmt::format("cannot cast from '{}' to '{}': both "
                                          "types must be valid",
@@ -76,8 +75,7 @@ struct cast_helper<FromType, ToType> {
     }
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
-          const ConcreteFromType& from_type,
-          const ConcreteToType& to_type) noexcept {
+          const ConcreteFromType& from_type, const ConcreteToType& to_type) {
           return cast_helper<ConcreteFromType, ConcreteToType>::can_cast(
             from_type, to_type);
         };
@@ -95,13 +93,12 @@ struct cast_helper<FromType, ToType> {
   static auto
   cast(const FromType& from_type,
        const std::shared_ptr<type_to_arrow_array_t<type>>& from_array,
-       const ToType& to_type) noexcept
+       const ToType& to_type)
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
     TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
-          const ConcreteFromType& from_type,
-          const ConcreteToType& to_type) noexcept
+          const ConcreteFromType& from_type, const ConcreteToType& to_type)
       -> std::shared_ptr<type_to_arrow_array_t<type>> {
       if constexpr (concrete_type<FromType>) {
         return cast_helper<ConcreteFromType, ConcreteToType>::cast(
@@ -129,12 +126,11 @@ struct cast_helper<FromType, ToType> {
     requires(std::same_as<type_to_data_t<FromType>, InputType>
              || std::same_as<view<type_to_data_t<FromType>>, InputType>)
   static auto cast_value(const FromType& from_type, const InputType& data,
-                         const ToType& to_type) noexcept
+                         const ToType& to_type)
     -> caf::expected<type_to_data_t<ToType>> {
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
-          const ConcreteFromType& from_type,
-          const ConcreteToType& to_type) noexcept
+          const ConcreteFromType& from_type, const ConcreteToType& to_type)
       -> caf::expected<type_to_data_t<ToType>> {
       auto v = cast_helper<ConcreteFromType, ConcreteToType>::cast_value(
         from_type, get_underlying_data<ConcreteFromType>(data), to_type);
@@ -183,33 +179,30 @@ private:
 
 template <basic_type Type>
 struct cast_helper<Type, Type> {
-  static auto can_cast(const Type&, const Type&) noexcept
-    -> caf::expected<void> {
+  static auto can_cast(const Type&, const Type&) -> caf::expected<void> {
     return {};
   }
 
   static auto
   cast(const Type&, std::shared_ptr<type_to_arrow_array_t<Type>> from_array,
-       const Type&) noexcept -> std::shared_ptr<type_to_arrow_array_t<Type>> {
+       const Type&) -> std::shared_ptr<type_to_arrow_array_t<Type>> {
     return from_array;
   }
 
   static auto cast_value(const Type&, const type_to_data_t<Type>& value,
-                         const Type&) noexcept
-    -> caf::expected<type_to_data_t<Type>> {
+                         const Type&) -> caf::expected<type_to_data_t<Type>> {
     return value;
   }
 
-  static auto cast_value(const string_type&, std::string_view view,
-                         const string_type&) noexcept
+  static auto
+  cast_value(const string_type&, std::string_view view, const string_type&)
     -> caf::expected<type_to_data_t<Type>>
     requires(std::same_as<string_type, Type>)
   {
     return materialize(view);
   }
 
-  static auto
-  cast_value(const blob_type&, view<blob> view, const blob_type&) noexcept
+  static auto cast_value(const blob_type&, view<blob> view, const blob_type&)
     -> caf::expected<type_to_data_t<Type>>
     requires(std::same_as<blob_type, Type>)
   {
@@ -219,7 +212,7 @@ struct cast_helper<Type, Type> {
 
 template <complex_type Type>
 struct cast_helper<Type, Type> {
-  static auto can_cast(const Type& from_type, const Type& to_type) noexcept
+  static auto can_cast(const Type& from_type, const Type& to_type)
     -> caf::expected<void> {
     if (from_type != to_type) {
       return caf::make_error(ec::convert_error,
@@ -232,7 +225,7 @@ struct cast_helper<Type, Type> {
 
   static auto cast(const Type& from_type,
                    std::shared_ptr<type_to_arrow_array_t<Type>> from_array,
-                   const Type& to_type) noexcept
+                   const Type& to_type)
     -> std::shared_ptr<type_to_arrow_array_t<Type>> {
     TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
     return from_array;
@@ -241,12 +234,11 @@ struct cast_helper<Type, Type> {
 
 template <>
 struct cast_helper<list_type, list_type> {
-  static auto
-  can_cast(const list_type& from_type, const list_type& to_type) noexcept
+  static auto can_cast(const list_type& from_type, const list_type& to_type)
     -> caf::expected<void> {
     auto can_cast_value_types = cast_helper<type, type>::can_cast(
       from_type.value_type(), to_type.value_type());
-    if (!can_cast_value_types) {
+    if (! can_cast_value_types) {
       return caf::make_error(ec::convert_error,
                              fmt::format("cannot cast from '{}' to '{}': {}",
                                          from_type, to_type,
@@ -257,7 +249,7 @@ struct cast_helper<list_type, list_type> {
 
   static auto cast(const list_type& from_type,
                    std::shared_ptr<type_to_arrow_array_t<list_type>> from_array,
-                   const list_type& to_type) noexcept
+                   const list_type& to_type)
     -> std::shared_ptr<type_to_arrow_array_t<list_type>> {
     TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
     if (from_type == to_type) {
@@ -277,7 +269,7 @@ struct cast_helper<list_type, list_type> {
       or std::same_as<std::remove_cvref_t<InputType>,
                       view<type_to_data_t<list_type>>>)
   static auto cast_value(const list_type& from_type, const InputType& value,
-                         const list_type& to_type) noexcept
+                         const list_type& to_type)
     -> caf::expected<type_to_data_t<list_type>> {
     if (from_type == to_type) {
       return on_same_input_and_output_types(value);
@@ -310,7 +302,7 @@ private:
 
 template <>
 struct cast_helper<map_type, map_type> {
-  static auto can_cast(const map_type&, const map_type&) noexcept
+  static auto can_cast(const map_type&, const map_type&)
     -> caf::expected<void> {
     return caf::make_error(ec::convert_error,
                            "cast not supported for map types");
@@ -318,18 +310,17 @@ struct cast_helper<map_type, map_type> {
 
   static auto
   cast(const map_type&, std::shared_ptr<type_to_arrow_array_t<map_type>>,
-       const map_type&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<map_type>> {
+       const map_type&) -> std::shared_ptr<type_to_arrow_array_t<map_type>> {
     TENZIR_UNREACHABLE();
   }
 
-  static auto cast_value(const map_type&, const map&, const map_type&) noexcept
+  static auto cast_value(const map_type&, const map&, const map_type&)
     -> caf::expected<type_to_data_t<map_type>> {
     return caf::make_error(ec::convert_error,
                            "cast not supported for map types");
   }
 
-  static auto cast_value(const map_type&, view<map>, const map_type&) noexcept
+  static auto cast_value(const map_type&, view<map>, const map_type&)
     -> caf::expected<type_to_data_t<map_type>> {
     return caf::make_error(ec::convert_error,
                            "cast not supported for map types");
@@ -338,8 +329,7 @@ struct cast_helper<map_type, map_type> {
 
 template <>
 struct cast_helper<record_type, record_type> {
-  static auto
-  can_cast(const record_type& from_type, const record_type& to_type) noexcept
+  static auto can_cast(const record_type& from_type, const record_type& to_type)
     -> caf::expected<void> {
     if (from_type == to_type) {
       return {};
@@ -352,7 +342,7 @@ struct cast_helper<record_type, record_type> {
         const auto& from_field = from_type.field(*from_field_index);
         auto can_cast_field_types = cast_helper<type, type>::can_cast(
           from_field.type, to_leaf.field.type);
-        if (!can_cast_field_types) {
+        if (! can_cast_field_types) {
           return caf::make_error(ec::unspecified,
                                  fmt::format("cannot cast from '{}' to '{}' as "
                                              "cast for matching field '{}' is "
@@ -368,7 +358,7 @@ struct cast_helper<record_type, record_type> {
   static auto
   cast(const record_type& from_type,
        std::shared_ptr<type_to_arrow_array_t<record_type>> from_array,
-       const record_type& to_type) noexcept
+       const record_type& to_type)
     -> std::shared_ptr<type_to_arrow_array_t<record_type>> {
     TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
     if (from_type == to_type) {
@@ -376,7 +366,7 @@ struct cast_helper<record_type, record_type> {
     }
     // NOLINTNEXTLINE
     auto impl = [&](const auto& impl, const record_type& to_type,
-                    std::string_view key_prefix) noexcept
+                    std::string_view key_prefix)
       -> std::shared_ptr<type_to_arrow_array_t<record_type>> {
       auto fields = arrow::FieldVector{};
       auto children = arrow::ArrayVector{};
@@ -392,7 +382,7 @@ struct cast_helper<record_type, record_type> {
           continue;
         }
         const auto index = from_type.resolve_key(key);
-        if (!index) {
+        if (! index) {
           // The field does not exist, so we insert a bunch of nulls.
           children.push_back(check(arrow::MakeArrayOfNull(
             to_field.type.to_arrow_type(), from_array->length())));
@@ -414,15 +404,14 @@ struct cast_helper<record_type, record_type> {
       or std::same_as<std::remove_cvref_t<InputType>,
                       view<type_to_data_t<record_type>>>)
   static auto cast_value(const record_type& from_type, const InputType& in,
-                         const record_type& to_type) noexcept
+                         const record_type& to_type)
     -> caf::expected<type_to_data_t<record_type>> {
     if (from_type == to_type) {
       return on_same_input_and_output_types(in);
     }
     // NOLINTNEXTLINE
-    auto impl
-      = [&](const auto& impl, const record_type& to_type,
-            std::string_view key_prefix) noexcept -> caf::expected<record> {
+    auto impl = [&](const auto& impl, const record_type& to_type,
+                    std::string_view key_prefix) -> caf::expected<record> {
       auto ret = type_to_data_t<record_type>{};
       for (const auto& to_field : to_type.fields()) {
         const auto key = key_prefix.empty()
@@ -500,13 +489,12 @@ private:
 
 template <>
 struct cast_helper<int64_type, uint64_type> {
-  static auto can_cast(const int64_type&, const uint64_type&) noexcept
+  static auto can_cast(const int64_type&, const uint64_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto
-  cast_value(const int64_type&, int64_t value, const uint64_type&) noexcept
+  static auto cast_value(const int64_type&, int64_t value, const uint64_type&)
     -> caf::expected<uint64_t> {
     if (value < 0) {
       return caf::make_error(
@@ -518,7 +506,7 @@ struct cast_helper<int64_type, uint64_type> {
 
   static auto
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
-       const uint64_type&) noexcept
+       const uint64_type&)
     -> std::shared_ptr<type_to_arrow_array_t<uint64_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -526,13 +514,13 @@ struct cast_helper<int64_type, uint64_type> {
 
 template <>
 struct cast_helper<uint64_type, int64_type> {
-  static auto can_cast(const uint64_type&, const int64_type&) noexcept
+  static auto can_cast(const uint64_type&, const int64_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const uint64_type&, uint64_t value,
-                         const int64_type&) noexcept -> caf::expected<int64_t> {
+  static auto cast_value(const uint64_type&, uint64_t value, const int64_type&)
+    -> caf::expected<int64_t> {
     if (value > std::numeric_limits<int64_t>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into int64: the "
@@ -544,7 +532,7 @@ struct cast_helper<uint64_type, int64_type> {
 
   static auto
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
-       const int64_type&) noexcept
+       const int64_type&)
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -552,13 +540,13 @@ struct cast_helper<uint64_type, int64_type> {
 
 template <>
 struct cast_helper<int64_type, bool_type> {
-  static auto can_cast(const int64_type&, const bool_type&) noexcept
+  static auto can_cast(const int64_type&, const bool_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const int64_type&, int64_t value,
-                         const bool_type&) noexcept -> caf::expected<bool> {
+  static auto cast_value(const int64_type&, int64_t value, const bool_type&)
+    -> caf::expected<bool> {
     if (value < std::numeric_limits<bool>::min()
         or value > std::numeric_limits<bool>::max()) {
       return caf::make_error(ec::convert_error,
@@ -571,27 +559,26 @@ struct cast_helper<int64_type, bool_type> {
 
   static auto
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
-       const bool_type&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
+       const bool_type&) -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
     TENZIR_UNIMPLEMENTED();
   }
 };
 
 template <>
 struct cast_helper<bool_type, int64_type> {
-  static auto can_cast(const bool_type&, const int64_type&) noexcept
+  static auto can_cast(const bool_type&, const int64_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const bool_type&, bool value,
-                         const int64_type&) noexcept -> caf::expected<int64_t> {
+  static auto cast_value(const bool_type&, bool value, const int64_type&)
+    -> caf::expected<int64_t> {
     return static_cast<int64_t>(value);
   }
 
   static auto
   cast(const bool_type&, std::shared_ptr<type_to_arrow_array_t<bool_type>>,
-       const int64_type&) noexcept
+       const int64_type&)
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -599,20 +586,19 @@ struct cast_helper<bool_type, int64_type> {
 
 template <>
 struct cast_helper<bool_type, uint64_type> {
-  static auto can_cast(const bool_type&, const uint64_type&) noexcept
+  static auto can_cast(const bool_type&, const uint64_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto
-  cast_value(const bool_type&, bool value, const uint64_type&) noexcept
+  static auto cast_value(const bool_type&, bool value, const uint64_type&)
     -> caf::expected<uint64_t> {
     return static_cast<uint64_t>(value);
   }
 
   static auto
   cast(const bool_type&, std::shared_ptr<type_to_arrow_array_t<bool_type>>,
-       const uint64_type&) noexcept
+       const uint64_type&)
     -> std::shared_ptr<type_to_arrow_array_t<uint64_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -620,13 +606,13 @@ struct cast_helper<bool_type, uint64_type> {
 
 template <>
 struct cast_helper<uint64_type, bool_type> {
-  static auto can_cast(const uint64_type&, const bool_type&) noexcept
+  static auto can_cast(const uint64_type&, const bool_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const uint64_type&, uint64_t value,
-                         const bool_type&) noexcept -> caf::expected<bool> {
+  static auto cast_value(const uint64_type&, uint64_t value, const bool_type&)
+    -> caf::expected<bool> {
     if (value > std::numeric_limits<bool>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into uint64: "
@@ -638,27 +624,26 @@ struct cast_helper<uint64_type, bool_type> {
 
   static auto
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
-       const bool_type&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
+       const bool_type&) -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
     TENZIR_UNIMPLEMENTED();
   }
 };
 
 template <>
 struct cast_helper<bool_type, double_type> {
-  static auto can_cast(const bool_type&, const double_type&) noexcept
+  static auto can_cast(const bool_type&, const double_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const bool_type&, bool value,
-                         const double_type&) noexcept -> caf::expected<double> {
+  static auto cast_value(const bool_type&, bool value, const double_type&)
+    -> caf::expected<double> {
     return static_cast<double>(value);
   }
 
   static auto
   cast(const bool_type&, std::shared_ptr<type_to_arrow_array_t<bool_type>>,
-       const double_type&) noexcept
+       const double_type&)
     -> std::shared_ptr<type_to_arrow_array_t<double_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -666,13 +651,13 @@ struct cast_helper<bool_type, double_type> {
 
 template <>
 struct cast_helper<double_type, bool_type> {
-  static auto can_cast(const double_type&, const bool_type&) noexcept
+  static auto can_cast(const double_type&, const bool_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const double_type&, double value,
-                         const bool_type&) noexcept -> caf::expected<bool> {
+  static auto cast_value(const double_type&, double value, const bool_type&)
+    -> caf::expected<bool> {
     if (value != 0.0 and value != 1.0) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into a double: "
@@ -684,27 +669,26 @@ struct cast_helper<double_type, bool_type> {
 
   static auto
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
-       const bool_type&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
+       const bool_type&) -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
     TENZIR_UNIMPLEMENTED();
   }
 };
 
 template <>
 struct cast_helper<int64_type, double_type> {
-  static auto can_cast(const int64_type&, const double_type&) noexcept
+  static auto can_cast(const int64_type&, const double_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const int64_type&, int64_t value,
-                         const double_type&) noexcept -> caf::expected<double> {
+  static auto cast_value(const int64_type&, int64_t value, const double_type&)
+    -> caf::expected<double> {
     return static_cast<double>(value);
   }
 
   static auto
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
-       const double_type&) noexcept
+       const double_type&)
     -> std::shared_ptr<type_to_arrow_array_t<double_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -712,19 +696,19 @@ struct cast_helper<int64_type, double_type> {
 
 template <>
 struct cast_helper<double_type, int64_type> {
-  static auto can_cast(const double_type&, const int64_type&) noexcept
+  static auto can_cast(const double_type&, const int64_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const double_type&, double value,
-                         const int64_type&) noexcept -> caf::expected<int64_t> {
+  static auto cast_value(const double_type&, double value, const int64_type&)
+    -> caf::expected<int64_t> {
     return static_cast<int64_t>(value);
   }
 
   static auto
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
-       const int64_type&) noexcept
+       const int64_type&)
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -732,19 +716,19 @@ struct cast_helper<double_type, int64_type> {
 
 template <>
 struct cast_helper<uint64_type, double_type> {
-  static auto can_cast(const uint64_type&, const double_type&) noexcept
+  static auto can_cast(const uint64_type&, const double_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const uint64_type&, uint64_t value,
-                         const double_type&) noexcept -> caf::expected<double> {
+  static auto cast_value(const uint64_type&, uint64_t value, const double_type&)
+    -> caf::expected<double> {
     return static_cast<double>(value);
   }
 
   static auto
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
-       const double_type&) noexcept
+       const double_type&)
     -> std::shared_ptr<type_to_arrow_array_t<double_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -752,20 +736,19 @@ struct cast_helper<uint64_type, double_type> {
 
 template <>
 struct cast_helper<double_type, uint64_type> {
-  static auto can_cast(const double_type&, const uint64_type&) noexcept
+  static auto can_cast(const double_type&, const uint64_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto
-  cast_value(const double_type&, double value, const uint64_type&) noexcept
+  static auto cast_value(const double_type&, double value, const uint64_type&)
     -> caf::expected<uint64_t> {
     return static_cast<uint64_t>(value);
   }
 
   static auto
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
-       const uint64_type&) noexcept
+       const uint64_type&)
     -> std::shared_ptr<type_to_arrow_array_t<uint64_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -773,13 +756,13 @@ struct cast_helper<double_type, uint64_type> {
 
 template <>
 struct cast_helper<uint64_type, enumeration_type> {
-  static auto can_cast(const uint64_type&, const enumeration_type&) noexcept
+  static auto can_cast(const uint64_type&, const enumeration_type&)
     -> caf::expected<void> {
     return {};
   }
 
   static auto cast_value(const uint64_type&, uint64_t value,
-                         const enumeration_type& enum_type) noexcept
+                         const enumeration_type& enum_type)
     -> caf::expected<enumeration> {
     if (value > std::numeric_limits<uint32_t>::max()) {
       return caf::make_error(
@@ -800,7 +783,7 @@ struct cast_helper<uint64_type, enumeration_type> {
 
   static auto
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
-       const enumeration_type&) noexcept
+       const enumeration_type&)
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -808,13 +791,13 @@ struct cast_helper<uint64_type, enumeration_type> {
 
 template <>
 struct cast_helper<int64_type, enumeration_type> {
-  static auto can_cast(const int64_type&, const enumeration_type&) noexcept
+  static auto can_cast(const int64_type&, const enumeration_type&)
     -> caf::expected<void> {
     return {};
   }
 
   static auto cast_value(const int64_type&, int64_t value,
-                         const enumeration_type& enum_type) noexcept
+                         const enumeration_type& enum_type)
     -> caf::expected<enumeration> {
     if (value > std::numeric_limits<uint32_t>::max()
         or value < std::numeric_limits<uint32_t>::min()) {
@@ -836,7 +819,7 @@ struct cast_helper<int64_type, enumeration_type> {
 
   static auto
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
-       const enumeration_type&) noexcept
+       const enumeration_type&)
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -844,13 +827,13 @@ struct cast_helper<int64_type, enumeration_type> {
 
 template <>
 struct cast_helper<double_type, enumeration_type> {
-  static auto can_cast(const double_type&, const enumeration_type&) noexcept
+  static auto can_cast(const double_type&, const enumeration_type&)
     -> caf::expected<void> {
     return {};
   }
 
   static auto cast_value(const double_type&, double value,
-                         const enumeration_type& enum_type) noexcept
+                         const enumeration_type& enum_type)
     -> caf::expected<enumeration> {
     auto maybe_uint = cast_helper<double_type, uint64_type>::cast_value(
       double_type{}, value, uint64_type{});
@@ -867,7 +850,7 @@ struct cast_helper<double_type, enumeration_type> {
 
   static auto
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
-       const enumeration_type&) noexcept
+       const enumeration_type&)
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -875,8 +858,7 @@ struct cast_helper<double_type, enumeration_type> {
 
 template <>
 struct cast_helper<enumeration_type, enumeration_type> {
-  static auto
-  can_cast(const enumeration_type& from, const enumeration_type& to) noexcept
+  static auto can_cast(const enumeration_type& from, const enumeration_type& to)
     -> caf::expected<void> {
     if (from == to) {
       return {};
@@ -888,7 +870,7 @@ struct cast_helper<enumeration_type, enumeration_type> {
   }
 
   static auto cast_value(const enumeration_type& from, enumeration value,
-                         const enumeration_type& to) noexcept
+                         const enumeration_type& to)
     -> caf::expected<enumeration> {
     auto can = can_cast(from, to);
     if (can) {
@@ -900,7 +882,7 @@ struct cast_helper<enumeration_type, enumeration_type> {
   static auto
   cast(const enumeration_type& from,
        std::shared_ptr<type_to_arrow_array_t<enumeration_type>> array,
-       const enumeration_type& to) noexcept
+       const enumeration_type& to)
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
     TENZIR_ASSERT_EXPENSIVE(can_cast(from, to));
     return array;
@@ -910,13 +892,12 @@ struct cast_helper<enumeration_type, enumeration_type> {
 template <concrete_type FromType>
   requires(not std::same_as<FromType, string_type>)
 struct cast_helper<FromType, string_type> {
-  static auto can_cast(const FromType&, const string_type&) noexcept
+  static auto can_cast(const FromType&, const string_type&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto
-  cast_value(const FromType&, const auto& value, const string_type&) noexcept
+  static auto cast_value(const FromType&, const auto& value, const string_type&)
     -> caf::expected<std::string> {
     if constexpr (std::same_as<view<type_to_data_t<FromType>>,
                                std::remove_cvref_t<decltype(value)>>) {
@@ -927,8 +908,7 @@ struct cast_helper<FromType, string_type> {
   }
 
   static auto cast_value(const enumeration_type& enum_type, enumeration value,
-                         const string_type&) noexcept
-    -> caf::expected<std::string> {
+                         const string_type&) -> caf::expected<std::string> {
     auto field_name = enum_type.field(static_cast<uint32_t>(value));
     TENZIR_ASSERT(not field_name.empty());
     return std::string{field_name};
@@ -936,7 +916,7 @@ struct cast_helper<FromType, string_type> {
 
   static auto
   cast(const FromType&, std::shared_ptr<type_to_arrow_array_t<FromType>>,
-       const string_type&) noexcept
+       const string_type&)
     -> std::shared_ptr<type_to_arrow_array_t<string_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -1079,20 +1059,19 @@ struct cast_helper<string_type, ToType> {
     return secret::make_literal(in);
   }
 
-  static auto can_cast(const string_type&, const ToType&) noexcept
+  static auto can_cast(const string_type&, const ToType&)
     -> caf::expected<void> {
     return {};
   }
 
-  static auto cast_value(const string_type&, std::string_view value,
-                         const ToType& to) noexcept {
+  static auto
+  cast_value(const string_type&, std::string_view value, const ToType& to) {
     return from_str(value, to);
   }
 
   static auto
   cast(const string_type&, std::shared_ptr<type_to_arrow_array_t<string_type>>,
-       const ToType&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
+       const ToType&) -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
     TENZIR_UNIMPLEMENTED();
   }
 };
@@ -1102,15 +1081,15 @@ template <class FromType>
            or std::same_as<FromType, uint64_type>
            or std::same_as<FromType, double_type>)
 struct cast_helper<FromType, duration_type> {
-  static auto can_cast(const FromType&, const duration_type&) noexcept
+  static auto can_cast(const FromType&, const duration_type&)
     -> caf::expected<void> {
     return {};
   }
 
   template <class ValType>
-  static auto
-  cast_value(const FromType& from, ValType value, const duration_type& to,
-             std::string_view unit = "s") noexcept -> caf::expected<duration> {
+  static auto cast_value(const FromType& from, ValType value,
+                         const duration_type& to, std::string_view unit = "s")
+    -> caf::expected<duration> {
     if (value < ValType{0}) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert negative numeric "
@@ -1132,7 +1111,7 @@ struct cast_helper<FromType, duration_type> {
 
   static auto
   cast(const FromType&, std::shared_ptr<type_to_arrow_array_t<FromType>>,
-       const duration_type&) noexcept
+       const duration_type&)
     -> std::shared_ptr<type_to_arrow_array_t<duration_type>> {
     TENZIR_UNIMPLEMENTED();
   }
@@ -1140,7 +1119,7 @@ struct cast_helper<FromType, duration_type> {
 
 template <>
 struct cast_helper<secret_type, secret_type> {
-  static auto can_cast(const secret_type&, const secret_type&) noexcept
+  static auto can_cast(const secret_type&, const secret_type&)
     -> caf::expected<void> {
     return {};
   }
@@ -1152,7 +1131,7 @@ struct cast_helper<secret_type, secret_type> {
 
   static auto cast(const secret_type&,
                    std::shared_ptr<type_to_arrow_array_t<secret_type>> arr,
-                   const secret_type&) noexcept
+                   const secret_type&)
     -> std::shared_ptr<type_to_arrow_array_t<secret_type>> {
     return arr;
   }
@@ -1164,7 +1143,7 @@ struct cast_helper<secret_type, secret_type> {
 /// @returns Nothing on success, or an error detailing why the cast is not
 /// possible on failure.
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
-auto can_cast(const FromType& from_type, const ToType& to_type) noexcept
+auto can_cast(const FromType& from_type, const ToType& to_type)
   -> caf::expected<void> {
   return detail::cast_helper<FromType, ToType>::can_cast(from_type, to_type);
 }
@@ -1175,7 +1154,7 @@ auto can_cast(const FromType& from_type, const ToType& to_type) noexcept
 template <type_or_concrete_type FromType, class ValueType,
           type_or_concrete_type ToType, class... Args>
 auto cast_value(const FromType& from_type, ValueType&& value,
-                const ToType& to_type, Args&&... args) noexcept {
+                const ToType& to_type, Args&&... args) {
   return detail::cast_helper<FromType, ToType>::cast_value(
     from_type, std::forward<ValueType>(value), to_type,
     std::forward<Args>(args)...);
@@ -1187,13 +1166,12 @@ auto cast_value(const FromType& from_type, ValueType&& value,
 /// @pre can_cast(from_slice.schema(), to_schema)
 /// @post result.schema() == to_schema
 /// @returns A slice that exactly matches *to_schema*.
-auto cast(table_slice from_slice, const type& to_schema) noexcept
-  -> table_slice;
+auto cast(table_slice from_slice, const type& to_schema) -> table_slice;
 
 template <concrete_type FromType, concrete_type ToType>
 static auto cast_to_builder(const FromType& from_type,
                             const type_to_arrow_array_t<FromType>& in,
-                            const ToType& to_type) noexcept
+                            const ToType& to_type)
   -> caf::expected<std::shared_ptr<type_to_arrow_builder_t<ToType>>> {
   auto ret = to_type.make_arrow_builder(arrow::default_memory_pool());
   for (const auto& v : values(from_type, in)) {

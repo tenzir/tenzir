@@ -83,6 +83,13 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::list& x) -> multi_series {
+  if (x.items.empty()) {
+    auto b = series_builder{};
+    for (auto i = int64_t{0}; i < length_; ++i) {
+      b.list();
+    }
+    return b.finish_assert_one_array();
+  }
   auto arrays = std::vector<multi_series>{};
   for (auto& item : x.items) {
     arrays.push_back(match(
@@ -96,6 +103,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
   }
   return map_series(arrays, [&](std::span<series> arrays) -> series {
     using result_t = variant<series, basic_series<list_type>>;
+    const auto slice_length = arrays.front().length();
     auto results = std::vector<result_t>{};
     auto value_type = type{null_type{}};
     for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
@@ -114,7 +122,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
                                           value_type.kind(), array.type.kind());
             }
             std::move(diag).emit(ctx_);
-            results.emplace_back(series::null(null_type{}, length_));
+            results.emplace_back(series::null(null_type{}, slice_length));
           }
         },
         [&](const ast::spread& spread) {
@@ -145,7 +153,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
     }
     // TODO: Rewrite this, `series_builder` is probably not the right tool.
     auto b = series_builder{type{list_type{value_type}}};
-    for (auto row = int64_t{0}; row < length_; ++row) {
+    for (auto row = int64_t{0}; row < slice_length; ++row) {
       auto l = b.list();
       for (auto& result : results) {
         // TODO: This is not very performant.

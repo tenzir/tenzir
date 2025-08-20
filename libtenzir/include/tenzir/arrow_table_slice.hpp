@@ -141,6 +141,9 @@ template <concrete_type Type>
 auto value_at([[maybe_unused]] const Type& type,
               const type_to_arrow_array_storage_t<Type>& arr, int64_t row)
   -> view<type_to_data_t<Type>> {
+  TENZIR_ASSERT_EXPENSIVE(row < arr.length(),
+                          "{} is out of bounds for {}-array of length {}", row,
+                          arr.length(), type_kind{tag_v<Type>});
   TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
   if constexpr (std::is_same_v<Type, null_type>) {
     return caf::none;
