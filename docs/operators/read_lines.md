@@ -27,6 +27,11 @@ Ignores empty lines in the input.
 
 ### `split_at_null = bool (optional)`
 
+:::caution[Deprecated]
+This option is deprecated. Use
+[`read_delimited_regex`](/reference/operators/read_delimited) instead.
+:::
+
 Use null byte (`\0`) as the delimiter instead of newline characters.
 
 ### `split_at_regex = string (optional)`
