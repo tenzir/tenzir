@@ -1,0 +1,13 @@
+title: "Enhanced UDP Source"
+description: "This release enhances UDP ingestion with the new `from_udp` operator that produces structured events with sender metadata. We also improved the execution model for `every` and `cron` subpipelines, added DNS lookup capabilities, and made the Syslog parser more flexible."
+changes:
+  - collar-device-rabbit
+  - comedy-events-become
+  - court-stands-bought
+  - crime-toured-delay
+  - indeed-fifty-spare
+  - joint-sturdy-blonde
+  - lumber-guess-leave
+  - match-import-dozen
+  - passed-shell-bottle
+  - source-sheet-yellow
