@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/concept/printable/tenzir/json.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -150,8 +152,9 @@ class where_assert_operator final
 public:
   where_assert_operator() = default;
 
-  explicit where_assert_operator(ast::expression expr, bool warn)
-    : expr_{std::move(expr)}, warn_{warn} {
+  where_assert_operator(ast::expression expr,
+                        std::optional<ast::expression> msg, bool warn)
+    : expr_{std::move(expr)}, msg_{std::move(msg)}, warn_{warn} {
   }
 
   auto name() const -> std::string override {
@@ -169,7 +172,7 @@ public:
       }
       auto offset = int64_t{0};
       for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
-        auto array = try_as<arrow::BooleanArray>(&*filter.array);
+        auto* array = try_as<arrow::BooleanArray>(*filter.array);
         if (not array) {
           diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
             .primary(expr_)
@@ -188,7 +191,7 @@ public:
             .primary(expr_)
             .emit(ctrl.diagnostics());
         }
-        if (warn_) {
+        if (warn_ and not msg_) {
           diagnostic::warning("assertion failure")
             .primary(expr_)
             .emit(ctrl.diagnostics());
@@ -198,6 +201,29 @@ public:
         auto current_begin = int64_t{0};
         // We add an artificial `false` at index `length` to flush.
         auto results = std::vector<table_slice>{};
+        const auto p = json_printer{json_printer_options{
+          .tql = true,
+          .oneline = true,
+        }};
+        auto buf = std::string{};
+        const auto print_messages
+          = [&](const int64_t start, const int64_t end) {
+              if (start == end) {
+                return;
+              }
+              const auto sub = subslice(slice, start, end);
+              const auto ms = eval(*msg_, sub, ctrl.diagnostics());
+              for (const auto& s : ms) {
+                for (auto msg : s.values()) {
+                  auto it = std::back_inserter(buf);
+                  p.print(it, msg);
+                  diagnostic::warning("assertion failed: {}", buf)
+                    .primary(expr_)
+                    .emit(ctrl.diagnostics());
+                  buf.clear();
+                }
+              }
+            };
         for (auto i = int64_t{1}; i < length + 1; ++i) {
           const auto next = i != length && array->IsValid(i) && array->Value(i);
           if (current_value == next) {
@@ -206,9 +232,14 @@ public:
           if (current_value) {
             results.push_back(
               subslice(slice, offset + current_begin, offset + i));
+          } else if (msg_) {
+            print_messages(offset + current_begin, offset + i);
           }
           current_value = next;
           current_begin = i;
+        }
+        if (msg_) {
+          print_messages(offset + current_begin, length);
         }
         co_yield concatenate(std::move(results));
         offset += length;
@@ -225,7 +256,7 @@ public:
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
                           : std::make_unique<where_assert_operator>(
-                              std::move(remainder), warn_);
+                              std::move(remainder), msg_, warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
     }
@@ -237,13 +268,15 @@ public:
   }
 
   friend auto inspect(auto& f, where_assert_operator& x) -> bool {
-    return f.object(x).fields(f.field("expression", x.expr_),
-                              f.field("warn", x.warn_));
+    return f.object(x).fields(f.field("expr_", x.expr_),
+                              f.field("msg_", x.msg_),
+                              f.field("warn_", x.warn_));
   }
 
 private:
   ast::expression expr_;
-  bool warn_;
+  std::optional<ast::expression> msg_;
+  bool warn_{};
 };
 
 struct arguments {
@@ -407,15 +440,15 @@ struct where_result_part {
       return slice_end - slice_start;
     }
   };
-  std::vector<part_slice_info> slices{};
-  arrow::Int32Builder offset_builder{};
-  arrow::TypedBufferBuilder<bool> null_builder{};
+  std::vector<part_slice_info> slices;
+  arrow::Int32Builder offset_builder;
+  arrow::TypedBufferBuilder<bool> null_builder;
   int64_t null_count = 0;
   int64_t event_count = 0;
 
   auto physical_size() const -> size_t {
     auto sum = size_t{0};
-    for (auto& slice : slices) {
+    for (const auto& slice : slices) {
       sum += slice.size();
     }
     return sum;
@@ -650,8 +683,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
       auto result = std::vector<series>{};
       result.reserve(result_assembly_info.size());
       auto to_merge = multi_series{};
-      for (size_t i = 0; i < result_assembly_info.size(); ++i) {
-        auto& p = result_assembly_info[i];
+      for (auto& p : result_assembly_info) {
         TENZIR_ASSERT(p.null_builder.length() == p.event_count);
         TENZIR_ASSERT(p.null_builder.length() > 0);
         TENZIR_ASSERT(p.offset_builder.length() != 1);
@@ -716,10 +748,13 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
+    auto msg = std::optional<ast::expression>{};
     TRY(argument_parser2::operator_("assert")
           .positional("invariant", expr, "bool")
+          .named("message", msg, "string")
           .parse(inv, ctx));
-    return std::make_unique<where_assert_operator>(std::move(expr), true);
+    return std::make_unique<where_assert_operator>(std::move(expr),
+                                                   std::move(msg), true);
   }
 };
 
@@ -815,7 +850,8 @@ public:
     TRY(argument_parser2::operator_("where")
           .positional("predicate", expr, "bool")
           .parse(inv, ctx));
-    return std::make_unique<where_assert_operator>(std::move(expr), false);
+    return std::make_unique<where_assert_operator>(std::move(expr),
+                                                   std::nullopt, false);
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const

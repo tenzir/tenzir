@@ -9,7 +9,7 @@
     }
   ],
   where_assert_operator {
-    expression: binary_expr {
+    expr_: binary_expr {
       left: root_field {
         id: `foo` @ 27..30,
         has_question_mark: false
@@ -17,7 +17,7 @@
       op: "eq" @ 31..33,
       right: constant int64 1 @ 34..35
     },
-    warn: false
+    warn_: false
   },
   tql2.set {
     assignments: [

@@ -9,7 +9,7 @@
     }
   ],
   where_assert_operator {
-    expression: unary_expr {
+    expr_: unary_expr {
       op: "not_" @ 0..0,
       expr: binary_expr {
         left: root_field {
@@ -20,7 +20,7 @@
         right: constant int64 1 @ 34..35
       }
     },
-    warn: false
+    warn_: false
   },
   tql2.set {
     assignments: [
