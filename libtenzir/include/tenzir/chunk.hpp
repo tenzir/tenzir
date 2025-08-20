@@ -341,6 +341,12 @@ private:
 
   template <class Inspector>
   friend auto save_impl(Inspector& f, chunk_ptr& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      if (not x) {
+        return dbg->fmt_value("chunk(nullptr)");
+      }
+      return dbg->fmt_value("chunk(size={})", x->size());
+    }
     if (not f.template begin_object_t<chunk_ptr>()) {
       return false;
     }
