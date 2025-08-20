@@ -7,7 +7,7 @@ example: 'assert name.starts_with("John")'
 Drops events and emits a warning if the invariant is violated.
 
 ```tql
-assert invariant:bool
+assert invariant:bool, [message=any]
 ```
 
 ## Description
@@ -21,6 +21,14 @@ operator does not emit a warning when the expression evaluates to false, hence
 it is more suitable for normal filtering purposes. It is also much faster than
 `assert` in some situations due to optimizations such as predicate pushdown.
 :::
+
+### `invariant: bool`
+
+Condition to assert being `true`.
+
+### `message = any (optional)`
+
+Context to associate with the assertion failure.
 
 ## Examples
 
