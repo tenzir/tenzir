@@ -1,3 +1,9 @@
 {"line":"1"}
 {"line":"2"}
 {"line":"3"}
+warning: the `split_at_null` option is deprecated, use `read_delimited` instead
+ --> <input>:1:26
+  |
+1 | read_lines split_at_null=true
+  |                          ~~~~ 
+  |

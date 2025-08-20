@@ -324,6 +324,12 @@ class read_lines final
         .emit(ctx);
       return failure::promise();
     }
+    if (args.null) {
+      diagnostic::warning("the `split_at_null` option is deprecated, use "
+                          "`read_delimited` instead")
+        .primary(*args.null)
+        .emit(ctx);
+    }
     if (args.split_at_regex) {
       diagnostic::warning("the `split_at_regex` option is deprecated, use "
                           "`read_delimited_regex` instead")
