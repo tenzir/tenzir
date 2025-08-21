@@ -525,7 +525,7 @@ auto from_file_state::start_stream(
         } else {
           diagnostic::warning("failed to remove `{}`", path)
             .primary(args_.url)
-            .note(status.ToStringWithoutContextLines())
+            .note(std::move(message))
             .emit(*dh_);
         }
       }
