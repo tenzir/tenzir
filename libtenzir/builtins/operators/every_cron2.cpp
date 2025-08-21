@@ -708,6 +708,10 @@ struct every_cron_operator final : public operator_base {
     return Name;
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto copy() const -> operator_ptr override {
     return std::make_unique<every_cron_operator>(*this);
   }
