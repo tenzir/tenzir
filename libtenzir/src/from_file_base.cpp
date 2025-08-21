@@ -515,10 +515,19 @@ auto from_file_state::start_stream(
       // There is no async call available.
       auto status = fs_->DeleteFile(path);
       if (not status.ok()) {
-        diagnostic::warning("failed to remove `{}`", path)
-          .primary(args_.url)
-          .note(status.ToStringWithoutContextLines())
-          .emit(*dh_);
+        auto message = status.ToStringWithoutContextLines();
+        if (dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())
+            and message.contains("ACCESS_DENIED during PutObject")) {
+          // When deleting the last file in an S3 directory, Arrow will try to
+          // add a zero-sized object to keep the directory around. This can fail
+          // if the necessary permissions were not granted. But because the
+          // actual delete goes through first, we can just ignore this error.
+        } else {
+          diagnostic::warning("failed to remove `{}`", path)
+            .primary(args_.url)
+            .note(status.ToStringWithoutContextLines())
+            .emit(*dh_);
+        }
       }
     }
     check_jobs_and_termination();
