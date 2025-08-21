@@ -452,18 +452,15 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
-    auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
           .positional("input", subject_expr, "string")
           .positional("format", format)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
-       format = std::move(format),
-       locale = std::move(locale)](evaluator eval, session ctx) {
-        auto result_type = time_type{};
-        auto result_arrow_type
-          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+       format = std::move(format)](evaluator eval, session ctx) {
+        const auto result_type = time_type{};
+        const auto cast_to = arrow::timestamp(arrow::TimeUnit::NANO);
         return map_series(eval(subject_expr), [&](series subject) {
           return match(
             *subject.array,
@@ -487,6 +484,11 @@ public:
                   .primary(fn)
                   .emit(ctx);
               }
+              const auto& tz
+                = as<arrow::TimestampType>(*result->type()).timezone();
+              TENZIR_ASSERT(tz.empty() or tz == "UTC");
+              result = arrow::compute::Cast(result.MoveValueUnsafe(), cast_to);
+              TENZIR_ASSERT(result.ok(), result.status().ToString());
               return series{result_type, result.MoveValueUnsafe().make_array()};
             },
             [&](const arrow::NullArray& array) {
