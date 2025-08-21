@@ -22,6 +22,7 @@
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/replace_columns.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -66,7 +67,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
     auto stream_writer = check(
       arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema()));
     auto status = stream_writer->WriteRecordBatch(*record_batch);
-    if (!status.ok()) {
+    if (not status.ok()) {
       TENZIR_ERROR("failed to write record batch: {}", status.ToString());
     }
     auto arrow_ipc_buffer = check(ipc_ostream->Finish());
@@ -356,7 +357,7 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // noexcept-specified. When adding a new encoding, add it here as well.
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v2&>>) {
-  if (!x) {
+  if (not x) {
     return std::invoke(std::forward<Visitor>(visitor));
   }
   switch (x->table_slice_type()) {
@@ -381,7 +382,7 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
 const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
   using flatbuffers::soffset_t;
   using flatbuffers::uoffset_t;
-  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+  if (not chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
     return nullptr;
   }
   return fbs::GetTableSlice(chunk->data());
@@ -397,7 +398,7 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
   if (verify == table_slice::verify::yes && chunk) {
     const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
     auto verifier = flatbuffers::Verifier{data, chunk->size()};
-    if (!verifier.template VerifyBuffer<fbs::TableSlice>()) {
+    if (not verifier.template VerifyBuffer<fbs::TableSlice>()) {
       chunk = {};
     }
   }
@@ -423,7 +424,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          const std::shared_ptr<arrow::RecordBatch>& batch,
                          type schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  TENZIR_ASSERT(!chunk_ || chunk_->unique());
+  TENZIR_ASSERT(not chunk_ || chunk_->unique());
   if (chunk_) {
     auto f = detail::overload{
       []() noexcept {
@@ -521,7 +522,7 @@ table_slice table_slice::unshare() const noexcept {
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  if (!lhs.chunk_ && !rhs.chunk_) {
+  if (not lhs.chunk_ && not rhs.chunk_) {
     return true;
   }
   constexpr auto check_metadata = true;
@@ -529,7 +530,7 @@ bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
 }
 
 bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
-  return !(lhs == rhs);
+  return not(lhs == rhs);
 }
 
 // -- properties ---------------------------------------------------------------
@@ -606,7 +607,7 @@ void table_slice::modify_state(F&& f) {
   // creating a new table slice here that points to the same data as the current
   // table slice. This implies that the table slice is no longer in one
   // contiguous buffer.
-  if (chunk_ && !chunk_->unique()) {
+  if (chunk_ && not chunk_->unique()) {
     *this = table_slice{to_record_batch(*this), schema()};
   }
   auto g = detail::overload{
@@ -766,25 +767,25 @@ select(const table_slice& slice, expression expr, const ids& hints) {
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
-  if (!hints.empty()) {
+  if (not hints.empty()) {
     selection &= hints;
   }
   // Do no rows qualify?
-  if (!any(selection)) {
+  if (not any(selection)) {
     co_return;
   }
   // Evaluate the filter expression.
-  if (!is<caf::none_t>(expr)) {
+  if (not is<caf::none_t>(expr)) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
     auto tailored_expr = tailor(expr, slice.schema());
-    if (!tailored_expr) {
+    if (not tailored_expr) {
       co_return;
     }
     selection = evaluate(*tailored_expr, slice, selection);
     // Do no rows qualify?
-    if (!any(selection)) {
+    if (not any(selection)) {
       co_return;
     }
   }
@@ -942,33 +943,33 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   // evaluate function, which expects field and type extractors to be resolved
   // already.
   auto tailored_expr = tailor(expr, slice.schema());
-  if (!tailored_expr) {
+  if (not tailored_expr) {
     return 0;
   }
   return rank(evaluate(expr, slice, hints));
 }
 
 namespace {
-constexpr static auto resolve_enumerations_transformation
-  = [](struct record_type::field field, std::shared_ptr<arrow::Array> array)
-  -> std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-  const auto& et = as<enumeration_type>(field.type);
+constexpr static auto enumeration_to_string
+  = [](series s) -> std::optional<series> {
+  auto es = s.as<enumeration_type>();
+  if (not es) {
+    return std::nullopt;
+  }
   auto new_type = tenzir::type{string_type{}};
-  new_type.assign_metadata(field.type);
+  new_type.assign_metadata(s.type);
   auto builder = string_type::make_arrow_builder(arrow::default_memory_pool());
-  for (const auto& value :
-       values(et, as<type_to_arrow_array_t<enumeration_type>>(*array))) {
-    if (!value) {
+  for (const auto& value : es->values()) {
+    if (not value) {
       check(builder->AppendNull());
       continue;
     }
-    check(append_builder(string_type{}, *builder, et.field(*value)));
+    check(append_builder(string_type{}, *builder, es->type.field(*value)));
   }
-  return {{
-    {field.name, std::move(new_type)},
+  return series{
+    std::move(new_type),
     check(builder->Finish()),
-  }};
+  };
 };
 
 template <typename T>
@@ -979,71 +980,35 @@ auto erase(std::pair<T, std::shared_ptr<type_to_arrow_array_t<T>>> v)
 } // namespace
 
 table_slice resolve_enumerations(table_slice slice) {
-  if (slice.rows() == 0) {
-    return slice;
-  }
-  auto type = as<record_type>(slice.schema());
-  // Resolve enumeration types, if there are any.
-  auto transformations = std::vector<indexed_transformation>{};
-  for (const auto& [field, index] : type.leaves()) {
-    if (!is<enumeration_type>(field.type)) {
-      continue;
-    }
-    transformations.emplace_back(index, resolve_enumerations_transformation);
-  }
-  return transform_columns(slice, std::move(transformations));
+  return replace(std::move(slice), enumeration_to_string).second;
 }
 
 auto resolve_enumerations(series s) -> series {
-  auto [new_type, new_array] = resolve_enumerations(s.type, s.array);
-  return series{std::move(new_type), std::move(new_array)};
+  return replace(std::move(s), enumeration_to_string).second;
 }
 
 auto resolve_enumerations(
   tenzir::type type,
   const std::shared_ptr<type_to_arrow_array_t<tenzir::type>>& array)
   -> std::pair<tenzir::type, std::shared_ptr<arrow::Array>> {
-  if (auto* t = try_as<enumeration_type>(type)) {
-    auto arr = std::static_pointer_cast<enumeration_type::array_type>(array);
-    TENZIR_ASSERT(arr);
-    return erase(resolve_enumerations(std::move(*t), arr));
-  }
-  if (auto* t = try_as<record_type>(type)) {
-    auto arr
-      = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
-    TENZIR_ASSERT(arr);
-    return erase(resolve_enumerations(std::move(*t), arr));
-  }
-  if (auto* t = try_as<list_type>(type)) {
-    auto arr
-      = std::static_pointer_cast<type_to_arrow_array_t<list_type>>(array);
-    TENZIR_ASSERT(arr);
-    return erase(resolve_enumerations(std::move(*t), arr));
-  }
-  return {std::move(type), array};
+  auto r
+    = replace(series{std::move(type), array}, enumeration_to_string).second;
+  return {
+    std::move(r.type),
+    std::move(r.array),
+  };
 }
 
 auto resolve_enumerations(
   record_type schema, const std::shared_ptr<arrow::StructArray>& struct_array)
   -> std::pair<record_type, std::shared_ptr<arrow::StructArray>> {
-  TENZIR_ASSERT(struct_array);
-  if (struct_array->length() == 0) {
-    return {std::move(schema), struct_array};
-  }
-  // Resolve enumeration types, if there are any.
-  auto transformations = std::vector<indexed_transformation>{};
-  for (const auto& [field, index] : schema.leaves()) {
-    if (!is<enumeration_type>(field.type)) {
-      continue;
-    }
-    transformations.emplace_back(index, resolve_enumerations_transformation);
-  }
-  auto transform_result = transform_columns(
-    tenzir::type{std::move(schema)}, struct_array, std::move(transformations));
-  auto result_array = std::static_pointer_cast<arrow::StructArray>(
-    std::move(transform_result.second));
-  TENZIR_ASSERT(result_array);
-  return {as<record_type>(transform_result.first), std::move(result_array)};
+  auto r = replace(basic_series<record_type>{std::move(schema), struct_array},
+                   enumeration_to_string)
+             .second;
+  return {
+    std::move(as<record_type>(r.type)),
+    std::static_pointer_cast<arrow::StructArray>(r.array),
+  };
 }
 
 auto resolve_enumerations(
@@ -1051,13 +1016,13 @@ auto resolve_enumerations(
   const std::shared_ptr<type_to_arrow_array_t<list_type>>& array)
   -> std::pair<tenzir::list_type,
                std::shared_ptr<type_to_arrow_array_t<list_type>>> {
-  auto value_type = type.value_type();
-  auto [resolved_type, resolved_array]
-    = resolve_enumerations(value_type, array->values());
-  auto new_list = check(arrow::ListArray::FromArrays(
-    *array->offsets(), *resolved_array, arrow::default_memory_pool(),
-    array->null_bitmap(), array->null_count()));
-  return {std::move(type), std::move(new_list)};
+  auto r = replace(basic_series<list_type>{std::move(type), array},
+                   enumeration_to_string)
+             .second;
+  return {
+    std::move(as<list_type>(r.type)),
+    std::static_pointer_cast<type_to_arrow_array_t<list_type>>(r.array),
+  };
 }
 
 auto resolve_enumerations(
@@ -1304,46 +1269,46 @@ auto make_flatten_transformation(
   std::string_view separator, const std::string& name_prefix,
   std::vector<std::shared_ptr<arrow::Array>> list_offsets)
   -> indexed_transformation::function_type {
-  return [=](struct record_type::field field,
-             std::shared_ptr<arrow::Array> array)
-           -> indexed_transformation::result_type {
-    return match(
-      field.type,
-      [&]<concrete_type Type>(
-        const Type&) -> indexed_transformation::result_type {
-        // Return unchanged, but use prefix, and wrap in a list if we need to.
-        if (list_offsets.empty()) {
+  return
+    [=](struct record_type::field field, std::shared_ptr<arrow::Array> array)
+      -> indexed_transformation::result_type {
+      return match(
+        field.type,
+        [&]<concrete_type Type>(
+          const Type&) -> indexed_transformation::result_type {
+          // Return unchanged, but use prefix, and wrap in a list if we need to.
+          if (list_offsets.empty()) {
+            return {
+              {
+                {
+                  fmt::format("{}{}", name_prefix, field.name),
+                  field.type,
+                },
+                array,
+              },
+            };
+          }
+          // FIXME: This transformation changes the length.
+          auto combined_offsets = combine_offsets(list_offsets);
           return {
             {
               {
                 fmt::format("{}{}", name_prefix, field.name),
-                field.type,
+                type{list_type{field.type}},
               },
-              array,
+              check(arrow::ListArray::FromArrays(*combined_offsets, *array)),
             },
           };
-        }
-        // FIXME: This transformation changes the length.
-        auto combined_offsets = combine_offsets(list_offsets);
-        return {
-          {
-            {
-              fmt::format("{}{}", name_prefix, field.name),
-              type{list_type{field.type}},
-            },
-            check(arrow::ListArray::FromArrays(*combined_offsets, *array)),
-          },
-        };
-      },
-      [&](const list_type&) -> indexed_transformation::result_type {
-        return flatten_list(separator, name_prefix, list_offsets,
-                            std::move(field), array);
-      },
-      [&](const record_type&) -> indexed_transformation::result_type {
-        return flatten_record(separator, name_prefix, list_offsets,
+        },
+        [&](const list_type&) -> indexed_transformation::result_type {
+          return flatten_list(separator, name_prefix, list_offsets,
                               std::move(field), array);
-      });
-  };
+        },
+        [&](const record_type&) -> indexed_transformation::result_type {
+          return flatten_record(separator, name_prefix, list_offsets,
+                                std::move(field), array);
+        });
+    };
 }
 
 auto make_rename_transformation(std::string new_name)
@@ -1439,7 +1404,7 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   const auto& array = check(to_record_batch(slice)->ToStructArray());
   const auto& [schema, transformed, renamed]
     = flatten(slice.schema(), array, separator);
-  if (!schema) {
+  if (not schema) {
     return {};
   }
   auto batch = arrow::RecordBatch::Make(
@@ -1649,8 +1614,8 @@ auto columns_of(const table_slice& slice) -> generator<column_view> {
   }
 }
 
-auto columns_of(const record_type& schema,
-                const arrow::StructArray& array) -> generator<column_view> {
+auto columns_of(const record_type& schema, const arrow::StructArray& array)
+  -> generator<column_view> {
   for (auto [i, kt] : detail::enumerate(schema.fields())) {
     const auto& [k, t] = kt;
     auto offset = tenzir::offset{};
