@@ -17,6 +17,8 @@
 
 #include <arrow/type.h>
 
+#include <string>
+
 namespace tenzir::plugins::repeat {
 
 namespace {
@@ -107,6 +109,59 @@ public:
       count.value_or(std::numeric_limits<uint64_t>::max()));
   }
 };
+
+template <class T>
+struct description {
+  description(auto&&...) {
+  }
+};
+
+auto positional(auto&&...) -> int {
+  return 0;
+}
+
+struct repeat_args {
+  uint64_t count;
+
+  friend auto inspect(auto& f, repeat_args& x) {
+    return f.object(x).fields(f.field("count", x.count));
+  }
+};
+
+struct repeat_state {
+  std::vector<table_slice> slices;
+
+  friend auto inspect(auto& f, repeat_state& x) {
+    return f.object(x).fields(f.field("slices", x.slices));
+  }
+};
+
+#if 0
+class plugin2 /*: transformation_operator<repeat_args, repeat_state> */ {
+  auto name() -> std::string {
+    return "repeat";
+  }
+
+  auto describe() -> description<repeat_args> {
+    return {
+      positional("count", &repeat_args::count),
+    };
+  }
+
+  struct exec_ctx {
+    exec::operator_actor::pointer self;
+    repeat_args args;
+    base_ctx ctx;
+    std::reference_wrapper<repeat_state> state;
+  };
+
+  auto
+  run(exec_ctx ctx, caf::flow::observable<exec::message<table_slice>> input)
+    -> caf::flow::observable<exec::message<table_slice>> {
+    return self->make_observable().repeat(std::move(input)).as_observable();
+  }
+};
+#endif
 
 } // namespace
 

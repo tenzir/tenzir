@@ -312,3 +312,37 @@ private:
 auto make_view_wrapper(data_view2 x) -> view_wrapper;
 
 } // namespace tenzir
+
+namespace fmt {
+
+template <>
+struct formatter<tenzir::data_view3> {
+  constexpr auto parse(format_parse_context ctx) {
+    return ctx.begin();
+  }
+
+  auto format(const tenzir::data_view3& value, format_context& ctx) const
+    -> format_context::iterator;
+};
+
+template <>
+struct formatter<tenzir::record_view3> {
+  constexpr auto parse(format_parse_context ctx) {
+    return ctx.begin();
+  }
+
+  auto format(const tenzir::record_view3& value, format_context& ctx) const
+    -> format_context::iterator;
+};
+
+template <>
+struct formatter<tenzir::list_view3> {
+  constexpr auto parse(format_parse_context ctx) {
+    return ctx.begin();
+  }
+
+  auto format(const tenzir::list_view3& value, format_context& ctx) const
+    -> format_context::iterator;
+};
+
+} // namespace fmt

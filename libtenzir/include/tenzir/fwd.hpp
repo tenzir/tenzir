@@ -195,10 +195,21 @@ struct pipeline;
 
 } // namespace ir
 
-namespace exec {
+namespace plan {
 
 class operator_base;
 class pipeline;
+
+} // namespace plan
+
+namespace exec {
+
+struct checkpoint;
+template <class T>
+struct message;
+struct exhausted;
+struct handshake;
+struct handshake_response;
 
 } // namespace exec
 
@@ -506,6 +517,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
 
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::chunk_ptr>))
+
+  TENZIR_ADD_TYPE_ID((tenzir::exec::handshake))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::handshake_response))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::checkpoint))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::message<void>))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::message<tenzir::table_slice>))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See tenzir/aliases.hpp for their definitions.

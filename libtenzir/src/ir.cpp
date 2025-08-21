@@ -9,8 +9,10 @@
 #include "tenzir/ir.hpp"
 
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/exec.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/finalize_ctx.hpp"
+#include "tenzir/plan/operator_spawn_args.hpp"
+#include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -40,11 +42,11 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
 
 } // namespace
 
-class if_exec final : public exec::operator_base {
+class if_exec final : public plan::operator_base {
 public:
   if_exec() = default;
 
-  if_exec(ast::expression condition, exec::pipeline then_, exec::pipeline else_)
+  if_exec(ast::expression condition, plan::pipeline then_, plan::pipeline else_)
     : condition_{std::move(condition)},
       then_{std::move(then_)},
       else_{std::move(else_)} {
@@ -54,7 +56,7 @@ public:
     return "if_exec";
   }
 
-  auto spawn() const -> operator_actor override {
+  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
     TENZIR_TODO();
   }
 
@@ -66,8 +68,8 @@ public:
 
 private:
   ast::expression condition_;
-  exec::pipeline then_;
-  exec::pipeline else_;
+  plan::pipeline then_;
+  plan::pipeline else_;
 };
 
 class if_ir final : public ir::operator_base {
@@ -106,9 +108,9 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TRY(auto then_instance, std::move(then_).finalize(ctx));
-    auto else_instance = exec::pipeline{};
+    auto else_instance = plan::pipeline{};
     if (else_) {
       TRY(else_instance, std::move(else_->pipe).finalize(ctx));
     }
@@ -117,8 +119,8 @@ public:
                                      std::move(else_instance));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     TRY(auto then_ty, then_.infer_type(input, dh));
     auto else_ty = std::optional{input};
     if (else_) {
@@ -157,22 +159,22 @@ private:
   std::optional<else_t> else_;
 };
 
-class legacy_exec final : public exec::operator_base {
+class legacy_bp final : public plan::operator_base {
 public:
-  legacy_exec() = default;
+  legacy_bp() = default;
 
-  explicit legacy_exec(operator_ptr op) : op_{std::move(op)} {
+  explicit legacy_bp(operator_ptr op) : op_{std::move(op)} {
   }
 
   auto name() const -> std::string override {
     return "legacy_exec";
   }
 
-  auto spawn(/*args*/) const -> operator_actor override {
+  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
     TENZIR_TODO();
   }
 
-  friend auto inspect(auto& f, legacy_exec& x) -> bool {
+  friend auto inspect(auto& f, legacy_bp& x) -> bool {
     return plugin_inspect(f, x.op_);
   }
 
@@ -221,21 +223,21 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     auto op = as<operator_ptr>(std::move(state_));
     if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
-      auto result = std::vector<exec::operator_ptr>{};
+      auto result = std::vector<plan::operator_ptr>{};
       for (auto& op : std::move(*pipe).unwrap()) {
-        result.push_back(std::make_unique<legacy_exec>(std::move(op)));
+        result.push_back(std::make_unique<legacy_bp>(std::move(op)));
       }
       return result;
     }
-    return std::make_unique<legacy_exec>(std::move(op));
+    return std::make_unique<legacy_bp>(std::move(op));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     auto op = try_as<operator_ptr>(state_);
     if (not op) {
       return std::nullopt;
@@ -255,7 +257,7 @@ public:
         .emit(dh);
       return failure::promise();
     }
-    return match(*legacy_output, [](auto x) -> operator_type2 {
+    return match(*legacy_output, [](auto x) -> element_type_tag {
       return x;
     });
   }
@@ -336,9 +338,9 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::operator_base, legacy_ir>{},
-    new inspection_plugin<exec::operator_base, legacy_exec>{},
+    new inspection_plugin<plan::operator_base, legacy_bp>{},
     new inspection_plugin<ir::operator_base, if_ir>{},
-    new inspection_plugin<exec::operator_base, if_exec>{},
+    new inspection_plugin<plan::operator_base, if_exec>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -491,7 +493,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
+auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
@@ -503,7 +505,7 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
                                      make_where_ir(expr));
   }
   *this = std::move(opt.replacement);
-  auto result = std::vector<exec::operator_ptr>{};
+  auto result = std::vector<plan::operator_ptr>{};
   for (auto& op : operators) {
     TRY(auto ops, std::move(*op).finalize(ctx));
     result.insert(result.end(), std::move_iterator{ops.begin()},
@@ -515,9 +517,9 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
   TENZIR_DIAGNOSTIC_POP
 }
 
-auto ir::pipeline::infer_type(operator_type2 input,
+auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
-  -> failure_or<std::optional<operator_type2>> {
+  -> failure_or<std::optional<element_type_tag>> {
   for (auto& op : operators) {
     TRY(auto output, op->infer_type(input, dh));
     TRY(input, output);
@@ -582,9 +584,9 @@ auto ir::operator_base::move() && -> operator_ptr {
   return copy();
 }
 
-auto ir::operator_base::infer_type(operator_type2 input,
+auto ir::operator_base::infer_type(element_type_tag input,
                                    diagnostic_handler& dh) const
-  -> failure_or<std::optional<operator_type2>> {
+  -> failure_or<std::optional<element_type_tag>> {
   // TODO: Is this a good default to have? Should probably be pure virtual.
   (void)input, (void)dh;
   return std::nullopt;
@@ -596,6 +598,14 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
     result = result.substr(5);
   }
   return result;
+}
+
+ir::operator_ptr::operator_ptr(const operator_ptr&) {
+  TENZIR_TODO();
+}
+
+auto ir::operator_ptr::operator=(const operator_ptr&) -> operator_ptr& {
+  TENZIR_TODO();
 }
 
 } // namespace tenzir

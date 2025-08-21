@@ -20,7 +20,7 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/exec.hpp>
+#include <tenzir/exec/operator.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
@@ -28,6 +28,7 @@
 #include <tenzir/modules.hpp>
 #include <tenzir/null_bitmap.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -42,6 +43,7 @@
 #include <arrow/compute/api.h>
 #include <arrow/type.h>
 #include <arrow/util/bitmap_writer.h>
+#include <caf/actor_from_state.hpp>
 #include <caf/expected.hpp>
 
 namespace tenzir::plugins::where {
@@ -146,6 +148,47 @@ public:
     return std::make_unique<where_operator>(std::move(expr));
   }
 };
+
+auto filter2(const table_slice& slice, const ast::expression& expr,
+             diagnostic_handler& dh, bool warn) -> std::vector<table_slice> {
+  auto results = std::vector<table_slice>{};
+  auto offset = int64_t{0};
+  for (auto& filter : eval(expr, slice, dh)) {
+    auto array = try_as<arrow::BooleanArray>(&*filter.array);
+    if (not array) {
+      diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+        .primary(expr)
+        .emit(dh);
+      offset += filter.array->length();
+      continue;
+    }
+    if (array->true_count() == array->length()) {
+      results.push_back(subslice(slice, offset, offset + array->length()));
+      offset += array->length();
+      continue;
+    }
+    if (warn) {
+      diagnostic::warning("assertion failure").primary(expr).emit(dh);
+    }
+    auto length = array->length();
+    auto current_value = array->Value(0);
+    auto current_begin = int64_t{0};
+    // We add an artificial `false` at index `length` to flush.
+    for (auto i = int64_t{1}; i < length + 1; ++i) {
+      const auto next = i != length && array->IsValid(i) && array->Value(i);
+      if (current_value == next) {
+        continue;
+      }
+      if (current_value) {
+        results.push_back(subslice(slice, offset + current_begin, offset + i));
+      }
+      current_value = next;
+      current_begin = i;
+    }
+    offset += length;
+  }
+  return results;
+}
 
 class where_assert_operator final
   : public crtp_operator<where_assert_operator> {
@@ -751,20 +794,80 @@ public:
   }
 };
 
-// TODO: Don't want to write this fully ourselves.
-class where_exec final : public exec::operator_base {
+class where_exec : public exec::operator_base<ast::expression> {
 public:
-  where_exec() = default;
-
-  auto name() const -> std::string override {
-    return "where_exec";
+  explicit where_exec(initializer init) : operator_base{std::move(init)} {
   }
 
-  explicit where_exec(ast::expression predicate)
+  void next(const table_slice& slice) override {
+    const auto& pred = state();
+    const auto filters = eval(pred, slice, ctx());
+    auto filter_offset = int64_t{0};
+    for (const auto& part : filters.parts()) {
+      const auto filter = part.as<bool_type>();
+      if (not filter) {
+        diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
+          .primary(pred)
+          .emit(ctx());
+        filter_offset += part.length();
+        continue;
+      }
+      if (filter->array->true_count() == filter->length()) {
+        push(subslice(slice, filter_offset, filter_offset + filter->length()));
+        filter_offset += filter->length();
+        continue;
+      }
+      // TODO: Should this warn? For some reason the original TQL2
+      // implementation did not.
+      // if (filter->array->null_count() > 0) {
+      //   diagnostic::warning(…).emit(ctx());
+      // }
+      auto start = std::optional<int64_t>{};
+      for (int64_t i = 0; i < filter->length(); ++i) {
+        if (filter->array->IsValid(i) and filter->array->GetView(i)) {
+          if (not start) {
+            start.emplace(i);
+          }
+          continue;
+        }
+        if (start) {
+          push(subslice(slice, filter_offset + *start, filter_offset + i));
+          start.reset();
+        }
+      }
+      if (start) {
+        push(subslice(slice, filter_offset + *start,
+                      filter_offset + filter->length()));
+      }
+      filter_offset += filter->length();
+    }
+    ready();
+  }
+
+  auto should_stop() -> bool override {
+    return get_input_ended();
+  }
+};
+
+// TODO: Don't want to write this fully ourselves.
+class where_plan final : public plan::operator_base {
+public:
+  where_plan() = default;
+
+  auto name() const -> std::string override {
+    return "where_plan";
+  }
+
+  explicit where_plan(ast::expression predicate)
     : predicate_{std::move(predicate)} {
   }
 
-  friend auto inspect(auto& f, where_exec& x) -> bool {
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    return exec::spawn_operator<where_exec>(std::move(args), predicate_);
+  }
+
+  friend auto inspect(auto& f, where_plan& x) -> bool {
     return f.apply(x.predicate_);
   }
 
@@ -794,13 +897,13 @@ public:
 
   // TODO: Should this get the type of the input?
   // Or do we get it earlier? Or later?
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
-    return std::make_unique<where_exec>(std::move(predicate_));
+    return std::make_unique<where_plan>(std::move(predicate_));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     if (input.is_not<table_slice>()) {
       // TODO: Do not duplicate these messages across the codebase.
       diagnostic::error("operator expects events").primary(self_).emit(dh);
@@ -827,7 +930,7 @@ private:
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
-TENZIR_REGISTER_PLUGIN(inspection_plugin<exec::operator_base, where_exec>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<plan::operator_base, where_plan>)
 
 class where_plugin final : public virtual operator_factory_plugin,
                            public virtual function_plugin,

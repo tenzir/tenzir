@@ -19,6 +19,7 @@
 #include "tenzir/connect_request.hpp"
 #include "tenzir/context.hpp"
 #include "tenzir/detail/stable_map.hpp"
+#include "tenzir/exec/operator.hpp"
 #include "tenzir/endpoint.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
