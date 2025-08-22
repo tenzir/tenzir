@@ -439,7 +439,14 @@ multi_series_builder::multi_series_builder(
     settings_{std::move(settings)},
     dh_{dh},
     schema_fn_{std::move(schema_fn)},
-    builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
+    builder_raw_{
+      data_builder::settings{
+        .building_settings = {
+          .duplicate_keys = settings_.duplicate_keys,
+        },
+        .schema_only = settings_.schema_only,
+        .parse_schema_fields_only = settings.schema_only,
+      },std::move(parser), &dh,} {
   TENZIR_ASSERT(schema_fn_);
   if (get_policy<policy_default>()) {
     // if we merge all events, they are necessarily ordered
