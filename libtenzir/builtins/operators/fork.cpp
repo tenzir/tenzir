@@ -142,7 +142,8 @@ public:
               .emit(ctrl.diagnostics());
           });
       ctrl.set_waiting(true);
-      co_yield std::exchange(result, {});
+      co_yield {};
+      co_yield std::move(result);
     } while (result.rows() > 0);
   }
 
@@ -150,9 +151,8 @@ public:
     return "internal-fork-source";
   }
 
-  auto optimize(const expression& filter, event_order order) const
+  auto optimize(const expression&, event_order) const
     -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
 
@@ -258,13 +258,7 @@ public:
   }
 
   auto location() const -> operator_location override {
-    const auto requires_node = [](const auto& ops) {
-      return std::ranges::find(ops, operator_location::remote,
-                               &operator_base::location)
-             != ops.end();
-    };
-    return requires_node(pipe_.inner.operators()) ? operator_location::remote
-                                                  : operator_location::anywhere;
+    return operator_location::local;
   }
 
   friend auto inspect(auto& f, fork_operator& x) -> bool {

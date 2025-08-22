@@ -1,6 +1,6 @@
 ---
 title: from_udp
-category: Inputs/Structured
+category: Inputs/Events
 example: 'from_udp "0.0.0.0:8090"'
 ---
 
