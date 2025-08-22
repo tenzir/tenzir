@@ -11,9 +11,9 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/atoms.hpp"
-#include "tenzir/exec/handshake.hpp"
 
 #include <caf/type_list.hpp>
+#include <caf/typed_actor.hpp>
 
 namespace tenzir::exec {
 
@@ -27,7 +27,6 @@ struct checkpoint_reader_traits {
 
 using checkpoint_reader_actor = caf::typed_actor<checkpoint_reader_traits>;
 
-// TODO: is this the rollback manager?
 struct checkpoint_receiver_actor_traits {
   using signatures = caf::type_list<
     // Accepts and acknowledges checkpoints.
@@ -37,48 +36,68 @@ struct checkpoint_receiver_actor_traits {
 using checkpoint_receiver_actor
   = caf::typed_actor<checkpoint_receiver_actor_traits>;
 
-struct stop_handler_actor_traits {
+struct checkpoint_actor_traits {
+  using signatures = caf::type_list<
+    // Called when a checkpoint shall be performed, returns immediately.
+    auto(atom::persist, checkpoint)->caf::result<void>,
+    // Called after the checkpoint has been commited.
+    auto(atom::done, checkpoint)->caf::result<void>>;
+};
+using checkpoint_actor = caf::typed_actor<checkpoint_actor_traits>;
+
+struct downstream_actor_traits {
+  using signatures = caf::type_list<
+    // Must not be called if the downstream type is void.
+    auto(atom::push, table_slice)->caf::result<void>,
+    auto(atom::push, chunk_ptr)->caf::result<void>,
+    //
+    auto(atom::persist, checkpoint)->caf::result<void>,
+    //
+    auto(atom::done)->caf::result<void>>;
+};
+using downstream_actor = caf::typed_actor<downstream_actor_traits>;
+
+struct upstream_actor_traits {
   using signatures = caf::type_list<
     // Handler for when an operator declares that it doesn't need any more
     // input. If an operator receives this from a downstream operator it should
     // cause the operator to only forward checkpoints from that moment on, as
     // the actual output is no longer relevant and will be ignored.
-    auto(atom::stop)->caf::result<void>>;
+    auto(atom::stop)->caf::result<void>,
+    // Request more items. Must not be called if the upstream type is void.
+    auto(atom::pull, uint64_t items)->caf::result<void>>;
 };
+using upstream_actor = caf::typed_actor<upstream_actor_traits>;
 
-using stop_handler_actor = caf::typed_actor<stop_handler_actor_traits>;
-
-struct shutdown_handler_actor_traits {
+struct shutdown_actor_traits {
   using signatures = caf::type_list<
-    // Signal that the operator is shutting down.
-    auto(atom::done)->caf::result<void>>;
+    // Call this when the sender is ready to shutdown.
+    auto(atom::shutdown)->caf::result<void>>;
 };
+using shutdown_actor = caf::typed_actor<shutdown_actor_traits>;
 
-using shutdown_handler_actor = caf::typed_actor<shutdown_handler_actor_traits>;
+struct connect_t {
+  upstream_actor upstream;
+  downstream_actor downstream;
+  checkpoint_receiver_actor checkpoint_receiver;
+  shutdown_actor shutdown;
+};
 
 struct operator_actor_traits {
   using signatures = caf::type_list<
-    // Initial setup.
-    auto(handshake hs)->caf::result<handshake_response>,
-    // Post-commit.
-    auto(checkpoint cp)->caf::result<void>>
-    // Signal that the actual output is no longer relevant, only checkpoints.
-    ::append_from<stop_handler_actor_traits::signatures>;
+    // Connect this operator to everything it needs. Must be called exactly once.
+    auto(connect_t)->caf::result<void>,
+    // Notification when all operators in this pipeline were connected.
+    auto(atom::start)->caf::result<void>
+    // Support the other interfaces.
+    >::append_from<upstream_actor::signatures, downstream_actor::signatures,
+                   checkpoint_actor::signatures>;
 };
-
 using operator_actor = caf::typed_actor<operator_actor_traits>;
 
 struct pipeline_actor_traits {
-  using signatures = caf::type_list<
-    // Starts the pipeline, returning after the pipeline's startup sequence has
-    // completed. This handler requires the pipeline to be closed.
-    auto(atom::start)->caf::result<void>,
-    // Starts the pipeline with an existing handshake. The handshake's type must
-    // match the pipeline's input type. The handler returns the handshake from
-    // the pipeline's last operator.
-    auto(atom::start, handshake hs)->caf::result<handshake_response>>;
+  using signatures = caf::type_list<>::append_from<operator_actor::signatures>;
 };
-
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
 
 } // namespace tenzir::exec

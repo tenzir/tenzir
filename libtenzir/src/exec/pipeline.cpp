@@ -50,13 +50,9 @@ private:
 };
 
 struct internal_pipeline_actor_traits {
-  using signatures = caf::type_list<
-    // Sent by all operators to let the executor know it's done.
-    auto(atom::done)->caf::result<void>,
-    // Sent by the first operator when it needs no more input (?).
-    auto(atom::stop)->caf::result<void>>
-    // Support the public interface of the pipeline actor.
-    ::append_from<pipeline_actor::signatures>;
+  using signatures = caf::type_list<>
+    //
+    ::append_from<pipeline_actor::signatures, shutdown_actor::signatures>;
 };
 
 using internal_pipeline_actor
@@ -79,17 +75,20 @@ public:
 
   auto make_behavior() -> internal_pipeline_actor::behavior_type {
     return {
+      [this](connect_t connect) -> caf::result<void> {
+
+      },
       [this](atom::start) -> caf::result<void> {
         return start();
       },
       [this](atom::start, handshake hs) -> caf::result<handshake_response> {
         return start(std::move(hs));
       },
-      [this](atom::done) -> caf::result<void> {
+      [this](atom::shutdown) -> caf::result<void> {
         // TODO: Could this come before we are fully spawned?
-        TENZIR_ASSERT(done_ < operators_.size());
-        done_ += 1;
-        TENZIR_WARN("got ready to shutdown from {} operators", done_);
+        TENZIR_ASSERT(shutdown_count_ < operators_.size());
+        shutdown_count_ += 1;
+        TENZIR_WARN("got ready to shutdown from {} operators", shutdown_count_);
         check_for_shutdown();
         return {};
       },
@@ -103,7 +102,7 @@ public:
 
 private:
   auto all_operators_are_ready_to_shutdown() const -> bool {
-    return done_ == operators_.size();
+    return shutdown_count_ == operators_.size();
   }
 
   /// This returns true if the post-commits for all checkpoints are completed.
@@ -224,86 +223,6 @@ private:
         self_->quit(std::move(err));
       })
       .do_on_complete([this] {
-        // TODO: Facing an infinite checkpoint stream, how do
-        // we know when we are actually done?
-        //
-        // ? src | head | dst
-        // > src could be potentially infinite. It should
-        //   shut down after head is done.
-        //
-        // ? src | fork { … } | head | dst
-        // > dst could already done, but what about the fork?
-        //   we probably want to end when the fork is done as
-        //   well… how do we do that? we already get an
-        //   exhausted message before. so we can't rely on
-        //   that. fork will also get a stop message from
-        //   head. but we can't stop the fork, unless that is
-        //   also done.
-        //
-        // ? src | if … | head | dst
-        // > it could be that one branch of the if has its
-        //   own sink. in that case, we probably want to keep
-        //   running. however, if both branches are
-        //   transformations, then we'd like to stop the
-        //   pipeline here.
-        // > the STOP would be forwarded to both pipelines,
-        //   which might then eventually signal ready to
-        //   shutdown. we could actually shut the inner
-        //   pipelines down in that case.
-        //
-        // ? src | group { … } | head | dst
-        // > if we don't know beforehand that the inner
-        //   pipeline doesn't contain any sinks, then we
-        //   cannot finish it.
-        // > let's say we spawn a new group. the group would
-        //   immediately get a STOP, right? maybe it's not
-        //   the sink that's relevant here, but what we need
-        //   is a property that says … what?
-        // > anyway, probably fine to not terminate here for
-        //   now... right?
-        //
-        // ? src | group { … | head | dst }
-        // > there are times when there are no active groups,
-        //   but still want to keep the pipeline running.
-        //
-        // ? src | group { … }
-        // > …
-        //
-        // We also need a mechanism to know when subpipelines
-        // are completed, right?
-        //
-        // Maybe: Every operator sends something to the
-        // pipeline executor when it's ready for shutdown
-        // (what does that mean?). This probably coincides
-        // with a stop message to the previous operator and
-        // an exhausted message to the next operator.
-        //
-        // When all operators are ready for shutdown, we
-        // commence shutdown by letting the incoming stream
-        // end. This will propagate through the whole chain.
-        // We know that we don't need checkpoints at this
-        // point anymore because all operators have declared
-        // that they are done.
-        //
-        // What degree of synchronization do we need for
-        // this?
-        // - We could do full synchronization by only using
-        //   the streams in the forward direction: We would
-        //   need to transport this message through all
-        //   operators and would have multiple of those. We
-        //   would know we are done when we have received 1
-        //   for every operator.
-        // - Alternatively, we could directly send the "ready
-        //   for shutdown" messages to the outer executor.
-        //   This would only be send after sending STOP and
-        //   EXHAUSTED to its neighbors.
-        //
-        // src | where | head | where | dst
-        //          <-STOP-+-DONE->
-        //                 |
-        //              EXECUTOR
-        //
-        //    <-STOP+             +DONE->
         TENZIR_WARN("complete");
         self_->quit();
       })
@@ -344,6 +263,53 @@ private:
   }
 
   auto start() -> caf::result<void> {
+#if 1
+    for (auto& op : pipe_) {
+      // Note: This could need to be async if we spawn the actor somewhere else.
+      operators_.push_back(op->spawn(
+        plan::operator_spawn_args{self_->system(), ctx_, std::nullopt}));
+    }
+    for (auto& op : operators_) {
+      auto upstream
+        = upstream_actor{&op == &operators_.front() ? self_ : *(&op - 1)};
+      auto downstream
+        = downstream_actor{&op == &operators_.back() ? self_ : *(&op + 1)};
+      self_
+        ->mail(connect_t{
+          std::move(upstream),
+          std::move(downstream),
+          // TODO
+          caf::actor_cast<checkpoint_receiver_actor>(nullptr),
+          shutdown_actor{self_},
+        })
+        .request(op, caf::infinite)
+        .then(
+          [this] {
+            connected_ += 1;
+            TENZIR_ASSERT(connected_ <= operators_.size());
+            if (connected_ == operators_.size()) {
+              // Inform operators that everything has been connected.
+              // TODO: Is this necessary?
+              for (auto& op : operators_) {
+                self_->mail(atom::start_v)
+                  .request(op, caf::infinite)
+                  .then(
+                    [] {
+
+                    },
+                    [](caf::error) {
+
+                    });
+              }
+            }
+          },
+          [this](caf::error err) {
+            // TODO
+            TENZIR_ERROR("{}", err);
+            self_->quit(err);
+          });
+    }
+#else
     auto rp = self_->make_response_promise<void>();
     spawn([this, rp]() mutable {
       auto [c, p] = caf::async::make_spsc_buffer_resource<message<void>>();
@@ -382,6 +348,7 @@ private:
                      });
     });
     return rp;
+#endif
   }
 
   auto start(handshake hs) -> caf::result<handshake_response> {
@@ -400,7 +367,8 @@ private:
   std::optional<checkpoint_reader_actor> checkpoint_reader_;
   base_ctx ctx_;
   std::vector<operator_actor> operators_;
-  size_t done_ = 0;
+  size_t connected_ = 0;
+  size_t shutdown_count_ = 0;
   size_t checkpoints_in_flight_ = 0;
   caf::async::producer_adapter<exec::message<void>> producer_;
   pipeline_settings settings_;
