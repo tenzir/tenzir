@@ -540,11 +540,15 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     diagnostic::error("empty pipeline is not supported yet").emit(ctx);
     return failure::promise();
   }
-  // TODO: What about the case where we have an empty pipeline?
-  // Type check the instantiated IR.
+  // Type check the instantiated IR. Because we do not support implicit sources
+  // anymore, the pipeline must start with `void` if it's well-formed. After
+  // instantiation, the pipeline must know it's output type when given a fixed
+  // input type.
   TRY(auto output, ir.infer_type(tag_v<void>, ctx));
-  // TODO: Can we assume that we get a result type here?
-  TENZIR_ASSERT(output);
+  if (not output) {
+    // TODO: Improve?
+    panic("expected pipeline to know it's output type after instantiation");
+  }
   if (output->is_not<void>()) {
     // TODO: Add the implicit sink here, before optimization.
     diagnostic::error("last operator must close pipeline, but it returns {}",

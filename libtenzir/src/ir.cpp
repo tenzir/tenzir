@@ -523,6 +523,7 @@ auto ir::pipeline::infer_type(element_type_tag input,
   for (auto& op : operators) {
     TRY(auto output, op->infer_type(input, dh));
     TRY(input, output);
+    // TODO: What if we get void in the middle?
   }
   return input;
 }
