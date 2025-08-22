@@ -58,7 +58,3 @@ output = input.match_regex("^[E|e]xample[!]?$")
 {input: "example!", output: true}
 {input: "example?", output: false}
 ```
-
-## See Also
-
-[String Operations](/reference/language/expressions#string-operations)

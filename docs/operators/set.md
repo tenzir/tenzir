@@ -21,13 +21,13 @@ yet.
 Within assignments, the `move` keyword in front of a field causes a field to be
 removed from the input after evaluation.
 
-:::tip
+:::tip[Implied operator]
 The `set` operator is implied whenever a direct assignment is written. We
 recommend to use the implicit version. For example, use `test = 42` instead of
 `set test=42`.
 
-Read our [language reference](/reference/language/statements#assignment) for a more
-detailed description.
+Read our [language documentation](/explanations/language/statements/#assignment)
+for a more detailed description.
 :::
 
 ## Examples
