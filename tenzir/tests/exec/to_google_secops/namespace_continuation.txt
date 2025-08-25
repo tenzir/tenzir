@@ -1,0 +1,3 @@
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"N1","entries":[{"log_text":"LOG_0"},{"log_text":"LOG_1"},{"log_text":"LOG_2"}]}
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"N2","entries":[{"log_text":"LOG_3"}]}
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"N1","entries":[{"log_text":"LOG_4"}]}

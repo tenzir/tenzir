@@ -13,7 +13,7 @@ warning: expected `string`, got `null`
   |                                                             ~~~~ 
   |
 
-warning: `log_type` must be set to non-empty string
+warning: `log_type` must be a non-empty string
  --> exec/to_google_secops/empty_record.tql:3:61
   |
 3 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
@@ -35,7 +35,7 @@ warning: expected `string`, got `null`
   |                                                             ~~~~ 
   |
 
-warning: `log_type` must be set to non-empty string
+warning: `log_type` must be a non-empty string
  --> exec/to_google_secops/empty_record.tql:7:61
   |
 7 |   private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type?, log_text=text?
