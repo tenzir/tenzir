@@ -13,9 +13,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/exec/actors.hpp"
 #include "tenzir/exec/checkpoint.hpp"
-#include "tenzir/exec/handshake.hpp"
 #include "tenzir/exec/operator_base.hpp"
-#include "tenzir/exec/trampoline.hpp"
 #include "tenzir/plan/operator_spawn_args.hpp"
 
 #include <caf/actor_from_state.hpp>
@@ -28,6 +26,7 @@
 
 namespace tenzir::exec {
 
+#if 0
 // FIXME: This should just be called operator_
 class operator_impl
   : public trampoline<message<table_slice>, message<table_slice>> {
@@ -195,6 +194,7 @@ private:
   std::unique_ptr<stateless_base> impl_;
   std::vector<exec::message<table_slice>> buffer_;
 };
+#endif
 
 template <class T, class... Ts>
 auto spawn_operator(plan::operator_spawn_args args,
@@ -209,17 +209,18 @@ auto spawn_operator(plan::operator_spawn_args args,
     auto ok = deserializer.apply(state);
     TENZIR_ASSERT(ok);
   }
-  return args.sys.spawn(
-    caf::actor_from_state<exec::operator_impl>,
-    [&](exec::actor_state& actor_state) {
-      return std::make_unique<T>(
-        typename T::initializer{
-          actor_state,
-          std::move(state),
-        },
-        std::forward<Ts>(xs)...);
-    },
-    std::move(args));
+  TENZIR_TODO();
+  // return args.sys.spawn(
+  //   caf::actor_from_state<exec::operator_impl>,
+  //   [&](exec::actor_state& actor_state) {
+  //     return std::make_unique<T>(
+  //       typename T::initializer{
+  //         actor_state,
+  //         std::move(state),
+  //       },
+  //       std::forward<Ts>(xs)...);
+  //   },
+  //   std::move(args));
 }
 
 } // namespace tenzir::exec

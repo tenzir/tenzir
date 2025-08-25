@@ -9,7 +9,6 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/exec/operator.hpp>
-#include <tenzir/exec/trampoline.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/pipeline.hpp>
@@ -25,6 +24,7 @@ namespace tenzir::plugins::head {
 
 namespace {
 
+#if 0
 class head_exec : public exec::operator_base<uint64_t> {
 public:
   explicit head_exec(initializer init) : operator_base{std::move(init)} {
@@ -42,6 +42,129 @@ public:
     return get_input_ended() or state() == 0;
   }
 };
+#else
+class head_exec {
+public:
+  [[maybe_unused]] static constexpr auto name = "head";
+
+  explicit head_exec(exec::operator_actor::pointer self, uint64_t count)
+    : self_{self}, remaining_{count} {
+  }
+
+  auto make_behavior() -> exec::operator_actor::behavior_type {
+    return {
+      /// @see operator_actor
+      [this](exec::connect_t connect) -> caf::result<void> {
+        TENZIR_WARN("connecting heads");
+        connect_ = std::move(connect);
+        return {};
+      },
+      [this](atom::start) -> caf::result<void> {
+        TENZIR_WARN("head got start");
+        // TODO: Is this the right place do perform this check?
+        if (remaining_ == 0) {
+          done();
+        }
+        return {};
+      },
+      [this](atom::commit) -> caf::result<void> {
+        return {};
+      },
+      /// @see upstream_actor
+      [this](atom::pull, uint64_t items) -> caf::result<void> {
+        TENZIR_WARN("??");
+        TENZIR_TODO();
+      },
+      [this](atom::stop) -> caf::result<void> {
+        // TODO: Anything else?
+        done();
+        return {};
+      },
+      /// @see downstream_actor
+      [this](atom::push, table_slice slice) -> caf::result<void> {
+        if (remaining_ == 0) {
+          TENZIR_WARN("head drops {} events", slice.rows());
+          return {};
+        }
+        TENZIR_WARN("head receives {} events", slice.rows());
+        auto out = tenzir::head(std::move(slice), remaining_);
+        remaining_ -= out.rows();
+        self_->mail(atom::push_v, std::move(out))
+          .request(connect_.downstream, caf::infinite)
+          .then([] {});
+        if (remaining_ == 0) {
+          // TODO: Then what?
+          done();
+        }
+        return {};
+      },
+      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
+        TENZIR_WARN("??");
+        TENZIR_TODO();
+      },
+      [this](atom::persist, exec::checkpoint check) -> caf::result<void> {
+        // TODO: What would the checkpoint say here?
+        TENZIR_INFO("head got checkpoint");
+        auto buf = caf::byte_buffer{};
+        auto ser = caf::binary_serializer{buf};
+        auto success = ser.apply(remaining_);
+        TENZIR_ASSERT(success);
+        TENZIR_INFO("head serialized into {} bytes", buf.size());
+        self_->mail(check, chunk::make(std::move(buf)))
+          .request(connect_.checkpoint_receiver, caf::infinite)
+          .then([this, check = std::move(check)] {
+            // Only forward afterwards.
+            self_->mail(atom::persist_v, check)
+              .request(connect_.downstream, caf::infinite)
+              .then([] {});
+          });
+        return {};
+      },
+      [this](atom::done) -> caf::result<void> {
+        // Since we immediately forward all events, we can declare that we are
+        // also done when upstream is done.
+        done();
+        return {};
+      },
+    };
+  }
+
+private:
+  void done() {
+    if (done_) {
+      return;
+    }
+    done_ = true;
+    TENZIR_WARN("head is sending done");
+    self_->mail(atom::done_v)
+      .request(connect_.downstream, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+    self_->mail(atom::stop_v)
+      .request(connect_.upstream, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+    self_->mail(atom::shutdown_v)
+      .request(connect_.shutdown, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+  }
+
+  bool done_ = false;
+  exec::operator_actor::pointer self_;
+  exec::connect_t connect_;
+  uint64_t remaining_;
+};
+#endif
 
 class head_plan final : public plan::operator_base {
 public:
@@ -54,7 +177,7 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    return exec::spawn_operator<head_exec>(std::move(args), count_);
+    return args.sys.spawn(caf::actor_from_state<head_exec>, count_);
   }
 
   friend auto inspect(auto& f, head_plan& x) -> bool {

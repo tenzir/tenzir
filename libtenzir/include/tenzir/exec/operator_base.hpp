@@ -22,6 +22,7 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_stream.hpp>
 
+#if 0
 namespace tenzir::exec {
 
 // TODO: Use actor struct directly.
@@ -166,3 +167,4 @@ private:
 };
 
 } // namespace tenzir::exec
+#endif
