@@ -343,8 +343,9 @@ public:
     // created by `data_unparsed` calls, unless those fields are present in
     // the used schema.
     bool raw = false;
+    // How to handle duplicate keys in non-merging mode.
     detail::data_builder::duplicate_keys duplicate_keys
-      = detail::data_builder::duplicate_keys::overwrite;
+      = detail::data_builder::duplicate_keys::to_list;
     // Unnest separator to be used when calling any `field` in the builder
     // pattern.
     std::string unnest_separator = {};
