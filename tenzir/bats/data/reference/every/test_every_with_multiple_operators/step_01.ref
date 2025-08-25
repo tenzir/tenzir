@@ -4,5 +4,5 @@ error: 'import' does not accept bytes as input
 1 | every 10ms {
   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
-  = note: source: libtenzir/builtins/operators/every_cron2.cpp:674
+  = note: source: libtenzir/builtins/operators/every_cron2.cpp:715
   = note: failed type inference

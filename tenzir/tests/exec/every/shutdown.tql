@@ -1,0 +1,6 @@
+from {}
+enumerate
+every 1ms {
+  tail 1
+}
+head 1
