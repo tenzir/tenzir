@@ -794,6 +794,7 @@ public:
   }
 };
 
+#if 0
 class where_exec : public exec::operator_base<ast::expression> {
 public:
   explicit where_exec(initializer init) : operator_base{std::move(init)} {
@@ -848,6 +849,7 @@ public:
     return get_input_ended();
   }
 };
+#endif
 
 // TODO: Don't want to write this fully ourselves.
 class where_plan final : public plan::operator_base {
@@ -864,7 +866,8 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    return exec::spawn_operator<where_exec>(std::move(args), predicate_);
+    TENZIR_TODO();
+    // return exec::spawn_operator<where_exec>(std::move(args), predicate_);
   }
 
   friend auto inspect(auto& f, where_plan& x) -> bool {

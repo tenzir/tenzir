@@ -509,10 +509,17 @@ auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
     }
     return failure::promise();
   }
-  auto running = true;
-  self->receive_while(running)([&running](caf::down_msg) {
-    running = false;
+  auto down_msg = std::optional<caf::down_msg>{};
+  self->receive_while([&] {
+    return not down_msg;
+  })([&down_msg](caf::down_msg msg) {
+    down_msg = std::move(msg);
   });
+  TENZIR_ASSERT(down_msg);
+  if (down_msg->reason) {
+    diagnostic::error("failed: {}", down_msg->reason).emit(ctx);
+    return failure::promise();
+  }
   return {};
 }
 

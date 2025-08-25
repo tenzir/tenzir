@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/exec/checkpoint.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -79,6 +80,7 @@ struct serializable_actor {
   }
 };
 
+#if 0
 class discard_exec : public serializable_actor<discard_exec> {
 public:
   explicit discard_exec(exec::operator_actor::pointer self,
@@ -167,6 +169,90 @@ private:
   exec::checkpoint_receiver_actor checkpoint_receiver_;
   exec::shutdown_handler_actor shutdown_handler_;
 };
+#else
+class discard_exec {
+public:
+  [[maybe_unused]] static constexpr auto name = "discard";
+
+  explicit discard_exec(exec::operator_actor::pointer self) : self_{self} {
+  }
+
+  auto make_behavior() -> exec::operator_actor::behavior_type {
+    return {
+      /// @see operator_actor
+      [this](exec::connect_t connect) -> caf::result<void> {
+        // TODO: Connector our operators already before?
+        TENZIR_WARN("connecting discard");
+        connect_ = std::move(connect);
+        return {};
+      },
+      [this](atom::start) -> caf::result<void> {
+        // TODO: Do we do anything?
+        TENZIR_WARN("discard got start");
+        return {};
+      },
+      [this](atom::commit) -> caf::result<void> {
+        return {};
+      },
+      /// @see upstream_actor
+      [this](atom::pull, uint64_t items) -> caf::result<void> {
+        TENZIR_TODO();
+      },
+      [this](atom::stop) -> caf::result<void> {
+        // TODO: Anything else?
+        TENZIR_TODO();
+      },
+      /// @see downstream_actor
+      [](atom::push, table_slice slice) -> caf::result<void> {
+        // TODO: Anything else?
+        TENZIR_WARN("discard got {} events", slice.rows());
+        return {};
+      },
+      [](atom::push, chunk_ptr chunk) -> caf::result<void> {
+        // TODO: Anything else?
+        TENZIR_ASSERT(chunk);
+        TENZIR_WARN("discard got {} bytes", chunk->size());
+        return {};
+      },
+      [this](atom::persist, exec::checkpoint check) -> caf::result<void> {
+        TENZIR_INFO("discard got checkpoint");
+        // TODO: Nothing to do, right?
+        self_->mail(atom::persist_v, check)
+          .request(connect_.downstream, caf::infinite)
+          .then([] {});
+        return {};
+      },
+      [this](atom::done) -> caf::result<void> {
+        // Cool, we are done too.
+        TENZIR_WARN("discard got done");
+        self_->mail(atom::done_v)
+          .request(connect_.downstream, caf::infinite)
+          .then([] {},
+                [](caf::error) {
+                  TENZIR_TODO();
+                });
+        self_->mail(atom::stop_v)
+          .request(connect_.upstream, caf::infinite)
+          .then([] {},
+                [](caf::error) {
+                  TENZIR_TODO();
+                });
+        self_->mail(atom::shutdown_v)
+          .request(connect_.shutdown, caf::infinite)
+          .then([] {},
+                [](caf::error) {
+                  TENZIR_TODO();
+                });
+        return {};
+      },
+    };
+  }
+
+private:
+  exec::operator_actor::pointer self_;
+  exec::connect_t connect_;
+};
+#endif
 
 class discard_bp final : public plan::operator_base {
 public:
@@ -178,10 +264,7 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    // TODO: Rewrite this in terms of exec::spawn_operator
-    return args.sys.spawn(caf::actor_from_state<discard_exec>,
-                          std::move(args.checkpoint_receiver),
-                          std::move(args.shutdown_handler));
+    return args.sys.spawn(caf::actor_from_state<discard_exec>);
   }
 
   friend auto inspect(auto& f, discard_bp& x) -> bool {

@@ -159,22 +159,23 @@ private:
   std::optional<else_t> else_;
 };
 
-class legacy_bp final : public plan::operator_base {
+class legacy_plan final : public plan::operator_base {
 public:
-  legacy_bp() = default;
+  legacy_plan() = default;
 
-  explicit legacy_bp(operator_ptr op) : op_{std::move(op)} {
+  explicit legacy_plan(operator_ptr op) : op_{std::move(op)} {
   }
 
   auto name() const -> std::string override {
-    return "legacy_exec";
+    return "legacy_plan";
   }
 
   auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
+    TENZIR_WARN("TODO: Spawning legacy");
     TENZIR_TODO();
   }
 
-  friend auto inspect(auto& f, legacy_bp& x) -> bool {
+  friend auto inspect(auto& f, legacy_plan& x) -> bool {
     return plugin_inspect(f, x.op_);
   }
 
@@ -229,11 +230,11 @@ public:
     if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
       auto result = std::vector<plan::operator_ptr>{};
       for (auto& op : std::move(*pipe).unwrap()) {
-        result.push_back(std::make_unique<legacy_bp>(std::move(op)));
+        result.push_back(std::make_unique<legacy_plan>(std::move(op)));
       }
       return result;
     }
-    return std::make_unique<legacy_bp>(std::move(op));
+    return std::make_unique<legacy_plan>(std::move(op));
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -338,7 +339,7 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::operator_base, legacy_ir>{},
-    new inspection_plugin<plan::operator_base, legacy_bp>{},
+    new inspection_plugin<plan::operator_base, legacy_plan>{},
     new inspection_plugin<ir::operator_base, if_ir>{},
     new inspection_plugin<plan::operator_base, if_exec>{},
   };

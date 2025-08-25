@@ -95,6 +95,7 @@ struct deduplicate_state {
   }
 };
 
+#if 0
 class deduplicate3 : public exec::operator_base<deduplicate_state> {
 public:
   explicit deduplicate3(initializer init, configuration cfg)
@@ -160,6 +161,7 @@ private:
   configuration cfg_;
 };
 
+#endif
 class deduplicate_bp final : public plan::operator_base {
 public:
   explicit deduplicate_bp(configuration cfg) : cfg_{std::move(cfg)} {
@@ -172,7 +174,8 @@ public:
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
     // TODO: Initial state.
-    return exec::spawn_operator<deduplicate3>(std::move(args), {}, cfg_);
+    TENZIR_TODO();
+    // return exec::spawn_operator<deduplicate3>(std::move(args), {}, cfg_);
   }
 
   friend auto inspect(auto& f, deduplicate_bp& x) -> bool {

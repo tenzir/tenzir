@@ -19,6 +19,7 @@ namespace tenzir::plugins::group {
 
 namespace {
 
+#if 0
 class group {
 public:
   group(exec::operator_actor::pointer self, ast::expression over,
@@ -31,18 +32,19 @@ public:
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
-    return {
-      [](exec::handshake hs) -> caf::result<exec::handshake_response> {
-        (void)hs;
-        TENZIR_TODO();
-      },
-      [](exec::checkpoint) -> caf::result<void> {
-        TENZIR_TODO();
-      },
-      [](atom::stop) -> caf::result<void> {
-        TENZIR_TODO();
-      },
-    };
+    TENZIR_TODO();
+    // return {
+    //   [](exec::handshake hs) -> caf::result<exec::handshake_response> {
+    //     (void)hs;
+    //     TENZIR_TODO();
+    //   },
+    //   [](exec::checkpoint) -> caf::result<void> {
+    //     TENZIR_TODO();
+    //   },
+    //   [](atom::stop) -> caf::result<void> {
+    //     TENZIR_TODO();
+    //   },
+    // };
   }
 
   // TODO: Do this properly.
@@ -75,7 +77,7 @@ public:
 
 private:
   struct group_t {
-    exec::pipeline_actor exec;
+    exec::subpipeline_actor exec;
     // TODO: Somehow we have to inject data into the flow?
 
     friend auto inspect(auto& f, group_t& x) -> bool {
@@ -102,7 +104,7 @@ private:
   std::unordered_map<std::string, group_t> groups_;
   base_ctx ctx_;
 };
-
+#endif
 class group_bp final : public plan::operator_base {
 public:
   group_bp() = default;
@@ -117,8 +119,9 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<group>, over_, pipe_, id_,
-                          args.ctx);
+    TENZIR_TODO();
+    // return args.sys.spawn(caf::actor_from_state<group>, over_, pipe_, id_,
+    //                       args.ctx);
   }
 
   friend auto inspect(auto& f, group_bp& x) -> bool {

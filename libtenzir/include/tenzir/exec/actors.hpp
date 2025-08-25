@@ -22,7 +22,7 @@ struct checkpoint_reader_traits {
     // Restores a checkpoint for a given operator.
     // TOOD: Assign a name to the (id, index) pair used to identify an operator
     // here.
-    auto(uuid id, uint64_t index)->caf::result<chunk_ptr>>;
+    auto(atom::get, uuid id, uint64_t index)->caf::result<chunk_ptr>>;
 };
 
 using checkpoint_reader_actor = caf::typed_actor<checkpoint_reader_traits>;
@@ -36,36 +36,29 @@ struct checkpoint_receiver_actor_traits {
 using checkpoint_receiver_actor
   = caf::typed_actor<checkpoint_receiver_actor_traits>;
 
-struct checkpoint_actor_traits {
-  using signatures = caf::type_list<
-    // Called when a checkpoint shall be performed, returns immediately.
-    auto(atom::persist, checkpoint)->caf::result<void>,
-    // Called after the checkpoint has been commited.
-    auto(atom::done, checkpoint)->caf::result<void>>;
-};
-using checkpoint_actor = caf::typed_actor<checkpoint_actor_traits>;
-
 struct downstream_actor_traits {
   using signatures = caf::type_list<
+    // TODO: Consider further batching `table_slice` for better performance in
+    // case of high heterogeneity.
     // Must not be called if the downstream type is void.
-    auto(atom::push, table_slice)->caf::result<void>,
-    auto(atom::push, chunk_ptr)->caf::result<void>,
+    auto(atom::push, table_slice slice)->caf::result<void>,
+    auto(atom::push, chunk_ptr chunk)->caf::result<void>,
     //
     auto(atom::persist, checkpoint)->caf::result<void>,
-    //
+    // Used to notify that no more pushes will come.
     auto(atom::done)->caf::result<void>>;
 };
 using downstream_actor = caf::typed_actor<downstream_actor_traits>;
 
 struct upstream_actor_traits {
   using signatures = caf::type_list<
-    // Handler for when an operator declares that it doesn't need any more
-    // input. If an operator receives this from a downstream operator it should
-    // cause the operator to only forward checkpoints from that moment on, as
-    // the actual output is no longer relevant and will be ignored.
-    auto(atom::stop)->caf::result<void>,
     // Request more items. Must not be called if the upstream type is void.
-    auto(atom::pull, uint64_t items)->caf::result<void>>;
+    auto(atom::pull, uint64_t items)->caf::result<void>,
+    // Handler for when the downstream operator declares that it doesn't need
+    // any more input. If an operator receives this should only forward
+    // checkpoints from that moment on, as the actual output is no longer
+    // relevant and will be ignored.
+    auto(atom::stop)->caf::result<void>>;
 };
 using upstream_actor = caf::typed_actor<upstream_actor_traits>;
 
@@ -81,22 +74,39 @@ struct connect_t {
   downstream_actor downstream;
   checkpoint_receiver_actor checkpoint_receiver;
   shutdown_actor shutdown;
+
+  friend auto inspect(auto& f, connect_t& x) -> bool {
+    return f.object(x).fields(
+      f.field("upstream", x.upstream), f.field("downstream", x.downstream),
+      f.field("checkpoint_receiver", x.checkpoint_receiver),
+      f.field("shutdown", x.shutdown));
+  }
 };
 
 struct operator_actor_traits {
   using signatures = caf::type_list<
-    // Connect this operator to everything it needs. Must be called exactly once.
-    auto(connect_t)->caf::result<void>,
-    // Notification when all operators in this pipeline were connected.
-    auto(atom::start)->caf::result<void>
+    // Initialize this operator with everything it needs.
+    auto(connect_t connect)->caf::result<void>,
+    // Notification when all operators in this pipeline were connected. Note
+    // that this is not guaranteed to arrive before messages from upstream and
+    // downstream operators!
+    auto(atom::start)->caf::result<void>,
+    //
+    auto(atom::commit)->caf::result<void>
     // Support the other interfaces.
-    >::append_from<upstream_actor::signatures, downstream_actor::signatures,
-                   checkpoint_actor::signatures>;
+    >::append_from<upstream_actor::signatures, downstream_actor::signatures>;
 };
 using operator_actor = caf::typed_actor<operator_actor_traits>;
 
-struct pipeline_actor_traits {
+struct subpipeline_actor_traits {
   using signatures = caf::type_list<>::append_from<operator_actor::signatures>;
+};
+using subpipeline_actor = caf::typed_actor<subpipeline_actor_traits>;
+
+struct pipeline_actor_traits {
+  using signatures = caf::type_list<
+    // Start the execution. Returns when start has completed.
+    auto(atom::start)->caf::result<void>>;
 };
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
 
