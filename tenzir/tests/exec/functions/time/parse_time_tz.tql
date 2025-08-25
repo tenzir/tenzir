@@ -1,0 +1,3 @@
+from {a: null}
+b = "2024-06-15 14:30:45 +0000".parse_time("%Y-%m-%d %H:%M:%S %z")
+drop a
