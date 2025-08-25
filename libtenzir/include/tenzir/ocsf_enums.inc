@@ -3208,6 +3208,14 @@
   {"d7fb1b84", {
     {6006, "File Hosting Activity"},
   }},
+  {"d9778f4e", {
+    {0, "Unknown"},
+    {1, "Inbound"},
+    {2, "Outbound"},
+    {3, "Internal"},
+    {4, "Local"},
+    {99, "Other"},
+  }},
   {"d9d223f8", {
     {100800, "Event Log Activity: Unknown"},
     {100801, "Event Log Activity: Clear"},
@@ -3629,6 +3637,14 @@
     {6, "Specific User Login"},
     {7, "Scheduled"},
     {8, "System Changed"},
+    {99, "Other"},
+  }},
+  {"fb27fc6b", {
+    {0, "Unknown"},
+    {1, "Inbound"},
+    {2, "Outbound"},
+    {3, "Lateral"},
+    {4, "Local"},
     {99, "Other"},
   }},
   {"fb992104", {
