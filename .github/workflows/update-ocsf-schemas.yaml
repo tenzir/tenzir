@@ -19,6 +19,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Reset branch to latest main
+        run: |
+          git fetch origin main
+          git checkout -B topic/update-ocsf-schemas origin/main
+          git push origin topic/update-ocsf-schemas --force
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
