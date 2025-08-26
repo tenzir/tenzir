@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/diagnostics.hpp"
-
 #include <tenzir/file.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/from_file_base.hpp>
@@ -70,6 +68,30 @@ auto make_operator(const operator_factory_plugin& plugin, location location,
                    session ctx) -> failure_or<operator_ptr> {
   auto inv = invocation_for_plugin(plugin, location);
   return plugin.make({std::move(inv.op), std::move(inv.args)}, ctx);
+}
+
+constexpr auto extract_root_path(const glob& glob_, const std::string& expanded)
+  -> std::string {
+  if (not glob_.empty()) {
+    if (const auto* prefix = try_as<std::string>(glob_[0])) {
+      // Use the whole path if we don't do any actual globbing.
+      if (glob_.size() == 1) {
+        auto result = *prefix;
+        // Preserve trailing slash semantics if present in original path
+        if (expanded.ends_with('/') && not result.ends_with('/')) {
+          result += '/';
+        }
+        return result;
+      }
+      // Otherwise use the last directory before the globbing starts.
+      const auto slash = prefix->rfind("/");
+      if (slash != std::string::npos) {
+        // The slash itself should be included.
+        return prefix->substr(0, slash + 1);
+      }
+    }
+  }
+  return "/";
 }
 
 } // namespace
@@ -172,28 +194,30 @@ from_file_state::from_file_state(
   }
   fs_ = fs.MoveValueUnsafe();
   glob_ = parse_glob(path);
-  root_path_ = std::invoke([&]() -> std::string {
-    if (not glob_.empty()) {
-      if (auto* prefix = try_as<std::string>(glob_[0])) {
-        // Use the whole path if we don't do any actual globbing.
-        if (glob_.size() == 1) {
-          auto result = *prefix;
-          // Preserve trailing slash semantics if present in original path
-          if (expanded.ends_with('/') && not result.ends_with('/')) {
-            result += '/';
-          }
-          return result;
-        }
-        // Otherwise use the last directory before the globbing starts.
-        auto slash = prefix->rfind("/");
-        if (slash != std::string::npos) {
-          // The slash itself should be included.
-          return prefix->substr(0, slash + 1);
-        }
-      }
-    }
-    return "/";
-  });
+  root_path_ = extract_root_path(glob_, expanded);
+  query_files();
+}
+
+from_file_state::from_file_state(
+  from_file_actor::pointer self, from_file_args args, std::string expanded,
+  std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
+  event_order order, std::unique_ptr<diagnostic_handler> dh,
+  std::string definition, node_actor node, bool is_hidden,
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  : self_{self},
+    dh_{std::move(dh)},
+    fs_{std::move(fs)},
+    args_{std::move(args)},
+    order_{order},
+    definition_{std::move(definition)},
+    node_{std::move(node)},
+    is_hidden_{is_hidden},
+    operator_index_{operator_index},
+    metrics_receiver_{std::move(metrics_receiver)} {
+  TENZIR_ASSERT(dh_);
+  TENZIR_ASSERT(fs_);
+  glob_ = parse_glob(path);
+  root_path_ = extract_root_path(glob_, expanded);
   query_files();
 }
 
