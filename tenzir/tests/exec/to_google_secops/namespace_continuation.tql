@@ -1,0 +1,8 @@
+from {namespace: "N1", text: "LOG_0"},
+     {namespace: "N1", text: "LOG_1"},
+     {namespace: "N1", text: "LOG_2"},
+     {namespace: "N2", text: "LOG_3"},
+     {namespace: "N1", text: "LOG_4"}
+to_google_secops _dry_run =true, region="REGION", customer_id="CUSTOMER",
+  private_key="PRIVATE_KEY", client_email="EMAIL", log_type="CUSTOM_DNS",
+  log_text=text, namespace=namespace

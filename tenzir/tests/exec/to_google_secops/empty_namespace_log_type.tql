@@ -1,0 +1,10 @@
+from {namespace: "", type: "", text: "LOG0"},
+     {namespace: "", type: "T0", text: "T0_LOG0"},
+     {namespace: "N0", type: "T0", text: "T0_LOG1"},
+     {namespace: "N0", type: "T0", text: "T0_LOG2"},
+     {namespace: "N0", type: "", text: "LOG1"},
+     {namespace: "N1", type: "T1", text: "T1_LOG0"},
+     {namespace: "N2", type: "T2", text: "T2_LOG0"}
+to_google_secops _dry_run =true, region="REGION", customer_id="CUSTOMER",
+  private_key="PRIVATE_KEY", client_email="EMAIL", log_type=type, log_text=text,
+  namespace=namespace
