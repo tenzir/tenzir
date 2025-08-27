@@ -40,3 +40,7 @@ venv/
 
 #cmake artifacts
 .cmake/
+
+# Claude
+CLAUDE.local.md
+CLAUDE-TODOS.md
