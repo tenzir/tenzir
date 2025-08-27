@@ -1,4 +1,4 @@
-Your task is to prepare a the tenzir build for this worktree.
+Your task is to prepare the tenzir build for this worktree.
 
 Follow the steps below.
 
