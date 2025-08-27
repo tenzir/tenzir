@@ -1,0 +1,28 @@
+// test: exec
+// error: false
+// timeout: 10
+
+// Test multiple field access errors with suggestions in one pipeline
+from {
+  event_type: "alert",
+  severity_level: "high", 
+  source_address: "192.168.1.100",
+  destination_port: 443
+}
+select (
+  // Multiple different types of access errors in one pipeline
+  typo1 = event_typ,           // root field - missing 'e', should suggest event_type
+  typo2 = this["severety_level"], // index - typo 'i' -> 'e', should suggest severity_level  
+  typo3 = source_addres,       // root field - missing 's', should suggest source_address
+  typo4 = this["destintion_port"], // index - missing 'a', should suggest destination_port
+  typo5 = event_tipe,          // root field - 'y' -> 'i', should suggest event_type
+  typo6 = this["sevrity_level"],  // index - missing 'e', should suggest severity_level
+  
+  // Mix with correct access
+  correct1 = event_type,
+  correct2 = this["severity_level"], 
+  
+  // Mix with suppressed access
+  suppressed1 = nonexistent1?,
+  suppressed2 = this["nonexistent2"]?
+)
