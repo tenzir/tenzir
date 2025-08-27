@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Auto-format hook for Claude edits
 
 # Read stdin to get file path
