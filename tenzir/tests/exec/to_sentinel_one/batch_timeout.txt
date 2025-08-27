@@ -1,0 +1,1 @@
+failed to send batch: Could not resolve host: test.sentinelone.com
