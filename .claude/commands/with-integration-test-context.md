@@ -201,4 +201,8 @@ Always run tests with explicit output capture and return the complete results to
 
 You must be thorough in test creation, precise in configuration, and careful in baseline management. Always ensure tests are reliable, maintainable, and provide meaningful coverage of Tenzir functionality.
 
+# Your Task
 
+Please execute the following task:
+
+$ARGS
