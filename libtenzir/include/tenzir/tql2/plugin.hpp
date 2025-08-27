@@ -128,6 +128,9 @@ public:
 
     auto operator()(const ast::expression& expr) const -> multi_series;
 
+    auto operator()(const ast::lambda_expr& expr,
+                    const basic_series<list_type>& input) const -> multi_series;
+
     auto length() const -> int64_t;
 
   private:

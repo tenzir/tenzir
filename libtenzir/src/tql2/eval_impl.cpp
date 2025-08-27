@@ -14,6 +14,7 @@
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/view3.hpp"
 
 #include <ranges>
@@ -22,7 +23,7 @@ namespace tenzir {
 
 auto evaluator::eval(const ast::record& x) -> multi_series {
   auto arrays = std::vector<multi_series>{};
-  for (auto& item : x.items) {
+  for (const auto& item : x.items) {
     arrays.push_back(eval(item.match(
       [&](const ast::record::field& field) {
         return field.expr;
@@ -91,7 +92,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
     return b.finish_assert_one_array();
   }
   auto arrays = std::vector<multi_series>{};
-  for (auto& item : x.items) {
+  for (const auto& item : x.items) {
     arrays.push_back(match(
       item,
       [&](const ast::expression& expr) {
@@ -162,7 +163,7 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
             l.data(value_at(s.type, *s.array, row));
           },
           [&](const basic_series<list_type>& s) {
-            auto& values = s.array->values();
+            const auto& values = s.array->values();
             auto value_ty = s.type.value_type();
             auto begin = s.array->value_offset(row);
             auto end = s.array->value_offset(row + 1);
@@ -187,7 +188,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       }
       return std::move(*null);
     }
-    auto rec_ty = try_as<record_type>(l.type);
+    auto* rec_ty = try_as<record_type>(l.type);
     if (not rec_ty) {
       diagnostic::warning("cannot access field of non-record type")
         .primary(x.name)
@@ -236,7 +237,7 @@ auto evaluator::eval(const ast::function_call& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::this_& x) -> multi_series {
-  auto& input = input_or_throw(x);
+  const auto& input = input_or_throw(x);
   return series{input.schema(), check(to_record_batch(input)->ToStructArray())};
 }
 
@@ -504,7 +505,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::meta& x) -> multi_series {
-  auto& input = input_or_throw(x);
+  const auto& input = input_or_throw(x);
   switch (x.kind) {
     case ast::meta::name:
       return to_series(std::string{input.schema().name()});
@@ -534,7 +535,7 @@ auto evaluator::eval(const ast::constant& x) -> multi_series {
 auto evaluator::eval(const ast::format_expr& x) -> multi_series {
   auto cols = std::vector<variant<std::string, multi_series>>{};
   cols.reserve(x.segments.size());
-  for (auto& s : x.segments) {
+  for (const auto& s : x.segments) {
     match(
       s,
       [&](const std::string& s) {
@@ -621,20 +622,16 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
       match(
         c,
         [&add_column_to_row](const std::string& s) {
-          return add_column_to_row(s);
+          add_column_to_row(s);
         },
         [this, &add_column_to_row, i](const multi_series& ms) {
           const auto v = ms.value_at(i);
-          if (auto* sec = try_as<view<secret>>(v)) {
-            return add_column_to_row(*sec);
-          } else {
-            auto str = to_string(v, location::unknown, ctx_);
-            if (str) {
-              return add_column_to_row(*str);
-            } else {
-              return add_column_to_row("null");
-            }
+          if (const auto* sec = try_as<view<secret>>(v)) {
+            add_column_to_row(*sec);
+            return;
           }
+          auto str = to_string(v, location::unknown, ctx_);
+          add_column_to_row(str ? *str : "null");
         });
     }
     match(row, append_row_to_builder);
@@ -646,6 +643,15 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
   }
   match(current_builder, append_builder_to_result);
   return res;
+}
+
+auto evaluator::eval(const ast::lambda_expr& x,
+                     const basic_series<list_type>& input) -> multi_series {
+  if (const auto* slice = this->get_input()) {
+    TENZIR_ASSERT(std::cmp_equal(slice->rows(), input.length()));
+    return tenzir::eval(x, input, *slice, ctx_);
+  }
+  return tenzir::eval(x, input, ctx_);
 }
 
 auto evaluator::eval(const ast::expression& x) -> multi_series {

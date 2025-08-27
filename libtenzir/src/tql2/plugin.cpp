@@ -24,6 +24,12 @@ auto function_use::evaluator::operator()(const ast::expression& expr) const
   return static_cast<tenzir::evaluator*>(self_)->eval(expr);
 }
 
+auto function_use::evaluator::operator()(
+  const ast::lambda_expr& expr, const basic_series<list_type>& input) const
+  -> multi_series {
+  return static_cast<tenzir::evaluator*>(self_)->eval(expr, input);
+}
+
 auto aggregation_plugin::make_function(invocation inv, session ctx) const
   -> failure_or<function_ptr> {
   if (inv.call.args.empty()) {
