@@ -19,14 +19,18 @@ Then:
 
 *IMPORTANT*: Ask the user for explicit confirmation of the plan before proceeding.
 
-Sequentially spawn a subagent to work on each task.
-Each agent should:
+Work on the next unfinished task in `CLAUDE-TODOS.md`.
   - Implement the assigned step of the plan.
-  - If the agent is writing C++ code, instruct it to read `./.claude/contexts/cpp-writing.md`
-    before writing code.
-  - Compile the code
+  - If the task includes writing C++ code:
+     - Read `./.claude/contexts/cpp-writing.md` before writing any code.
+     - Compile the code before marking the task as finished.
+  - If the task includes writing TQL code:
+     - Instruct it to read the tenzir docs TQL guide before writing any code.
   - Run the relevant tests
   - Tick of the completed task in `CLAUDE-TODOS.md` and update it with any relevant learnings.
 
+After the task is done, ask the user for approval to go to the next task.
+Suggest using /clear to reset the context window.
+
 Finally:
-  - Run all integration and unit tests
+  - Run all integration and unit tests and declare the task as being done.

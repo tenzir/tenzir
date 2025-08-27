@@ -12,6 +12,9 @@ When working with these types, evaluate expressions once per series or slice.
 If row-wise access is necessary, perform the access in a single iteration loop
 after evaluation.
 
+The public `series.array` data member is a shared_ptr to the underlying
+arrow array.
+
 Any `ast::*` entity should be evaluated using an evaluator and not manually accessed.
 
 ## Secrets
@@ -42,9 +45,28 @@ When iterating a generator in a loop, keep the iterator around. Do not regenerat
 
 ## Use `view3.hpp`
 
-When iterating or accessing series or arrow table slices, use the contents of `view3.hpp`.
+When iterating or accessing series, multiseries or arrow table slices, use the contents of `view3.hpp`
+to access individual rows, like in this example:
+
+```cpp
+    auto buffer = std::string{};
+    auto builder = type_to_arrow_builder_t<string_type>{};
+    // arg has a concrete arrow type, e.g arrow::StringArray or arrow:BooleanArray
+    for (auto row : values3(arg)) {
+      if (not row) {
+        check(builder.Append("null"));
+        continue;
+      }
+      buffer.clear();
+      auto it = std::back_inserter(buffer);
+      printer.print(it, *row);
+      check(builder.Append(buffer));
+    }
+    return series{string_type{}, check(builder.Finish())};
+```
 
 Do not use the `value_at` facilities from arrow_table_slice.hpp or `.values()` methods.
+
 
 ## Do not materialize
 
