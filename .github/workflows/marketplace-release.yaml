@@ -36,7 +36,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      # Extract release tag and image based on trigger type
       - name: Get release information
         id: get_release
         run: |
