@@ -1,0 +1,3 @@
+from {data: {message: "Test log entry", level: "info"}}
+to_sentinel_one _debug_curl=true, api_token="TEST_TOKEN", endpoint_url="https://test.sentinelone.com", 
+  event_data=data, additional_fields={source: "tenzir", version: "1.0"}
