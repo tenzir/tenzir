@@ -118,29 +118,14 @@ Tenzir maintains code quality through several mechanisms:
   - Enforced in CI via `.github/workflows/style-check.yaml`
   - Configuration in `python/pyproject.toml`
 
-#### CI/CD Pipeline
-
-GitHub Actions workflows in `.github/workflows/`:
-
-- `style-check.yaml` - Enforces code formatting standards
-- `tenzir.yaml` - Main CI pipeline for builds and tests
-- `analysis.yaml` - Static analysis and security checks
-- `docker.yaml` - Container image builds
-- `release.yaml` - Release automation
-
-#### Additional Tools
-
-- `scripts/` directory contains various development utilities:
-  - `git-setup.sh` - Git hooks and configuration
-  - `regression-tests.sh` - Regression testing
-  - Platform-specific dependency installers
-
 ## Best Practices
 
 - Follow the existing code style and conventions.
 - Write integration tests for new TQL features, such as functions and
   operators.
-- Use Git to create self-contained commits.
+- Use Git to create self-contained commits. Use brief commit messages that
+  only contain the high-level description, no implementation details and no
+  detailed lists of changes.
 - Update documentation when adding new features.
 - Changelog:
   - Create one or more a changelog entries for new features, bugfixes, or changes
