@@ -24,19 +24,19 @@ select (
   correct_email = user.email_address,
   
   // Nested field access with typos - should get suggestions
-  name_typo1 = user.first_nam,     // missing 'e' - should suggest first_name
-  name_typo2 = user.frist_name,    // transposed 'ir' -> 'ri' - should suggest first_name  
-  name_typo3 = user.lst_name,      // missing 'a' - should suggest last_name
-  email_typo1 = user.email_adress, // missing 'd' - should suggest email_address
-  email_typo2 = user.emal_address, // missing 'i' - should suggest email_address
+  name_typo1 = user.first_nam,
+  name_typo2 = user.frist_name,  
+  name_typo3 = user.lst_name,
+  email_typo1 = user.email_adress,
+  email_typo2 = user.emal_address,
   
   // Deeper nested access with typos
-  age_typo = user.profile.ag,      // missing 'e' - should suggest age  
-  dept_typo = user.profile.deparment, // missing 't' - should suggest department
+  age_typo = user.profile.ag,  
+  dept_typo = user.profile.deparment,
   
   // Index-style access on nested records
-  timestamp_typo = event["timestmp"], // missing 'a' - should suggest timestamp
-  id_typo = event["event_i"],        // missing 'd' - should suggest event_id
+  timestamp_typo = event["timestmp"],
+  id_typo = event["event_i"],
   
   // Very different - should not get suggestions  
   bad_nested1 = user.xyz,

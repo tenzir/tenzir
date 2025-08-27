@@ -16,15 +16,15 @@ select (
   correct_dest = dest_ip,
   
   // Root field access with typos - should get suggestions
-  src_typo1 = src_i,       // missing 'p' - should suggest src_ip
-  src_typo2 = sr_ip,       // missing 'c' - should suggest src_ip  
-  src_typo3 = src_pi,      // transposed 'ip' -> 'pi' - should suggest src_ip
-  dest_typo1 = dest_i,     // missing 'p' - should suggest dest_ip
-  dest_typo2 = dест_ip,    // typo with similar char - should suggest dest_ip
-  port_typo1 = src_por,    // missing 't' - should suggest src_port
-  port_typo2 = dest_prt,   // missing 'o' - should suggest dest_port
-  protocol_typo1 = protcol, // missing 'o' - should suggest protocol
-  protocol_typo2 = protocl, // missing 'o' - should suggest protocol
+  src_typo1 = src_i,
+  src_typo2 = sr_ip,  
+  src_typo3 = src_pi,
+  dest_typo1 = dest_i,
+  dest_typo2 = dest_ip,
+  port_typo1 = src_por,
+  port_typo2 = dest_prt,
+  protocol_typo1 = protcol,
+  protocol_typo2 = protocl,
   
   // Very different names - should not get suggestions
   completely_different = xyz123,

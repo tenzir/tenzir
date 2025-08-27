@@ -1,0 +1,113 @@
+{
+  correct_name: "John",
+  correct_email: "john@example.com",
+  name_typo1: null,
+  name_typo2: null,
+  name_typo3: null,
+  email_typo1: null,
+  email_typo2: null,
+  age_typo: null,
+  dept_typo: null,
+  timestamp_typo: null,
+  id_typo: null,
+  bad_nested1: null,
+  bad_nested2: null,
+  suppressed_nested1: null,
+  suppressed_nested2: null,
+}
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:27:21
+   |
+27 |   name_typo1 = user.first_nam,
+   |                     ~~~~~~~~~ 
+   |
+   = hint: did you mean `first_name`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:28:21
+   |
+28 |   name_typo2 = user.frist_name,  
+   |                     ~~~~~~~~~~ 
+   |
+   = hint: did you mean `first_name`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:29:21
+   |
+29 |   name_typo3 = user.lst_name,
+   |                     ~~~~~~~~ 
+   |
+   = hint: did you mean `last_name`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:30:22
+   |
+30 |   email_typo1 = user.email_adress,
+   |                      ~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `email_address`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:31:22
+   |
+31 |   email_typo2 = user.emal_address,
+   |                      ~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `email_address`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:34:27
+   |
+34 |   age_typo = user.profile.ag,  
+   |                           ~~ 
+   |
+   = hint: did you mean `age`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:35:28
+   |
+35 |   dept_typo = user.profile.deparment,
+   |                            ~~~~~~~~~ 
+   |
+   = hint: did you mean `department`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:38:26
+   |
+38 |   timestamp_typo = event["timestmp"],
+   |                          ~~~~~~~~~~ 
+   |
+   = hint: did you mean `timestamp`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:39:19
+   |
+39 |   id_typo = event["event_i"],
+   |                   ~~~~~~~~~ 
+   |
+   = hint: did you mean `event_id`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:42:22
+   |
+42 |   bad_nested1 = user.xyz,
+   |                      ~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/nested_field_suggestions.tql:43:23
+   |
+43 |   bad_nested2 = event["abc123"],
+   |                       ~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning

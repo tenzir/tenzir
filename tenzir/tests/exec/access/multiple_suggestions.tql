@@ -11,12 +11,12 @@ from {
 }
 select (
   // Multiple different types of access errors in one pipeline
-  typo1 = event_typ,           // root field - missing 'e', should suggest event_type
-  typo2 = this["severety_level"], // index - typo 'i' -> 'e', should suggest severity_level  
-  typo3 = source_addres,       // root field - missing 's', should suggest source_address
-  typo4 = this["destintion_port"], // index - missing 'a', should suggest destination_port
-  typo5 = event_tipe,          // root field - 'y' -> 'i', should suggest event_type
-  typo6 = this["sevrity_level"],  // index - missing 'e', should suggest severity_level
+  typo1 = event_typ,
+  typo2 = this["severety_level"],  
+  typo3 = source_addres,
+  typo4 = this["destintion_port"],
+  typo5 = event_tipe,
+  typo6 = this["sevrity_level"],
   
   // Mix with correct access
   correct1 = event_type,
