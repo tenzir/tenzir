@@ -1,0 +1,35 @@
+// test: exec
+// error: false 
+// timeout: 10
+
+// Test root field access "did you mean" suggestions
+from {
+  src_ip: "192.168.1.1",
+  dest_ip: "10.0.0.1", 
+  src_port: 80,
+  dest_port: 443,
+  protocol: "tcp"
+}
+select (
+  // Correct access (baseline)
+  correct_src = src_ip,
+  correct_dest = dest_ip,
+  
+  // Root field access with typos - should get suggestions
+  src_typo1 = src_i,
+  src_typo2 = sr_ip,  
+  src_typo3 = src_pi,
+  dest_typo1 = dest_i,
+  dest_typo2 = dest_ip,
+  port_typo1 = src_por,
+  port_typo2 = dest_prt,
+  protocol_typo1 = protcol,
+  protocol_typo2 = protocl,
+  
+  // Very different names - should not get suggestions
+  completely_different = xyz123,
+  another_bad = qwerty,
+  
+  // Test that ? suppression still works
+  suppressed_root = nonexistent_field?
+)

@@ -1,0 +1,150 @@
+{
+  typo_a: null,
+  typo_ab: null,
+  typo_abc1: null,
+  typo_abc2: null,
+  long_typo1: null,
+  long_typo2: null,
+  numbers_typo1: null,
+  underscore_typo: null,
+  case_typo1: null,
+  case_typo2: null,
+  mixed_typo1: null,
+  mixed_typo2: null,
+  empty_access: null,
+  too_different1: null,
+  too_different2: null,
+  suppressed1: null,
+  suppressed2: null,
+}
+warning: field `b` not found
+  --> exec/access/edge_case_suggestions.tql:18:12
+   |
+18 |   typo_a = b,                        // single char diff - should suggest 'a' 
+   |            ~ 
+   |
+   = hint: did you mean `ab`?
+   = hint: append `?` to suppress this warning
+
+warning: field `ac` not found
+  --> exec/access/edge_case_suggestions.tql:19:13
+   |
+19 |   typo_ab = ac,                      // single char diff - should suggest 'ab'
+   |             ~~ 
+   |
+   = hint: did you mean `a`?
+   = hint: append `?` to suppress this warning
+
+warning: field `abd` not found
+  --> exec/access/edge_case_suggestions.tql:20:15
+   |
+20 |   typo_abc1 = abd,                   // single char diff - should suggest 'abc'
+   |               ~~~ 
+   |
+   = hint: did you mean `ab`?
+   = hint: append `?` to suppress this warning
+
+warning: field `abcd` not found
+  --> exec/access/edge_case_suggestions.tql:21:15
+   |
+21 |   typo_abc2 = abcd,                  // single char addition - should suggest 'abc' 
+   |               ~~~~ 
+   |
+   = hint: did you mean `abc`?
+   = hint: append `?` to suppress this warning
+
+warning: field `very_long_field_nam` not found
+  --> exec/access/edge_case_suggestions.tql:24:16
+   |
+24 |   long_typo1 = very_long_field_nam,  // missing 'e' - should suggest very_long_field_name
+   |                ~~~~~~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `very_long_field_name`?
+   = hint: append `?` to suppress this warning
+
+warning: field `very_lng_field_name` not found
+  --> exec/access/edge_case_suggestions.tql:25:16
+   |
+25 |   long_typo2 = very_lng_field_name,  // missing 'o' - should suggest very_long_field_name
+   |                ~~~~~~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `very_long_field_name`?
+   = hint: append `?` to suppress this warning
+
+warning: field `field_with_numbers12` not found
+  --> exec/access/edge_case_suggestions.tql:28:19
+   |
+28 |   numbers_typo1 = field_with_numbers12,  // missing '3' - should suggest field_with_numbers123
+   |                   ~~~~~~~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `field_with_numbers123`?
+   = hint: append `?` to suppress this warning
+
+warning: field `field_with_underscores` not found
+  --> exec/access/edge_case_suggestions.tql:29:21
+   |
+29 |   underscore_typo = field_with_underscores, // missing '_' - should suggest field_with_underscores_
+   |                     ~~~~~~~~~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `field_with_underscores_`?
+   = hint: append `?` to suppress this warning
+
+warning: field `camelcasefield` not found
+  --> exec/access/edge_case_suggestions.tql:32:16
+   |
+32 |   case_typo1 = camelcasefield,       // wrong case - should suggest CamelCaseField
+   |                ~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `CamelCaseField`?
+   = hint: append `?` to suppress this warning
+
+warning: field `CAMELCASEFIELD` not found
+  --> exec/access/edge_case_suggestions.tql:33:16
+   |
+33 |   case_typo2 = CAMELCASEFIELD,       // wrong case - should suggest CamelCaseField
+   |                ~~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `field12` not found
+  --> exec/access/edge_case_suggestions.tql:36:17
+   |
+36 |   mixed_typo1 = field12,             // missing '3' - should suggest field123
+   |                 ~~~~~~~ 
+   |
+   = hint: did you mean `field123`?
+   = hint: append `?` to suppress this warning
+
+warning: field `fild123` not found
+  --> exec/access/edge_case_suggestions.tql:37:17
+   |
+37 |   mixed_typo2 = fild123,             // missing 'e' - should suggest field123
+   |                 ~~~~~~~ 
+   |
+   = hint: did you mean `field123`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/edge_case_suggestions.tql:40:21
+   |
+40 |   empty_access = {}.nonexistent_field,
+   |                     ~~~~~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `xyz` not found
+  --> exec/access/edge_case_suggestions.tql:43:20
+   |
+43 |   too_different1 = xyz,              // completely different
+   |                    ~~~ 
+   |
+   = hint: did you mean `a`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/edge_case_suggestions.tql:44:25
+   |
+44 |   too_different2 = this["qwertyuiop"], // way too different
+   |                         ~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
