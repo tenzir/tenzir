@@ -1,0 +1,9 @@
+let $constant = [1].map(x => y)
+from {
+  x: 1,
+  y: 1.1.1.1,
+  z: 0s,
+  list: [{a: 4, b: 5}, {}],
+  unused: 0.0.0.0/8,
+}
+list = list.map(x => {a: x.a, y: y, z: this["z"], k0: this.keys()[0]})

@@ -9,12 +9,13 @@
 #include "tenzir/tql2/eval.hpp"
 
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
+#include "tenzir/tql2/set.hpp"
 #include "tenzir/try.hpp"
+
+#include <arrow/compute/api_vector.h>
 
 /// TODO:
 /// - Reduce series expansion. For example, `src_ip in [1.2.3.4, 1.2.3.5]`
@@ -61,6 +62,40 @@ auto is_deterministic(const ast::expression& expr, session ctx) -> bool {
   impl.visit(const_cast<ast::expression&>(expr));
   return impl.result;
 }
+
+class capture_extractor : public ast::visitor<capture_extractor> {
+public:
+  template <typename T>
+  auto visit(const T& x) -> void {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<T&>(x));
+  }
+
+  auto visit(const ast::index_expr& x) -> void {
+    if (auto path = ast::field_path::try_from(x)) {
+      captures_.push_back(std::move(*path));
+      return;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<ast::index_expr&>(x));
+  }
+
+  template <typename T>
+  auto visit(const T& x) -> void
+    requires concepts::one_of<T, ast::root_field, ast::field_access>
+  {
+    if (auto path = ast::field_path::try_from(x)) {
+      captures_.push_back(std::move(*path));
+    }
+  }
+
+  auto result() && -> std::vector<ast::field_path> {
+    return std::move(captures_);
+  }
+
+private:
+  std::vector<ast::field_path> captures_;
+};
 
 } // namespace
 
@@ -172,6 +207,49 @@ auto try_const_eval(const ast::expression& expr, session ctx)
       return std::move(*result);
     }
     return {};
+  });
+}
+
+auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
+          const table_slice& slice, diagnostic_handler& dh) -> multi_series {
+  return trace_panic(lambda, [&] -> multi_series {
+    TENZIR_ASSERT(input.array);
+    TENZIR_ASSERT(input.array->values());
+    TENZIR_ASSERT(std::cmp_equal(slice.rows(), input.length()));
+    auto visitor = capture_extractor{};
+    visitor.visit(lambda.right);
+    const auto captures = std::move(visitor).result();
+    const auto ty = input.type.value_type();
+    auto capture_offsets = std::vector<offset>{};
+    for (const auto& capture : captures) {
+      if (capture.path().front().id.name == lambda.left.name) {
+        continue;
+      }
+      auto resolved = resolve(capture, slice.schema());
+      if (const auto* off = try_as<offset>(resolved)) {
+        capture_offsets.push_back(*off);
+      }
+    }
+    if (capture_offsets.empty()) {
+      return eval(lambda, series{ty, input.array->values()}, dh);
+    }
+    const auto to
+      = check(ast::field_path::try_from(ast::root_field{lambda.left, false}));
+    auto b = arrow::Int64Builder{};
+    check(b.Reserve(input.array->values()->length()));
+    for (auto i = int64_t{}; i < input.array->length(); ++i) {
+      for (auto j = int64_t{}; j < input.array->value_length(i); ++j) {
+        b.UnsafeAppend(i);
+      }
+    }
+    auto repeated = table_slice{
+      check(arrow::compute::Take(to_record_batch(slice), finish(b)))
+        .record_batch(),
+      slice.schema(),
+    };
+    repeated.import_time(slice.import_time());
+    const auto slice = assign(to, {ty, input.array->values()}, repeated, dh);
+    return eval(lambda.right, slice, dh);
   });
 }
 
