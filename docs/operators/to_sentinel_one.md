@@ -7,7 +7,7 @@ example: 'to_sentinel_one "https://…", …'
 Sends security events to SentinelOne's Data Lake via REST API.
 
 ```tql
-to_sentinel_one endpoint=string, api_token=string, event_data=string,
+to_sentinel_one endpoint=string, api_token=string, event_data=any,
                 [activity_type=string, site_id=string, agent_id=string,
                 max_request_size=int, batch_timeout=duration]
 ```
@@ -38,11 +38,12 @@ is used in the `Authorization: Bearer <token>` header for all requests.
 You can generate API tokens from the SentinelOne management console under 
 Settings > Users > API Token.
 
-### `event_data = string`
+### `event_data = any`
 
-The event data to send as the activity log text. This should contain the 
-structured or unstructured log information you want to ingest into SentinelOne's
-Data Lake.
+The event data to send to SentinelOne's Data Lake. This parameter accepts any
+Tenzir data type, which is automatically converted to JSON format internally
+before being sent to the API. This allows you to send structured records,
+strings, or any other Tenzir data type directly without manual conversion.
 
 ### `activity_type = string (optional)`
 
@@ -105,7 +106,7 @@ where orig_bytes > 1000000  // Focus on large transfers
 to_sentinel_one \
   endpoint="https://your-instance.eu1.sentinelone.net",
   api_token=secret("sentinel_api_token"),
-  event_data=to_json(.),
+  event_data=this,
   activity_type="network_activity",
   batch_timeout=10s
 ```
