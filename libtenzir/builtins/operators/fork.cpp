@@ -127,7 +127,7 @@ public:
     // before the nested pipeline has started up.
     co_yield {};
     auto result = table_slice{};
-    do {
+    while (true) {
       ctrl.self()
         .mail(atom::pull_v)
         .request(side_channel_, caf::infinite)
@@ -143,8 +143,11 @@ public:
           });
       ctrl.set_waiting(true);
       co_yield {};
+      if (result.rows() == 0) {
+        co_return;
+      }
       co_yield std::move(result);
-    } while (result.rows() > 0);
+    }
   }
 
   auto name() const -> std::string override {
