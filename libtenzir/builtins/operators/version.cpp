@@ -9,6 +9,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/exec/operator.hpp"
+#include "tenzir/exec/operator_base.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
@@ -250,108 +251,70 @@ private:
   exec::stop_handler_actor stop_handler_;
 };
 #else
-class version_exec {
+
+// FIXME: Cannot make this final…
+class version_exec : public exec::operator_base {
 public:
   [[maybe_unused]] static constexpr auto name = "version";
 
-  explicit version_exec(exec::operator_actor::pointer self) : self_{self} {
+  using operator_base::operator_base;
+
+  // operator_base virtual method implementations
+  auto on_start() -> caf::result<void> override {
+    // We don't care about demand and just deliver our message.
+    TENZIR_WARN("version got start");
+    send_version(5);
+    return {};
   }
 
-  auto make_behavior() -> exec::operator_actor::behavior_type {
-    return {
-      /// @see operator_actor
-      [this](exec::connect_t connect) -> caf::result<void> {
-        // TODO: Connector our operators already before?
-        TENZIR_WARN("connecting version");
-        connect_ = std::move(connect);
-        return {};
-      },
-      [this](atom::start) -> caf::result<void> {
-        // We don't care about demand and just deliver our message.
-        TENZIR_WARN("version got start");
-        send_version(5);
-        return {};
-      },
-      [this](atom::commit) -> caf::result<void> {
-        return {};
-      },
-      /// @see upstream_actor
-      [this](atom::pull, uint64_t items) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::stop) -> caf::result<void> {
-        done();
-        return {};
-      },
-      /// @see downstream_actor
-      [this](atom::push, table_slice slice) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::persist, exec::checkpoint check) -> caf::result<void> {
-        // TODO: What would the checkpoint say here?
-        TENZIR_INFO("version got checkpoint");
-        self_->mail(atom::persist_v, check)
-          .request(connect_.downstream, caf::infinite)
-          .then([] {});
-        return {};
-      },
-      [](atom::done) -> caf::result<void> {
-        // TODO: We can't get this since we are a source...
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-    };
+  void on_commit() override {
+    TENZIR_INFO("version got commit");
+  }
+
+  void on_pull(uint64_t items) override {
+    (void)items;
+    TENZIR_WARN("??");
+    TENZIR_TODO();
+  }
+
+  void on_stop() override {
+    finish();
+  }
+
+  void on_push(table_slice slice) override {
+    (void)slice;
+    TENZIR_WARN("??");
+    TENZIR_TODO();
+  }
+
+  void on_push(chunk_ptr chunk) override {
+    (void)chunk;
+    TENZIR_WARN("??");
+    TENZIR_TODO();
+  }
+
+  auto persist() -> chunk_ptr override {
+    // TODO: What would the checkpoint say here?
+    TENZIR_INFO("version got checkpoint");
+    return {};
+  }
+
+  void on_done() override {
+    // TODO: We can't get this since we are a source...
+    TENZIR_WARN("??");
+    TENZIR_TODO();
   }
 
 private:
-  void done() {
-    if (done_) {
-      return;
-    }
-    done_ = true;
-    self_->mail(atom::done_v)
-      .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-    self_->mail(atom::stop_v)
-      .request(connect_.upstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-    self_->mail(atom::shutdown_v)
-      .request(connect_.shutdown, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-  }
-
   void send_version(size_t count) {
-    if (done_) {
+    if (has_finished()) {
       return;
     }
+
     auto slice = make_version(content(self_->config()));
     // Pretend that we do this a couple of times.
     TENZIR_WARN("version pushes {} events", slice.rows());
-    self_->mail(atom::push_v, std::move(slice))
-      .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
+    push(slice);
     if (count > 1) {
       // Repeat this a bit later.
       detail::weak_run_delayed(self_, std::chrono::seconds{1}, [this, count] {
@@ -359,12 +322,8 @@ private:
       });
       return;
     }
-    done();
+    finish();
   }
-
-  exec::operator_actor::pointer self_;
-  exec::connect_t connect_;
-  bool done_ = false;
 };
 #endif
 
@@ -393,6 +352,9 @@ class version_ir final : public ir::operator_base {
 public:
   version_ir() = default;
 
+  explicit version_ir(location self) : self_{self} {
+  }
+
   auto name() const -> std::string override {
     return "version_ir";
   }
@@ -414,9 +376,17 @@ public:
     return tag_v<table_slice>;
   }
 
-  friend auto inspect(auto& f, version_ir& x) -> bool {
-    return f.object(x).fields();
+  auto main_location() const -> location override {
+    return self_;
   }
+
+
+  friend auto inspect(auto& f, version_ir& x) -> bool {
+    return f.object(x).fields(f.field("self", x.self_));
+  }
+
+private:
+  location self_;
 };
 
 class plugin final : public virtual operator_plugin<version_operator>,
@@ -445,7 +415,7 @@ public:
     // TODO
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(inv.args.empty());
-    return std::make_unique<version_ir>();
+    return std::make_unique<version_ir>(inv.op.get_location());
   }
 };
 

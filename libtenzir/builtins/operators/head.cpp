@@ -43,14 +43,63 @@ public:
   }
 };
 #else
-class head_exec {
+class head_exec : public exec::operator_base {
 public:
   [[maybe_unused]] static constexpr auto name = "head";
 
-  explicit head_exec(exec::operator_actor::pointer self, uint64_t count)
-    : self_{self}, remaining_{count} {
+  head_exec(exec::operator_actor::pointer self, uint64_t count)
+    : operator_base{self}, remaining_{count} {
   }
 
+  auto on_start() -> caf::result<void> override {
+    TENZIR_WARN("head got start");
+    // TODO: Is this the right place do perform this check?
+    if (remaining_ == 0) {
+      finish();
+    }
+    return {};
+  }
+
+  void on_push(table_slice slice) override {
+    if (remaining_ == 0) {
+      TENZIR_WARN("head drops {} events", slice.rows());
+      return;
+    }
+    TENZIR_WARN("head receives {} events", slice.rows());
+    auto out = tenzir::head(std::move(slice), remaining_);
+    remaining_ -= out.rows();
+    push(std::move(out));
+    if (remaining_ == 0) {
+      // TODO: Then what?
+      finish();
+    }
+  }
+
+  void on_push(chunk_ptr chunk) override {
+    TENZIR_WARN("??");
+    TENZIR_TODO();
+  }
+
+  auto persist() -> chunk_ptr override {
+    // TODO: What would the checkpoint say here?
+    TENZIR_INFO("head got checkpoint");
+    auto buf = caf::byte_buffer{};
+    auto ser = caf::binary_serializer{buf};
+    auto success = ser.apply(remaining_);
+    TENZIR_ASSERT(success);
+    TENZIR_INFO("head serialized into {} bytes", buf.size());
+    return chunk::make(std::move(buf));
+  }
+
+  void on_done() override {
+    finish();
+  }
+
+  void on_pull(uint64_t items) override {
+    pull(std::min(items, remaining_));
+  }
+
+#  if 0
   auto make_behavior() -> exec::operator_actor::behavior_type {
     return {
       /// @see operator_actor
@@ -128,40 +177,9 @@ public:
       },
     };
   }
+#  endif
 
 private:
-  void done() {
-    if (done_) {
-      return;
-    }
-    done_ = true;
-    TENZIR_WARN("head is sending done");
-    self_->mail(atom::done_v)
-      .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-    self_->mail(atom::stop_v)
-      .request(connect_.upstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-    self_->mail(atom::shutdown_v)
-      .request(connect_.shutdown, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-  }
-
-  bool done_ = false;
-  exec::operator_actor::pointer self_;
-  exec::connect_t connect_;
   uint64_t remaining_;
 };
 #endif
@@ -177,7 +195,17 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<head_exec>, count_);
+    auto remaining = count_;
+    if (args.restore) {
+      // We always send things for checkpointing.
+      TENZIR_ASSERT(*args.restore);
+      auto f = caf::binary_deserializer{
+        caf::const_byte_span{(*args.restore)->data(), (*args.restore)->size()}};
+      auto ok = f.apply(remaining);
+      TENZIR_ASSERT(ok);
+      // TODO: Assert that we are at the end?
+    }
+    return args.sys.spawn(caf::actor_from_state<head_exec>, remaining);
   }
 
   friend auto inspect(auto& f, head_plan& x) -> bool {

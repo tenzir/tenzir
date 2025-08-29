@@ -427,8 +427,10 @@ public:
         TENZIR_TODO();
       },
       [this](atom::persist, checkpoint check) -> caf::result<void> {
-        TENZIR_INFO("checkpoint completed! (pretending commit)");
-        self_->mail(atom::commit_v).request(sub_, caf::infinite).then([] {});
+        TENZIR_INFO("checkpoint completed, committing now");
+        self_->mail(atom::commit_v).request(sub_, caf::infinite).then([] {
+          TENZIR_INFO("commit successful");
+        });
         return {};
       },
       [this](atom::done) -> caf::result<void> {

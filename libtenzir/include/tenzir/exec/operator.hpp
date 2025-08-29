@@ -194,7 +194,6 @@ private:
   std::unique_ptr<stateless_base> impl_;
   std::vector<exec::message<table_slice>> buffer_;
 };
-#endif
 
 template <class T, class... Ts>
 auto spawn_operator(plan::operator_spawn_args args,
@@ -222,5 +221,6 @@ auto spawn_operator(plan::operator_spawn_args args,
   //   },
   //   std::move(args));
 }
+#endif
 
 } // namespace tenzir::exec

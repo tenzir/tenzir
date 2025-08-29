@@ -10,6 +10,7 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/exec/checkpoint.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/plan/operator_spawn_args.hpp"
 #include "tenzir/plan/pipeline.hpp"
@@ -17,6 +18,8 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
+
+#include <caf/actor_from_state.hpp>
 
 #include <ranges>
 
@@ -159,6 +162,155 @@ private:
   std::optional<else_t> else_;
 };
 
+class legacy_control_plane final : public operator_control_plane {
+public:
+  auto self() noexcept -> exec_node_actor::base& override {
+    TENZIR_TODO();
+  }
+
+  auto definition() const noexcept -> std::string_view override {
+    TENZIR_TODO();
+  }
+
+  auto run_id() const noexcept -> uuid override {
+    TENZIR_TODO();
+  }
+
+  auto node() noexcept -> node_actor override {
+    TENZIR_TODO();
+  }
+
+  auto operator_index() const noexcept -> uint64_t override {
+    TENZIR_TODO();
+  }
+
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    TENZIR_TODO();
+  }
+
+  auto metrics(type t) noexcept -> metric_handler override {
+    TENZIR_TODO();
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
+    TENZIR_TODO();
+  }
+
+  auto no_location_overrides() const noexcept -> bool override {
+    TENZIR_TODO();
+  }
+
+  auto has_terminal() const noexcept -> bool override {
+    TENZIR_TODO();
+  }
+
+  auto is_hidden() const noexcept -> bool override {
+    TENZIR_TODO();
+  }
+
+  auto set_waiting(bool value) noexcept -> void override {
+    TENZIR_TODO();
+  }
+
+  auto resolve_secrets_must_yield(std::vector<secret_request> requests,
+                                  final_callback_t final_callback)
+    -> secret_resolution_sentinel override {
+    TENZIR_TODO();
+  }
+};
+
+class legacy_exec {
+public:
+  legacy_exec(exec::operator_actor::pointer self, operator_ptr op)
+    : self_{std::move(self)}, op_{std::move(op)} {
+  }
+
+  auto make_behavior() -> exec::operator_actor::behavior_type {
+    return {
+      /// @see operator_actor
+      [this](exec::connect_t connect) -> caf::result<void> {
+        // TODO: Connector our operators already before?
+        TENZIR_WARN("connecting legacy");
+        connect_ = std::move(connect);
+        return {};
+      },
+      [this](atom::start) -> caf::result<void> {
+        // We don't care about demand and just deliver our message.
+        TENZIR_WARN("legacy got start");
+        return {};
+      },
+      [this](atom::commit) -> caf::result<void> {
+        return {};
+      },
+      /// @see upstream_actor
+      [this](atom::pull, uint64_t items) -> caf::result<void> {
+        TENZIR_WARN("??");
+        TENZIR_TODO();
+      },
+      [this](atom::stop) -> caf::result<void> {
+        done();
+        return {};
+      },
+      /// @see downstream_actor
+      [this](atom::push, table_slice slice) -> caf::result<void> {
+        TENZIR_WARN("??");
+        TENZIR_TODO();
+      },
+      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
+        TENZIR_WARN("??");
+        TENZIR_TODO();
+      },
+      [this](atom::persist, exec::checkpoint check) -> caf::result<void> {
+        // TODO: What would the checkpoint say here?
+        TENZIR_INFO("legacy got checkpoint");
+        self_->mail(atom::persist_v, check)
+          .request(connect_.downstream, caf::infinite)
+          .then([] {});
+        return {};
+      },
+      [](atom::done) -> caf::result<void> {
+        // TODO: We can't get this since we are a source...
+        TENZIR_WARN("??");
+        TENZIR_TODO();
+      },
+    };
+  }
+
+  void done() {
+    if (done_) {
+      return;
+    }
+    done_ = true;
+    self_->mail(atom::done_v)
+      .request(connect_.downstream, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+    self_->mail(atom::stop_v)
+      .request(connect_.upstream, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+    self_->mail(atom::shutdown_v)
+      .request(connect_.shutdown, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+  }
+
+private:
+  exec::operator_actor::pointer self_;
+  operator_ptr op_;
+  exec::connect_t connect_;
+  bool done_ = false;
+};
+
 class legacy_plan final : public plan::operator_base {
 public:
   legacy_plan() = default;
@@ -170,9 +322,9 @@ public:
     return "legacy_plan";
   }
 
-  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
-    TENZIR_WARN("TODO: Spawning legacy");
-    TENZIR_TODO();
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<legacy_exec>, op_->copy());
   }
 
   friend auto inspect(auto& f, legacy_plan& x) -> bool {

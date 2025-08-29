@@ -592,15 +592,15 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 }
 
 // TODO: Source for diagnostic handler?
-auto exec_restore(std::span<const std::byte> bp_chunk,
+auto exec_restore(std::span<const std::byte> plan_bytes,
                   exec::checkpoint_reader_actor checkpoint_reader, base_ctx ctx)
   -> failure_or<void> {
   auto f = caf::binary_deserializer{
-    caf::const_byte_span{bp_chunk.data(), bp_chunk.size()}};
-  auto pipe_bp = plan::pipeline{};
-  auto ok = f.apply(pipe_bp);
+    caf::const_byte_span{plan_bytes.data(), plan_bytes.size()}};
+  auto plan = plan::pipeline{};
+  auto ok = f.apply(plan);
   TENZIR_ASSERT(ok);
-  auto exec = exec::make_pipeline(std::move(pipe_bp), exec::pipeline_settings{},
+  auto exec = exec::make_pipeline(std::move(plan), exec::pipeline_settings{},
                                   std::move(checkpoint_reader), ctx);
   return run_pipeline(std::move(exec), ctx);
 }
