@@ -1,0 +1,102 @@
+{
+  field_typo: "correct",
+  field_typo1: null,
+  field_typo2: null,
+  field_typo3: null,
+  field_typo4: null,
+  index_typo1: null,
+  index_typo2: null,
+  index_typo3: null,
+  index_typo4: null,
+  very_different1: null,
+  very_different2: null,
+  suppressed1: null,
+  suppressed2: null,
+}
+warning: field `filedname` not found
+  --> exec/access/field_suggestions.tql:15:17
+   |
+15 |   field_typo1 = filedname,  
+   |                 ~~~~~~~~~ 
+   |
+   = hint: did you mean `fieldname`?
+   = hint: append `?` to suppress this warning
+
+warning: field `fieldnme` not found
+  --> exec/access/field_suggestions.tql:16:17
+   |
+16 |   field_typo2 = fieldnme,
+   |                 ~~~~~~~~ 
+   |
+   = hint: did you mean `fieldname`?
+   = hint: append `?` to suppress this warning
+
+warning: field `fielname` not found
+  --> exec/access/field_suggestions.tql:17:17
+   |
+17 |   field_typo3 = fielname,
+   |                 ~~~~~~~~ 
+   |
+   = hint: did you mean `fieldname`?
+   = hint: append `?` to suppress this warning
+
+warning: field `fieldnama` not found
+  --> exec/access/field_suggestions.tql:18:17
+   |
+18 |   field_typo4 = fieldnama,
+   |                 ~~~~~~~~~ 
+   |
+   = hint: did you mean `fieldname`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:21:22
+   |
+21 |   index_typo1 = this["usrname"],
+   |                      ~~~~~~~~~ 
+   |
+   = hint: did you mean `username`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:22:22
+   |
+22 |   index_typo2 = this["usernme"],
+   |                      ~~~~~~~~~ 
+   |
+   = hint: did you mean `username`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:23:22
+   |
+23 |   index_typo3 = this["timestmp"],
+   |                      ~~~~~~~~~~ 
+   |
+   = hint: did you mean `timestamp`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:24:22
+   |
+24 |   index_typo4 = this["mesage_content"],
+   |                      ~~~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `message_content`?
+   = hint: append `?` to suppress this warning
+
+warning: field `xyz` not found
+  --> exec/access/field_suggestions.tql:27:21
+   |
+27 |   very_different1 = xyz,
+   |                     ~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:28:26
+   |
+28 |   very_different2 = this["abc"],
+   |                          ~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
