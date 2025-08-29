@@ -30,9 +30,7 @@ namespace tenzir::plugins::decapsulate {
 namespace {
 
 auto to_uint16(std::span<const std::byte, 2> bytes) {
-  const auto* data = bytes.data();
-  const auto* ptr = reinterpret_cast<const uint16_t*>(std::launder(data));
-  return detail::to_host_order(*ptr);
+  return uint16_t((uint16_t(bytes[0]) << 8) | uint16_t(bytes[1]));
 }
 
 /// An 802.3 Ethernet frame.
