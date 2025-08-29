@@ -38,6 +38,10 @@ public:
       TENZIR_ASSERT(end == 1);
       return result;
     }
+    TENZIR_ASSERT(begin >= 0, "{} (begin) >= 0", begin);
+    TENZIR_ASSERT(end >= begin, "{} (end) >= {} (begin)", end, begin);
+    TENZIR_ASSERT(static_cast<size_t>(end) <= input->rows(),
+                  "{} (end) <= {} (rows)", end, input->rows());
     result.input_ = subslice(*input, begin, end);
     result.length_ = end - begin;
     return result;

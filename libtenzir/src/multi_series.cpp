@@ -95,7 +95,9 @@ auto map_series(multi_series x,
   -> multi_series {
   auto result = std::vector<series>{};
   for (auto& part : x) {
+    [[maybe_unused]] const auto input_part_length = part.length();
     auto mapped = f(std::move(part));
+    TENZIR_ASSERT_EQ(mapped.length(), input_part_length);
     result.insert(result.end(), std::move_iterator{mapped.begin()},
                   std::move_iterator{mapped.end()});
   }
