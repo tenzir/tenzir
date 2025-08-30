@@ -44,6 +44,11 @@
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
         };
+        package-clang = pkgs.callPackages ./nix/package.nix {
+          nix2container = inputs.nix2container.packages.${system};
+          isReleaseBuild = inputs.isReleaseBuild.value;
+          forceClang = true;
+        };
       in
       {
         packages =
@@ -52,6 +57,10 @@
             tenzir-de-static = package.tenzir-de-static;
             tenzir = package.tenzir;
             tenzir-static = package.tenzir-static;
+            tenzir-de-clang = package-clang.tenzir-de;
+            tenzir-de-static-clang = package-clang.tenzir-de-static;
+            tenzir-clang = package-clang.tenzir;
+            tenzir-static-clang = package-clang.tenzir-static;
             integration-test-shell = pkgs.mkShell {
               packages = package.tenzir-integration-test-runner;
             };

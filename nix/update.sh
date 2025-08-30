@@ -19,10 +19,13 @@ echo "mainroot = ${mainroot}"
 echo "gitdir = ${gitdir}"
 
 command -v docker > /dev/null && {
-  echo "Updating with with a nix docker container..."
+  echo "Updating with a nix docker container..."
   if [ "$toplevel/.git" = "$gitdir" ]; then
     docker run \
       -v "${toplevel}:${toplevel}" \
+      -e GIT_CONFIG_COUNT=1 \
+      -e GIT_CONFIG_KEY_0=safe.directory \
+      -e GIT_CONFIG_VALUE_0=${toplevel} \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
@@ -30,6 +33,9 @@ command -v docker > /dev/null && {
     docker run \
       -v "${toplevel}:${toplevel}" \
       -v "${gitdir}:${gitdir}" \
+      -e GIT_CONFIG_COUNT=1 \
+      -e GIT_CONFIG_KEY_0=safe.directory \
+      -e GIT_CONFIG_VALUE_0=${toplevel} \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
@@ -42,6 +48,9 @@ command -v podman > /dev/null && {
   if [ "$toplevel/.git" = "$gitdir" ]; then
     podman run \
       -v "${toplevel}:${toplevel}" \
+      -e GIT_CONFIG_COUNT=1 \
+      -e GIT_CONFIG_KEY_0=safe.directory \
+      -e GIT_CONFIG_VALUE_0=${toplevel} \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
@@ -49,6 +58,9 @@ command -v podman > /dev/null && {
     podman run \
       -v "${toplevel}:${toplevel}" \
       -v "${gitdir}:${gitdir}" \
+      -e GIT_CONFIG_COUNT=1 \
+      -e GIT_CONFIG_KEY_0=safe.directory \
+      -e GIT_CONFIG_VALUE_0=${toplevel} \
       -e GITHUB_TOKEN \
       -e GH_TOKEN \
       nixos/nix "${toplevel}/nix/update.sh"
