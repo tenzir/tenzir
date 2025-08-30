@@ -3,7 +3,10 @@
   stdenv,
   fetchFromGitHub,
   caf,
+  empty-libgcc_eh,
+  llvmPackages,
   openssl,
+  pkgsBuildHost,
 }:
 let
   source = builtins.fromJSON (builtins.readFile ./source.json);
@@ -38,6 +41,16 @@ in
     '';
   }
   // lib.optionalAttrs stdenv.hostPlatform.isStatic {
+    nativeBuildInputs =
+      (old.nativeBuildInputs or [ ])
+      ++ lib.optionals stdenv.cc.isClang [
+        llvmPackages.bintools
+      ];
+    buildInputs =
+      (old.buildInputs or [ ])
+      ++ lib.optionals stdenv.cc.isClang [
+        empty-libgcc_eh
+      ];
     cmakeFlags =
       old.cmakeFlags
       ++ [
@@ -50,11 +63,22 @@ in
       ++ lib.optionals stdenv.hostPlatform.isLinux [
         "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
         "-DCAF_CXX_VERSION=23"
+      ]
+      ++ lib.optionals stdenv.cc.isClang [
+        "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
+        "-DCMAKE_CXX_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
+        "-DCMAKE_C_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
+        "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
+        "-DCMAKE_LINKER_TYPE=LLD"
       ];
-    hardeningDisable = [
-      "fortify"
-      "pic"
-    ];
+    hardeningDisable =
+      [
+        "fortify"
+        "pic"
+      ]
+      ++ lib.optionals stdenv.cc.isClang [
+        "pie"
+      ];
     dontStrip = true;
     doCheck = false;
   }
