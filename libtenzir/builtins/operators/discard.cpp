@@ -203,15 +203,16 @@ public:
         TENZIR_TODO();
       },
       /// @see downstream_actor
-      [](atom::push, table_slice slice) -> caf::result<void> {
+      [](atom::push, exec::payload payload) -> caf::result<void> {
         // TODO: Anything else?
-        TENZIR_WARN("discard got {} events", slice.rows());
-        return {};
-      },
-      [](atom::push, chunk_ptr chunk) -> caf::result<void> {
-        // TODO: Anything else?
-        TENZIR_ASSERT(chunk);
-        TENZIR_WARN("discard got {} bytes", chunk->size());
+        match(
+          payload,
+          [](table_slice slice) {
+            TENZIR_WARN("discard got {} events", slice.rows());
+          },
+          [](chunk_ptr chunk) {
+            TENZIR_WARN("discard got {} bytes", chunk->size());
+          });
         return {};
       },
       [this](atom::persist, exec::checkpoint check) -> caf::result<void> {

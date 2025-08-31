@@ -552,17 +552,36 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // instantiation, the pipeline must know it's output type when given a fixed
   // input type.
   TRY(auto output, ir.infer_type(tag_v<void>, ctx));
-  if (not output) {
+  if (not output.has_value()) {
     // TODO: Improve?
     panic("expected pipeline to know it's output type after instantiation");
   }
+  // Add implicit sink before optimization.
   if (output->is_not<void>()) {
-    // TODO: Add the implicit sink here, before optimization.
-    diagnostic::error("last operator must close pipeline, but it returns {}",
-                      operator_type_name(*output))
-      .primary(ir.operators.back()->main_location())
-      .emit(ctx);
-    return failure::promise();
+    // TODO: Support bytes.
+    auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
+                                              : cfg.implicit_bytes_sink;
+    auto sink = parse_pipeline_with_bad_diagnostics(sink_def, ctx)
+                  // TODO: Error handling.
+                  .unwrap()
+                  .compile(c_ctx)
+                  .unwrap();
+    ir.lets.insert(ir.lets.end(), std::move_iterator{sink.lets.begin()},
+                   std::move_iterator{sink.lets.end()});
+    ir.operators.insert(ir.operators.end(),
+                        std::move_iterator{sink.operators.begin()},
+                        std::move_iterator{sink.operators.end()});
+    TRY(output, ir.infer_type(tag_v<void>, ctx));
+    TENZIR_ASSERT(output.has_value());
+    // TODO: This is a problem with the implicit sink config.
+    if (not output->is<void>()) {
+      diagnostic::error("last operator must close pipeline, but it returns {}",
+                        operator_type_name(*output))
+        // TODO: This location will be unknown.
+        .primary(ir.operators.back()->main_location())
+        .emit(ctx);
+      return failure::promise();
+    }
   }
   // Optimize the IR.
   auto opt

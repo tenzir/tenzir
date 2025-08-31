@@ -25,12 +25,17 @@
 
 namespace tenzir::exec {
 
-class operator_base {
+template <class Actor>
+class basic_operator {
 public:
-  operator_base(operator_actor::pointer self) : self_{self} {
+  explicit basic_operator(Actor::pointer self) : self_{self} {
+    self_->set_error_handler([this](caf::error& err) {
+      TENZIR_ERROR("operator quits because of error: {}", err);
+      self_->quit(err);
+    });
   }
 
-  virtual ~operator_base() = default;
+  virtual ~basic_operator() = default;
 
   virtual auto on_start() -> caf::result<void> {
     return {};
@@ -39,70 +44,93 @@ public:
   virtual void on_commit() {
   }
 
-  // downstream_actor_traits handlers
+  virtual auto on_connect() -> caf::result<void> {
+    return {};
+  }
+
+  // downstream_actor
   virtual void on_push(table_slice slice) = 0;
   virtual void on_push(chunk_ptr chunk) = 0;
-  virtual auto persist() -> chunk_ptr = 0;
+  virtual auto serialize() -> chunk_ptr = 0;
+  virtual void on_persist(checkpoint checkpoint) {
+    auto forward_checkpoint = [this, checkpoint] {
+      persist(checkpoint);
+    };
+    auto result = serialize();
+    if (result and result->size() > 0) {
+      self_->mail(checkpoint, std::move(result))
+        .request(connect_.checkpoint_receiver, caf::infinite)
+        .then(forward_checkpoint);
+    } else {
+      forward_checkpoint();
+    }
+  }
   virtual void on_done() = 0;
 
-  // upstream_actor_traits handlers
+  // upstream_actor
   virtual void on_pull(uint64_t items) = 0;
   virtual void on_stop() {
     finish();
   }
 
-  auto make_behavior() -> operator_actor::behavior_type {
-    return {
-      [this](connect_t connect) -> caf::result<void> {
-        connect_ = std::move(connect);
-        return {};
-      },
-      [this](atom::start) -> caf::result<void> {
-        return this->on_start();
-      },
-      [this](atom::commit) -> caf::result<void> {
-        this->on_commit();
-        return {};
-      },
-      [this](atom::push, table_slice slice) -> caf::result<void> {
-        this->on_push(std::move(slice));
-        return {};
-      },
-      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
-        this->on_push(std::move(chunk));
-        return {};
-      },
-      [this](atom::persist, checkpoint checkpoint) -> caf::result<void> {
-        auto forward_checkpoint = [this, checkpoint] {
-          self_->mail(atom::persist_v, checkpoint)
-            .request(connect_.downstream, caf::infinite)
-            .then([] {});
+  template <class... Fs>
+  auto extend_behavior(std::tuple<Fs...> fs) -> Actor::behavior_type {
+    return std::apply(
+      [this](auto... fs) -> Actor::behavior_type {
+        return {
+          std::move(fs)...,
+          [this](connect_t connect) -> caf::result<void> {
+            connect_ = std::move(connect);
+            return on_connect();
+          },
+          [this](atom::start) -> caf::result<void> {
+            return on_start();
+          },
+          [this](atom::commit) -> caf::result<void> {
+            on_commit();
+            return {};
+          },
+          [this](atom::push, payload payload) -> caf::result<void> {
+            match(
+              std::move(payload),
+              [&](table_slice slice) {
+                TENZIR_ASSERT(slice.rows() > 0);
+                on_push(std::move(slice));
+              },
+              [&](chunk_ptr chunk) {
+                TENZIR_ASSERT(chunk);
+                TENZIR_ASSERT(chunk->size() > 0);
+                on_push(std::move(chunk));
+              });
+            return {};
+          },
+          [this](atom::persist, checkpoint checkpoint) -> caf::result<void> {
+            on_persist(checkpoint);
+            return {};
+          },
+          [this](atom::done) -> caf::result<void> {
+            upstream_finished_ = true;
+            on_done();
+            return {};
+          },
+          [this](atom::pull, uint64_t items) -> caf::result<void> {
+            on_pull(items);
+            return {};
+          },
+          [this](atom::stop) -> caf::result<void> {
+            downstream_finished_ = true;
+            on_stop();
+            return {};
+          },
         };
-        auto result = persist();
-        if (result and result->size() > 0) {
-          self_->mail(checkpoint, std::move(result))
-            .request(connect_.checkpoint_receiver, caf::infinite)
-            .then(forward_checkpoint);
-        } else {
-          forward_checkpoint();
-        }
-        return {};
       },
-      [this](atom::done) -> caf::result<void> {
-        upstream_finished_ = true;
-        this->on_done();
-        return {};
-      },
-      [this](atom::pull, uint64_t items) -> caf::result<void> {
-        this->on_pull(items);
-        return {};
-      },
-      [this](atom::stop) -> caf::result<void> {
-        downstream_finished_ = true;
-        this->on_stop();
-        return {};
-      },
-    };
+      std::move(fs));
+  }
+
+  auto make_behavior() -> Actor::behavior_type
+    requires std::same_as<Actor, exec::operator_actor>
+  {
+    return extend_behavior({});
   }
 
   void no_more_input() {
@@ -151,7 +179,27 @@ public:
   }
 
   void push(table_slice slice) {
-    self_->mail(atom::push_v, std::move(slice))
+    self_->mail(atom::push_v, payload{std::move(slice)})
+      .request(connect_.downstream, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+  }
+
+  void push(chunk_ptr chunk) {
+    self_->mail(atom::push_v, payload{std::move(chunk)})
+      .request(connect_.downstream, caf::infinite)
+      .then([] {},
+            [](caf::error) {
+              TENZIR_WARN("??");
+              TENZIR_TODO();
+            });
+  }
+
+  void persist(checkpoint checkpoint) {
+    self_->mail(atom::persist_v, checkpoint)
       .request(connect_.downstream, caf::infinite)
       .then([] {},
             [](caf::error) {
@@ -171,7 +219,19 @@ public:
   }
 
 protected:
-  operator_actor::pointer self_;
+  Actor::pointer self_;
+
+  auto upstream() const -> const upstream_actor& {
+    return connect_.upstream;
+  }
+
+  auto downstream() const -> const downstream_actor& {
+    return connect_.downstream;
+  }
+
+  auto checkpoint_receiver() const -> const checkpoint_receiver_actor& {
+    return connect_.checkpoint_receiver;
+  }
 
 private:
   connect_t connect_;
@@ -179,5 +239,7 @@ private:
   bool upstream_finished_ = false;
   bool sent_shutdown_ = false;
 };
+
+using operator_base = basic_operator<operator_actor>;
 
 } // namespace tenzir::exec

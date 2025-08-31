@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/exec/operator_base.hpp"
+#include "tenzir/exec/pipeline.hpp"
 #include "tenzir/plan/operator_spawn_args.hpp"
 
 #include <tenzir/compile_ctx.hpp>
@@ -22,6 +24,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/report.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -35,340 +38,247 @@ namespace tenzir::plugins::every_cron {
 
 namespace {
 
-template <typename T>
-concept scheduler_concept
-  = requires(const T t, time::clock::time_point now, parser_interface& p) {
-      { t.next_after(now) } -> std::same_as<time::clock::time_point>;
-      { T::parse(p) } -> std::same_as<T>;
-      { T::name } -> std::convertible_to<std::string_view>;
-      { T::immediate } -> std::same_as<const bool&>;
-    };
+struct every_actor_traits {
+  using signatures = exec::operator_actor::signatures::append_from<
+    exec::shutdown_actor::signatures>;
+};
 
-/// This is the base template for all kinds of scheduled execution operators,
-/// such as the `every` and `cron` operators. The actual scheduling logic, CAF
-/// serialization and name are handled by the `Scheduler` template parameter
-template <scheduler_concept Scheduler>
-class scheduled_execution_operator final : public operator_base {
+using every_actor = caf::typed_actor<every_actor_traits>;
+
+class every_exec : public exec::basic_operator<every_actor> {
 public:
-  scheduled_execution_operator() = default;
+  [[maybe_unused]] static constexpr auto name = "every_exec";
 
-  explicit scheduled_execution_operator(pipeline pipe, Scheduler scheduler,
-                                        operator_location location)
-    : pipe_{std::move(pipe)},
-      scheduler_{std::move(scheduler)},
-      location_{location} {
-  }
-
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    auto result = pipe_.optimize(filter, order);
-    if (not result.replacement) {
-      return result;
+  every_exec(every_actor::pointer self, duration interval, ir::pipeline ir,
+             std::optional<plan::restore_t> restore, base_ctx ctx)
+    : basic_operator{self}, interval_{interval}, ir_{std::move(ir)}, ctx_{ctx} {
+    if (not restore) {
+      return;
     }
-    auto* pipe = dynamic_cast<pipeline*>(result.replacement.get());
-    TENZIR_ASSERT(pipe);
-    result.replacement = std::make_unique<scheduled_execution_operator>(
-      std::move(*pipe), scheduler_, location_);
-    return result;
+    spawn_pipe(std::move(restore));
   }
 
-  template <class Input, class Output>
-  auto run(operator_input input, operator_control_plane& ctrl) const
-    -> generator<Output> {
-    auto next_run = scheduler_.next_after(time::clock::now());
-    auto done = false;
-    co_yield {};
-    auto make_input = [&, input = std::move(input)]() mutable {
-      if constexpr (std::is_same_v<Input, std::monostate>) {
-        (void)next_run;
-        TENZIR_ASSERT(std::holds_alternative<std::monostate>(input));
-        return []() -> std::monostate {
-          return {};
-        };
-      } else {
-        TENZIR_ASSERT(std::holds_alternative<generator<Input>>(input));
-        auto typed_input = std::move(std::get<generator<Input>>(input));
-        // We prime the generator's coroutine manually so that we can use
-        // `unsafe_current()` in the adapted generator.
-        typed_input.begin();
-        return
-          [&, input = std::move(typed_input)]() mutable -> generator<Input> {
-            auto it = input.unsafe_current();
-            while (time::clock::now() < next_run and it != input.end()) {
-              co_yield std::move(*it);
-              ++it;
-            }
-            done = it == input.end();
-          };
-      }
-    }();
-    bool generate_output = Scheduler::immediate;
-    while (true) {
-      if (generate_output) {
-        auto gen = pipe_.instantiate(make_input(), ctrl);
-        if (not gen) {
-          diagnostic::error(gen.error()).emit(ctrl.diagnostics());
-          co_return;
-        }
-        auto typed_gen = std::get_if<generator<Output>>(&*gen);
-        TENZIR_ASSERT(typed_gen);
-        for (auto&& result : *typed_gen) {
-          co_yield std::move(result);
-        }
-        if (done) {
-          break;
-        }
-      }
-      generate_output = true;
-      const auto now = time::clock::now();
-      const duration delta = next_run - now;
-      if (delta < duration::zero()) {
-        next_run = scheduler_.next_after(now);
-        continue;
-      }
-      next_run = scheduler_.next_after(next_run);
-      ctrl.self().run_delayed_weak(delta, [&] {
-        ctrl.set_waiting(false);
-      });
-      ctrl.set_waiting(true);
-      co_yield {};
+  auto make_behavior() -> every_actor::behavior_type {
+    return extend_behavior(std::tuple{
+      [this](atom::shutdown) {
+        on_shutdown();
+      },
+    });
+  }
+
+  void on_shutdown() {
+    TENZIR_WARN("subpipeline is requesting shutdown");
+    // TODO: Or can we just ignore it?
+    // TODO: Don't we have to wait for checkpoints etc?
+    // self_->send_exit(sub_, caf::exit_reason::user_shutdown);
+    // Somehow store that we killed it so that we don't continue sending things
+    // to it?
+  }
+
+  auto on_connect() -> caf::result<void> override {
+    return {};
+    // TENZIR_WARN("??");
+    // auto rp = self_->make_response_promise<void>();
+    // TENZIR_ASSERT(sub_);
+    // self_
+    //   ->mail(exec::connect_t{
+    //     exec::upstream_actor{self_},
+    //     exec::downstream_actor{self_},
+    //     checkpoint_receiver(),
+    //     // TODO: Shutdown actor is self?
+    //     exec::shutdown_actor{self_},
+    //   })
+    //   .request(sub_, caf::infinite)
+    //   .then(
+    //     [rp] mutable {
+    //       rp.deliver();
+    //     },
+    //     [this](caf::error& err) {
+    //       TENZIR_ERROR("failed to connect to subpipeline: {}", err);
+    //       self_->quit(err);
+    //     });
+    // return rp;
+  }
+
+  auto connect_pipe(std::function<void()> callback) {
+    TENZIR_ASSERT(sub_);
+    self_
+      ->mail(exec::connect_t{
+        exec::upstream_actor{self_},
+        exec::downstream_actor{self_},
+        checkpoint_receiver(),
+        // TODO: Shutdown actor is self?
+        exec::shutdown_actor{self_},
+      })
+      .request(sub_, caf::infinite)
+      .then(std::move(callback), TENZIR_REPORT);
+  }
+
+  auto on_start() -> caf::result<void> override {
+    // TODO: Wait for subpipeline to start before returning?
+    if (sub_) {
+      // We restored and can thus immediately start the subpipeline.
+      self_->mail(atom::start_v)
+        .request(sub_, caf::infinite)
+        .then([] {}, TENZIR_REPORT);
+      return {};
+    }
+    spawn_pipe(std::nullopt);
+    connect_pipe([this] {
+      self_->mail(atom::start_v)
+        .request(sub_, caf::infinite)
+        .then([] {}, TENZIR_REPORT);
+    });
+    return {};
+  }
+
+  void on_commit() override {
+    self_->mail(atom::commit_v)
+      .request(sub_, caf::infinite)
+      .then([] {}, TENZIR_REPORT);
+  }
+
+  // downstream_actor_traits handlers
+  void on_push(table_slice slice) override {
+    if (self_->current_sender() == upstream()) {
+      self_->mail(atom::push_v, exec::payload{std::move(slice)})
+        .request(sub_, caf::infinite)
+        .then([] {}, TENZIR_REPORT);
+    } else {
+      self_->mail(atom::push_v, exec::payload{std::move(slice)})
+        .request(downstream(), caf::infinite)
+        .then([] {}, TENZIR_REPORT);
     }
   }
 
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
-    -> caf::expected<operator_output> override {
-    auto f = [&]<class Input>(const Input&) -> caf::expected<operator_output> {
-      using generator_type
-        = std::conditional_t<std::is_same_v<Input, std::monostate>,
-                             generator<std::monostate>, Input>;
-      using input_type = typename generator_type::value_type;
-      using tag_type
-        = std::conditional_t<std::is_same_v<input_type, std::monostate>,
-                             tag<void>, tag<input_type>>;
-      auto output = infer_type_impl(tag_type{});
-      if (not output) {
-        return std::move(output.error());
-      }
-      if (output->template is<table_slice>()) {
-        return run<input_type, table_slice>(std::move(input), ctrl);
-      }
-      if (output->template is<chunk_ptr>()) {
-        return run<input_type, chunk_ptr>(std::move(input), ctrl);
-      }
-      TENZIR_ASSERT(output->template is<void>());
-      return run<input_type, std::monostate>(std::move(input), ctrl);
-    };
-    return std::visit(f, input);
+  void on_push(chunk_ptr chunk) override {
+    TENZIR_WARN("?");
+    TENZIR_TODO();
   }
 
-  auto copy() const -> operator_ptr override {
-    return std::make_unique<scheduled_execution_operator>(pipe_, scheduler_,
-                                                          location_);
-  };
-
-  auto location() const -> operator_location override {
-    return location_;
+  /// We have the following dynamic state:
+  /// - The plan of the currently executing pipeline
+  /// - When this pipeline was started (questionable)
+  auto serialize() -> chunk_ptr override {
+    auto buffer = caf::byte_buffer{};
+    auto ser = caf::binary_serializer{buffer};
+    auto ok = ser.apply(plan_);
+    TENZIR_ASSERT(ok);
+    return chunk::make(std::move(buffer));
   }
 
-  auto detached() const -> bool override {
-    return pipe_.operators().empty() ? false : pipe_.operators()[0]->detached();
+  void on_persist(exec::checkpoint checkpoint) override {
+    if (self_->current_sender() == sub_) {
+      // We got our checkpoint back from the subpipeline, so we forward it now.
+      persist(checkpoint);
+      return;
+    }
+    // Otherwise we got the checkpoint from upstream.
+    TENZIR_ASSERT(self_->current_sender() == upstream());
+    auto serialized = serialize();
+    self_->mail(checkpoint, serialize())
+      .request(checkpoint_receiver(), caf::infinite)
+      .then(
+        [this, checkpoint] {
+          self_->mail(atom::persist_v, checkpoint)
+            .request(sub_, caf::infinite)
+            .then([] {}, TENZIR_REPORT);
+        },
+        TENZIR_REPORT);
   }
 
-  auto internal() const -> bool override {
-    return pipe_.operators().empty() ? false : pipe_.operators()[0]->internal();
+  void on_done() override {
+    if (self_->current_sender() == sub_) {
+      // Inner pipeline is done.
+      TENZIR_WARN("inner pipeline is done");
+      // TODO: What now?
+      return;
+    }
+    TENZIR_WARN("upstream is done");
+    TENZIR_ASSERT(self_->current_sender() == upstream());
+    // Wait for the inner pipeline to terminate.
+    TENZIR_TODO();
   }
 
-  auto idle_after() const -> duration override {
-    return pipe_.operators().empty() ? duration::zero()
-                                     : pipe_.operators()[0]->idle_after();
+  // upstream_actor_traits handlers
+  void on_pull(uint64_t items) override {
+    if (self_->current_sender() == sub_) {
+      pull(items);
+      return;
+    }
+    TENZIR_ASSERT(self_->current_sender() == downstream());
+    self_->mail(atom::pull_v, items)
+      .request(sub_, caf::infinite)
+      .then([] {}, TENZIR_REPORT);
   }
 
-  auto demand() const -> demand_settings override {
-    return pipe_.operators().empty() ? operator_base::demand()
-                                     : pipe_.operators()[0]->demand();
-  }
-
-  auto strictness() const -> strictness_level override {
-    return pipe_.operators().empty() ? operator_base::strictness()
-                                     : pipe_.operators()[0]->strictness();
-  }
-
-  auto infer_type_impl(operator_type input) const
-    -> caf::expected<operator_type> override {
-    return pipe_.infer_type(input);
-  }
-
-  auto name() const -> std::string override {
-    return std::string{scheduler_.name};
-  }
-
-  friend auto inspect(auto& f, scheduled_execution_operator& x) -> bool {
-    return f.object(x).fields(f.field("pipe", x.pipe_),
-                              f.field("scheduler", x.scheduler_),
-                              f.field("location", x.location_));
+  void on_stop() override {
+    if (self_->current_sender() == sub_) {
+      // TODO: Anything else?
+      return;
+    }
+    TENZIR_WARN("?");
+    TENZIR_ASSERT(self_->current_sender() == downstream());
+    TENZIR_TODO();
   }
 
 private:
-  pipeline pipe_;
-  Scheduler scheduler_;
-  operator_location location_;
-};
-
-/// This is the base plugin template for scheduled execution operators.
-/// The actual parsing is handled by the `Scheduler` type.
-template <scheduler_concept Scheduler>
-class scheduled_execution_plugin
-  : public virtual operator_plugin<scheduled_execution_operator<Scheduler>> {
-public:
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto scheduler = Scheduler::parse(p);
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
-        .throw_();
+  void spawn_pipe(std::optional<plan::restore_t> restore) {
+    TENZIR_ASSERT(not sub_);
+    auto plan = plan::pipeline{};
+    if (restore) {
+      auto bytes = as_bytes(restore->chunk);
+      auto f = caf::binary_deserializer{
+        caf::const_byte_span{bytes.data(), bytes.size()}};
+      auto plan = plan::pipeline{};
+      auto ok = f.apply(plan);
+      TENZIR_ASSERT(ok);
+      sub_ = exec::make_subpipeline(std::move(plan), restore->checkpoint_reader,
+                                    ctx_);
+    } else {
+      auto copy = ir_;
+      auto result = copy.substitute(substitute_ctx{ctx_, nullptr}, true);
+      // TODO
+      TENZIR_ASSERT(result);
+      auto plan = std::move(copy).finalize(finalize_ctx{ctx_}).unwrap();
+      sub_ = exec::make_subpipeline(
+        std::move(plan),
+        restore ? std::optional{restore->checkpoint_reader} : std::nullopt,
+        ctx_);
     }
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::move(result.inner));
-    auto pipe = pipeline{std::move(ops)};
-    auto location = pipe.infer_location();
-    if (not location) {
-      diagnostic::error("pipeline contains both remote and local operators")
-        .primary(result.source)
-        .note("this limitation will be lifted soon")
-        .throw_();
-    }
-    return std::make_unique<scheduled_execution_operator<Scheduler>>(
-      std::move(pipe), std::move(scheduler), *location);
-  }
-};
-
-class every_scheduler {
-public:
-  constexpr static std::string_view name = "every";
-  constexpr static bool immediate = true;
-
-  every_scheduler() = default;
-  explicit every_scheduler(duration interval) : interval_{interval} {
   }
 
-  friend auto inspect(auto& f, every_scheduler& x) -> bool {
-    return f.object(x).fields(f.field("interval", x.interval_));
-  }
-
-  auto next_after(time::clock::time_point now) const
-    -> time::clock::time_point {
-    return std::chrono::time_point_cast<time::clock::time_point::duration>(
-      now + interval_);
-  }
-
-  static auto parse(parser_interface& p) -> every_scheduler {
-    auto interval_data = p.parse_data();
-    const auto* interval = try_as<duration>(&interval_data.inner);
-    if (not interval) {
-      diagnostic::error("interval must be a duration")
-        .primary(interval_data.source)
-        .throw_();
-    }
-    if (*interval <= duration::zero()) {
-      diagnostic::error("interval must be a positive duration")
-        .primary(interval_data.source)
-        .throw_();
-    }
-    return every_scheduler{*interval};
-  }
-
-private:
+  // Plan
   duration interval_;
+  ir::pipeline ir_;
+
+  // Indirect
+  base_ctx ctx_;
+
+  // Serialized
+  plan::pipeline plan_;
+  exec::subpipeline_actor sub_;
 };
 
-using every_plugin = scheduled_execution_plugin<every_scheduler>;
-
-class cron_scheduler {
+class every_plan final : public plan::operator_base {
 public:
-  constexpr static std::string_view name = "cron";
-  constexpr static bool immediate = false;
+  every_plan() = default;
 
-  cron_scheduler() = default;
-  explicit cron_scheduler(detail::cron::cronexpr expr)
-    : cronexpr_{std::move(expr)} {
-  }
-
-  auto next_after(time::clock::time_point now) const
-    -> time::clock::time_point {
-    const auto tt = time::clock::to_time_t(now);
-    return time::clock::from_time_t(detail::cron::cron_next(cronexpr_, tt));
-  }
-
-  friend auto inspect(auto& f, cron_scheduler& x) -> bool {
-    const auto get = [&x]() {
-      return detail::cron::to_cronstr(x.cronexpr_);
-    };
-    const auto set = [&x](std::string_view text) {
-      x.cronexpr_ = detail::cron::make_cron(text);
-    };
-    return f.object(x).fields(f.field("cronexpr", get, set));
-  }
-
-  static auto parse(parser_interface& p) -> cron_scheduler {
-    auto cronexpr_string = p.accept_shell_arg();
-    if (not cronexpr_string) {
-      diagnostic::error("expected cron expression")
-        .primary(p.current_span())
-        .throw_();
-    }
-    try {
-      return cron_scheduler{detail::cron::make_cron(cronexpr_string->inner)};
-    } catch (const detail::cron::bad_cronexpr& ex) {
-      // The croncpp library re-throws the exception message from the
-      // `std::stoul` call on failure. This happens for most cases of invalid
-      // expressions, i.e. ones that do not contain unsigned integers or allowed
-      // literals. libstdc++ and libc++ exception messages both contain the
-      // string "stoul" in their what() strings. We can check for this and
-      // provide a slightly better error message back to the user.
-      if (std::string_view{ex.what()}.find("stoul") != std::string_view::npos) {
-        diagnostic::error(
-          "bad cron expression: invalid value for at least one field")
-          .primary(cronexpr_string->source)
-          .throw_();
-      } else {
-        diagnostic::error("bad cron expression: \"{}\"", ex.what())
-          .primary(cronexpr_string->source)
-          .throw_();
-      }
-    }
-  }
-
-private:
-  detail::cron::cronexpr cronexpr_;
-};
-using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
-
-class every_exec final : public plan::operator_base {
-public:
-  every_exec() = default;
-
-  every_exec(duration interval, ir::pipeline pipe)
+  every_plan(duration interval, ir::pipeline pipe)
     : interval_{interval}, pipe_{std::move(pipe)} {
   }
 
   auto name() const -> std::string override {
-    return "every_exec";
+    return "every_plan";
   }
 
-  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
-    TENZIR_TODO();
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<every_exec>, interval_, pipe_,
+                          std::move(args.restore), args.ctx);
   }
 
-  friend auto inspect(auto& f, every_exec& x) -> bool {
+  friend auto inspect(auto& f, every_plan& x) -> bool {
     return f.object(x).fields(f.field("interval", x.interval_),
                               f.field("pipe", x.pipe_));
   }
@@ -386,7 +296,7 @@ private:
   ir::pipeline pipe_;
 };
 
-using every_exec_plugin = inspection_plugin<plan::operator_base, every_exec>;
+using every_exec_plugin = inspection_plugin<plan::operator_base, every_plan>;
 
 class every_ir final : public ir::operator_base {
 public:
@@ -407,7 +317,7 @@ public:
     // TRY(auto pipe, tenzir::instantiate(std::move(pipe_), ctx));
     // We know that this succeeds because instantiation must happen before.
     auto interval = as<duration>(interval_);
-    return std::make_unique<every_exec>(interval, std::move(pipe_));
+    return std::make_unique<every_plan>(interval, std::move(pipe_));
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -449,6 +359,11 @@ public:
       }));
     TRY(pipe_.substitute(ctx, false));
     return {};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    return pipe_.infer_type(input, dh);
   }
 
   friend auto inspect(auto& f, every_ir& x) -> bool {

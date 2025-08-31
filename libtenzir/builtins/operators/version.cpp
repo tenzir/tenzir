@@ -142,6 +142,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    using T = exec_node_actor::base;
     co_yield make_version(content(ctrl.self().config()));
   }
 
@@ -257,13 +258,13 @@ class version_exec : public exec::operator_base {
 public:
   [[maybe_unused]] static constexpr auto name = "version";
 
-  using operator_base::operator_base;
+  using exec::operator_base::operator_base;
 
   // operator_base virtual method implementations
   auto on_start() -> caf::result<void> override {
     // We don't care about demand and just deliver our message.
     TENZIR_WARN("version got start");
-    send_version(5);
+    send_version(1);
     return {};
   }
 
@@ -293,7 +294,7 @@ public:
     TENZIR_TODO();
   }
 
-  auto persist() -> chunk_ptr override {
+  auto serialize() -> chunk_ptr override {
     // TODO: What would the checkpoint say here?
     TENZIR_INFO("version got checkpoint");
     return {};
@@ -370,16 +371,21 @@ public:
     return std::make_unique<version_bp>();
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler&) const
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    TENZIR_ASSERT(input == tag_v<void>);
+    // TODO: Refactor.
+    if (not input.is<void>()) {
+      diagnostic::error("expected void, got {}", input)
+        .primary(main_location())
+        .emit(dh);
+      return failure::promise();
+    }
     return tag_v<table_slice>;
   }
 
   auto main_location() const -> location override {
     return self_;
   }
-
 
   friend auto inspect(auto& f, version_ir& x) -> bool {
     return f.object(x).fields(f.field("self", x.self_));

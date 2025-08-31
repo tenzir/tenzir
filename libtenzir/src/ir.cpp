@@ -11,10 +11,13 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/exec/checkpoint.hpp"
+#include "tenzir/exec/operator_base.hpp"
+#include "tenzir/execution_node.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/plan/operator_spawn_args.hpp"
 #include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/report.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
@@ -162,8 +165,31 @@ private:
   std::optional<else_t> else_;
 };
 
+class legacy_metrics_receiver {
+public:
+  auto make_behavior() -> metrics_receiver_actor::behavior_type {
+    return {
+      [this](uint64_t op_index, uuid metrics_id, type) -> caf::result<void> {
+        // TODO
+        TENZIR_TODO();
+      },
+      [this](uint64_t op_index, uuid metrics_id, record) -> caf::result<void> {
+        // TODO
+        TENZIR_TODO();
+      },
+      [this](const operator_metric& metric) -> caf::result<void> {
+        // TODO
+        TENZIR_TODO();
+      },
+    };
+  }
+};
+
 class legacy_control_plane final : public operator_control_plane {
 public:
+  explicit legacy_control_plane(exec_node_actor::base& self) {
+  }
+
   auto self() noexcept -> exec_node_actor::base& override {
     TENZIR_TODO();
   }
@@ -189,7 +215,8 @@ public:
   }
 
   auto metrics(type t) noexcept -> metric_handler override {
-    TENZIR_TODO();
+    return metric_handler{
+      self().spawn(caf::actor_from_state<legacy_metrics_receiver>), 0, t};
   }
 
   auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
@@ -219,96 +246,99 @@ public:
   }
 };
 
-class legacy_exec {
+struct legacy_exec_trait {
+  using signatures
+    = exec::operator_actor::signatures::append_from<exec_node_actor::signatures>;
+};
+
+using legacy_exec_actor = caf::typed_actor<legacy_exec_trait>;
+
+// TODO: This cannot be final because of CAF...
+class legacy_exec : public exec::basic_operator<legacy_exec_actor> {
 public:
-  legacy_exec(exec::operator_actor::pointer self, operator_ptr op)
-    : self_{std::move(self)}, op_{std::move(op)} {
+  static constexpr auto name = "legacy-exec";
+
+  legacy_exec(legacy_exec_actor::pointer self, operator_ptr op, base_ctx ctx)
+    : basic_operator{self}, op_{std::move(op)}, ctx_{ctx} {
+    auto exec_node
+      = spawn_exec_node(self_, op_->copy(), operator_type::of<table_slice>,
+                        "TODO: definition", node_actor{},
+                        receiver_actor<diagnostic>{}, metrics_receiver_actor{},
+                        /*index*/ 0, false, false, uuid::random());
+    auto [actor, output_type] = check(exec_node);
+    // TODO: Pass `self_` as previous if it's not a source.
+    self_->mail(atom::start_v, std::vector<caf::actor>{})
+      .request(actor, caf::infinite)
+      .then([] {}, TENZIR_REPORT);
+    self_->mail(atom::pull_v, exec_node_sink_actor{self_}, uint64_t{10})
+      .request(actor, caf::infinite)
+      .then([] {}, TENZIR_REPORT);
   }
 
-  auto make_behavior() -> exec::operator_actor::behavior_type {
-    return {
-      /// @see operator_actor
-      [this](exec::connect_t connect) -> caf::result<void> {
-        // TODO: Connector our operators already before?
-        TENZIR_WARN("connecting legacy");
-        connect_ = std::move(connect);
+  auto make_behavior() -> legacy_exec_actor::behavior_type {
+    return extend_behavior(std::tuple{
+      [this](atom::start,
+             std::vector<caf::actor> all_previous) -> caf::result<void> {
+        TENZIR_ASSERT(all_previous.empty());
+      },
+      [this](atom::pause) -> caf::result<void> {
         return {};
       },
-      [this](atom::start) -> caf::result<void> {
-        // We don't care about demand and just deliver our message.
-        TENZIR_WARN("legacy got start");
+      [this](atom::resume) -> caf::result<void> {
         return {};
       },
-      [this](atom::commit) -> caf::result<void> {
+      [this](diagnostic diag) -> caf::result<void> {
+        std::move(diag).modify().emit(ctx_);
         return {};
       },
-      /// @see upstream_actor
-      [this](atom::pull, uint64_t items) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::stop) -> caf::result<void> {
-        done();
+      [this](atom::pull, exec_node_sink_actor sink,
+             uint64_t batch_size) -> caf::result<void> {
+        pull_rp_ = self_->make_response_promise<void>();
+        pull(batch_size);
         return {};
       },
-      /// @see downstream_actor
-      [this](atom::push, table_slice slice) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::persist, exec::checkpoint check) -> caf::result<void> {
-        // TODO: What would the checkpoint say here?
-        TENZIR_INFO("legacy got checkpoint");
-        self_->mail(atom::persist_v, check)
-          .request(connect_.downstream, caf::infinite)
-          .then([] {});
+      [this](atom::push, table_slice events) -> caf::result<void> {
+        push(std::move(events));
         return {};
       },
-      [](atom::done) -> caf::result<void> {
-        // TODO: We can't get this since we are a source...
-        TENZIR_WARN("??");
-        TENZIR_TODO();
+      [this](atom::push, chunk_ptr bytes) -> caf::result<void> {
+        push(std::move(bytes));
+        return {};
       },
-    };
+    });
   }
 
-  void done() {
-    if (done_) {
-      return;
-    }
-    done_ = true;
-    self_->mail(atom::done_v)
-      .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-    self_->mail(atom::stop_v)
-      .request(connect_.upstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
-    self_->mail(atom::shutdown_v)
-      .request(connect_.shutdown, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
+  auto on_start() -> caf::result<void> override {
+    return {};
+  }
+
+  void on_push(table_slice slice) override {
+    // TODO: Schedule execution?
+    // TODO: Check.
+    // as<std::deque<table_slice>>(input_).push_back(std::move(slice));
+    // run_once();
+  }
+
+  void on_push(chunk_ptr chunk) override {
+    // as<std::deque<chunk_ptr>>(input_).push_back(std::move(chunk));
+    // run_once();
+  }
+
+  void on_pull(uint64_t items) override {
+    // TODO: Can we ignore demand here?
+  }
+
+  auto serialize() -> chunk_ptr override {
+    return {};
+  }
+
+  void on_done() override {
   }
 
 private:
-  exec::operator_actor::pointer self_;
   operator_ptr op_;
-  exec::connect_t connect_;
-  bool done_ = false;
+  base_ctx ctx_;
+  caf::typed_response_promise<void> pull_rp_;
 };
 
 class legacy_plan final : public plan::operator_base {
@@ -324,7 +354,8 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<legacy_exec>, op_->copy());
+    return args.sys.spawn(caf::actor_from_state<legacy_exec>, op_->copy(),
+                          args.ctx);
   }
 
   friend auto inspect(auto& f, legacy_plan& x) -> bool {
@@ -754,12 +785,13 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
   return result;
 }
 
-ir::operator_ptr::operator_ptr(const operator_ptr&) {
-  TENZIR_TODO();
+ir::operator_ptr::operator_ptr(const operator_ptr& other) {
+  *this = other;
 }
 
-auto ir::operator_ptr::operator=(const operator_ptr&) -> operator_ptr& {
-  TENZIR_TODO();
+auto ir::operator_ptr::operator=(const operator_ptr& other) -> operator_ptr& {
+  *this = other->copy();
+  return *this;
 }
 
 } // namespace tenzir

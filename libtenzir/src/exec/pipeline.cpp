@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/exec/checkpoint.hpp"
+#include "tenzir/report.hpp"
 
 #include <caf/actor_from_state.hpp>
 #include <caf/async/producer_adapter.hpp>
@@ -76,18 +77,34 @@ public:
   }
 
   auto make_behavior() -> internal_subpipeline_actor::behavior_type {
+    self_->set_exception_handler([this](std::exception_ptr exc) -> caf::error {
+      TENZIR_ERROR("subpipeline got uncaught exception");
+      try {
+        std::rethrow_exception(exc);
+      } catch (panic_exception& panic) {
+        to_diagnostic(panic).modify().emit(ctx_);
+        return ec::silent;
+      } catch (...) {
+        return caf::scheduled_actor::default_exception_handler(self_, exc);
+      }
+    });
     self_->attach_functor([this] {
+      TENZIR_WARN("killing subpipeline operators");
       for (auto& op : operators_) {
         if (op) {
-          self_->send_exit(op, caf::exit_reason::kill);
+          self_->send_exit(op, caf::exit_reason::user_shutdown);
         }
       }
+    });
+    // TODO: This doesn't work as a handler?
+    self_->set_error_handler([this](caf::error& err) {
+      TENZIR_ERROR("subpipeline got error: {}", err);
+      self_->quit(err);
     });
     begin_spawn();
     return {
       /// @see operator_actor
       [this](connect_t connect) -> caf::result<void> {
-        // TODO: Only return once we also connected all our operators.
         TENZIR_WARN("connecting subpipeline with outer");
         connect_rp_ = self_->make_response_promise<void>();
         connect_ = std::move(connect);
@@ -97,61 +114,68 @@ public:
       [this](atom::start) -> caf::result<void> {
         // We know that this only happens after connection (unless the caller
         // made a mistake...)
+        TENZIR_ERROR("fully starting subpipeline");
         TENZIR_ASSERT(started_ == 0);
-        start_rp = self_->make_response_promise<void>();
+        auto start_rp = self_->make_response_promise<void>();
         for (auto& op : operators_) {
           self_->mail(atom::start_v)
             .request(op, caf::infinite)
             .then(
-              [this] {
+              [this, start_rp] mutable {
                 started_ += 1;
                 TENZIR_ASSERT(started_ <= operators_.size());
                 if (started_ == operators_.size()) {
+                  TENZIR_ERROR("subpipeline was fully started");
                   start_rp.deliver();
                 }
               },
-              [](caf::error) {
-                TENZIR_ERROR("start failed");
-                TENZIR_TODO();
-              });
+              TENZIR_REPORT);
         }
         return start_rp;
       },
       [this](atom::commit) -> caf::result<void> {
         TENZIR_INFO("subpipeline received commit notification");
         auto remaining = std::make_shared<size_t>(operators_.size());
-        for (auto& op : operators_) {
+        for (auto [index, op] : detail::enumerate(operators_)) {
           self_->mail(atom::commit_v)
             .request(op, caf::infinite)
-            .then([this, remaining] {
-              TENZIR_ASSERT(*remaining > 0);
-              *remaining -= 1;
-              if (*remaining == 0) {
-                TENZIR_INFO("commit for subpipeline completed");
-                TENZIR_ASSERT(checkpoints_in_flight_ > 0);
-                checkpoints_in_flight_ -= 1;
-                check_for_shutdown();
-              }
-            });
+            .then(
+              [this, remaining] {
+                TENZIR_ASSERT(*remaining > 0);
+                *remaining -= 1;
+                if (*remaining == 0) {
+                  TENZIR_INFO("commit for subpipeline completed");
+                  TENZIR_ASSERT(checkpoints_in_flight_ > 0);
+                  checkpoints_in_flight_ -= 1;
+                  check_for_shutdown();
+                }
+              },
+              TENZIR_REPORT);
         }
         return {};
       },
       /// @see upstream_actor
       [this](atom::pull, uint64_t items) -> caf::result<void> {
-        return self_->mail(atom::pull_v, items).delegate(connect_.upstream);
+        self_->mail(atom::pull_v, items)
+          .request(connect_.upstream, caf::infinite)
+          .then([] {});
+        return {};
       },
       [this](atom::stop) -> caf::result<void> {
         // TODO: Anything else?
-        return self_->mail(atom::stop_v).delegate(connect_.upstream);
+        // TODO: Should we delegate here? Difference in sender!
+        self_->mail(atom::stop_v)
+          .request(connect_.upstream, caf::infinite)
+          .then([] {});
+        return {};
+        // return self_->mail(atom::stop_v).delegate(connect_.upstream);
       },
       /// @see downstream_actor
-      [this](atom::push, table_slice slice) -> caf::result<void> {
-        return self_->mail(atom::push_v, std::move(slice))
-          .delegate(connect_.downstream);
-      },
-      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
-        return self_->mail(atom::push_v, std::move(chunk))
-          .delegate(connect_.downstream);
+      [this](atom::push, payload payload) -> caf::result<void> {
+        self_->mail(atom::push_v, std::move(payload))
+          .request(connect_.downstream, caf::infinite)
+          .then([] {});
+        return {};
       },
       [this](atom::persist, checkpoint check) -> caf::result<void> {
         // TODO: What do we do here?
@@ -160,22 +184,30 @@ public:
           TENZIR_INFO("got back checkpoint from last operator");
           self_->mail(atom::persist_v, check)
             .request(connect_.downstream, caf::infinite)
-            .then([] {});
-        } else {
-          // TODO: Don't do this if we already try to shut down!
-          TENZIR_INFO("checkpointing subpipeline");
-          checkpoints_in_flight_ += 1;
-          self_->mail(atom::persist_v, check)
-            .request(operators_.front(), caf::infinite)
-            .then([]() {},
-                  [this](caf::error err) {
-                    self_->quit(std::move(err));
-                  });
+            .then([] {}, TENZIR_REPORT);
+          return {};
         }
+        if (asked_for_exit) {
+          // TODO: We probably want to wait for shutdown to complete?
+          TENZIR_INFO("got checkpoint during shutdown");
+          self_->mail(atom::persist_v, check)
+            .request(connect_.downstream, caf::infinite)
+            .then([] {}, TENZIR_REPORT);
+          return {};
+        }
+        // TODO: Don't do this if we already try to shut down!
+        TENZIR_INFO("checkpointing subpipeline");
+        checkpoints_in_flight_ += 1;
+        self_->mail(atom::persist_v, check)
+          .request(operators_.front(), caf::infinite)
+          .then([]() {}, TENZIR_REPORT);
         return {};
       },
       [this](atom::done) -> caf::result<void> {
-        return self_->mail(atom::done_v).delegate(connect_.downstream);
+        self_->mail(atom::done_v)
+          .request(connect_.downstream, caf::infinite)
+          .then([] {});
+        return {};
       },
       /// @see shutdown_actor
       [this](atom::shutdown) -> caf::result<void> {
@@ -228,11 +260,12 @@ private:
   }
 
   // TODO: This should be async if we spawn remote.
-  void spawn_operator(uint64_t index, std::optional<chunk_ptr> restore) {
+  void spawn_operator(uint64_t index, std::optional<plan::restore_t> restore) {
     TENZIR_ASSERT(operators_.size() == plan_.size());
     TENZIR_ASSERT(index < operators_.size());
     TENZIR_ASSERT(not operators_[index]);
-    TENZIR_WARN("spawning operator {} with {}", index, restore);
+    TENZIR_WARN("spawning operator {} with {:?}", index,
+                use_default_formatter{restore});
     operators_[index] = plan_[index]->spawn(
       plan::operator_spawn_args{self_->system(), ctx_, std::move(restore)});
     self_->monitor(operators_[index], [this](caf::error err) {
@@ -241,7 +274,7 @@ private:
       }
       if (not asked_for_exit or err != caf::exit_reason::user_shutdown) {
         TENZIR_WARN("operator exited unexpectedly: {}", err);
-        self_->quit(err);
+        self_->quit(make_report_error(err));
         return;
       }
       exit_count_ += 1;
@@ -249,15 +282,10 @@ private:
       if (exit_count_ == operators_.size()) {
         TENZIR_WARN("all operators exited");
         // TODO: Why can't we directly quit here?
+        // Maybe because we want users of `subpipeline` to not worry about that?
         self_->mail(atom::shutdown_v)
           .request(connect_.shutdown, caf::infinite)
-          .then(
-            [] {
-
-            },
-            [](caf::error) {
-              TENZIR_TODO();
-            });
+          .then([] {}, TENZIR_REPORT);
       }
     });
     TENZIR_WARN("spawned operator {}", index);
@@ -274,7 +302,7 @@ private:
       return;
     }
     TENZIR_ERROR("connecting subpipeline operators");
-    for (auto& op : operators_) {
+    for (auto [index, op] : detail::enumerate(operators_)) {
       TENZIR_ASSERT(op);
       // TODO: Do we really need to use ourselves here?
       auto upstream
@@ -295,10 +323,10 @@ private:
             TENZIR_ASSERT(connected_ <= operators_.size());
             check_connected();
           },
-          [this](caf::error err) {
-            // TODO
-            TENZIR_ERROR("{}", err);
-            self_->quit(err);
+          [this, index](caf::error& err) {
+            self_->quit(caf::make_error(ec::unspecified,
+                                        fmt::format("failed to connect {}: {}",
+                                                    index, err)));
           });
     }
   }
@@ -313,13 +341,11 @@ private:
         self_->mail(atom::get_v, plan_.id(), index)
           .request(*checkpoint_reader_, caf::infinite)
           .then(
-            [this, index](chunk_ptr restore) {
-              spawn_operator(index, std::move(restore));
+            [this, index](chunk_ptr chunk) {
+              spawn_operator(index, plan::restore_t{std::move(chunk),
+                                                    *checkpoint_reader_});
             },
-            [](caf::error) {
-              TENZIR_ERROR("oops");
-              TENZIR_TODO();
-            });
+            TENZIR_REPORT);
       } else {
         // Fresh spawn.
         spawn_operator(index, std::nullopt);
@@ -337,12 +363,9 @@ private:
   std::vector<operator_actor> operators_;
   size_t connected_ = 0;
   size_t started_ = 0;
-  caf::typed_response_promise<void> start_rp;
   size_t shutdown_count_ = 0;
   bool asked_for_exit = false;
-
   size_t exit_count_ = 0;
-
   size_t checkpoints_in_flight_ = 0;
 };
 
@@ -358,15 +381,15 @@ public:
         err = caf::make_error(ec::logic_error, "no reason given");
       }
       if (not asked_for_exit or err != caf::exit_reason::user_shutdown) {
-        TENZIR_ERROR("pipeline error: {}", err);
-        self_->quit(std::move(err));
+        self_->quit(make_report_error(std::move(err)));
         return;
       }
       TENZIR_ERROR("pipeline exited successfully");
       self_->quit();
     });
     self_->attach_functor([this] {
-      self_->send_exit(sub_, caf::exit_reason::kill);
+      TENZIR_WARN("killing subpipeline");
+      self_->send_exit(sub_, caf::exit_reason::user_shutdown);
     });
   }
 
@@ -418,11 +441,7 @@ public:
         return {};
       },
       /// ---------- @see downstream_actor ----------
-      [this](atom::push, table_slice slice) -> caf::result<void> {
-        TENZIR_WARN("?");
-        TENZIR_TODO();
-      },
-      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
+      [this](atom::push, payload payload) -> caf::result<void> {
         TENZIR_WARN("?");
         TENZIR_TODO();
       },
@@ -453,18 +472,22 @@ private:
         [this] {
           TENZIR_ERROR("successfully started pipeline");
           start_rp.deliver();
-          detail::weak_run_delayed_loop(self_, std::chrono::seconds{3}, [this] {
-            TENZIR_INFO("emitting checkpoint");
-            self_->mail(atom::persist_v, checkpoint{})
-              .request(sub_, caf::infinite)
-              .then(
-                [] {
+          // TODO: When to start sending checkpoints?
+          detail::weak_run_delayed_loop(
+            self_, std::chrono::seconds{3},
+            [this] {
+              TENZIR_INFO("emitting checkpoint");
+              self_->mail(atom::persist_v, checkpoint{})
+                .request(sub_, caf::infinite)
+                .then(
+                  [] {
 
-                },
-                [](caf::error) {
-                  TENZIR_TODO();
-                });
-          });
+                  },
+                  [](caf::error) {
+                    TENZIR_TODO();
+                  });
+            },
+            false);
         },
         [](caf::error) {
           TENZIR_TODO();
@@ -484,13 +507,19 @@ private:
 auto make_pipeline(plan::pipeline pipe, pipeline_settings settings,
                    std::optional<checkpoint_reader_actor> checkpoint_reader,
                    base_ctx ctx) -> pipeline_actor {
-  TENZIR_ERROR("spawning subpipeline");
   auto sub
-    = ctx.system().spawn(caf::actor_from_state<subpipeline>, std::move(pipe),
-                         std::move(checkpoint_reader), ctx);
+    = make_subpipeline(std::move(pipe), std::move(checkpoint_reader), ctx);
   TENZIR_ERROR("spawning outer pipeline");
   return ctx.system().spawn(caf::actor_from_state<pipeline>, std::move(sub),
                             std::move(settings));
+}
+
+auto make_subpipeline(plan::pipeline pipe,
+                      std::optional<checkpoint_reader_actor> checkpoint_reader,
+                      base_ctx ctx) -> subpipeline_actor {
+  TENZIR_ERROR("spawning subpipeline");
+  return ctx.system().spawn(caf::actor_from_state<subpipeline>, std::move(pipe),
+                            std::move(checkpoint_reader), ctx);
 }
 
 } // namespace tenzir::exec

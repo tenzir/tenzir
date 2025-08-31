@@ -94,6 +94,8 @@ enum class ec : uint8_t {
   serialization_error,
   /// The error wraps a diagnostic.
   diagnostic,
+  /// The error wraps a report.
+  report,
   /// No error; number of error codes.
   ec_count,
 };

@@ -25,6 +25,7 @@ struct checkpoint_reader_traits {
     auto(atom::get, uuid id, uint64_t index)->caf::result<chunk_ptr>>;
 };
 
+/// An actor that reads from a single checkpoint.
 using checkpoint_reader_actor = caf::typed_actor<checkpoint_reader_traits>;
 
 struct checkpoint_receiver_actor_traits {
@@ -36,13 +37,14 @@ struct checkpoint_receiver_actor_traits {
 using checkpoint_receiver_actor
   = caf::typed_actor<checkpoint_receiver_actor_traits>;
 
+using payload = variant<table_slice, chunk_ptr>;
+
 struct downstream_actor_traits {
   using signatures = caf::type_list<
     // TODO: Consider further batching `table_slice` for better performance in
     // case of high heterogeneity.
     // Must not be called if the downstream type is void.
-    auto(atom::push, table_slice slice)->caf::result<void>,
-    auto(atom::push, chunk_ptr chunk)->caf::result<void>,
+    auto(atom::push, payload payload)->caf::result<void>,
     //
     auto(atom::persist, checkpoint)->caf::result<void>,
     // Used to notify that no more pushes will come.
@@ -85,7 +87,8 @@ struct connect_t {
 
 struct operator_actor_traits {
   using signatures = caf::type_list<
-    // Initialize this operator with everything it needs.
+    // Initialize this operator with everything it needs. Returns when the
+    // operator is ready to start.
     auto(connect_t connect)->caf::result<void>,
     // Notification when all operators in this pipeline were connected. Note
     // that this is not guaranteed to arrive before messages from upstream and

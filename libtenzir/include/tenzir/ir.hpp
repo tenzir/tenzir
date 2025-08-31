@@ -90,9 +90,9 @@ class operator_ptr {
 public:
   operator_ptr() = default;
   ~operator_ptr() = default;
-  operator_ptr(const operator_ptr&);
+  operator_ptr(const operator_ptr& other);
   operator_ptr(operator_ptr&&) = default;
-  auto operator=(const operator_ptr&) -> operator_ptr&;
+  auto operator=(const operator_ptr& other) -> operator_ptr&;
   auto operator=(operator_ptr&&) -> operator_ptr& = default;
 
   explicit(false) operator_ptr(std::nullptr_t) {

@@ -326,6 +326,18 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     // TODO: Do not create a new session here.
+    auto info = cfg_.groups.size() == 0 and cfg_.aggregates.size() == 1
+                and cfg_.aggregates[0].dest
+                and cfg_.aggregates[0].dest->path().size() == 1
+                and cfg_.aggregates[0].dest->path()[0].id.name == "foo";
+    if (info) {
+      TENZIR_WARN("spawning summarize");
+    }
+    ctrl.self().attach_functor([info] {
+      if (info) {
+        TENZIR_WARN("destroying summarize");
+      }
+    });
     auto provider = session_provider::make(ctrl.diagnostics());
     auto impl = implementation2{cfg_, provider.as_session()};
     for (auto&& slice : input) {

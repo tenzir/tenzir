@@ -21,4 +21,11 @@ auto make_pipeline(plan::pipeline pipe, pipeline_settings settings,
                    std::optional<checkpoint_reader_actor> checkpoint_reader,
                    base_ctx ctx) -> pipeline_actor;
 
+/// Create a new subpipeline executor.
+///
+/// If `checkpoint_reader` is set, then the pipeline will be restored.
+auto make_subpipeline(plan::pipeline pipe,
+                      std::optional<checkpoint_reader_actor> checkpoint_reader,
+                      base_ctx ctx) -> subpipeline_actor;
+
 } // namespace tenzir::exec

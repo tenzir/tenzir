@@ -48,7 +48,7 @@ public:
   [[maybe_unused]] static constexpr auto name = "head";
 
   head_exec(exec::operator_actor::pointer self, uint64_t count)
-    : operator_base{self}, remaining_{count} {
+    : exec::operator_base{self}, remaining_{count} {
   }
 
   auto on_start() -> caf::result<void> override {
@@ -80,7 +80,7 @@ public:
     TENZIR_TODO();
   }
 
-  auto persist() -> chunk_ptr override {
+  auto serialize() -> chunk_ptr override {
     // TODO: What would the checkpoint say here?
     TENZIR_INFO("head got checkpoint");
     auto buf = caf::byte_buffer{};
@@ -186,6 +186,8 @@ private:
 
 class head_plan final : public plan::operator_base {
 public:
+  head_plan() = default;
+
   explicit head_plan(int64_t count) : count_{count} {
   }
 
@@ -198,9 +200,9 @@ public:
     auto remaining = count_;
     if (args.restore) {
       // We always send things for checkpointing.
-      TENZIR_ASSERT(*args.restore);
-      auto f = caf::binary_deserializer{
-        caf::const_byte_span{(*args.restore)->data(), (*args.restore)->size()}};
+      TENZIR_ASSERT(args.restore->chunk);
+      auto f = caf::binary_deserializer{caf::const_byte_span{
+        args.restore->chunk->data(), args.restore->chunk->size()}};
       auto ok = f.apply(remaining);
       TENZIR_ASSERT(ok);
       // TODO: Assert that we are at the end?
@@ -220,7 +222,8 @@ class head_ir final : public ir::operator_base {
 public:
   head_ir() = default;
 
-  explicit head_ir(ast::expression count) : count_{std::move(count)} {
+  explicit head_ir(location self, ast::expression count)
+    : self_{self}, count_{std::move(count)} {
   }
 
   auto name() const -> std::string override {
@@ -246,9 +249,13 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    // TODO!
-    (void)dh;
-    TENZIR_ASSERT(input.is<table_slice>());
+    // TODO: Refactor.
+    if (not input.is<table_slice>()) {
+      diagnostic::error("expected events, got {}", input)
+        .primary(main_location())
+        .emit(dh);
+      return failure::promise();
+    }
     return element_type_tag{tag_v<table_slice>};
   }
 
@@ -257,11 +264,17 @@ public:
     return std::make_unique<head_plan>(as<int64_t>(count_));
   }
 
+  auto main_location() const -> location override {
+    return self_;
+  }
+
   friend auto inspect(auto& f, head_ir& x) -> bool {
-    return f.apply(x.count_);
+    return f.object(x).fields(f.field("self", x.self_),
+                              f.field("count", x.count_));
   }
 
 private:
+  location self_;
   variant<ast::expression, int64_t> count_;
 };
 
@@ -303,7 +316,7 @@ public:
     }
     auto expr = inv.args.empty() ? ast::constant{10, location::unknown}
                                  : std::move(inv.args[0]);
-    return std::make_unique<head_ir>(std::move(expr));
+    return std::make_unique<head_ir>(inv.op.get_location(), std::move(expr));
   }
 };
 
@@ -312,5 +325,8 @@ public:
 } // namespace tenzir::plugins::head
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::head::plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::plan::operator_base,
+                            tenzir::plugins::head::head_plan>)
 TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::operator_base,
                                                  tenzir::plugins::head::head_ir>)

@@ -209,7 +209,7 @@ auto plugin_serialize(Inspector& f, const Base& x) -> bool {
     // Workaround for debug formatting non-serializable plugins. In that case we
     // only print the name instead of throwing an exception.
     if (not p) {
-      return true;
+      return dbg->fmt_value("<no serialization plugin>");
     }
   } else {
     if (not f.apply(name)) {
