@@ -37,7 +37,7 @@ struct weak_handle : caf::weak_actor_ptr {
   ~weak_handle() noexcept = default;
 
   explicit(false) weak_handle(const Handle& handle) noexcept
-    : weak_ptr_{handle->ctrl()} {
+    : weak_ptr_{handle ? handle->ctrl() : caf::weak_actor_ptr{}} {
     // nop
   }
 
