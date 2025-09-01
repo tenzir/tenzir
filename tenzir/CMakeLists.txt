@@ -328,6 +328,10 @@ list(JOIN TENZIR_BUNDLED_PLUGINS "," joined_bundled_plugins)
 target_compile_definitions(
   tenzir PRIVATE "TENZIR_BUNDLED_PLUGINS=${joined_bundled_plugins}")
 
+
+include(TenzirInspectTarget)
+print_target_properties(platform)
+
 # -- man page ------------------------------------------------------------------
 
 # TODO: Feed the last commit date in. Using the current date breaks
