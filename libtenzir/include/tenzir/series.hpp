@@ -52,25 +52,39 @@ struct basic_series {
     std::tie(type, array) = idx.get(slice);
   }
 
-  template <class Other>
-    requires(not std::same_as<Other, class tenzir::type>)
-  basic_series(Other type, std::shared_ptr<type_to_arrow_array_t<Type>> array)
+  /// Type + Type::Array -> basic_series<Type>
+  basic_series(Type type, std::shared_ptr<type_to_arrow_array_t<Type>> array)
     : type{std::move(type)}, array{std::move(array)} {
+    TENZIR_ASSERT(this->array);
+    TENZIR_ASSERT_EXPENSIVE(this->type.to_arrow_type()->id()
+                            == this->array->type_id());
+  }
+
+  /// concrete type + concrete array -> erased series
+  template <concrete_type Other>
+    requires(std::same_as<Type, tenzir::type>)
+  basic_series(Other type, std::shared_ptr<type_to_arrow_array_t<Other>> array)
+    : type{tenzir::type{std::move(type)}}, array{std::move(array)} {
+    TENZIR_ASSERT(this->array);
+    TENZIR_ASSERT_EXPENSIVE(this->type.to_arrow_type()->id()
+                            == this->array->type_id());
+  }
+
+  /// concrete type + erased array -> erased series
+  template <concrete_type Other>
+    requires(std::same_as<Type, tenzir::type>)
+  basic_series(Other type, std::shared_ptr<arrow::Array> array)
+    : type{tenzir::type{std::move(type)}}, array{std::move(array)} {
+    TENZIR_ASSERT(this->array);
+    TENZIR_ASSERT_EXPENSIVE(this->type.to_arrow_type()->id()
+                            == this->array->type_id());
   }
 
   explicit(false)
     basic_series(std::shared_ptr<type_to_arrow_array_t<Type>> array)
     requires basic_type<Type>
     : type{Type{}}, array{std::move(array)} {
-  }
-
-  basic_series(class type type,
-               std::shared_ptr<type_to_arrow_array_t<class type>> array)
-    requires(std::same_as<Type, class type>)
-    : type{std::move(type)}, array{std::move(array)} {
-    TENZIR_ASSERT_EXPENSIVE(not this->array
-                            or this->type.to_arrow_type()->id()
-                                 == this->array->type_id());
+    TENZIR_ASSERT(this->array);
   }
 
   // TODO: std::get_if, etc.
@@ -108,7 +122,7 @@ struct basic_series {
   static auto null(Other ty, int64_t length) -> basic_series<Type> {
     auto b = ty.make_arrow_builder(arrow_memory_pool());
     // TODO
-    (void)b->AppendNulls(length);
+    check(b->AppendNulls(length));
     return {std::move(ty),
             std::static_pointer_cast<type_to_arrow_array_t<Other>>(
               check(b->Finish()))};
