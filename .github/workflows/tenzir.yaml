@@ -458,7 +458,7 @@ jobs:
             compiler: Clang
             cc: clang
             cxx: clang++
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST="snowflake;from_velociraptor"
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
@@ -529,6 +529,9 @@ jobs:
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir
+      - name: Set Xcode version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
       - name: Install Dependencies (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
         run: |
