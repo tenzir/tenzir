@@ -2552,6 +2552,17 @@
   {"a58a3e8e", {
     {5023, "Cloud Resources Inventory Info"},
   }},
+  {"a61a5ad0", {
+    {0, "Unknown"},
+    {1, "External Storage"},
+    {2, "Keyboard"},
+    {3, "Mouse"},
+    {4, "Printer"},
+    {7, "Monitor"},
+    {9, "Microphone"},
+    {10, "Webcam"},
+    {99, "Other"},
+  }},
   {"a72e1ac9", {
     {0, "Unknown"},
     {1, "Hostname"},
@@ -2584,6 +2595,15 @@
     {700103, "Remediation Activity: Restore"},
     {700104, "Remediation Activity: Harden"},
     {700199, "Remediation Activity: Other"},
+  }},
+  {"a9654517", {
+    {0, "Unknown"},
+    {1, "Connect"},
+    {2, "Disconnect"},
+    {3, "Enable"},
+    {4, "Disable"},
+    {5, "Eject"},
+    {99, "Other"},
   }},
   {"a9f825d2", {
     {0, "Unknown"},
@@ -3122,6 +3142,15 @@
   {"d1a1bfde", {
     {1007, "Process Activity"},
   }},
+  {"d1b2e996", {
+    {101000, "Peripheral Activity: Unknown"},
+    {101001, "Peripheral Activity: Connect"},
+    {101002, "Peripheral Activity: Disconnect"},
+    {101003, "Peripheral Activity: Enable"},
+    {101004, "Peripheral Activity: Disable"},
+    {101005, "Peripheral Activity: Eject"},
+    {101099, "Peripheral Activity: Other"},
+  }},
   {"d1e36033", {
     {400700, "SSH Activity: Unknown"},
     {400701, "SSH Activity: Open"},
@@ -3475,6 +3504,9 @@
     {700303, "Process Remediation Activity: Restore"},
     {700304, "Process Remediation Activity: Harden"},
     {700399, "Process Remediation Activity: Other"},
+  }},
+  {"eee5f394", {
+    {1010, "Peripheral Activity"},
   }},
   {"ef8220b3", {
     {0, "Unknown"},
