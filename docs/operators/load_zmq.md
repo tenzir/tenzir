@@ -7,7 +7,8 @@ example: 'load_zmq'
 Receives ZeroMQ messages.
 
 ```tql
-load_zmq [endpoint:str, filter=str, listen=bool, connect=bool, monitor=bool]
+load_zmq [endpoint:str, filter=str, listen=bool, connect=bool,
+          insert_separator=string, monitor=bool]
 ```
 
 ## Description
@@ -50,6 +51,12 @@ Defaults to `false`.
 Connect to the ZeroMQ socket.
 
 Defaults to `true`.
+
+### `insert_separator = string (optional)`
+
+A separator string to append to each received ZeroMQ message.
+
+Defaults to no separator.
 
 ### `monitor = bool (optional)`
 

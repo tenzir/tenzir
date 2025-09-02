@@ -27,6 +27,7 @@ public:
           .named("filter", args.filter)
           .named("listen", args.listen)
           .named("connect", args.connect)
+          .named("insert_separator", args.separator)
           .named("monitor", args.monitor)
           .parse(inv, ctx));
     if (args.listen and args.connect) {
