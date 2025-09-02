@@ -517,7 +517,7 @@ function (TenzirRegisterPlugin)
   if (PLUGIN_BUILTINS)
     foreach (builtin IN LISTS PLUGIN_BUILTINS)
       file(READ "${builtin}" lines)
-      if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
+      if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\r?\n?$]")
         message(FATAL_ERROR "builtin ${builtin} does not register as a plugin")
       endif ()
       set_property(

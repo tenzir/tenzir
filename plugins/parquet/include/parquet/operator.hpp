@@ -64,18 +64,17 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
       .emit(ctrl.diagnostics());
     co_return;
   }
-  std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
-  auto record_batch_reader_status
-    = out_buffer->GetRecordBatchReader(&rb_reader);
-  if (! record_batch_reader_status.ok()) {
+  auto maybe_rb_reader
+    = out_buffer->GetRecordBatchReader();
+  if (not maybe_rb_reader.ok()) {
     diagnostic::error("{}",
-                      record_batch_reader_status.ToStringWithoutContextLines())
+                      maybe_rb_reader.status().ToStringWithoutContextLines())
       .note("failed create record batches from input data")
       .emit(ctrl.diagnostics());
     co_return;
   }
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
-       *rb_reader) {
+       *maybe_rb_reader.ValueUnsafe()) {
     if (! maybe_batch.ok()) {
       diagnostic::error("{}",
                         maybe_batch.status().ToStringWithoutContextLines())
