@@ -11,7 +11,7 @@ let
       ninja,
       pkg-config,
       poetry,
-      lld,
+      llvmPackages,
       boost,
       caf,
       curl,
@@ -22,6 +22,7 @@ let
       azure-sdk-for-cpp,
       libbacktrace,
       clickhouse-cpp,
+      empty-libgcc_eh,
       fast-float,
       flatbuffers,
       fluent-bit,
@@ -135,6 +136,7 @@ let
         selection:
         let
           allPlugins = callPackage ./plugins {
+            inherit stdenv;
             tenzir = self;
             tenzir-plugins-srcs = allPluginSrcs;
           };
@@ -207,8 +209,8 @@ let
               dpkg
               rpm
             ]
-            ++ lib.optionals stdenv.hostPlatform.isDarwin [
-              lld
+            ++ lib.optionals stdenv.cc.isClang [
+              llvmPackages.bintools
             ];
           propagatedNativeBuildInputs = [ pkg-config ];
           buildInputs =
@@ -222,7 +224,6 @@ let
               libunwind
               rabbitmq-c
               rdkafka
-              reproc
               cppzmq
               restinio
               (restinio.override {
@@ -236,6 +237,9 @@ let
             ]
             ++ lib.optionals stdenv.isLinux [
               pfs
+            ]
+            ++ lib.optionals (stdenv.cc.isClang && isStatic) [
+              empty-libgcc_eh
             ]
             ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
               yara
@@ -253,6 +257,7 @@ let
               libyamlcpp
               protobuf
               re2
+              reproc
               robin-map
               simdjson
               spdlog
@@ -270,6 +275,7 @@ let
             # Needed to statisfy the ORCs custom cmake modules.
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
+            #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
           };
           cmakeFlags =
             [
@@ -310,6 +316,13 @@ let
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             ]
+            ++ lib.optionals stdenv.cc.isClang [
+              "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
+              "-DCMAKE_CXX_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
+              "-DCMAKE_C_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
+              "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
+              "-DCMAKE_LINKER_TYPE=LLD"
+            ]
             ++ lib.optionals stdenv.hostPlatform.isx86_64 [
               "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
               "-DTENZIR_ENABLE_SSSE3_INSTRUCTIONS=ON"
@@ -319,69 +332,34 @@ let
               "-DTENZIR_ENABLE_AVX_INSTRUCTIONS=OFF"
               "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
             ]
-            ++ lib.optionals stdenv.hostPlatform.isDarwin (
-              let
-                compilerName =
-                  if stdenv.cc.isClang then
-                    "clang"
-                  else if stdenv.cc.isGNU then
-                    "gcc"
-                  else
-                    "unknown";
-                # ar with lto support
-                ar =
-                  stdenv.cc.bintools.targetPrefix
-                  + {
-                    "clang" = "ar";
-                    "gcc" = "gcc-ar";
-                    "unknown" = "ar";
-                  }
-                  ."${compilerName}";
-                # ranlib with lto support
-                ranlib =
-                  stdenv.cc.bintools.targetPrefix
-                  + {
-                    "clang" = "ranlib";
-                    "gcc" = "gcc-ranlib";
-                    "unknown" = "ranlib";
-                  }
-                  ."${compilerName}";
-              in
-              [
-                # Want's to install into the users home, but that would be the
-                # builder in the Nix context, and that doesn't make sense.
-                "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
-              ]
-            )
+            ++ lib.optionals stdenv.hostPlatform.isDarwin [
+              # Want's to install into the users home, but that would be the
+              # builder in the Nix context, and that doesn't make sense.
+              "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
+            ]
             ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure =
-            (
-              if isReleaseBuild then
-                ''
-                  cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
-                ''
-              else
-                ''
-                  version_build_metadata=$(basename $out | cut -d'-' -f 1)
-                  cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-                ''
-            )
-            # TODO: Fix LTO on darwin by passing these commands by their original
-            # executable names "llvm-ar" and "llvm-ranlib". Should work with
-            # `readlink -f $AR` to find the correct ones.
-            + lib.optionalString stdenv.hostPlatform.isDarwin ''
-              cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$AR")
-              cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$AR")
-              cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$RANLIB")
-              cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$RANLIB")
-            '';
+          preConfigure = (
+            if isReleaseBuild then
+              ''
+                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
+              ''
+            else
+              ''
+                version_build_metadata=$(basename $out | cut -d'-' -f 1)
+                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
+              ''
+          );
 
-          hardeningDisable = lib.optionals isStatic [
-            "fortify"
-            "pic"
-          ];
+          hardeningDisable =
+            lib.optionals isStatic [
+              "fortify"
+              "pic"
+            ]
+            ++ lib.optionals (stdenv.cc.isClang && isStatic) [
+              "pie"
+            ];
 
           preBuild =
             let
