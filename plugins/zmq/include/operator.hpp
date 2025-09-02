@@ -57,6 +57,7 @@ struct loader_args {
   std::optional<located<std::string>> filter;
   std::optional<location> connect;
   std::optional<location> listen;
+  std::optional<located<std::string>> separator;
   std::optional<location> monitor;
 
   template <class Inspector>
@@ -65,7 +66,7 @@ struct loader_args {
       .pretty_name("loader_args")
       .fields(f.field("endpoint", x.endpoint), f.field("filter", x.filter),
               f.field("listen", x.listen), f.field("connect", x.connect),
-              f.field("monitor", x.monitor));
+              f.field("separator", x.separator), f.field("monitor", x.monitor));
   }
 };
 
@@ -174,6 +175,9 @@ public:
     -> caf::expected<connection> {
     try {
       auto result = connection{::zmq::socket_type::sub};
+      if (args.separator) {
+        result.separator = args.separator->inner;
+      }
       const auto& endpoint = args.endpoint->inner;
       if (args.monitor) {
         TENZIR_ASSERT(endpoint.starts_with("tcp://"));
@@ -211,8 +215,9 @@ public:
     }
   }
 
-  auto send(chunk_ptr chunk, std::optional<std::chrono::milliseconds> timeout
-                             = {}) -> caf::error {
+  auto send(const chunk_ptr& chunk,
+            std::optional<std::chrono::milliseconds> timeout = {})
+    -> caf::error {
     try {
       TENZIR_TRACE("waiting until socket is ready to send");
       if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
@@ -241,6 +246,9 @@ public:
       auto bytes = socket_.recv(*message, flags);
       TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
       TENZIR_TRACE("got 0mq message with {} bytes", *bytes);
+      if (not separator.empty()) {
+        return chunk::make(message->to_string() + separator);
+      }
       const auto* data = message->data();
       auto size = message->size();
       auto deleter = [msg = std::move(message)]() noexcept {};
@@ -355,6 +363,7 @@ private:
   ::zmq::socket_t socket_;
   std::optional<class monitor> monitor_;
   size_t num_peers_{0};
+  std::string separator;
 };
 
 class zmq_loader final : public crtp_operator<zmq_loader> {

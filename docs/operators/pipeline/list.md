@@ -1,6 +1,6 @@
 ---
 title: pipeline::list
-category: Pipelines, Packages
+category: Pipelines
 example: "pipeline::list"
 ---
 
