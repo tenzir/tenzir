@@ -573,7 +573,7 @@ struct every_cron_operator final : public operator_base {
   template <concepts::one_of<void, table_slice> In>
   auto make_pipeline(const transceiver_actor& hdl) const -> pipeline {
     auto pipe = args_.pipe.inner;
-    auto out = pipe.infer_type<In>();
+    auto out = pipe.template infer_type<In>();
     TENZIR_ASSERT(out);
     if (out->template is<table_slice>()) {
       pipe.append(std::make_unique<internal_sink>(hdl, args_.op));
