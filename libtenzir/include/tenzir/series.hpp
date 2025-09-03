@@ -218,6 +218,7 @@ public:
     auto ty = variant_traits<type>::get<I>(x.type);
     using Type = decltype(ty);
     // Directly using `typeid(*x.array)` leads to a warning.
+    TENZIR_ASSERT(x.array);
     auto& deref = *x.array;
     TENZIR_ASSERT(
       typeid(type_to_arrow_array_t<Type>) == typeid(deref), "`{}` != `{}`",
