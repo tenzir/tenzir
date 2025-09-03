@@ -129,8 +129,8 @@ RUN --mount=target=/ccache,type=cache \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
-    # ctest --test-dir build --output-on-failure --exclude-regex "^tenzir/" && \
-    # cmake --build build --target bats && \
+    ctest --test-dir build --output-on-failure --exclude-regex "^tenzir/" && \
+    cmake --build build --target bats && \
     cmake --install build --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build && \
     rm -rf build
@@ -562,16 +562,16 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/to_google_cloud_logging cmake --install build-to_google_cloud_logging --component Runtime && \
     rm -rf build-to_google_cloud_logging
 
-FROM plugins-source AS to_sentinel_one-plugin
+FROM plugins-source AS to_sentinelone_data_lake-plugin
 
-COPY contrib/tenzir-plugins/to_sentinel_one ./contrib/tenzir-plugins/to_sentinel_one
+COPY contrib/tenzir-plugins/to_sentinelone_data_lake ./contrib/tenzir-plugins/to_sentinelone_data_lake
 RUN --mount=target=/ccache,type=cache \
-    cmake -S contrib/tenzir-plugins/to_sentinel_one -B build-to_sentinel_one -G Ninja \
+    cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-to_sentinel_one --parallel && \
-    cmake --build build-to_sentinel_one --target bats && \
-    DESTDIR=/plugin/to_sentinel_one cmake --install build-to_sentinel_one --component Runtime && \
-    rm -rf build-to_sentinel_one
+    cmake --build build-to_sentinelone_data_lake --parallel && \
+    cmake --build build-to_sentinelone_data_lake --target bats && \
+    DESTDIR=/plugin/to_sentinelone_data_lake cmake --install build-to_sentinelone_data_lake --component Runtime && \
+    rm -rf build-to_sentinelone_data_lake
 
 FROM plugins-source AS vast-plugin
 
@@ -599,7 +599,7 @@ COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
 COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
-COPY --from=to_sentinel_one-plugin --chown=tenzir:tenzir /plugin/to_sentinel_one /
+COPY --from=to_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/to_sentinelone_data_lake /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 USER tenzir:tenzir
