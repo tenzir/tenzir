@@ -186,6 +186,14 @@ endif ()
 
 # Create the internal target that is used for option/property propagation.
 add_library(libtenzir_internal INTERFACE)
+target_link_options(libtenzir_internal INTERFACE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wl,--icf=all>
+    $<$<CXX_COMPILER_ID:MSVC>:/OPT:ICF>
+)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  add_link_options("-fuse-ld=gold")
+endif ()
 set_target_properties(libtenzir_internal PROPERTIES EXPORT_NAME internal)
 add_library(tenzir::internal ALIAS libtenzir_internal)
 install(
