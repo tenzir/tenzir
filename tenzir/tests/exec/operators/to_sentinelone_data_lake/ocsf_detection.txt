@@ -1,0 +1,6 @@
+sending session:
+headers:
+	`Content-Type`: `application/json`
+	`Authorization`: `Bearer TOKEN`
+Uncompressed body:
+{"session":"01991b24-c7e4-72bd-80ed-f160d8c535a4",events:[{"ts":"1757097019362522733","sev":4,"attrs":{"metadata":{"version":"1.6.0"},"time":"2025-09-05T18:30:19.362522733Z","severity_id":4}}]}

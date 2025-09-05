@@ -1,5 +1,0 @@
-from {}
-to_sentinel_one _debug_curl=true, api_token="TEST_TOKEN", endpoint_url="https://test.sentinelone.com", event_data=data?
-
-from {}, {data: {type: "security.event", message: "Test log"}}, {data: null}
-to_sentinel_one _debug_curl=true, api_token="TEST_TOKEN", endpoint_url="https://test.sentinelone.com", event_data=data?

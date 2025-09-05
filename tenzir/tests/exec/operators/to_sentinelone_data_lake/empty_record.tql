@@ -1,0 +1,5 @@
+from {}
+to_sentinelone_data_lake "https://example.com", bearer_token="TOKEN", _dry_run=true
+
+from {}, {data: {type: "security.event", message: "Test log"}}, {data: null}
+to_sentinelone_data_lake "https://example.com", bearer_token="TOKEN", _dry_run=true
