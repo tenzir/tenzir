@@ -31,7 +31,7 @@ This entire record serves as input to `decapsulate` since the `linktype`
 determines how to intepret the binary `data` field containing the raw packet
 data.
 
-:::note Wireshark?
+:::note[Wireshark?]
 With `decapsulate`, we aim to provide a *minimal* packet parsing up to the
 transport layer so that you can work with packets in pipelines and implement use
 cases such as alert-based PCAP. The goal is *not* to comprehensively parse all

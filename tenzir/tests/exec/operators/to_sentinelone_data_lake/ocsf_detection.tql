@@ -1,0 +1,8 @@
+from {
+  metadata:{
+    version: "1.6.0",
+  },
+  time: 0s.from_epoch(),
+  severity_id: 4,
+}
+to_sentinelone_data_lake "https://example.com", bearer_token="TOKEN", _dry_run=true

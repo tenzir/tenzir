@@ -33,9 +33,9 @@ and `lz4` for [LZ4 Frame][lz4-docs] compression.
 [zstd-docs]: http://facebook.github.io/zstd/
 [lz4-docs]: https://android.googlesource.com/platform/external/lz4/+/HEAD/doc/lz4_Frame_format.md
 
-:::tip Why would I use this over the `compress` operator?
+:::tip[Why would I use this over the `compress_*` operators?]
 The Feather format offers more efficient compression compared to the
-[`compress`](/reference/operators/compress) operator. This is because it compresses
+`compress_*` operators. This is because it compresses
 the data column-by-column, leaving metadata that needs to be accessed frequently
 uncompressed.
 :::
