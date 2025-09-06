@@ -1,0 +1,12 @@
+sending session:
+headers:
+	`Content-Type`: `application/json`
+	`Authorization`: `Bearer TOKEN`
+Uncompressed body:
+{"session":"01991b24-c80b-73cd-8030-b4af53eb037e",events:[{"attrs":{}}]}
+sending session:
+headers:
+	`Content-Type`: `application/json`
+	`Authorization`: `Bearer TOKEN`
+Uncompressed body:
+{"session":"01991b24-c810-70d8-800a-d832fae3163c",events:[{"attrs":{}},{"attrs":{"data":{"type":"security.event","message":"Test log"}}},{"attrs":{"data":null}}]}

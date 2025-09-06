@@ -91,6 +91,14 @@ public:
     }
   }
 
+  auto values3() const -> generator<data_view3> {
+    for (auto& part : parts_) {
+      for (auto value : ::tenzir::values3(*part.array)) {
+        co_yield std::move(value);
+      }
+    }
+  }
+
   auto null_count() const -> int64_t {
     auto result = int64_t{0};
     for (auto& part : parts_) {

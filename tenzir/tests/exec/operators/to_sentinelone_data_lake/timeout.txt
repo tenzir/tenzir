@@ -1,0 +1,6 @@
+sending session:
+headers:
+	`Content-Type`: `application/json`
+	`Authorization`: `Bearer TOKEN`
+Uncompressed body:
+{"session":"01991b24-c7f8-72c6-80f2-20b4339dc16b",events:[{"attrs":{}}]}
