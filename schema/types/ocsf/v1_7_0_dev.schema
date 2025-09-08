@@ -1914,7 +1914,7 @@ type _ocsf.v1_7_0_dev.object.peripheral_device = record{
   name: string #required,
   serial_number: string #recommended,
   type: string #optional,
-  type_id: int64 #recommended #enum=a61a5ad0 #sibling=type,
+  type_id: int64 #recommended #enum=8f8c0e29 #sibling=type,
   uid: string #recommended,
   vendor_id_list: list<string> #recommended,
   vendor_name: string #recommended,
