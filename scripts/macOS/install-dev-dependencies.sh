@@ -22,7 +22,7 @@ brew install --overwrite \
     libpcap \
     librdkafka \
     libunwind-headers \
-    llvm \
+    llvm@20 \
     ninja \
     nmap \
     pandoc \
