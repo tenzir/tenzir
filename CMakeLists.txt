@@ -426,7 +426,7 @@ endif ()
 # -- sanitizers ----------------------------------------------------------------
 
 # Address Sanitizer
-set(_tenzir_build_types_with_default_asan "Debug;CI")
+set(_tenzir_build_types_with_default_asan "Debug")
 if (NOT TENZIR_ENABLE_STATIC_EXECUTABLE
     AND CMAKE_BUILD_TYPE IN_LIST _tenzir_build_types_with_default_asan)
   set(_TENZIR_ENABLE_ASAN_DEFAULT ON)
