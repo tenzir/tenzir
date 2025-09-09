@@ -1496,18 +1496,125 @@ struct from_http final : public virtual operator_factory_plugin {
 
 //------------------------------------ http ------------------------------------
 
-struct http_args {
+// Base structure for common HTTP request arguments shared between operators
+// Common HTTP utility functions shared between http and to_http operators
+namespace http_utils {
+
+// Evaluate body expression from table slice, handling different types and
+// encodings
+auto eval_body(const std::optional<ast::expression>& body_expr,
+               const std::optional<located<std::string>>& encode_setting,
+               const table_slice& slice, diagnostic_handler& dh)
+  -> generator<std::pair<std::string_view, bool>> {
+  if (not body_expr) {
+    for (auto i = size_t{}; i < slice.rows(); ++i) {
+      co_yield {};
+    }
+    co_return;
+  }
+  const auto ms = eval(body_expr.value(), slice, dh);
+  for (const auto& s : ms.parts()) {
+    if (s.type.kind().is<null_type>()) {
+      for (auto i = int64_t{}; i < s.length(); ++i) {
+        co_yield {};
+      }
+      continue;
+    }
+    if (s.type.kind().is<blob_type>()) {
+      for (auto val : s.values<blob_type>()) {
+        if (not val) {
+          co_yield {};
+          continue;
+        }
+        co_yield {
+          {reinterpret_cast<const char*>(val->data()), val->size()},
+          false,
+        };
+      }
+      continue;
+    }
+    if (s.type.kind().is<string_type>()) {
+      for (auto val : s.values<string_type>()) {
+        if (not val) {
+          co_yield {};
+          continue;
+        }
+        co_yield {val.value(), false};
+      }
+      continue;
+    }
+    if (s.type.kind().is<record_type>()) {
+      auto buf = std::string{};
+      const auto form = encode_setting and encode_setting->inner == "form";
+      for (auto val : s.values<record_type>()) {
+        if (not val) {
+          co_yield {};
+          continue;
+        }
+        if (form) {
+          co_yield {curl::escape(flatten(materialize(val.value()))), true};
+          continue;
+        }
+        auto p = json_printer{{}};
+        auto it = std::back_inserter(buf);
+        p.print(it, val.value());
+        co_yield {buf, true};
+        buf.clear();
+      }
+      continue;
+    }
+    diagnostic::warning("expected `blob`, `record` or `string`, got `{}`",
+                        s.type.kind())
+      .primary(body_expr.value())
+      .emit(dh);
+    for (auto i = int64_t{}; i < s.length(); ++i) {
+      co_yield {};
+    }
+  }
+}
+
+// Evaluate optional string expression from table slice
+auto eval_optional_string(const std::optional<ast::expression>& expr,
+                          const table_slice& slice, diagnostic_handler& dh)
+  -> generator<std::string_view> {
+  if (not expr) {
+    for (auto i = size_t{}; i < slice.rows(); ++i) {
+      co_yield {};
+    }
+    co_return;
+  }
+  const auto ms = eval(*expr, slice, dh);
+  for (const auto& s : ms.parts()) {
+    if (s.type.kind().is<null_type>()) {
+      for (auto i = int64_t{}; i < s.length(); ++i) {
+        co_yield {};
+      }
+      continue;
+    }
+    if (s.type.kind().is<string_type>()) {
+      for (auto val : s.values<string_type>()) {
+        co_yield val.value_or("");
+      }
+      continue;
+    }
+    diagnostic::warning("expected `string`, got `{}`", s.type.kind())
+      .primary(*expr)
+      .emit(dh);
+    for (auto i = int64_t{}; i < s.length(); ++i) {
+      co_yield {};
+    }
+  }
+}
+
+} // namespace http_utils
+
+struct http_request_args {
   tenzir::location op;
   ast::expression url;
   std::optional<ast::expression> method;
   std::optional<ast::expression> body;
   std::optional<located<std::string>> encode;
   std::optional<ast::expression> headers;
-  std::optional<ast::field_path> response_field;
-  std::optional<ast::field_path> metadata_field;
-  std::optional<ast::field_path> error_field;
-  std::optional<ast::lambda_expr> paginate;
-  located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
   std::optional<tenzir::location> tls;
   std::optional<located<std::string>> keyfile;
@@ -1516,6 +1623,93 @@ struct http_args {
   located<duration> connection_timeout{5s, location::unknown};
   uint64_t max_retry_count{};
   located<duration> retry_delay{1s, location::unknown};
+
+  // Common validation for HTTP request fields
+  auto validate_request_args(diagnostic_handler& dh) const -> failure_or<void> {
+    TENZIR_ASSERT(op);
+    if (encode) {
+      if (not body) {
+        diagnostic::error("encoding specified without a `body`")
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (encode->inner != "json" and encode->inner != "form") {
+        diagnostic::error("unsupported encoding: `{}`", encode->inner)
+          .primary(encode->source)
+          .hint("must be `json` or `form`")
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (retry_delay.inner < duration::zero()) {
+      diagnostic::error("`retry_delay` must be a positive duration")
+        .primary(retry_delay)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (connection_timeout.inner < duration::zero()) {
+      diagnostic::error("`connection_timeout` must be a positive duration")
+        .primary(connection_timeout)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (parallel.inner == 0) {
+      diagnostic::error("`parallel` must be not be zero")
+        .primary(parallel)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
+  // Common method parsing
+  auto make_method(const std::string_view method) const
+    -> std::optional<http::method> {
+    if (method.empty()) {
+      if (not this->method and body) {
+        return http::method::post;
+      }
+      return http::method::get;
+    }
+    auto m = http::method{};
+    if (http::from_string(method, m)) {
+      return m;
+    }
+    return std::nullopt;
+  }
+
+  // Common SSL context creation
+  auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
+    return ssl::context::enable(tls.has_value() or uri.scheme() == "https")
+      .and_then(ssl::emplace_context(ssl::tls::any))
+      .and_then(ssl::enable_default_verify_paths())
+      .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
+      .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
+      .and_then(ssl::use_password_if(inner(password)))
+      .and_then(ssl::use_sni_hostname(std::move(uri)));
+  }
+
+  friend auto inspect(auto& f, http_request_args& x) -> bool {
+    return f.object(x).fields(
+      f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
+      f.field("body", x.body), f.field("encode", x.encode),
+      f.field("headers", x.headers), f.field("parallel", x.parallel),
+      f.field("tls", x.tls), f.field("keyfile", x.keyfile),
+      f.field("certfile", x.certfile), f.field("password", x.password),
+      f.field("connection_timeout", x.connection_timeout),
+      f.field("max_retry_count", x.max_retry_count),
+      f.field("retry_delay", x.retry_delay));
+  }
+};
+
+struct http_args : http_request_args {
+  // Response-specific fields (not in base)
+  std::optional<ast::field_path> response_field;
+  std::optional<ast::field_path> metadata_field;
+  std::optional<ast::field_path> error_field;
+  std::optional<ast::lambda_expr> paginate;
+  located<duration> paginate_delay{0s, location::unknown};
   std::optional<located<pipeline>> parse;
   std::optional<expression> filter;
 
@@ -1542,22 +1736,12 @@ struct http_args {
   }
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
-    TENZIR_ASSERT(op);
-    if (encode) {
-      if (not body) {
-        diagnostic::error("encoding specified without a `body`")
-          .primary(encode->source)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (encode->inner != "json" and encode->inner != "form") {
-        diagnostic::error("unsupported encoding: `{}`", encode->inner)
-          .primary(encode->source)
-          .hint("must be `json` or `form`")
-          .emit(dh);
-        return failure::promise();
-      }
+    // First validate common request arguments
+    if (auto result = validate_request_args(dh); not result) {
+      return result;
     }
+
+    // Then validate response-specific fields
     if (response_field and metadata_field) {
       auto rp = std::views::transform(response_field->path(),
                                       &ast::field_path::segment::id)
@@ -1592,27 +1776,9 @@ struct http_args {
         return failure::promise();
       }
     }
-    if (retry_delay.inner < duration::zero()) {
-      diagnostic::error("`retry_delay` must be a positive duration")
-        .primary(retry_delay)
-        .emit(dh);
-      return failure::promise();
-    }
     if (paginate_delay.inner < duration::zero()) {
       diagnostic::error("`paginate_delay` must be a positive duration")
         .primary(paginate_delay)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (connection_timeout.inner < duration::zero()) {
-      diagnostic::error("`connection_timeout` must be a positive duration")
-        .primary(connection_timeout)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (parallel.inner == 0) {
-      diagnostic::error("`parallel` must be not be zero")
-        .primary(parallel)
         .emit(dh);
       return failure::promise();
     }
@@ -1630,31 +1796,6 @@ struct http_args {
       }
     }
     return {};
-  }
-
-  auto make_method(const std::string_view method) const
-    -> std::optional<http::method> {
-    if (method.empty()) {
-      if (not this->method and body) {
-        return http::method::post;
-      }
-      return http::method::get;
-    }
-    auto m = http::method{};
-    if (http::from_string(method, m)) {
-      return m;
-    }
-    return std::nullopt;
-  }
-
-  auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
-    return ssl::context::enable(tls.has_value() or uri.scheme() == "https")
-      .and_then(ssl::emplace_context(ssl::tls::any))
-      .and_then(ssl::enable_default_verify_paths())
-      .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
-      .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
-      .and_then(ssl::use_password_if(inner(password)))
-      .and_then(ssl::use_sni_hostname(std::move(uri)));
   }
 
   friend auto inspect(auto& f, http_args& x) -> bool {
@@ -1675,6 +1816,45 @@ struct http_args {
       f.field("filter", x.filter));
   }
 };
+
+// Arguments for the to_http sink operator (subset of http_args without response
+// handling)
+struct to_http_args : http_request_args {
+  auto add_to(argument_parser2& p) {
+    p.positional("url", url, "string");
+    p.named("method", method, "string");
+    p.named("body|payload", body, "record|string|blob");
+    p.named("encode", encode);
+    p.named("headers", headers, "record");
+    p.named_optional("parallel", parallel);
+    p.named("tls", tls);
+    p.named("certfile", certfile);
+    p.named("keyfile", keyfile);
+    p.named("password", password);
+    p.named_optional("connection_timeout", connection_timeout);
+    p.named_optional("max_retry_count", max_retry_count);
+    p.named_optional("retry_delay", retry_delay);
+  }
+
+  auto validate(diagnostic_handler& dh) const -> failure_or<void> {
+    // Only validate common request arguments - no response-specific validation
+    // needed
+    return validate_request_args(dh);
+  }
+
+  friend auto inspect(auto& f, to_http_args& x) -> bool {
+    return f.object(x).fields(
+      f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
+      f.field("body", x.body), f.field("encode", x.encode),
+      f.field("headers", x.headers), f.field("parallel", x.parallel),
+      f.field("tls", x.tls), f.field("keyfile", x.keyfile),
+      f.field("certfile", x.certfile), f.field("password", x.password),
+      f.field("connection_timeout", x.connection_timeout),
+      f.field("max_retry_count", x.max_retry_count),
+      f.field("retry_delay", x.retry_delay));
+  }
+};
+;
 
 class http_operator final : public crtp_operator<http_operator> {
 public:
@@ -1941,8 +2121,8 @@ public:
       TENZIR_ASSERT(hdrs.size() == slice.rows());
       auto url_it = urls.begin();
       auto hdr_it = hdrs.begin();
-      auto methods = eval_optional_string(args_.method, slice, dh);
-      auto bodies = eval_body(slice, dh);
+      auto methods = http_utils::eval_optional_string(args_.method, slice, dh);
+      auto bodies = http_utils::eval_body(args_.body, args_.encode, slice, dh);
       for (auto row : slice.values()) {
         auto& url = *url_it++;
         auto& [headers, has_content_type] = *hdr_it++;
@@ -2091,108 +2271,6 @@ public:
     TENZIR_ASSERT(pagination_queue.empty());
   }
 
-  auto eval_body(const table_slice& slice, diagnostic_handler& dh) const
-    -> generator<std::pair<std::string_view, bool>> {
-    if (not args_.body) {
-      for (auto i = size_t{}; i < slice.rows(); ++i) {
-        co_yield {};
-      }
-      co_return;
-    }
-    const auto ms = eval(args_.body.value(), slice, dh);
-    for (const auto& s : ms.parts()) {
-      if (s.type.kind().is<null_type>()) {
-        for (auto i = int64_t{}; i < s.length(); ++i) {
-          co_yield {};
-        }
-        continue;
-      }
-      if (s.type.kind().is<blob_type>()) {
-        for (auto val : s.values<blob_type>()) {
-          if (not val) {
-            co_yield {};
-            continue;
-          }
-          co_yield {
-            {reinterpret_cast<const char*>(val->data()), val->size()},
-            false,
-          };
-        }
-        continue;
-      }
-      if (s.type.kind().is<string_type>()) {
-        for (auto val : s.values<string_type>()) {
-          if (not val) {
-            co_yield {};
-            continue;
-          }
-          co_yield {val.value(), false};
-        }
-        continue;
-      }
-      if (s.type.kind().is<record_type>()) {
-        auto buf = std::string{};
-        const auto form = args_.encode and args_.encode->inner == "form";
-        for (auto val : s.values<record_type>()) {
-          if (not val) {
-            co_yield {};
-            continue;
-          }
-          if (form) {
-            co_yield {curl::escape(flatten(materialize(val.value()))), true};
-            continue;
-          }
-          auto p = json_printer{{}};
-          auto it = std::back_inserter(buf);
-          p.print(it, val.value());
-          co_yield {buf, true};
-          buf.clear();
-        }
-        continue;
-      }
-      diagnostic::warning("expected `blob`, `record` or `string`, got `{}`",
-                          s.type.kind())
-        .primary(args_.body.value())
-        .emit(dh);
-      for (auto i = int64_t{}; i < s.length(); ++i) {
-        co_yield {};
-      }
-    }
-  }
-
-  static auto
-  eval_optional_string(const std::optional<ast::expression>& expr,
-                       const table_slice& slice, diagnostic_handler& dh)
-    -> generator<std::string_view> {
-    if (not expr) {
-      for (auto i = size_t{}; i < slice.rows(); ++i) {
-        co_yield {};
-      }
-      co_return;
-    }
-    const auto ms = eval(*expr, slice, dh);
-    for (const auto& s : ms.parts()) {
-      if (s.type.kind().is<null_type>()) {
-        for (auto i = int64_t{}; i < s.length(); ++i) {
-          co_yield {};
-        }
-        continue;
-      }
-      if (s.type.kind().is<string_type>()) {
-        for (auto val : s.values<string_type>()) {
-          co_yield val.value_or("");
-        }
-        continue;
-      }
-      diagnostic::warning("expected `string`, got `{}`", s.type.kind())
-        .primary(*expr)
-        .emit(dh);
-      for (auto i = int64_t{}; i < s.length(); ++i) {
-        co_yield {};
-      }
-    }
-  }
-
   auto location() const -> operator_location override {
     return operator_location::local;
   }
@@ -2226,6 +2304,274 @@ private:
   http_args args_;
 };
 
+// Sink operator that sends HTTP requests but discards responses
+class to_http_operator final : public crtp_operator<to_http_operator> {
+public:
+  to_http_operator() = default;
+
+  to_http_operator(to_http_args args) : args_{std::move(args)} {
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    auto& dh = ctrl.diagnostics();
+    auto awaiting = uint64_t{};
+
+    for (const auto& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield std::monostate{};
+        continue;
+      }
+
+      auto urls = std::vector<std::string>{};
+      urls.reserve(slice.rows());
+      auto reqs = std::vector<secret_request>{};
+      auto url_warn = false;
+
+      // Evaluate URLs (using the same logic as http operator)
+      const auto url_ms = eval(args_.url, slice, dh);
+      for (const auto& s : url_ms.parts()) {
+        if (s.type.kind().is<string_type>()) {
+          for (auto val : s.values<string_type>()) {
+            if (val) {
+              urls.emplace_back(*val);
+            } else {
+              url_warn = true;
+              urls.emplace_back();
+            }
+          }
+          continue;
+        }
+        if (s.type.kind().is<secret_type>()) {
+          for (const auto& val : s.values<secret_type>()) {
+            if (val) {
+              auto req = make_secret_request("url", materialize(*val),
+                                             args_.url.get_location(),
+                                             urls.emplace_back(), dh);
+              reqs.emplace_back(std::move(req));
+            } else {
+              url_warn = true;
+              urls.emplace_back();
+            }
+          }
+          continue;
+        }
+        diagnostic::warning("expected `string`, got `{}`", s.type.kind())
+          .primary(args_.url)
+          .emit(dh);
+        urls.insert(urls.end(), s.length(), {});
+      }
+
+      if (url_warn) {
+        diagnostic::warning("`url` must not be null")
+          .primary(args_.url)
+          .note("skipping request")
+          .emit(dh);
+      }
+
+      // Evaluate headers
+      auto hdrs = std::vector<
+        std::pair<std::unordered_map<std::string, std::string>, bool>>{};
+      if (args_.headers) {
+        hdrs.reserve(slice.rows());
+        auto hdr_ms = eval(*args_.headers, slice, dh);
+        for (const auto& s : hdr_ms.parts()) {
+          if (s.type.kind().is_not<record_type>()) {
+            hdrs.insert(hdrs.end(), s.length(), {});
+            diagnostic::warning("expected `record`, got `{}`", s.type.kind())
+              .primary(*args_.headers)
+              .note("skipping headers")
+              .emit(dh);
+            continue;
+          }
+          for (const auto& val : s.values<record_type>()) {
+            if (not val) {
+              hdrs.emplace_back();
+              diagnostic::warning("expected `record`, got `null`")
+                .primary(*args_.headers)
+                .note("skipping headers")
+                .emit(dh);
+              continue;
+            }
+            auto& [h, has_content_type] = hdrs.emplace_back();
+            const auto has_body = args_.body.has_value();
+            for (const auto& [k, v] : *val) {
+              has_content_type
+                |= has_body and caf::icase_equal(k, "content-type");
+              match(
+                v,
+                [&](const std::string_view& x) {
+                  h.emplace(k, x);
+                },
+                [&](const secret_view& x) {
+                  auto key = std::string{k};
+                  auto req = make_secret_request(key, materialize(x),
+                                                 args_.headers->get_location(),
+                                                 h[key], dh);
+                  reqs.emplace_back(std::move(req));
+                },
+                [&](const auto&) {
+                  diagnostic::warning(
+                    "`headers` must be `{{ string: string }}`")
+                    .primary(*args_.headers)
+                    .note("skipping headers")
+                    .emit(dh);
+                });
+            }
+          }
+        }
+      } else {
+        hdrs.resize(slice.rows());
+      }
+
+      if (not reqs.empty()) {
+        co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
+      }
+
+      TENZIR_ASSERT(urls.size() == slice.rows());
+      TENZIR_ASSERT(hdrs.size() == slice.rows());
+
+      auto url_it = urls.begin();
+      auto hdr_it = hdrs.begin();
+      auto methods = http_utils::eval_optional_string(args_.method, slice, dh);
+      auto bodies = http_utils::eval_body(args_.body, args_.encode, slice, dh);
+
+      for (auto row : slice.values()) {
+        auto& url = *url_it++;
+        auto& [headers, has_content_type] = *hdr_it++;
+        const auto method = methods.next().value();
+        const auto [body, insert_content_type] = bodies.next().value();
+
+        if (url.empty()) {
+          diagnostic::warning("`url` must not be empty")
+            .primary(args_.url)
+            .note("skipping request")
+            .emit(dh);
+          continue;
+        }
+
+        if (not url.starts_with("http://")
+            and not url.starts_with("https://")) {
+          url.insert(0, args_.tls ? "https://" : "http://");
+        }
+        if (args_.tls and url.starts_with("http://")) {
+          url.insert(4, "s");
+        }
+
+        const auto m = args_.make_method(method);
+        if (not m) {
+          diagnostic::warning("invalid http method: `{}`", method)
+            .primary(args_.method.value())
+            .emit(dh);
+          continue;
+        }
+
+        auto caf_uri = caf::make_uri(url);
+        if (not caf_uri) {
+          diagnostic::warning("failed to parse uri: {}", caf_uri.error())
+            .primary(args_.op)
+            .emit(dh);
+          continue;
+        }
+
+        if (insert_content_type and not has_content_type) {
+          headers.emplace("Content-Type",
+                          args_.encode and args_.encode->inner == "form"
+                            ? "application/x-www-form-urlencoded"
+                            : "application/json");
+        }
+
+        // Send HTTP request but don't handle response (sink behavior)
+        http::with(ctrl.self().system())
+          .context(args_.make_ssl_context(*caf_uri))
+          .connect(*caf_uri)
+          .max_response_size(max_response_size)
+          .connection_timeout(args_.connection_timeout.inner)
+          .max_retry_count(args_.max_retry_count)
+          .retry_delay(args_.retry_delay.inner)
+          .add_header_fields(headers)
+          .request(*m, body)
+          .or_else([&](const caf::error& e) {
+            diagnostic::warning("failed to make http request: {}", e)
+              .primary(args_.op)
+              .emit(dh);
+          })
+          .transform([](auto&& x) {
+            return std::move(x.first);
+          })
+          .transform([&](const caf::async::future<http::response>& fut) {
+            ++awaiting;
+            fut.bind_to(ctrl.self())
+              .then(
+                [&](const http::response& r) {
+                  --awaiting;
+                  ctrl.set_waiting(false);
+                  // Log response for debugging but don't process it
+                  const auto code = std::to_underlying(r.code());
+                  if (code < 200 or 399 < code) {
+                    TENZIR_DEBUG("[to_http] request failed with status: {}",
+                                 code);
+                  } else {
+                    TENZIR_DEBUG("[to_http] request succeeded with status: {}",
+                                 code);
+                  }
+                },
+                [&](const caf::error& e) {
+                  --awaiting;
+                  ctrl.set_waiting(false);
+                  diagnostic::warning("request failed: `{}`", e)
+                    .primary(args_.op)
+                    .emit(dh);
+                });
+          });
+
+        // Limit parallel requests
+        while (awaiting >= args_.parallel.inner) {
+          ctrl.set_waiting(true);
+          co_yield std::monostate{};
+        }
+      }
+    }
+
+    // Wait for all pending requests to complete
+    do {
+      ctrl.set_waiting(awaiting != 0);
+      co_yield std::monostate{};
+    } while (awaiting != 0);
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.to_http";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(expression const& expr, event_order) const
+    -> optimize_result override {
+    auto args = args_;
+    // No filter support for sink operators
+    return {
+      std::nullopt,
+      args_.parallel.inner == 1 ? event_order::ordered : event_order::unordered,
+      std::make_unique<to_http_operator>(std::move(args)),
+    };
+  }
+
+  friend auto inspect(auto& f, to_http_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  to_http_args args_;
+};
+
 struct http_plugin final : public operator_plugin2<http_operator> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -2237,6 +2583,19 @@ struct http_plugin final : public operator_plugin2<http_operator> {
     TRY(args.validate(ctx));
     warn_deprecated_payload(inv, ctx);
     return std::make_unique<http_operator>(std::move(args));
+  }
+};
+
+struct to_http_plugin final : public operator_plugin2<to_http_operator> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = to_http_args{};
+    args.op = inv.self.get_location();
+    auto p = argument_parser2::operator_(name());
+    args.add_to(p);
+    TRY(p.parse(inv, ctx));
+    TRY(args.validate(ctx));
+    return std::make_unique<to_http_operator>(std::move(args));
   }
 };
 
@@ -2252,5 +2611,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_client)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_server)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::http_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::to_http_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::internal_source_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::internal_sink_plugin)
