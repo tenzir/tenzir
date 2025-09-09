@@ -156,20 +156,6 @@ to_http "https://backup-api.example.com/data",
         connection_timeout=10s
 ```
 
-## Differences from `http` operator
-
-The key differences between `to_http` and [`http`](/reference/operators/http) are:
-
-| Feature               | `to_http`                        | `http`                                            |
-| --------------------- | -------------------------------- | ------------------------------------------------- |
-| **Purpose**           | Sink - send data out             | Source/Transform - fetch and process data         |
-| **Output**            | No output events                 | Forwards response data as events                  |
-| **Response handling** | Discarded (logged for debugging) | Parsed and forwarded                              |
-| **Response fields**   | Not available                    | `response_field`, `metadata_field`, `error_field` |
-| **Pagination**        | Not supported                    | Supported via `paginate`                          |
-| **Parse pipeline**    | Not supported                    | Supported via `{ ... }`                           |
-| **Use case**          | Webhooks, notifications, logging | API consumption, data fetching                    |
-
 ## See Also
 
 [`http`](/reference/operators/http), [`from_http`](/reference/operators/from_http)

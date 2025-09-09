@@ -2494,10 +2494,12 @@ public:
                   // Log response for debugging but don't process it
                   const auto code = std::to_underlying(r.code());
                   if (code < 200 or 399 < code) {
-                    TENZIR_DEBUG("[to_http] request failed with status: {}",
-                                 code);
+                    diagnostic::warning("HTTP request failed with status: {}",
+                                        code)
+                      .primary(args_.op)
+                      .emit(dh);
                   } else {
-                    TENZIR_DEBUG("[to_http] request succeeded with status: {}",
+                    TENZIR_TRACE("[to_http] request succeeded with status: {}",
                                  code);
                   }
                 },
