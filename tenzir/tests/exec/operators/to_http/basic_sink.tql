@@ -1,0 +1,2 @@
+from {message: "Hello World", id: 1}
+to_http "https://httpbin.org/post"

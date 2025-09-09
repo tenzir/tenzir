@@ -1,0 +1,2 @@
+from {username: "testuser", password: "secret123"}
+to_http "https://httpbin.org/post", method="post", encode="form", body=this
