@@ -36,6 +36,14 @@ public:
     std::optional<std::string> ext_id;
     location loc;
 
+    friend auto inspect(auto& f, aws_iam_options& x) -> bool {
+      return f.object(x).fields(f.field("region", x.region),
+                                f.field("role", x.role),
+                                f.field("session_name", x.session_name),
+                                f.field("ext_id", x.ext_id),
+                                f.field("loc", x.loc));
+    }
+
     static auto from_record(located<record> config, diagnostic_handler& dh)
       -> failure_or<aws_iam_options>;
   };

@@ -131,7 +131,7 @@ public:
     auto path = std::string{};
     auto opts = arrow::fs::S3Options::FromUri(uri, &path);
     if (not opts.ok()) {
-      diagnostic::error("failed to create Arrow S3 filesystem: {}",
+      diagnostic::error("failed to create Arrow S3 options: {}",
                         opts.status().ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;

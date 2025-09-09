@@ -17,6 +17,7 @@
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/error.hpp>
 
+#include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
@@ -81,6 +82,10 @@ auto configuration::aws_iam_options::from_record(located<record> config,
 auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   RdKafka::Handle* handle, const std::string&) -> void {
   const auto valid_for = std::chrono::seconds{900};
+  Aws::InitAPI({});
+  const auto aws_guard = detail::scope_guard{[] noexcept {
+    Aws::ShutdownAPI({});
+  }};
   const auto url = Aws::Http::URI{
     fmt::format("https://kafka.{}.amazonaws.com/", options_.region),
   };

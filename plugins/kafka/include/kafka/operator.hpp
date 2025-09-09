@@ -33,7 +33,75 @@
 using namespace std::chrono_literals;
 namespace tenzir::plugins::kafka {
 
-namespace {
+inline auto validate_options(const located<record>& r, diagnostic_handler& dh)
+  -> failure_or<void> {
+  for (const auto& [key, value] : r.inner) {
+    const auto f = detail::overload{
+      [](const concepts::arithmetic auto&) -> failure_or<void> {
+        return {};
+      },
+      [](const std::string&) -> failure_or<void> {
+        return {};
+      },
+      [](const secret&) -> failure_or<void> {
+        return {};
+      },
+      [](const tenzir::pattern&) -> failure_or<void> {
+        TENZIR_UNREACHABLE();
+      },
+      [&]<typename T>(const T&) -> failure_or<void> {
+        diagnostic::error("options must be a record `{{ "
+                          "string: number|string }}`")
+          .primary(r.source, "key `{}` is `{}", key,
+                   type_kind{tag_v<data_to_type_t<T>>})
+          .emit(dh);
+        return failure::promise();
+      }};
+    TRY(match(value, f));
+  }
+  return {};
+}
+
+inline auto check_sasl_mechanism(const located<record>& options,
+                                 diagnostic_handler& dh) -> failure_or<void> {
+  const auto it = options.inner.find("sasl.mechanism");
+  if (it != options.inner.end()) {
+    const auto* mechanism = try_as<std::string>(it->second);
+    if (not mechanism) {
+      diagnostic::error("option `sasl.mechanism` must be `string`")
+        .primary(options)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (*mechanism != "OAUTHBEARER") {
+      diagnostic::error("conflicting `sasl.mechanism`: `{}` "
+                        "`but `aws_iam` requires `OAUTHBEARER`",
+                        *mechanism)
+        .primary(options)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  const auto it_ms = options.inner.find("sasl.mechanisms");
+  if (it_ms != options.inner.end()) {
+    const auto* mechanisms = try_as<std::string>(it_ms->second);
+    if (not mechanisms) {
+      diagnostic::error("option `sasl.mechanisms` must be `string`")
+        .primary(options)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (*mechanisms != "OAUTHBEARER") {
+      diagnostic::error("conflicting `sasl.mechanisms`: `{}` "
+                        "but `aws_iam` requires `OAUTHBEARER`",
+                        *mechanisms)
+        .primary(options)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
+}
 
 // Valid values:
 // - beginning | end | stored
@@ -238,14 +306,15 @@ struct saver_args {
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<record> options;
-  configuration::aws_iam_options aws;
+  std::optional<configuration::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
       .fields(f.field("topic", x.topic), f.field("key", x.key),
-              f.field("timestamp", x.timestamp), f.field("options", x.options));
+              f.field("timestamp", x.timestamp), f.field("options", x.options),
+              f.field("aws", x.aws));
   }
 };
 
@@ -340,5 +409,5 @@ private:
   saver_args args_;
   record config_;
 };
-} // namespace
+
 } // namespace tenzir::plugins::kafka
