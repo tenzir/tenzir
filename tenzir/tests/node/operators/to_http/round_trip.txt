@@ -1,3 +1,0 @@
-{id: 1, message: "Hello"}
-{id: 2, message: "World"}
-{id: 3, message: "Test"}

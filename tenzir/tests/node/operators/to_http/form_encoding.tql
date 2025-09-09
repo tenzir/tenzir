@@ -2,7 +2,7 @@
 
 // Start local HTTP server to receive form data
 pipeline::detach {
-  from_http "127.0.0.1:54323", server=true, { 
+  from_http "127.0.0.1:54323", server=true {
     read_kv field_split="&", value_split="="
   }
   publish "http_form_data"
@@ -10,13 +10,15 @@ pipeline::detach {
 
 // Send form-encoded data
 pipeline::detach {
-  from {username: "testuser", password: "secret123"}
-  to_http "http://127.0.0.1:54323", 
-          method="post", 
+  every 10ms {
+    from {username: "testuser", password: "secret123"}
+  }
+  to_http "http://127.0.0.1:54323",
+          method="post",
           encode="form",
           body=this
 }
 
 // Verify form data was received
-subscribe "http_form_data" 
-head 1
+subscribe "http_form_data"
+head 3

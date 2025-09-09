@@ -2,13 +2,15 @@
 
 // Start local HTTP server to receive requests
 pipeline::detach {
-  from_http "127.0.0.1:54322", server=true
+  from_http "127.0.0.1:54322", server=true, metadata_field=headers
   publish "http_with_headers"
 }
 
 // Send JSON data with custom headers
 pipeline::detach {
-  from {user: "alice", action: "login", timestamp: "2023-01-01T12:00:00Z"}
+  every 10ms {
+    from {user: "alice", action: "login", timestamp: "2023-01-01T12:00:00Z"}
+  }
   to_http "http://127.0.0.1:54322", 
           method="post", 
           headers={"X-Test": "true", "Content-Type": "application/json"},

@@ -8,10 +8,12 @@ pipeline::detach {
 
 // Send test data to the HTTP server using to_http
 pipeline::detach {
-  from {message: "Hello World", id: 1}
+  every 10ms {
+    from {message: "Hello World"}
+  }
   to_http "http://127.0.0.1:54321", method="post", body=this
 }
 
 // Subscribe to received data and output for verification
 subscribe "http_received"
-head 1
+head 5
