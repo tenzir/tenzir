@@ -557,7 +557,7 @@ jobs:
           echo "CXX=${llvm_root}/bin/clang++" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
-          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "LDFLAGS=-L${llvm_root}/lib/c++ -Wl,-rpath,${llvm_root}/lib/c++" >> $GITHUB_ENV
       - name: Fetch ccache Cache
         uses: actions/cache/restore@v4
         with:
