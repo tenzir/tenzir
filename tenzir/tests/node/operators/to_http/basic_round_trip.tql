@@ -1,0 +1,17 @@
+// node: true
+
+// Start local HTTP server that receives requests and publishes them
+pipeline::detach {
+  from_http "127.0.0.1:54321", server=true
+  publish "http_received"
+}
+
+// Send test data to the HTTP server using to_http
+pipeline::detach {
+  from {message: "Hello World", id: 1}
+  to_http "http://127.0.0.1:54321", method="post", body=this
+}
+
+// Subscribe to received data and output for verification
+subscribe "http_received"
+head 1

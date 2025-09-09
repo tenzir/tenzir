@@ -1,0 +1,20 @@
+// node: true
+
+// Start local HTTP server to receive requests
+pipeline::detach {
+  from_http "127.0.0.1:54322", server=true
+  publish "http_with_headers"
+}
+
+// Send JSON data with custom headers
+pipeline::detach {
+  from {user: "alice", action: "login", timestamp: "2023-01-01T12:00:00Z"}
+  to_http "http://127.0.0.1:54322", 
+          method="post", 
+          headers={"X-Test": "true", "Content-Type": "application/json"},
+          body=this
+}
+
+// Verify the received data
+subscribe "http_with_headers"
+head 1

@@ -1,6 +1,0 @@
-// skip: httpbin.org currently unavailable (503 error)
-
-from {data: "test"}
-to_http "https://httpbin.org/post", method="post", 
-        headers={"X-Test": "true", "Authorization": "Bearer test"}, 
-        body=this

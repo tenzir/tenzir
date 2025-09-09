@@ -1,6 +1,0 @@
-// skip: httpbin.org currently unavailable (503 error)
-
-from {id: 1, message: "First event"}
-repeat 3
-enumerate id
-to_http "https://httpbin.org/post", method="post", body=this
