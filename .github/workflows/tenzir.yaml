@@ -551,11 +551,13 @@ jobs:
       - if: ${{ matrix.tenzir.name == 'macOS' }}
         name: Setup Homebrew Clang
         run: |
-          llvm_root="$(brew --prefix llvm)"
+          llvm_root="$(brew --prefix llvm@20)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
-          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CC=${llvm_root}/bin/clang" >> $GITHUB_ENV
+          echo "CXX=${llvm_root}/bin/clang++" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
-          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+          echo "CXXFLAGS=-nostdinc++ -isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+          echo "LDFLAGS=-L${llvm_root}/lib/c++ -Wl,-rpath,${llvm_root}/lib/c++" >> $GITHUB_ENV
       - name: Fetch ccache Cache
         uses: actions/cache/restore@v4
         with:

@@ -1,7 +1,21 @@
 ---
 name: changelog-writer
 description: |
-  Use this agent when you need to create or update changelog entries for Tenzir.
+  Use this agent ONLY for USER-FACING changes that need changelog entries.
+  User-facing changes include:
+  - TQL operators, functions, formats, and connectors
+  - CLI tools and their flags/options
+  - Pipeline behavior changes visible to users
+  - User-visible bug fixes in TQL or CLI functionality
+
+  DO NOT use this agent for:
+  - Build system changes (CMake, Nix, Docker)
+  - CI/CD pipeline updates
+  - Internal refactoring without user impact
+  - Developer tooling improvements
+  - Documentation-only changes
+  - Test infrastructure changes
+
   This agent specializes in writing changelog entries as microblogs that clearly
   communicate changes to users. It understands the changelog/add.py tool and
   follows Tenzir's changelog writing guidelines.
@@ -9,29 +23,38 @@ description: |
   Examples:
 
   <example>
-  Context: User has implemented a new feature and needs a changelog entry.
-  user: "Write a changelog entry for my new operator"
-  assistant: "I'll use the changelog-writer agent to create a proper changelog entry for the new operator."
+  Context: User has implemented a new TQL operator.
+  user: "Write a changelog entry for my new dns_lookup operator"
+  assistant: "I'll use the changelog-writer agent to create a proper changelog entry for the new TQL operator."
   <commentary>
-  The user needs a changelog entry for a new feature, which is the changelog-writer agent's specialty.
+  New TQL operators are user-facing features that need changelog entries.
   </commentary>
   </example>
 
   <example>
-  Context: User has fixed a bug and needs to document it.
+  Context: User has fixed a bug in TQL pipeline execution.
   user: "I fixed the memory leak in the JSON parser. Please create a changelog entry."
-  assistant: "Let me use the changelog-writer agent to write a changelog entry for this bug fix."
+  assistant: "Let me use the changelog-writer agent to write a changelog entry for this user-facing bug fix."
   <commentary>
-  Bug fixes need changelog entries to inform users about resolved issues.
+  Bug fixes in TQL functionality affect users and need changelog entries.
   </commentary>
   </example>
 
   <example>
-  Context: User wants to update an existing changelog entry.
-  user: "The changelog entry for the new operator needs better examples. Can you improve it?"
-  assistant: "I'll use the changelog-writer agent to enhance the changelog entry with better examples."
+  Context: User updated build system configuration.
+  user: "I updated the CMake configuration for better dependency management. Write a changelog."
+  assistant: "Build system changes are not user-facing, so no changelog entry is needed for this change."
   <commentary>
-  Improving existing changelog entries falls within the changelog-writer agent's expertise.
+  CMake/build system changes are infrastructure updates, not user-facing changes.
+  </commentary>
+  </example>
+
+  <example>
+  Context: User changed CI pipeline.
+  user: "I fixed the GitHub Actions workflow. Should I write a changelog?"
+  assistant: "CI/CD pipeline changes don't affect users directly, so no changelog entry is needed."
+  <commentary>
+  CI/CD changes are project infrastructure, not user-facing.
   </commentary>
   </example>
 model: opus
