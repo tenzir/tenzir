@@ -1,25 +1,19 @@
 ---
-title: save_kafka
-category: Outputs/Bytes
-example: 'save_kafka topic="example"'
+title: to_kafka
+category: Outputs/Events
+example: 'to_kafka "topic", message=this.print_json()'
 ---
 
-Saves a byte stream to a Apache Kafka topic.
+Sends messages to an Apache Kafka topic.
 
 ```tql
-save_kafka topic:string, [key=string, timestamp=time, options=record,
-           aws_iam=record]
+to_kafka topic:string, message:blob|string, [key=string, timestamp=time,
+         options=record, aws_iam=record]
 ```
 
 ## Description
 
-:::caution[Deprecated]
-The `save_kafka` operator does not respect event boundaries and can combine
-multiple events into a single message, causing issues for consumers. Consider
-using `to_kafka` instead.
-:::
-
-The `save_kafka` operator saves bytes to a Kafka topic.
+The `to_kafka` operator sends one message per event to a Kafka topic.
 
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
 supports all [configuration options][librdkafka-options]. You can specify them
@@ -34,11 +28,14 @@ include them:
 
 - `bootstrap.servers`: `localhost`
 - `client.id`: `tenzir`
-- `group.id`: `tenzir`
 
 ### `topic: string`
 
-The Kafka topic to use.
+The Kafka topic to send messages to.
+
+### `message: blob|string`
+
+An expression that evaluates to the message content for each row.
 
 ### `key = string (optional)`
 
@@ -51,15 +48,14 @@ Sets a fixed timestamp for all messages.
 ### `options = record (optional)`
 
 A record of key-value configuration options for
-[librdkafka][librdkafka], e.g., `{"auto.offset.reset" : "earliest",
-"enable.partition.eof": true}`.
+[librdkafka][librdkafka], e.g., `{"acks": "all", "batch.size": 16384}`.
 
-The `save_kafka` operator passes the key-value pairs directly to
+The `to_kafka` operator passes the key-value pairs directly to
 [librdkafka][librdkafka]. Consult the list of available [configuration
 options][librdkafka-options] to configure Kafka according to your needs.
 
 We recommend factoring these options into the plugin-specific `kafka.yaml` so
-that they are independent of the `save_kafka` arguments.
+that they are independent of the `to_kafka` arguments.
 
 ### `aws_iam = record (optional)`
 
@@ -88,23 +84,28 @@ The operator will try to get credentials in the following order:
 
 ## Examples
 
-### Write the Tenzir version to topic `tenzir` with timestamp from the past
+### Send JSON-formatted events to topic `events`
 
 ```tql
-version
-write_json
-save_kafka "tenzir", timestamp=1984-01-01
+subscribe "logs"
+to_kafka "events", message=this.print_json()
 ```
 
-### Follow a CSV file and publish it to topic `data`
+### Send specific field values with a timestamp
 
 ```tql
-load_file "/tmp/data.csv"
-read_csv
-write_json
-save_kafka "data"
+subscribe "logs"
+to_kafka "alerts", message=alert_msg, timestamp=2024-01-01T00:00:00
+```
+
+### Send data with a fixed key for partitioning
+
+```tql
+metrics
+to_kafka "metrics", message=this.print_json(), key="server-01"
 ```
 
 ## See Also
 
-[`load_kafka`](/reference/operators/load_kafka)
+[`load_kafka`](/reference/operators/load_kafka),
+[`save_kafka`](/reference/operators/save_kafka)
