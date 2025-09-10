@@ -2478,6 +2478,8 @@ public:
                             : "application/json");
         }
         // Send HTTP request but don't handle response (sink behavior)
+        // Note: The HTTP client retries on network errors and 5xx responses,
+        // but not on 4xx client errors (which are typically permanent failures)
         http::with(ctrl.self().system())
           .context(args_.make_ssl_context(*caf_uri))
           .connect(*caf_uri)
@@ -2545,14 +2547,26 @@ public:
                     = args_.on_error ? args_.on_error->inner : "warn";
 
                   if (on_error_mode == "fail") {
-                    diagnostic::error("HTTP request to {} failed: {}", url, e)
-                      .primary(args_.op)
-                      .emit(dh);
+                    auto err = diagnostic::error(
+                                 "HTTP request to {} failed: {}", url, e)
+                                 .primary(args_.op);
+                    if (args_.max_retry_count > 0) {
+                      err = std::move(err).note(
+                        fmt::format("failed after {} retry attempt(s)",
+                                    args_.max_retry_count));
+                    }
+                    err.emit(dh);
                     ctrl.abort(diagnostic::error("aborting due to HTTP error"));
                   } else if (on_error_mode == "warn") {
-                    diagnostic::warning("HTTP request to {} failed: {}", url, e)
-                      .primary(args_.op)
-                      .emit(dh);
+                    auto warn = diagnostic::warning(
+                                  "HTTP request to {} failed: {}", url, e)
+                                  .primary(args_.op);
+                    if (args_.max_retry_count > 0) {
+                      warn = std::move(warn).note(
+                        fmt::format("failed after {} retry attempt(s)",
+                                    args_.max_retry_count));
+                    }
+                    warn.emit(dh);
                   }
                   // If on_error_mode == "ignore", do nothing
                 });
