@@ -25,6 +25,7 @@
 #  include <tenzir/detail/boost_uuid_generators.hpp>
 #endif
 
+#include <mutex>
 #include <ranges>
 #include <string_view>
 
@@ -51,8 +52,11 @@ struct operator_args {
   uint64_t max_size{};
 };
 
-// UUIDv7 generator for unique file naming
-static inline auto uuid_gen = boost::uuids::time_generator_v7{};
+// Thread-safe UUIDv7 generator for unique file naming
+namespace {
+std::mutex uuid_mutex;
+boost::uuids::time_generator_v7 uuid_gen;
+} // namespace
 
 // TODO: Don't we have this already?
 auto is_empty(const table_slice& x) -> bool {
@@ -297,7 +301,10 @@ public:
             relative_path
               += fmt::format("/{}={}", selector_to_name(sel), match(data, f));
           }
-          auto uuid = uuid_gen();
+          auto uuid = std::invoke([&] {
+            auto lock = std::lock_guard{uuid_mutex};
+            return uuid_gen();
+          });
           relative_path += fmt::format("/{}.{}", boost::uuids::to_string(uuid),
                                        args_.extension);
           auto partitioned_url = extend_url_path(*base_url, relative_path);
