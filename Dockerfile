@@ -561,6 +561,17 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/to_google_cloud_logging cmake --install build-to_google_cloud_logging --component Runtime && \
     rm -rf build-to_google_cloud_logging
 
+FROM plugins-source AS to_sentinelone_data_lake-plugin
+
+COPY contrib/tenzir-plugins/to_sentinelone_data_lake ./contrib/tenzir-plugins/to_sentinelone_data_lake
+RUN --mount=target=/ccache,type=cache \
+    cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+    cmake --build build-to_sentinelone_data_lake --parallel && \
+    cmake --build build-to_sentinelone_data_lake --target bats && \
+    DESTDIR=/plugin/to_sentinelone_data_lake cmake --install build-to_sentinelone_data_lake --component Runtime && \
+    rm -rf build-to_sentinelone_data_lake
+
 FROM plugins-source AS vast-plugin
 
 COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
@@ -587,6 +598,7 @@ COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
 COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
+COPY --from=to_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/to_sentinelone_data_lake /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 USER tenzir:tenzir

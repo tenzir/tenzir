@@ -1,0 +1,7 @@
+url: `https://example.com/api/addEvents`
+headers:
+	`Authorization`: `Bearer TOKEN`
+	`Content-Encoding`: `gzip`
+	`Content-Type`: `application/json`
+Uncompressed body:
+{"session":"DRY-RUN-ID-0","events":[{"ts":"0","sev":4,"attrs":{"metadata":{"version":"1.6.0"},"time":"1970-01-01T00:00:00Z","severity_id":4}}]}

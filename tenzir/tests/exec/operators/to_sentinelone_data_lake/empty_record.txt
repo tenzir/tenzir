@@ -1,0 +1,14 @@
+url: `https://example.com/api/addEvents`
+headers:
+	`Authorization`: `Bearer TOKEN`
+	`Content-Encoding`: `gzip`
+	`Content-Type`: `application/json`
+Uncompressed body:
+{"session":"DRY-RUN-ID-0","events":[{"attrs":{}}]}
+url: `https://example.com/api/addEvents`
+headers:
+	`Authorization`: `Bearer TOKEN`
+	`Content-Encoding`: `gzip`
+	`Content-Type`: `application/json`
+Uncompressed body:
+{"session":"DRY-RUN-ID-0","events":[{"attrs":{"events":{"data":null}}},{"attrs":{"events":{"data":{"type":"security.event","message":"Test log"}}}},{"attrs":{"events":{"data":null}}}]}
