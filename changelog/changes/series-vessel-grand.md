@@ -1,5 +1,5 @@
 ---
-title: "Don't autocast zeek TSV logs to predefined schemas"
+title: "Keep zeek TSV logs as-is in `read_zeek_tsv`"
 type: change
 authors: tobim
 pr: 5461
