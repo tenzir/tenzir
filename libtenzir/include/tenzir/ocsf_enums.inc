@@ -2344,6 +2344,17 @@
     {38, "Resource Details Object: name"},
     {99, "Other"},
   }},
+  {"8f8c0e29", {
+    {0, "Unknown"},
+    {1, "External Storage"},
+    {2, "Keyboard"},
+    {3, "Mouse"},
+    {4, "Printer"},
+    {5, "Monitor"},
+    {6, "Microphone"},
+    {7, "Webcam"},
+    {99, "Other"},
+  }},
   {"8fad684f", {
     {0, "Unknown"},
     {1, "Personal"},
@@ -2551,17 +2562,6 @@
   }},
   {"a58a3e8e", {
     {5023, "Cloud Resources Inventory Info"},
-  }},
-  {"a61a5ad0", {
-    {0, "Unknown"},
-    {1, "External Storage"},
-    {2, "Keyboard"},
-    {3, "Mouse"},
-    {4, "Printer"},
-    {7, "Monitor"},
-    {9, "Microphone"},
-    {10, "Webcam"},
-    {99, "Other"},
   }},
   {"a72e1ac9", {
     {0, "Unknown"},
