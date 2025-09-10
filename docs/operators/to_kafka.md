@@ -90,9 +90,26 @@ The operator will try to get credentials in the following order:
 
 ### Send JSON-formatted events to topic `events` (using default)
 
+Stream security events to a Kafka topic with automatic JSON formatting:
+
 ```tql
-subscribe "logs"
+subscribe "security-alerts"
+where severity >= "high"
+select timestamp, source_ip, alert_type, details
 to_kafka "events"
+```
+
+This pipeline subscribes to security alerts, filters for high-severity events,
+selects relevant fields, and sends them to Kafka as JSON. Each event is
+automatically formatted using `this.print_json()`, producing messages like:
+
+```json
+{
+  "timestamp": "2024-03-15T10:30:00.000000",
+  "source_ip": "192.168.1.100",
+  "alert_type": "brute_force",
+  "details": "Multiple failed login attempts detected"
+}
 ```
 
 ### Send JSON-formatted events with explicit message

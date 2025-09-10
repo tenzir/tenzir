@@ -77,12 +77,13 @@ public:
     const auto key = args_.key ? args_.key->inner : "";
     const auto timestamp = args_.timestamp ? args_.timestamp->inner : time{};
     // Create default expression if message not provided
-    auto message_expr = args_.message.value_or(ast::function_call{
+    static const auto default_message = ast::function_call{
       ast::entity{{ast::identifier{"print_json", location::unknown}}},
       {ast::this_{location::unknown}},
       location::unknown,
       true // method call
-    });
+    };
+    auto message_expr = args_.message.value_or(default_message);
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
