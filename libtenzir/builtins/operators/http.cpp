@@ -1498,13 +1498,12 @@ struct from_http final : public virtual operator_factory_plugin {
 
 // Base structure for common HTTP request arguments shared between operators
 // Common HTTP utility functions shared between http and to_http operators
-namespace http_utils {
 
 // Evaluate body expression from table slice, handling different types and
 // encodings
-auto eval_body(const std::optional<ast::expression>& body_expr,
-               const std::optional<located<std::string>>& encode_setting,
-               const table_slice& slice, diagnostic_handler& dh)
+auto eval_http_body(const std::optional<ast::expression>& body_expr,
+                    const std::optional<located<std::string>>& encode_setting,
+                    const table_slice& slice, diagnostic_handler& dh)
   -> generator<std::pair<std::string_view, bool>> {
   if (not body_expr) {
     for (auto i = size_t{}; i < slice.rows(); ++i) {
@@ -1574,8 +1573,8 @@ auto eval_body(const std::optional<ast::expression>& body_expr,
 }
 
 // Evaluate optional string expression from table slice
-auto eval_optional_string(const std::optional<ast::expression>& expr,
-                          const table_slice& slice, diagnostic_handler& dh)
+auto eval_http_optional_string(const std::optional<ast::expression>& expr,
+                               const table_slice& slice, diagnostic_handler& dh)
   -> generator<std::string_view> {
   if (not expr) {
     for (auto i = size_t{}; i < slice.rows(); ++i) {
@@ -1605,8 +1604,6 @@ auto eval_optional_string(const std::optional<ast::expression>& expr,
     }
   }
 }
-
-} // namespace http_utils
 
 struct http_request_args {
   tenzir::location op;
@@ -2119,8 +2116,8 @@ public:
       TENZIR_ASSERT(hdrs.size() == slice.rows());
       auto url_it = urls.begin();
       auto hdr_it = hdrs.begin();
-      auto methods = http_utils::eval_optional_string(args_.method, slice, dh);
-      auto bodies = http_utils::eval_body(args_.body, args_.encode, slice, dh);
+      auto methods = eval_http_optional_string(args_.method, slice, dh);
+      auto bodies = eval_http_body(args_.body, args_.encode, slice, dh);
       for (auto row : slice.values()) {
         auto& url = *url_it++;
         auto& [headers, has_content_type] = *hdr_it++;
@@ -2424,8 +2421,8 @@ public:
       TENZIR_ASSERT(hdrs.size() == slice.rows());
       auto url_it = urls.begin();
       auto hdr_it = hdrs.begin();
-      auto methods = http_utils::eval_optional_string(args_.method, slice, dh);
-      auto bodies = http_utils::eval_body(args_.body, args_.encode, slice, dh);
+      auto methods = eval_http_optional_string(args_.method, slice, dh);
+      auto bodies = eval_http_body(args_.body, args_.encode, slice, dh);
 
       for (auto row : slice.values()) {
         auto& url = *url_it++;
