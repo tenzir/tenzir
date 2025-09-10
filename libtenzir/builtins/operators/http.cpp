@@ -1818,8 +1818,6 @@ struct http_args : http_request_args {
 // Arguments for the to_http sink operator (subset of http_args without response
 // handling)
 struct to_http_args : http_request_args {
-  std::optional<located<std::string>> on_error;
-
   auto add_to(argument_parser2& p) {
     p.positional("url", url, "string");
     p.named("method", method, "string");
@@ -1827,7 +1825,6 @@ struct to_http_args : http_request_args {
     p.named("encode", encode);
     p.named("headers", headers, "record");
     p.named_optional("parallel", parallel);
-    p.named("on_error", on_error);
     p.named("tls", tls);
     p.named("certfile", certfile);
     p.named("keyfile", keyfile);
@@ -1837,18 +1834,7 @@ struct to_http_args : http_request_args {
     p.named_optional("retry_delay", retry_delay);
   }
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
-    // Validate on_error parameter
-    if (on_error) {
-      if (on_error->inner != "fail" and on_error->inner != "warn"
-          and on_error->inner != "ignore") {
-        diagnostic::error("invalid on_error value: `{}`", on_error->inner)
-          .primary(on_error->source)
-          .hint("must be `fail`, `warn`, or `ignore`")
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    // Validate common request arguments
+    // Only validate common request arguments
     return validate_request_args(dh);
   }
   friend auto inspect(auto& f, to_http_args& x) -> bool {
@@ -1856,9 +1842,8 @@ struct to_http_args : http_request_args {
       f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
       f.field("body", x.body), f.field("encode", x.encode),
       f.field("headers", x.headers), f.field("parallel", x.parallel),
-      f.field("on_error", x.on_error), f.field("tls", x.tls),
-      f.field("keyfile", x.keyfile), f.field("certfile", x.certfile),
-      f.field("password", x.password),
+      f.field("tls", x.tls), f.field("keyfile", x.keyfile),
+      f.field("certfile", x.certfile), f.field("password", x.password),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
       f.field("retry_delay", x.retry_delay));
@@ -2511,27 +2496,26 @@ public:
                   const auto is_server_error = 500 <= code and code <= 599;
 
                   if (not is_success) {
-                    const auto on_error_mode
-                      = args_.on_error ? args_.on_error->inner : "warn";
-
-                    if (on_error_mode == "fail") {
-                      diagnostic::error(
-                        "HTTP request to {} failed with status {}", url, code)
+                    // For server errors with retries configured, emit an error
+                    // (retries were exhausted). Otherwise emit a warning.
+                    if (is_server_error and args_.max_retry_count > 0) {
+                      diagnostic::error("HTTP request to {} failed with status "
+                                        "{} after {} retry attempt(s)",
+                                        url, code, args_.max_retry_count)
                         .primary(args_.op)
-                        .note(is_client_error   ? "client error"
-                              : is_server_error ? "server error"
-                                                : "unexpected status code")
+                        .note("server error - all retries exhausted")
                         .emit(dh);
-                    } else if (on_error_mode == "warn") {
+                    } else {
+                      // Client errors or no retries configured - just warn
                       diagnostic::warning(
                         "HTTP request to {} failed with status {}", url, code)
                         .primary(args_.op)
-                        .note(is_client_error   ? "client error"
+                        .note(is_client_error
+                                ? "client error - request was not retried"
                               : is_server_error ? "server error"
                                                 : "unexpected status code")
                         .emit(dh);
                     }
-                    // If on_error_mode == "ignore", do nothing
                   } else {
                     TENZIR_TRACE("[to_http] request to {} succeeded with "
                                  "status {}",
@@ -2541,31 +2525,20 @@ public:
                 [&, url](const caf::error& e) {
                   --awaiting;
                   ctrl.set_waiting(false);
-                  const auto on_error_mode
-                    = args_.on_error ? args_.on_error->inner : "warn";
-
-                  if (on_error_mode == "fail") {
-                    auto err = diagnostic::error(
-                                 "HTTP request to {} failed: {}", url, e)
-                                 .primary(args_.op);
-                    if (args_.max_retry_count > 0) {
-                      err = std::move(err).note(
-                        fmt::format("failed after {} retry attempt(s)",
-                                    args_.max_retry_count));
-                    }
-                    std::move(err).emit(dh);
-                  } else if (on_error_mode == "warn") {
-                    auto warn = diagnostic::warning(
-                                  "HTTP request to {} failed: {}", url, e)
-                                  .primary(args_.op);
-                    if (args_.max_retry_count > 0) {
-                      warn = std::move(warn).note(
-                        fmt::format("failed after {} retry attempt(s)",
-                                    args_.max_retry_count));
-                    }
-                    std::move(warn).emit(dh);
+                  // If retries were configured and we still failed, emit an
+                  // error to terminate the pipeline (all retries exhausted)
+                  if (args_.max_retry_count > 0) {
+                    diagnostic::error("HTTP request to {} failed after {} "
+                                      "retry attempt(s): {}",
+                                      url, args_.max_retry_count, e)
+                      .primary(args_.op)
+                      .emit(dh);
+                  } else {
+                    // No retries configured, just emit a warning
+                    diagnostic::warning("HTTP request to {} failed: {}", url, e)
+                      .primary(args_.op)
+                      .emit(dh);
                   }
-                  // If on_error_mode == "ignore", do nothing
                 });
           });
         // Limit parallel requests
