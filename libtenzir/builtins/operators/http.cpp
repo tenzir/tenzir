@@ -44,6 +44,7 @@
 #include <caf/net/ssl/context.hpp>
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/timespan.hpp>
+#include <fmt/format.h>
 
 #include <charconv>
 #include <ranges>
@@ -2521,9 +2522,6 @@ public:
                               : is_server_error ? "server error"
                                                 : "unexpected status code")
                         .emit(dh);
-                      // Mark the control plane as failed
-                      ctrl.abort(
-                        diagnostic::error("aborting due to HTTP error"));
                     } else if (on_error_mode == "warn") {
                       diagnostic::warning(
                         "HTTP request to {} failed with status {}", url, code)
@@ -2555,8 +2553,7 @@ public:
                         fmt::format("failed after {} retry attempt(s)",
                                     args_.max_retry_count));
                     }
-                    err.emit(dh);
-                    ctrl.abort(diagnostic::error("aborting due to HTTP error"));
+                    std::move(err).emit(dh);
                   } else if (on_error_mode == "warn") {
                     auto warn = diagnostic::warning(
                                   "HTTP request to {} failed: {}", url, e)
@@ -2566,7 +2563,7 @@ public:
                         fmt::format("failed after {} retry attempt(s)",
                                     args_.max_retry_count));
                     }
-                    warn.emit(dh);
+                    std::move(warn).emit(dh);
                   }
                   // If on_error_mode == "ignore", do nothing
                 });
