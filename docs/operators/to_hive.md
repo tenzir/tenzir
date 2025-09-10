@@ -19,6 +19,10 @@ if the events are partitioned by the fields `year` and `month`, then the files
 in the directory `/year=2024/month=10` will contain all events where
 `year == 2024` and `month == 10`.
 
+Files within each partition directory are named using UUIDv7 for guaranteed
+uniqueness and natural time-based ordering. This prevents filename conflicts
+when multiple processes write to the same partition simultaneously.
+
 ### `uri: string`
 
 The base URI for all partitions.
@@ -57,10 +61,10 @@ Compress the output files with the given compression algorithm. See docs for the
 from {a: 0, b: 0}, {a: 0, b: 1}, {a: 1, b: 2}
 to_hive "/tmp/out/", partition_by=[a], format="json"
 // This pipeline produces two files:
-// -> /tmp/out/a=0/1.json:
+// -> /tmp/out/a=0/<uuid>.json:
 //    {"b": 0}
 //    {"b": 1}
-// -> /tmp/out/a=1/2.json:
+// -> /tmp/out/a=1/<uuid>.json:
 //    {"b": 2}
 ```
 
@@ -71,7 +75,7 @@ day.
 
 ```tql
 to_hive "abfs://domain/bucket", partition_by=[year, month, day], format="parquet"
-// -> abfs://domain/bucket/year=<year>/month=<month>/day=<day>/<num>.parquet
+// -> abfs://domain/bucket/year=<year>/month=<month>/day=<day>/<uuid>.parquet
 ```
 
 ### Write partitioned JSON into an S3 bucket
@@ -86,7 +90,7 @@ to_hive "s3://my-bucket/some/subdirectory",
   partition_by=[year, month],
   format="json",
   max_size=1G
-// -> s3://my-bucket/some/subdirectory/year=<year>/month=<month>/<num>.json
+// -> s3://my-bucket/some/subdirectory/year=<year>/month=<month>/<uuid>.json
 ```
 
 ## See Also

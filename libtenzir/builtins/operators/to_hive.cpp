@@ -15,7 +15,17 @@
 
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
+// Include our compatibility header for Boost < 1.86
+#include <boost/version.hpp>
+#if BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
+#  include <tenzir/detail/boost_uuid_generators.hpp>
+#endif
+
+#include <mutex>
 #include <ranges>
 #include <string_view>
 
@@ -41,6 +51,12 @@ struct operator_args {
   duration timeout{};
   uint64_t max_size{};
 };
+
+// Thread-safe UUIDv7 generator for unique file naming
+namespace {
+std::mutex uuid_mutex;
+boost::uuids::time_generator_v7 uuid_gen;
+} // namespace
 
 // TODO: Don't we have this already?
 auto is_empty(const table_slice& x) -> bool {
@@ -247,7 +263,6 @@ public:
     // least produce a warning in that case.
     // TODO: Using `data` is not optimal, but okay for now.
     auto groups = std::unordered_map<data, group_t>{};
-    auto next_id = size_t{0};
     auto base_url = boost::urls::parse_uri_reference(args_.uri.inner);
     TENZIR_ASSERT(base_url);
     auto process = [&](table_slice slice) {
@@ -286,8 +301,12 @@ public:
             relative_path
               += fmt::format("/{}={}", selector_to_name(sel), match(data, f));
           }
-          relative_path += fmt::format("/{}.{}", next_id, args_.extension);
-          next_id += 1;
+          auto uuid = std::invoke([&] {
+            auto lock = std::lock_guard{uuid_mutex};
+            return uuid_gen();
+          });
+          relative_path += fmt::format("/{}.{}", boost::uuids::to_string(uuid),
+                                       args_.extension);
           auto partitioned_url = extend_url_path(*base_url, relative_path);
           TENZIR_TRACE("creating saver with path {}", partitioned_url);
           // TODO: Even though we check this before with a test URL, this can
