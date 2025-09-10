@@ -220,6 +220,11 @@ public:
           diagnostic::error("failed to enable partition EOF: {}", err).done());
       }
     }
+    // Disable auto-commit to use manual commit for precise message counting
+    if (auto err = cfg->set("enable.auto.commit", "false")) {
+      ctrl.diagnostics().emit(
+        diagnostic::error("failed to disable auto-commit: {}", err).done());
+    }
     // Adjust rebalance callback to set desired offset.
     auto offset = RdKafka::Topic::OFFSET_END;
     if (args_.offset) {
@@ -255,22 +260,34 @@ public:
     // Setup the coroutine factory.
     auto num_messages = size_t{0};
     while (true) {
-      auto msg = client->consume(500ms);
-      if (! msg) {
+      auto raw_msg = client->consume_raw(500ms);
+      if (! raw_msg) {
         co_yield {};
-        if (msg.error() == ec::timeout) {
+        if (raw_msg.error() == ec::timeout) {
           continue;
         }
-        if (msg.error() == ec::end_of_input) {
+        if (raw_msg.error() == ec::end_of_input) {
           // FIXME: currently doesn't work for N partitions with N > 1.
           // Upgrade to a counter and only break out of the loop once this
           // signal has been received N times.
           break;
         }
-        TENZIR_ERROR(msg.error());
+        TENZIR_ERROR(raw_msg.error());
         break;
       }
-      co_yield *msg;
+      // Create chunk from the message
+      auto* msg_ptr = raw_msg->get();
+      auto chunk = chunk::make(msg_ptr->payload(), msg_ptr->len(),
+                               [msg = std::move(*raw_msg)]() noexcept {
+                                 // Message will be automatically deleted when
+                                 // unique_ptr goes out of scope
+                               });
+      co_yield chunk;
+      // Manually commit this specific message after processing
+      if (auto err = client->commit(msg_ptr)) {
+        diagnostic::error("failed to commit offset: {}", err)
+          .emit(ctrl.diagnostics());
+      }
       if (args_.count && args_.count->inner == ++num_messages) {
         break;
       }

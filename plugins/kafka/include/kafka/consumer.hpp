@@ -31,8 +31,15 @@ public:
   /// Subscribes to a list of topics.
   auto subscribe(const std::vector<std::string>& topics) -> caf::error;
 
-  /// Consumes a message, blocking for a given maximum timeout.
-  auto consume(std::chrono::milliseconds timeout) -> caf::expected<chunk_ptr>;
+  /// Consumes a raw message, blocking for a given maximum timeout.
+  auto consume_raw(std::chrono::milliseconds timeout)
+    -> caf::expected<std::unique_ptr<RdKafka::Message>>;
+
+  /// Commits offset for a specific message synchronously.
+  auto commit(RdKafka::Message* message) -> caf::error;
+
+  /// Commits offset for a specific message asynchronously.
+  auto commit_async(RdKafka::Message* message) -> caf::error;
 
 private:
   consumer() = default;
