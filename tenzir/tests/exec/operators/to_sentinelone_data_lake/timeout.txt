@@ -1,13 +1,13 @@
 url: `https://example.com/api/addEvents`
 headers:
+	`Authorization`: `Bearer TOKEN`
 	`Content-Encoding`: `gzip`
 	`Content-Type`: `application/json`
-	`Authorization`: `Bearer TOKEN`
 Uncompressed body:
-{"session":"DRY-RUN-ID-0","events":[{"attrs":{"#":0}},{"attrs":{"#":1}}]}
+{"session":"DRY-RUN-ID-0","events":[{"attrs":{"#":0,"events":{}}},{"attrs":{"#":1,"events":{}}}]}
 headers:
+	`Authorization`: `Bearer TOKEN`
 	`Content-Encoding`: `gzip`
 	`Content-Type`: `application/json`
-	`Authorization`: `Bearer TOKEN`
 Uncompressed body:
-{"session":"DRY-RUN-ID-0","events":[{"attrs":{"#":2}},{"attrs":{"#":3}}]}
+{"session":"DRY-RUN-ID-0","events":[{"attrs":{"#":2,"events":{}}},{"attrs":{"#":3,"events":{}}}]}

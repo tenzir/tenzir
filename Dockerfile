@@ -135,7 +135,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake --install build && \
     rm -rf build
 
-
 RUN mkdir -p \
       $PREFIX/etc/tenzir \
       /var/cache/tenzir \

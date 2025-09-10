@@ -4,4 +4,4 @@ every 2s {
 }
 enumerate
 head 4
-to_sentinelone_data_lake "https://example.com", bearer_token="TOKEN", _dry_run=true, timeout=1s
+to_sentinelone_data_lake "https://example.com", token="TOKEN", _dry_run=true, timeout=1s
