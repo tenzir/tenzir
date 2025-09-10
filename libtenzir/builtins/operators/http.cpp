@@ -1817,6 +1817,8 @@ struct http_args : http_request_args {
 // Arguments for the to_http sink operator (subset of http_args without response
 // handling)
 struct to_http_args : http_request_args {
+  std::optional<located<std::string>> on_error;
+
   auto add_to(argument_parser2& p) {
     p.positional("url", url, "string");
     p.named("method", method, "string");
@@ -1824,6 +1826,7 @@ struct to_http_args : http_request_args {
     p.named("encode", encode);
     p.named("headers", headers, "record");
     p.named_optional("parallel", parallel);
+    p.named("on_error", on_error);
     p.named("tls", tls);
     p.named("certfile", certfile);
     p.named("keyfile", keyfile);
@@ -1833,8 +1836,18 @@ struct to_http_args : http_request_args {
     p.named_optional("retry_delay", retry_delay);
   }
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
-    // Only validate common request arguments - no response-specific validation
-    // needed
+    // Validate on_error parameter
+    if (on_error) {
+      if (on_error->inner != "fail" and on_error->inner != "warn"
+          and on_error->inner != "ignore") {
+        diagnostic::error("invalid on_error value: `{}`", on_error->inner)
+          .primary(on_error->source)
+          .hint("must be `fail`, `warn`, or `ignore`")
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    // Validate common request arguments
     return validate_request_args(dh);
   }
   friend auto inspect(auto& f, to_http_args& x) -> bool {
@@ -1842,8 +1855,9 @@ struct to_http_args : http_request_args {
       f.field("op", x.op), f.field("url", x.url), f.field("method", x.method),
       f.field("body", x.body), f.field("encode", x.encode),
       f.field("headers", x.headers), f.field("parallel", x.parallel),
-      f.field("tls", x.tls), f.field("keyfile", x.keyfile),
-      f.field("certfile", x.certfile), f.field("password", x.password),
+      f.field("on_error", x.on_error), f.field("tls", x.tls),
+      f.field("keyfile", x.keyfile), f.field("certfile", x.certfile),
+      f.field("password", x.password),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
       f.field("retry_delay", x.retry_delay));
@@ -2485,27 +2499,62 @@ public:
             ++awaiting;
             fut.bind_to(ctrl.self())
               .then(
-                [&](const http::response& r) {
+                [&, url](const http::response& r) {
                   --awaiting;
                   ctrl.set_waiting(false);
-                  // Log response for debugging but don't process it
                   const auto code = std::to_underlying(r.code());
-                  if (code < 200 or 399 < code) {
-                    diagnostic::warning("HTTP request failed with status: {}",
-                                        code)
-                      .primary(args_.op)
-                      .emit(dh);
+                  const auto is_success = 200 <= code and code <= 299;
+                  const auto is_client_error = 400 <= code and code <= 499;
+                  const auto is_server_error = 500 <= code and code <= 599;
+
+                  if (not is_success) {
+                    const auto on_error_mode
+                      = args_.on_error ? args_.on_error->inner : "warn";
+
+                    if (on_error_mode == "fail") {
+                      diagnostic::error(
+                        "HTTP request to {} failed with status {}", url, code)
+                        .primary(args_.op)
+                        .note(is_client_error   ? "client error"
+                              : is_server_error ? "server error"
+                                                : "unexpected status code")
+                        .emit(dh);
+                      // Mark the control plane as failed
+                      ctrl.abort(
+                        diagnostic::error("aborting due to HTTP error"));
+                    } else if (on_error_mode == "warn") {
+                      diagnostic::warning(
+                        "HTTP request to {} failed with status {}", url, code)
+                        .primary(args_.op)
+                        .note(is_client_error   ? "client error"
+                              : is_server_error ? "server error"
+                                                : "unexpected status code")
+                        .emit(dh);
+                    }
+                    // If on_error_mode == "ignore", do nothing
                   } else {
-                    TENZIR_TRACE("[to_http] request succeeded with status: {}",
-                                 code);
+                    TENZIR_TRACE("[to_http] request to {} succeeded with "
+                                 "status {}",
+                                 url, code);
                   }
                 },
-                [&](const caf::error& e) {
+                [&, url](const caf::error& e) {
                   --awaiting;
                   ctrl.set_waiting(false);
-                  diagnostic::warning("request failed: `{}`", e)
-                    .primary(args_.op)
-                    .emit(dh);
+                  const auto on_error_mode
+                    = args_.on_error ? args_.on_error->inner : "warn";
+
+                  if (on_error_mode == "fail") {
+                    diagnostic::error("HTTP request to {} failed: {}", url, e)
+                      .primary(args_.op)
+                      .emit(dh);
+                    ctrl.abort(diagnostic::error("aborting due to HTTP error"));
+                  } else if (on_error_mode == "warn") {
+                    diagnostic::warning("HTTP request to {} failed: {}", url, e)
+                      .primary(args_.op)
+                      .emit(dh);
+                  }
+                  // If on_error_mode == "ignore", do nothing
                 });
           });
         // Limit parallel requests
