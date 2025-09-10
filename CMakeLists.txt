@@ -91,6 +91,20 @@ include(TenzirProvideFindModule)
 include(TenzirRegisterPlugin)
 include(TenzirUtilities)
 
+# Deduplicate linker flags inherited from environment variables like LDFLAGS.
+# CMake's automatic deduplication only applies to modern commands like
+# add_link_options/target_link_options, NOT to CMAKE_*_LINKER_FLAGS variables
+# which may contain duplicates from environment variables we cannot control.
+# See: https://cmake.org/cmake/help/latest/command/add_link_options.html#option-de-duplication
+foreach (_linker_flags CMAKE_EXE_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS
+                       CMAKE_SHARED_LINKER_FLAGS)
+  if (${_linker_flags})
+    separate_arguments(_flags NATIVE_COMMAND "${${_linker_flags}}")
+    list(REMOVE_DUPLICATES _flags)
+    string(REPLACE ";" " " ${_linker_flags} "${_flags}")
+  endif ()
+endforeach ()
+
 # -- extra installation dirs ---------------------------------------------------
 
 set(TENZIR_INSTALL_ARCHIVEDIR
