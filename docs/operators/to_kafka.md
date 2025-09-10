@@ -7,7 +7,7 @@ example: 'to_kafka "topic", message=this.print_json()'
 Sends messages to an Apache Kafka topic.
 
 ```tql
-to_kafka topic:string, message:blob|string, [key=string, timestamp=time,
+to_kafka topic:string, [message=blob|string, key=string, timestamp=time,
          options=record, aws_iam=record]
 ```
 
@@ -33,9 +33,11 @@ include them:
 
 The Kafka topic to send messages to.
 
-### `message: blob|string`
+### `message = blob|string (optional)`
 
 An expression that evaluates to the message content for each row.
+
+Defaults to `this.print_json()` when not specified.
 
 ### `key = string (optional)`
 
@@ -63,18 +65,20 @@ If specified, enables using AWS IAM Authentication for MSK. The keys must be
 non-empty when specified.
 
 Available keys:
+
 - `region`: Region of the MSK Clusters. Must be specified when using IAM.
 - `assume_role`: Optional Role ARN to assume.
 - `session_name`: Optional session name to use when assuming a role.
 - `external_id`: Optional external id to use when assuming a role.
 
 The operator will try to get credentials in the following order:
+
 1. Checks your environment variables for AWS Credentials.
 2. Checks your `$HOME/.aws/credentials` file for a profile and credentials
 3. Contacts and logs in to a trusted identity provider. The login information to
    these providers can either be on the environment variables: `AWS_ROLE_ARN`,
-`AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_SESSION_NAME` or on a profile in your
-`$HOME/.aws/credentials`.
+   `AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_SESSION_NAME` or on a profile in your
+   `$HOME/.aws/credentials`.
 4. Checks for an external method set as part of a profile on `$HOME/.aws/config`
    to generate or look up credentials that are not directly supported by AWS.
 5. Contacts the ECS Task Role to request credentials if Environment variable
@@ -84,7 +88,14 @@ The operator will try to get credentials in the following order:
 
 ## Examples
 
-### Send JSON-formatted events to topic `events`
+### Send JSON-formatted events to topic `events` (using default)
+
+```tql
+subscribe "logs"
+to_kafka "events"
+```
+
+### Send JSON-formatted events with explicit message
 
 ```tql
 subscribe "logs"
