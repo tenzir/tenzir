@@ -1,0 +1,33 @@
+// test: exec
+// error: false
+// timeout: 10
+
+// Test field access "did you mean" suggestions for various types of typos
+from {
+  fieldname: "correct",
+  username: "john", 
+  timestamp: "2024-01-01",
+  message_content: "hello"
+}
+select (
+  // Field access operator with similar typos - should get suggestions
+  field_typo = fieldname,
+  field_typo1 = filedname,  
+  field_typo2 = fieldnme,
+  field_typo3 = fielname,
+  field_typo4 = fieldnama,
+  
+  // Index expression with string typos - should get suggestions  
+  index_typo1 = this["usrname"],
+  index_typo2 = this["usernme"],
+  index_typo3 = this["timestmp"],
+  index_typo4 = this["mesage_content"],
+  
+  // Typos too different - should not get suggestions
+  very_different1 = xyz,
+  very_different2 = this["abc"],
+  
+  // Test that ? suppression still works
+  suppressed1 = nonexistent?,
+  suppressed2 = this["nonexistent"]?
+)
