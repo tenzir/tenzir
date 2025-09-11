@@ -23,7 +23,7 @@ namespace {
 struct to_kafka_args {
   location op;
   std::string topic;
-  ast::expression message;
+  std::optional<ast::expression> message;
   std::optional<located<std::string>> key;
   std::optional<located<time>> timestamp;
   located<record> options;
@@ -76,12 +76,20 @@ public:
     });
     const auto key = args_.key ? args_.key->inner : "";
     const auto timestamp = args_.timestamp ? args_.timestamp->inner : time{};
+    // Create default expression if message not provided
+    static const auto default_message = ast::function_call{
+      ast::entity{{ast::identifier{"print_json", location::unknown}}},
+      {ast::this_{location::unknown}},
+      location::unknown,
+      true // method call
+    };
+    auto message_expr = args_.message.value_or(default_message);
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      const auto& ms = eval(args_.message, slice, dh);
+      const auto& ms = eval(message_expr, slice, dh);
       for (const auto& s : ms) {
         match(
           *s.array,
@@ -90,7 +98,7 @@ public:
             for (auto i = int64_t{}; i < array.length(); ++i) {
               if (array.IsNull(i)) {
                 diagnostic::warning("expected `string` or `blob`, got `null`")
-                  .primary(args_.message)
+                  .primary(message_expr)
                   .emit(dh);
                 continue;
               }
@@ -103,7 +111,7 @@ public:
           [&](const auto&) {
             diagnostic::warning("expected `string` or `blob`, got `{}`",
                                 s.type.kind())
-              .primary(args_.message)
+              .primary(message_expr)
               .emit(dh);
           });
       }
