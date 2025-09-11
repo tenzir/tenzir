@@ -207,23 +207,22 @@ public:
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     if (! cfg) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to create configuration: {}", cfg.error())
-          .done());
+      diagnostic::error("failed to create configuration: {}", cfg.error())
+        .emit(ctrl.diagnostics());
       co_return;
     }
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
     if (args_.exit) {
       if (auto err = cfg->set("enable.partition.eof", "true")) {
-        ctrl.diagnostics().emit(
-          diagnostic::error("failed to enable partition EOF: {}", err).done());
+        diagnostic::error("failed to enable partition EOF: {}", err)
+          .emit(ctrl.diagnostics());
       }
     }
     // Disable auto-commit to use manual commit for precise message counting
     if (auto err = cfg->set("enable.auto.commit", "false")) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to disable auto-commit: {}", err).done());
+      diagnostic::error("failed to disable auto-commit: {}", err)
+        .emit(ctrl.diagnostics());
     }
     // Adjust rebalance callback to set desired offset.
     auto offset = RdKafka::Topic::OFFSET_END;
@@ -261,35 +260,45 @@ public:
     auto num_messages = size_t{0};
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
-      if (! raw_msg) {
-        co_yield {};
-        if (raw_msg.error() == ec::timeout) {
-          continue;
-        }
-        if (raw_msg.error() == ec::end_of_input) {
-          // FIXME: currently doesn't work for N partitions with N > 1.
-          // Upgrade to a counter and only break out of the loop once this
-          // signal has been received N times.
+      if (not raw_msg) {
+        diagnostic::error("internal error").emit(ctrl.diagnostics());
+        co_return;
+      }
+      switch (raw_msg->err()) {
+        case RdKafka::ERR_NO_ERROR: {
           break;
         }
-        TENZIR_ERROR(raw_msg.error());
-        break;
+        case RdKafka::ERR__TIMED_OUT: {
+          co_yield {};
+          continue;
+        }
+        case RdKafka::ERR__PARTITION_EOF: {
+          co_yield {};
+          co_return;
+        }
+        default: {
+          diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
+            .emit(ctrl.diagnostics());
+          co_yield {};
+          co_return;
+        }
       }
       // Create chunk from the message
-      auto* msg_ptr = raw_msg->get();
-      auto chunk = chunk::make(msg_ptr->payload(), msg_ptr->len(),
-                               [msg = std::move(*raw_msg)]() noexcept {
+      auto chunk = chunk::make(raw_msg->payload(), raw_msg->len(),
+                               [msg = raw_msg]() noexcept {
                                  // Message will be automatically deleted when
                                  // unique_ptr goes out of scope
                                });
       co_yield chunk;
       // Manually commit this specific message after processing
-      if (auto err = client->commit(msg_ptr)) {
+      if (auto err = client->commit(raw_msg.get())) {
         diagnostic::error("failed to commit offset: {}", err)
           .emit(ctrl.diagnostics());
+        co_return;
       }
       if (args_.count && args_.count->inner == ++num_messages) {
-        break;
+        co_yield {};
+        co_return;
       }
     }
   }

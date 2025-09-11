@@ -33,13 +33,19 @@ public:
 
   /// Consumes a raw message, blocking for a given maximum timeout.
   auto consume_raw(std::chrono::milliseconds timeout)
-    -> caf::expected<std::unique_ptr<RdKafka::Message>>;
+    -> std::shared_ptr<RdKafka::Message>;
 
   /// Commits offset for a specific message synchronously.
   auto commit(RdKafka::Message* message) -> caf::error;
 
   /// Commits offset for a specific message asynchronously.
   auto commit_async(RdKafka::Message* message) -> caf::error;
+
+  ~consumer() {
+    if (consumer_.use_count() == 1) {
+      consumer_->close();
+    }
+  }
 
 private:
   consumer() = default;
