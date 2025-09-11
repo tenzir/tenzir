@@ -498,13 +498,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto line_nr = size_t{0};
   // Helper for finishing and casting.
   auto finish = [&] {
-    auto slice = unflatten(document.builder->finish_assert_one_slice(), ".");
-    if (document.target_schema
-        and can_cast(slice.schema(), document.target_schema)) {
-      return cast(std::move(slice), document.target_schema);
-    } else {
-      return slice;
-    }
+    return unflatten(document.builder->finish_assert_one_slice(), ".");
   };
   for (auto&& line : lines) {
     const auto now = std::chrono::steady_clock::now();
