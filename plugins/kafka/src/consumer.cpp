@@ -36,24 +36,9 @@ auto consumer::subscribe(const std::vector<std::string>& topics) -> caf::error {
 }
 
 auto consumer::consume_raw(std::chrono::milliseconds timeout)
-  -> caf::expected<std::unique_ptr<RdKafka::Message>> {
+  -> std::shared_ptr<RdKafka::Message> {
   auto ms = detail::narrow_cast<int>(timeout.count());
-  auto* ptr = consumer_->consume(ms);
-  auto result = std::unique_ptr<RdKafka::Message>(ptr);
-  switch (ptr->err()) {
-    case RdKafka::ERR_NO_ERROR:
-      break;
-    case RdKafka::ERR__TIMED_OUT:
-      return ec::timeout;
-    case RdKafka::ERR__PARTITION_EOF:
-      return ec::end_of_input;
-    default:
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to consume message: {} ({})",
-                                         ptr->errstr(),
-                                         static_cast<int>(ptr->err())));
-  }
-  return result;
+  return std::shared_ptr<RdKafka::Message>{consumer_->consume(ms)};
 }
 
 auto consumer::commit(RdKafka::Message* message) -> caf::error {
