@@ -1,0 +1,7 @@
+title: "SentinelOne Data Lake"
+description: "This release introduces an integration fo SentinelOne Singularity™ Data Lake and a new message based `to_kafka` operator that features a one to one event to message relation."
+changes:
+  - extend-dance-gather
+  - forgotten-change-fixup
+  - hourly-aside-portal
+  - storm-iconic-arise
