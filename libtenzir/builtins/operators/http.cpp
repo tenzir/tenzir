@@ -2492,28 +2492,21 @@ public:
                   ctrl.set_waiting(false);
                   const auto code = std::to_underlying(r.code());
                   const auto is_success = 200 <= code and code <= 299;
-                  const auto is_client_error = 400 <= code and code <= 499;
-                  const auto is_server_error = 500 <= code and code <= 599;
 
                   if (not is_success) {
-                    // For server errors with retries configured, emit an error
-                    // (retries were exhausted). Otherwise emit a warning.
-                    if (is_server_error and args_.max_retry_count > 0) {
+                    // If retries were configured and we still failed, emit an
+                    // error to terminate the pipeline (all retries exhausted)
+                    if (args_.max_retry_count > 0) {
                       diagnostic::error("HTTP request to {} failed with status "
                                         "{} after {} retry attempt(s)",
                                         url, code, args_.max_retry_count)
                         .primary(args_.op)
-                        .note("server error - all retries exhausted")
                         .emit(dh);
                     } else {
-                      // Client errors or no retries configured - just warn
+                      // No retries configured, just emit a warning
                       diagnostic::warning(
                         "HTTP request to {} failed with status {}", url, code)
                         .primary(args_.op)
-                        .note(is_client_error
-                                ? "client error - request was not retried"
-                              : is_server_error ? "server error"
-                                                : "unexpected status code")
                         .emit(dh);
                     }
                   } else {
