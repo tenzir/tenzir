@@ -24,6 +24,7 @@
 #include <caf/async/spsc_buffer.hpp>
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/send.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
@@ -231,29 +232,29 @@ private:
 
   struct reader {
     size_t offset = {};
-    caf::typed_response_promise<table_slice> rp = {};
+    caf::typed_response_promise<table_slice> rp;
   };
 
   cache_actor::pointer self_ = {};
 
-  shared_diagnostic_handler diagnostics_ = {};
+  shared_diagnostic_handler diagnostics_;
 
-  located<uint64_t> max_events_ = {};
+  located<uint64_t> max_events_;
   uint64_t cache_size_ = {};
-  std::vector<table_slice> cached_events_ = {};
+  std::vector<table_slice> cached_events_;
 
   uint64_t byte_size_ = {};
   const uint64_t max_bytes_;
   caf::flow::multicaster<cache_update> update_multicaster_;
 
-  caf::actor_addr writer_ = {};
+  caf::actor_addr writer_;
   bool done_ = {};
-  detail::flat_map<caf::actor_addr, reader> readers_ = {};
+  detail::flat_map<caf::actor_addr, reader> readers_;
 
   duration read_timeout_ = {};
   duration write_timeout_ = {};
-  caf::disposable on_read_timeout_ = {};
-  caf::disposable on_write_timeout_ = {};
+  caf::disposable on_read_timeout_;
+  caf::disposable on_write_timeout_;
 };
 
 struct cache_manager_actor_traits {
@@ -345,7 +346,7 @@ private:
         .for_each([this, id](cache_update update) {
           const auto it = caches_.find(id);
           TENZIR_ASSERT(it != caches_.end());
-          it->second.update = std::move(update);
+          it->second.update = update;
         });
       auto handle
         = self_->spawn(caf::actor_from_state<cache>, std::move(diagnostics),
@@ -359,8 +360,7 @@ private:
           });
       return caf::actor_cast<caf::actor>(
         caches_
-          .emplace_hint(it, std::move(id),
-                        managed_cache{std::move(handle), std::move(monitor)})
+          .try_emplace(it, std::move(id), std::move(handle), std::move(monitor))
           ->second.handle);
     }
     return check_exclusive(it->second.handle, exclusive);
@@ -393,12 +393,20 @@ private:
   }
 
   struct managed_cache {
+    managed_cache(const managed_cache&) = delete;
+    managed_cache(managed_cache&&) = delete;
+    auto operator=(const managed_cache&) -> managed_cache& = delete;
+    auto operator=(managed_cache&&) -> managed_cache& = delete;
     managed_cache(cache_actor handle, caf::disposable monitor)
       : handle{std::move(handle)}, monitor{std::move(monitor)} {
     }
 
-    cache_actor handle = {};
-    caf::disposable monitor = {};
+    ~managed_cache() {
+      caf::anon_send_exit(handle, caf::exit_reason::user_shutdown);
+    }
+
+    cache_actor handle;
+    caf::disposable monitor;
     cache_update update = {};
     std::chrono::steady_clock::time_point created_at
       = std::chrono::steady_clock::now();
@@ -411,7 +419,7 @@ private:
 
   cache_manager_actor::pointer self_ = {};
   const uint64_t max_bytes_ = {};
-  std::unordered_map<std::string, managed_cache> caches_ = {};
+  std::unordered_map<std::string, managed_cache> caches_;
 };
 
 class write_cache_operator final : public operator_base {
@@ -583,9 +591,9 @@ public:
   }
 
 private:
-  located<std::string> id_ = {};
+  located<std::string> id_;
   bool sink_ = {};
-  located<uint64_t> max_events_ = {};
+  located<uint64_t> max_events_;
   duration read_timeout_ = {};
   duration write_timeout_ = {};
 };
@@ -728,9 +736,9 @@ public:
   }
 
 private:
-  located<std::string> id_ = {};
+  located<std::string> id_;
   bool source_ = {};
-  located<uint64_t> max_events_ = {};
+  located<uint64_t> max_events_;
   duration read_timeout_ = {};
   duration write_timeout_ = {};
 };
@@ -739,12 +747,13 @@ class cache_plugin final : public virtual operator_factory_plugin,
                            public virtual operator_parser_plugin,
                            public virtual component_plugin {
 public:
-  auto initialize(const record& global_config, const record& plugin_config)
+  auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);
     using namespace si_literals;
-    TRY(cache_lifetime_, try_get_or(global_config, "tenzir.cache.lifetime",
-                                    std::chrono::minutes{10}));
+    using namespace std::literals;
+    TRY(cache_lifetime_,
+        try_get_or(global_config, "tenzir.cache.lifetime", duration{10min}));
     if (cache_lifetime_ <= duration::zero()) {
       return diagnostic::error("cache lifetime must be greater than zero")
         .to_error();
