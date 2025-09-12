@@ -12,6 +12,8 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
+#include <tenzir/view.hpp>
+#include <tenzir/view3.hpp>
 
 #include <arrow/compute/api.h>
 
@@ -130,6 +132,119 @@ public:
   }
 };
 
+class add : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "add";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto list_expr = ast::expression{};
+    auto element_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("xs", list_expr, "list")
+          .positional("x", element_expr, "any")
+          .parse(inv, ctx));
+
+    return function_use::make([list_expr = std::move(list_expr),
+                               element_expr = std::move(element_expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      auto add_impl = [&](series list, series element) -> series {
+        // Handle null list case
+        if (is<null_type>(list.type)) {
+          // If list is null, create a new list with just the element
+          auto builder = series_builder{type{list_type{element.type}}};
+          for (auto i = int64_t{0}; i < list.length(); ++i) {
+            builder.list();
+            auto elem_idx = i < element.length() ? i : element.length() - 1;
+            auto elem_values = values3(*element.array);
+            auto elem_it = elem_values.begin();
+            std::advance(elem_it, elem_idx);
+            if (elem_it != elem_values.end()) {
+              auto val = *elem_it;
+              if (! is<caf::none_t>(val)) {
+                // TODO: Convert data_view3 to data_view2 for series_builder
+                // For now, skip adding the element
+              }
+            }
+          }
+          return builder.finish_assert_one_array();
+        }
+        // Get the list type
+        auto list_type_ptr = try_as<list_type>(list.type);
+        if (! list_type_ptr) {
+          diagnostic::warning("expected `list`, but got `{}`", list.type.kind())
+            .primary(list_expr)
+            .emit(ctx);
+          return list;
+        }
+        // Determine output type - if list contains only nulls, promote to
+        // element type
+        auto output_type = list.type;
+        if (is<null_type>(list_type_ptr->value_type())) {
+          output_type = type{list_type{element.type}};
+        }
+        // Build result list with the appropriate type
+        auto builder = series_builder{output_type};
+        // TODO: Implement the actual add logic
+        return list;
+      };
+      return map_series(eval(list_expr), eval(element_expr), add_impl);
+    });
+  }
+};
+
+class remove_from_list : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "remove";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto list_expr = ast::expression{};
+    auto element_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("xs", list_expr, "list")
+          .positional("x", element_expr, "any")
+          .parse(inv, ctx));
+
+    return function_use::make([list_expr = std::move(list_expr),
+                               element_expr = std::move(element_expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      auto remove_impl = [&](series list, series element) -> series {
+        // Handle null list case
+        if (is<null_type>(list.type)) {
+          return series::null(null_type{}, list.length());
+        }
+        // Get the list type
+        auto list_type_ptr = try_as<list_type>(list.type);
+        if (! list_type_ptr) {
+          diagnostic::warning("expected `list`, but got `{}`", list.type.kind())
+            .primary(list_expr)
+            .emit(ctx);
+          return list;
+        }
+        // Build result list with the same type as input
+        auto builder = series_builder{list.type};
+        // TODO: Implement the actual remove logic
+        // For now, just return the original list
+        return list;
+      };
+      return map_series(eval(list_expr), eval(element_expr), remove_impl);
+    });
+  }
+};
+
 class zip final : public function_plugin {
 public:
   struct arguments {
@@ -241,4 +356,6 @@ using namespace tenzir::plugins::list;
 TENZIR_REGISTER_PLUGIN(prepend)
 TENZIR_REGISTER_PLUGIN(append)
 TENZIR_REGISTER_PLUGIN(concatenate)
+TENZIR_REGISTER_PLUGIN(add)
+TENZIR_REGISTER_PLUGIN(remove_from_list)
 TENZIR_REGISTER_PLUGIN(zip)
