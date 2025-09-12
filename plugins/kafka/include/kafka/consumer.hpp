@@ -38,9 +38,6 @@ public:
   /// Commits offset for a specific message synchronously.
   auto commit(RdKafka::Message* message) -> caf::error;
 
-  /// Commits offset for a specific message asynchronously.
-  auto commit_async(RdKafka::Message* message) -> caf::error;
-
   ~consumer() {
     if (consumer_.use_count() == 1) {
       consumer_->close();
