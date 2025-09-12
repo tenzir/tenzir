@@ -1,0 +1,41 @@
+// test: exec
+
+// Test basic remove functionality
+from {xs: [1, 2, 3, 4]}
+xs = xs.remove(2)
+
+// Test removing non-existent element
+from {xs: [1, 2, 3]}
+xs = xs.remove(5)
+
+// Test removing all occurrences
+from {xs: [1, 2, 3, 2, 4, 2]}
+xs = xs.remove(2)
+
+// Test removing from empty list
+from {xs: []}
+xs = xs.remove(1)
+
+// Test with strings
+from {xs: ["apple", "banana", "apple", "orange"]}
+xs = xs.remove("apple")
+
+// Test removing non-existent string
+from {xs: ["apple", "banana"]}
+xs = xs.remove("cherry")
+
+// Test with mixed types
+from {xs: [1, "two", 3, "two"]}
+xs = xs.remove("two")
+
+// Test with null values
+from {xs: [1, null, 3, null]}
+xs = xs.remove(null)
+
+// Test with null list
+from {xs: null}
+xs = xs.remove(1)
+
+// Test multiple operations
+from {xs: [1, 2, 3, 4, 5]}
+xs = xs.remove(2).remove(4)

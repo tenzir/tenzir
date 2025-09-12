@@ -1,0 +1,50 @@
+# Test remove function with various scenarios
+
+# Basic remove operations
+from {xs: [1, 2, 3, 2]}
+xs = xs.remove(2)
+---
+from {xs: [1, 2, 3]}
+xs = xs.remove(4)
+---
+from {xs: [1]}
+xs = xs.remove(1)
+---
+
+# Remove with null lists
+from {xs: null}
+xs = xs.remove(1)
+---
+
+# Remove null element from list
+from {xs: [1, null, 2, null]}
+xs = xs.remove(null)
+---
+
+# Remove from list with mixed types
+from {xs: [1, "hello", true, "hello"]}
+xs = xs.remove("hello")
+---
+from {xs: [1, "hello", true]}
+xs = xs.remove(42)
+---
+
+# Remove with nested lists
+from {xs: [[1, 2], [3, 4], [1, 2]]}
+xs = xs.remove([1, 2])
+---
+from {xs: [[1, 2], [3, 4]]}
+xs = xs.remove([5, 6])
+---
+
+# Remove records from list
+from {xs: [{a: 1}, {b: 2}, {a: 1}]}
+xs = xs.remove({a: 1})
+---
+from {xs: [{a: 1}, {b: 2}]}
+xs = xs.remove({c: 3})
+---
+
+# Remove all occurrences
+from {xs: [1, 1, 1, 2, 1, 1]}
+xs = xs.remove(1)
