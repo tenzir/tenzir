@@ -179,6 +179,8 @@ struct loader_args {
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
+  std::uint64_t commit_batch_size = 1000;
+  duration commit_timeout = 10s;
   located<record> options;
   configuration::aws_iam_options aws;
 
@@ -188,6 +190,8 @@ struct loader_args {
       .pretty_name("loader_args")
       .fields(f.field("topic", x.topic), f.field("count", x.count),
               f.field("exit", x.exit), f.field("offset", x.offset),
+              f.field("commit_batch_size", x.commit_batch_size),
+              f.field("commit_timeout", x.commit_timeout),
               f.field("options", x.options));
   }
 };
@@ -207,18 +211,22 @@ public:
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     if (! cfg) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to create configuration: {}", cfg.error())
-          .done());
+      diagnostic::error("failed to create configuration: {}", cfg.error())
+        .emit(ctrl.diagnostics());
       co_return;
     }
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
     if (args_.exit) {
       if (auto err = cfg->set("enable.partition.eof", "true")) {
-        ctrl.diagnostics().emit(
-          diagnostic::error("failed to enable partition EOF: {}", err).done());
+        diagnostic::error("failed to enable partition EOF: {}", err)
+          .emit(ctrl.diagnostics());
       }
+    }
+    // Disable auto-commit to use manual commit for precise message counting
+    if (auto err = cfg->set("enable.auto.commit", "false")) {
+      diagnostic::error("failed to disable auto-commit: {}", err)
+        .emit(ctrl.diagnostics());
     }
     // Adjust rebalance callback to set desired offset.
     auto offset = RdKafka::Topic::OFFSET_END;
@@ -252,27 +260,52 @@ public:
       diagnostic::error("failed to subscribe to topic: {}", err)
         .emit(ctrl.diagnostics());
     }
-    // Setup the coroutine factory.
     auto num_messages = size_t{0};
+    auto last_commit_time = time::clock::now();
     while (true) {
-      auto msg = client->consume(500ms);
-      if (! msg) {
-        co_yield {};
-        if (msg.error() == ec::timeout) {
+      auto raw_msg = client->consume_raw(500ms);
+      if (not raw_msg) {
+        diagnostic::error("internal error").emit(ctrl.diagnostics());
+        co_return;
+      }
+      switch (raw_msg->err()) {
+        case RdKafka::ERR_NO_ERROR: {
+          // Create chunk from the message
+          auto chunk = chunk::make(raw_msg->payload(), raw_msg->len(),
+                                   [msg = raw_msg]() noexcept {});
+          TENZIR_ASSERT(chunk);
+          co_yield std::move(chunk);
+          // Manually commit this specific message after processing
+          ++num_messages;
+          const auto now = time::clock::now();
+          if (num_messages % args_.commit_batch_size == 0
+              or last_commit_time - now > args_.commit_timeout) {
+            last_commit_time = now;
+            if (auto err = client->commit(raw_msg.get())) {
+              diagnostic::error("failed to commit offset: {}", err)
+                .emit(ctrl.diagnostics());
+              co_return;
+            }
+          }
+          if (args_.count && args_.count->inner == num_messages) {
+            co_return;
+          }
           continue;
         }
-        if (msg.error() == ec::end_of_input) {
-          // FIXME: currently doesn't work for N partitions with N > 1.
-          // Upgrade to a counter and only break out of the loop once this
-          // signal has been received N times.
-          break;
+        case RdKafka::ERR__TIMED_OUT: {
+          co_yield {};
+          continue;
         }
-        TENZIR_ERROR(msg.error());
-        break;
-      }
-      co_yield *msg;
-      if (args_.count && args_.count->inner == ++num_messages) {
-        break;
+        case RdKafka::ERR__PARTITION_EOF: {
+          co_yield {};
+          co_return;
+        }
+        default: {
+          diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
+            .emit(ctrl.diagnostics());
+          co_yield {};
+          co_return;
+        }
       }
     }
   }
