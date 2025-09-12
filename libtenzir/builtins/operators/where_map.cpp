@@ -348,8 +348,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
             // itself is `null`. This is very unlikely to happen in practice,
             // and one proper fix for this would be passing in a null bitmap to
             // the call to evaluate to indicate which rows not to evaluate.
-            for (const auto& result :
-                 tenzir::eval(args.lambda, list_values, ctx)) {
+            for (const auto& result : eval(args.lambda, lists)) {
               match(
                 result.type,
                 [&](const bool_type&) {
@@ -493,7 +492,7 @@ struct where_result_part {
 
 auto make_map_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  TRY(auto args, arguments::parse("map", "function", "any => any", inv, ctx));
+  TRY(auto args, arguments::parse("map", "function", "any -> any", inv, ctx));
   return function_use::make([args = std::move(args)](
                               function_plugin::evaluator eval, session ctx) {
     return map_series(eval(args.field), [&](series field) -> multi_series {
@@ -520,7 +519,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           series::null(null_type{}, field_list->array->values()->length()),
           *field_list->array);
       }
-      auto ms = tenzir::eval(args.lambda, list_values, ctx);
+      auto ms = eval(args.lambda, *field_list);
       TENZIR_ASSERT(not ms.parts().empty());
       // If there were no conflicts in the result, we are in the happy case
       // Here we just need to take that slice and re-join it with the offsets
