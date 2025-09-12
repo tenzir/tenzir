@@ -38,9 +38,10 @@ namespace {
 /// A parser that parses an optional value whose nullopt is presented as a dash.
 template <class Parser>
 struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
-  using value_type = typename std::decay_t<Parser>::attribute;
-  using attribute = std::conditional_t<concepts::container<value_type>,
-                                       value_type, std::optional<value_type>>;
+  using attribute = typename std::decay_t<Parser>::attribute;
+  // using value_type = typename std::decay_t<Parser>::attribute;
+  // using attribute = std::conditional_t<concepts::container<value_type>,
+  //                                      value_type, std::optional<value_type>>;
 
   explicit maybe_null_parser(Parser parser) : parser_{std::move(parser)} {
   }
@@ -49,10 +50,11 @@ struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parser_literals;
     // clang-format off
-       auto p = ('-'_p >> &(' '_p)) ->*[] { return attribute{}; }
-              | parser_ ->*[](value_type in) { return attribute{in}; };
+    auto p = ('-'_p >> &(' '_p)) ->*[] {return Attribute{}; }
+             | parser_ ->*[](attribute in) { return Attribute{in}; };
     // clang-format on
-    return p(f, l, x);
+    auto r = p(f, l, x);
+    return r;
   }
 
   Parser parser_;
@@ -71,10 +73,10 @@ struct header {
   uint16_t severity;
   uint16_t version;
   std::optional<time> ts;
-  std::string hostname;
-  std::string app_name;
-  std::string process_id;
-  std::string msg_id;
+  std::optional<std::string> hostname;
+  std::optional<std::string> app_name;
+  std::optional<std::string> process_id;
+  std::optional<std::string> msg_id;
 };
 
 /// Parser for Syslog message headers.
@@ -112,6 +114,8 @@ struct header_parser : parser_base<header_parser> {
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
+      static_assert(
+        std::same_as<decltype(x.hostname), std::optional<std::string>>);
       return p(f, l, x.version, x.ts, x.hostname, x.app_name, x.process_id,
                x.msg_id);
     }
@@ -623,6 +627,22 @@ enum class builder_tag {
   unknown_syslog_builder,
 };
 
+auto infuse_new_schema(multi_series_builder::options o)
+  -> multi_series_builder::options {
+  if (try_as<multi_series_builder::policy_default>(o.policy)) {
+    o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc5424");
+  }
+  return o;
+}
+
+auto infuse_legacy_schema(multi_series_builder::options o)
+  -> multi_series_builder::options {
+  if (try_as<multi_series_builder::policy_default>(o.policy)) {
+    o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc3164");
+  }
+  return o;
+}
+
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
                 multi_series_builder::options opts) -> generator<table_slice> {
@@ -631,9 +651,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       diag.message = fmt::format("syslog parser: {}", diag.message);
       return diag;
     }};
-  syslog_builder new_builder{opts, dh};
-  legacy_syslog_builder legacy_builder{opts, dh};
-  unknown_syslog_builder unknown_builder{opts, dh};
+  auto new_builder = syslog_builder{infuse_new_schema(opts), dh};
+  auto legacy_builder = legacy_syslog_builder{infuse_legacy_schema(opts), dh};
+  auto unknown_builder = unknown_syslog_builder{opts, dh};
   auto last = builder_tag::unknown_syslog_builder;
   auto line_nr = size_t{0};
   co_yield {};
@@ -1099,8 +1119,9 @@ public:
               return arg;
             },
             [&](const arrow::StringArray& arg) -> multi_series {
-              auto builder = syslog_builder{msb_opts, ctx};
-              auto legacy_builder = legacy_syslog_builder{msb_opts, ctx};
+              auto builder = syslog_builder{infuse_new_schema(msb_opts), ctx};
+              auto legacy_builder
+                = legacy_syslog_builder{infuse_legacy_schema(msb_opts), ctx};
               auto last = builder_tag::syslog_builder;
               auto res = multi_series{};
               /// flushes the current builder, if its not the same as
