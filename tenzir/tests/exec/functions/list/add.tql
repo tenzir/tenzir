@@ -1,0 +1,37 @@
+// test: exec
+
+// Test basic add functionality
+from {xs: [1, 2, 3]}
+xs = xs.add(4)
+
+// Test adding existing element
+from {xs: [1, 2, 3]}
+xs = xs.add(2)
+
+// Test adding to empty list
+from {xs: []}
+xs = xs.add(42)
+
+// Test with strings
+from {xs: ["apple", "banana"]}
+xs = xs.add("orange")
+
+// Test with existing string
+from {xs: ["apple", "banana"]}
+xs = xs.add("apple")
+
+// Test with mixed types
+from {xs: [1, "two", 3]}
+xs = xs.add(4)
+
+// Test with null values
+from {xs: [1, null, 3]}
+xs = xs.add(null)
+
+// Test with null list
+from {xs: null}
+xs = xs.add(1)
+
+// Test multiple operations
+from {xs: [1, 2]}
+xs = xs.add(3).add(2).add(4)
