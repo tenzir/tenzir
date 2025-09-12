@@ -51,14 +51,4 @@ auto consumer::commit(RdKafka::Message* message) -> caf::error {
   return {};
 }
 
-auto consumer::commit_async(RdKafka::Message* message) -> caf::error {
-  auto result = consumer_->commitAsync(message);
-  if (result != RdKafka::ERR_NO_ERROR) {
-    return caf::make_error(ec::unspecified,
-                           fmt::format("failed to commit message async: {}",
-                                       RdKafka::err2str(result)));
-  }
-  return {};
-}
-
 } // namespace tenzir::plugins::kafka

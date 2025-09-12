@@ -179,6 +179,8 @@ struct loader_args {
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
+  std::uint64_t commit_batch_size = 1000;
+  duration commit_timeout = 10s;
   located<record> options;
   configuration::aws_iam_options aws;
 
@@ -188,6 +190,8 @@ struct loader_args {
       .pretty_name("loader_args")
       .fields(f.field("topic", x.topic), f.field("count", x.count),
               f.field("exit", x.exit), f.field("offset", x.offset),
+              f.field("commit_batch_size", x.commit_batch_size),
+              f.field("commit_timeout", x.commit_timeout),
               f.field("options", x.options));
   }
 };
@@ -256,8 +260,8 @@ public:
       diagnostic::error("failed to subscribe to topic: {}", err)
         .emit(ctrl.diagnostics());
     }
-    // Setup the coroutine factory.
     auto num_messages = size_t{0};
+    auto last_commit_time = time::clock::now();
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
       if (not raw_msg) {
@@ -266,39 +270,62 @@ public:
       }
       switch (raw_msg->err()) {
         case RdKafka::ERR_NO_ERROR: {
-          break;
+          // Create chunk from the message
+          auto chunk = chunk::make(raw_msg->payload(), raw_msg->len(),
+                                   [msg = raw_msg]() noexcept {});
+          TENZIR_ASSERT(chunk);
+          co_yield std::move(chunk);
+          // Manually commit this specific message after processing
+          ++num_messages;
+          const auto now = time::clock::now();
+          if (num_messages % args_.commit_batch_size == 0
+              or last_commit_time - now > args_.commit_timeout) {
+            last_commit_time = now;
+            if (auto err = client->commit(raw_msg.get())) {
+              diagnostic::error("failed to commit offset: {}", err)
+                .emit(ctrl.diagnostics());
+              co_return;
+            }
+          }
+          if (args_.count && args_.count->inner == num_messages) {
+            if (auto err = client->commit(raw_msg.get())) {
+              diagnostic::error("failed to commit offset: {}", err)
+                .emit(ctrl.diagnostics());
+            }
+            co_return;
+          }
+          continue;
         }
         case RdKafka::ERR__TIMED_OUT: {
+          const auto now = time::clock::now();
+          if (last_commit_time - now > args_.commit_timeout) {
+            if (auto err = client->commit(raw_msg.get())) {
+              diagnostic::error("failed to commit offset: {}", err)
+                .emit(ctrl.diagnostics());
+              co_return;
+            }
+          }
           co_yield {};
           continue;
         }
         case RdKafka::ERR__PARTITION_EOF: {
+          if (auto err = client->commit(raw_msg.get())) {
+            diagnostic::error("failed to commit offset: {}", err)
+              .emit(ctrl.diagnostics());
+          }
           co_yield {};
           co_return;
         }
         default: {
           diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
             .emit(ctrl.diagnostics());
+          if (auto err = client->commit(raw_msg.get())) {
+            diagnostic::error("failed to commit offset: {}", err)
+              .emit(ctrl.diagnostics());
+          }
           co_yield {};
           co_return;
         }
-      }
-      // Create chunk from the message
-      auto chunk = chunk::make(raw_msg->payload(), raw_msg->len(),
-                               [msg = raw_msg]() noexcept {
-                                 // Message will be automatically deleted when
-                                 // unique_ptr goes out of scope
-                               });
-      co_yield chunk;
-      // Manually commit this specific message after processing
-      if (auto err = client->commit(raw_msg.get())) {
-        diagnostic::error("failed to commit offset: {}", err)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      if (args_.count && args_.count->inner == ++num_messages) {
-        co_yield {};
-        co_return;
       }
     }
   }

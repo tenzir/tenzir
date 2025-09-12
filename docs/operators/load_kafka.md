@@ -7,8 +7,8 @@ example: 'load_kafka topic="example"'
 Loads a byte stream from a Apache Kafka topic.
 
 ```tql
-load_kafka topic:string, [count=int, exit=bool, offset=int|string,
-           options=record, aws_iam=record]
+load_kafka topic:string, [count=int, exit=bool, offset=int|string, options=record,
+           aws_iam=record, commit_batch_size=int, commit_timeout=duration]
 ```
 
 ## Description
@@ -29,6 +29,7 @@ include them:
 - `bootstrap.servers`: `localhost`
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
+- `enable.auto.commit`: `false` (This option cannot be changed)
 
 ### `topic: string`
 
@@ -73,24 +74,41 @@ options][librdkafka-options] to configure Kafka according to your needs.
 We recommend factoring these options into the plugin-specific `kafka.yaml` so
 that they are independent of the `load_kafka` arguments.
 
+### `commit_batch_size = int (optional)`
+
+The operator commits offsets after `commit_batch_size` messages have been received.
+to improve throughput. If you need to ensure exactly-once semantics for your
+pipeline, set this option to `1` to commit every message individually.
+
+Defaults to `1000`
+
+### `commit_timeout = duration (optional)`
+
+A timeout after which messages will be committed, even if less than `commit_batch_size`
+have been accepted. This is useful for long running, low volume pipelines.
+
+Defaults to `10s`.
+
 ### `aws_iam = record (optional)`
 
 If specified, enables using AWS IAM Authentication for MSK. The keys must be
 non-empty when specified.
 
 Available keys:
+
 - `region`: Region of the MSK Clusters. Must be specified when using IAM.
 - `assume_role`: Optional role ARN to assume.
 - `session_name`: Optional session name to use when assume a role.
 - `external_id`: Optional external id to use when assuming a role.
 
 The operator will try to get credentials in the following order:
+
 1. Checks your environment variables for AWS Credentials.
 2. Checks your `$HOME/.aws/credentials` file for a profile and credentials
 3. Contacts and logs in to a trusted identity provider. The login information to
    these providers can either be on the environment variables: `AWS_ROLE_ARN`,
-`AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_SESSION_NAME` or on a profile in your
-`$HOME/.aws/credentials`.
+   `AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_SESSION_NAME` or on a profile in your
+   `$HOME/.aws/credentials`.
 4. Checks for an external method set as part of a profile on `$HOME/.aws/config`
    to generate or look up credentials that isn't directly supported by AWS.
 5. Contacts the ECS Task Role to request credentials if Environment variable
