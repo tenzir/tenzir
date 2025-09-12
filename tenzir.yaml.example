@@ -163,6 +163,9 @@ tenzir:
   # keywords, e.g., remotely reading from a file.
   no-location-overrides: false
 
+  # Prevent all pipelines from automatically starting when the node starts.
+  no-autostart: false
+
   # Do not move pipeline operators to subprocesses.
   disable-pipeline-subprocesses: false
 

@@ -118,7 +118,10 @@ auto make_start_command() {
       .add<std::string>("disk-budget-high", "high-water mark for disk budget")
       .add<std::string>("disk-budget-low", "low-water mark for disk budget")
       .add<int64_t>("disk-budget-step-size", "number of partitions to erase "
-                                             "before re-checking size"));
+                                             "before re-checking size")
+      .add<bool>("no-autostart", "prevent all pipelines from automatically "
+                                 "starting "
+                                 "when the node starts"));
 }
 
 auto make_root_command(std::string_view name) {
