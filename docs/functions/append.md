@@ -1,7 +1,7 @@
 ---
 title: append
 category: List
-example: 'xs.append(y)'
+example: "xs.append(y)"
 ---
 
 Inserts an element at the back of a list.
@@ -30,5 +30,7 @@ xs = xs.append(3)
 
 ## See Also
 
+[`add`](/reference/functions/add),
 [`concatenate`](/reference/functions/concatenate),
-[`prepend`](/reference/functions/prepend)
+[`prepend`](/reference/functions/prepend),
+[`remove`](/reference/functions/remove)

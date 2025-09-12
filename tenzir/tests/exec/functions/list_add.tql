@@ -1,0 +1,45 @@
+# Test add function with various scenarios
+
+# Basic add operations
+from {xs: [1, 2, 3]}
+xs = xs.add(4)
+---
+from {xs: [1, 2, 3]}
+xs = xs.add(2)
+---
+from {xs: []}
+xs = xs.add(1)
+---
+
+# Add with null lists
+from {xs: null}
+xs = xs.add(1)
+---
+
+# Add null element to list
+from {xs: [1, 2]}
+xs = xs.add(null)
+---
+
+# Add to list with mixed types
+from {xs: [1, "hello", true]}
+xs = xs.add(3.14)
+---
+from {xs: [1, "hello", true]}
+xs = xs.add("hello")
+---
+
+# Add with nested lists
+from {xs: [[1, 2], [3, 4]]}
+xs = xs.add([5, 6])
+---
+from {xs: [[1, 2], [3, 4]]}
+xs = xs.add([1, 2])
+---
+
+# Add records to list
+from {xs: [{a: 1}, {b: 2}]}
+xs = xs.add({c: 3})
+---
+from {xs: [{a: 1}, {b: 2}]}
+xs = xs.add({a: 1})
