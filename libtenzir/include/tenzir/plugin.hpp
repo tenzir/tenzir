@@ -719,9 +719,7 @@ public:
 
   /// Load a dynamic plugin from the specified library filename.
   /// @param filename The filename that's passed to 'dlopen'.
-  /// @param cfg The actor system config to register type IDs with.
-  static auto
-  make_dynamic(const char* filename, caf::actor_system_config& cfg) noexcept
+  static auto make_dynamic(const char* filename) noexcept
     -> caf::expected<plugin_ptr>;
 
   /// Take ownership of a static plugin.
