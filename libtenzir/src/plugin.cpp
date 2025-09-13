@@ -273,7 +273,7 @@ auto load(const std::vector<std::string>& bundled_plugins,
   }
   // Load plugins.
   for (auto path : std::move(*paths)) {
-    if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
+    if (auto plugin = plugin_ptr::make_dynamic(path.c_str())) {
       // Check for name clashes.
       if (find((*plugin)->name()) != nullptr) {
         return caf::make_error(ec::invalid_configuration,
@@ -609,8 +609,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
 
 // -- plugin_ptr ---------------------------------------------------------------
 
-auto plugin_ptr::make_dynamic(const char* filename,
-                              caf::actor_system_config& cfg) noexcept
+auto plugin_ptr::make_dynamic(const char* filename) noexcept
   -> caf::expected<plugin_ptr> {
   TENZIR_DISABLE_LEAK_SANITIZER();
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
@@ -684,9 +683,8 @@ auto plugin_ptr::make_dynamic(const char* filename,
     = reinterpret_cast<::tenzir::plugin_type_id_block (*)()>(
       dlsym(library, "tenzir_plugin_type_id_block"));
   if (plugin_type_id_block) {
-    auto plugin_register_type_id_block
-      = reinterpret_cast<void (*)(::caf::actor_system_config&)>(
-        dlsym(library, "tenzir_plugin_register_type_id_block"));
+    auto plugin_register_type_id_block = reinterpret_cast<void (*)()>(
+      dlsym(library, "tenzir_plugin_register_type_id_block"));
     if (not plugin_register_type_id_block) {
       return caf::make_error(ec::system_error,
                              "failed to resolve symbol "
@@ -715,7 +713,7 @@ auto plugin_ptr::make_dynamic(const char* filename,
                                "encountered type ID block clash in", filename);
       }
     }
-    plugin_register_type_id_block(cfg);
+    plugin_register_type_id_block();
     old_blocks.push_back(new_block);
   }
   return plugin_ptr{

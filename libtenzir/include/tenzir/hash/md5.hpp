@@ -43,7 +43,7 @@ private:
   void transform(const unsigned char* data, size_t num_blks);
 
   std::array<uint32_t, 4> H_;
-  std::array<unsigned char, 64> m_;
+  alignas(sizeof(uint32_t)) std::array<unsigned char, 64> m_;
   size_t pos_ = 0;
   uint64_t total_ = 0;
 };

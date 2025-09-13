@@ -20,6 +20,9 @@
 
 #include "tenzir/hash/utils.hpp"
 
+#include <bit>
+#include <vector>
+
 namespace tenzir {
 namespace {
 
@@ -83,7 +86,10 @@ void md5::add(std::span<const std::byte> bytes) noexcept {
   auto f = [this](const unsigned char* data, size_t len) {
     transform(data, len);
   };
-  const auto* ptr = reinterpret_cast<const unsigned char*>(bytes.data());
+  auto local = std::vector<uint32_t>{};
+  local.reserve(bytes.size());
+  std::memcpy(local.data(), bytes.data(), bytes.size());
+  const auto* ptr = reinterpret_cast<const unsigned char*>(local.data());
   detail::absorb_bytes(ptr, bytes.size(), 64, 64, m_.data(), pos_, total_, f);
 }
 
