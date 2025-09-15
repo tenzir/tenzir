@@ -732,11 +732,67 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   }
 }
 
+inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
+  -> generator<std::optional<std::string_view>> {
+  auto buffer = std::string{};
+  auto remaining_message_length = std::ptrdiff_t{};
+  for (auto&& chunk : input) {
+    if (! chunk || chunk->size() == 0) {
+      co_yield std::nullopt;
+      continue;
+    }
+    auto* chunk_begin = reinterpret_cast<const char*>(chunk->data());
+    const auto chunk_end = chunk_begin + chunk->size();
+    auto chunk_length = [&]() {
+      return chunk_end - chunk_begin;
+    };
+    // We still need bytes to continue a previous message
+    if (remaining_message_length > 0) {
+      const auto take = std::min(remaining_message_length, chunk_length());
+      buffer.append(chunk_begin, take);
+      remaining_message_length -= take;
+      // The message is complete, we can yield it
+      if (remaining_message_length == 0) {
+        co_yield buffer;
+        buffer.clear();
+      }
+      chunk_begin += take;
+    }
+    // A new message starts in (the remainder of) the chunk
+    while (chunk_begin != chunk_end) {
+      auto [ptr, ec]
+        = std::from_chars(chunk_begin, chunk_end, remaining_message_length);
+      if (ec != std::errc{}) {
+        diagnostic::error("failed to parse octet: `{}`",
+                          std::make_error_code(ec).message())
+          .note("text: `{}`", std::string_view{chunk_begin, chunk_end})
+          .emit(dh);
+        co_return;
+      }
+      // Remove the size prefix and conditionally one whitespace
+      chunk_begin = ptr + (ptr != chunk_end);
+      // The new message is fully within this chunk
+      if (remaining_message_length <= chunk_length()) {
+        const auto message_end = chunk_begin + remaining_message_length;
+        co_yield std::string_view{chunk_begin, message_end};
+        chunk_begin = message_end;
+        continue; // more messages in this chunk
+      } else {
+        // The message is longer than the remainder of the chunk:
+        buffer.append(chunk_begin, chunk_end);
+        remaining_message_length -= chunk_length();
+        break; // next chunk
+      }
+    }
+  }
+}
+
 class syslog_parser final : public plugin_parser {
 public:
   syslog_parser() = default;
 
-  syslog_parser(multi_series_builder::options opts) : opts_{std::move(opts)} {
+  syslog_parser(multi_series_builder::options opts, bool octet_counting)
+    : opts_{std::move(opts)}, octet_counting_{octet_counting} {
   }
 
   auto name() const -> std::string override {
@@ -746,15 +802,22 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_loop(to_lines(std::move(input)), ctrl, opts_);
+    if (octet_counting_) {
+      return parse_loop(split_octet(std::move(input), ctrl.diagnostics()), ctrl,
+                        opts_);
+    } else {
+      return parse_loop(to_lines(std::move(input)), ctrl, opts_);
+    }
   }
 
   friend auto inspect(auto& f, syslog_parser& x) -> bool {
-    return f.apply(x.opts_);
+    return f.object(x).fields(f.field("octet", x.octet_counting_),
+                              f.field("opts", x.opts_));
   }
 
 private:
   multi_series_builder::options opts_;
+  bool octet_counting_ = false;
 };
 
 auto make_root_field(std::string field) -> ast::root_field {
@@ -1095,7 +1158,7 @@ public:
         throw diag;
       }
     }
-    return std::make_unique<syslog_parser>(std::move(*msb_opts));
+    return std::make_unique<syslog_parser>(std::move(*msb_opts), false);
   }
 };
 
@@ -1104,12 +1167,14 @@ class read_syslog final
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
+    bool octet_counting = false;
+    parser.named_optional("octet_counting", octet_counting);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<syslog_parser>>(
-      syslog_parser{std::move(opts)});
+      syslog_parser{std::move(opts), octet_counting});
   }
 };
 

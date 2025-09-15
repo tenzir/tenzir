@@ -7,7 +7,7 @@ example: 'read_syslog'
 Parses an incoming Syslog stream into events.
 
 ```tql
-read_syslog [merge=bool, raw=bool, schema=string, selector=string, schema_only=bool, unflatten_separator=string]
+read_syslog [octet_counting=bool, merge=bool, raw=bool, schema=string, selector=string, schema_only=bool, unflatten_separator=string]
 ```
 
 ## Description
@@ -71,6 +71,14 @@ With this input, the parser will produce the following output, with the schema n
 ```
 
 import ParsingOptions from '../../.../../../../partials/operators/ParsingOptions.mdx';
+
+### `octet_counting = bool (optional)`
+
+Employs "octet counting" according to [RFC6587](https://datatracker.ietf.org/doc/html/rfc6587#section-3.4.1)
+to determine message boundaries instead of the parsing heuristic for multi-line
+messages.
+
+Defaults to `false`
 
 <ParsingOptions />
 
