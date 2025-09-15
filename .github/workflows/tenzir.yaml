@@ -458,7 +458,7 @@ jobs:
             compiler: Clang
             cc: clang
             cxx: clang++
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST="from_velociraptor;platform;snowflake"
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
@@ -529,11 +529,21 @@ jobs:
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir
-      - name: Install Dependencies (macOS)
+      - name: Setup Homebrew Clang and Install Dependencies (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
         run: |
+          # Setup Homebrew Clang
+          brew install llvm@20
+          llvm_root="$(brew --prefix llvm@20)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "CC=${llvm_root}/bin/clang" >> $GITHUB_ENV
+          echo "CXX=${llvm_root}/bin/clang++" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-nostdinc++ -isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+          echo "LDFLAGS=-L${llvm_root}/lib/c++ -Wl,-rpath,${llvm_root}/lib/c++" >> $GITHUB_ENV
+          # Install all other dependencies.
           ./scripts/macOS/install-dev-dependencies.sh
-      - name: Setup Python
+      - name: Setup Python (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
         uses: actions/setup-python@v5
         with:
@@ -548,16 +558,6 @@ jobs:
           PUBLISH_NAME="$(echo "tenzir-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-      - if: ${{ matrix.tenzir.name == 'macOS' }}
-        name: Setup Homebrew Clang
-        run: |
-          llvm_root="$(brew --prefix llvm@20)"
-          echo "${llvm_root}/bin" >> $GITHUB_PATH
-          echo "CC=${llvm_root}/bin/clang" >> $GITHUB_ENV
-          echo "CXX=${llvm_root}/bin/clang++" >> $GITHUB_ENV
-          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
-          echo "CXXFLAGS=-nostdinc++ -isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
-          echo "LDFLAGS=-L${llvm_root}/lib/c++ -Wl,-rpath,${llvm_root}/lib/c++" >> $GITHUB_ENV
       - name: Fetch ccache Cache
         uses: actions/cache/restore@v4
         with:
