@@ -461,7 +461,7 @@ public:
   using row_type = syslog_row<message_type>;
 
   syslog_builder(multi_series_builder::options opts, diagnostic_handler& dh)
-    : builder{std::move(opts), dh} {
+    : timeout{opts.settings.timeout}, builder{std::move(opts), dh} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -485,6 +485,9 @@ public:
   }
 
   auto yield_ready() -> std::vector<table_slice> {
+    if (last_message and time::clock::now() - last_message_time > timeout) {
+      finish_last();
+    }
     return builder.yield_ready_as_table_slice();
   }
 
@@ -519,6 +522,7 @@ public:
     last_message.reset();
   }
 
+  duration timeout;
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
@@ -531,7 +535,7 @@ public:
 
   legacy_syslog_builder(multi_series_builder::options opts,
                         diagnostic_handler& dh)
-    : builder{std::move(opts), dh} {
+    : timeout{opts.settings.timeout}, builder{std::move(opts), dh} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -543,6 +547,9 @@ public:
   }
 
   auto yield_ready() -> std::vector<table_slice> {
+    if (last_message and time::clock::now() - last_message_time > timeout) {
+      finish_last();
+    }
     return builder.yield_ready_as_table_slice();
   }
 
@@ -582,6 +589,7 @@ public:
     last_message.reset();
   }
 
+  duration timeout;
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
@@ -765,7 +773,6 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
       if (ec != std::errc{}) {
         diagnostic::error("failed to parse octet: `{}`",
                           std::make_error_code(ec).message())
-          .note("text: `{}`", std::string_view{chunk_begin, chunk_end})
           .emit(dh);
         co_return;
       }
