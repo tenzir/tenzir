@@ -29,6 +29,8 @@
 #include <ranges>
 #include <string_view>
 
+using namespace std::chrono_literals;
+
 namespace tenzir::plugins::syslog {
 
 namespace {
@@ -36,9 +38,7 @@ namespace {
 /// A parser that parses an optional value whose nullopt is presented as a dash.
 template <class Parser>
 struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
-  using value_type = typename std::decay_t<Parser>::attribute;
-  using attribute = std::conditional_t<concepts::container<value_type>,
-                                       value_type, std::optional<value_type>>;
+  using attribute = typename std::decay_t<Parser>::attribute;
 
   explicit maybe_null_parser(Parser parser) : parser_{std::move(parser)} {
   }
@@ -47,8 +47,8 @@ struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parser_literals;
     // clang-format off
-       auto p = ('-'_p >> &(' '_p)) ->*[] { return attribute{}; }
-              | parser_ ->*[](value_type in) { return attribute{in}; };
+    auto p = ('-'_p >> &(' '_p)) ->*[] {return Attribute{}; }
+             | parser_ ->*[](attribute in) { return Attribute{in}; };
     // clang-format on
     return p(f, l, x);
   }
@@ -69,10 +69,10 @@ struct header {
   uint16_t severity;
   uint16_t version;
   std::optional<time> ts;
-  std::string hostname;
-  std::string app_name;
-  std::string process_id;
-  std::string msg_id;
+  std::optional<std::string> hostname;
+  std::optional<std::string> app_name;
+  std::optional<std::string> process_id;
+  std::optional<std::string> msg_id;
 };
 
 /// Parser for Syslog message headers.
@@ -454,15 +454,23 @@ public:
   using message_type = message;
   using row_type = syslog_row<message_type>;
 
-  syslog_builder() = default;
-
-  auto add_new(row_type&& row) -> void {
-    rows_.emplace_back(std::move(row));
+  syslog_builder(multi_series_builder::options opts, diagnostic_handler& dh)
+    : timeout{opts.settings.timeout}, builder{std::move(opts), dh} {
   }
 
-  auto add_line_to_latest(std::string_view line) -> void {
-    TENZIR_ASSERT(not rows_.empty());
-    auto& latest = rows_.back();
+  auto add_new(row_type&& row) -> void {
+    if (last_message) {
+      finish_last();
+    }
+    last_message_time = time::clock::now();
+    last_message.emplace(std::move(row));
+  }
+
+  auto add_line_to_latest(std::string_view line) -> bool {
+    if (not last_message) {
+      return false;
+    }
+    auto& latest = *last_message;
     if (not latest.parsed.msg) {
       latest.parsed.msg.emplace(line);
     } else {
@@ -470,29 +478,51 @@ public:
       latest.parsed.msg->append(line);
     }
     ++latest.line_count;
-  }
-
-  static auto finish_single(message_type& msg, multi_series_builder& builder)
-    -> bool {
-    auto r = builder.record();
-    r.exact_field("facility").data(msg.hdr.facility);
-    r.exact_field("severity").data(msg.hdr.severity);
-    r.exact_field("version").data(msg.hdr.version);
-    r.exact_field("timestamp").data(std::move(msg.hdr.ts));
-    r.exact_field("hostname").data(std::move(msg.hdr.hostname));
-    r.exact_field("app_name").data(std::move(msg.hdr.app_name));
-    r.exact_field("process_id").data(std::move(msg.hdr.process_id));
-    r.exact_field("message_id").data(std::move(msg.hdr.msg_id));
-    r.exact_field("structured_data").data(std::move(msg.data));
-    r.exact_field("message").data(std::move(msg.msg));
     return true;
   }
 
-  static auto finish_single(row_type& row, multi_series_builder& builder)
-    -> bool {
-    return finish_single(row.parsed, builder);
+  auto yield_ready() -> std::vector<table_slice> {
+    if (last_message and time::clock::now() - last_message_time > timeout) {
+      finish_last();
+    }
+    return builder.yield_ready_as_table_slice();
   }
-  std::vector<row_type> rows_{};
+
+  auto finalize_as_table_slice() -> std::vector<table_slice> {
+    if (last_message) {
+      finish_last();
+    }
+    return builder.finalize_as_table_slice();
+  }
+
+  auto finalize() -> std::vector<series> {
+    if (last_message) {
+      finish_last();
+    }
+    return builder.finalize();
+  }
+
+  auto finish_last() -> void {
+    TENZIR_ASSERT(last_message);
+    auto r = builder.record();
+    auto& row = last_message->parsed;
+    r.exact_field("facility").data(row.hdr.facility);
+    r.exact_field("severity").data(row.hdr.severity);
+    r.exact_field("version").data(row.hdr.version);
+    r.exact_field("timestamp").data(std::move(row.hdr.ts));
+    r.exact_field("hostname").data(std::move(row.hdr.hostname));
+    r.exact_field("app_name").data(std::move(row.hdr.app_name));
+    r.exact_field("process_id").data(std::move(row.hdr.process_id));
+    r.exact_field("message_id").data(std::move(row.hdr.msg_id));
+    r.exact_field("structured_data").data(std::move(row.data));
+    r.exact_field("message").data(std::move(row.msg));
+    last_message.reset();
+  }
+
+  duration timeout;
+  multi_series_builder builder;
+  time last_message_time;
+  std::optional<row_type> last_message{};
 };
 
 struct legacy_syslog_builder {
@@ -500,22 +530,54 @@ public:
   using message_type = legacy_message;
   using row_type = syslog_row<message_type>;
 
-  legacy_syslog_builder() = default;
-
-  auto add_new(row_type&& row) -> void {
-    rows_.emplace_back(std::move(row));
+  legacy_syslog_builder(multi_series_builder::options opts,
+                        diagnostic_handler& dh)
+    : timeout{opts.settings.timeout}, builder{std::move(opts), dh} {
   }
 
-  auto add_line_to_latest(std::string_view line) -> void {
-    TENZIR_ASSERT(not rows_.empty());
-    auto& latest = rows_.back();
+  auto add_new(row_type&& row) -> void {
+    if (last_message) {
+      finish_last();
+    }
+    last_message_time = time::clock::now();
+    last_message.emplace(std::move(row));
+  }
+
+  auto yield_ready() -> std::vector<table_slice> {
+    if (last_message and time::clock::now() - last_message_time > timeout) {
+      finish_last();
+    }
+    return builder.yield_ready_as_table_slice();
+  }
+
+  auto finalize_as_table_slice() -> std::vector<table_slice> {
+    if (last_message) {
+      finish_last();
+    }
+    return builder.finalize_as_table_slice();
+  }
+
+  auto finalize() -> std::vector<series> {
+    if (last_message) {
+      finish_last();
+    }
+    return builder.finalize();
+  }
+
+  auto add_line_to_latest(std::string_view line) -> bool {
+    if (not last_message) {
+      return false;
+    }
+    auto& latest = *last_message;
     latest.parsed.content.push_back('\n');
     latest.parsed.content.append(line);
     ++latest.line_count;
+    return true;
   }
 
-  static auto finish_single(message_type& msg, multi_series_builder& builder)
-    -> bool {
+  auto finish_last() -> void {
+    TENZIR_ASSERT(last_message);
+    auto& msg = last_message->parsed;
     auto r = builder.record();
     r.exact_field("facility").data(msg.facility);
     r.exact_field("severity").data(msg.severity);
@@ -524,20 +586,13 @@ public:
     r.exact_field("app_name").data(std::move(msg.tag));
     r.exact_field("process_id").data(std::move(msg.process_id));
     r.exact_field("content").data(msg.content);
-    // if (not builder.add(msg.facility, msg.severity, msg.timestamp, msg.host,
-    //                     msg.tag, msg.process_id, msg.content)) {
-    //   row.emit_diag("RFC 3164", diag);
-    //   return false;
-    // }
-    return true;
+    last_message.reset();
   }
 
-  static auto finish_single(row_type& row, multi_series_builder& builder)
-    -> bool {
-    return finish_single(row.parsed, builder);
-  }
-
-  std::vector<row_type> rows_{};
+  duration timeout;
+  multi_series_builder builder;
+  time last_message_time;
+  std::optional<row_type> last_message{};
 };
 
 struct unknown_syslog_builder {
@@ -545,120 +600,95 @@ public:
   using message_type = std::string;
   using row_type = syslog_row<message_type>;
 
-  unknown_syslog_builder() = default;
+  unknown_syslog_builder(multi_series_builder::options opts,
+                         diagnostic_handler& dh)
+    : builder{std::move(opts), dh} {
+  }
+
+  auto yield_ready() -> std::vector<table_slice> {
+    return builder.yield_ready_as_table_slice();
+  }
+
+  auto finalize_as_table_slice() -> std::vector<table_slice> {
+    return builder.finalize_as_table_slice();
+  }
+
+  auto finalize() -> std::vector<series> {
+    return builder.finalize();
+  }
 
   auto add_new(row_type&& row) -> void {
-    rows_.emplace_back(std::move(row.parsed));
+    builder.record().exact_field("syslog_message").data(std::move(row.parsed));
   }
 
-  static auto add_line_to_latest(std::string_view) -> void {
-    TENZIR_UNREACHABLE();
-  }
-
-  static auto finish_all_but_last(multi_series_builder&) -> void {
-    TENZIR_UNREACHABLE();
-  }
-
-  static auto finish_single(message_type& row, multi_series_builder& msb) {
-    msb.record().exact_field("syslog_message").data(std::move(row));
-    return true;
-  }
-
-  std::vector<std::string> rows_;
+  multi_series_builder builder;
 };
+
+enum class builder_tag {
+  syslog_builder,
+  legacy_syslog_builder,
+  unknown_syslog_builder,
+};
+
+auto infuse_new_schema(multi_series_builder::options o)
+  -> multi_series_builder::options {
+  if (try_as<multi_series_builder::policy_default>(o.policy)) {
+    o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc5424");
+  }
+  return o;
+}
+
+auto infuse_legacy_schema(multi_series_builder::options o)
+  -> multi_series_builder::options {
+  if (try_as<multi_series_builder::policy_default>(o.policy)) {
+    o.policy.emplace<multi_series_builder::policy_schema>("syslog.rfc3164");
+  }
+  return o;
+}
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
                 multi_series_builder::options opts) -> generator<table_slice> {
-  std::variant<syslog_builder, legacy_syslog_builder, unknown_syslog_builder>
-    builder{std::in_place_type<unknown_syslog_builder>};
   auto dh = transforming_diagnostic_handler{
     ctrl.diagnostics(), [](auto diag) {
       diag.message = fmt::format("syslog parser: {}", diag.message);
       return diag;
     }};
-  auto msb = multi_series_builder{std::move(opts), dh};
-  // This will be called when switching the builder and at the very end of
-  // execution
-  const auto finish_all = [&]() {
-    return std::visit(
-      [&](auto& b) {
-        for (auto& row : b.rows_) {
-          if (not b.finish_single(row, msb)) {
-            return;
-          }
-        }
-        b.rows_.clear();
-      },
-      builder);
-  };
-  // This will be called periodically to move events from the syslog aggregator
-  // into the multi_series_builder. It doesnt finish the last event, because the
-  // next line *may* be a continuation of the previous message
-  const auto finish_all_but_last = [&]() {
-    return std::visit(
-      [&](auto& b) {
-        for (auto& row : std::views::take(b.rows_, b.rows_.size() - 1)) {
-          if (not b.finish_single(row, msb)) {
-            return;
-          }
-        }
-        if (not b.rows_.empty()) {
-          b.rows_.erase(b.rows_.begin(), b.rows_.end() - 1);
-        }
-      },
-      builder);
-  };
-  // adds a new event to the currently active syslog builder
-  const auto add_new = [&]<typename Message>(Message&& msg, size_t line_no) {
-    std::visit(
-      [&]<typename Builder>(Builder& b) {
-        if constexpr (std::is_constructible_v<typename Builder::message_type,
-                                              std::remove_cvref_t<Message>>) {
-          b.add_new(
-            typename Builder::row_type{std::forward<Message>(msg), line_no});
-        } else {
-          TENZIR_UNREACHABLE();
-        }
-      },
-      builder);
-  };
-  // changes the currently active syslog builder
-  const auto change_builder = [&]<typename Builder>(tag<Builder>) {
-    if (std::holds_alternative<Builder>(builder)) {
-      return;
+  const auto ordered = opts.settings.ordered;
+  auto new_builder = syslog_builder{infuse_new_schema(opts), dh};
+  auto legacy_builder = legacy_syslog_builder{infuse_legacy_schema(opts), dh};
+  auto unknown_builder = unknown_syslog_builder{opts, dh};
+  auto last = builder_tag::unknown_syslog_builder;
+  const auto maybe_flush
+    = [&](builder_tag new_tag) -> std::vector<table_slice> {
+    if (not ordered) {
+      return {};
     }
-    finish_all();
-    builder.template emplace<Builder>();
-  };
-  const auto length = [&]() {
-    return std::visit(
-      [](const auto& b) {
-        return b.rows_.size();
-      },
-      builder);
+    if (new_tag == last) {
+      return {};
+    }
+    switch (last) {
+      using enum builder_tag;
+      case syslog_builder:
+        return new_builder.finalize_as_table_slice();
+      case legacy_syslog_builder:
+        return legacy_builder.finalize_as_table_slice();
+      case unknown_syslog_builder:
+        return unknown_builder.finalize_as_table_slice();
+    }
+    TENZIR_UNREACHABLE();
   };
   auto line_nr = size_t{0};
-  auto last_line_received = time::clock::now();
   co_yield {};
   for (auto&& line : lines) {
-    // We need our own timeout logic here, because we dont directly write events
-    // into the MSB. Only on a `finish_all` or `finish_all_but_last` call events
-    // are actually written into the MSB.
-    auto now = time::clock::now();
-    if (now - last_line_received > opts.settings.timeout) {
-      finish_all();
-      // We call finalize here because we did the timeout handling ourselves.
-      // Otherwise we would double the timeout.
-      for (auto&& slice : msb.finalize_as_table_slice()) {
-        co_yield std::move(slice);
-      }
-    } else {
-      finish_all_but_last();
-      // In here we rely on the timeout handling by the MSB.
-      for (auto&& slice : msb.yield_ready_as_table_slice()) {
-        co_yield std::move(slice);
-      }
+    for (auto&& s : new_builder.yield_ready()) {
+      co_yield std::move(s);
+    }
+    for (auto&& s : legacy_builder.yield_ready()) {
+      co_yield std::move(s);
+    }
+    for (auto&& s : unknown_builder.yield_ready()) {
+      co_yield std::move(s);
     }
     if (not line) {
       co_yield {};
@@ -668,46 +698,104 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
-    last_line_received = now;
     const auto* f = line->begin();
     const auto* const l = line->end();
     message msg{};
     legacy_message legacy_msg{};
     if (auto parser = message_parser{}; parser(f, l, msg)) {
-      // This line is a valid new-RFC (5424) syslog message.
-      // Store it in the builder
-      change_builder(tag_v<syslog_builder>);
-      add_new(std::move(msg), line_nr);
+      for (auto&& s : maybe_flush(builder_tag::syslog_builder)) {
+        co_yield std::move(s);
+      }
+      last = builder_tag::syslog_builder;
+      new_builder.add_new({std::move(msg), line_nr});
     } else if (auto legacy_parser = legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
-      // Same as above, except it's an old-RFC (3164) syslog message.
-      change_builder(tag_v<legacy_syslog_builder>);
-      add_new(std::move(legacy_msg), line_nr);
-    } else if (std::holds_alternative<unknown_syslog_builder>(builder)) {
-      // This line is not a valid syslog message.
-      // The current builder is `unknown_syslog_builder`,
-      // so this line will also become an event of type `syslog.unknown`.
-      add_new(std::string{*line}, line_nr);
-    } else if (length() == 0) {
-      /// In case there is no active message in the builder, the new part cannot
-      /// be a continuation.
-      change_builder(tag_v<unknown_syslog_builder>);
-      add_new(std::string{*line}, line_nr);
+      for (auto&& s : maybe_flush(builder_tag::legacy_syslog_builder)) {
+        co_yield std::move(s);
+      }
+      last = builder_tag::legacy_syslog_builder;
+      legacy_builder.add_new({std::move(legacy_msg), line_nr});
+    } else if (last == builder_tag::syslog_builder
+               and new_builder.add_line_to_latest(*line)) {
+      continue;
+    } else if (last == builder_tag::legacy_syslog_builder
+               and legacy_builder.add_line_to_latest(*line)) {
+      continue;
     } else {
-      // This line is not a valid syslog message,
-      // but the previous line was.
-      // Let's assume that we have a multiline syslog message,
-      // and append this current line to the previous message.
-      std::visit(
-        [&](auto& b) {
-          b.add_line_to_latest(*line);
-        },
-        builder);
+      for (auto&& s : maybe_flush(builder_tag::unknown_syslog_builder)) {
+        co_yield std::move(s);
+      }
+      last = builder_tag::unknown_syslog_builder;
+      unknown_builder.add_new({std::string{*line}, line_nr});
     }
   }
-  finish_all();
-  for (auto&& slice : msb.finalize_as_table_slice()) {
-    co_yield std::move(slice);
+  for (auto&& s : new_builder.finalize_as_table_slice()) {
+    co_yield std::move(s);
+  }
+  for (auto&& s : legacy_builder.finalize_as_table_slice()) {
+    co_yield std::move(s);
+  }
+  for (auto&& s : unknown_builder.finalize_as_table_slice()) {
+    co_yield std::move(s);
+  }
+}
+
+inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
+  -> generator<std::optional<std::string_view>> {
+  auto buffer = std::string{};
+  auto remaining_message_length = std::ptrdiff_t{};
+  for (auto&& chunk : input) {
+    if (! chunk || chunk->size() == 0) {
+      co_yield std::nullopt;
+      continue;
+    }
+    auto* chunk_begin = reinterpret_cast<const char*>(chunk->data());
+    const auto chunk_end = chunk_begin + chunk->size();
+    auto chunk_length = [&]() {
+      return chunk_end - chunk_begin;
+    };
+    // We still need bytes to continue a previous message
+    if (remaining_message_length > 0) {
+      const auto take = std::min(remaining_message_length, chunk_length());
+      buffer.append(chunk_begin, take);
+      remaining_message_length -= take;
+      // The message is complete, we can yield it
+      if (remaining_message_length == 0) {
+        co_yield buffer;
+        buffer.clear();
+      }
+      chunk_begin += take;
+    }
+    // A new message starts in (the remainder of) the chunk
+    while (chunk_begin != chunk_end) {
+      auto [ptr, ec]
+        = std::from_chars(chunk_begin, chunk_end, remaining_message_length);
+      if (ec != std::errc{}) {
+        TENZIR_WARN(
+          "`{}`", std::string_view{reinterpret_cast<const char*>(chunk->data()),
+                                   chunk_end});
+        TENZIR_WARN("`{}`", std::string_view{chunk_begin, chunk_end});
+        diagnostic::error("failed to parse octet: `{}`",
+                          std::make_error_code(ec).message())
+          .emit(dh);
+        co_return;
+      }
+      // Remove the size prefix and conditionally one whitespace
+      chunk_begin = ptr + (ptr != chunk_end);
+      // The new message is fully within this chunk
+      if (remaining_message_length <= chunk_length()) {
+        const auto message_end = chunk_begin + remaining_message_length;
+        remaining_message_length = 0;
+        co_yield std::string_view{chunk_begin, message_end};
+        chunk_begin = message_end;
+        continue; // more messages in this chunk
+      } else {
+        // The message is longer than the remainder of the chunk:
+        buffer.append(chunk_begin, chunk_end);
+        remaining_message_length -= chunk_length();
+        break; // next chunk
+      }
+    }
   }
 }
 
@@ -715,7 +803,8 @@ class syslog_parser final : public plugin_parser {
 public:
   syslog_parser() = default;
 
-  syslog_parser(multi_series_builder::options opts) : opts_{std::move(opts)} {
+  syslog_parser(multi_series_builder::options opts, bool octet_counting)
+    : opts_{std::move(opts)}, octet_counting_{octet_counting} {
   }
 
   auto name() const -> std::string override {
@@ -725,15 +814,22 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_loop(to_lines(std::move(input)), ctrl, opts_);
+    if (octet_counting_) {
+      return parse_loop(split_octet(std::move(input), ctrl.diagnostics()), ctrl,
+                        opts_);
+    } else {
+      return parse_loop(to_lines(std::move(input)), ctrl, opts_);
+    }
   }
 
   friend auto inspect(auto& f, syslog_parser& x) -> bool {
-    return f.apply(x.opts_);
+    return f.object(x).fields(f.field("octet", x.octet_counting_),
+                              f.field("opts", x.opts_));
   }
 
 private:
   multi_series_builder::options opts_;
+  bool octet_counting_ = false;
 };
 
 auto make_root_field(std::string field) -> ast::root_field {
@@ -1068,13 +1164,13 @@ public:
     parser.parse(p);
     auto dh = collecting_diagnostic_handler{};
     auto msb_opts = msb_parser.get_options(dh);
-    msb_opts->settings.default_schema_name = "tenzir.syslog";
+    msb_opts->settings.default_schema_name = "syslog.unknown";
     for (auto&& diag : std::move(dh).collect()) {
       if (diag.severity == severity::error) {
         throw diag;
       }
     }
-    return std::make_unique<syslog_parser>(std::move(*msb_opts));
+    return std::make_unique<syslog_parser>(std::move(*msb_opts), false);
   }
 };
 
@@ -1083,12 +1179,14 @@ class read_syslog final
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
+    bool octet_counting = false;
+    parser.named_optional("octet_counting", octet_counting);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<syslog_parser>>(
-      syslog_parser{std::move(opts)});
+      syslog_parser{std::move(opts), octet_counting});
   }
 };
 
@@ -1122,10 +1220,50 @@ public:
               return arg;
             },
             [&](const arrow::StringArray& arg) -> multi_series {
-              auto msb = multi_series_builder{msb_opts, ctx};
+              auto builder = syslog_builder{infuse_new_schema(msb_opts), ctx};
+              auto legacy_builder
+                = legacy_syslog_builder{infuse_legacy_schema(msb_opts), ctx};
+              auto last = builder_tag::syslog_builder;
+              auto res = multi_series{};
+              /// flushes the current builder, if its not the same as
+              /// `new_builder`
+              const auto maybe_flush = [&](builder_tag new_builder) {
+                if (new_builder == last) {
+                  return;
+                }
+                switch (last) {
+                  using enum builder_tag;
+                  case syslog_builder: {
+                    res.append(multi_series{builder.finalize()});
+                    break;
+                  }
+                  case legacy_syslog_builder: {
+                    res.append(multi_series{legacy_builder.finalize()});
+                    break;
+                  }
+                  case unknown_syslog_builder:
+                    TENZIR_UNREACHABLE();
+                }
+              };
+              /// adds a null to the current builder
+              const auto null = [&]() {
+                switch (last) {
+                  using enum builder_tag;
+                  case syslog_builder: {
+                    builder.builder.null();
+                    break;
+                  }
+                  case legacy_syslog_builder: {
+                    legacy_builder.builder.null();
+                    break;
+                  }
+                  case unknown_syslog_builder:
+                    TENZIR_UNREACHABLE();
+                }
+              };
               for (int64_t i = 0; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
-                  msb.null();
+                  null();
                   continue;
                 }
                 auto msg = message{};
@@ -1134,24 +1272,25 @@ public:
                 auto f = v.begin();
                 auto l = v.end();
                 if (auto parser = message_parser{}; parser(f, l, msg)) {
-                  // This line is a valid new-RFC (5424) syslog message.
-                  // Store it in the builder
-                  const auto success = syslog_builder::finish_single(msg, msb);
-                  TENZIR_ASSERT(success);
+                  maybe_flush(builder_tag::syslog_builder);
+                  builder.add_new({std::move(msg), 0});
+                  last = builder_tag::syslog_builder;
                 } else if (auto legacy_parser = legacy_message_parser{};
                            legacy_parser(f, l, legacy_msg)) {
-                  // Same as above, except it's an old-RFC (3164) syslog
-                  const auto success
-                    = legacy_syslog_builder::finish_single(legacy_msg, msb);
-                  TENZIR_ASSERT(success);
+                  maybe_flush(builder_tag::legacy_syslog_builder);
+                  legacy_builder.add_new({std::move(legacy_msg), 0});
+                  last = builder_tag::legacy_syslog_builder;
                 } else {
                   diagnostic::warning("`input` is not valid syslog")
                     .primary(expr.get_location())
                     .emit(ctx);
-                  msb.null();
+                  null();
                 }
               }
-              return multi_series{msb.finalize()};
+              /// We flush with a new builder tag of "unknown", as that is
+              /// guaranteed to flush the last builder
+              maybe_flush(builder_tag::unknown_syslog_builder);
+              return res;
             },
             [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_syslog` expected `string`, got `{}`",
