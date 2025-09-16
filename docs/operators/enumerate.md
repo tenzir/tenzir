@@ -7,7 +7,7 @@ example: 'enumerate num'
 Add a field with the number of preceding events.
 
 ```tql
-enumerate [out:field]
+enumerate [out:field, group=any]
 ```
 
 ## Description
@@ -20,6 +20,12 @@ the beginning of the input record.
 Sets the name of the output field.
 
 Defaults to `"#"`.
+
+### `group: any (optional)`
+
+Groups events by the specified expression and enumerates within each group.
+When provided, an independent enumeration counter is used for each unique
+value of the grouping expression.
 
 ## Examples
 
@@ -46,4 +52,19 @@ enumerate index
 ```tql
 {index: 0, x: true}
 {index: 1, x: false}
+```
+
+### Count within groups
+
+```tql
+from {x: 1}, {x: 2}, {x: 1}, {x: 2}
+enumerate count, group=x
+count = count + 1
+```
+
+```tql
+{count: 1, x: 1}
+{count: 1, x: 2}
+{count: 2, x: 1}
+{count: 2, x: 2}
 ```
