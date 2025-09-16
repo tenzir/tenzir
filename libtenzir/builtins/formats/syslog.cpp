@@ -39,9 +39,6 @@ namespace {
 template <class Parser>
 struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
   using attribute = typename std::decay_t<Parser>::attribute;
-  // using value_type = typename std::decay_t<Parser>::attribute;
-  // using attribute = std::conditional_t<concepts::container<value_type>,
-  //                                      value_type, std::optional<value_type>>;
 
   explicit maybe_null_parser(Parser parser) : parser_{std::move(parser)} {
   }
@@ -53,8 +50,7 @@ struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
     auto p = ('-'_p >> &(' '_p)) ->*[] {return Attribute{}; }
              | parser_ ->*[](attribute in) { return Attribute{in}; };
     // clang-format on
-    auto r = p(f, l, x);
-    return r;
+    return p(f, l, x);
   }
 
   Parser parser_;
@@ -114,8 +110,6 @@ struct header_parser : parser_base<header_parser> {
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
-      static_assert(
-        std::same_as<decltype(x.hostname), std::optional<std::string>>);
       return p(f, l, x.version, x.ts, x.hostname, x.app_name, x.process_id,
                x.msg_id);
     }
@@ -472,9 +466,11 @@ public:
     last_message.emplace(std::move(row));
   }
 
-  auto add_line_to_latest(std::string_view line) -> void {
-    TENZIR_ASSERT(last_message);
-    auto latest = *last_message;
+  auto add_line_to_latest(std::string_view line) -> bool {
+    if (not last_message) {
+      return false;
+    }
+    auto& latest = *last_message;
     if (not latest.parsed.msg) {
       latest.parsed.msg.emplace(line);
     } else {
@@ -482,6 +478,7 @@ public:
       latest.parsed.msg->append(line);
     }
     ++latest.line_count;
+    return true;
   }
 
   auto yield_ready() -> std::vector<table_slice> {
@@ -508,7 +505,7 @@ public:
   auto finish_last() -> void {
     TENZIR_ASSERT(last_message);
     auto r = builder.record();
-    auto row = last_message->parsed;
+    auto& row = last_message->parsed;
     r.exact_field("facility").data(row.hdr.facility);
     r.exact_field("severity").data(row.hdr.severity);
     r.exact_field("version").data(row.hdr.version);
@@ -567,12 +564,15 @@ public:
     return builder.finalize();
   }
 
-  auto add_line_to_latest(std::string_view line) -> void {
-    TENZIR_ASSERT(last_message);
+  auto add_line_to_latest(std::string_view line) -> bool {
+    if (not last_message) {
+      return false;
+    }
     auto& latest = *last_message;
     latest.parsed.content.push_back('\n');
     latest.parsed.content.append(line);
     ++latest.line_count;
+    return true;
   }
 
   auto finish_last() -> void {
@@ -682,11 +682,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   co_yield {};
   for (auto&& line : lines) {
     for (auto&& s : new_builder.yield_ready()) {
-      last = builder_tag::unknown_syslog_builder;
       co_yield std::move(s);
     }
     for (auto&& s : legacy_builder.yield_ready()) {
-      last = builder_tag::unknown_syslog_builder;
       co_yield std::move(s);
     }
     for (auto&& s : unknown_builder.yield_ready()) {
@@ -717,10 +715,12 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       }
       last = builder_tag::legacy_syslog_builder;
       legacy_builder.add_new({std::move(legacy_msg), line_nr});
-    } else if (last == builder_tag::syslog_builder) {
-      new_builder.add_line_to_latest(*line);
-    } else if (last == builder_tag::legacy_syslog_builder) {
-      legacy_builder.add_line_to_latest(*line);
+    } else if (last == builder_tag::syslog_builder
+               and new_builder.add_line_to_latest(*line)) {
+      continue;
+    } else if (last == builder_tag::legacy_syslog_builder
+               and legacy_builder.add_line_to_latest(*line)) {
+      continue;
     } else {
       for (auto&& s : maybe_flush(builder_tag::unknown_syslog_builder)) {
         co_yield std::move(s);
@@ -771,6 +771,10 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
       auto [ptr, ec]
         = std::from_chars(chunk_begin, chunk_end, remaining_message_length);
       if (ec != std::errc{}) {
+        TENZIR_WARN(
+          "`{}`", std::string_view{reinterpret_cast<const char*>(chunk->data()),
+                                   chunk_end});
+        TENZIR_WARN("`{}`", std::string_view{chunk_begin, chunk_end});
         diagnostic::error("failed to parse octet: `{}`",
                           std::make_error_code(ec).message())
           .emit(dh);
@@ -781,6 +785,7 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
       // The new message is fully within this chunk
       if (remaining_message_length <= chunk_length()) {
         const auto message_end = chunk_begin + remaining_message_length;
+        remaining_message_length = 0;
         co_yield std::string_view{chunk_begin, message_end};
         chunk_begin = message_end;
         continue; // more messages in this chunk
