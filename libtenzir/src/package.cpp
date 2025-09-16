@@ -358,17 +358,25 @@ auto package_pipeline::parse(const view<record>& data)
 
 auto package_pipeline::parse(std::string_view input)
   -> caf::expected<package_pipeline> {
-  auto [frontmatter, definition] = detail::split_once(input, "\n---\n");
-  auto metadata = from_yaml(frontmatter);
-  if (not metadata) {
-    return metadata.error();
+  record* rec = nullptr;
+  // Front matter is optional, the only required field in a packaged pipeline is
+  // the definition.
+  if (input.starts_with("---\n")) {
+    input.remove_prefix(4);
+    auto [frontmatter, definition] = detail::split_once(input, "\n---\n");
+    auto metadata = from_yaml(frontmatter);
+    if (not metadata) {
+      return metadata.error();
+    }
+    rec = try_as<record>(*metadata);
+    if (not rec) {
+      return caf::make_error(ec::parse_error,
+                             "pipeline frontmatter is not a record");
+    }
+    rec->emplace("definition", std::string{definition});
+  } else {
+    rec->emplace("definition", std::string{input});
   }
-  record* rec = try_as<record>(*metadata);
-  if (not rec) {
-    return caf::make_error(ec::parse_error,
-                           "pipeline frontmatter is not a record");
-  }
-  rec->emplace("definition", std::string{definition});
   return parse(make_view(*rec));
 }
 
