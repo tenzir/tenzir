@@ -36,6 +36,9 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
 auto try_const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data>;
 
+auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
+          const table_slice& slice, diagnostic_handler& dh) -> multi_series;
+
 auto eval(const ast::lambda_expr& lambda, const multi_series& input,
           diagnostic_handler& dh) -> multi_series;
 

@@ -77,6 +77,9 @@ public:
     return not_implemented(x);
   }
 
+  auto eval(const ast::lambda_expr& x, const basic_series<list_type>& input)
+    -> multi_series;
+
   auto to_series(const data& x) const -> series;
 
   auto input_or_throw(into_location location) -> const table_slice&;
