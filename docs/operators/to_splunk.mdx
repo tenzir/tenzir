@@ -10,7 +10,7 @@ Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
 
 ```tql
 to_splunk url:string, hec_token=string,
-          [host=string, source=string, sourcetype=expr, index=expr,
+          [event=any, host=string, source=string, sourcetype=expr, index=expr,
           tls=bool, cacert=string, certfile=string, keyfile=string,
           skip_peer_verification=bool, print_nulls=bool, max_content_length=int,
           buffer_timeout=duration, compress=bool]
@@ -38,6 +38,12 @@ The address of the Splunk indexer.
 The [HEC
 token](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector#Create_an_Event_Collector_token_on_Splunk_Cloud_Platform)
 for authentication.
+
+### `event = any (optional)`
+
+The event to send. By default, the entire input event is send.
+
+Defaults to `this`.
 
 ### `host = string (optional)`
 
@@ -110,5 +116,45 @@ Defaults to `true`.
 ```tql
 load_file "example.json"
 read_json
-to_splunk "https://localhost:8088", hec_token="example-token-1234"
+to_splunk "https://localhost:8088", hec_token=secret("splunk-hec-token")
+```
+
+
+### Data Dependent Splunk framing
+
+By default, the `to_splunk` operator sends the entire event as the `event` field
+to the HEC, together with any optional Splunk "frame" fields such as `host`,
+`source`, `sourcetype` and `index`. These special properties can be set using
+the operators respective arguments, with an expression that is evaluated per event.
+
+However, this means that these special properties may be transmitted as both part
+of `event` and as part of the Splunk frame. This can be especially undesirable
+when the events are supposed to adhere to a specific schema, such as OCSF.
+
+In this case, you can specify the additional `event` option to specify which part
+of the incoming event should be sent as the event.
+
+```tql
+from {
+  host: "my-host",
+  source: "my-source",
+  a: 42,
+  b: 0
+  message: "text",
+  nested: { x: 0 },
+}
+
+// move the entire event into `event`
+this = { event: this }
+
+// hoist the splunk specific fields back out, so they are no longer part of the
+// sent event
+move host = event.host,
+  source = event.source
+
+to_splunk "https://localhost:8088",
+  hec_token=secret("splunk-hec-token"),
+  host=host,
+  source=source,
+  event=event
 ```
