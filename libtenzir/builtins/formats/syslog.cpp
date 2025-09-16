@@ -1159,7 +1159,7 @@ public:
     parser.parse(p);
     auto dh = collecting_diagnostic_handler{};
     auto msb_opts = msb_parser.get_options(dh);
-    msb_opts->settings.default_schema_name = "tenzir.syslog";
+    msb_opts->settings.default_schema_name = "syslog.unknown";
     for (auto&& diag : std::move(dh).collect()) {
       if (diag.severity == severity::error) {
         throw diag;
