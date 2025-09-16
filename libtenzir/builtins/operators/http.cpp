@@ -902,9 +902,13 @@ struct from_http_args {
                  detail::stable_map<std::string, secret>> {
     auto hdrs = std::unordered_map<std::string, std::string>{};
     auto secrets = detail::stable_map<std::string, secret>{};
+    auto insert_accept_header = true;
     auto insert_content_type = body and is<record>(body->inner);
     if (headers) {
       for (const auto& [k, v] : headers->inner) {
+        if (caf::icase_equal(k, "accept")) {
+          insert_accept_header = false;
+        }
         if (caf::icase_equal(k, "content-type")) {
           insert_content_type = false;
         }
@@ -925,6 +929,9 @@ struct from_http_args {
       hdrs.emplace("Content-Type", encode and encode->inner == "form"
                                      ? "application/x-www-form-urlencoded"
                                      : "application/json");
+    }
+    if (insert_accept_header) {
+      hdrs.emplace("Accept", "application/json, */*;q=0.5");
     }
     return std::pair{hdrs, secrets};
   }
@@ -1879,7 +1886,7 @@ public:
           .emit(dh);
       }
       auto hdrs = std::vector<
-        std::pair<std::unordered_map<std::string, std::string>, bool>>{};
+        std::tuple<std::unordered_map<std::string, std::string>, bool, bool>>{};
       if (args_.headers) {
         hdrs.reserve(slice.rows());
         auto hdr_ms = eval(*args_.headers, slice, dh);
@@ -1901,11 +1908,13 @@ public:
                 .emit(dh);
               continue;
             }
-            auto& [h, has_content_type] = hdrs.emplace_back();
+            auto& [h, has_content_type, has_accept_header]
+              = hdrs.emplace_back();
             const auto has_body = args_.body.has_value();
             for (const auto& [k, v] : *val) {
               has_content_type
                 |= has_body and caf::icase_equal(k, "content-type");
+              has_accept_header |= caf::icase_equal(k, "accept");
               match(
                 v,
                 [&](const std::string_view& x) {
@@ -1945,7 +1954,7 @@ public:
       auto bodies = eval_body(slice, dh);
       for (auto row : slice.values()) {
         auto& url = *url_it++;
-        auto& [headers, has_content_type] = *hdr_it++;
+        auto& [headers, has_content_type, has_accept_header] = *hdr_it++;
         const auto method = methods.next().value();
         const auto [body, insert_content_type] = bodies.next().value();
         if (url.empty()) {
@@ -1981,6 +1990,9 @@ public:
                           args_.encode and args_.encode->inner == "form"
                             ? "application/x-www-form-urlencoded"
                             : "application/json");
+        }
+        if (not has_accept_header) {
+          headers.emplace("Accept", "application/json, */*;q=0.5");
         }
         http::with(ctrl.self().system())
           .context(args_.make_ssl_context(*caf_uri))
