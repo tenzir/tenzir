@@ -2032,7 +2032,7 @@ public:
             co_yield slices[i];
           }
           slices.clear();
-          ctrl.set_waiting(true);
+          ctrl.set_waiting(awaiting != 0);
           co_yield {};
         }
         // NOTE: Must be an index-based loop. The thread can go back to the
