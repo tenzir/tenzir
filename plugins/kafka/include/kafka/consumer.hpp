@@ -36,7 +36,8 @@ public:
     -> std::shared_ptr<RdKafka::Message>;
 
   /// Commits offset for a specific message synchronously.
-  auto commit(RdKafka::Message* message) -> caf::error;
+  auto commit(RdKafka::Message* message, diagnostic_handler& dh, location loc)
+    -> failure_or<void>;
 
   ~consumer() {
     if (consumer_.use_count() == 1) {

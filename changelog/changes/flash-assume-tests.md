@@ -1,6 +1,6 @@
 ---
 title: "Explicit Commits in `load_kafka`"
-type: feature
+type: bugfix
 authors: IyeOnline
 pr: 5465
 ---

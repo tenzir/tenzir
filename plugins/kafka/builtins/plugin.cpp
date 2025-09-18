@@ -54,6 +54,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
+    args.operator_location = inv.self.get_location();
     auto offset = std::optional<ast::expression>{};
     auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())

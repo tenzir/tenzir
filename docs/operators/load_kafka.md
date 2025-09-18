@@ -4,7 +4,7 @@ category: Inputs/Bytes
 example: 'load_kafka topic="example"'
 ---
 
-Loads a byte stream from a Apache Kafka topic.
+Loads a byte stream from an Apache Kafka topic.
 
 ```tql
 load_kafka topic:string, [count=int, exit=bool, offset=int|string, options=record,
@@ -43,7 +43,7 @@ Exit successfully after having consumed `count` messages.
 
 Exit successfully after having received the last message.
 
-Without this option, the operator waits for new messages after having consumed the
+Without this option, the operator waits for new messages after consuming the
 last one.
 
 ### `offset = int|string (optional)`
@@ -76,16 +76,15 @@ that they are independent of the `load_kafka` arguments.
 
 ### `commit_batch_size = int (optional)`
 
-The operator commits offsets after `commit_batch_size` messages have been received.
+The operator commits offsets after receiving `commit_batch_size` messages
 to improve throughput. If you need to ensure exactly-once semantics for your
 pipeline, set this option to `1` to commit every message individually.
 
-Defaults to `1000`
+Defaults to `1000`.
 
 ### `commit_timeout = duration (optional)`
 
-A timeout after which messages will be committed, even if less than `commit_batch_size`
-have been accepted. This is useful for long running, low volume pipelines.
+A timeout after which the operator commits messages, even if it accepted fewer than `commit_batch_size`. This helps with long-running, low-volume pipelines.
 
 Defaults to `10s`.
 
@@ -98,10 +97,10 @@ Available keys:
 
 - `region`: Region of the MSK Clusters. Must be specified when using IAM.
 - `assume_role`: Optional role ARN to assume.
-- `session_name`: Optional session name to use when assume a role.
+- `session_name`: Optional session name to use when assuming a role.
 - `external_id`: Optional external id to use when assuming a role.
 
-The operator will try to get credentials in the following order:
+The operator tries to get credentials in the following order:
 
 1. Checks your environment variables for AWS Credentials.
 2. Checks your `$HOME/.aws/credentials` file for a profile and credentials

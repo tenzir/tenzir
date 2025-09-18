@@ -183,6 +183,7 @@ struct loader_args {
   duration commit_timeout = 10s;
   located<record> options;
   configuration::aws_iam_options aws;
+  location operator_location;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
@@ -192,7 +193,8 @@ struct loader_args {
               f.field("exit", x.exit), f.field("offset", x.offset),
               f.field("commit_batch_size", x.commit_batch_size),
               f.field("commit_timeout", x.commit_timeout),
-              f.field("options", x.options));
+              f.field("options", x.options), f.field("aws", x.aws),
+              f.field("operator_location", x.operator_location));
   }
 };
 
@@ -208,11 +210,13 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto& dh = ctrl.diagnostics();
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
+    auto cfg = configuration::make(config_, args_.aws, dh);
     if (! cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
-        .emit(ctrl.diagnostics());
+        .primary(args_.operator_location)
+        .emit(dh);
       co_return;
     }
     // If we want to exit when we're done, we need to tell Kafka to emit a
@@ -220,13 +224,17 @@ public:
     if (args_.exit) {
       if (auto err = cfg->set("enable.partition.eof", "true")) {
         diagnostic::error("failed to enable partition EOF: {}", err)
-          .emit(ctrl.diagnostics());
+          .primary(args_.operator_location)
+          .emit(dh);
+        co_return;
       }
     }
     // Disable auto-commit to use manual commit for precise message counting
     if (auto err = cfg->set("enable.auto.commit", "false")) {
       diagnostic::error("failed to disable auto-commit: {}", err)
-        .emit(ctrl.diagnostics());
+        .primary(args_.operator_location)
+        .emit(dh);
+      co_return;
     }
     // Adjust rebalance callback to set desired offset.
     auto offset = RdKafka::Topic::OFFSET_END;
@@ -237,13 +245,14 @@ public:
                   offset);
     }
     if (auto err = cfg->set_rebalance_cb(offset)) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to set rebalance callback: {}", err).done());
+      diagnostic::error("failed to set rebalance callback: {}", err)
+        .primary(args_.operator_location)
+        .emit(dh);
+      co_return;
     }
     // Override configuration with arguments.
     {
-      auto secrets
-        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      auto secrets = configure_or_request(args_.options, *cfg, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     // Create the consumer.
@@ -253,21 +262,20 @@ public:
     auto client = consumer::make(*cfg);
     if (! client) {
       diagnostic::error("failed to create consumer: {}", client.error())
-        .emit(ctrl.diagnostics());
+        .primary(args_.operator_location)
+        .emit(dh);
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
     if (auto err = client->subscribe({args_.topic})) {
       diagnostic::error("failed to subscribe to topic: {}", err)
-        .emit(ctrl.diagnostics());
+        .primary(args_.operator_location)
+        .emit(dh);
     }
     auto num_messages = size_t{0};
     auto last_commit_time = time::clock::now();
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
-      if (not raw_msg) {
-        diagnostic::error("internal error").emit(ctrl.diagnostics());
-        co_return;
-      }
+      TENZIR_ASSERT(raw_msg);
       switch (raw_msg->err()) {
         case RdKafka::ERR_NO_ERROR: {
           // Create chunk from the message
@@ -279,18 +287,16 @@ public:
           ++num_messages;
           const auto now = time::clock::now();
           if (num_messages % args_.commit_batch_size == 0
-              or last_commit_time - now > args_.commit_timeout) {
+              or last_commit_time - now >= args_.commit_timeout) {
             last_commit_time = now;
-            if (auto err = client->commit(raw_msg.get())) {
-              diagnostic::error("failed to commit offset: {}", err)
-                .emit(ctrl.diagnostics());
+            if (not client->commit(raw_msg.get(), dh,
+                                   args_.operator_location)) {
               co_return;
             }
           }
           if (args_.count && args_.count->inner == num_messages) {
-            if (auto err = client->commit(raw_msg.get())) {
-              diagnostic::error("failed to commit offset: {}", err)
-                .emit(ctrl.diagnostics());
+            if (not client->commit(raw_msg.get(), dh,
+                                   args_.operator_location)) {
             }
             co_return;
           }
@@ -298,10 +304,9 @@ public:
         }
         case RdKafka::ERR__TIMED_OUT: {
           const auto now = time::clock::now();
-          if (last_commit_time - now > args_.commit_timeout) {
-            if (auto err = client->commit(raw_msg.get())) {
-              diagnostic::error("failed to commit offset: {}", err)
-                .emit(ctrl.diagnostics());
+          if (last_commit_time - now >= args_.commit_timeout) {
+            if (not client->commit(raw_msg.get(), dh,
+                                   args_.operator_location)) {
               co_return;
             }
           }
@@ -309,20 +314,16 @@ public:
           continue;
         }
         case RdKafka::ERR__PARTITION_EOF: {
-          if (auto err = client->commit(raw_msg.get())) {
-            diagnostic::error("failed to commit offset: {}", err)
-              .emit(ctrl.diagnostics());
-          }
+          std::ignore
+            = client->commit(raw_msg.get(), dh, args_.operator_location);
           co_yield {};
           co_return;
         }
         default: {
+          std::ignore
+            = client->commit(raw_msg.get(), dh, args_.operator_location);
           diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
-            .emit(ctrl.diagnostics());
-          if (auto err = client->commit(raw_msg.get())) {
-            diagnostic::error("failed to commit offset: {}", err)
-              .emit(ctrl.diagnostics());
-          }
+            .emit(dh);
           co_yield {};
           co_return;
         }

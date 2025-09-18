@@ -41,12 +41,14 @@ auto consumer::consume_raw(std::chrono::milliseconds timeout)
   return std::shared_ptr<RdKafka::Message>{consumer_->consume(ms)};
 }
 
-auto consumer::commit(RdKafka::Message* message) -> caf::error {
+auto consumer::commit(RdKafka::Message* message, diagnostic_handler& dh,
+                      location loc) -> failure_or<void> {
   auto result = consumer_->commitSync(message);
   if (result != RdKafka::ERR_NO_ERROR) {
-    return caf::make_error(ec::unspecified,
-                           fmt::format("failed to commit message: {}",
-                                       RdKafka::err2str(result)));
+    diagnostic::error("failed to commit offset: {}", RdKafka::err2str(result))
+      .primary(loc)
+      .emit(dh);
+    return failure::promise();
   }
   return {};
 }
