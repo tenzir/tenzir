@@ -24,8 +24,8 @@ from {
 // move the entire event into `event`
 this = { event: this }
 
-// hoist the splunk specific fields back out
-move source = event.source
+// hoist the splunk specific field back out
+move host = event.host
 
 to_splunk "https://localhost:8088",
   hec_token=secret("splunk-hec-token"),
