@@ -54,6 +54,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
+    args.operator_location = inv.self.get_location();
     auto offset = std::optional<ast::expression>{};
     auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
@@ -61,8 +62,10 @@ public:
           .named("count", args.count)
           .named("exit", args.exit)
           .named("offset", offset, "string|int")
-          .named("aws_iam", iam_opts)
           .named_optional("options", args.options)
+          .named("aws_iam", iam_opts)
+          .named_optional("commit_batch_size", args.commit_batch_size)
+          .named_optional("commit_timeout", args.commit_timeout)
           .parse(inv, ctx));
     if (iam_opts) {
       TRY(check_sasl_mechanism(args.options, ctx));
@@ -70,6 +73,13 @@ public:
       args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
       TRY(args.aws, configuration::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
+    }
+    if (args.options.inner.contains("enable.auto.commit")) {
+      diagnostic::error("`enable.auto.commit` must not be specified")
+        .primary(args.options)
+        .note("`args.auto.commit` is enforced to be `false`")
+        .emit(ctx);
+      return failure::promise();
     }
     if (offset) {
       TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));

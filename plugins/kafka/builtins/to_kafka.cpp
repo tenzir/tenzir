@@ -12,6 +12,7 @@
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/resolve.hpp"
 
 #include <tenzir/tql2/plugin.hpp>
 
@@ -23,7 +24,12 @@ namespace {
 struct to_kafka_args {
   location op;
   std::string topic;
-  std::optional<ast::expression> message;
+  ast::expression message = ast::function_call{
+    ast::entity{{ast::identifier{"print_ndjson", location::unknown}}},
+    {ast::this_{location::unknown}},
+    location::unknown,
+    true // method call
+  };
   std::optional<located<std::string>> key;
   std::optional<located<time>> timestamp;
   located<record> options;
@@ -77,19 +83,18 @@ public:
     const auto key = args_.key ? args_.key->inner : "";
     const auto timestamp = args_.timestamp ? args_.timestamp->inner : time{};
     // Create default expression if message not provided
-    static const auto default_message = ast::function_call{
+    auto default_message = ast::function_call{
       ast::entity{{ast::identifier{"print_json", location::unknown}}},
       {ast::this_{location::unknown}},
       location::unknown,
       true // method call
     };
-    auto message_expr = args_.message.value_or(default_message);
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      const auto& ms = eval(message_expr, slice, dh);
+      const auto& ms = eval(args_.message, slice, dh);
       for (const auto& s : ms) {
         match(
           *s.array,
@@ -98,7 +103,7 @@ public:
             for (auto i = int64_t{}; i < array.length(); ++i) {
               if (array.IsNull(i)) {
                 diagnostic::warning("expected `string` or `blob`, got `null`")
-                  .primary(message_expr)
+                  .primary(args_.message)
                   .emit(dh);
                 continue;
               }
@@ -111,7 +116,7 @@ public:
           [&](const auto&) {
             diagnostic::warning("expected `string` or `blob`, got `{}`",
                                 s.type.kind())
-              .primary(message_expr)
+              .primary(args_.message)
               .emit(dh);
           });
       }
@@ -181,10 +186,11 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = to_kafka_args{};
+    TRY(resolve_entities(args.message, ctx));
     auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .positional("topic", args.topic)
-          .named("message", args.message, "blob|string")
+          .named_optional("message", args.message, "blob|string")
           .named("key", args.key)
           .named("timestamp", args.timestamp)
           .named("aws_iam", iam_opts)

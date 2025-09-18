@@ -179,8 +179,11 @@ struct loader_args {
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
+  std::uint64_t commit_batch_size = 1000;
+  duration commit_timeout = 10s;
   located<record> options;
   configuration::aws_iam_options aws;
+  location operator_location;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
@@ -188,7 +191,10 @@ struct loader_args {
       .pretty_name("loader_args")
       .fields(f.field("topic", x.topic), f.field("count", x.count),
               f.field("exit", x.exit), f.field("offset", x.offset),
-              f.field("options", x.options));
+              f.field("commit_batch_size", x.commit_batch_size),
+              f.field("commit_timeout", x.commit_timeout),
+              f.field("options", x.options), f.field("aws", x.aws),
+              f.field("operator_location", x.operator_location));
   }
 };
 
@@ -204,21 +210,31 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto& dh = ctrl.diagnostics();
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
+    auto cfg = configuration::make(config_, args_.aws, dh);
     if (! cfg) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to create configuration: {}", cfg.error())
-          .done());
+      diagnostic::error("failed to create configuration: {}", cfg.error())
+        .primary(args_.operator_location)
+        .emit(dh);
       co_return;
     }
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
     if (args_.exit) {
       if (auto err = cfg->set("enable.partition.eof", "true")) {
-        ctrl.diagnostics().emit(
-          diagnostic::error("failed to enable partition EOF: {}", err).done());
+        diagnostic::error("failed to enable partition EOF: {}", err)
+          .primary(args_.operator_location)
+          .emit(dh);
+        co_return;
       }
+    }
+    // Disable auto-commit to use manual commit for precise message counting
+    if (auto err = cfg->set("enable.auto.commit", "false")) {
+      diagnostic::error("failed to disable auto-commit: {}", err)
+        .primary(args_.operator_location)
+        .emit(dh);
+      co_return;
     }
     // Adjust rebalance callback to set desired offset.
     auto offset = RdKafka::Topic::OFFSET_END;
@@ -229,13 +245,14 @@ public:
                   offset);
     }
     if (auto err = cfg->set_rebalance_cb(offset)) {
-      ctrl.diagnostics().emit(
-        diagnostic::error("failed to set rebalance callback: {}", err).done());
+      diagnostic::error("failed to set rebalance callback: {}", err)
+        .primary(args_.operator_location)
+        .emit(dh);
+      co_return;
     }
     // Override configuration with arguments.
     {
-      auto secrets
-        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      auto secrets = configure_or_request(args_.options, *cfg, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     // Create the consumer.
@@ -245,34 +262,71 @@ public:
     auto client = consumer::make(*cfg);
     if (! client) {
       diagnostic::error("failed to create consumer: {}", client.error())
-        .emit(ctrl.diagnostics());
+        .primary(args_.operator_location)
+        .emit(dh);
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
     if (auto err = client->subscribe({args_.topic})) {
       diagnostic::error("failed to subscribe to topic: {}", err)
-        .emit(ctrl.diagnostics());
+        .primary(args_.operator_location)
+        .emit(dh);
     }
-    // Setup the coroutine factory.
     auto num_messages = size_t{0};
+    auto last_commit_time = time::clock::now();
     while (true) {
-      auto msg = client->consume(500ms);
-      if (! msg) {
-        co_yield {};
-        if (msg.error() == ec::timeout) {
+      auto raw_msg = client->consume_raw(500ms);
+      TENZIR_ASSERT(raw_msg);
+      switch (raw_msg->err()) {
+        case RdKafka::ERR_NO_ERROR: {
+          // Create chunk from the message
+          auto chunk = chunk::make(raw_msg->payload(), raw_msg->len(),
+                                   [msg = raw_msg]() noexcept {});
+          TENZIR_ASSERT(chunk);
+          co_yield std::move(chunk);
+          // Manually commit this specific message after processing
+          ++num_messages;
+          const auto now = time::clock::now();
+          if (num_messages % args_.commit_batch_size == 0
+              or last_commit_time - now >= args_.commit_timeout) {
+            last_commit_time = now;
+            if (not client->commit(raw_msg.get(), dh,
+                                   args_.operator_location)) {
+              co_return;
+            }
+          }
+          if (args_.count && args_.count->inner == num_messages) {
+            if (not client->commit(raw_msg.get(), dh,
+                                   args_.operator_location)) {
+            }
+            co_return;
+          }
           continue;
         }
-        if (msg.error() == ec::end_of_input) {
-          // FIXME: currently doesn't work for N partitions with N > 1.
-          // Upgrade to a counter and only break out of the loop once this
-          // signal has been received N times.
-          break;
+        case RdKafka::ERR__TIMED_OUT: {
+          const auto now = time::clock::now();
+          if (last_commit_time - now >= args_.commit_timeout) {
+            if (not client->commit(raw_msg.get(), dh,
+                                   args_.operator_location)) {
+              co_return;
+            }
+          }
+          co_yield {};
+          continue;
         }
-        TENZIR_ERROR(msg.error());
-        break;
-      }
-      co_yield *msg;
-      if (args_.count && args_.count->inner == ++num_messages) {
-        break;
+        case RdKafka::ERR__PARTITION_EOF: {
+          std::ignore
+            = client->commit(raw_msg.get(), dh, args_.operator_location);
+          co_yield {};
+          co_return;
+        }
+        default: {
+          std::ignore
+            = client->commit(raw_msg.get(), dh, args_.operator_location);
+          diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
+            .emit(dh);
+          co_yield {};
+          co_return;
+        }
       }
     }
   }
