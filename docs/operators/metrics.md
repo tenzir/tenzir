@@ -81,12 +81,26 @@ in production systems.
 
 The record `system` has the following schema:
 
-| Field                | Type    | Description                                     |
-| :------------------- | :------ | :---------------------------------------------- |
-| `running_actors`     | `int64` | Number of currently running actors.             |
-| `queued_messages`    | `int64` | Number of messages waiting in actor mailboxes.  |
-| `processed_messages` | `int64` | Number of messages processed since last metric. |
-| `rejected_messages`  | `int64` | Number of messages rejected since last metric.  |
+| Field               | Type     | Description                                                       |
+| :------------------ | :------- | :---------------------------------------------------------------- |
+| `running_actors`    | `int64`  | Number of currently running actors.                               |
+| `all_messages`      | `record` | Information about the total message metrics                       |
+| `messages_by_actor` | `list`   | Information about the message metrics, keyed the receiving actor. |
+
+The `all_messages` has the following schema:
+
+| Field       | Type    | Description                   |
+| :---------- | :------ | :---------------------------- |
+| `processed` | `int64` | Number of processed messages. |
+| `rejected`  | `int64` | Number of rejected messages.  |
+
+The `messages_by_actor` field is a `list` of `record` with the following schema:
+
+| Field       | Type     | Description                                                                                 |
+| :---------- | :------- | :------------------------------------------------------------------------------------------ |
+| `name`      | `string` | The name of the receiving actor. This may be null for messages without an associated actor. |
+| `processed` | `int64`  | Number of processed messages.                                                               |
+| `rejected`  | `int64`  | Number of rejected messages.                                                                |
 
 The record `middleman` has the following schema:
 
