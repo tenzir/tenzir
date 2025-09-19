@@ -3,6 +3,7 @@
   nix2container,
   lib,
   pkgs,
+  forceClang ? false,
 }:
 rec {
   bundledPlugins = builtins.attrNames (
@@ -59,52 +60,65 @@ rec {
     #toybox
     pkgs.yara
     pkgs.uv
-    (pkgs.python3.withPackages (
-      ps: [
-        ps.trustme
-      ]
-    ))
+    (pkgs.python3.withPackages (ps: [
+      ps.trustme
+    ]))
   ] ++ tenzir-integration-test-runner;
 
   toImageFn = import ./tenzir/image.nix nix2container;
 
-  unchecked = linkPkgs: rec {
-    tenzir-de = linkPkgs.callPackage ./tenzir {
-      inherit tenzir-source toImageFn isReleaseBuild;
-    };
-    # Policy: The suffix-less `tenzir' packages come with a few closed source
-    # plugins.
-    tenzir =
-      let
-        tenzir-plugins-source =
-          if builtins.pathExists ./../contrib/tenzir-plugins/README.md then
-            ./../contrib/tenzir-plugins
-          else
-            pkgs.callPackage ./tenzir/plugins/source.nix { };
-        pkg = tenzir-de.override {
-          inherit tenzir-plugins-source;
-        };
-      in
-      pkg.withPlugins (
-        ps:
-        [
-          ps.compaction
-          ps.context
-          ps.packages
-          ps.pipeline-manager
-          ps.platform
-          ps.to_amazon_security_lake
-          ps.to_azure_log_analytics
-          ps.to_splunk
-          ps.to_google_secops
-          ps.to_google_cloud_logging
-          ps.vast
-        ]
-        ++ lib.optionals (!linkPkgs.stdenv.hostPlatform.isStatic) [
-          ps.snowflake
-        ]
+  unchecked =
+    linkPkgs:
+    let
+      tenzir-de = linkPkgs.callPackage ./tenzir (
+        {
+          inherit tenzir-source toImageFn isReleaseBuild;
+        }
+        // lib.optionalAttrs forceClang {
+          stdenv = linkPkgs.clangStdenv;
+          caf = (
+            linkPkgs.caf.override {
+              stdenv = linkPkgs.clangStdenv;
+            }
+          );
+        }
       );
-  };
+    in
+    {
+      inherit tenzir-de;
+      # Policy: The suffix-less `tenzir' packages come with a few closed source
+      # plugins.
+      tenzir =
+        let
+          tenzir-plugins-source =
+            if builtins.pathExists ./../contrib/tenzir-plugins/README.md then
+              ./../contrib/tenzir-plugins
+            else
+              pkgs.callPackage ./tenzir/plugins/source.nix { };
+          pkg = tenzir-de.override {
+            inherit tenzir-plugins-source;
+          };
+        in
+        pkg.withPlugins (
+          ps:
+          [
+            ps.compaction
+            ps.context
+            ps.packages
+            ps.pipeline-manager
+            ps.platform
+            ps.to_amazon_security_lake
+            ps.to_azure_log_analytics
+            ps.to_splunk
+            ps.to_google_secops
+            ps.to_google_cloud_logging
+            ps.vast
+          ]
+          ++ lib.optionals (!linkPkgs.stdenv.hostPlatform.isStatic) [
+            ps.snowflake
+          ]
+        );
+    };
   toChecked =
     x:
     # Run checks only on Linux for now. Alternative platforms are expensive in

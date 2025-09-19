@@ -16,6 +16,7 @@ in
   pfs = prevPkgs.callPackage ./pfs { };
   speeve = prevPkgs.callPackage ./speeve { };
   uv-bin = prevPkgs.callPackage ./uv-binary { };
+  empty-libgcc_eh = prevPkgs.callPackage ./empty-libgcc_eh { };
 
   pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [
     (python-finalPkgs: python-prevPkgs: {
@@ -29,7 +30,7 @@ in
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
     inherit (prevPkgs) aws-sdk-cpp;
   };
-  caf = callFunction ./caf { inherit (prevPkgs) caf; };
+  caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };
