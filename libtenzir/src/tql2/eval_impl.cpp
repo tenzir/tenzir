@@ -11,6 +11,7 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/similarity.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
@@ -20,6 +21,24 @@
 #include <ranges>
 
 namespace tenzir {
+
+/// Find the best matching field name from available field names.
+/// Returns the best match if similarity score is above the threshold (-5).
+auto suggest_field_name(const std::string& requested_field,
+                        const std::vector<std::string>& available_fields)
+  -> std::optional<std::string> {
+  if (available_fields.empty()) {
+    return std::nullopt;
+  }
+  auto best_field
+    = std::ranges::max(available_fields, {}, [&](const auto& field) {
+        return detail::calculate_similarity(requested_field, field);
+      });
+  if (detail::calculate_similarity(requested_field, best_field) > -5) {
+    return best_field;
+  }
+  return std::nullopt;
+}
 
 auto evaluator::eval(const ast::record& x) -> multi_series {
   auto arrays = std::vector<multi_series>{};
@@ -215,10 +234,19 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       };
     }
     if (not x.suppress_warnings()) {
-      diagnostic::warning("record does not have this field")
-        .primary(x.name)
-        .hint("append `?` to suppress this warning")
-        .emit(ctx_);
+      // Get available field names for suggestions
+      auto available_fields = std::vector<std::string>{};
+      for (const auto& field : rec_ty->fields()) {
+        available_fields.push_back(std::string{field.name});
+      }
+      auto diag
+        = diagnostic::warning("record does not have this field").primary(x.name);
+      if (auto suggestion = suggest_field_name(x.name.name, available_fields)) {
+        diag = std::move(diag).hint("did you mean `{}`?", *suggestion);
+      }
+      diag = std::move(diag).hint(
+        std::string{"append `?` to suppress this warning"});
+      std::move(diag).emit(ctx_);
     }
     return null();
   });
@@ -251,10 +279,19 @@ auto evaluator::eval(const ast::root_field& x) -> multi_series {
     };
   }
   if (not x.has_question_mark) {
-    diagnostic::warning("field `{}` not found", x.id.name)
-      .primary(x.id)
-      .hint("append `?` to suppress this warning")
-      .emit(ctx_);
+    // Get available field names for suggestions
+    auto available_fields = std::vector<std::string>{};
+    for (const auto& field : rec_ty.fields()) {
+      available_fields.push_back(std::string{field.name});
+    }
+    auto diag
+      = diagnostic::warning("field `{}` not found", x.id.name).primary(x.id);
+    if (auto suggestion = suggest_field_name(x.id.name, available_fields)) {
+      diag = std::move(diag).hint("did you mean `{}`?", *suggestion);
+    }
+    diag = std::move(diag).hint(
+      std::string{"append `?` to suppress this warning"});
+    std::move(diag).emit(ctx_);
   }
   return null();
 }
@@ -351,10 +388,21 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
               if (not x.has_question_mark) {
-                diagnostic::warning("record does not have field `{}`", name)
-                  .primary(x.index, "does not exist")
-                  .compose(add_suppress_hint)
-                  .emit(ctx_);
+                // Get available field names for suggestions
+                auto available_fields = std::vector<std::string>{};
+                for (const auto& field : ty->fields()) {
+                  available_fields.push_back(std::string{field.name});
+                }
+                auto diag
+                  = diagnostic::warning("record does not have field `{}`", name)
+                      .primary(x.index, "does not exist");
+                if (auto suggestion
+                    = suggest_field_name(std::string{name}, available_fields)) {
+                  diag
+                    = std::move(diag).hint("did you mean `{}`?", *suggestion);
+                }
+                diag = std::move(diag).compose(add_suppress_hint);
+                std::move(diag).emit(ctx_);
               }
               not_found.emplace_back(name);
             }
