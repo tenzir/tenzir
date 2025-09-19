@@ -97,14 +97,21 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       auto p = ignore(parsers::real) >> ignore(*space) >> unit;
       return p(f, l, unused);
     } else {
-      double scale;
-      auto multiply = [&](attribute dur) {
-        using double_duration = std::chrono::duration<double, Period>;
-        auto result = duration_cast<double_duration>(dur) * scale;
-        return cast(result);
-      };
-      auto p = parsers::real >> ignore(*space) >> unit->*multiply;
-      return p(f, l, scale, x);
+      auto scale = double{};
+      auto p = parsers::real >> ignore(*space) >> unit;
+      if (not p(f, l, scale, x)) {
+        return false;
+      }
+      using double_duration = std::chrono::duration<double, Period>;
+      constexpr double_duration m = Attribute::min();
+      constexpr double_duration M = Attribute::max();
+      double_duration s = x * scale;
+      if (s < m || s > M) {
+        return false;
+      }
+      auto result = double_duration{s};
+      x = duration_cast<Attribute>(result);
+      return true;
     }
   }
 };
