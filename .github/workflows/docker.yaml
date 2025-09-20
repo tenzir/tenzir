@@ -108,12 +108,57 @@ jobs:
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr
         uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and Push Intermediate Stages
+        env:
+          BUILDX_GIT_LABELS: full
+          CACHE_REGISTRY: ghcr.io/tenzir/tenzir
+        run: |
+          # Define intermediate stages to cache
+          stages=(
+            "aws-sdk-cpp-package"
+            "google-cloud-cpp-package"
+            "arrow-package"
+            "fluent-bit-package"
+            "arrow-adbc-package"
+            "dependencies"
+          )
+
+          # Build and push each intermediate stage
+          for stage in "${stages[@]}"; do
+            echo "::notice Building and caching stage: ${stage}"
+            docker buildx build . \
+              --target "${stage}" \
+              --tag "${CACHE_REGISTRY}:${{ matrix.build.tag }}-cache-${stage}" \
+              --platform ${{ matrix.build.arch }} \
+              --push \
+              --cache-from "type=registry,ref=${CACHE_REGISTRY}:${{ matrix.build.tag }}-cache-${stage}" \
+              --cache-to "type=inline"
+          done
       - name: Build Docker Images
         env:
           BUILDX_GIT_LABELS: full
-          CACHE_TAG: ghcr.io/tenzir/tenzir:${{ matrix.build.tag }}-build-cache
+          CACHE_REGISTRY: ghcr.io/tenzir/tenzir
         run: |
           cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
+
+          # Build cache-from arguments for all intermediate stages
+          cache_from_args=""
+          stages=(
+            "aws-sdk-cpp-package"
+            "google-cloud-cpp-package"
+            "arrow-package"
+            "fluent-bit-package"
+            "arrow-adbc-package"
+            "dependencies"
+          )
+
+          for stage in "${stages[@]}"; do
+            cache_from_args="${cache_from_args} --cache-from type=registry,ref=${CACHE_REGISTRY}:${{ matrix.build.tag }}-cache-${stage}"
+          done
+
+          # Also use the general build cache
+          cache_from_args="${cache_from_args} --cache-from type=registry,ref=${CACHE_REGISTRY}:${{ matrix.build.tag }}-build-cache"
+
           jq -r '.editions[] | .name as $name | .target as $target | .registries[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
@@ -121,8 +166,8 @@ jobs:
                 -t "${registry}/tenzir/${name}:${{ matrix.build.tag }}-${tag}" --target "${target}" \
                 --platform ${{ matrix.build.arch }} --push \
                 --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
-                --cache-from "type=registry,ref=${CACHE_TAG}" \
-                --cache-to "type=registry,mode=max,ref=${CACHE_TAG}"
+                ${cache_from_args} \
+                --cache-to "type=registry,mode=max,ref=${CACHE_REGISTRY}:${{ matrix.build.tag }}-build-cache"
             done
           done
 
