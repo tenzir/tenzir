@@ -36,6 +36,9 @@ public:
 
   using super::super;
 
+  using types = detail::type_list<Ts...>;
+  using tag_types = super::types;
+
   template <class T>
   static constexpr auto make() -> tag_variant {
     return tag_variant{tag_v<T>};
