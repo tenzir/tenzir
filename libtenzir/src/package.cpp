@@ -356,6 +356,30 @@ auto package_pipeline::parse(const view<record>& data)
   return result;
 }
 
+auto package_pipeline::parse(std::string_view input)
+  -> caf::expected<package_pipeline> {
+  record* rec = nullptr;
+  // Front matter is optional, the only required field in a packaged pipeline is
+  // the definition.
+  if (input.starts_with("---\n")) {
+    input.remove_prefix(4);
+    auto [frontmatter, definition] = detail::split_once(input, "\n---\n");
+    auto metadata = from_yaml(frontmatter);
+    if (not metadata) {
+      return metadata.error();
+    }
+    rec = try_as<record>(*metadata);
+    if (not rec) {
+      return caf::make_error(ec::parse_error,
+                             "pipeline frontmatter is not a record");
+    }
+    rec->emplace("definition", std::string{definition});
+  } else {
+    rec->emplace("definition", std::string{input});
+  }
+  return parse(make_view(*rec));
+}
+
 auto package_context::parse(const view<record>& data)
   -> caf::expected<package_context> {
   auto result = package_context{};
@@ -379,6 +403,22 @@ auto package_example::parse(const view<record>& data)
   }
   REQUIRED_FIELD(definition)
   return result;
+}
+
+auto package_example::parse(std::string_view input)
+  -> caf::expected<package_example> {
+  auto [frontmatter, definition] = detail::split_once(input, "\n---\n");
+  auto metadata = from_yaml(frontmatter);
+  if (not metadata) {
+    return metadata.error();
+  }
+  record* rec = try_as<record>(*metadata);
+  if (not rec) {
+    return caf::make_error(ec::parse_error,
+                           "pipeline frontmatter is not a record");
+  }
+  rec->emplace("definition", std::string{definition});
+  return parse(make_view(*rec));
 }
 
 auto package::parse(const view<record>& data) -> caf::expected<package> {
