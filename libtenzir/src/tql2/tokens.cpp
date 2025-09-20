@@ -164,7 +164,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | ignore(
         +((space - '\n') |
         ("\\" >> *(space - '\n') >> '\n')) |
-        ("#!" >> *(any - '\n')).when([&] { return result.empty(); })
+        ("#!" >> *(any - '\n')).when([&] { return result.empty(); }) |
+        ("---\n" >> *(any - '---\n')).when([&] { return result.empty(); })
       )
       ->* [] { return tk::whitespace; };
   auto common_content
