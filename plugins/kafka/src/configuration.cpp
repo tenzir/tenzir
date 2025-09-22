@@ -34,7 +34,12 @@ namespace tenzir::plugins::kafka {
 auto configuration::aws_iam_options::from_record(located<record> config,
                                                  diagnostic_handler& dh)
   -> failure_or<aws_iam_options> {
-  constexpr auto known = std::array{"method", "region", "assume_role"};
+  constexpr auto known = std::array{
+    "region",
+    "assume_role",
+    "session_name",
+    "external_id",
+  };
   const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
   });
