@@ -345,7 +345,7 @@ public:
     bool raw = false;
     // How to handle duplicate keys in non-merging mode.
     detail::data_builder::duplicate_keys duplicate_keys
-      = detail::data_builder::duplicate_keys::to_list;
+      = detail::data_builder::duplicate_keys::merge_structural;
     // Unnest separator to be used when calling any `field` in the builder
     // pattern.
     std::string unnest_separator = {};

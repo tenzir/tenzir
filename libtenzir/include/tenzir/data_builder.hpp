@@ -237,13 +237,26 @@ enum class state : char {
   dead,
 };
 
+/// Determines how a two successive calls `factory.field("key").A` with
+/// `factory.field("key").B` are handled.
 enum class duplicate_keys : char {
+  /// Overwrite the value with `B`, the later value, but merge records.
   overwrite,
+  /// Promote the `field` into a list, producing `[A,B]`
   to_list,
+  /// Promote the `field` into a list, but merge repeated calls to the same
+  /// structural type instead.
+  merge_structural,
 };
 
 struct settings {
+  /// @relates enum duplicate_keys
   enum duplicate_keys duplicate_keys = duplicate_keys::overwrite;
+  /// @relates The name to use when `merge_structural` is enabled and we
+  /// conflict with `key: v1` and `key.nested: v2`. We use an empty string here,
+  /// because that has the least possible conflict potential. The downside is
+  /// that using this field is not as nice in tenzir.
+  constexpr static std::string_view top_key_name_for_records = "";
 };
 
 class node_base {
@@ -465,15 +478,15 @@ public:
   /// If its type mismatches with the seed during the later parsing/signature
   /// computation, a warning is emitted.
   template <non_structured_data_type T>
-  auto data(T data) -> void;
+  auto data(T data, bool overwrite = false) -> void;
   /// @brief Unpacks The tenzir::data into this field
-  auto data(tenzir::data) -> void;
+  auto data(tenzir::data, bool overwrite = false) -> void;
   /// @brief Sets this field to some unparsed data.
   /// It is later parsed when a seed is potentially available.
   auto data_unparsed(std::string raw_text) -> void;
-  auto null() -> void;
-  auto record() -> node_record*;
-  auto list() -> node_list*;
+  auto null(bool overwrite = false) -> void;
+  auto record(bool overwrite = false) -> node_record*;
+  auto list(bool overwrite = false) -> node_list*;
 
   node_object(settings);
 
@@ -716,11 +729,14 @@ inline node_list::node_list(settings settings) : node_base{settings} {
 }
 
 template <non_structured_data_type T>
-auto node_object::data(T data) -> void {
+auto node_object::data(T data, bool overwrite) -> void {
   /// If we are not a repeat key list, we can write data directly. This is OK,
   /// because either the node is new, or its dead, or the mode is overwrite
   /// (and hence ìs_repeat_key_list is set).
-  if (not is_repeat_key_list) {
+  const auto direct = overwrite
+                      or settings_.duplicate_keys == duplicate_keys::overwrite
+                      or not is_repeat_key_list;
+  if (direct) {
     mark_this_alive();
     value_state_ = value_state_type::has_value;
     data_.emplace<T>(std::move(data));
@@ -730,6 +746,13 @@ auto node_object::data(T data) -> void {
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
   TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  if (settings_.duplicate_keys == duplicate_keys::merge_structural) {
+    if (auto* r = try_as<node_record>(data_)) {
+      r->field(settings_.top_key_name_for_records)
+        ->data(std::move(data), overwrite);
+      return;
+    }
+  }
   /// The node could already have been upgraded to a list.If it is, we can just
   /// append to it
   if (auto* l = try_as<node_list>(data_)) {
@@ -738,9 +761,7 @@ auto node_object::data(T data) -> void {
     return;
   }
   /// If the node isnt already upgraded ot a list, we need to do it
-  auto previous_value = std::move(data_);
   auto* l = list();
-  l->data(std::move(previous_value));
   l->data(std::move(data));
 }
 
