@@ -46,6 +46,11 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   auto ip = ipv4 | ipv6.when([&] {
     return ipv6_enabled;
   });
+  auto only_whitespace = [&] {
+    return std::all_of(result.cbegin(), result.cend(), [](token t) {
+      return t.kind == tk::whitespace or t.kind == tk::newline;
+    });
+  };
   struct in_string {
     in_string(int64_t hashes, bool format, bool raw)
       : hashes{hashes}, format{format}, raw{raw} {
@@ -103,6 +108,10 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return tk::delim_comment; }
     | ignore("/*" >> *(any - "*/"))
       ->* [] { return tk::error; } // non-terminated comment
+    | ignore("---\n" >> *(any - "\n---\n") >> "\n---\n").when(only_whitespace)
+      ->* [] { return tk::whitespace; }
+    | ignore("---\n" >> *(any - "\n---\n")).when(only_whitespace)
+      ->* [] { return tk::error; } // non-terminated frontmatter
     | ignore(ch<'@'>)
       ->* [] { return tk::at; }
 #define X(x, y) ignore(lit{x}) ->* [] { return tk::y; }
