@@ -34,8 +34,9 @@ public:
     -> generator<std::monostate> {
     co_yield {}; // signal readiness
     // Get the routes-manager actor from the registry
-    const auto routes_manager = ctrl.self().system().registry()
-      .get<routes_manager_actor>("routes-manager");
+    const auto routes_manager
+      = ctrl.self().system().registry().get<routes_manager_actor>(
+        "tenzir.routes-manager");
     // Send the proxy actor to the routes-manager
     auto output = named_output_actor{
       name_.inner,

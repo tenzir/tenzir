@@ -28,7 +28,9 @@ public:
 
   auto operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    const auto router = ctrl.self().system().registry().get<routes_manager_actor>("routes-manager");
+    const auto router
+      = ctrl.self().system().registry().get<routes_manager_actor>(
+        "tenzir.routes-manager");
     auto sp = session_provider::make(ctrl.diagnostics());
     auto ctx = sp.as_session();
     for (const auto& batch : input) {

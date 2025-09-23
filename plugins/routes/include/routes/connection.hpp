@@ -22,7 +22,7 @@ namespace tenzir::plugins::routes {
 struct connection {
   /// The name of the input source.
   std::string from;
-  
+
   /// The name of the output destination.
   std::string to;
 

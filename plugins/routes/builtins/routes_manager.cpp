@@ -21,6 +21,7 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> self) const
     -> component_plugin_actor override {
+    TENZIR_WARN("making routes manager");
     // TODO: Shutdown order. Make pipeline manager depend on this.
     auto [fs] = self->state().registry.find<filesystem_actor>();
     return self->spawn<caf::linked>(caf::actor_from_state<routes_manager>,

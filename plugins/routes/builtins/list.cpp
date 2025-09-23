@@ -30,10 +30,13 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     co_yield {}; // signal readiness
-    const auto router = ctrl.self().system().registry().get<routes_manager_actor>("routes-manager");
+    const auto router
+      = ctrl.self().system().registry().get<routes_manager_actor>(
+        "tenzir.routes-manager");
     // TODO: Consider having this operator subscribe to the routes manager
     // instead of fetching the state just once, and then returning a new value
     // whenever the config changes.
+    TENZIR_ASSERT(router);
     auto cfg = std::optional<config>{};
     ctrl.self().mail(atom::list_v)
       .request(router, caf::infinite)
