@@ -21,6 +21,13 @@ classifiers = [
 homepage = "https://tenzir.com"
 documentation = "https://tenzir.com/docs"
 repository = "https://github.com/tenzir/tenzir"
+packages = [{ include = "tenzir" }]
+# If present at build time, include bundled static binaries and resources in the wheel.
+include = [
+  "tenzir/bin/**",
+  "tenzir/libexec/**",
+  "tenzir/share/**",
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -63,3 +70,8 @@ ignore = ["FA", "D1"]
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+# Expose CLI entry points that prefer the bundled static binaries on Linux.
+tenzir = "tenzir._bin.tenzir:main"
+tenzir-ctl = "tenzir._bin.tenzir_ctl:main"
