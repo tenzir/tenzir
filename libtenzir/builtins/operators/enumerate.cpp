@@ -60,7 +60,7 @@ public:
       if (args_.group) {
         for (const auto& s : eval(args_.group.value(), slice, dh)) {
           for (const auto& val : s.values()) {
-            auto it = groups.find(val);
+            auto it = groups.find(materialize(val));
             match(
               val,
               [&]<typename T>(const T& x)
