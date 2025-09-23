@@ -1,10 +1,23 @@
 import asyncio
 import copy
+import os
 import subprocess
+from pathlib import Path
 
 import tenzir.utils.logging
 
 logger = tenzir.utils.logging.get(__name__)
+
+
+from typing import Optional
+
+
+def _packaged_tenzir_ctl() -> Optional[str]:
+    # Resolve packaged binary path if present, else None
+    p = Path(__file__).resolve().parents[1] / "bin" / "tenzir-ctl"
+    if p.is_file() and os.access(p, os.X_OK):
+        return p.as_posix()
+    return None
 
 
 class CLI:
@@ -26,7 +39,7 @@ class CLI:
     async def exec(self, stdin=False) -> asyncio.subprocess.Process:
         async def run(*args, stdin) -> asyncio.subprocess.Process:
             return await asyncio.create_subprocess_exec(
-                "tenzir-ctl",
+                _packaged_tenzir_ctl() or "tenzir-ctl",
                 *args,
                 stdin=asyncio.subprocess.PIPE if stdin else None,
                 stdout=asyncio.subprocess.PIPE,
@@ -47,7 +60,7 @@ class CLI:
     def sync_exec(self, stdin=False) -> subprocess.Popen:
         def run(*args, stdin) -> subprocess.Popen:
             return subprocess.Popen(
-                ["tenzir-ctl", *args],
+                [_packaged_tenzir_ctl() or "tenzir-ctl", *args],
                 stdin=subprocess.PIPE if stdin else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
