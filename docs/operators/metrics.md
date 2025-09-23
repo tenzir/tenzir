@@ -81,26 +81,34 @@ in production systems.
 
 The record `system` has the following schema:
 
-| Field               | Type     | Description                                                       |
-| :------------------ | :------- | :---------------------------------------------------------------- |
-| `running_actors`    | `int64`  | Number of currently running actors.                               |
-| `all_messages`      | `record` | Information about the total message metrics                       |
-| `messages_by_actor` | `list`   | Information about the message metrics, keyed the receiving actor. |
+| Field                    | Type     | Description                                                            |
+| :----------------------- | :------- | :--------------------------------------------------------------------- |
+| `running_actors`         | `int64`  | Number of currently running actors.                                    |
+| `running_actors_by_name` | `list`   | Number of running actors, grouped by actor name.                       |
+| `all_messages`           | `record` | Information about the total message metrics.                           |
+| `messages_by_actor`      | `list`   | Information about the message metrics, grouped by receiving actor name |
 
-The `all_messages` has the following schema:
+The `running_actors_by_name` field is a `list` of `record`s with the following schema:
+
+| Field   | Type     | Description                                        |
+| :------ | :------- | :------------------------------------------------- |
+| `name`  | `string` | Actor name.                                        |
+| `count` | `int64`  | Number of actors with this name currently running. |
+
+The `all_messages` field has the following schema:
 
 | Field       | Type    | Description                   |
 | :---------- | :------ | :---------------------------- |
 | `processed` | `int64` | Number of processed messages. |
 | `rejected`  | `int64` | Number of rejected messages.  |
 
-The `messages_by_actor` field is a `list` of `record` with the following schema:
+The `messages_by_actor` field is a `list` of `record`s with the following schema:
 
-| Field       | Type     | Description                                                                                 |
-| :---------- | :------- | :------------------------------------------------------------------------------------------ |
-| `name`      | `string` | The name of the receiving actor. This may be null for messages without an associated actor. |
-| `processed` | `int64`  | Number of processed messages.                                                               |
-| `rejected`  | `int64`  | Number of rejected messages.                                                                |
+| Field       | Type     | Description                                                                             |
+| :---------- | :------- | :-------------------------------------------------------------------------------------- |
+| `name`      | `string` | Name of the receiving actor. This may be null for messages without an associated actor. |
+| `processed` | `int64`  | Number of processed messages.                                                           |
+| `rejected`  | `int64`  | Number of rejected messages.                                                            |
 
 The record `middleman` has the following schema:
 
