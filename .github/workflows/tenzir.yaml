@@ -214,6 +214,7 @@ jobs:
             exit 0
           fi
           run_if_changed python "python/"
+          run_if_changed python-package "python/"
           TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
