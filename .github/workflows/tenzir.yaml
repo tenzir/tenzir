@@ -755,13 +755,26 @@ jobs:
           python -m pip install dist/*.whl
           tenzir version
       - name: Configure PyPI
+        if: github.event_name == 'release'
         working-directory: python
         run: |
           poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
       - name: Publish to PyPI
+        if: github.event_name == 'release'
         working-directory: python
         run: |
           poetry publish --build --no-interaction
+      - name: Configure Test PyPI
+        if: github.event_name != 'release'
+        working-directory: python
+        run: |
+          poetry config repositories.test-pypi https://test.pypi.org/legacy/
+          poetry config pypi-token.test-pypi "${{ secrets.TEST_PYPI_TOKEN }}"
+      - name: Publish to Test PyPI
+        if: github.event_name != 'release'
+        working-directory: python
+        run: |
+          poetry publish --build --no-interaction -r test-pypi
 
   pass-branch-protections:
     needs:
