@@ -18,26 +18,32 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/view3.hpp"
 
+#include <limits>
 #include <ranges>
 
 namespace tenzir {
 
 /// Find the best matching field name from available field names.
-/// Returns the best match if similarity score is above the threshold (-5).
-auto suggest_field_name(const std::string& requested_field,
-                        const std::vector<std::string>& available_fields)
-  -> std::optional<std::string> {
-  if (available_fields.empty()) {
+auto suggest_field_name(std::string_view requested_field,
+                        const record_type* rec)
+  -> std::optional<std::string_view> {
+  auto best_field = std::string_view{};
+  auto best_similarity = std::numeric_limits<int64_t>::min();
+  for (const auto& field : rec->fields()) {
+    if (field.name.empty()) {
+      continue;
+    }
+    const auto similarity
+      = detail::calculate_similarity(requested_field, field.name);
+    if (similarity > best_similarity) {
+      best_similarity = similarity;
+      best_field = field.name;
+    }
+  }
+  if (best_field.empty() or best_similarity <= -3) {
     return std::nullopt;
   }
-  auto best_field
-    = std::ranges::max(available_fields, {}, [&](const auto& field) {
-        return detail::calculate_similarity(requested_field, field);
-      });
-  if (detail::calculate_similarity(requested_field, best_field) > -5) {
-    return best_field;
-  }
-  return std::nullopt;
+  return best_field;
 }
 
 auto evaluator::eval(const ast::record& x) -> multi_series {
@@ -234,19 +240,16 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       };
     }
     if (not x.suppress_warnings()) {
-      // Get available field names for suggestions
-      auto available_fields = std::vector<std::string>{};
-      for (const auto& field : rec_ty->fields()) {
-        available_fields.push_back(std::string{field.name});
-      }
-      auto diag
-        = diagnostic::warning("record does not have this field").primary(x.name);
-      if (auto suggestion = suggest_field_name(x.name.name, available_fields)) {
-        diag = std::move(diag).hint("did you mean `{}`?", *suggestion);
-      }
-      diag = std::move(diag).hint(
-        std::string{"append `?` to suppress this warning"});
-      std::move(diag).emit(ctx_);
+      diagnostic::warning("record does not have this field")
+        .primary(x.name)
+        .compose([&](auto&& d) {
+          auto suggestion = suggest_field_name(x.name.name, rec_ty);
+          return suggestion
+                   ? std::move(d).hint("did you mean `{}`?", *suggestion)
+                   : d;
+        })
+        .hint(std::string{"append `?` to suppress this warning"})
+        .emit(ctx_);
     }
     return null();
   });
@@ -279,19 +282,15 @@ auto evaluator::eval(const ast::root_field& x) -> multi_series {
     };
   }
   if (not x.has_question_mark) {
-    // Get available field names for suggestions
-    auto available_fields = std::vector<std::string>{};
-    for (const auto& field : rec_ty.fields()) {
-      available_fields.push_back(std::string{field.name});
-    }
-    auto diag
-      = diagnostic::warning("field `{}` not found", x.id.name).primary(x.id);
-    if (auto suggestion = suggest_field_name(x.id.name, available_fields)) {
-      diag = std::move(diag).hint("did you mean `{}`?", *suggestion);
-    }
-    diag = std::move(diag).hint(
-      std::string{"append `?` to suppress this warning"});
-    std::move(diag).emit(ctx_);
+    diagnostic::warning("field `{}` not found", x.id.name)
+      .primary(x.id)
+      .compose([&](auto&& d) {
+        auto suggestion = suggest_field_name(x.id.name, &rec_ty);
+        return suggestion ? std::move(d).hint("did you mean `{}`?", *suggestion)
+                          : d;
+      })
+      .hint(std::string{"append `?` to suppress this warning"})
+      .emit(ctx_);
   }
   return null();
 }
@@ -388,21 +387,16 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
               if (not x.has_question_mark) {
-                // Get available field names for suggestions
-                auto available_fields = std::vector<std::string>{};
-                for (const auto& field : ty->fields()) {
-                  available_fields.push_back(std::string{field.name});
-                }
-                auto diag
-                  = diagnostic::warning("record does not have field `{}`", name)
-                      .primary(x.index, "does not exist");
-                if (auto suggestion
-                    = suggest_field_name(std::string{name}, available_fields)) {
-                  diag
-                    = std::move(diag).hint("did you mean `{}`?", *suggestion);
-                }
-                diag = std::move(diag).compose(add_suppress_hint);
-                std::move(diag).emit(ctx_);
+                diagnostic::warning("record does not have field `{}`", name)
+                  .primary(x.index, "does not exist")
+                  .compose([&](auto&& d) {
+                    auto suggestion = suggest_field_name(name, ty);
+                    return suggestion ? std::move(d).hint("did you mean `{}`?",
+                                                          *suggestion)
+                                      : d;
+                  })
+                  .hint("use `[…]?` to suppress this warning")
+                  .emit(ctx_);
               }
               not_found.emplace_back(name);
             }

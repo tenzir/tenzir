@@ -2,32 +2,48 @@
 // error: false
 // timeout: 10
 
-// Test field access "did you mean" suggestions for various types of typos
+// Comprehensive test for field name suggestions covering root fields,
+// general field access, and index expressions with both close matches
+// (that should be suggested) and distant matches (that should not)
 from {
-  fieldname: "correct",
-  username: "john", 
-  timestamp: "2024-01-01",
-  message_content: "hello"
+  src_ip: "192.168.1.1",
+  dest_port: 443,
+  message_content: "hello world",
+  user: {
+    username: "john",
+    email_address: "john@example.com"
+  }
 }
 select (
-  // Field access operator with similar typos - should get suggestions
-  field_typo = fieldname,
-  field_typo1 = filedname,  
-  field_typo2 = fieldnme,
-  field_typo3 = fielname,
-  field_typo4 = fieldnama,
-  
-  // Index expression with string typos - should get suggestions  
-  index_typo1 = this["usrname"],
-  index_typo2 = this["usernme"],
-  index_typo3 = this["timestmp"],
-  index_typo4 = this["mesage_content"],
-  
-  // Typos too different - should not get suggestions
-  very_different1 = xyz,
-  very_different2 = this["abc"],
-  
-  // Test that ? suppression still works
-  suppressed1 = nonexistent?,
-  suppressed2 = this["nonexistent"]?
+  // Root field access - close matches
+  root_close1 = src_i,
+  root_close2 = dest_por,
+  root_close3 = message_conten,
+
+  // Root field access - distant matches
+  root_distant1 = xyz,
+  root_distant2 = completely_different,
+
+  // General field access - close matches
+  field_close1 = user.usernam,
+  field_close2 = user.email_addres,
+
+  // General field access - distant matches
+  field_distant1 = user.abc,
+  field_distant2 = user.qwerty,
+
+  // Index expressions - close matches
+  index_close1 = this["src_i"],
+  index_close2 = this["dest_por"],
+  index_close3 = user["usernam"],
+  index_close4 = user["email_addres"],
+
+  // Index expressions - distant matches
+  index_distant1 = this["xyz"],
+  index_distant2 = user["abc123"],
+
+  // Test suppression still works
+  suppressed_root = nonexistent?,
+  suppressed_field = user.missing?,
+  suppressed_index = this["missing"]?
 )
