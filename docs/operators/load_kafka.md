@@ -56,6 +56,8 @@ The offset to start consuming from. Possible values are:
 - `<value>`: absolute offset
 - `-<value>`: relative offset from end
 
+The default is `"stored"`.
+
 <!--
 - `s@<value>`: timestamp in ms to start at
 - `e@<value>`: timestamp in ms to stop at (not included)

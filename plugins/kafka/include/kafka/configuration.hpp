@@ -85,7 +85,7 @@ public:
 private:
   class rebalancer : public RdKafka::RebalanceCb {
   public:
-    explicit rebalancer(int offset);
+    explicit rebalancer(int64_t offset);
 
     auto rebalance_cb(RdKafka::KafkaConsumer*, RdKafka::ErrorCode,
                       std::vector<RdKafka::TopicPartition*>&) -> void override;
