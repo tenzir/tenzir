@@ -22,6 +22,19 @@ namespace tenzir::plugins::caf_system {
 
 namespace {
 
+class gauge_t {
+public:
+  auto add(int64_t value) -> void {
+    total_ += value;
+  }
+  auto rotate() -> int64_t {
+    return std::exchange(total_, 0);
+  }
+
+private:
+  int64_t total_ = {};
+};
+
 class message_metric_t {
 public:
   auto add(int64_t value) -> void {
@@ -49,7 +62,10 @@ struct bundled_message_metric_t {
 
 struct metric {
   struct system_t {
-    int64_t running_actors = {};
+    gauge_t running_actors;
+    tsl::robin_map<std::string, gauge_t, detail::heterogeneous_string_hash,
+                   detail::heterogeneous_string_equal>
+      running_by_name;
     /// Message Metrics for all messages (unnamed + per actor)
     bundled_message_metric_t all_messages;
     /// Message Metrics that did not provide a name label
@@ -58,7 +74,7 @@ struct metric {
     tsl::robin_map<std::string, bundled_message_metric_t,
                    detail::heterogeneous_string_hash,
                    detail::heterogeneous_string_equal>
-      actor_messages;
+      messages_by_name;
   };
 
   struct middleman_t {
@@ -118,15 +134,35 @@ struct caf_collector {
       (result.system.unnamed_messages.*member).add(value);
       return;
     }
-    auto it = result.system.actor_messages.find(*actor_name);
-    if (it == result.system.actor_messages.end()) {
+    auto it = result.system.messages_by_name.find(*actor_name);
+    if (it == result.system.messages_by_name.end()) {
       auto inserted = false;
       std::tie(it, inserted)
-        = result.system.actor_messages.try_emplace(std::string{*actor_name});
+        = result.system.messages_by_name.try_emplace(std::string{*actor_name});
       TENZIR_ASSERT(inserted);
     }
     auto& m = it.value();
     (m.*member).add(value);
+  }
+
+  void collect_system_gauge(const caf::telemetry::metric_family* family,
+                            const caf::telemetry::metric* metric,
+                            const caf::telemetry::int_gauge* impl) {
+    if (family->name() != "running-actors") {
+      return;
+    }
+    const auto value = impl->value();
+    result.system.running_actors.add(value);
+    const auto actor_name = get_actor_name(metric);
+    TENZIR_ASSERT(actor_name);
+    auto it = result.system.running_by_name.find(*actor_name);
+    if (it == result.system.running_by_name.end()) {
+      auto inserted = false;
+      std::tie(it, inserted)
+        = result.system.running_by_name.try_emplace(std::string{*actor_name});
+      TENZIR_ASSERT(inserted);
+    }
+    it.value().add(value);
   }
 
   template <class T>
@@ -134,10 +170,7 @@ struct caf_collector {
                   const caf::telemetry::metric* metric, const T* impl) {
     if (family->prefix() == "caf.system") {
       if constexpr (std::same_as<T, caf::telemetry::int_gauge>) {
-        if (family->name() == "running-actors") {
-          result.system.running_actors = impl->value();
-          return;
-        }
+        collect_system_gauge(family, metric, impl);
       }
       if constexpr (std::same_as<T, caf::telemetry::int_counter>) {
         collect_system_counter(family, metric, impl);
@@ -214,22 +247,45 @@ struct caf_collector {
 
   auto messages_by_actor() -> list {
     auto res = list{};
-    res.reserve(result.system.actor_messages.size() + 1);
+    res.reserve(result.system.messages_by_name.size() + 1);
     auto& r = as<record>(res.emplace_back(record{}));
     r.reserve(3);
     r.try_emplace("name", caf::none);
     r.try_emplace("processed",
                   result.system.unnamed_messages.processed.rotate());
     r.try_emplace("rejected", result.system.unnamed_messages.rejected.rotate());
-    for (auto it = result.system.actor_messages.begin();
-         it != result.system.actor_messages.end(); ++it) {
+    for (auto it = result.system.messages_by_name.begin();
+         it != result.system.messages_by_name.end(); ++it) {
       auto& k = it.key();
       auto& v = it.value();
+      const auto processed = v.processed.rotate();
+      const auto rejected = v.rejected.rotate();
+      if (processed == 0 and rejected == 0) {
+        continue;
+      }
       auto& r = as<record>(res.emplace_back(record{}));
       r.reserve(3);
       r.try_emplace("name", k);
-      r.try_emplace("processed", v.processed.rotate());
-      r.try_emplace("rejected", v.rejected.rotate());
+      r.try_emplace("processed", processed);
+      r.try_emplace("rejected", rejected);
+    }
+    return res;
+  }
+
+  auto running_by_actor() -> list {
+    auto res = list{};
+    res.reserve(result.system.running_by_name.size());
+    for (auto it = result.system.running_by_name.begin();
+         it != result.system.running_by_name.end(); ++it) {
+      const auto& k = it.key();
+      const auto value = it.value().rotate();
+      if (value == 0) {
+        continue;
+      }
+      auto& r = as<record>(res.emplace_back(record{}));
+      r.reserve(2);
+      r.try_emplace("name", k);
+      r.try_emplace("count", value);
     }
     return res;
   }
@@ -237,7 +293,8 @@ struct caf_collector {
   auto operator()() -> caf::expected<record> {
     system.metrics().collect(*this);
     auto system_metric = record{
-      {"running_actors", result.system.running_actors},
+      {"running_actors", result.system.running_actors.rotate()},
+      {"running_actors_by_name", running_by_actor()},
       {"all_messages",
        record{
          {"processed", result.system.all_messages.processed.rotate()},
@@ -290,20 +347,30 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{
-      {"system", record_type{{"running_actors", int64_type{}},
-                             {"all_messages",
-                              record_type{
-                                {"processed", int64_type{}},
-                                {"rejected", int64_type{}},
-                              }},
-                             {
-                               "messages_by_actor",
-                               list_type{record_type{
-                                 {"name", string_type{}},
-                                 {"processed", int64_type{}},
-                                 {"rejected", int64_type{}},
-                               }},
-                             }}},
+      {"system",
+       record_type{
+         {"running_actors", int64_type{}},
+         {
+           "running_actors_by_name",
+           list_type{record_type{
+             {"name", string_type{}},
+             {"count", int64_type{}},
+           }},
+         },
+         {"all_messages",
+          record_type{
+            {"processed", int64_type{}},
+            {"rejected", int64_type{}},
+          }},
+         {
+           "messages_by_actor",
+           list_type{record_type{
+             {"name", string_type{}},
+             {"processed", int64_type{}},
+             {"rejected", int64_type{}},
+           }},
+         },
+       }},
       {"middleman",
        record_type{
          {"inbound_messages_size", int64_type{}},
