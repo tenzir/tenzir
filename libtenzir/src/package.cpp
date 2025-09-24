@@ -8,6 +8,7 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/detail/env.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/package.hpp>
 #include <tenzir/type.hpp>
 
@@ -387,6 +388,7 @@ auto package_pipeline::parse(std::string_view input)
     }
     rec = *maybe_rec;
     input_.remove_prefix(frontmatter_end + 5);
+    input_ = detail::trim_front(input_);
   }
   rec.emplace("definition", std::string{input_});
   return parse(make_view(rec));
@@ -429,6 +431,7 @@ auto package_example::parse(std::string_view input)
     return caf::make_error(ec::parse_error,
                            "pipeline frontmatter is not a record");
   }
+  definition = detail::trim_front(definition);
   rec->emplace("definition", std::string{definition});
   return parse(make_view(*rec));
 }
