@@ -40,4 +40,5 @@ warning: field `y` not found
 2 | chart_area x=x, y=sum(y), resolution=2s, x_min=0s, x_max=15s, fill=0s
   |                       ~ 
   |
+  = hint: did you mean `x`?
   = hint: append `?` to suppress this warning

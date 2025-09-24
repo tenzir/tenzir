@@ -24,4 +24,5 @@ warning: field `y` not found
 1 | let $constant = [1].map(x => y)
   |                              ~ 
   |
+  = hint: did you mean `x`?
   = hint: append `?` to suppress this warning

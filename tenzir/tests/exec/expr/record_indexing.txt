@@ -36,6 +36,7 @@ warning: field `y` not found
 9 | z = x[y]
   |       ~ 
   |
+  = hint: did you mean `x`?
   = hint: append `?` to suppress this warning
 
 warning: cannot use `null` as index
@@ -60,6 +61,7 @@ warning: field `x` not found
 9 | z = x[y]
   |     ~ 
   |
+  = hint: did you mean `y`?
   = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`

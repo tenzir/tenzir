@@ -15,4 +15,5 @@ warning: field `y` not found
 2 | sort -y
   |       ~ 
   |
+  = hint: did you mean `x`?
   = hint: append `?` to suppress this warning

@@ -6,4 +6,5 @@ warning: field `a` not found
 1 | deduplicate {a: a, b: b}, limit=1
   |                 ~ 
   |
+  = hint: did you mean `b`?
   = hint: append `?` to suppress this warning

@@ -1,0 +1,148 @@
+{
+  root_close1: null,
+  root_close2: null,
+  root_close3: null,
+  root_distant1: null,
+  root_distant2: null,
+  field_close1: null,
+  field_close2: null,
+  field_distant1: null,
+  field_distant2: null,
+  index_close1: null,
+  index_close2: null,
+  index_close3: null,
+  index_close4: null,
+  index_distant1: null,
+  index_distant2: null,
+  suppressed_root: null,
+  suppressed_field: null,
+  suppressed_index: null,
+}
+warning: field `src_i` not found
+  --> exec/access/field_suggestions.tql:19:17
+   |
+19 |   root_close1 = src_i,
+   |                 ~~~~~ 
+   |
+   = hint: did you mean `src_ip`?
+   = hint: append `?` to suppress this warning
+
+warning: field `dest_por` not found
+  --> exec/access/field_suggestions.tql:20:17
+   |
+20 |   root_close2 = dest_por,
+   |                 ~~~~~~~~ 
+   |
+   = hint: did you mean `dest_port`?
+   = hint: append `?` to suppress this warning
+
+warning: field `message_conten` not found
+  --> exec/access/field_suggestions.tql:21:17
+   |
+21 |   root_close3 = message_conten,
+   |                 ~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `message_content`?
+   = hint: append `?` to suppress this warning
+
+warning: field `xyz` not found
+  --> exec/access/field_suggestions.tql:24:19
+   |
+24 |   root_distant1 = xyz,
+   |                   ~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `completely_different` not found
+  --> exec/access/field_suggestions.tql:25:19
+   |
+25 |   root_distant2 = completely_different,
+   |                   ~~~~~~~~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:28:23
+   |
+28 |   field_close1 = user.usernam,
+   |                       ~~~~~~~ 
+   |
+   = hint: did you mean `username`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:29:23
+   |
+29 |   field_close2 = user.email_addres,
+   |                       ~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `email_address`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:32:25
+   |
+32 |   field_distant1 = user.abc,
+   |                         ~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:33:25
+   |
+33 |   field_distant2 = user.qwerty,
+   |                         ~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:36:23
+   |
+36 |   index_close1 = this["src_i"],
+   |                       ~~~~~~~ 
+   |
+   = hint: did you mean `src_ip`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:37:23
+   |
+37 |   index_close2 = this["dest_por"],
+   |                       ~~~~~~~~~~ 
+   |
+   = hint: did you mean `dest_port`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:38:23
+   |
+38 |   index_close3 = user["usernam"],
+   |                       ~~~~~~~~~ 
+   |
+   = hint: did you mean `username`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:39:23
+   |
+39 |   index_close4 = user["email_addres"],
+   |                       ~~~~~~~~~~~~~~ 
+   |
+   = hint: did you mean `email_address`?
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:42:25
+   |
+42 |   index_distant1 = this["xyz"],
+   |                         ~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> exec/access/field_suggestions.tql:43:25
+   |
+43 |   index_distant2 = user["abc123"],
+   |                         ~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
