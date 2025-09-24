@@ -20,6 +20,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <caf/actor_from_state.hpp>
+#include <caf/actor_registry.hpp>
 #include <caf/disposable.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
@@ -38,14 +39,6 @@ template <typename T>
   return std::exchange(x, std::nullopt).value();
 }
 
-template <typename T>
-[[nodiscard]] constexpr auto
-take_and_replace(std::optional<T>& x, std::optional<T>& y) -> T {
-  auto value = take(x);
-  x.swap(y);
-  return value;
-}
-
 using timepoint = decltype(time::clock::now());
 
 struct transceiver_actor_traits final {
@@ -58,8 +51,8 @@ struct transceiver_actor_traits final {
     auto(atom::internal, atom::pull)->caf::result<table_slice>,
     /// Get events from self to parent.
     auto(atom::pull)->caf::result<table_slice>,
-    /// Get events from self to parent immediately.
-    auto(atom::pull, atom::flush)->caf::result<table_slice>,
+    /// Signal subpipeline stop.
+    auto(atom::stop)->caf::result<void>,
     /// Signal input end.
     auto(atom::done)->caf::result<void>>
     /// Support the diagnostic receiver interface.
@@ -90,45 +83,40 @@ struct transceiver_state {
       [this](atom::push, table_slice input) -> caf::result<void> {
         TENZIR_ASSERT(not done_);
         TENZIR_ASSERT(not push_rp_.pending());
+        TENZIR_ASSERT(not input_);
         if (internal_pull_rp_.pending()) {
           internal_pull_rp_.deliver(std::move(input));
           return {};
         }
-        if (input_) {
-          extra_input_ = std::move(input);
-          push_rp_ = self_->make_response_promise<void>();
-          return push_rp_;
-        }
         input_ = std::move(input);
-        return {};
+        push_rp_ = self_->make_response_promise<void>();
+        return push_rp_;
       },
       [this](atom::internal, atom::push,
              table_slice output) -> caf::result<void> {
         TENZIR_ASSERT(not internal_push_rp_.pending());
+        TENZIR_ASSERT(not output_);
         if (pull_rp_.pending()) {
           pull_rp_.deliver(std::move(output));
           return {};
         }
-        if (output_) {
-          extra_output_ = std::move(output);
-          internal_push_rp_ = self_->make_response_promise<void>();
-          return internal_push_rp_;
-        }
         output_ = std::move(output);
-        return {};
+        internal_push_rp_ = self_->make_response_promise<void>();
+        return internal_push_rp_;
       },
       [this](atom::internal, atom::pull) -> caf::result<table_slice> {
         TENZIR_ASSERT(not internal_pull_rp_.pending());
-        if (done_rp_.pending() and not extra_input_) {
+        if (done_rp_.pending()) {
           done_rp_.deliver();
         }
         if (push_rp_.pending()) {
           push_rp_.deliver();
         }
         if (input_) {
-          return take_and_replace(input_, extra_input_);
+          return take(input_);
         }
-        if (done_) {
+        if (stop_ or done_) {
+          stop_ = false;
           return table_slice{};
         }
         internal_pull_rp_ = self_->make_response_promise<table_slice>();
@@ -140,26 +128,25 @@ struct transceiver_state {
           internal_push_rp_.deliver();
         }
         if (output_) {
-          return take_and_replace(output_, extra_output_);
+          return take(output_);
         }
         pull_rp_ = self_->make_response_promise<table_slice>();
         return pull_rp_;
       },
-      [this](atom::pull, atom::flush) -> caf::result<table_slice> {
-        if (internal_push_rp_.pending()) {
-          internal_push_rp_.deliver();
+      [this](atom::stop) -> caf::result<void> {
+        if (internal_pull_rp_.pending()) {
+          internal_pull_rp_.deliver(table_slice{});
+        } else {
+          stop_ = true;
         }
-        if (output_) {
-          return take_and_replace(output_, extra_output_);
-        }
-        return table_slice{};
+        return {};
       },
       [this](atom::done) -> caf::result<void> {
         TENZIR_ASSERT(not push_rp_.pending());
+        done_ = true;
         if (internal_pull_rp_.pending()) {
           internal_pull_rp_.deliver(table_slice{});
         }
-        done_ = true;
         if (input_) {
           done_rp_ = self_->make_response_promise<void>();
           return done_rp_;
@@ -195,6 +182,7 @@ struct transceiver_state {
   }
 
 private:
+  bool stop_ = false;
   bool done_ = false;
   uint64_t operator_index_ = 0;
   transceiver_actor::pointer self_;
@@ -202,8 +190,6 @@ private:
   metrics_receiver_actor metrics_receiver_;
   std::optional<table_slice> output_;
   std::optional<table_slice> input_;
-  std::optional<table_slice> extra_output_;
-  std::optional<table_slice> extra_input_;
   caf::typed_response_promise<void> done_rp_;
   caf::typed_response_promise<void> push_rp_;
   caf::typed_response_promise<void> internal_push_rp_;
@@ -316,11 +302,12 @@ private:
 };
 
 struct every_cron_args {
-  tenzir::location op;
+  tenzir::location op{};
   located<duration> every;
   located<std::string> cron;
   located<pipeline> pipe;
   bool is_every{};
+  uuid id{};
 
   auto validate(session ctx) const -> failure_or<void> {
     if (is_every) {
@@ -353,7 +340,8 @@ struct every_cron_args {
   friend auto inspect(auto& f, every_cron_args& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("every", x.every),
                               f.field("cron", x.cron), f.field("pipe", x.pipe),
-                              f.field("is_every", x.is_every));
+                              f.field("is_every", x.is_every),
+                              f.field("id", x.id));
   }
 };
 
@@ -483,11 +471,14 @@ struct every_cron_operator final : public operator_base {
   auto run(generator<table_slice> input, operator_control_plane& ctrl,
            tag<table_slice>) const -> generator<table_slice> {
     const auto cron = make_cronexpr();
-    const auto handle = spawn_transceiver(ctrl);
+    const auto key
+      = fmt::format("tenzir.every_cron_sink.{}.{}", args_.id, ctrl.run_id());
+    const auto handle
+      = ctrl.self().system().registry().get<transceiver_actor>(key);
+    TENZIR_ASSERT(handle);
     auto start = timepoint{};
     auto finish = timepoint{};
     auto state = execution_state{};
-    auto output = table_slice{};
     spawn_pipeline(ctrl, handle, start, finish, cron, state);
     for (auto&& slice : input) {
       if (slice.rows() != 0) {
@@ -504,25 +495,8 @@ struct every_cron_operator final : public operator_base {
             [&](const caf::error& e) {
               diagnostic::error(e).primary(args_.op).emit(ctrl.diagnostics());
             });
-        co_yield {};
       }
-      TENZIR_DEBUG("[every_cron] requesting flushed slice");
-      ctrl.set_waiting(true);
-      ctrl.self()
-        .mail(atom::pull_v, atom::flush_v)
-        .request(handle, caf::infinite)
-        .then(
-          [&](table_slice x) {
-            TENZIR_DEBUG("[every_cron] received flushed slice: {} rows",
-                         x.rows());
-            ctrl.set_waiting(false);
-            output = std::move(x);
-          },
-          [&](const caf::error& e) {
-            diagnostic::error(e).primary(args_.op).emit(ctrl.diagnostics());
-          });
       co_yield {};
-      co_yield std::move(output);
     }
     TENZIR_DEBUG("[every_cron] finishing input");
     state.input_done = true;
@@ -533,34 +507,12 @@ struct every_cron_operator final : public operator_base {
       .then(
         [&] {
           TENZIR_DEBUG("[every_cron] finished input");
-          ctrl.set_waiting(false);
           state.input_consumed = true;
         },
         [&](const caf::error& e) {
           diagnostic::error(e).primary(args_.op).emit(ctrl.diagnostics());
         });
     co_yield {};
-    while (true) {
-      TENZIR_DEBUG("[every_cron] requesting slice");
-      ctrl.set_waiting(true);
-      ctrl.self()
-        .mail(atom::pull_v)
-        .request(handle, caf::infinite)
-        .then(
-          [&](table_slice x) {
-            TENZIR_DEBUG("[every_cron] received slice");
-            ctrl.set_waiting(false);
-            output = std::move(x);
-          },
-          [&](const caf::error& e) {
-            diagnostic::error(e).primary(args_.op).emit(ctrl.diagnostics());
-          });
-      co_yield {};
-      if (output.rows() == 0) {
-        co_return;
-      }
-      co_yield std::move(output);
-    }
   }
 
   auto make_cronexpr() const -> std::optional<detail::cron::cronexpr> {
@@ -673,7 +625,7 @@ struct every_cron_operator final : public operator_base {
               }
               TENZIR_DEBUG("[every_cron] closing input source");
               ctrl.self()
-                .mail(atom::push_v, table_slice{})
+                .mail(atom::stop_v)
                 .request(hdl, caf::infinite)
                 .then(
                   [] {
@@ -765,6 +717,93 @@ private:
   every_cron_args args_;
 };
 
+class every_cron_sink_operator final
+  : public crtp_operator<every_cron_sink_operator> {
+public:
+  every_cron_sink_operator() = default;
+
+  every_cron_sink_operator(uuid id, tenzir::location loc) : id_{id}, loc_{loc} {
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    const auto handle = spawn_transceiver(ctrl);
+    const auto key
+      = fmt::format("tenzir.every_cron_sink.{}.{}", id_, ctrl.run_id());
+    ctrl.self().system().registry().put(key, handle);
+    co_yield {};
+    auto output = table_slice{};
+    auto done = false;
+    while (not done) {
+      if (const auto stub = input.next()) {
+        TENZIR_ASSERT(stub->rows() == 0);
+      }
+      ctrl.self()
+        .mail(atom::pull_v)
+        .request(handle, caf::infinite)
+        .then(
+          [&](table_slice slice) {
+            ctrl.set_waiting(false);
+            done = slice.rows() == 0;
+            output = std::move(slice);
+          },
+          [&](caf::error err) {
+            diagnostic::error(std::move(err))
+              .primary(loc_)
+              .emit(ctrl.diagnostics());
+          });
+      ctrl.set_waiting(true);
+      co_yield {};
+      co_yield std::move(output);
+    }
+  }
+
+  auto add_diagnostic_location() const {
+    return [loc = loc_](diagnostic_builder x) -> diagnostic_builder {
+      if (x.inner().annotations.empty()) {
+        return std::move(x).primary(loc);
+      }
+      return x;
+    };
+  }
+
+  auto spawn_transceiver(operator_control_plane& ctrl) const
+    -> transceiver_actor {
+    auto hdl
+      = ctrl.self().spawn(caf::actor_from_state<transceiver_state>,
+                          ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
+                          ctrl.operator_index(), &ctrl.self());
+    ctrl.self().monitor(hdl, [&](caf::error e) {
+      diagnostic::error(std::move(e))
+        .compose(add_diagnostic_location())
+        .emit(ctrl.diagnostics());
+    });
+    return hdl;
+  }
+
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
+    return {filter, order, copy()};
+  }
+
+  auto name() const -> std::string override {
+    return "every_cron_sink";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  friend auto inspect(auto& f, every_cron_sink_operator& x) -> bool {
+    return f.object(x).fields(f.field("id_", x.id_), f.field("loc_", x.loc_));
+  }
+
+private:
+  uuid id_{};
+  tenzir::location loc_{};
+};
+
 using every_operator = every_cron_operator<"every">;
 
 struct every_plugin final : public operator_plugin2<every_operator> {
@@ -778,6 +817,16 @@ struct every_plugin final : public operator_plugin2<every_operator> {
           .positional("{ … }", args.pipe)
           .parse(inv, ctx));
     TRY(args.validate(ctx));
+    if (const auto out = args.pipe.inner.infer_type(tag_v<table_slice>);
+        out and out->is<table_slice>()) {
+      const auto loc = args.pipe.source;
+      const auto id = uuid::random();
+      args.id = id;
+      auto pipe = std::make_unique<pipeline>();
+      pipe->append(std::make_unique<every_operator>(std::move(args)));
+      pipe->append(std::make_unique<every_cron_sink_operator>(id, loc));
+      return std::move(pipe);
+    }
     return std::make_unique<every_operator>(std::move(args));
   }
 };
@@ -794,12 +843,23 @@ struct cron_plugin final : public operator_plugin2<cron_operator> {
           .positional("{ … }", args.pipe)
           .parse(inv, ctx));
     TRY(args.validate(ctx));
+    if (const auto out = args.pipe.inner.infer_type(tag_v<table_slice>);
+        out and out->is<table_slice>()) {
+      const auto loc = args.pipe.source;
+      const auto id = uuid::random();
+      args.id = id;
+      auto pipe = std::make_unique<pipeline>();
+      pipe->append(std::make_unique<cron_operator>(std::move(args)));
+      pipe->append(std::make_unique<every_cron_sink_operator>(id, loc));
+      return std::move(pipe);
+    }
     return std::make_unique<cron_operator>(std::move(args));
   }
 };
 
 using internal_source_plugin = operator_inspection_plugin<internal_source>;
 using internal_sink_plugin = operator_inspection_plugin<internal_sink>;
+using every_cron_sink = operator_inspection_plugin<every_cron_sink_operator>;
 
 } // namespace
 
@@ -809,3 +869,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron2::every_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron2::cron_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron2::internal_source_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron2::internal_sink_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron2::every_cron_sink)

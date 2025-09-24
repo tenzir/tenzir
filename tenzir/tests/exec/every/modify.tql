@@ -1,2 +1,12 @@
-from {x: 0} 
-every 1s { pass }
+from {}
+repeat 5
+enumerate
+every 1ms { pass }
+write_tql
+save_stdout
+
+from {},{},{},{},{}
+enumerate
+every 1ms { x = 1 }
+write_tql
+save_stdout
