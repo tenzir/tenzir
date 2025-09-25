@@ -704,6 +704,10 @@ auto evaluator::eval(const ast::expression& x) -> multi_series {
     TENZIR_ASSERT(result.length() == length_,
                   "got length {} instead of {} while evaluating {:?}",
                   result.length(), length_, x);
+    /// FIXME: This should be removed again.
+    for (auto& p : result) {
+      check(p.array->ValidateFull());
+    }
     return result;
   });
 }

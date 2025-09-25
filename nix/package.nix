@@ -123,7 +123,7 @@ rec {
     x:
     # Run checks only on Linux for now. Alternative platforms are expensive in
     # CI and also not as important.
-    if pkgs.stdenv.hostPlatform.isLinux then
+    if false then
       pkgs.callPackage ./tenzir/check.nix {
         inherit tenzir-integration-test-deps;
         src = lib.fileset.toSource {

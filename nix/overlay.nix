@@ -43,4 +43,7 @@ in
   yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
   zeromq = callFunction ./overrides/zeromq.nix { inherit (prevPkgs) zeromq; };
   jemalloc = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
+  tenzir = callFunction ./tenzir {
+    extraCmakeFlags = [ "-DTENZIR_ENABLE_ASAN=ON" ];
+  };
 }
