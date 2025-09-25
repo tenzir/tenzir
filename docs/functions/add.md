@@ -16,6 +16,15 @@ The `add` function returns the list `xs` with `x` inserted at the end, but only
 if `x` is not already present in the list. This performs a set-insertion
 operation, ensuring no duplicate values in the resulting list.
 
+### `xs: list`
+
+The list to add to.
+
+### `x: any`
+
+An element to add to the list. If this is of a type incompatible with the list,
+it will be considered as `null`.
+
 ## Examples
 
 ### Add a new element to a list

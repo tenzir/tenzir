@@ -3,35 +3,53 @@
 // Test basic add functionality
 from {xs: [1, 2, 3]}
 xs = xs.add(4)
+write_tql(compact=true)
+save_stdout
 
 // Test adding existing element
 from {xs: [1, 2, 3]}
 xs = xs.add(2)
+write_tql(compact=true)
+save_stdout
 
 // Test adding to empty list
 from {xs: []}
 xs = xs.add(42)
+write_tql(compact=true)
+save_stdout
 
 // Test with strings
 from {xs: ["apple", "banana"]}
 xs = xs.add("orange")
+write_tql(compact=true)
+save_stdout
 
 // Test with existing string
 from {xs: ["apple", "banana"]}
 xs = xs.add("apple")
+write_tql(compact=true)
+save_stdout
 
 // Test with mixed types
-from {xs: [1, "two", 3]}
-xs = xs.add(4)
+from {xs: [1, 2, 3]}
+xs = xs.add("1")
+write_tql(compact=true)
+save_stdout
 
 // Test with null values
 from {xs: [1, null, 3]}
 xs = xs.add(null)
+write_tql(compact=true)
+save_stdout
 
 // Test with null list
 from {xs: null}
 xs = xs.add(1)
+write_tql(compact=true)
+save_stdout
 
 // Test multiple operations
 from {xs: [1, 2]}
 xs = xs.add(3).add(2).add(4)
+write_tql(compact=true)
+save_stdout

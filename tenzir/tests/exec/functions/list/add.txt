@@ -1,0 +1,18 @@
+{xs:[1,2,3,4]}
+{xs:[1,2,3]}
+{xs:[42]}
+{xs:["apple","banana","orange"]}
+{xs:["apple","banana"]}
+{xs:[1,2,3]}
+{xs:[1,null,3]}
+{xs:[1]}
+{xs:[1,2,3,4]}
+warning: type mismatch between list content and value
+  --> exec/functions/list/add.tql:35:6
+   |
+35 | xs = xs.add("1")
+   |      ~~ list contains `int64`
+   ⋮
+35 | xs = xs.add("1")
+   |             ~~~ element to add is `string`
+   |

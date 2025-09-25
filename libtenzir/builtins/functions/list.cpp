@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/series_builder_view3.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -154,45 +155,75 @@ public:
     return function_use::make([list_expr = std::move(list_expr),
                                element_expr = std::move(element_expr)](
                                 evaluator eval, session ctx) -> multi_series {
-      auto add_impl = [&](series list, series element) -> series {
+      const auto add_impl = [&](series list, series element) -> series {
         // Handle null list case
         if (is<null_type>(list.type)) {
           // If list is null, create a new list with just the element
           auto builder = series_builder{type{list_type{element.type}}};
-          for (auto i = int64_t{0}; i < list.length(); ++i) {
-            builder.list();
-            auto elem_idx = i < element.length() ? i : element.length() - 1;
-            auto elem_values = values3(*element.array);
-            auto elem_it = elem_values.begin();
-            std::advance(elem_it, elem_idx);
-            if (elem_it != elem_values.end()) {
-              auto val = *elem_it;
-              if (! is<caf::none_t>(val)) {
-                // TODO: Convert data_view3 to data_view2 for series_builder
-                // For now, skip adding the element
-              }
-            }
+          for (const auto& v : values3(*element.array)) {
+            add_to_builder(builder.list(), v);
           }
           return builder.finish_assert_one_array();
         }
-        // Get the list type
-        auto list_type_ptr = try_as<list_type>(list.type);
-        if (! list_type_ptr) {
+        auto list_list = list.as<list_type>();
+        if (not list_list) {
           diagnostic::warning("expected `list`, but got `{}`", list.type.kind())
             .primary(list_expr)
             .emit(ctx);
           return list;
         }
-        // Determine output type - if list contains only nulls, promote to
-        // element type
-        auto output_type = list.type;
-        if (is<null_type>(list_type_ptr->value_type())) {
-          output_type = type{list_type{element.type}};
+        auto final_element_type = list_list->type.value_type();
+        const auto v_kind = final_element_type.kind();
+        const auto e_kind = element.type.kind();
+        const auto list_is_integer
+          = v_kind == tag_v<int64_type> or v_kind == tag_v<uint64_type>;
+        const auto element_is_integer
+          = e_kind == tag_v<int64_type> or e_kind == tag_v<uint64_type>;
+        if (v_kind == tag_v<null_type>) {
+          final_element_type = element.type;
+        } else if (final_element_type.kind() != element.type.kind()) {
+          const auto can_add = list_is_integer and element_is_integer;
+          if (not can_add and not element.type.kind().is<null_type>()) {
+            diagnostic::warning("type mismatch between list content and value")
+              .primary(list_expr.get_location(), "list contains `{}`",
+                       final_element_type.kind())
+              .primary(element_expr, "element to add is `{}`",
+                       element.type.kind())
+              .compose([&](auto&& d) {
+                if (list_is_integer and e_kind == tag_v<double_type>) {
+                  return std::move(d).hint(
+                    "consider explicitly casting the element");
+                }
+                return std::move(d);
+              })
+              .emit(ctx);
+            return list;
+          }
         }
-        // Build result list with the appropriate type
-        auto builder = series_builder{output_type};
-        // TODO: Implement the actual add logic
-        return list;
+        auto builder = series_builder{type{list_type{final_element_type}}};
+        auto list_generator = values3(*list_list->array);
+        auto element_generator = values3(*element.array);
+        for (auto i = int64_t{0}; i < list.length(); ++i) {
+          const auto l = *list_generator.next();
+          auto e = *element_generator.next();
+          if (not l) {
+            builder.null();
+            continue;
+          }
+          auto lb = builder.list();
+          auto already_found = false;
+          for (const auto& v : *l) {
+            add_to_builder(lb, v);
+            if (not already_found) {
+              already_found
+                = partial_order(v, e) == std::partial_ordering::equivalent;
+            }
+          }
+          if (not already_found) {
+            add_to_builder(lb, e);
+          }
+        }
+        return builder.finish_assert_one_array();
       };
       return map_series(eval(list_expr), eval(element_expr), add_impl);
     });
@@ -227,18 +258,33 @@ public:
           return series::null(null_type{}, list.length());
         }
         // Get the list type
-        auto list_type_ptr = try_as<list_type>(list.type);
-        if (! list_type_ptr) {
+        auto list_list = list.as<list_type>();
+        if (not list_list) {
           diagnostic::warning("expected `list`, but got `{}`", list.type.kind())
             .primary(list_expr)
             .emit(ctx);
           return list;
         }
-        // Build result list with the same type as input
         auto builder = series_builder{list.type};
-        // TODO: Implement the actual remove logic
-        // For now, just return the original list
-        return list;
+        auto list_generator = values3(*list_list->array);
+        auto element_generator = values3(*element.array);
+        for (auto i = int64_t{0}; i < list.length(); ++i) {
+          const auto l = *list_generator.next();
+          const auto e = *element_generator.next();
+          if (not l) {
+            builder.null();
+            continue;
+          }
+          auto lb = builder.list();
+          for (const auto& v : *l) {
+            const auto matches
+              = partial_order(v, e) == std::partial_ordering::equivalent;
+            if (not matches) {
+              add_to_builder(lb, v);
+            }
+          }
+        }
+        return builder.finish_assert_one_array();
       };
       return map_series(eval(list_expr), eval(element_expr), remove_impl);
     });

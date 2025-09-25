@@ -15,6 +15,14 @@ remove(xs:list, x:any) -> list
 The `remove` function returns the list `xs` with all occurrences of `x` removed.
 If `x` is not present in the list, the original list is returned unchanged.
 
+### `xs: list`
+
+A list to remove elements from.
+
+### `x: any`
+
+The value to remove from the list.
+
 ## Examples
 
 ### Remove an element from a list
