@@ -1,0 +1,290 @@
+{
+  empty_list: [],
+  empty_record: {},
+  search_empty_list: false,
+  search_empty_record: false,
+  search_null_in_nulls: true,
+  search_value_in_nulls: false,
+  search_mixed_int: false,
+  search_mixed_string: false,
+  search_mixed_bool: false,
+  search_mixed_double: false,
+  search_deep_target: false,
+  search_deep_missing: false,
+  search_int_42: false,
+  search_uint_42: false,
+  search_double_42: false,
+  search_empty_string: false,
+  search_whitespace: false,
+  search_substring: false,
+}
+{
+  null_values: {
+    a: null,
+    b: 42,
+  },
+  search_empty_list: false,
+  search_empty_record: false,
+  search_null_in_nulls: true,
+  search_value_in_nulls: true,
+  search_mixed_int: false,
+  search_mixed_string: false,
+  search_mixed_bool: false,
+  search_mixed_double: false,
+  search_deep_target: false,
+  search_deep_missing: false,
+  search_int_42: false,
+  search_uint_42: false,
+  search_double_42: false,
+  search_empty_string: false,
+  search_whitespace: false,
+  search_substring: false,
+}
+{
+  mixed_types: [
+    1,
+    null,
+    null,
+    null,
+  ],
+  search_empty_list: false,
+  search_empty_record: false,
+  search_null_in_nulls: true,
+  search_value_in_nulls: false,
+  search_mixed_int: true,
+  search_mixed_string: false,
+  search_mixed_bool: false,
+  search_mixed_double: false,
+  search_deep_target: false,
+  search_deep_missing: false,
+  search_int_42: false,
+  search_uint_42: false,
+  search_double_42: false,
+  search_empty_string: false,
+  search_whitespace: false,
+  search_substring: false,
+}
+{
+  deeply_nested: {
+    level1: {
+      level2: {
+        level3: {
+          target: "deep",
+        },
+      },
+    },
+  },
+  search_empty_list: false,
+  search_empty_record: false,
+  search_null_in_nulls: true,
+  search_value_in_nulls: false,
+  search_mixed_int: false,
+  search_mixed_string: false,
+  search_mixed_bool: false,
+  search_mixed_double: false,
+  search_deep_target: true,
+  search_deep_missing: false,
+  search_int_42: false,
+  search_uint_42: false,
+  search_double_42: false,
+  search_empty_string: false,
+  search_whitespace: false,
+  search_substring: false,
+}
+{
+  numeric_types: {
+    int: 42,
+    uint: 42,
+    double: 42.0,
+  },
+  search_empty_list: false,
+  search_empty_record: false,
+  search_null_in_nulls: true,
+  search_value_in_nulls: false,
+  search_mixed_int: false,
+  search_mixed_string: false,
+  search_mixed_bool: false,
+  search_mixed_double: false,
+  search_deep_target: false,
+  search_deep_missing: false,
+  search_int_42: true,
+  search_uint_42: true,
+  search_double_42: true,
+  search_empty_string: false,
+  search_whitespace: false,
+  search_substring: false,
+}
+{
+  string_cases: {
+    empty: "",
+    whitespace: " ",
+    text: "hello world",
+  },
+  search_empty_list: false,
+  search_empty_record: false,
+  search_null_in_nulls: true,
+  search_value_in_nulls: false,
+  search_mixed_int: false,
+  search_mixed_string: false,
+  search_mixed_bool: false,
+  search_mixed_double: false,
+  search_deep_target: false,
+  search_deep_missing: false,
+  search_int_42: false,
+  search_uint_42: false,
+  search_double_42: false,
+  search_empty_string: true,
+  search_whitespace: true,
+  search_substring: false,
+}
+warning: type clash in list, using `null` instead
+ --> exec/search/edge_cases.tql:4:19
+  |
+4 | {mixed_types: [1, "hello", true, 3.14]},
+  |                   ~~~~~~~ 
+  |
+  = note: expected `int64` but got `string`
+
+warning: type clash in list, using `null` instead
+ --> exec/search/edge_cases.tql:4:28
+  |
+4 | {mixed_types: [1, "hello", true, 3.14]},
+  |                            ~~~~ 
+  |
+  = note: expected `int64` but got `bool`
+
+warning: type clash in list, using `null` instead
+ --> exec/search/edge_cases.tql:4:34
+  |
+4 | {mixed_types: [1, "hello", true, 3.14]},
+  |                                  ~~~~ 
+  |
+  = note: expected `int64` but got `double`
+
+warning: field `empty_list` not found
+  --> exec/search/edge_cases.tql:10:28
+   |
+10 | search_empty_list = search(empty_list, 1)
+   |                            ~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `empty_record` not found
+  --> exec/search/edge_cases.tql:11:30
+   |
+11 | search_empty_record = search(empty_record, 1)
+   |                              ~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `null_values` not found
+  --> exec/search/edge_cases.tql:14:31
+   |
+14 | search_null_in_nulls = search(null_values, null)
+   |                               ~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `null_values` not found
+  --> exec/search/edge_cases.tql:15:32
+   |
+15 | search_value_in_nulls = search(null_values, 42)
+   |                                ~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `mixed_types` not found
+  --> exec/search/edge_cases.tql:18:27
+   |
+18 | search_mixed_int = search(mixed_types, 1)
+   |                           ~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `mixed_types` not found
+  --> exec/search/edge_cases.tql:19:30
+   |
+19 | search_mixed_string = search(mixed_types, "hello")
+   |                              ~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `mixed_types` not found
+  --> exec/search/edge_cases.tql:20:28
+   |
+20 | search_mixed_bool = search(mixed_types, true)
+   |                            ~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `mixed_types` not found
+  --> exec/search/edge_cases.tql:21:30
+   |
+21 | search_mixed_double = search(mixed_types, 3.14)
+   |                              ~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `deeply_nested` not found
+  --> exec/search/edge_cases.tql:24:29
+   |
+24 | search_deep_target = search(deeply_nested, "deep")
+   |                             ~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `deeply_nested` not found
+  --> exec/search/edge_cases.tql:25:30
+   |
+25 | search_deep_missing = search(deeply_nested, "shallow")
+   |                              ~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `numeric_types` not found
+  --> exec/search/edge_cases.tql:28:24
+   |
+28 | search_int_42 = search(numeric_types, 42)
+   |                        ~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `numeric_types` not found
+  --> exec/search/edge_cases.tql:29:25
+   |
+29 | search_uint_42 = search(numeric_types, 42.uint())
+   |                         ~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `numeric_types` not found
+  --> exec/search/edge_cases.tql:30:27
+   |
+30 | search_double_42 = search(numeric_types, 42.0)
+   |                           ~~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `string_cases` not found
+  --> exec/search/edge_cases.tql:33:30
+   |
+33 | search_empty_string = search(string_cases, "")
+   |                              ~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `string_cases` not found
+  --> exec/search/edge_cases.tql:34:28
+   |
+34 | search_whitespace = search(string_cases, " ")
+   |                            ~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: field `string_cases` not found
+  --> exec/search/edge_cases.tql:35:27
+   |
+35 | search_substring = search(string_cases, "world")
+   |                           ~~~~~~~~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
