@@ -39,56 +39,61 @@ class throttle_operator final : public crtp_operator<throttle_operator> {
 public:
   throttle_operator() = default;
 
-  explicit throttle_operator(double max_bandwidth, float_seconds window)
-    : bandwidth_per_second_(max_bandwidth / window.count()), window_(window) {
+  explicit throttle_operator(uint64_t bandwidth, duration window)
+    : bandwidth_(bandwidth), window_(window) {
   }
 
   // TODO: Currently the operator only handles byte stream, but in the future
   // we also want to be able to handle events as input.
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto last_timestamp = std::chrono::steady_clock::now() - window_;
-    auto bytes_per_window = bandwidth_per_second_ * window_.count();
-    if (bytes_per_window == size_t{0}) {
-      ++bytes_per_window; // Enforce at least some progress every window.
-    }
-    double budget = 0.0;
+    auto bytes_in_current_window = uint64_t{0};
+    auto window_start = std::chrono::steady_clock::now();
     for (auto&& bytes : input) {
       if (not bytes) {
         co_yield {};
         continue;
       }
-      auto now = std::chrono::steady_clock::now();
-      auto additional_budget
-        = duration_cast<float_seconds>(now - last_timestamp).count()
-          * bandwidth_per_second_;
-      budget = std::min(bytes_per_window, budget + additional_budget);
-      auto split_position = static_cast<size_t>(budget);
-      auto head = chunk::make_empty();
-      auto tail = chunk::make_empty();
-      auto head_offset = size_t{0};
-      std::tie(head, tail) = split_chunk(bytes, head_offset, split_position);
-      budget -= static_cast<double>(head->size());
-      head_offset += head->size();
-      co_yield std::move(head);
-      // If we didn't have enough budget to send everything in one go,
-      // send the remainder in intervals according to the configured
-      // window.
-      while (tail->size() > 0) {
-        budget = 0;
-        std::tie(head, tail) = split_chunk(
-          bytes, head_offset, static_cast<size_t>(bytes_per_window));
-        head_offset += head->size();
-        ctrl.self().run_delayed_weak(duration_cast<duration>(window_), [&] {
-          ctrl.set_waiting(false);
-        });
-        ctrl.set_waiting(true);
-        co_yield {};
-        co_yield std::move(head);
+      // Process the chunk, potentially splitting it if needed
+      auto current_chunk = bytes;
+      while (current_chunk && current_chunk->size() > 0) {
+        // Check if we need to reset the window
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = now - window_start;
+        if (elapsed >= window_) {
+          // Reset the window
+          window_start = now;
+          bytes_in_current_window = 0;
+        }
+        // Calculate how many bytes we can send in the current window
+        auto remaining_allowance = (bandwidth_ > bytes_in_current_window)
+                                     ? bandwidth_ - bytes_in_current_window
+                                     : uint64_t{0};
+        if (remaining_allowance == 0) {
+          // Need to wait until the next window
+          auto wake_time = window_start + window_;
+          ctrl.self().run_scheduled_weak(wake_time, [&] {
+            ctrl.set_waiting(false);
+          });
+          ctrl.set_waiting(true);
+          co_yield {};
+          // After waiting, reset the window
+          window_start = std::chrono::steady_clock::now();
+          bytes_in_current_window = 0;
+          remaining_allowance = bandwidth_;
+        }
+        // Split the chunk if necessary
+        auto [to_send, rest]
+          = split_chunk(current_chunk, 0, remaining_allowance);
+        if (to_send and to_send->size() > 0) {
+          // Send what we can
+          bytes_in_current_window += to_send->size();
+          co_yield std::move(to_send);
+        }
+        // Update current_chunk to the remainder
+        current_chunk = std::move(rest);
       }
-      last_timestamp = std::chrono::steady_clock::now();
     }
-    co_return;
   }
 
   auto name() const -> std::string override {
@@ -102,12 +107,13 @@ public:
   }
 
   friend auto inspect(auto& f, throttle_operator& x) -> bool {
-    return f.apply(x.bandwidth_per_second_);
+    return f.object(x).fields(f.field("bandwidth", x.bandwidth_),
+                              f.field("window", x.window_));
   }
 
 private:
-  double bandwidth_per_second_ = 0.0; // bytes
-  float_seconds window_ = {};
+  uint64_t bandwidth_ = 0; // bytes per window
+  duration window_ = {};
 };
 
 class throttle_plugin final : virtual public operator_plugin<throttle_operator>,
@@ -128,7 +134,6 @@ public:
     if (bandwidth.inner == 0) {
       diagnostic::error("`bandwidth` must be a positive number")
         .primary(bandwidth.source)
-        .note("the unit of measurement is bytes/second")
         .throw_();
     }
     if (window and window->inner <= duration::zero()) {
@@ -138,8 +143,7 @@ public:
     }
     return std::make_unique<throttle_operator>(
       bandwidth.inner,
-      window ? std::chrono::duration_cast<float_seconds>(window->inner)
-             : float_seconds{1});
+      window ? window->inner : duration{std::chrono::seconds{1}});
   }
 
   auto make(invocation inv, session ctx) const
@@ -154,7 +158,6 @@ public:
     if (bandwidth.inner == 0) {
       diagnostic::error("`bandwidth` must be a positive value")
         .primary(bandwidth.source)
-        .note("the unit of measurement is bytes/second")
         .emit(ctx);
     }
     if (window and window->inner <= duration::zero()) {
@@ -164,8 +167,7 @@ public:
     }
     return std::make_unique<throttle_operator>(
       bandwidth.inner,
-      window ? std::chrono::duration_cast<float_seconds>(window->inner)
-             : float_seconds{1});
+      window ? window->inner : duration{std::chrono::seconds{1}});
   }
 };
 

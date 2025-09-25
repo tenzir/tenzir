@@ -150,6 +150,42 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   }
 }
 
+auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
+  const auto ty = event.type();
+  if (ty == RdKafka::Event::EVENT_ERROR) {
+    const auto* const severity = [&] {
+      switch (event.severity()) {
+        case RdKafka::Event::EVENT_SEVERITY_EMERG:
+          return "emergency";
+        case RdKafka::Event::EVENT_SEVERITY_ALERT:
+          return "alert";
+        case RdKafka::Event::EVENT_SEVERITY_CRITICAL:
+          return "critical";
+        case RdKafka::Event::EVENT_SEVERITY_ERROR:
+          return "error";
+        case RdKafka::Event::EVENT_SEVERITY_WARNING:
+          return "warning";
+        case RdKafka::Event::EVENT_SEVERITY_NOTICE:
+          return "notice";
+        case RdKafka::Event::EVENT_SEVERITY_INFO:
+          return "info";
+        case RdKafka::Event::EVENT_SEVERITY_DEBUG:
+          return "debug";
+        default:
+          return "unknown";
+      }
+    }();
+    const auto error_code = event.err();
+    const auto error_msg = event.str();
+    diagnostic::warning("librdkafka {}: {} ({})", severity,
+                        error_msg.empty() ? RdKafka::err2str(error_code)
+                                          : error_msg,
+                        std::to_underlying(error_code))
+      .severity(event.fatal() ? severity::error : severity::warning)
+      .emit(dh_);
+  }
+}
+
 auto configuration::make(const record& options,
                          std::optional<aws_iam_options> aws,
                          diagnostic_handler& dh)
@@ -158,11 +194,17 @@ auto configuration::make(const record& options,
   if (auto err = result.set(options)) {
     return err;
   }
+  auto errstr = std::string{};
+  result.error_callback_ = std::make_shared<error_callback>(dh);
+  result.conf_->set("event_cb", result.error_callback_.get(), errstr);
+  if (not errstr.empty()) {
+    return diagnostic::error("failed to set event callback: {}", errstr)
+      .to_error();
+  }
   if (aws) {
     TENZIR_VERBOSE("setting aws iam callback");
     result.aws_
       = std::make_shared<aws_iam_callback>(std::move(aws).value(), dh);
-    std::string errstr;
     result.conf_->set("oauthbearer_token_refresh_cb", result.aws_.get(),
                       errstr);
     if (not errstr.empty()) {
@@ -230,7 +272,7 @@ auto configuration::set_rebalance_cb(int64_t offset) -> caf::error {
   return {};
 }
 
-configuration::rebalancer::rebalancer(int offset) : offset_{offset} {
+configuration::rebalancer::rebalancer(int64_t offset) : offset_{offset} {
 }
 
 auto configuration::rebalancer::rebalance_cb(

@@ -237,7 +237,7 @@ public:
       co_return;
     }
     // Adjust rebalance callback to set desired offset.
-    auto offset = RdKafka::Topic::OFFSET_END;
+    auto offset = RdKafka::Topic::OFFSET_STORED;
     if (args_.offset) {
       auto success = offset_parser()(args_.offset->inner, offset);
       TENZIR_ASSERT(success); // validated earlier;

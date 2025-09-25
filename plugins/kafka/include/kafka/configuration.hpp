@@ -15,6 +15,7 @@
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
+#include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafkacpp.h>
 
 #include <memory>
@@ -62,6 +63,17 @@ public:
     diagnostic_handler& dh_;
   };
 
+  class error_callback : public RdKafka::EventCb {
+  public:
+    explicit error_callback(diagnostic_handler& dh) : dh_{dh} {
+    }
+
+    auto event_cb(RdKafka::Event& event) -> void override;
+
+  private:
+    diagnostic_handler& dh_;
+  };
+
   /// Creates a configuration from a record.
   static auto make(const record& options, std::optional<aws_iam_options> aws,
                    diagnostic_handler& dh) -> caf::expected<configuration>;
@@ -85,7 +97,7 @@ public:
 private:
   class rebalancer : public RdKafka::RebalanceCb {
   public:
-    explicit rebalancer(int offset);
+    explicit rebalancer(int64_t offset);
 
     auto rebalance_cb(RdKafka::KafkaConsumer*, RdKafka::ErrorCode,
                       std::vector<RdKafka::TopicPartition*>&) -> void override;
@@ -96,9 +108,10 @@ private:
 
   configuration();
 
-  std::shared_ptr<RdKafka::Conf> conf_{};
-  std::shared_ptr<aws_iam_callback> aws_{};
+  std::shared_ptr<RdKafka::Conf> conf_;
+  std::shared_ptr<aws_iam_callback> aws_;
   std::shared_ptr<rebalancer> rebalance_callback_;
+  std::shared_ptr<error_callback> error_callback_;
 };
 
 } // namespace tenzir::plugins::kafka

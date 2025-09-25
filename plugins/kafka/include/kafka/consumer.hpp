@@ -40,7 +40,7 @@ public:
     -> failure_or<void>;
 
   ~consumer() {
-    if (consumer_.use_count() == 1) {
+    if (consumer_ and consumer_.use_count() == 1) {
       consumer_->close();
     }
   }
