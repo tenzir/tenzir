@@ -1,0 +1,4 @@
+from {x: 1}, {x: 2}
+write_ndjson
+throttle 10
+read_ndjson
