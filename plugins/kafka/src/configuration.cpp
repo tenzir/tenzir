@@ -230,7 +230,7 @@ auto configuration::set_rebalance_cb(int64_t offset) -> caf::error {
   return {};
 }
 
-configuration::rebalancer::rebalancer(int offset) : offset_{offset} {
+configuration::rebalancer::rebalancer(int64_t offset) : offset_{offset} {
 }
 
 auto configuration::rebalancer::rebalance_cb(
