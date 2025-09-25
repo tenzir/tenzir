@@ -85,6 +85,8 @@ struct package_operator final {
 
   auto to_record() const -> record;
 
+  static auto parse(const view<record>& data)
+    -> caf::expected<package_operator>;
   static auto parse(std::string_view input) -> caf::expected<package_operator>;
 
   friend auto inspect(auto& f, package_operator& x) -> bool {
@@ -210,8 +212,13 @@ struct package final {
 
   static auto parse(const view<record>& data) -> caf::expected<package>;
 
-  static auto load(const std::filesystem::path& path, diagnostic_handler& dh)
+  static auto load(const std::filesystem::path& dir, diagnostic_handler& dh)
     -> failure_or<package>;
+
+  auto id_from_path(const std::filesystem::path& pkg_part,
+                    const std::filesystem::path& parts_base,
+                    diagnostic_handler& dh) const
+    -> failure_or<std::string>;
 
   auto to_record() const -> record;
 
@@ -222,8 +229,9 @@ struct package final {
       f.field("package_icon", x.package_icon),
       f.field("author_icon", x.author_icon),
       f.field("categories", x.categories), f.field("inputs", x.inputs),
-      f.field("pipelines", x.pipelines), f.field("contexts", x.contexts),
-      f.field("examples", x.examples), f.field("config", x.config));
+      f.field("operators", x.operators), f.field("pipelines", x.pipelines),
+      f.field("contexts", x.contexts), f.field("examples", x.examples),
+      f.field("config", x.config));
   }
 };
 
