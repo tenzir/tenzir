@@ -9,6 +9,7 @@
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/detail/load_contents.hpp>
 #include <tenzir/package.hpp>
 #include <tenzir/type.hpp>
 
@@ -212,7 +213,7 @@ namespace tenzir {
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
-      target.push_back(*item);                                                 \
+      (target).push_back(*item);                                               \
       ++pos;                                                                   \
     }                                                                          \
     continue;                                                                  \
@@ -438,8 +439,6 @@ auto package_example::parse(std::string_view input)
 
 auto package::parse(const view<record>& data) -> caf::expected<package> {
   auto result = package{};
-  // Briefly support both `snippets` and `examples` to enable a smooth transition
-  auto legacy_snippets = std::vector<package_example>{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(id);
     TRY_ASSIGN_STRING_TO_RESULT(name);
@@ -453,21 +452,12 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
     TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
-    TRY_ASSIGN_LIST(snippets, package_example, legacy_snippets);
     TENZIR_WARN("ignoring unknown key `{}` in `package` entry in package "
                 "definition",
                 key);
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
-  if (not legacy_snippets.empty()) {
-    if (not result.examples.empty()) {
-      return diagnostic::error("found both `snippets` and `examples`")
-        .note("the `snippets` key is deprecated, use `examples` instead")
-        .to_error();
-    }
-    result.examples = std::move(legacy_snippets);
-  }
   if (result.config) {
     for (auto& [name, _] : result.config->inputs) {
       if (not result.inputs.contains(name)) {
@@ -486,6 +476,207 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     }
   }
   return result;
+}
+
+namespace {
+
+auto yaml_file_to_record(const std::filesystem::path& file, auto& dh)
+  -> failure_or<record> {
+  auto yaml = detail::load_contents(file);
+  if (not yaml) {
+    diagnostic::error("failed to load file")
+      .note("trying to load {}", file)
+      .note("error: {}", yaml.error())
+      .emit(dh);
+    return failure::promise();
+  }
+  auto data = from_yaml(*yaml);
+  if (not data) {
+    diagnostic::error("failed to parse yaml")
+      .note("trying to load {}", file)
+      .note("error: {}", data.error())
+      .emit(dh);
+    return failure::promise();
+  }
+  auto* record = try_as<tenzir::record>(&*data);
+  if (not record) {
+    diagnostic::error("expected a record")
+      .note("trying to load {}", file)
+      .emit(dh);
+    return failure::promise();
+  }
+  return *record;
+}
+
+template <class Type>
+auto load_package_part(const std::filesystem::path& file, auto& dh)
+  -> failure_or<Type> {
+  auto content = detail::load_contents(file);
+  if (not content) {
+    diagnostic::error(content.error()).note("trying to load {}", file).emit(dh);
+    return failure::promise();
+  }
+  auto result = Type::parse(*content);
+  if (not result) {
+    diagnostic::error("{}", result.error()).note("from file: {}", file).emit(dh);
+    return failure::promise();
+  }
+  return *result;
+}
+
+} // namespace
+
+auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
+  -> failure_or<package> {
+  auto package_file = dir / "package.yaml";
+  std::error_code ec;
+  if (not std::filesystem::exists(package_file, ec)) {
+    if (ec) {
+      diagnostic::error("{}", ec).note("for file {}", package_file).emit(dh);
+    }
+    return failure::promise();
+  }
+  TRY(auto package_record, yaml_file_to_record(package_file, dh));
+  auto parsed_package = package::parse(make_view(package_record));
+  if (not parsed_package) {
+    diagnostic::error("failed to parse package.yaml")
+      .note("in package directory {}", dir)
+      .note("encountered error {}", parsed_package.error())
+      .emit(dh);
+    return failure::promise();
+  }
+  if (parsed_package->id != dir.filename()) {
+    TENZIR_WARN("name mismatch: found package {} in directory {}/",
+                parsed_package->id, dir);
+  }
+  // Support storing the `config` part in a separate file in the same
+  // directory.
+  auto config_file = dir / "config.yaml";
+  if (not std::filesystem::exists(config_file, ec)) {
+    if (ec) {
+      diagnostic::error("{}", ec).note("for file {}", config_file).emit(dh);
+    }
+  } else {
+    if (parsed_package->config.has_value()) {
+      diagnostic::error(
+        "invalid package definition: found both an inline config "
+        "section and a separate 'config.yaml'")
+        .note("in package directory {}/", dir)
+        .emit(dh);
+    }
+    TRY(auto config_record, yaml_file_to_record(config_file, dh));
+    auto parsed_config = package_config::parse(make_view(config_record));
+    if (not parsed_config) {
+      diagnostic::error("failed to parse package config")
+        .note("in package directory {}/", dir)
+        .note("got error: {}", parsed_config.error())
+        .emit(dh);
+    } else {
+      parsed_package->config = std::move(*parsed_config);
+    }
+  }
+  auto pipelines_dir = dir / "pipelines";
+  if (not std::filesystem::exists(pipelines_dir, ec)) {
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while trying to load {}", pipelines_dir)
+        .emit(dh);
+    }
+  } else {
+    auto pipelines
+      = std::filesystem::directory_iterator{pipelines_dir, ec}
+        | std::views::filter([&](const std::filesystem::path& path) {
+            return path.extension() == ".tql";
+          });
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while trying to load {}", pipelines_dir)
+        .emit(dh);
+      return failure::promise();
+    }
+    try {
+      for (const auto& pipeline_file : pipelines) {
+        if (auto pipeline
+            = load_package_part<package_pipeline>(pipeline_file, dh)) {
+          parsed_package->pipelines.emplace(pipeline_file.path().stem(),
+                                            std::move(*pipeline));
+        }
+      }
+    } catch (std::exception& e) {
+      diagnostic::error("{}", e)
+        .note("while trying to load pipelines in {}", pipelines_dir)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  auto operators_dir = dir / "operators";
+  if (not std::filesystem::exists(operators_dir, ec)) {
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while trying to load {}", operators_dir)
+        .emit(dh);
+    }
+  } else {
+    auto operators
+      = std::filesystem::directory_iterator{operators_dir, ec}
+        | std::views::filter([&](const std::filesystem::path& path) {
+            return path.extension() == ".tql";
+          });
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while trying to load {}", operators_dir)
+        .emit(dh);
+      return failure::promise();
+    }
+    try {
+      for (const auto& operator_file : operators) {
+        if (auto pipeline
+            = load_package_part<package_operator>(operator_file, dh)) {
+          parsed_package->operators.emplace(operator_file.path().stem(),
+                                            std::move(*pipeline));
+        }
+      }
+    } catch (std::exception& e) {
+      diagnostic::error("{}", e)
+        .note("while trying to load pipelines in {}", pipelines_dir)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  auto examples_dir = dir / "examples";
+  if (not std::filesystem::exists(examples_dir, ec)) {
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while trying to load {}", examples_dir)
+        .emit(dh);
+    }
+  } else {
+    auto examples
+      = std::filesystem::directory_iterator{examples_dir, ec}
+        | std::views::filter([&](const std::filesystem::path& path) {
+            return path.extension() == ".tql";
+          });
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while trying to load {}", examples_dir)
+        .emit(dh);
+      return failure::promise();
+    }
+    try {
+      for (const auto& example_file : examples) {
+        if (auto example_
+            = load_package_part<package_example>(example_file, dh)) {
+          parsed_package->examples.push_back(std::move(*example_));
+        }
+      }
+    } catch (std::exception& e) {
+      diagnostic::error("{}", e)
+        .note("while trying to load examples in {}", examples_dir)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return *parsed_package;
 }
 
 auto package_source::to_record() const -> record {
