@@ -241,7 +241,7 @@ namespace tenzir {
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
-      result.name.push_back(std::string{*str});                                \
+      result.name.emplace_back(*str);                                          \
     }                                                                          \
     continue;                                                                  \
   }
@@ -294,6 +294,67 @@ auto package_config::parse(const view<record>& data)
                 key);
   }
   return result;
+}
+
+namespace {
+
+auto load_tql_with_frontmatter(std::string_view input)
+  -> caf::expected<record> {
+  auto rec = record{};
+  // Search optional frontmatter, but allow a `#!` shebang lines before that.
+  auto input_ = input;
+  while (input_.starts_with("#!")) {
+    auto after_shebang = input_.find('\n');
+    if (after_shebang == std::string_view::npos) {
+      // Unexpected, but we let the real parser handle this.
+      break;
+    }
+    input_.remove_prefix(after_shebang + 1);
+  }
+  if (input_.starts_with("---\n")) {
+    auto frontmatter_end = input_.find("\n---\n");
+    if (frontmatter_end == std::string_view::npos) {
+      return caf::make_error(ec::parse_error,
+                             "missing end marker of tql frontmatter");
+    }
+    auto frontmatter = input_.substr(4, frontmatter_end);
+    auto metadata = from_yaml(frontmatter);
+    if (not metadata) {
+      return metadata.error();
+    }
+    auto* maybe_rec = try_as<record>(*metadata);
+    if (not maybe_rec) {
+      return caf::make_error(ec::parse_error,
+                             "tql frontmatter is not a record");
+    }
+    rec = *maybe_rec;
+    input_.remove_prefix(frontmatter_end + 5);
+    input_ = detail::trim_front(input_);
+  }
+  rec.emplace("definition", std::string{input_});
+  return rec;
+}
+
+} // namespace
+
+auto package_operator::parse(const view<record>& data)
+  -> caf::expected<package_operator> {
+  auto result = package_operator{};
+  for (const auto& [key, value] : data) {
+    TRY_ASSIGN_STRING_TO_RESULT(definition);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
+    TENZIR_WARN("ignoring unknown key `{}` in `operator` entry in package "
+                "definition",
+                key);
+  }
+  REQUIRED_FIELD(definition)
+  return result;
+}
+
+auto package_operator::parse(std::string_view input)
+  -> caf::expected<package_operator> {
+  TRY(auto rec, load_tql_with_frontmatter(input));
+  return parse(make_view(rec));
 }
 
 auto package_pipeline::parse(const view<record>& data)
@@ -360,38 +421,7 @@ auto package_pipeline::parse(const view<record>& data)
 
 auto package_pipeline::parse(std::string_view input)
   -> caf::expected<package_pipeline> {
-  auto rec = record{};
-  // Search optional frontmatter, but allow a `#!` shebang lines before that.
-  auto input_ = input;
-  while (input_.starts_with("#!")) {
-    auto after_shebang = input_.find('\n');
-    if (after_shebang == std::string_view::npos) {
-      // Unexpected, but we let the real parser handle this.
-      break;
-    }
-    input_.remove_prefix(after_shebang + 1);
-  }
-  if (input_.starts_with("---\n")) {
-    auto frontmatter_end = input_.find("\n---\n");
-    if (frontmatter_end == std::string_view::npos) {
-      return caf::make_error(ec::parse_error,
-                             "missing end marker of pipeline frontmatter");
-    }
-    auto frontmatter = input_.substr(4, frontmatter_end);
-    auto metadata = from_yaml(frontmatter);
-    if (not metadata) {
-      return metadata.error();
-    }
-    auto* maybe_rec = try_as<record>(*metadata);
-    if (not maybe_rec) {
-      return caf::make_error(ec::parse_error,
-                             "pipeline frontmatter is not a record");
-    }
-    rec = *maybe_rec;
-    input_.remove_prefix(frontmatter_end + 5);
-    input_ = detail::trim_front(input_);
-  }
-  rec.emplace("definition", std::string{input_});
+  TRY(auto rec, load_tql_with_frontmatter(input));
   return parse(make_view(rec));
 }
 
@@ -422,19 +452,8 @@ auto package_example::parse(const view<record>& data)
 
 auto package_example::parse(std::string_view input)
   -> caf::expected<package_example> {
-  auto [frontmatter, definition] = detail::split_once(input, "\n---\n");
-  auto metadata = from_yaml(frontmatter);
-  if (not metadata) {
-    return metadata.error();
-  }
-  record* rec = try_as<record>(*metadata);
-  if (not rec) {
-    return caf::make_error(ec::parse_error,
-                           "pipeline frontmatter is not a record");
-  }
-  definition = detail::trim_front(definition);
-  rec->emplace("definition", std::string{definition});
-  return parse(make_view(*rec));
+  TRY(auto rec, load_tql_with_frontmatter(input));
+  return parse(make_view(rec));
 }
 
 auto package::parse(const view<record>& data) -> caf::expected<package> {
@@ -448,6 +467,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author_icon);
     TRY_ASSIGN_VECTOR_OF_STRING(categories);
     TRY_ASSIGN_MAP_TO_RESULT(inputs, package_input);
+    TRY_ASSIGN_MAP_TO_RESULT(operators, package_operator);
     TRY_ASSIGN_MAP_TO_RESULT(pipelines, package_pipeline);
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
@@ -526,6 +546,29 @@ auto load_package_part(const std::filesystem::path& file, auto& dh)
 
 } // namespace
 
+auto package::id_from_path(const std::filesystem::path& pkg_part,
+             const std::filesystem::path& parts_base, diagnostic_handler& dh) const
+  -> failure_or<std::string> {
+  auto ec = std::error_code{};
+  auto relative = std::filesystem::relative(pkg_part, parts_base, ec);
+  if (ec) {
+    diagnostic::error("{}", ec)
+      .note("trying derive id for {}", pkg_part)
+      .emit(dh);
+    return failure::promise();
+  }
+  const auto* path_separator = "/";
+  auto strrep = relative.string();
+  auto components = detail::split(strrep, path_separator);
+  auto ss = std::stringstream{};
+  ss << id << "::";
+  for (size_t i = 0; i < components.size() - 1; i++) {
+    ss << components[i] << "::";
+  }
+  ss << relative.stem().string();
+  return ss.str();
+}
+
 auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
   -> failure_or<package> {
   auto package_file = dir / "package.yaml";
@@ -584,7 +627,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
     }
   } else {
     auto pipelines
-      = std::filesystem::directory_iterator{pipelines_dir, ec}
+      = std::filesystem::recursive_directory_iterator{pipelines_dir, ec}
         | std::views::filter([&](const std::filesystem::path& path) {
             return path.extension() == ".tql";
           });
@@ -598,7 +641,9 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
       for (const auto& pipeline_file : pipelines) {
         if (auto pipeline
             = load_package_part<package_pipeline>(pipeline_file, dh)) {
-          parsed_package->pipelines.emplace(pipeline_file.path().stem(),
+          TRY(auto id, parsed_package->id_from_path(pipeline_file.path(),
+                                                    pipelines_dir, dh));
+          parsed_package->pipelines.emplace(std::move(id),
                                             std::move(*pipeline));
         }
       }
@@ -618,7 +663,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
     }
   } else {
     auto operators
-      = std::filesystem::directory_iterator{operators_dir, ec}
+      = std::filesystem::recursive_directory_iterator{operators_dir, ec}
         | std::views::filter([&](const std::filesystem::path& path) {
             return path.extension() == ".tql";
           });
@@ -630,10 +675,12 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
     }
     try {
       for (const auto& operator_file : operators) {
-        if (auto pipeline
+        if (auto operator_
             = load_package_part<package_operator>(operator_file, dh)) {
-          parsed_package->operators.emplace(operator_file.path().stem(),
-                                            std::move(*pipeline));
+          TRY(auto id, parsed_package->id_from_path(operator_file.path(),
+                                                    operators_dir, dh));
+          parsed_package->operators.emplace(std::move(id),
+                                            std::move(*operator_));
         }
       }
     } catch (std::exception& e) {
@@ -742,6 +789,14 @@ auto package_example::to_record() const -> record {
   };
 }
 
+auto package_operator::to_record() const -> record {
+  auto result = record{
+    {"description", description},
+    {"definition", definition},
+  };
+  return result;
+}
+
 auto package_pipeline::to_record() const -> record {
   auto result = record{
     {"name", name},
@@ -773,6 +828,11 @@ auto package::to_record() const -> record {
   if (config) {
     info_record["config"] = config->to_record();
   }
+  auto operators_record = record{};
+  for (auto const& [pipeline_id, operator_] : operators) {
+    operators_record[pipeline_id] = operator_.to_record();
+  }
+  info_record["operators"] = std::move(operators_record);
   auto pipelines_record = record{};
   for (auto const& [pipeline_id, pipeline] : pipelines) {
     pipelines_record[pipeline_id] = pipeline.to_record();
