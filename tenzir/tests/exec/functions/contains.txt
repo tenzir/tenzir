@@ -1,0 +1,200 @@
+{
+  name: "Alice",
+  age: 30,
+  active: true,
+  found_alice: true,
+  found_bob: false,
+  found_30: true,
+  found_true: true,
+}
+{
+  user: {
+    profile: {
+      name: "John",
+      settings: {
+        theme: "dark",
+      },
+    },
+  },
+  found_john: true,
+  found_theme: true,
+  found_missing: false,
+  found_settings: true,
+}
+{
+  numbers: [
+    1,
+    2,
+    3,
+    42,
+  ],
+  tags: [
+    "important",
+    "urgent",
+  ],
+  found_42: true,
+  found_important: true,
+  found_missing: false,
+  found_in_tags: true,
+}
+{
+  values: {
+    int_val: 42,
+    uint_val: 42,
+    double_val: 42.0,
+  },
+  search_int: true,
+  search_uint: true,
+  search_double: true,
+  search_mismatch: false,
+}
+{
+  message: "Hello, World!",
+  substring_match: true,
+  exact_match: false,
+  partial_no_match: false,
+  exact_full_match: true,
+  exact_no_match: false,
+  substring_partial: true,
+}
+{
+  data: {
+    level1: {
+      level2: {
+        level3: {
+          target: "found",
+        },
+      },
+    },
+  },
+  deep_search: true,
+  search_from_top: true,
+  search_from_l1: true,
+  search_missing: false,
+}
+{
+  empty_list: [],
+  empty_record: {},
+  nested_lists: [
+    [
+      1,
+      2,
+    ],
+    [
+      3,
+      4,
+      5,
+    ],
+  ],
+  with_strings: {
+    tags: [
+      "test",
+      "demo",
+    ],
+    nested: {
+      value: "found",
+    },
+  },
+  with_numbers: {
+    nums: [
+      1,
+      2,
+      3,
+    ],
+    nested: {
+      value: 42,
+    },
+  },
+  with_bools: {
+    flags: [
+      true,
+      false,
+    ],
+    nested: {
+      active: true,
+    },
+  },
+  search_in_empty_list: false,
+  search_in_empty_record: false,
+  search_in_nested: true,
+  search_string_in_list: true,
+  search_string_in_record: true,
+  search_number_in_list: true,
+  search_number_in_record: true,
+  search_bool_in_list: true,
+  search_bool_in_record: true,
+}
+{
+  subnet: 10.0.0.0/8,
+  contains_ip: true,
+  contains_subnet: true,
+  exact_subnet: true,
+  not_in_subnet_ip: false,
+  not_in_subnet: false,
+  exact_no_match: false,
+}
+{
+  contains_null: true,
+}
+{
+  x: 1,
+  contains_null: false,
+}
+{
+  x: [],
+  contains_null: false,
+}
+{
+  x: {},
+  contains_null: false,
+}
+{
+  x: {
+    y: 1,
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: null,
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: {
+      z: null,
+    },
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: {
+      z: 1,
+    },
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: {
+      z: 1,
+      w: null,
+    },
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: [
+      {
+        z: 1,
+      },
+      {
+        z: null,
+      },
+    ],
+  },
+  contains_null: false,
+}
