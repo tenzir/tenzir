@@ -1044,7 +1044,7 @@ struct exec_node_state {
       });
       return;
     }
-    self->delay_fn([this] {
+    self->run_delayed_weak(duration::zero(), [this] {
       run_scheduled = false;
       run();
     });
