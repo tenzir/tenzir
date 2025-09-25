@@ -134,7 +134,6 @@ public:
     if (bandwidth.inner == 0) {
       diagnostic::error("`bandwidth` must be a positive number")
         .primary(bandwidth.source)
-        .note("the unit of measurement is bytes/second")
         .throw_();
     }
     if (window and window->inner <= duration::zero()) {
@@ -159,7 +158,6 @@ public:
     if (bandwidth.inner == 0) {
       diagnostic::error("`bandwidth` must be a positive value")
         .primary(bandwidth.source)
-        .note("the unit of measurement is bytes/second")
         .emit(ctx);
     }
     if (window and window->inner <= duration::zero()) {
