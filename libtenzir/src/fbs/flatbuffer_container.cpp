@@ -110,7 +110,10 @@ flatbuffer_container_builder::finish(const char* identifier) && {
     auto* segments = v0->mutable_file_segments();
     for (size_t i = 0; i < segments->size(); ++i) {
       auto* segment = segments->GetMutableObject(i);
-      segment->mutate_offset(segment->offset() + offset_adjustment);
+      // FIXME: This `const_cast` is a hack to work around `GetMutableObject`
+      // returning a `const` pointer on newer LLVM versions.
+      const_cast<tenzir::fbs::segmented_file::FileSegment*>(segment)
+        ->mutate_offset(segment->offset() + offset_adjustment);
     }
   }
   auto chunk = chunk::make(std::move(file_contents_));
