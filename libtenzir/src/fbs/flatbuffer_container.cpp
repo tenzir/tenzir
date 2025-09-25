@@ -111,7 +111,7 @@ flatbuffer_container_builder::finish(const char* identifier) && {
     for (size_t i = 0; i < segments->size(); ++i) {
       auto* segment = segments->GetMutableObject(i);
       // FIXME: This `const_cast` is a hack to work around `GetMutableObject`
-      // returning a `const` pointer on newer LLVM versions.
+      // returning a `const` pointer on newer Flatbuffer versions.
       const_cast<tenzir::fbs::segmented_file::FileSegment*>(segment)
         ->mutate_offset(segment->offset() + offset_adjustment);
     }
