@@ -46,8 +46,7 @@ auto session::has_failure() const -> bool {
 }
 
 auto session::reg() -> const registry& {
-  // TODO: The registry should be attached to a session instead.
-  return global_registry();
+  return *provider_.reg_;
 }
 
 auto session::dh() -> diagnostic_handler& {

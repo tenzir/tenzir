@@ -18,6 +18,10 @@
 #include <tsl/robin_map.h>
 
 #include <ranges>
+#include <tenzir/logger.hpp>
+
+#undef TENZIR_DEBUG
+#define TENZIR_DEBUG TENZIR_INFO
 
 namespace tenzir {
 
@@ -35,6 +39,9 @@ public:
     }
     TENZIR_ASSERT(not x.path.empty());
     TENZIR_ASSERT(context_ != context_t::none);
+    TENZIR_DEBUG("resolver: visiting entity with raw path '{}'", fmt::join(
+                   std::views::transform(x.path, &ast::identifier::name),
+                   "::"));
     // We use the following logic:
     // - Look at the first segment.
     // - Use its name + namespace (mod/fn/op) for lookup as user-defined.
@@ -43,6 +50,7 @@ public:
     const auto target_ns
       = context_ == context_t::op_name ? entity_ns::op : entity_ns::fn;
     const auto first_ns = x.path.size() == 1 ? target_ns : entity_ns::mod;
+    TENZIR_DEBUG("resolver: target_ns={}, first_ns={}", target_ns, first_ns);
     const auto report_not_found = [&](const std::vector<ast::identifier>& path,
                                       size_t idx, entity_ns ns) {
       result_ = failure::promise();
@@ -114,11 +122,19 @@ public:
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.
     auto pkg = std::invoke([&]() -> std::optional<entity_pkg> {
-      for (auto pkg : {entity_pkg::cfg, entity_pkg::std}) {
+      // Resolution precedence: cfg (user overrides) -> std (builtins) ->
+      // packages (installed)
+      for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
+                       std::string{"packages"}}) {
         auto path = entity_path{pkg, {x.path[0].name}, first_ns};
+        TENZIR_DEBUG("resolver: probing root='{}' segment='{}' ns={}",
+                     pkg, x.path[0].name, first_ns);
         if (is<entity_ref>(reg_.try_get(path))) {
+          TENZIR_DEBUG("resolver: found root='{}' for first segment '{}'", pkg,
+                       x.path[0].name);
           return pkg;
         }
+        TENZIR_DEBUG("resolver: not found in root '{}'", pkg);
       }
       return std::nullopt;
     });
@@ -133,15 +149,20 @@ public:
       segments.push_back(segment.name);
     };
     auto path = entity_path{*pkg, std::move(segments), target_ns};
+    TENZIR_DEBUG("resolver: probing full path='{}::{}/{}'", *pkg,
+                 fmt::join(path.segments(), "::"), target_ns);
     auto result = reg_.try_get(path);
     auto err = try_as<registry::error>(result);
     if (err) {
+      TENZIR_DEBUG("resolver: failed to resolve at segment {} (other_exists={})",
+                   err->segment, err->other_exists);
       TENZIR_ASSERT(err->segment < x.path.size());
       auto is_last = err->segment == path.segments().size() - 1;
       auto error_ns = is_last ? target_ns : entity_ns::mod;
       report_not_found(x.path, err->segment, error_ns);
       return;
     }
+    TENZIR_DEBUG("resolver: success resolving entity");
     x.ref = std::move(path);
   }
 
