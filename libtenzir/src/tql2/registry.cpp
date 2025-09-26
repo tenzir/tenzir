@@ -75,9 +75,18 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
 
 thread_local const registry* g_thread_local_registry = nullptr;
 
+// Global snapshot holder with early atexit reset to avoid late teardown issues.
 static auto global_registry_atom()
   -> std::atomic<std::shared_ptr<const registry>>& {
   static std::atomic<std::shared_ptr<const registry>> atom{};
+  static std::once_flag registered;
+  std::call_once(registered, [] {
+    // Clear the snapshot early during shutdown to avoid late destruction of
+    // shared resources that may depend on other singletons.
+    std::atexit([] {
+      atom.store({}, std::memory_order_release);
+    });
+  });
   return atom;
 }
 
@@ -169,9 +178,10 @@ auto registry::try_get(const entity_path& path) const
     auto it = current->defs.find(segments[i]);
     if (it == current->defs.end()) {
       if (i == 0) {
-        TENZIR_INFO("registry.try_get: root '{}' missing first segment '{}' in ns {}. Available entries: {}",
-                    path.pkg(), segments[i], path.ns(),
-                    fmt::join(std::views::keys(current->defs), ", "));
+        TENZIR_DEBUG("registry.try_get: root '{}' missing first segment '{}' "
+                     "in ns {}. entries=[{}]",
+                     path.pkg(), segments[i], path.ns(),
+                     fmt::join(std::views::keys(current->defs), ", "));
       }
       // No such entity.
       return error{i, false};

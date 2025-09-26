@@ -601,6 +601,7 @@ auto make_id(const std::filesystem::path& pkg_part,
 
 auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
   -> failure_or<package> {
+  bool had_errors = false;
   auto package_file = dir / "package.yaml";
   std::error_code ec;
   if (not std::filesystem::exists(package_file, ec)) {
@@ -719,6 +720,41 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
                          std::back_inserter(path), [](auto component) {
                            return std::string{component};
                          });
+          // Validate that all path segments are valid TQL identifiers:
+          // first char [A-Za-z_], subsequent [A-Za-z0-9_].
+          auto is_valid_ident = [](std::string_view s) -> bool {
+            if (s.empty())
+              return false;
+            auto is_alpha = [](unsigned char c) {
+              return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+            };
+            auto is_alnum_us = [&](unsigned char c) {
+              return is_alpha(c) || (c >= '0' && c <= '9') || c == '_';
+            };
+            if (!(is_alpha(static_cast<unsigned char>(s[0])) || s[0] == '_'))
+              return false;
+            for (size_t i = 1; i < s.size(); ++i) {
+              if (!is_alnum_us(static_cast<unsigned char>(s[i])))
+                return false;
+            }
+            return true;
+          };
+          bool valid = true;
+          for (const auto& seg : path) {
+            if (!is_valid_ident(seg)) {
+              diagnostic::error(
+                "invalid operator path segment '{}' (must match [A-Za-z_][A-Za-z0-9_]*)",
+                seg)
+                .note("in operator file {}", operator_file.path())
+                .emit(dh);
+              valid = false;
+              break;
+            }
+          }
+          if (!valid) {
+            had_errors = true;
+            continue;
+          }
           parsed_package->operators.emplace(std::move(path),
                                             std::move(*operator_));
         }
@@ -762,6 +798,9 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
         .emit(dh);
       return failure::promise();
     }
+  }
+  if (had_errors) {
+    return failure::promise();
   }
   return *parsed_package;
 }
