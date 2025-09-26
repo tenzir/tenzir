@@ -1,0 +1,120 @@
+{
+  x: 1,
+  y: 2,
+  found_1: true,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: true,
+  y_has_nested: false,
+}
+{
+  x: 1,
+  y: 3,
+  found_1: true,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: true,
+  y_has_nested: false,
+}
+{
+  x: null,
+  y: 4,
+  found_1: false,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: false,
+}
+{
+  x: "",
+  z: "2",
+  found_1: false,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: false,
+}
+{
+  x: 1,
+  z: 1,
+  found_1: true,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: true,
+  y_has_nested: false,
+}
+{
+  y: {
+    a: 1,
+    b: 2,
+    z: null,
+    x: {
+      k: 1,
+    },
+  },
+  a: {},
+  found_1: true,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: true,
+}
+{
+  found_1: false,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: false,
+}
+{
+  numbers: [
+    1,
+    2,
+    3,
+    42,
+  ],
+  found_1: true,
+  found_42: true,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: false,
+}
+{
+  nested: {
+    deep: {
+      value: "found",
+    },
+  },
+  found_1: false,
+  found_42: false,
+  found_alice: false,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: false,
+}
+{
+  list_of_records: [
+    {
+      id: 1,
+      name: "Alice",
+    },
+    {
+      id: 2,
+      name: "Bob",
+    },
+  ],
+  found_1: true,
+  found_42: false,
+  found_alice: true,
+  found_missing: false,
+  x_has_1: false,
+  y_has_nested: false,
+}

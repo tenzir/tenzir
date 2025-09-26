@@ -1,0 +1,16 @@
+from {x: 1, y: 2},
+{x: 1, y: 3},
+{x: null.int(), y: 4},
+{x: "", z: "2"},
+{x: 1.uint(), z: 1},
+{y: {a: 1, b: 2, z: null, x: {k: 1}}, a: {}},
+{},
+{numbers: [1, 2, 3, 42]},
+{nested: {deep: {value: "found"}}},
+{list_of_records: [{id: 1, name: "Alice"}, {id: 2, name: "Bob"}]}
+found_1 = search(this, 1)
+found_42 = search(this, 42)
+found_alice = search(this, "Alice")
+found_missing = search(this, 999)
+x_has_1 = search(x?, 1)
+y_has_nested = search(y?, 1)

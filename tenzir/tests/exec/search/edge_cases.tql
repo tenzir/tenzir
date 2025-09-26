@@ -1,0 +1,35 @@
+// Test edge cases for the search function
+from {empty_list: [], empty_record: {}},
+{null_values: {a: null, b: 42}},
+{mixed_types: [1, "hello", true, 3.14]},
+{deeply_nested: {level1: {level2: {level3: {target: "deep"}}}}},
+{numeric_types: {int: 42, uint: 42.uint(), double: 42.0}},
+{string_cases: {empty: "", whitespace: " ", text: "hello world"}}
+
+// Test searching in empty containers
+search_empty_list = search(empty_list, 1)
+search_empty_record = search(empty_record, 1)
+
+// Test searching for null values
+search_null_in_nulls = search(null_values, null)
+search_value_in_nulls = search(null_values, 42)
+
+// Test mixed type list search
+search_mixed_int = search(mixed_types, 1)
+search_mixed_string = search(mixed_types, "hello")
+search_mixed_bool = search(mixed_types, true)
+search_mixed_double = search(mixed_types, 3.14)
+
+// Test deep nesting
+search_deep_target = search(deeply_nested, "deep")
+search_deep_missing = search(deeply_nested, "shallow")
+
+// Test numeric type compatibility
+search_int_42 = search(numeric_types, 42)
+search_uint_42 = search(numeric_types, 42.uint())
+search_double_42 = search(numeric_types, 42.0)
+
+// Test string edge cases
+search_empty_string = search(string_cases, "")
+search_whitespace = search(string_cases, " ")
+search_substring = search(string_cases, "world")
