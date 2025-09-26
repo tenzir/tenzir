@@ -19,7 +19,7 @@
   suppressed_index: null,
 }
 warning: field `src_i` not found
-  --> exec/access/field_suggestions.tql:19:17
+  --> tests/language/field_suggestions.tql:19:17
    |
 19 |   root_close1 = src_i,
    |                 ~~~~~ 
@@ -28,7 +28,7 @@ warning: field `src_i` not found
    = hint: append `?` to suppress this warning
 
 warning: field `dest_por` not found
-  --> exec/access/field_suggestions.tql:20:17
+  --> tests/language/field_suggestions.tql:20:17
    |
 20 |   root_close2 = dest_por,
    |                 ~~~~~~~~ 
@@ -37,7 +37,7 @@ warning: field `dest_por` not found
    = hint: append `?` to suppress this warning
 
 warning: field `message_conten` not found
-  --> exec/access/field_suggestions.tql:21:17
+  --> tests/language/field_suggestions.tql:21:17
    |
 21 |   root_close3 = message_conten,
    |                 ~~~~~~~~~~~~~~ 
@@ -46,7 +46,7 @@ warning: field `message_conten` not found
    = hint: append `?` to suppress this warning
 
 warning: field `xyz` not found
-  --> exec/access/field_suggestions.tql:24:19
+  --> tests/language/field_suggestions.tql:24:19
    |
 24 |   root_distant1 = xyz,
    |                   ~~~ 
@@ -54,7 +54,7 @@ warning: field `xyz` not found
    = hint: append `?` to suppress this warning
 
 warning: field `completely_different` not found
-  --> exec/access/field_suggestions.tql:25:19
+  --> tests/language/field_suggestions.tql:25:19
    |
 25 |   root_distant2 = completely_different,
    |                   ~~~~~~~~~~~~~~~~~~~~ 
@@ -62,7 +62,7 @@ warning: field `completely_different` not found
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:28:23
+  --> tests/language/field_suggestions.tql:28:23
    |
 28 |   field_close1 = user.usernam,
    |                       ~~~~~~~ 
@@ -71,7 +71,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:29:23
+  --> tests/language/field_suggestions.tql:29:23
    |
 29 |   field_close2 = user.email_addres,
    |                       ~~~~~~~~~~~~ 
@@ -80,7 +80,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:32:25
+  --> tests/language/field_suggestions.tql:32:25
    |
 32 |   field_distant1 = user.abc,
    |                         ~~~ 
@@ -88,7 +88,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:33:25
+  --> tests/language/field_suggestions.tql:33:25
    |
 33 |   field_distant2 = user.qwerty,
    |                         ~~~~~~ 
@@ -96,7 +96,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:36:23
+  --> tests/language/field_suggestions.tql:36:23
    |
 36 |   index_close1 = this["src_i"],
    |                       ~~~~~~~ 
@@ -105,7 +105,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:37:23
+  --> tests/language/field_suggestions.tql:37:23
    |
 37 |   index_close2 = this["dest_por"],
    |                       ~~~~~~~~~~ 
@@ -114,7 +114,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:38:23
+  --> tests/language/field_suggestions.tql:38:23
    |
 38 |   index_close3 = user["usernam"],
    |                       ~~~~~~~~~ 
@@ -123,7 +123,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:39:23
+  --> tests/language/field_suggestions.tql:39:23
    |
 39 |   index_close4 = user["email_addres"],
    |                       ~~~~~~~~~~~~~~ 
@@ -132,7 +132,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:42:25
+  --> tests/language/field_suggestions.tql:42:25
    |
 42 |   index_distant1 = this["xyz"],
    |                         ~~~~~ 
@@ -140,7 +140,7 @@ warning: record does not have this field
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
-  --> exec/access/field_suggestions.tql:43:25
+  --> tests/language/field_suggestions.tql:43:25
    |
 43 |   index_distant2 = user["abc123"],
    |                         ~~~~~~~~ 
