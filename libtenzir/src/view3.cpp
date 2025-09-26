@@ -121,6 +121,11 @@ auto order_impl(const data_view3 l, const data_view3 r) -> Ordering {
   return match(std::tie(l, r), f);
 }
 
+auto partial_order(const data_view3 l, const data_view3 r)
+  -> std::partial_ordering {
+  return order_impl<std::partial_ordering>(l, r);
+}
+
 auto weak_order(const data_view3 l, const data_view3 r) -> std::weak_ordering {
   return order_impl<std::weak_ordering>(l, r);
 }
