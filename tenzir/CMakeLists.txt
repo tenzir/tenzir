@@ -155,37 +155,42 @@ foreach (dir IN LISTS _integration_test_dirs)
       FIXTURES_REQUIRED "tenzir_integration_test_fixture")
 endforeach ()
 
-add_custom_target(
-  integration
+add_custom_target(integration DEPENDS tenzir)
+add_custom_command(
+  TARGET integration
+  POST_BUILD
   COMMAND
     "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
     "${CMAKE_COMMAND}" "-E" "env" "--modify"
     "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
     "${TENZIR_UV_PATH}" "tool" "run"
     "--python"
-    "\">=3.12\""
+    ">=3.12"
     "tenzir-test"
     "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
     "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
     "--root" "${CMAKE_SOURCE_DIR}/test"
-  DEPENDS tenzir)
-set_property(TARGET integration PROPERTY USES_TERMINAL TRUE)
-add_custom_target(
-  update-integration
+  USES_TERMINAL
+  VERBATIM)
+
+add_custom_target(update-integration DEPENDS tenzir)
+add_custom_command(
+  TARGET update-integration
+  POST_BUILD
   COMMAND
     "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
     "${CMAKE_COMMAND}" "-E" "env" "--modify"
     "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
     "${TENZIR_UV_PATH}" "tool" "run"
     "--python"
-    "\">=3.12\""
+    ">=3.12"
     "tenzir-test"
     "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
     "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
     "--root" "${CMAKE_SOURCE_DIR}/test"
     "--update"
-  DEPENDS tenzir)
-set_property(TARGET update-integration PROPERTY USES_TERMINAL TRUE)
+  USES_TERMINAL
+  VERBATIM)
 
 # Add a target for running integration tests with code coverage enabled
 if (TENZIR_ENABLE_CODE_COVERAGE)
@@ -193,9 +198,10 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
     message(FATAL_ERROR "Code coverage is only supported in Debug builds")
   endif ()
 
-  add_custom_target(
-    integration-coverage
-    DEPENDS tenzir
+  add_custom_target(integration-coverage DEPENDS tenzir)
+  add_custom_command(
+    TARGET integration-coverage
+    POST_BUILD
     COMMAND
       "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
       "${CMAKE_COMMAND}" "-E" "env" "--modify"
@@ -204,7 +210,7 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
       "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}" "--"
       "${TENZIR_UV_PATH}" "tool" "run"
       "--python"
-      "\">=3.12\""
+      ">=3.12"
       "tenzir-test"
       "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
       "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
@@ -219,8 +225,8 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
       "--tenzir-binary=$<TARGET_FILE:tenzir>"
       "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
     COMMENT "Running integration tests with code coverage enabled"
+    USES_TERMINAL
     VERBATIM)
-  set_property(TARGET integration-coverage PROPERTY USES_TERMINAL TRUE)
 endif ()
 
 add_custom_target(bats)
