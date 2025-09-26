@@ -168,8 +168,8 @@ struct package_inputs_map
 };
 
 struct package_operators_map
-  : public detail::flat_map<std::string, package_operator> {
-  using super = detail::flat_map<std::string, package_operator>;
+  : public detail::flat_map<std::vector<std::string>, package_operator> {
+  using super = detail::flat_map<std::vector<std::string>, package_operator>;
   using super::super;
 };
 
@@ -214,11 +214,6 @@ struct package final {
 
   static auto load(const std::filesystem::path& dir, diagnostic_handler& dh)
     -> failure_or<package>;
-
-  auto id_from_path(const std::filesystem::path& pkg_part,
-                    const std::filesystem::path& parts_base,
-                    diagnostic_handler& dh) const
-    -> failure_or<std::string>;
 
   auto to_record() const -> record;
 

@@ -13,6 +13,7 @@
 #include "tenzir/tql2/exec.hpp"
 
 #include <ranges>
+#include <tenzir/logger.hpp>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -167,6 +168,11 @@ auto registry::try_get(const entity_path& path) const
   for (auto i = size_t{0}; i < segments.size(); ++i) {
     auto it = current->defs.find(segments[i]);
     if (it == current->defs.end()) {
+      if (i == 0) {
+        TENZIR_INFO("registry.try_get: root '{}' missing first segment '{}' in ns {}. Available entries: {}",
+                    path.pkg(), segments[i], path.ns(),
+                    fmt::join(std::views::keys(current->defs), ", "));
+      }
       // No such entity.
       return error{i, false};
     }

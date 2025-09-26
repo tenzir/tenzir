@@ -8,8 +8,8 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/detail/env.hpp>
-#include <tenzir/detail/string.hpp>
 #include <tenzir/detail/load_contents.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/package.hpp>
 #include <tenzir/type.hpp>
 
@@ -117,6 +117,42 @@ namespace tenzir {
           .to_error();                                                         \
       }                                                                        \
       result.name[std::string{key}] = *parsed_value;                           \
+    }                                                                          \
+    continue;                                                                  \
+  }
+
+#define TRY_ASSIGN_NESTED_MAP_TO_RESULT(name, value_type)                      \
+  if (key == #name) {                                                          \
+    const auto* x = try_as<view<record>>(&value);                              \
+    if (not x) {                                                               \
+      return diagnostic::error(#name " must be a record")                      \
+        .note("got {}", value)                                                 \
+        .note("invalid package definition")                                    \
+        .to_error();                                                           \
+    }                                                                          \
+    for (auto const& [key, value] : *x) {                                      \
+      auto const* value_record = try_as<view<record>>(&value);                 \
+      if (not value_record) {                                                  \
+        return diagnostic::error(#name " values must be records")              \
+          .note("while parsing key {} for field " #name, key)                  \
+          .note("invalid package definition")                                  \
+          .to_error();                                                         \
+      }                                                                        \
+      auto parsed_value = value_type::parse(*value_record);                    \
+      if (not parsed_value) {                                                  \
+        return diagnostic::error(parsed_value.error())                         \
+          .note("while parsing key {} for field " #name, key)                  \
+          .note("invalid package definition")                                  \
+          .to_error();                                                         \
+      }                                                                        \
+      auto components = detail::split(key, "::");                              \
+      TENZIR_ASSERT(not components.empty());                                   \
+      auto path = std::vector<std::string>{};                                  \
+      std::transform(components.begin(), components.end(),                     \
+                     std::back_inserter(path), [](auto component) {            \
+                       return std::string{component};                          \
+                     });                                                       \
+      result.name[std::move(path)] = *parsed_value;                            \
     }                                                                          \
     continue;                                                                  \
   }
@@ -467,7 +503,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author_icon);
     TRY_ASSIGN_VECTOR_OF_STRING(categories);
     TRY_ASSIGN_MAP_TO_RESULT(inputs, package_input);
-    TRY_ASSIGN_MAP_TO_RESULT(operators, package_operator);
+    TRY_ASSIGN_NESTED_MAP_TO_RESULT(operators, package_operator);
     TRY_ASSIGN_MAP_TO_RESULT(pipelines, package_pipeline);
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
@@ -544,30 +580,24 @@ auto load_package_part(const std::filesystem::path& file, auto& dh)
   return *result;
 }
 
-} // namespace
-
-auto package::id_from_path(const std::filesystem::path& pkg_part,
-             const std::filesystem::path& parts_base, diagnostic_handler& dh) const
+auto make_id(const std::filesystem::path& pkg_part,
+             const std::filesystem::path& parts_base, std::string_view sep)
   -> failure_or<std::string> {
   auto ec = std::error_code{};
   auto relative = std::filesystem::relative(pkg_part, parts_base, ec);
-  if (ec) {
-    diagnostic::error("{}", ec)
-      .note("trying derive id for {}", pkg_part)
-      .emit(dh);
-    return failure::promise();
-  }
+  TENZIR_ASSERT(not ec);
   const auto* path_separator = "/";
   auto strrep = relative.string();
   auto components = detail::split(strrep, path_separator);
   auto ss = std::stringstream{};
-  ss << id << "::";
   for (size_t i = 0; i < components.size() - 1; i++) {
-    ss << components[i] << "::";
+    ss << components[i] << sep;
   }
   ss << relative.stem().string();
   return ss.str();
 }
+
+} // namespace
 
 auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
   -> failure_or<package> {
@@ -641,8 +671,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
       for (const auto& pipeline_file : pipelines) {
         if (auto pipeline
             = load_package_part<package_pipeline>(pipeline_file, dh)) {
-          TRY(auto id, parsed_package->id_from_path(pipeline_file.path(),
-                                                    pipelines_dir, dh));
+          TRY(auto id, make_id(pipeline_file.path(), pipelines_dir, "/"));
           parsed_package->pipelines.emplace(std::move(id),
                                             std::move(*pipeline));
         }
@@ -677,9 +706,20 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
       for (const auto& operator_file : operators) {
         if (auto operator_
             = load_package_part<package_operator>(operator_file, dh)) {
-          TRY(auto id, parsed_package->id_from_path(operator_file.path(),
-                                                    operators_dir, dh));
-          parsed_package->operators.emplace(std::move(id),
+          auto ec = std::error_code{};
+          auto relative
+            = std::filesystem::relative(operator_file, operators_dir, ec);
+          TENZIR_ASSERT(not ec);
+          const auto* path_separator = "/";
+          auto strrep = relative.replace_extension("").generic_string();
+          auto components = detail::split(strrep, path_separator);
+          TENZIR_ASSERT(not components.empty());
+          auto path = std::vector<std::string>{};
+          std::transform(components.begin(), components.end(),
+                         std::back_inserter(path), [](auto component) {
+                           return std::string{component};
+                         });
+          parsed_package->operators.emplace(std::move(path),
                                             std::move(*operator_));
         }
       }
@@ -829,8 +869,9 @@ auto package::to_record() const -> record {
     info_record["config"] = config->to_record();
   }
   auto operators_record = record{};
-  for (auto const& [pipeline_id, operator_] : operators) {
-    operators_record[pipeline_id] = operator_.to_record();
+  for (auto const& [operator_path, operator_] : operators) {
+    auto operator_id = fmt::format("{}", fmt::join(operator_path, "::"));
+    operators_record[operator_id] = operator_.to_record();
   }
   info_record["operators"] = std::move(operators_record);
   auto pipelines_record = record{};
