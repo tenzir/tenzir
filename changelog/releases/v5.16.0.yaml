@@ -1,0 +1,12 @@
+title: "Stability improvements"
+description: "This release brings forth stability improvements under high load that could cause platform unresponsiveness, fixes API request isolation problems, better kafka diagnostics and more."
+changes:
+  - brand-remedy-meadow
+  - cancel-book-passed
+  - cancel-phone-passed
+  - device-living-warned
+  - manner-plant-notion
+  - owned-weight-grant
+  - recall-remote-forty
+  - teeth-suffer-bread
+  - video-enzyme-model
