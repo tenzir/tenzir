@@ -1,0 +1,14 @@
+{
+  host: "one.one.one.one",
+  dns_lookup: {
+    address: 1.0.0.1,
+    type: "A",
+  },
+}
+{
+  host: "one.one.one.one",
+  dns_lookup: {
+    address: 1.1.1.1,
+    type: "A",
+  },
+}

@@ -1,0 +1,6 @@
+error: `inputs/from_file/does_not_exist.json` does not exist
+ --> tests/operators/from_file/does_not_exist.tql:5:11
+  |
+5 | from_file f"{env("TENZIR_INPUTS")}/from_file/does_not_exist.json", path_field=path
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

@@ -1,3 +1,0 @@
-// test: exec
-from {x: 1}, {x: 2}, {x: 3}
-nil_uuid = uuid(version="nil")

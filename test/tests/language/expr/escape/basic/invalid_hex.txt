@@ -1,0 +1,6 @@
+error: invalid hex escape sequence
+ --> tests/language/expr/escape/basic/invalid_hex.tql:6:7
+  |
+6 |   x: "\xFH"
+  |       ^^^^ 
+  |

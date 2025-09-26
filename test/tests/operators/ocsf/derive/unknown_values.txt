@@ -1,0 +1,16 @@
+{
+  activity_id: 999,
+  activity_name: null,
+  class_name: "File System Activity",
+  class_uid: 1001,
+  metadata: {
+    version: "1.5.0",
+  },
+}
+warning: found invalid value for `activity_id`
+  --> tests/operators/ocsf/derive/unknown_values.tql:11:1
+   |
+11 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |
+   = note: got 999

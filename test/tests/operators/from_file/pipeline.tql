@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/from_file/**.json", path_field=path {
+  read_lines
+  head 1
+}
+sort path

@@ -1,6 +1,0 @@
-error: incomplete unicode escape sequence
- --> format_strings/unicode_braces.tql:4:12
-  |
-4 | from {x: f"\u{0}"}
-  |            ^^ 
-  |

@@ -1,0 +1,11 @@
+from {
+  a: {
+    b: {
+      c: null,
+      d: 1
+    },
+    e: null
+  },
+  f: null
+}
+drop_null_fields

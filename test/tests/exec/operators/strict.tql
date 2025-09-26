@@ -1,4 +1,0 @@
-// error: true
-
-from {}
-strict { assert false }

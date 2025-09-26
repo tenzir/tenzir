@@ -1,0 +1,49 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     every_ir {
+-      interval: expression constant duration "1s" @ 6..8,
++      interval: duration "1s",
+       pipe: {
+         lets: [
+           {
+             ident: `$ts` @ 128..131,
+             expr: binary_expr {
+               left: function_call {
+                 fn: {
+                   path: [
+                     `now` @ 134..137
+                   ],
+                   ref: std::now/fn
+                 },
+                 args: [
+                   
+                 ],
+                 rpar: 138..139,
+                 method: false
+               },
+               op: "sub" @ 140..141,
+               right: constant duration "10min" @ 142..147
+             },
+             id: 1
+           }
+         ],
+         operators: [
+           where_ir {
+             self: 150..155,
+             predicate: binary_expr {
+               left: root_field {
+                 id: `time` @ 156..160,
+                 has_question_mark: false
+               },
+               op: "lt" @ 161..162,
+               right: dollar_var `$ts` -> 1 @ 163..166
+             }
+           }
+         ]
+       }
+     }
+   ]
+ }

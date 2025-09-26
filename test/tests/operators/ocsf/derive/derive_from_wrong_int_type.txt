@@ -1,0 +1,15 @@
+{
+  activity_id: 1.5,
+  activity_name: null,
+  class_name: "File System Activity",
+  class_uid: 1001,
+  metadata: {
+    version: "1.5.0",
+  },
+}
+warning: expected field `activity_id` to be `int`, but got `double`
+  --> tests/operators/ocsf/derive/derive_from_wrong_int_type.tql:12:1
+   |
+12 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |

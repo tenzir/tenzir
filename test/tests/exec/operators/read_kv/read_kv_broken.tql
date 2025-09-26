@@ -1,2 +1,0 @@
-load_file f"{env("INPUTS")}/txt/key_value_pairs.txt"
-read_kv

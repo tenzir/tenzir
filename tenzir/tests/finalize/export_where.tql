@@ -1,4 +1,0 @@
-// test: finalize
-
-export
-where foo == 1 and bar == baz

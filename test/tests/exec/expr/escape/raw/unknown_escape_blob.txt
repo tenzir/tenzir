@@ -1,6 +1,0 @@
-error: found unknown escape sequence `\k`
- --> exec/expr/escape/raw/unknown_escape_blob.tql:5:13
-  |
-5 |   b1: b"test\ktest"
-  |             ^^ 
-  |

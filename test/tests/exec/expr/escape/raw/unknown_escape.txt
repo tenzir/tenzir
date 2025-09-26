@@ -1,6 +1,0 @@
-error: found unknown escape sequence `\q`
- --> exec/expr/escape/raw/unknown_escape.tql:4:11
-  |
-4 |   s1: "foo\qbar", // backslash-q is not a valid escape sequence
-  |           ^^ 
-  |

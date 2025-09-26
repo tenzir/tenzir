@@ -1,0 +1,106 @@
+[
+  invocation {
+    op: {
+      path: [
+        `export` @ 0..6
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `foo` @ 7..10,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `foo` @ 7..10,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 11..12,
+    right: constant int64 42 @ 13..15
+  },
+  invocation {
+    op: {
+      path: [
+        `set` @ 16..19
+      ],
+      ref: unresolved
+    },
+    args: [
+      assignment {
+        left: field_path {
+          expr: root_field {
+            id: `bar` @ 20..23,
+            has_question_mark: false
+          },
+          has_this: false,
+          path: [
+            {
+              id: `bar` @ 20..23,
+              has_question_mark: false
+            }
+          ]
+        },
+        equals: 24..25,
+        right: constant int64 43 @ 26..28
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `foo` @ 29..32
+      ],
+      ref: unresolved
+    },
+    args: [
+      root_field {
+        id: `bar` @ 33..36,
+        has_question_mark: false
+      },
+      assignment {
+        left: field_path {
+          expr: root_field {
+            id: `baz` @ 38..41,
+            has_question_mark: false
+          },
+          has_this: false,
+          path: [
+            {
+              id: `baz` @ 38..41,
+              has_question_mark: false
+            }
+          ]
+        },
+        equals: 41..42,
+        right: root_field {
+          id: `qux` @ 42..45,
+          has_question_mark: false
+        }
+      },
+      root_field {
+        id: `quux` @ 47..51,
+        has_question_mark: false
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `import` @ 52..58
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  }
+]

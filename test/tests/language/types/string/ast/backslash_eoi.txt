@@ -1,0 +1,7 @@
+error: found unknown escape sequence `\
+`
+ --> tests/language/types/string/ast/backslash_eoi.tql:5:12
+  |
+5 | from {x: f"\
+  |            ^^ 
+  |

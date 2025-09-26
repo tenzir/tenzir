@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {
+  // Unknown escape sequences are an error even in a blob
+  b1: b"test\ktest"
+}

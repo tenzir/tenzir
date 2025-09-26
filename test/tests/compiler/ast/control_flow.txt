@@ -1,0 +1,210 @@
+[
+  invocation {
+    op: {
+      path: [
+        `a` @ 0..1
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  },
+  if_stmt {
+    if_kw: 2..4,
+    condition: binary_expr {
+      left: root_field {
+        id: `b` @ 5..6,
+        has_question_mark: false
+      },
+      op: "eq" @ 7..9,
+      right: constant int64 42 @ 10..12
+    },
+    then: [
+      invocation {
+        op: {
+          path: [
+            `c` @ 17..18
+          ],
+          ref: unresolved
+        },
+        args: [
+          root_field {
+            id: `d` @ 19..20,
+            has_question_mark: false
+          }
+        ]
+      },
+      invocation {
+        op: {
+          path: [
+            `e` @ 23..24
+          ],
+          ref: unresolved
+        },
+        args: [
+          assignment {
+            left: field_path {
+              expr: root_field {
+                id: `f` @ 25..26,
+                has_question_mark: false
+              },
+              has_this: false,
+              path: [
+                {
+                  id: `f` @ 25..26,
+                  has_question_mark: false
+                }
+              ]
+            },
+            equals: 26..27,
+            right: root_field {
+              id: `g` @ 27..28,
+              has_question_mark: false
+            }
+          }
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `h` @ 31..32
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  },
+  if_stmt {
+    if_kw: 33..35,
+    condition: root_field {
+      id: `i` @ 36..37,
+      has_question_mark: false
+    },
+    then: [
+      
+    ],
+    else: {
+      kw: 41..45,
+      pipe: [
+        
+      ]
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `j` @ 49..50
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  },
+  match_stmt {
+    begin: 51..56,
+    expr: root_field {
+      id: `k` @ 57..58,
+      has_question_mark: false
+    },
+    arms: [
+      
+    ],
+    end: 60..61
+  },
+  match_stmt {
+    begin: 62..67,
+    expr: root_field {
+      id: `k` @ 68..69,
+      has_question_mark: false
+    },
+    arms: [
+      {
+        filter: [
+          constant string "foo" @ 72..77
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `bar` @ 83..86
+              ],
+              ref: unresolved
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      }
+    ],
+    end: 89..90
+  },
+  match_stmt {
+    begin: 91..96,
+    expr: root_field {
+      id: `k` @ 97..98,
+      has_question_mark: false
+    },
+    arms: [
+      {
+        filter: [
+          constant string "foo" @ 103..108
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `bar` @ 118..121
+              ],
+              ref: unresolved
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      },
+      {
+        filter: [
+          constant int64 42 @ 128..130
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `foo` @ 140..143
+              ],
+              ref: unresolved
+            },
+            args: [
+              root_field {
+                id: `bar` @ 144..147,
+                has_question_mark: false
+              }
+            ]
+          },
+          invocation {
+            op: {
+              path: [
+                `qux` @ 152..155
+              ],
+              ref: unresolved
+            },
+            args: [
+              root_field {
+                id: `bar` @ 156..159,
+                has_question_mark: false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    end: 164..165
+  }
+]

@@ -1,6 +1,0 @@
-// test: ast
-
-// Newlines should be allowed before `else`.
-if x {}
-else if y {}
-else {}

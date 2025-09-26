@@ -1,0 +1,2 @@
+   line_comment "// This line does not have a trailing new-line on purpose!"
+        newline "\n"

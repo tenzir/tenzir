@@ -1,0 +1,5 @@
+
+// Make sure basic decapsulation logic works.
+from f"{env("TENZIR_INPUTS")}/pcap/example.pcap.gz"
+this = this.decapsulate()
+write_tql compact=true

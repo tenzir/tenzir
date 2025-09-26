@@ -1,0 +1,6 @@
+every 1s {
+  // This `let` must not be instantiated with `every`. Instantiation only
+  // happens at execution time here.
+  let $ts = now() - 10min
+  where time < $ts
+}

@@ -1,0 +1,57 @@
+ {
+   lets: [
+-    {
+-      ident: `$foo` @ 4..8,
+-      expr: binary_expr {
+-        left: function_call {
+-          fn: {
+-            path: [
+-              `now` @ 11..14
+-            ],
+-            ref: std::now/fn
+-          },
+-          args: [
+-            
+-          ],
+-          rpar: 15..16,
+-          method: false
+-        },
+-        op: "eq" @ 17..19,
+-        right: constant time 2100-01-01T00:00:00Z @ 20..30
+-      },
+-      id: 1
+-    }
++    
+   ],
+   operators: [
+     legacy_ir unique_ptr export {
+       expression: {
+         node: predicate {
+           lhs: meta_extractor {
+             kind: 3
+           },
+           op: 4,
+           rhs: data bool false
+         }
+       },
+       mode: {
+         retro: true,
+         live: false,
+         internal: false,
+         parallel: 3
+       }
+     },
+     where_ir {
+       self: 39..44,
+       predicate: binary_expr {
+         left: root_field {
+           id: `foo` @ 45..48,
+           has_question_mark: false
+         },
+         op: "eq" @ 49..51,
+-        right: dollar_var `$foo` -> 1 @ 52..56
++        right: constant bool false @ 52..56
+       }
+     }
+   ]
+ }

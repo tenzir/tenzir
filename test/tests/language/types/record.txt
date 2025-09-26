@@ -1,0 +1,250 @@
+{
+  xs: {
+    foo: 1,
+  },
+  index_first: 1,
+  get_first: 1,
+  get_first_fallback: 1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: 1,
+  get_str: 1,
+  get_str_fallback: 1,
+  get_field: 1,
+  get_field_lenient: 1,
+}
+{
+  xs: {},
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+{
+  xs: null,
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+{
+  xs: "foo",
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+warning: leading `.?` is deprecated; use a trailing `?` instead
+  --> tests/language/types/record.tql:19:25
+   |
+19 |   get_field_lenient = xs.?foo,
+   |                         ~~ 
+   |
+
+warning: cannot use `null` as index
+  --> tests/language/types/record.tql:12:19
+   |
+12 |   index_null = xs[null],
+   |                   ~~~~ is null
+   |
+   = hint: use `[…]?` to suppress this warning
+
+warning: cannot use `null` as index
+  --> tests/language/types/record.tql:13:21
+   |
+13 |   get_null = xs.get(null),
+   |                     ~~~~ is null
+   |
+   = hint: provide a fallback value to suppress this warning
+
+warning: index out of bounds
+ --> tests/language/types/record.tql:9:20
+  |
+9 |   index_first = xs[0],
+  |                    ~ is out of bounds
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: index out of bounds
+  --> tests/language/types/record.tql:10:22
+   |
+10 |   get_first = xs.get(0),
+   |                      ~ is out of bounds
+   |
+   = hint: provide a fallback value to suppress this warning
+
+warning: record does not have this field
+  --> tests/language/types/record.tql:15:18
+   |
+15 |   index_str = xs["foo"],
+   |                  ~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> tests/language/types/record.tql:16:20
+   |
+16 |   get_str = xs.get("foo"),
+   |                    ~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+  --> tests/language/types/record.tql:18:18
+   |
+18 |   get_field = xs.foo,
+   |                  ~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: tried to access field of `null`
+ --> tests/language/types/record.tql:9:17
+  |
+9 |   index_first = xs[0],
+  |                 ~~ is null
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: tried to access field of `null`
+  --> tests/language/types/record.tql:10:15
+   |
+10 |   get_first = xs.get(0),
+   |               ~~ is null
+   |
+   = hint: provide a fallback value to suppress this warning
+
+warning: tried to access field of `null`
+  --> tests/language/types/record.tql:12:16
+   |
+12 |   index_null = xs[null],
+   |                ~~ is null
+   |
+   = hint: use `[…]?` to suppress this warning
+
+warning: tried to access field of `null`
+  --> tests/language/types/record.tql:13:14
+   |
+13 |   get_null = xs.get(null),
+   |              ~~ is null
+   |
+   = hint: provide a fallback value to suppress this warning
+
+warning: tried to access field of `null`
+  --> tests/language/types/record.tql:15:18
+   |
+15 |   index_str = xs["foo"],
+   |                  ~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: tried to access field of `null`
+  --> tests/language/types/record.tql:16:20
+   |
+16 |   get_str = xs.get("foo"),
+   |                    ~~~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: tried to access field of `null`
+  --> tests/language/types/record.tql:18:18
+   |
+18 |   get_field = xs.foo,
+   |                  ~~~ 
+   |
+   = hint: append `?` to suppress this warning
+
+warning: expected `record` or `list`
+ --> tests/language/types/record.tql:9:17
+  |
+9 |   index_first = xs[0],
+  |                 ~~ has type `string`
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: expected `record` or `list`
+  --> tests/language/types/record.tql:10:15
+   |
+10 |   get_first = xs.get(0),
+   |               ~~ has type `string`
+   |
+   = hint: provide a fallback value to suppress this warning
+
+warning: expected `record` or `list`
+  --> tests/language/types/record.tql:11:24
+   |
+11 |   get_first_fallback = xs.get(0, -1),
+   |                        ~~ has type `string`
+   |
+   = hint: provide a fallback value to suppress this warning
+
+warning: cannot access field of non-record type
+  --> tests/language/types/record.tql:15:18
+   |
+15 |   index_str = xs["foo"],
+   |                  ~~~~~ 
+   ⋮
+15 |   index_str = xs["foo"],
+   |               -- type `string`
+   |
+
+warning: cannot access field of non-record type
+  --> tests/language/types/record.tql:16:20
+   |
+16 |   get_str = xs.get("foo"),
+   |                    ~~~~~ 
+   ⋮
+16 |   get_str = xs.get("foo"),
+   |             -- type `string`
+   |
+
+warning: cannot access field of non-record type
+  --> tests/language/types/record.tql:17:29
+   |
+17 |   get_str_fallback = xs.get("foo", -1),
+   |                             ~~~~~ 
+   ⋮
+17 |   get_str_fallback = xs.get("foo", -1),
+   |                      -- type `string`
+   |
+
+warning: cannot access field of non-record type
+  --> tests/language/types/record.tql:18:18
+   |
+18 |   get_field = xs.foo,
+   |                  ~~~ 
+   ⋮
+18 |   get_field = xs.foo,
+   |               -- type `string`
+   |
+
+warning: cannot access field of non-record type
+  --> tests/language/types/record.tql:19:27
+   |
+19 |   get_field_lenient = xs.?foo,
+   |                           ~~~ 
+   ⋮
+19 |   get_field_lenient = xs.?foo,
+   |                       -- type `string`
+   |

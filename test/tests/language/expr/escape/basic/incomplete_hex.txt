@@ -1,0 +1,6 @@
+error: incomplete hex escape sequence
+ --> tests/language/expr/escape/basic/incomplete_hex.tql:6:7
+  |
+6 |   x: "\x1"
+  |       ^^^ 
+  |

@@ -1,0 +1,47 @@
+[
+  tql2.from_events [
+    record {
+      begin: 5..6,
+      items: [
+        
+      ],
+      end: 6..7
+    }
+  ],
+  where_assert_operator {
+    expr_: binary_expr {
+      left: root_field {
+        id: `foo` @ 11..14,
+        has_question_mark: false
+      },
+      op: "eq" @ 15..17,
+      right: constant int64 1 @ 18..19
+    },
+    warn_: false
+  },
+  tql2.set {
+    assignments: [
+      {
+        left: field_path {
+          expr: root_field {
+            id: `foo` @ 28..31,
+            has_question_mark: false
+          },
+          has_this: false,
+          path: [
+            {
+              id: `foo` @ 28..31,
+              has_question_mark: false
+            }
+          ]
+        },
+        equals: 32..33,
+        right: constant int64 2 @ 34..35
+      }
+    ],
+    moved_fields: [
+      
+    ],
+    order: "ordered"
+  }
+]

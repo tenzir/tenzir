@@ -1,0 +1,12 @@
+{
+  d: 3,
+}
+warning: ignoring dropped field within dropped record
+ --> tests/operators/drop/parent_and_child.tql:8:6
+  |
+8 | drop a.b, a
+  |      ~~~ ignoring this field
+  ⋮
+8 | drop a.b, a
+  |           - because it is already dropped here
+  |

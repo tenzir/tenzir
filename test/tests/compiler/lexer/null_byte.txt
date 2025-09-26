@@ -1,0 +1,5 @@
+     whitespace "---\nerror: true\n---\n"
+        newline "\n"
+          error "\x00"
+        newline "\n"
+        newline "\n"

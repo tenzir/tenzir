@@ -1,0 +1,1106 @@
+[
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `activity_name` @ 0..13,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `activity_name` @ 0..13,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 14..15,
+    right: constant string "Launch" @ 16..24
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `activity_id` @ 25..36,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `activity_id` @ 25..36,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 37..38,
+    right: constant int64 1 @ 39..40
+  },
+  assignment {
+    left: field_path {
+      expr: field_access {
+        left: root_field {
+          id: `actor` @ 41..46,
+          has_question_mark: false
+        },
+        dot: 46..47,
+        has_question_mark: false,
+        name: `process` @ 47..54
+      },
+      has_this: false,
+      path: [
+        {
+          id: `actor` @ 41..46,
+          has_question_mark: false
+        },
+        {
+          id: `process` @ 47..54,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 55..56,
+    right: record {
+      begin: 57..58,
+      items: [
+        field {
+          name: `file` @ 61..65,
+          expr: record {
+            begin: 67..68,
+            items: [
+              field {
+                name: `path` @ 73..77,
+                expr: root_field {
+                  id: `path` @ 79..83,
+                  has_question_mark: false
+                }
+              },
+              field {
+                name: `parent_folder` @ 89..102,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 104..107,
+                      `path` @ 109..113,
+                      `parent` @ 115..121
+                    ],
+                    ref: unresolved
+                  },
+                  args: [
+                    field_access {
+                      left: field_access {
+                        left: root_field {
+                          id: `src` @ 122..125,
+                          has_question_mark: false
+                        },
+                        dot: 125..126,
+                        has_question_mark: false,
+                        name: `event_data` @ 126..136
+                      },
+                      dot: 136..137,
+                      has_question_mark: false,
+                      name: `ParentImage` @ 137..148
+                    }
+                  ],
+                  rpar: 148..149,
+                  method: false
+                }
+              },
+              field {
+                name: `name` @ 155..159,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 161..164,
+                      `path` @ 166..170,
+                      `file_name` @ 172..181
+                    ],
+                    ref: unresolved
+                  },
+                  args: [
+                    field_access {
+                      left: field_access {
+                        left: root_field {
+                          id: `src` @ 182..185,
+                          has_question_mark: false
+                        },
+                        dot: 185..186,
+                        has_question_mark: false,
+                        name: `event_data` @ 186..196
+                      },
+                      dot: 196..197,
+                      has_question_mark: false,
+                      name: `ParentImage` @ 197..208
+                    }
+                  ],
+                  rpar: 208..209,
+                  method: false
+                }
+              },
+              field {
+                name: `type` @ 215..221,
+                expr: constant string "Unknown" @ 223..232
+              },
+              field {
+                name: `type_id` @ 238..245,
+                expr: constant int64 0 @ 247..248
+              }
+            ],
+            end: 252..253
+          }
+        },
+        field {
+          name: `pid` @ 257..260,
+          expr: function_call {
+            fn: {
+              path: [
+                `int` @ 262..265
+              ],
+              ref: unresolved
+            },
+            args: [
+              field_access {
+                left: field_access {
+                  left: root_field {
+                    id: `src` @ 266..269,
+                    has_question_mark: false
+                  },
+                  dot: 269..270,
+                  has_question_mark: false,
+                  name: `event_data` @ 270..280
+                },
+                dot: 280..281,
+                has_question_mark: false,
+                name: `ParentProcessId` @ 281..296
+              }
+            ],
+            rpar: 296..297,
+            method: false
+          }
+        }
+      ],
+      end: 299..300
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 301..305
+      ],
+      ref: unresolved
+    },
+    args: [
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 306..309,
+            has_question_mark: false
+          },
+          dot: 309..310,
+          has_question_mark: false,
+          name: `event_data` @ 310..320
+        },
+        dot: 320..321,
+        has_question_mark: false,
+        name: `ParentImage` @ 321..332
+      },
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 334..337,
+            has_question_mark: false
+          },
+          dot: 337..338,
+          has_question_mark: false,
+          name: `event_data` @ 338..348
+        },
+        dot: 348..349,
+        has_question_mark: false,
+        name: `ParentProcessId` @ 349..364
+      }
+    ]
+  },
+  assignment {
+    left: field_path {
+      expr: field_access {
+        left: root_field {
+          id: `actor` @ 365..370,
+          has_question_mark: false
+        },
+        dot: 370..371,
+        has_question_mark: false,
+        name: `user` @ 371..375
+      },
+      has_this: false,
+      path: [
+        {
+          id: `actor` @ 365..370,
+          has_question_mark: false
+        },
+        {
+          id: `user` @ 371..375,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 376..377,
+    right: record {
+      begin: 378..379,
+      items: [
+        field {
+          name: `account_type` @ 382..394,
+          expr: constant string "Windows Account" @ 396..413
+        },
+        field {
+          name: `account_type_id` @ 417..432,
+          expr: constant int64 2 @ 434..435
+        },
+        field {
+          name: `domain` @ 439..445,
+          expr: field_access {
+            left: field_access {
+              left: root_field {
+                id: `src` @ 447..450,
+                has_question_mark: false
+              },
+              dot: 450..451,
+              has_question_mark: false,
+              name: `user` @ 451..455
+            },
+            dot: 455..456,
+            has_question_mark: false,
+            name: `domain` @ 456..462
+          }
+        },
+        field {
+          name: `name` @ 466..470,
+          expr: field_access {
+            left: field_access {
+              left: root_field {
+                id: `src` @ 472..475,
+                has_question_mark: false
+              },
+              dot: 475..476,
+              has_question_mark: false,
+              name: `user` @ 476..480
+            },
+            dot: 480..481,
+            has_question_mark: false,
+            name: `name` @ 481..485
+          }
+        },
+        field {
+          name: `uid` @ 489..492,
+          expr: field_access {
+            left: field_access {
+              left: root_field {
+                id: `src` @ 494..497,
+                has_question_mark: false
+              },
+              dot: 497..498,
+              has_question_mark: false,
+              name: `user` @ 498..502
+            },
+            dot: 502..503,
+            has_question_mark: false,
+            name: `identifier` @ 503..513
+          }
+        }
+      ],
+      end: 515..516
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 517..521
+      ],
+      ref: unresolved
+    },
+    args: [
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 522..525,
+            has_question_mark: false
+          },
+          dot: 525..526,
+          has_question_mark: false,
+          name: `user` @ 526..530
+        },
+        dot: 530..531,
+        has_question_mark: false,
+        name: `domain` @ 531..537
+      },
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 539..542,
+            has_question_mark: false
+          },
+          dot: 542..543,
+          has_question_mark: false,
+          name: `user` @ 543..547
+        },
+        dot: 547..548,
+        has_question_mark: false,
+        name: `name` @ 548..552
+      },
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 554..557,
+            has_question_mark: false
+          },
+          dot: 557..558,
+          has_question_mark: false,
+          name: `user` @ 558..562
+        },
+        dot: 562..563,
+        has_question_mark: false,
+        name: `identifier` @ 563..573
+      }
+    ]
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `category_name` @ 574..587,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `category_name` @ 574..587,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 588..589,
+    right: constant string "System Activity" @ 590..607
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `category_uid` @ 608..620,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `category_uid` @ 608..620,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 621..622,
+    right: function_call {
+      fn: {
+        path: [
+          `ocsf` @ 623..627,
+          `category_uid` @ 629..641
+        ],
+        ref: unresolved
+      },
+      args: [
+        root_field {
+          id: `category_name` @ 642..655,
+          has_question_mark: false
+        }
+      ],
+      rpar: 655..656,
+      method: false
+    }
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `class_name` @ 657..667,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `class_name` @ 657..667,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 668..669,
+    right: constant string "Process Activity" @ 670..688
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `class_uid` @ 689..698,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `class_uid` @ 689..698,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 699..700,
+    right: function_call {
+      fn: {
+        path: [
+          `ocsf` @ 701..705,
+          `class_uid` @ 707..716
+        ],
+        ref: unresolved
+      },
+      args: [
+        root_field {
+          id: `class_name` @ 717..727,
+          has_question_mark: false
+        }
+      ],
+      rpar: 727..728,
+      method: false
+    }
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `device` @ 729..735,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `device` @ 729..735,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 736..737,
+    right: record {
+      begin: 738..739,
+      items: [
+        field {
+          name: `hostname` @ 742..750,
+          expr: field_access {
+            left: root_field {
+              id: `src` @ 752..755,
+              has_question_mark: false
+            },
+            dot: 755..756,
+            has_question_mark: false,
+            name: `computer_name` @ 756..769
+          }
+        },
+        field {
+          name: `os` @ 773..775,
+          expr: record {
+            begin: 777..778,
+            items: [
+              field {
+                name: `name` @ 783..787,
+                expr: constant string "Windows" @ 789..798
+              },
+              field {
+                name: `type` @ 804..810,
+                expr: constant string "Windows" @ 812..821
+              },
+              field {
+                name: `type_id` @ 827..834,
+                expr: constant int64 100 @ 836..839
+              }
+            ],
+            end: 843..844
+          }
+        },
+        field {
+          name: `type` @ 848..854,
+          expr: constant string "Unknown" @ 856..865
+        },
+        field {
+          name: `type_id` @ 869..876,
+          expr: constant int64 0 @ 878..879
+        }
+      ],
+      end: 881..882
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 883..887
+      ],
+      ref: unresolved
+    },
+    args: [
+      field_access {
+        left: root_field {
+          id: `src` @ 888..891,
+          has_question_mark: false
+        },
+        dot: 891..892,
+        has_question_mark: false,
+        name: `computer_name` @ 892..905
+      }
+    ]
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `message` @ 906..913,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `message` @ 906..913,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 914..915,
+    right: constant string "A new process has been created." @ 916..949
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `metadata` @ 950..958,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `metadata` @ 950..958,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 959..960,
+    right: record {
+      begin: 961..962,
+      items: [
+        field {
+          name: `original_time` @ 965..978,
+          expr: field_access {
+            left: field_access {
+              left: root_field {
+                id: `src` @ 980..983,
+                has_question_mark: false
+              },
+              dot: 983..984,
+              has_question_mark: false,
+              name: `event_data` @ 984..994
+            },
+            dot: 994..995,
+            has_question_mark: false,
+            name: `UtcTime` @ 995..1002
+          }
+        },
+        field {
+          name: `product` @ 1006..1013,
+          expr: record {
+            begin: 1015..1016,
+            items: [
+              field {
+                name: `feature` @ 1021..1028,
+                expr: record {
+                  begin: 1030..1031,
+                  items: [
+                    field {
+                      name: `name` @ 1038..1042,
+                      expr: constant string "Security" @ 1044..1054
+                    }
+                  ],
+                  end: 1060..1061
+                }
+              },
+              field {
+                name: `name` @ 1067..1071,
+                expr: constant string "Microsoft Windows" @ 1073..1092
+              },
+              field {
+                name: `vendor_name` @ 1098..1109,
+                expr: constant string "Microsoft" @ 1111..1122
+              }
+            ],
+            end: 1126..1127
+          }
+        },
+        field {
+          name: `profiles` @ 1131..1139,
+          expr: list {
+            begin: 1141..1142,
+            items: [
+              expression constant string "host" @ 1142..1148
+            ],
+            end: 1148..1149
+          }
+        },
+        field {
+          name: `uid` @ 1153..1156,
+          expr: field_access {
+            left: root_field {
+              id: `src` @ 1158..1161,
+              has_question_mark: false
+            },
+            dot: 1161..1162,
+            has_question_mark: false,
+            name: `record_id` @ 1162..1171
+          }
+        },
+        field {
+          name: `version` @ 1175..1182,
+          expr: constant string "1.1.0" @ 1184..1191
+        }
+      ],
+      end: 1193..1194
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 1195..1199
+      ],
+      ref: unresolved
+    },
+    args: [
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 1200..1203,
+            has_question_mark: false
+          },
+          dot: 1203..1204,
+          has_question_mark: false,
+          name: `event_data` @ 1204..1214
+        },
+        dot: 1214..1215,
+        has_question_mark: false,
+        name: `UtcTime` @ 1215..1222
+      },
+      field_access {
+        left: root_field {
+          id: `src` @ 1224..1227,
+          has_question_mark: false
+        },
+        dot: 1227..1228,
+        has_question_mark: false,
+        name: `record_id` @ 1228..1237
+      }
+    ]
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `process` @ 1238..1245,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `process` @ 1238..1245,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1246..1247,
+    right: record {
+      begin: 1248..1249,
+      items: [
+        field {
+          name: `cmd_line` @ 1252..1260,
+          expr: field_access {
+            left: field_access {
+              left: root_field {
+                id: `src` @ 1262..1265,
+                has_question_mark: false
+              },
+              dot: 1265..1266,
+              has_question_mark: false,
+              name: `event_data` @ 1266..1276
+            },
+            dot: 1276..1277,
+            has_question_mark: false,
+            name: `CommandLine` @ 1277..1288
+          }
+        },
+        field {
+          name: `file` @ 1292..1296,
+          expr: record {
+            begin: 1298..1299,
+            items: [
+              field {
+                name: `path` @ 1304..1308,
+                expr: field_access {
+                  left: field_access {
+                    left: root_field {
+                      id: `src` @ 1310..1313,
+                      has_question_mark: false
+                    },
+                    dot: 1313..1314,
+                    has_question_mark: false,
+                    name: `event_data` @ 1314..1324
+                  },
+                  dot: 1324..1325,
+                  has_question_mark: false,
+                  name: `Image` @ 1325..1330
+                }
+              },
+              field {
+                name: `parent_folder` @ 1336..1349,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 1351..1354,
+                      `path` @ 1356..1360,
+                      `parent` @ 1362..1368
+                    ],
+                    ref: unresolved
+                  },
+                  args: [
+                    field_access {
+                      left: field_access {
+                        left: root_field {
+                          id: `src` @ 1369..1372,
+                          has_question_mark: false
+                        },
+                        dot: 1372..1373,
+                        has_question_mark: false,
+                        name: `event_data` @ 1373..1383
+                      },
+                      dot: 1383..1384,
+                      has_question_mark: false,
+                      name: `Image` @ 1384..1389
+                    }
+                  ],
+                  rpar: 1389..1390,
+                  method: false
+                }
+              },
+              field {
+                name: `name` @ 1396..1400,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 1402..1405,
+                      `path` @ 1407..1411,
+                      `file_name` @ 1413..1422
+                    ],
+                    ref: unresolved
+                  },
+                  args: [
+                    field_access {
+                      left: field_access {
+                        left: root_field {
+                          id: `src` @ 1423..1426,
+                          has_question_mark: false
+                        },
+                        dot: 1426..1427,
+                        has_question_mark: false,
+                        name: `event_data` @ 1427..1437
+                      },
+                      dot: 1437..1438,
+                      has_question_mark: false,
+                      name: `Image` @ 1438..1443
+                    }
+                  ],
+                  rpar: 1443..1444,
+                  method: false
+                }
+              },
+              field {
+                name: `type` @ 1450..1456,
+                expr: constant string "Unknown" @ 1458..1467
+              },
+              field {
+                name: `type_id` @ 1473..1480,
+                expr: constant int64 0 @ 1482..1483
+              }
+            ],
+            end: 1487..1488
+          }
+        },
+        field {
+          name: `pid` @ 1492..1495,
+          expr: function_call {
+            fn: {
+              path: [
+                `int` @ 1497..1500
+              ],
+              ref: unresolved
+            },
+            args: [
+              field_access {
+                left: field_access {
+                  left: root_field {
+                    id: `src` @ 1501..1504,
+                    has_question_mark: false
+                  },
+                  dot: 1504..1505,
+                  has_question_mark: false,
+                  name: `event_data` @ 1505..1515
+                },
+                dot: 1515..1516,
+                has_question_mark: false,
+                name: `ProcessId` @ 1516..1525
+              }
+            ],
+            rpar: 1525..1526,
+            method: false
+          }
+        }
+      ],
+      end: 1528..1529
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 1530..1534
+      ],
+      ref: unresolved
+    },
+    args: [
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 1535..1538,
+            has_question_mark: false
+          },
+          dot: 1538..1539,
+          has_question_mark: false,
+          name: `event_data` @ 1539..1549
+        },
+        dot: 1549..1550,
+        has_question_mark: false,
+        name: `CommandLine` @ 1550..1561
+      },
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 1563..1566,
+            has_question_mark: false
+          },
+          dot: 1566..1567,
+          has_question_mark: false,
+          name: `event_data` @ 1567..1577
+        },
+        dot: 1577..1578,
+        has_question_mark: false,
+        name: `Image` @ 1578..1583
+      },
+      field_access {
+        left: field_access {
+          left: root_field {
+            id: `src` @ 1585..1588,
+            has_question_mark: false
+          },
+          dot: 1588..1589,
+          has_question_mark: false,
+          name: `event_data` @ 1589..1599
+        },
+        dot: 1599..1600,
+        has_question_mark: false,
+        name: `ProcessId` @ 1600..1609
+      }
+    ]
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `severity` @ 1610..1618,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `severity` @ 1610..1618,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1619..1620,
+    right: constant string "Informational" @ 1621..1636
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `severity_id` @ 1637..1648,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `severity_id` @ 1637..1648,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1649..1650,
+    right: constant int64 1 @ 1651..1652
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `status` @ 1653..1659,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `status` @ 1653..1659,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1660..1661,
+    right: constant string "Success" @ 1662..1671
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `status_id` @ 1672..1681,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `status_id` @ 1672..1681,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1682..1683,
+    right: constant int64 1 @ 1684..1685
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `time` @ 1686..1690,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `time` @ 1686..1690,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1691..1692,
+    right: function_call {
+      fn: {
+        path: [
+          `round` @ 1693..1698
+        ],
+        ref: unresolved
+      },
+      args: [
+        binary_expr {
+          left: function_call {
+            fn: {
+              path: [
+                `timestamp` @ 1728..1737
+              ],
+              ref: unresolved
+            },
+            args: [
+              function_call {
+                fn: {
+                  path: [
+                    `time` @ 1699..1703
+                  ],
+                  ref: unresolved
+                },
+                args: [
+                  field_access {
+                    left: root_field {
+                      id: `metadata` @ 1704..1712,
+                      has_question_mark: false
+                    },
+                    dot: 1712..1713,
+                    has_question_mark: false,
+                    name: `original_time` @ 1713..1726
+                  }
+                ],
+                rpar: 1726..1727,
+                method: false
+              }
+            ],
+            rpar: 1738..1739,
+            method: true
+          },
+          op: "mul" @ 1740..1741,
+          right: constant int64 1000 @ 1742..1746
+        }
+      ],
+      rpar: 1746..1747,
+      method: false
+    }
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `type_name` @ 1748..1757,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `type_name` @ 1748..1757,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1758..1759,
+    right: constant string "Process Activity: Launch" @ 1760..1786
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `type_uid` @ 1787..1795,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `type_uid` @ 1787..1795,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1796..1797,
+    right: constant int64 100701 @ 1798..1804
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `unmapped` @ 1805..1813,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `unmapped` @ 1805..1813,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 1814..1815,
+    right: root_field {
+      id: `src` @ 1816..1819,
+      has_question_mark: false
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 1820..1824
+      ],
+      ref: unresolved
+    },
+    args: [
+      root_field {
+        id: `src` @ 1825..1828,
+        has_question_mark: false
+      }
+    ]
+  }
+]
