@@ -1,0 +1,6 @@
+error: backslash is not followed by escape sequence
+ --> tests/language/types/string/ast/backslash_fmt.tql:5:12
+  |
+5 | from {x: f"\{42}"}
+  |            ^ 
+  |

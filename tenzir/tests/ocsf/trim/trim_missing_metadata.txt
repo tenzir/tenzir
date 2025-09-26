@@ -1,6 +1,0 @@
-warning: dropping events where `metadata` does not exist
- --> ocsf/trim/trim_missing_metadata.tql:8:1
-  |
-8 | ocsf::trim
-  | ~~~~~~~~~~ 
-  |

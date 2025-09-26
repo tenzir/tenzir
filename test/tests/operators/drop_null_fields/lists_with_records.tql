@@ -1,0 +1,7 @@
+from {
+  id: 1,
+  items: [{name: "a", value: 1}, {name: "b", value: null}],
+  metadata: null,
+  tags: ["x", null, "y"]
+}
+drop_null_fields

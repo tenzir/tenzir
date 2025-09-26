@@ -1,0 +1,61 @@
+{
+  xs: [
+    1,
+    2,
+    3,
+  ],
+  num_strings: 0,
+  num_ints: 3,
+}
+{
+  xs: [
+    4,
+    null,
+  ],
+  num_strings: 0,
+  num_ints: 1,
+}
+{
+  xs: [
+    null,
+  ],
+  num_strings: 0,
+  num_ints: 0,
+}
+{
+  xs: [],
+  num_strings: 0,
+  num_ints: 0,
+}
+{
+  xs: [
+    "foo",
+    "bar",
+    "baz",
+  ],
+  num_strings: 3,
+  num_ints: 0,
+}
+{
+  xs: null,
+  num_strings: null,
+  num_ints: null,
+}
+{
+  xs: "qux",
+  num_strings: null,
+  num_ints: null,
+}
+warning: expected `list`, but got `string`
+  --> tests/language/lambda/count_if.tql:10:15
+   |
+10 | num_strings = xs.count_if(x => type_of(x).kind == "string")
+   |               ~~ 
+   |
+
+warning: expected `list`, but got `string`
+  --> tests/language/lambda/count_if.tql:11:12
+   |
+11 | num_ints = xs.count_if(x => type_of(x).kind == "int64")
+   |            ~~ 
+   |

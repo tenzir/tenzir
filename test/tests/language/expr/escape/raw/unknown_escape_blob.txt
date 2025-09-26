@@ -1,0 +1,6 @@
+error: found unknown escape sequence `\k`
+ --> tests/language/expr/escape/raw/unknown_escape_blob.tql:7:13
+  |
+7 |   b1: b"test\ktest"
+  |             ^^ 
+  |

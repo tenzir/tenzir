@@ -1,6 +1,0 @@
-error: assertion failure
- --> exec/operators/strict.tql:4:17
-  |
-4 | strict { assert false }
-  |                 ^^^^^ 
-  |

@@ -1,5 +1,0 @@
-// error: true
-
-from {
-  s5: "\u{D800}",          // First high surrogate (not valid standalone UTF-8)
-}

@@ -1,7 +1,0 @@
-
-// Decapsulate VLAN information. Manually verified with:
-// tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
-from f"{env("INPUTS")}/pcap/vlan-single-tagging.pcap"
-this = this.decapsulate()
-select vlan.outer
-write_tql compact=true

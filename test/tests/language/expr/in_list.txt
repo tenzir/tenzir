@@ -1,0 +1,87 @@
+{
+  x: "",
+  y: [],
+  exists: false,
+  not_exists: true,
+}
+{
+  x: "",
+  y: [
+    "Non-Empty",
+    "",
+  ],
+  exists: true,
+  not_exists: false,
+}
+{
+  x: "Different",
+  y: [
+    1ms,
+    10d,
+    40541.9175d,
+  ],
+  exists: null,
+  not_exists: null,
+}
+{
+  x: 1,
+  y: [
+    1,
+    10,
+    111,
+  ],
+  exists: true,
+  not_exists: false,
+}
+{
+  x: 1.0,
+  y: [
+    1,
+    10,
+    111,
+  ],
+  exists: true,
+  not_exists: false,
+}
+{
+  x: null,
+  y: [
+    null,
+    1,
+    2,
+  ],
+  exists: true,
+  not_exists: false,
+}
+{
+  x: null,
+  y: [
+    1,
+    2,
+    null,
+  ],
+  exists: true,
+  not_exists: false,
+}
+{
+  x: null,
+  y: [
+    1,
+    2,
+  ],
+  exists: false,
+  not_exists: true,
+}
+warning: got incompatible types for `in`: `string in list<duration>`
+ --> tests/language/expr/in_list.tql:2:10
+  |
+2 | exists = x in y
+  |          ~~~~~~ 
+  |
+
+warning: got incompatible types for `in`: `string in list<duration>`
+ --> tests/language/expr/in_list.tql:3:14
+  |
+3 | not_exists = x not in y
+  |              ~~~~~~~~~~ 
+  |

@@ -1,0 +1,3 @@
+// We don't emit an error at the moment when there are no matches.
+from_file f"{env("TENZIR_INPUTS")}/from_file/**/does_not_exist.json", path_field=path
+sort path

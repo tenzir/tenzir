@@ -1,0 +1,54 @@
+[
+  invocation {
+    op: {
+      path: [
+        `from` @ 21..25
+      ],
+      ref: unresolved
+    },
+    args: [
+      record {
+        begin: 26..27,
+        items: [
+          field {
+            name: `xs` @ 30..32,
+            expr: function_call {
+              fn: {
+                path: [
+                  `map` @ 44..47
+                ],
+                ref: unresolved
+              },
+              args: [
+                list {
+                  begin: 34..35,
+                  items: [
+                    expression constant int64 1 @ 35..36,
+                    expression constant int64 2 @ 38..39,
+                    expression constant int64 3 @ 41..42
+                  ],
+                  end: 42..43
+                },
+                lambda_expr {
+                  left: `x` @ 48..49,
+                  arrow: 50..52,
+                  right: binary_expr {
+                    left: root_field {
+                      id: `x` @ 53..54,
+                      has_question_mark: false
+                    },
+                    op: "mul" @ 55..56,
+                    right: constant int64 2 @ 57..58
+                  }
+                }
+              ],
+              rpar: 58..59,
+              method: true
+            }
+          }
+        ],
+        end: 61..62
+      }
+    ]
+  }
+]

@@ -1,5 +1,0 @@
-// error: true
-
-from {
-  s6: "\u{DFFF}",          // Last low surrogate (not valid standalone UTF-8)
-}

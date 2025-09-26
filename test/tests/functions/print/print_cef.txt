@@ -1,0 +1,28 @@
+{
+  r1: "CEF:0|VENDOR|PRODUCT|VERSION|MyCustomSignature|NAME|8|a=42 b=Hello",
+  r2: "CEF:0|VENDOR|PRODUCT|VERSION|MyCustomSignature|NAME|8",
+  r3: null,
+  r4: null,
+  r5: null,
+  r6: "CEF:0|VENDOR|PRODUCT|VERSION|MyCustomSignature|NAME|8|a.b=nested b=top c=",
+}
+warning: `extension` must be `record`
+  --> tests/functions/print/print_cef.tql:19:6
+   |
+19 | r3 = null.print_cef(
+   |      ~~~~ got `null`
+   |
+
+warning: `name` must be `string`
+  --> tests/functions/print/print_cef.tql:27:56
+   |
+27 |     signature_id=signature_id, severity=severity, name=null
+   |                                                        ~~~~ got `null`
+   |
+
+warning: `name` is `null`
+  --> tests/functions/print/print_cef.tql:32:56
+   |
+32 |     signature_id=signature_id, severity=severity, name=string(null)
+   |                                                        ~~~~~~~~~~~~ 
+   |

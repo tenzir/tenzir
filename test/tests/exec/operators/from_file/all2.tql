@@ -1,2 +1,0 @@
-from_file env("INPUTS") + "/from_file/**/*", path_field=path
-sort path

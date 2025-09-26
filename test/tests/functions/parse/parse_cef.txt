@@ -1,0 +1,25 @@
+{
+  x: "CEF:0|Cynet|Cynet 360|4.5.4.22139|0|Memory Pattern - Cobalt Strike Beacon ReflectiveLoader|8|key=value",
+  y: {
+    cef_version: 0,
+    device_vendor: "Cynet",
+    device_product: "Cynet 360",
+    device_version: "4.5.4.22139",
+    signature_id: "0",
+    name: "Memory Pattern - Cobalt Strike Beacon ReflectiveLoader",
+    severity: "8",
+    extension: {
+      key: "value",
+    },
+  },
+}
+{
+  x: "failure",
+  y: null,
+}
+warning: incorrect field count in CEF event
+ --> tests/functions/parse/parse_cef.tql:3:5
+  |
+3 | y = x.parse_cef()
+  |     ~~~~~~~~~~~~~ 
+  |

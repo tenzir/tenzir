@@ -1,0 +1,8 @@
+from f"{env("TENZIR_INPUTS")}/syslog/syslog.log" {
+  read_lines
+}
+enumerate n
+line = line + ("\nnewline" if n < 2 and n> 5 else "")
+select l = line.length_chars()+1, line = line
+write_lines
+read_syslog octet_counting=true

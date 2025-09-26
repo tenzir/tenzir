@@ -1,0 +1,6 @@
+from {
+  // Cloudflare DNS - stable IP
+  ip: 1.1.1.1,
+  name: "test"
+}
+dns_lookup ip

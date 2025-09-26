@@ -1,3 +1,0 @@
-// test: lexer
-// error: true
-"aÿb" + 42

@@ -1,0 +1,6 @@
+error: found unknown escape sequence `\q`
+ --> tests/language/expr/escape/raw/unknown_escape.tql:6:11
+  |
+6 |   s1: "foo\qbar", // backslash-q is not a valid escape sequence
+  |           ^^ 
+  |

@@ -1,8 +1,0 @@
-from env("INPUTS") + "/pcap/suricata/eve.json.gz" {
-  decompress_gzip
-  read_suricata
-}
-repeat 10
-batch
-measure
-drop timestamp
