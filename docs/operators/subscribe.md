@@ -7,7 +7,7 @@ example: 'subscribe "topic"'
 Subscribes to events from a channel with a topic.
 
 ```tql
-subscribe [topic:string]
+subscribe [topic:string...]
 ```
 
 ## Description
@@ -22,9 +22,9 @@ avoid data loss. This mechanism is disabled for pipelines that are not visible
 on the overview page on [app.tenzir.com](https://app.tenzir.com), which drop
 data rather than slow down their publishers.
 
-### `topic: string (optional)`
+### `topic: string... (optional)`
 
-An optional channel name to subscribe to. If unspecified, the operator
+Optional channel names to subscribe to. If unspecified, the operator
 subscribes to the topic `main`.
 
 ## Examples
@@ -33,6 +33,12 @@ subscribes to the topic `main`.
 
 ```tql
 subscribe "zeek-conn"
+```
+
+### Subscribe to the multiple topics
+
+```tql
+subscribe "alerts", "notices", "critical"
 ```
 
 ## See Also
