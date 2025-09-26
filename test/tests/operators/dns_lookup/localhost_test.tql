@@ -4,5 +4,6 @@ from {
 }
 dns_lookup host
 unroll dns_lookup
+where dns_lookup.type == "A"
 drop dns_lookup.ttl
 sort dns_lookup.type, dns_lookup.address
