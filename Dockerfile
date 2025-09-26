@@ -607,8 +607,13 @@ USER tenzir:tenzir
 
 FROM tenzir-ce-untested AS tenzir-ce-integration
 
-COPY tenzir/tests/ ./tests
-RUN ./tests/run.py -j $(nproc) ./tests && echo "success" > /tmp/tenzir-integration-result
+COPY test/ ./test
+RUN uvx tenzir-test --python=>=3.12 \
+    --tenzir-binary "$PREFIX/bin/tenzir" \
+    --tenzir-node-binary "$PREFIX/bin/tenzir-node" \
+    --root test \
+    -j $(nproc) && \
+    echo "success" > /tmp/tenzir-integration-result
 
 # -- tenzir-ce -----------------------------------------------------------------
 

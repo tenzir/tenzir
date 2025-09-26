@@ -137,32 +137,55 @@ foreach (dir IN LISTS _integration_test_dirs)
   add_test(
     NAME "tenzir/${dir}"
     COMMAND
+      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
       "${CMAKE_COMMAND}" "-E" "env" "--modify"
       "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-      "${TENZIR_UV_PATH}" "run" "--python=>=3.12"
-      "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
+      "${TENZIR_UV_PATH}" "tool" "run"
+      "--python"
+      "\">=3.12\""
+      "tenzir-test"
+      "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
+      "--tenzir-node-binary"
+      "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
       "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}/")
   set_tests_properties(
-    "tenzir/${dir}" PROPERTIES FIXTURES_REQUIRED
-                               "tenzir_integration_test_fixture")
+    "tenzir/${dir}"
+    PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/test"
+      FIXTURES_REQUIRED "tenzir_integration_test_fixture")
 endforeach ()
 
 add_custom_target(
   integration
   COMMAND
+    "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
     "${CMAKE_COMMAND}" "-E" "env" "--modify"
     "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-    "${TENZIR_UV_PATH}" "run" "--python=>=3.12"
-    "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
+    "${TENZIR_UV_PATH}" "tool" "run"
+    "--python"
+    "\">=3.12\""
+    "tenzir-test"
+    "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
+    "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
+    "--root" "${CMAKE_SOURCE_DIR}/test"
   DEPENDS tenzir)
+set_property(TARGET integration PROPERTY USES_TERMINAL TRUE)
 add_custom_target(
   update-integration
   COMMAND
+    "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
     "${CMAKE_COMMAND}" "-E" "env" "--modify"
     "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-    "${TENZIR_UV_PATH}" "run" "--python=>=3.12" "--"
-    "${CMAKE_CURRENT_LIST_DIR}/tests/run.py" "--update"
+    "${TENZIR_UV_PATH}" "tool" "run"
+    "--python"
+    "\">=3.12\""
+    "tenzir-test"
+    "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
+    "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
+    "--root" "${CMAKE_SOURCE_DIR}/test"
+    "--update"
   DEPENDS tenzir)
+set_property(TARGET update-integration PROPERTY USES_TERMINAL TRUE)
 
 # Add a target for running integration tests with code coverage enabled
 if (TENZIR_ENABLE_CODE_COVERAGE)
@@ -174,22 +197,30 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
     integration-coverage
     DEPENDS tenzir
     COMMAND
+      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
       "${CMAKE_COMMAND}" "-E" "env" "--modify"
       "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>"
       "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
-      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}" "--" "${TENZIR_UV_PATH}" "run"
-      "--python=>=3.12" "--" "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
+      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}" "--"
+      "${TENZIR_UV_PATH}" "tool" "run"
+      "--python"
+      "\">=3.12\""
+      "tenzir-test"
+      "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
+      "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
+      "--root" "${CMAKE_SOURCE_DIR}/test"
       "--coverage" "--coverage-source-dir=${CMAKE_SOURCE_DIR}"
     COMMAND
       "${CMAKE_COMMAND}" "-E" "env"
       "VERBOSE=$<IF:$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>,1,0>" "--"
-      "${CMAKE_CURRENT_LIST_DIR}/tests/process_coverage.sh"
+      "${CMAKE_SOURCE_DIR}/scripts/process_coverage.sh"
       "--coverage-dir=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
       "--source-dir=${CMAKE_SOURCE_DIR}" "--binary-dir=${CMAKE_BINARY_DIR}"
       "--tenzir-binary=$<TARGET_FILE:tenzir>"
       "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
     COMMENT "Running integration tests with code coverage enabled"
     VERBATIM)
+  set_property(TARGET integration-coverage PROPERTY USES_TERMINAL TRUE)
 endif ()
 
 add_custom_target(bats)
@@ -243,7 +274,6 @@ endforeach ()
 
 unset(parallel_level)
 
-# link the full
 add_custom_target(
   link-integration
   COMMAND "${CMAKE_COMMAND}" -E make_directory
@@ -255,9 +285,6 @@ add_custom_target(
 
 add_dependencies(tenzir link-integration)
 
-# We only install the tenzir extension library, users need to provide bats,
-# bats-common and bats-assert themselves when building plugins against an
-# install tree.
 option(TENZIR_ENABLE_BATS_TENZIR_INSTALLATION "Install bats-tenzir" ON)
 add_feature_info("TENZIR_ENABLE_BATS_TENZIR_INSTALLATION"
                  TENZIR_ENABLE_BATS_TENZIR_INSTALLATION "install bats-tenzir.")

@@ -29,9 +29,13 @@ stdenvNoCC.mkDerivation {
           echo "running ${path} BATS tests"
           bats -T -j $NIX_BUILD_CORES "${path}/bats/tests"
         fi
-        if [ -f "${path}/tests/run.py" ]; then
+        if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
-          ${path}/tests/run.py -j $NIX_BUILD_CORES
+          uvx tenzir-test --python=>=3.12 \\
+            --tenzir-binary "$(command -v tenzir)" \\
+            --tenzir-node-binary "$(dirname "$(command -v tenzir)")/tenzir-node" \\
+            --root "${path}/test" \\
+            -j $NIX_BUILD_CORES
         fi
       '';
     in
@@ -40,9 +44,8 @@ stdenvNoCC.mkDerivation {
       export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
       export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/bats
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
-      export UV_NO_INDEX=1
-      export UV_OFFLINE=1
-      export UV_PYTHON=${lib.getExe py3}
+      # To run the integration tests fully offline, pre-populate uv's cache and
+      # set `UV_NO_INDEX=1` and `UV_OFFLINE=1` before invoking `nix build`.
       mkdir -p cache
       export XDG_CACHE_HOME=$PWD/cache
       ${template "tenzir"}
