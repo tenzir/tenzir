@@ -366,7 +366,7 @@ auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
     return {};
   }
   // TODO: Consider reporting offset.
-  diagnostic::error("found invalid UTF8").note("content: {}", content).emit(ctx);
+  diagnostic::error("found invalid UTF8").emit(ctx);
   return failure::promise();
 }
 

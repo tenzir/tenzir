@@ -11,6 +11,8 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/registry.hpp"
 
+#include <memory>
+
 namespace tenzir {
 
 /// The context that is available during all execution stages of a pipeline.
@@ -20,7 +22,14 @@ namespace tenzir {
 /// type interning, etc.
 class base_ctx {
 public:
-  base_ctx(diagnostic_handler& dh, const registry& reg) : dh_{dh}, reg_{reg} {
+  base_ctx(diagnostic_handler& dh, const registry& reg)
+    : dh_{dh}, reg_ptr_{&reg} {
+  }
+
+  // Own the registry via shared_ptr, useful when using snapshot semantics.
+  base_ctx(diagnostic_handler& dh, std::shared_ptr<const registry> reg)
+    : dh_{dh}, reg_holder_{std::move(reg)} {
+    reg_ptr_ = reg_holder_.get();
   }
 
   // TODO: Consider using inheritance instead.
@@ -35,12 +44,14 @@ public:
   }
 
   explicit(false) operator const registry&() {
-    return reg_;
+    TENZIR_ASSERT(reg_ptr_);
+    return *reg_ptr_;
   }
 
 private:
   std::reference_wrapper<diagnostic_handler> dh_;
-  std::reference_wrapper<const registry> reg_;
+  const registry* reg_ptr_ = nullptr;
+  std::shared_ptr<const registry> reg_holder_{};
 };
 
 } // namespace tenzir
