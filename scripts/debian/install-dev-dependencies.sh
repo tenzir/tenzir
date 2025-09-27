@@ -4,9 +4,6 @@ set -euo pipefail
 
 apt-get update
 apt-get -y --no-install-recommends install \
-    bats \
-    bats-assert \
-    bats-support \
     build-essential \
     ca-certificates \
     ccache \
