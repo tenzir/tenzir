@@ -1,0 +1,36 @@
+[
+  tql2.from_events [
+    record {
+      begin: 5..6,
+      items: [
+        
+      ],
+      end: 6..7
+    }
+  ],
+  tql2.set {
+    assignments: [
+      {
+        left: field_path {
+          expr: root_field {
+            id: `foo` @ 40..43,
+            has_question_mark: false
+          },
+          has_this: false,
+          path: [
+            {
+              id: `foo` @ 40..43,
+              has_question_mark: false
+            }
+          ]
+        },
+        equals: 44..45,
+        right: constant int64 2 @ 46..47
+      }
+    ],
+    moved_fields: [
+      
+    ],
+    order: "ordered"
+  }
+]

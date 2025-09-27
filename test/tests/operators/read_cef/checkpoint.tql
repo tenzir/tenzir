@@ -1,0 +1,3 @@
+from f"{env("TENZIR_INPUTS")}/cef/checkpoint.log" {
+  read_cef
+}

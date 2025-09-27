@@ -1,0 +1,7 @@
+{
+  host: "a.root-servers.net",
+  dns_lookup: {
+    address: 198.41.0.4,
+    type: "A",
+  },
+}

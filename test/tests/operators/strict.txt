@@ -1,0 +1,6 @@
+error: assertion failure
+ --> tests/operators/strict.tql:6:17
+  |
+6 | strict { assert false }
+  |                 ^^^^^ 
+  |

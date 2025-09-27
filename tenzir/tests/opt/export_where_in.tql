@@ -1,4 +1,0 @@
-// test: opt
-
-export
-where foo in [1, 2, 3]

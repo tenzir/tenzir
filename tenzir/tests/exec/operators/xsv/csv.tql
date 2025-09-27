@@ -1,2 +1,0 @@
-from env("INPUTS") + "/xsv/sample.csv"
-write_csv

@@ -1,0 +1,6 @@
+warning: dropping event for class "Registry Key Activity" because extension "win" is not enabled
+ --> tests/operators/ocsf/apply/registry_key_activity_without_extension.tql:7:1
+  |
+7 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |

@@ -1,0 +1,103 @@
+{
+  activity_id: null,
+  activity_name: null,
+  actor: null,
+  actual_permissions: null,
+  category_name: null,
+  category_uid: null,
+  class_name: null,
+  class_uid: 1007,
+  count: null,
+  device: null,
+  duration: null,
+  end_time: null,
+  enrichments: null,
+  exit_code: null,
+  injection_type: null,
+  injection_type_id: null,
+  message: null,
+  metadata: {
+    correlation_uid: null,
+    debug: null,
+    event_code: null,
+    extension: null,
+    extensions: [
+      {
+        name: null,
+        uid: null,
+        version: null,
+      },
+    ],
+    labels: null,
+    log_level: null,
+    log_name: null,
+    log_provider: null,
+    log_version: null,
+    logged_time: null,
+    loggers: null,
+    modified_time: null,
+    original_time: null,
+    processed_time: null,
+    product: null,
+    profiles: null,
+    sequence: null,
+    tags: null,
+    tenant_uid: null,
+    transformation_info_list: null,
+    uid: null,
+    version: "1.5.0",
+  },
+  module: null,
+  observables: null,
+  process: {
+    ancestry: null,
+    cmd_line: null,
+    cpid: null,
+    created_time: null,
+    environment_variables: null,
+    file: null,
+    integrity: null,
+    integrity_id: null,
+    lineage: null,
+    loaded_modules: null,
+    name: null,
+    path: null,
+    pid: null,
+    sandbox: null,
+    session: null,
+    terminated_time: null,
+    tid: null,
+    uid: null,
+    user: null,
+    working_directory: null,
+    xattributes: null,
+  },
+  raw_data: null,
+  raw_data_size: null,
+  requested_permissions: null,
+  severity: null,
+  severity_id: null,
+  start_time: null,
+  status: null,
+  status_code: null,
+  status_detail: null,
+  status_id: null,
+  time: null,
+  timezone_offset: null,
+  type_name: null,
+  type_uid: null,
+  unmapped: null,
+}
+warning: ignoring extensions for events where `metadata.extensions[].name` is not a string
+ --> tests/operators/ocsf/apply/wrong_inner_type_extensions_name.tql:9:1
+  |
+9 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
+
+warning: expected type `string` for `metadata.extensions[].name`, but got `int64`
+ --> tests/operators/ocsf/apply/wrong_inner_type_extensions_name.tql:9:1
+  |
+9 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |

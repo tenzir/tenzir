@@ -1,0 +1,10 @@
+from {
+  events: [{ x: 0 }, { x:1 }]
+}
+unroll events
+select x=move events.x
+dns_lookup 1.1.1.1 if x == 0 else "one.one.one.one"
+unroll dns_lookup
+where dns_lookup.type? != "AAAA"
+drop x, dns_lookup.ttl?
+sort dns_lookup.address?

@@ -1,0 +1,2 @@
+load_file f"{env("TENZIR_INPUTS")}/empty-file-multiline.txt"
+read_csv

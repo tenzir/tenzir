@@ -1,6 +1,0 @@
-// test: opt
-
-let $foo = 42
-
-export
-where foo == $foo

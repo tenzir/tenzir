@@ -1,0 +1,5 @@
+   string_begin "\""
+       char_seq "a🤨b"
+  closing_quote "\""
+        newline "\n"
+        newline "\n"

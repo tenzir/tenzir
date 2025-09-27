@@ -90,10 +90,10 @@ Use the `tenzir` binary to execute a TQL program:
 
 ### Integration Tests
 
-To integration tests:
+Run integration tests as follows:
 
 ```sh
-uv run tenzir/tests/run.py
+uvx tenzir-test --python=>=3.12 --root test
 ```
 
 ### Code Quality

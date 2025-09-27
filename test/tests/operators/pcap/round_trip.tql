@@ -1,0 +1,10 @@
+
+// Re-produce an identical copy of the input by taking the input PCAP file
+// header as blueprint for the output trace. The MD5 of the original input
+// is 2696858410a08f5edb405b8630a9858c.
+from f"{env("TENZIR_INPUTS")}/pcap/example.pcap.gz" {
+  decompress_gzip
+  read_pcap emit_file_headers=true
+}
+write_pcap
+shell "md5sum | cut -f 1 -d ' '"

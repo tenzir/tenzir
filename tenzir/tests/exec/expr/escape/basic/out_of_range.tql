@@ -1,5 +1,0 @@
-// error: true
-
-from {
-  x: "\u{FFFFFF}",
-}

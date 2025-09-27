@@ -1,0 +1,7 @@
+error: unknown variable
+ --> tests/compiler/ir/one_let_with_unknown_var.tql:5:12
+  |
+5 | let $foo = $bar
+  |            ^^^^ 
+  |
+  = hint: no variables are available here

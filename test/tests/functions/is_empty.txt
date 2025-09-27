@@ -1,0 +1,38 @@
+{
+  empty_string: true,
+  non_empty_string: false,
+  space_string: false,
+  empty_list: true,
+  non_empty_list: false,
+  single_element: false,
+  empty_record: true,
+  non_empty_record: false,
+  single_field: false,
+  null_value: null,
+  integer: null,
+  boolean: null,
+  double: null,
+  nested_empty_list: false,
+  nested_empty_record: false,
+  complex_record: false,
+}
+warning: expected `string`, `list`, or `record`, got `int64`
+  --> tests/functions/is_empty.tql:22:12
+   |
+22 |   integer: 42.is_empty(),
+   |            ~~ 
+   |
+
+warning: expected `string`, `list`, or `record`, got `bool`
+  --> tests/functions/is_empty.tql:23:12
+   |
+23 |   boolean: true.is_empty(),
+   |            ~~~~ 
+   |
+
+warning: expected `string`, `list`, or `record`, got `double`
+  --> tests/functions/is_empty.tql:24:11
+   |
+24 |   double: 3.14.is_empty(),
+   |           ~~~~ 
+   |

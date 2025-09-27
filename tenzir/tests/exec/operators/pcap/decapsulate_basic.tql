@@ -1,5 +1,0 @@
-
-// Make sure basic decapsulation logic works.
-from f"{env("INPUTS")}/pcap/example.pcap.gz"
-this = this.decapsulate()
-write_tql compact=true

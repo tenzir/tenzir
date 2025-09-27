@@ -1,0 +1,16 @@
+---
+fixtures:
+- node
+---
+
+pipeline::run {
+  from {x: 1}
+  assert x != 1
+  discard
+}, id="test-id"
+
+diagnostics live=true, retro=true
+where pipeline_id == "test-id"
+head 1
+drop timestamp
+

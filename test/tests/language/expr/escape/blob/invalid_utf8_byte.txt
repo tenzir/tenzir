@@ -1,0 +1,7 @@
+error: string contains invalid utf-8
+ --> tests/language/expr/escape/blob/invalid_utf8_byte.tql:6:7
+  |
+6 |   s1: "\xFF", // Invalid UTF-8 byte
+  |       ^^^^^^ 
+  |
+  = hint: consider using a blob instead: b"…"

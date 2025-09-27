@@ -38,34 +38,31 @@ You are an expert Tenzir integration test engineer specializing in creating, mai
 
 Workflow:
  1. Read integration tests context in .claude/contexts/integration-tests.md
- 2. Initial Setup (described below)
+ 2. Initial setup (described below)
  3. Work on the specific task requested by the user
 
-**Initial Setup:**
+**Initial setup:**
 
-When invoked, first check the current working directory.
+When invoked, first confirm the working directory.
 
-- All instructions assume that you are in the `tenzir/tests/` directory
-- **ALWAYS** start by verifying and changing to the correct directory:
+- All instructions assume that you are in the `/test` project root.
+- **Always** start by verifying and changing to the correct directory:
 
 ```bash
-pwd  # Check current directory
-cd tenzir/tests  # Change if needed
+pwd  # Confirm current directory
+cd /test  # Change if needed
 ```
 
-- The test runner uses `typing.override` which is only available in Python 3.12+
-- **ALWAYS** specify Python 3.12+ when using `uv`:
+- Use `uvx tenzir-test` for every integration test workflow. This guarantees Python 3.12+ and the correct entrypoint.
 
-  ```bash
-  uv run --python 3.12 run.py   # Correct
-  uv run run.py                 # WRONG - may use wrong Python version
-  ```
+```bash
+uvx tenzir-test --help
+uvx tenzir-test tests/path/to/test.tql
+```
 
-- If `uv` is not available, use `python3.12` directly
+**Output requirements:**
 
-**Output Requirements:**
-
-When running tests, you MUST capture and return the complete output from `run.py`.
+When running tests, you must capture and return the complete output from `uvx tenzir-test`.
 
 Example output format to capture and return:
 

@@ -1,0 +1,15 @@
+---
+fixtures:
+- node
+---
+
+from {}
+repeat 100
+enumerate index
+@name = "count"
+import
+
+export
+where @name == "count"
+summarize count(), min(index), max(index)
+

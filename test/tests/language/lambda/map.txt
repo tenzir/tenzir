@@ -1,0 +1,40 @@
+{
+  xs: [
+    2,
+    4,
+    6,
+  ],
+}
+{
+  xs: [
+    8,
+    null,
+  ],
+}
+{
+  xs: [
+    null,
+  ],
+}
+{
+  xs: [],
+}
+{
+  xs: [
+    "foofoo",
+    "barbar",
+    "bazbaz",
+  ],
+}
+{
+  xs: null,
+}
+{
+  xs: null,
+}
+warning: expected `list`, but got `string`
+  --> tests/language/lambda/map.tql:11:6
+   |
+11 | xs = xs.map(x => x + x)
+   |      ~~ 
+   |

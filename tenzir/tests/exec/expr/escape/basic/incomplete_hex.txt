@@ -1,6 +1,0 @@
-error: incomplete hex escape sequence
- --> exec/expr/escape/basic/incomplete_hex.tql:4:7
-  |
-4 |   x: "\x1"
-  |       ^^^ 
-  |

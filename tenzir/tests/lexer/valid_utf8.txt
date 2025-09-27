@@ -1,6 +1,0 @@
-   line_comment "// test: lexer"
-        newline "\n"
-   string_begin "\""
-       char_seq "a🤨b"
-  closing_quote "\""
-        newline "\n"

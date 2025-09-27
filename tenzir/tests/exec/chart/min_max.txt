@@ -1,9 +1,0 @@
-error: `x_min` must be less than `x_max`
- --> exec/chart/min_max.tql:4:28
-  |
-4 | chart_area x=x, y=y, x_min=1, x_max=0
-  |                            ^ 
-  ⋮
-4 | chart_area x=x, y=y, x_min=1, x_max=0
-  |                                     ^ 
-  |

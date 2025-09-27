@@ -1,0 +1,28 @@
+{
+  r1: "LEEF:1.0|Tenzir|Tenzir Node|5.5.0|id|a=42\tb=Hello",
+  r2: "LEEF:1.0|Tenzir|Tenzir Node|5.5.0|other-id|a=42\tb=Hello",
+  r3: null,
+  r4: null,
+  r5: null,
+  r6: "LEEF:2.0|Tenzir|Tenzir Node|5.5.0|id|^|a.b=nested^b=top^c=",
+}
+warning: `event_class_id` must be `string`
+  --> tests/functions/print/print_leef.tql:20:20
+   |
+20 |     event_class_id=null)
+   |                    ~~~~ got `null`
+   |
+
+warning: `attributes` must be `record`
+  --> tests/functions/print/print_leef.tql:21:6
+   |
+21 | r4 = null.print_leef(
+   |      ~~~~ got `null`
+   |
+
+warning: `event_class_id` is `null`
+  --> tests/functions/print/print_leef.tql:30:20
+   |
+30 |     event_class_id=string(null))
+   |                    ~~~~~~~~~~~~ 
+   |
