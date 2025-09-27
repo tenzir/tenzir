@@ -39,14 +39,6 @@ rec {
     fileset = tenzir-tree;
   };
 
-  tenzir-integration-test-runner = [
-    (pkgs.bats.withLibraries (p: [
-      p.bats-support
-      p.bats-assert
-      pkgs.bats-tenzir
-    ]))
-    pkgs.parallel
-  ];
   tenzir-integration-test-deps = [
     pkgs.curl
     pkgs.jq
@@ -60,10 +52,11 @@ rec {
     #toybox
     pkgs.yara
     pkgs.uv
+    pkgs.parallel
     (pkgs.python3.withPackages (ps: [
       ps.trustme
     ]))
-  ] ++ tenzir-integration-test-runner;
+  ];
 
   toImageFn = import ./tenzir/image.nix nix2container;
 

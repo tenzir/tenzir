@@ -130,7 +130,6 @@ RUN --mount=target=/ccache,type=cache \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
     ctest --test-dir build --output-on-failure --exclude-regex "^tenzir/" && \
-    cmake --build build --target bats && \
     cmake --install build --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build && \
     rm -rf build
@@ -153,11 +152,6 @@ FROM development AS plugins-source
 
 WORKDIR /tmp/tenzir
 
-RUN apt-get -y --no-install-recommends install \
-      bats \
-      bats-assert \
-      bats-support
-
 # -- bundled-plugins -------------------------------------------------------------------
 
 FROM plugins-source AS amqp-plugin
@@ -167,7 +161,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/amqp -B build-amqp -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-amqp --parallel && \
-    cmake --build build-amqp --target bats && \
     DESTDIR=/plugin/amqp cmake --install build-amqp --component Runtime && \
     rm -rf build-amqp
 
@@ -178,7 +171,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-azure-blob-storage --parallel && \
-    cmake --build build-azure-blob-storage --target bats && \
     DESTDIR=/plugin/azure-blob-storage cmake --install build-azure-blob-storage --component Runtime && \
     rm -rf build-azure-blob-storage
 
@@ -189,7 +181,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/clickhouse -B build-clickhouse -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-clickhouse --parallel && \
-    cmake --build build-clickhouse --target bats && \
     DESTDIR=/plugin/clickhouse cmake --install build-clickhouse --component Runtime && \
     rm -rf build-clickhouse
 
@@ -200,7 +191,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/fluent-bit -B build-fluent-bit -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-fluent-bit --parallel && \
-    cmake --build build-fluent-bit --target bats && \
     DESTDIR=/plugin/fluent-bit cmake --install build-fluent-bit --component Runtime && \
     rm -rf build-fluent-bit
 
@@ -211,7 +201,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/gcs -B build-gcs -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-gcs --parallel && \
-    cmake --build build-gcs --target bats && \
     DESTDIR=/plugin/gcs cmake --install build-gcs --component Runtime && \
     rm -rf build-gcs
 
@@ -223,7 +212,6 @@ RUN --mount=target=/ccache,type=cache \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
     cmake --build build-google-cloud-pubsub --parallel && \
-    cmake --build build-google-cloud-pubsub --target bats && \
     DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --component Runtime && \
     rm -rf build-google-cloud-pubsub
 
@@ -234,7 +222,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/kafka -B build-kafka -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-kafka --parallel && \
-    cmake --build build-kafka --target bats && \
     DESTDIR=/plugin/kafka cmake --install build-kafka --component Runtime && \
     rm -rf build-kafka
 
@@ -245,7 +232,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/nic -B build-nic -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-nic --parallel && \
-    cmake --build build-nic --target bats && \
     DESTDIR=/plugin/nic cmake --install build-nic --component Runtime && \
     rm -rf build-nic
 
@@ -256,7 +242,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/parquet -B build-parquet -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-parquet --parallel && \
-    cmake --build build-parquet --target bats && \
     DESTDIR=/plugin/parquet cmake --install build-parquet --component Runtime && \
     rm -rf build-parquet
 
@@ -267,7 +252,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/s3 -B build-s3 -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-s3 --parallel && \
-    cmake --build build-s3 --target bats && \
     DESTDIR=/plugin/s3 cmake --install build-s3 --component Runtime && \
     rm -rf build-s3
 
@@ -278,7 +262,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/sigma -B build-sigma -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-sigma --parallel && \
-    cmake --build build-sigma --target bats && \
     DESTDIR=/plugin/sigma cmake --install build-sigma --component Runtime && \
     rm -rf build-sigma
 
@@ -289,7 +272,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/sqs -B build-sqs -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-sqs --parallel && \
-    cmake --build build-sqs --target bats && \
     DESTDIR=/plugin/sqs cmake --install build-sqs --component Runtime && \
     rm -rf build-sqs
 
@@ -300,7 +282,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/from_velociraptor -B build-from_velociraptor -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-from_velociraptor --parallel && \
-    cmake --build build-from_velociraptor --target bats && \
     DESTDIR=/plugin/from_velociraptor cmake --install build-from_velociraptor --component Runtime && \
     rm -rf build-from_velociraptor
 
@@ -311,7 +292,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/web -B build-web -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-web --parallel && \
-    cmake --build build-web --target bats && \
     DESTDIR=/plugin/web cmake --install build-web --component Runtime && \
     rm -rf build-web
 
@@ -322,7 +302,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/yara -B build-yara -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-yara --parallel && \
-    cmake --build build-yara --target bats && \
     DESTDIR=/plugin/yara cmake --install build-yara --component Runtime && \
     rm -rf build-yara
 
@@ -333,7 +312,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S plugins/zmq -B build-zmq -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-zmq --parallel && \
-    cmake --build build-zmq --target bats && \
     DESTDIR=/plugin/zmq cmake --install build-zmq --component Runtime && \
     rm -rf build-zmq
 
@@ -445,7 +423,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-compaction --parallel 1 && \
-    cmake --build build-compaction --target bats && \
     DESTDIR=/plugin/compaction cmake --install build-compaction --component Runtime && \
     rm -rf build-compaction
 
@@ -456,7 +433,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-context --parallel && \
-    cmake --build build-context --target bats && \
     DESTDIR=/plugin/context cmake --install build-context --component Runtime && \
     rm -rf build-context
 
@@ -467,7 +443,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-pipeline-manager --parallel && \
-    cmake --build build-pipeline-manager --target bats && \
     DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --component Runtime && \
     rm -rf build-pipeline-manager
 
@@ -490,7 +465,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-platform --parallel && \
-    cmake --build build-platform --target bats && \
     DESTDIR=/plugin/platform cmake --install build-platform --component Runtime && \
     rm -rf build-platform
 
@@ -501,7 +475,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-snowflake --parallel && \
-    cmake --build build-snowflake --target bats && \
     DESTDIR=/plugin/snowflake cmake --install build-snowflake --component Runtime && \
     rm -rf build-snowflake
 
@@ -512,7 +485,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_amazon_security_lake -B build-to_amazon_security_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_amazon_security_lake --parallel && \
-    cmake --build build-to_amazon_security_lake --target bats && \
     DESTDIR=/plugin/to_amazon_security_lake cmake --install build-to_amazon_security_lake --component Runtime && \
     rm -rf build-to_amazon_security_lake
 
@@ -523,7 +495,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_azure_log_analytics -B build-to_azure_log_analytics -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_azure_log_analytics --parallel && \
-    cmake --build build-to_azure_log_analytics --target bats && \
     DESTDIR=/plugin/to_azure_log_analytics cmake --install build-to_azure_log_analytics --component Runtime && \
     rm -rf build-to_azure_log_analytics
 
@@ -534,7 +505,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_splunk --parallel && \
-    cmake --build build-to_splunk --target bats && \
     DESTDIR=/plugin/to_splunk cmake --install build-to_splunk --component Runtime && \
     rm -rf build-to_splunk
 
@@ -545,7 +515,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_google_secops --parallel && \
-    cmake --build build-to_google_secops --target bats && \
     DESTDIR=/plugin/to_google_secops cmake --install build-to_google_secops --component Runtime && \
     rm -rf build-to_google_secops
 
@@ -557,7 +526,6 @@ RUN --mount=target=/ccache,type=cache \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
     cmake --build build-to_google_cloud_logging --parallel && \
-    cmake --build build-to_google_cloud_logging --target bats && \
     DESTDIR=/plugin/to_google_cloud_logging cmake --install build-to_google_cloud_logging --component Runtime && \
     rm -rf build-to_google_cloud_logging
 
@@ -568,7 +536,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_sentinelone_data_lake --parallel && \
-    cmake --build build-to_sentinelone_data_lake --target bats && \
     DESTDIR=/plugin/to_sentinelone_data_lake cmake --install build-to_sentinelone_data_lake --component Runtime && \
     rm -rf build-to_sentinelone_data_lake
 
@@ -579,7 +546,6 @@ RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-vast --parallel && \
-    cmake --build build-vast --target bats && \
     DESTDIR=/plugin/vast cmake --install build-vast --component Runtime && \
     rm -rf build-vast
 
