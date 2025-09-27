@@ -24,9 +24,9 @@ COPY --chown=tenzir:tenzir \
     ./python/pyproject.toml \
     ./python/uv.lock \
     ./
-RUN uv sync --all-extras --group dev --no-install-project
+RUN uv sync --all-packages --all-extras --group dev --no-install-project
 COPY --chown=tenzir:tenzir \
     ./python/ \
     ./
-RUN uv sync --all-extras --group dev
+RUN uv sync --all-packages --all-extras --group dev
 ENTRYPOINT [ "uv", "run" ]

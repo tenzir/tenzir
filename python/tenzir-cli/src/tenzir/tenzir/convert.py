@@ -7,12 +7,12 @@ from typing import Any, AsyncIterable
 
 import numpy as np
 import pyarrow as pa
-import tenzir.utils.arrow
-import tenzir.utils.logging
+from tenzir_core import arrow as core_arrow
+from tenzir_core import logging as core_logging
 
 from .tenzir import TableSlice
 
-logger = tenzir.utils.logging.get("tenzir.tenzir")
+logger = core_logging.get("tenzir.tenzir")
 
 _JSON_COMPATIBILITY_DOCSTRING_ = """JSON types are numbers, booleans, strings, arrays and objects
 - dates and times are formated with ISO 8601
@@ -38,7 +38,7 @@ async def collect_pyarrow(
     batches = defaultdict(list)
     async for slice in stream:
         batch = to_pyarrow(slice)
-        name = tenzir.utils.arrow.name(batch.schema)
+        name = core_arrow.name(batch.schema)
         logger.debug(f"got batch of {name}")
         num_batches += 1
         num_rows += batch.num_rows
@@ -49,7 +49,7 @@ async def collect_pyarrow(
     result = defaultdict(list)
     for _, batches in batches.items():
         table = pa.Table.from_batches(batches)
-        name = tenzir.utils.arrow.name(table.schema)
+        name = core_arrow.name(table.schema)
         result[name].append(table)
     return result
 
@@ -101,6 +101,6 @@ async def to_json_rows(
     {_JSON_COMPATIBILITY_DOCSTRING_}"""
     async for slice in stream:
         batch = to_pyarrow(slice)
-        name = tenzir.utils.arrow.name(batch.schema)
+        name = core_arrow.name(batch.schema)
         for row in batch.to_pylist():
             yield VastRow(name, arrow_dict_to_json_dict(row))

@@ -4,9 +4,9 @@ import os
 import subprocess
 from pathlib import Path
 
-import tenzir.utils.logging
+from tenzir_core import logging as core_logging
 
-logger = tenzir.utils.logging.get(__name__)
+logger = core_logging.get(__name__)
 
 
 from typing import Optional

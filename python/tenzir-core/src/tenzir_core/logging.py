@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from tenzir.utils.config import create as create_config, Config
+from .config import create as create_config, Config
 
 
 def configure(config: Config, logger: logging.Logger):
