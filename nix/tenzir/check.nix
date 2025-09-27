@@ -25,10 +25,6 @@ stdenvNoCC.mkDerivation {
         ps.trustme
       ]);
       template = path: ''
-        if [ -d "${path}/bats/tests" ]; then
-          echo "running ${path} BATS tests"
-          bats -T -j $NIX_BUILD_CORES "${path}/bats/tests"
-        fi
         if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
           uvx tenzir-test --python=>=3.12 \\
@@ -40,9 +36,7 @@ stdenvNoCC.mkDerivation {
       '';
     in
     ''
-      patchShebangs tenzir/bats/data/misc/scripts
       export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
-      export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/bats
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
       # To run the integration tests fully offline, pre-populate uv's cache and
       # set `UV_NO_INDEX=1` and `UV_OFFLINE=1` before invoking `nix build`.

@@ -62,7 +62,7 @@
             tenzir-clang = package-clang.tenzir;
             tenzir-static-clang = package-clang.tenzir-static;
             integration-test-shell = pkgs.mkShell {
-              packages = package.tenzir-integration-test-runner;
+              packages = package.tenzir-integration-test-deps;
             };
           }
           // {
