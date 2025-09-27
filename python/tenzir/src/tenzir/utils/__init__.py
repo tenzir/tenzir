@@ -1,4 +1,4 @@
-"""Compatibility package providing access to tenzir-core utilities."""
+"""Compatibility package providing access to tenzir-common utilities."""
 
 from . import arrow, asyncio, config, logging
 

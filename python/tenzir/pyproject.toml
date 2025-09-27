@@ -1,20 +1,20 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=80", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tenzir-cli"
+name = "tenzir"
 version = "5.19.0"
 description = "Tenzir CLI bindings and binary launchers"
 requires-python = ">=3.9"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
+readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
   { name = "Tenzir", email = "engineering@tenzir.com" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Plugins",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
     "Topic :: Security",
@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-  "tenzir-core>=5.19.0,<5.20.0",
+  "tenzir-common>=5.19.0,<5.20.0",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +33,11 @@ operator = [
   "tenzir-operators[pandas]>=5.19.0,<5.20.0",
   "aiohttp>=3.8,<4.0",
 ]
+
+[project.urls]
+Homepage = "https://tenzir.com"
+Documentation = "https://docs.tenzir.com/reference/python-api"
+Repository = "https://github.com/tenzir/tenzir"
 
 [project.scripts]
 tenzir = "tenzir._bin.tenzir:main"
@@ -50,3 +55,6 @@ where = ["src"]
   "libexec/**",
   "share/**",
 ]
+
+[tool.uv.sources]
+tenzir-common = { workspace = true }

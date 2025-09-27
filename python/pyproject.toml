@@ -6,13 +6,13 @@ build-backend = "setuptools.build_meta"
 members = [
   "tenzir-core",
   "tenzir-operators",
-  "tenzir-cli",
+  "tenzir",
 ]
 
 [tool.uv.sources]
 tenzir-core = { workspace = true }
 tenzir-operators = { workspace = true }
-tenzir-cli = { workspace = true }
+tenzir = { workspace = true }
 
 [dependency-groups]
 dev = [

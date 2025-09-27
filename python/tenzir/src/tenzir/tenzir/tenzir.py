@@ -7,7 +7,7 @@ from enum import Enum, auto
 from typing import AsyncIterable
 
 import pyarrow as pa
-from tenzir_core import logging as core_logging
+from tenzir_common import logging as core_logging
 
 from .cli import CLI
 

@@ -10,7 +10,7 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "tenzir-cli",
+    "tenzir",
     "tenzir-core",
     "tenzir-operators",
 ]
@@ -971,9 +971,9 @@ wheels = [
 ]
 
 [[package]]
-name = "tenzir-cli"
+name = "tenzir"
 version = "5.19.0"
-source = { editable = "tenzir-cli" }
+source = { editable = "tenzir" }
 dependencies = [
     { name = "tenzir-common" },
 ]

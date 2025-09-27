@@ -7,13 +7,13 @@ name = "tenzir-core"
 version = "5.19.0"
 description = "Shared Python utilities for the Tenzir data pipeline"
 requires-python = ">=3.9"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
+readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
   { name = "Tenzir", email = "engineering@tenzir.com" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
 ]

@@ -15,7 +15,7 @@ This workspace builds three distributions:
   the Python ecosystem.
 - `tenzir-operators`: The Python operator executor that powers the `python`
   pipeline stage when running inside Tenzir.
-- `tenzir-cli`: The public CLI bindings, including compatibility shims for the
+- `tenzir`: The public CLI bindings, including compatibility shims for the
   legacy `tenzir` import path and optional bundled binaries.
 
 ## Usage
@@ -26,7 +26,7 @@ To get started, clone the Tenzir repository and install the CLI bindings via
 ```bash
 git clone https://github.com/tenzir/tenzir.git
 cd tenzir/python
-uv sync --package tenzir-cli --extra module
+uv sync --package tenzir --extra module
 ```
 
 Add `--extra operator` if you need the Python operator helpers
@@ -73,7 +73,7 @@ Update each member package individually, for example:
 ```bash
 uv version --package tenzir-core 2.3.1
 uv version --package tenzir-operators 2.3.1
-uv version --package tenzir-cli 2.3.1
+uv version --package tenzir 2.3.1
 ```
 
 ### Build distributions
@@ -83,7 +83,7 @@ Create wheels and sdists for the packages that changed:
 ```bash
 uv build --package tenzir-core
 uv build --package tenzir-operators
-uv build --package tenzir-cli
+uv build --package tenzir
 ```
 
 ## Bundled CLI binaries (Linux)
@@ -92,10 +92,10 @@ For Linux wheels, you can bundle static `tenzir` and `tenzir-ctl` binaries and t
 
 - Build static binaries: `nix build .#tenzir-static` (and/or `.#tenzir-de-static`).
 - Copy resulting directories into the CLI package:
-  - `result/bin` → `python/tenzir-cli/src/tenzir/bin/`
-  - `result/libexec` → `python/tenzir-cli/src/tenzir/libexec/` (if present)
-  - `result/share` → `python/tenzir-cli/src/tenzir/share/` (if present)
-- Build the wheel: `uv build --package tenzir-cli`.
+  - `result/bin` → `python/tenzir/src/tenzir/bin/`
+  - `result/libexec` → `python/tenzir/src/tenzir/libexec/` (if present)
+  - `result/share` → `python/tenzir/src/tenzir/share/` (if present)
+- Build the wheel: `uv build --package tenzir`.
 
 The wheel exposes `tenzir` and `tenzir-ctl` console scripts that prefer the bundled
 static binaries when present, falling back to the system `PATH` otherwise. Non-Linux
@@ -107,7 +107,7 @@ platforms are supported via fallback only and are not expected to include binari
 2. Publish the desired package(s), e.g. the CLI wheel:
 
    ```bash
-   uv publish --publish-url https://test.pypi.org/legacy/ --check-url https://test.pypi.org/simple/ --token pypi-XXXXXXXX dist/tenzir_cli-*.whl dist/tenzir_cli-*.tar.gz
+   uv publish --publish-url https://test.pypi.org/legacy/ --check-url https://test.pypi.org/simple/ --token pypi-XXXXXXXX dist/tenzir-*.whl dist/tenzir-*.tar.gz
    ```
 
 ### Publish to PyPI
@@ -118,5 +118,5 @@ platforms are supported via fallback only and are not expected to include binari
    ```bash
    uv publish --token pypi-XXXXXXXX dist/tenzir_core-*.whl dist/tenzir_core-*.tar.gz
    uv publish --token pypi-XXXXXXXX dist/tenzir_operators-*.whl dist/tenzir_operators-*.tar.gz
-   uv publish --token pypi-XXXXXXXX dist/tenzir_cli-*.whl dist/tenzir_cli-*.tar.gz
+   uv publish --token pypi-XXXXXXXX dist/tenzir-*.whl dist/tenzir-*.tar.gz
    ```
