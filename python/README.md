@@ -10,25 +10,24 @@ with other security tools.
 ## Usage
 
 To get started, clone the Tenzir repository and install the Python package via
-[Poetry](https://python-poetry.org/docs/):
+[uv](https://docs.astral.sh/uv/):
 
 ```bash
 git clone https://github.com/tenzir/tenzir.git
 cd tenzir/python
-poetry install -E module
+uv sync --extra module
 ```
 
 ## Development
 
-We recommend that you work with an editable installation, which is the default
-for `poetry install`.
+We recommend an editable installation, which `uv sync` creates by default.
 
 ### Unit Tests
 
 Run the unit tests via pytest:
 
 ```bash
-poetry run pytest
+uv run pytest
 ```
 
 ### Integration Tests
@@ -36,7 +35,7 @@ poetry run pytest
 Run the integrations tests via Docker Compose and pytest:
 
 ```bash
-./docker-poetry-run.sh pytest -v
+./docker-uv-run.sh pytest -v
 ```
 
 ## Packaging
@@ -53,7 +52,7 @@ package to PyPI.
 Prior to releasing a new version, bump the version, e.g.:
 
 ```bash
-poetry version 2.3.1
+uv version 2.3.1
 ```
 
 This updates the `pyproject.toml` file.
@@ -67,7 +66,7 @@ For Linux wheels, you can bundle static `tenzir` and `tenzir-ctl` binaries and t
   - `result/bin` → `python/tenzir/bin/`
   - `result/libexec` → `python/tenzir/libexec/` (if present)
   - `result/share` → `python/tenzir/share/` (if present)
-- Build the wheel: `poetry build`.
+- Build the wheel: `uv build`.
 
 The wheel exposes `tenzir` and `tenzir-ctl` console scripts that prefer the bundled
 static binaries when present, falling back to the system `PATH` otherwise. Non-Linux
@@ -75,39 +74,20 @@ platforms are supported via fallback only and are not expected to include binari
 
 ### Publish to Test PyPI
 
-1. Add a Test PyPi repository:
+1. Get the token from <https://test.pypi.org/manage/account/token/>.
+
+2. Publish:
 
    ```bash
-   poetry config repositories.test-pypi https://test.pypi.org/legacy/
-   ```
-
-2. Get the token from <https://test.pypi.org/manage/account/token/>.
-
-3. Store the token:
-
-  ```bash
-  poetry config pypi-token.test-pypi pypi-XXXXXXXX
-  ```
-
-4. Publish:
-  
-   ```bash
-   poetry publish --build -r test-pypi
+   uv publish --publish-url https://test.pypi.org/legacy/ --check-url https://test.pypi.org/simple/ --token pypi-XXXXXXXX
    ```
 
 ### Publish to PyPI
 
 1. Get the token from <https://pypi.org/manage/account/token/>.
 
-2. Store the token:
-
-  ```bash
-  poetry config pypi-token.pypi pypi-XXXXXXXX
-  ```
-
-3. Publish
+2. Publish
 
    ```bash
-   poetry publish --build
+   uv publish --token pypi-XXXXXXXX
    ```
-
