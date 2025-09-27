@@ -7,8 +7,8 @@ from typing import Any, AsyncIterable
 
 import numpy as np
 import pyarrow as pa
-from tenzir_core import arrow as core_arrow
-from tenzir_core import logging as core_logging
+from tenzir_common import arrow as core_arrow
+from tenzir_common import logging as core_logging
 
 from .tenzir import TableSlice
 
