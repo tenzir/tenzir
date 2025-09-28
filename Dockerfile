@@ -574,7 +574,9 @@ USER tenzir:tenzir
 FROM tenzir-ce-untested AS tenzir-ce-integration
 
 COPY test/ ./test
-RUN uvx tenzir-test --python=>=3.12 \
+RUN "$PREFIX/libexec/uv" tool run \
+    --python ">=3.12" \
+    tenzir-test \
     --tenzir-binary "$PREFIX/bin/tenzir" \
     --tenzir-node-binary "$PREFIX/bin/tenzir-node" \
     --root test \
