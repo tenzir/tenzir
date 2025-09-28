@@ -813,7 +813,7 @@ function (TenzirRegisterPlugin)
     set_tests_properties(
       build-${PLUGIN_TARGET}-test
       PROPERTIES FIXTURES_SETUP tenzir_${PLUGIN_TARGET}_unit_test_fixture
-                 FIXTURES_REQUIRED tenzir_unit_test_fixture)
+                 FIXTURES_REQUIRED tenzir_unit_test_fixture LABELS unit)
     foreach (suite IN LISTS suites)
       string(REPLACE " " "_" test_name ${suite})
       add_test(NAME "plugin/${PLUGIN_TARGET}/${test_name}"
@@ -821,7 +821,8 @@ function (TenzirRegisterPlugin)
                        "${TENZIR_UNIT_TEST_TIMEOUT}" -s "${suite}")
       set_tests_properties(
         "plugin/${PLUGIN_TARGET}/${test_name}"
-        PROPERTIES FIXTURES_REQUIRED tenzir_${PLUGIN_TARGET}_unit_test_fixture)
+        PROPERTIES FIXTURES_REQUIRED tenzir_${PLUGIN_TARGET}_unit_test_fixture
+                   LABELS unit)
     endforeach ()
   endif ()
 

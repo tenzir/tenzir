@@ -127,9 +127,9 @@ RUN --mount=target=/ccache,type=cache \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-      ${TENZIR_BUILD_OPTIONS} && \
-    cmake --build build --parallel && \
-    ctest --test-dir build --output-on-failure --exclude-regex "^tenzir/" && \
+    ${TENZIR_BUILD_OPTIONS} && \
+  cmake --build build --parallel && \
+    cmake --build build --target unit-tests && \
     cmake --install build --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build && \
     rm -rf build
