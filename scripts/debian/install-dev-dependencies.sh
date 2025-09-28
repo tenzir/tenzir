@@ -69,6 +69,10 @@ apt-get update
 apt-get -y install yarn
 
 
+# uv
+curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+
+
 # Poetry
 export POETRY_HOME=/opt/poetry
 curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
