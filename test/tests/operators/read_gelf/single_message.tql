@@ -1,0 +1,5 @@
+from {
+  line: r#"{"x":1,"y":"foo","z":4.2}"#
+}
+write_lines
+read_gelf
