@@ -180,9 +180,6 @@ public:
                             "running them sequentially")
         .add<bool>("strict",
                    "return a non-zero exit code if any warnings occured"));
-    exec->options.add<bool>("?tenzir", "tql2",
-                            "enable TQL2-only mode (deprecated; this option is "
-                            "always enabled)");
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
