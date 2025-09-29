@@ -41,9 +41,6 @@ void add_root_opts(command& cmd) {
     "disable user and system configuration, schema and plugin "
     "directories lookup and static and dynamic plugin "
     "autoloading (this may only be used on the command line)");
-  cmd.options.add<bool>("?tenzir", "tql2",
-                        "enable TQL2-only mode (deprecated; this option is "
-                        "always enabled)");
   cmd.options.add<bool>(
     "?tenzir", "no-location-overrides",
     "forbid unsafe location overrides for pipelines with the "
