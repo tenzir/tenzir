@@ -29,6 +29,7 @@
 
 #include <chrono>
 #include <string>
+#include <utility>
 
 using namespace std::chrono_literals;
 namespace tenzir::plugins::kafka {
@@ -160,7 +161,7 @@ configure_or_request(const located<record>& options, kafka::configuration& cfg,
         requests.emplace_back(
           s, options.source,
           [&cfg, &dh, loc = options.source,
-           key](resolved_secret_value v) -> failure_or<void> {
+           key](const resolved_secret_value& v) -> failure_or<void> {
             TRY(auto str, v.utf8_view("options." + key, loc, dh));
             set_or_fail(key, std::string{str}, loc, cfg, dh);
             return {};
@@ -182,7 +183,7 @@ struct loader_args {
   std::uint64_t commit_batch_size = 1000;
   duration commit_timeout = 10s;
   located<record> options;
-  configuration::aws_iam_options aws;
+  std::optional<configuration::aws_iam_options> aws;
   location operator_location;
 
   template <class Inspector>
@@ -445,8 +446,9 @@ public:
     -> generator<std::monostate> {
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
-    if (! cfg) {
+    if (not cfg) {
       diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
+      co_return;
     };
     // Override configuration with arguments.
     {
@@ -472,18 +474,18 @@ public:
         TENZIR_ERROR("{} messages were not delivered", num_messages);
       }
     });
-    auto topics = std::vector<std::string>{std::move(args_.topic)};
-    std::string key;
+    auto topics = std::vector<std::string>{args_.topic};
+    auto key = std::string{};
     if (args_.key) {
       key = args_.key->inner;
     }
-    time timestamp;
+    auto timestamp = time{};
     if (args_.timestamp) {
       auto result = parsers::time(args_.timestamp->inner, timestamp);
       TENZIR_ASSERT(result); // validated earlier
     }
-    for (auto chunk : input) {
-      if (! chunk || chunk->size() == 0) {
+    for (const auto& chunk : input) {
+      if (not chunk or chunk->size() == 0) {
         co_yield {};
         continue;
       }
