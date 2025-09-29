@@ -1,8 +1,0 @@
-error: unsupported scheme `unknown`
- --> <input>:1:5
-  |
-1 | to "unknown://example.org"
-  |     ^^^^^^^ 
-  |
-  = note: supported schemes for deduction: `elasticsearch`, `email`, `file`, `ftp`, `ftps`, `http`, `https`, `mailto`, `opensearch`, `smtp`, `smtps`, `tcp`, `udp`
-  = docs: https://docs.tenzir.com/reference/operators/to

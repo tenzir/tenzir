@@ -12,6 +12,7 @@
 - Decompose `pipelines_local.bats` so each behaviour lands in the appropriate directory under `test/tests/*`.
 - Prefer inline `from { … }` data (with `write_lines` when needed) over `shell` commands to keep scenarios self-contained.
 - Run `uvx tenzir-test` from the `test/` directory before staging changes so baselines capture stable relative paths.
+- Remove the corresponding `tenzir/bats/data/reference/**` artefacts once a Bats suite is ported to tenzir-test.
 
 ## Test Suite Inventory & Target State
 | File | Focus | Current State | Migration Decision |
@@ -20,7 +21,7 @@
 | tests/every.bats | Scheduler modifiers (`every`, remote) | TQL2 | Direct port alongside cron. |
 | tests/time.bats | Duration arithmetic & rounding | TQL2 | Direct port into expression-focused tenzir-test cases. |
 | tests/functions.bats | TQL2 scalar & record functions | TQL2 | Split into thematic tenzir-test specs; keep single-source-of-truth for function behaviour. |
-| tests/from_to.bats | URI auto-deduction | TQL2 | Port to tenzir-test using compilation assertions. |
+| tests/from_to.bats | URI auto-deduction | TQL2 | Ported to `tests/compiler/from_to/*.tql`. |
 | tests/gelf.bats | `read_gelf`, `unflatten` | TQL2 | Ported to `tests/operators/read_gelf/**/*.tql`. |
 | tests/lines.bats | `read_lines` null delimiters | TQL2 | Ported to `tests/operators/read_delimited/null_separator.tql`. |
 | tests/database.bats | Node metrics & import/export | TQL2 | Port after building node fixture & metrics assertions. |
