@@ -33,7 +33,7 @@
 | tests/version.bats | `version` smoke | TQL2 | Retire; existing CLI smoke coverage is sufficient. |
 | tests/pipelines_local.bats | Mixed parser coverage, heavy `TENZIR_LEGACY` | TQL1 | Triage: rewrite relevant behaviours in TQL2 (schema selectors, charts, deduplicate, unroll); drop legacy-only parser assertions. |
 | tests/leef.bats | `read_leef`, `parse_leef` under legacy flag | TQL1 | Ported to `tests/operators/leef/*.tql` with modern syntax. |
-| tests/vast.bats, tests/vast_server.bats | Old node pipelines & filters | TQL1 | Identify behaviours still missing in TQL2 suites (import/export filtering, schema predicates) and rewrite; remove redundant legacy syntax checks. |
+| tests/vast.bats, tests/vast_server.bats | Old node pipelines & filters | Removed | Dropped without replacement; overlapping coverage now lives in tenzir-test node/storage suites. |
 | lib/** | Vendored Bats framework self-tests | N/A | Drop after migration (not part of Tenzir coverage). |
 
 ## Capability Prerequisites for tenzir-test
@@ -71,10 +71,10 @@
    - Port pure TQL2 suites (cron, every, time, functions, from_to, gelf, lines, version).
    - Add regression coverage for `measure`, `deduplicate`, `unroll` using TQL2 syntax while porting.
 3. **Integration-heavy ports (Week 3)**
-   - Migrate database, feather, http2/opensearch, tcp/udp, shutdown after fixtures mature.
+   - Migrate database, feather, http2/opensearch, tcp/udp after fixtures mature.
    - Introduce reusable tenzir-test modules for HTTP mock servers, TLS cert generation, and UDP echo clients.
 4. **Legacy rewrites (Week 4+)**
-   - For pipelines_local/leef/vast/vast_server, catalogue behaviours worth keeping (e.g., schema selectors, import filters, chart validation) and re-author them in TQL2.
+   - For pipelines_local, catalogue behaviours worth keeping (e.g., schema selectors, import filters, chart validation) and re-author them in TQL2.
    - Drop tests that only assert legacy parser quirks (`--dump-ast`, `load file` syntax errors, etc.).
 5. **Cleanup**
    - Remove vendored `lib/bats` subtree and obsolete helper scripts.

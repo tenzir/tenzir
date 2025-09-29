@@ -1,7 +1,0 @@
-error: could not parse `select` operator
- --> <input>:1:27
-  |
-1 | export | sort timestamp | select timestamp /*double ending*/ slash*/
-  |                           ^^^^^^ 
-  |
-  = note: !! syntax_error: failed to parse select operator: ' timestamp /*double ending*/ slash*/'
