@@ -28,7 +28,7 @@
 | tests/feather.bats | Arrow/Feather roundtrip & compression | TQL2 + Python deps | Port after providing pyarrow/uv fixture in tenzir-test or stubbing via golden files. |
 | tests/http2.bats, tests/opensearch.bats | HTTP load/save & OpenSearch bulk | TQL2 | Port with HTTP mock server support; prefer built-in runner over ad-hoc `python webserver.py`. |
 | tests/tcp.bats, tests/udp.bats | Socket transports (TLS/UDP) | TQL2 | Port once tenzir-test exposes socket helpers & certificate fixtures; keep TLS coverage. |
-| tests/shutdown.bats | Remote operator shutdown | TQL2 | Port with node lifecycle hooks in tenzir-test. |
+| tests/shutdown.bats | Remote operator shutdown | TQL2 | Retired; behaviour covered by node lifecycle tests elsewhere. |
 | tests/version.bats | `version` smoke | TQL2 | Retire; existing CLI smoke coverage is sufficient. |
 | tests/pipelines_local.bats | Mixed parser coverage, heavy `TENZIR_LEGACY` | TQL1 | Triage: rewrite relevant behaviours in TQL2 (schema selectors, charts, deduplicate, unroll); drop legacy-only parser assertions. |
 | tests/leef.bats | `read_leef`, `parse_leef` under legacy flag | TQL1 | Ported to `tests/operators/leef/*.tql` with modern syntax. |
