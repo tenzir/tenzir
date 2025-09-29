@@ -1,0 +1,6 @@
+from {
+  a: round(2s, 2s),
+  b: round(1s, 2s),
+  c: round(4s, 3s),
+  d: round(5s, 3s),
+}

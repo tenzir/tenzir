@@ -1,0 +1,7 @@
+from {
+  time: 2024-08-27T16:42:43,
+}
+year = round(time, 1y)
+half = round(time, 0.5y)
+week = round(time, 1w)
+nano = round(time, 1ns)

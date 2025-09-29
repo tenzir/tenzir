@@ -19,7 +19,7 @@
 | --- | --- | --- | --- |
 | tests/cron.bats | Scheduler modifiers (`cron`, remote) | TQL2 | Directly port to tenzir-test once scheduler fixtures exist. |
 | tests/every.bats | Scheduler modifiers (`every`, remote) | TQL2 | Direct port alongside cron. |
-| tests/time.bats | Duration arithmetic & rounding | TQL2 | Direct port into expression-focused tenzir-test cases. |
+| tests/time.bats | Duration arithmetic & rounding | TQL2 | Ported to `tests/functions/time/*.tql`. |
 | tests/functions.bats | TQL2 scalar & record functions | TQL2 | Split into thematic tenzir-test specs; keep single-source-of-truth for function behaviour. |
 | tests/from_to.bats | URI auto-deduction | TQL2 | Ported to `tests/compiler/from_to/*.tql`. |
 | tests/gelf.bats | `read_gelf`, `unflatten` | TQL2 | Ported to `tests/operators/read_gelf/**/*.tql`. |

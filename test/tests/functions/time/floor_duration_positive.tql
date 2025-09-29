@@ -1,0 +1,6 @@
+from {
+  a: floor(2s, 2s),
+  b: floor(1s, 2s),
+  c: floor(3s, 2s),
+  d: floor(5s, 3s),
+}
