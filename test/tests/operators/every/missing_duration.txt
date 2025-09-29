@@ -1,16 +1,16 @@
 error: expected argument of type `duration`, but got `pipeline`
- --> <input>:1:7
+ --> tests/operators/every/missing_duration.tql:5:7
   |
-1 | every { version }
-  |       ^^^^^^^^^^^ 
+5 | every {
+  |       ^^^^^^^^^^^^^ 
   |
   = usage: every interval:duration { … }
   = docs: https://docs.tenzir.com/reference/operators/every
 
 error: expected additional positional argument `{ … }`
- --> <input>:1:1
+ --> tests/operators/every/missing_duration.tql:5:1
   |
-1 | every { version }
+5 | every {
   | ^^^^^ 
   |
   = usage: every interval:duration { … }

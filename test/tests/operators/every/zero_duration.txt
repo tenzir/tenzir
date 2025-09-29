@@ -1,7 +1,7 @@
 error: expected argument of type `duration`, but got `int64`
- --> <input>:1:7
+ --> tests/operators/every/zero_duration.tql:5:7
   |
-1 | every 0 { version }
+5 | every 0 {
   |       ^ 
   |
   = usage: every interval:duration { … }

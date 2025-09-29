@@ -1,8 +1,0 @@
-error: 'import' does not accept bytes as input
- --> /dev/stdin:1:12
-  |
-1 | every 10ms {
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  |
-  = note: source: libtenzir/builtins/operators/every_cron2.cpp:667
-  = note: failed type inference

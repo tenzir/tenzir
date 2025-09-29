@@ -18,7 +18,7 @@
 | File | Focus | Current State | Migration Decision |
 | --- | --- | --- | --- |
 | tests/cron.bats | Scheduler modifiers (`cron`, remote) | TQL2 | Ported to `tests/node/scheduler/*.tql` and `tests/operators/cron/*.tql`. |
-| tests/every.bats | Scheduler modifiers (`every`, remote) | TQL2 | Direct port alongside cron. |
+| tests/every.bats | Scheduler modifiers (`every`, remote) | TQL2 | Ported to `tests/node/scheduler/*.tql` and `tests/operators/every/*.tql`. |
 | tests/time.bats | Duration arithmetic & rounding | TQL2 | Ported to `tests/functions/time/*.tql`. |
 | tests/functions.bats | TQL2 scalar & record functions | TQL2 | Ported to `tests/functions/**` scenarios. |
 | tests/from_to.bats | URI auto-deduction | TQL2 | Ported to `tests/compiler/from_to/*.tql`. |
