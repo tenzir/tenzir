@@ -31,7 +31,7 @@
 | tests/shutdown.bats | Remote operator shutdown | TQL2 | Port with node lifecycle hooks in tenzir-test. |
 | tests/version.bats | `version` smoke | TQL2 | Retire; existing CLI smoke coverage is sufficient. |
 | tests/pipelines_local.bats | Mixed parser coverage, heavy `TENZIR_LEGACY` | TQL1 | Triage: rewrite relevant behaviours in TQL2 (schema selectors, charts, deduplicate, unroll); drop legacy-only parser assertions. |
-| tests/leef.bats | `read leef`, `parse content leef` under legacy flag | TQL1 | Re-spec in TQL2 using `read_leef`/`parse_leef` functions; retire reliance on `TENZIR_LEGACY`. |
+| tests/leef.bats | `read_leef`, `parse_leef` under legacy flag | TQL1 | Ported to `tests/operators/leef/*.tql` with modern syntax. |
 | tests/vast.bats, tests/vast_server.bats | Old node pipelines & filters | TQL1 | Identify behaviours still missing in TQL2 suites (import/export filtering, schema predicates) and rewrite; remove redundant legacy syntax checks. |
 | lib/** | Vendored Bats framework self-tests | N/A | Drop after migration (not part of Tenzir coverage). |
 
