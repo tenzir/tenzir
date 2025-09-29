@@ -1,6 +1,6 @@
 error: bad cron expression: invalid value for at least one field
- --> <input>:1:6
+ --> tests/operators/cron/invalid_value.tql:5:6
   |
-1 | cron "E * * * * *", { version }
+5 | cron "E * * * * *", {
   |      ^^^^^^^^^^^^^ 
   |

@@ -1,0 +1,6 @@
+error: the file `./this-file-does-not-exist.json` does not exist
+ --> tests/operators/cron/missing_file.tql:6:8
+  |
+6 |   from "./this-file-does-not-exist.json"
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
