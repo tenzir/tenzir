@@ -273,56 +273,77 @@ public:
     }
     auto num_messages = size_t{0};
     auto last_commit_time = time::clock::now();
+    auto last_good_message = std::shared_ptr<RdKafka::Message>{};
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
       TENZIR_ASSERT(raw_msg);
       switch (raw_msg->err()) {
         case RdKafka::ERR_NO_ERROR: {
+          last_good_message = std::move(raw_msg);
           // Create chunk from the message
-          auto chunk = chunk::make(raw_msg->payload(), raw_msg->len(),
-                                   [msg = raw_msg]() noexcept {});
+          auto chunk = chunk::make(last_good_message->payload(),
+                                   last_good_message->len(),
+                                   [msg = last_good_message]() noexcept {});
           TENZIR_ASSERT(chunk);
           co_yield std::move(chunk);
           // Manually commit this specific message after processing
           ++num_messages;
           const auto now = time::clock::now();
-          if (num_messages % args_.commit_batch_size == 0
-              or last_commit_time - now >= args_.commit_timeout) {
+          if (last_good_message
+              and (num_messages % args_.commit_batch_size == 0
+                   or last_commit_time - now >= args_.commit_timeout)) {
             last_commit_time = now;
-            if (not client->commit(raw_msg.get(), dh,
+            if (not client->commit(last_good_message.get(), dh,
                                    args_.operator_location)) {
               co_return;
             }
+            last_good_message.reset();
           }
-          if (args_.count && args_.count->inner == num_messages) {
-            if (not client->commit(raw_msg.get(), dh,
-                                   args_.operator_location)) {
-            }
+          if (last_good_message and args_.count
+              && args_.count->inner == num_messages) {
+            std::ignore = client->commit(last_good_message.get(), dh,
+                                         args_.operator_location);
             co_return;
           }
           continue;
         }
         case RdKafka::ERR__TIMED_OUT: {
           const auto now = time::clock::now();
-          if (last_commit_time - now >= args_.commit_timeout) {
-            if (not client->commit(raw_msg.get(), dh,
+          if (last_good_message
+              and last_commit_time - now >= args_.commit_timeout) {
+            if (not client->commit(last_good_message.get(), dh,
                                    args_.operator_location)) {
               co_return;
             }
+            last_good_message.reset();
           }
           co_yield {};
           continue;
         }
         case RdKafka::ERR__PARTITION_EOF: {
-          std::ignore
-            = client->commit(raw_msg.get(), dh, args_.operator_location);
+          if (last_good_message) {
+            std::ignore = client->commit(last_good_message.get(), dh,
+                                         args_.operator_location);
+          }
           co_yield {};
           co_return;
         }
         default: {
-          std::ignore
-            = client->commit(raw_msg.get(), dh, args_.operator_location);
+          if (last_good_message) {
+            auto ndh = transforming_diagnostic_handler{
+              dh,
+              [](auto&& diag) {
+                return std::move(diag)
+                  .modify()
+                  .severity(severity::warning)
+                  .done();
+              },
+            };
+            std::ignore = client->commit(last_good_message.get(), ndh,
+                                         args_.operator_location);
+          }
           diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
+            .primary(args_.operator_location)
             .emit(dh);
           co_yield {};
           co_return;
