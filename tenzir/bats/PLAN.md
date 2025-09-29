@@ -14,7 +14,7 @@
 | tests/functions.bats | TQL2 scalar & record functions | TQL2 | Split into thematic tenzir-test specs; keep single-source-of-truth for function behaviour. |
 | tests/from_to.bats | URI auto-deduction | TQL2 | Port to tenzir-test using compilation assertions. |
 | tests/gelf.bats | `read_gelf`, `unflatten` | TQL2 | Port (pure data fixtures, no node). |
-| tests/lines.bats | `read_lines` null delimiters | TQL2 | Port as quick smoke test. |
+| tests/lines.bats | `read_lines` null delimiters | TQL2 | Ported to `tests/operators/read_delimited/null_separator.tql`. |
 | tests/database.bats | Node metrics & import/export | TQL2 | Port after building node fixture & metrics assertions. |
 | tests/feather.bats | Arrow/Feather roundtrip & compression | TQL2 + Python deps | Port after providing pyarrow/uv fixture in tenzir-test or stubbing via golden files. |
 | tests/http2.bats, tests/opensearch.bats | HTTP load/save & OpenSearch bulk | TQL2 | Port with HTTP mock server support; prefer built-in runner over ad-hoc `python webserver.py`. |

@@ -1,0 +1,5 @@
+from {
+  line: "1\x002\x003"
+}
+write_lines
+read_delimited b"\x00"
