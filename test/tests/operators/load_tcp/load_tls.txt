@@ -1,0 +1,6 @@
+{
+  line: "foo",
+}
+warning: Connection reset by peer
+ = note: failed to read from TCP connection
+ = note: handle `16`
