@@ -1,0 +1,13 @@
+---
+fixtures: [udp_sink]
+timeout: 60
+---
+
+from {foo: 42}
+repeat 10
+write_json
+save_udp env("UDP_SINK_ENDPOINT")
+
+load_file env("UDP_SINK_FILE"), follow=true
+read_json
+head 10
