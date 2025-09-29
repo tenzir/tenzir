@@ -24,7 +24,7 @@
 | tests/from_to.bats | URI auto-deduction | TQL2 | Ported to `tests/compiler/from_to/*.tql`. |
 | tests/gelf.bats | `read_gelf`, `unflatten` | TQL2 | Ported to `tests/operators/read_gelf/**/*.tql`. |
 | tests/lines.bats | `read_lines` null delimiters | TQL2 | Ported to `tests/operators/read_delimited/null_separator.tql`. |
-| tests/database.bats | Node metrics & import/export | TQL2 | Port after building node fixture & metrics assertions. |
+| tests/database.bats | Node metrics & import/export | TQL2 | Ported to `tests/node/storage/*.tql`. |
 | tests/feather.bats | Arrow/Feather roundtrip & compression | TQL2 + Python deps | Port after providing pyarrow/uv fixture in tenzir-test or stubbing via golden files. |
 | tests/http2.bats, tests/opensearch.bats | HTTP load/save & OpenSearch bulk | TQL2 | Port with HTTP mock server support; prefer built-in runner over ad-hoc `python webserver.py`. |
 | tests/tcp.bats, tests/udp.bats | Socket transports (TLS/UDP) | TQL2 | Port once tenzir-test exposes socket helpers & certificate fixtures; keep TLS coverage. |
