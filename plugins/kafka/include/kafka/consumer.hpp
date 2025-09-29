@@ -39,6 +39,9 @@ public:
   auto commit(RdKafka::Message* message, diagnostic_handler& dh, location loc)
     -> failure_or<void>;
 
+  /// Gets the partition count for a given topic.
+  auto get_partition_count(const std::string& topic) -> caf::expected<size_t>;
+
   ~consumer() {
     if (consumer_ and consumer_.use_count() == 1) {
       consumer_->close();

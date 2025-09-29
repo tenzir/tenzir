@@ -274,6 +274,11 @@ public:
     auto num_messages = size_t{0};
     auto last_commit_time = time::clock::now();
     auto last_good_message = std::shared_ptr<RdKafka::Message>{};
+
+    // Track EOF status per partition for proper multi-partition handling
+    auto partition_count = std::optional<size_t>{};
+    auto eof_partition_count = size_t{0};
+
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
       TENZIR_ASSERT(raw_msg);
@@ -300,7 +305,7 @@ public:
             last_good_message.reset();
           }
           if (last_good_message and args_.count
-              && args_.count->inner == num_messages) {
+              and args_.count->inner == num_messages) {
             std::ignore = client->commit(last_good_message.get(), dh,
                                          args_.operator_location);
             co_return;
@@ -321,12 +326,46 @@ public:
           continue;
         }
         case RdKafka::ERR__PARTITION_EOF: {
-          if (last_good_message) {
-            std::ignore = client->commit(last_good_message.get(), dh,
-                                         args_.operator_location);
+          // Get partition count if not already retrieved
+          if (not partition_count) {
+            auto pc = client->get_partition_count(args_.topic);
+            if (not pc) {
+              diagnostic::error("failed to get partition count: {}", pc.error())
+                .primary(args_.operator_location)
+                .emit(dh);
+              co_return;
+            }
+            partition_count = *pc;
+            TENZIR_DEBUG("kafka topic {} has {} partitions", args_.topic,
+                         *partition_count);
           }
+          ++eof_partition_count;
+          TENZIR_DEBUG("kafka partition {} reached EOF ({}/{} partitions EOF)",
+                       raw_msg->partition(), eof_partition_count,
+                       *partition_count);
+          // Only exit if all partitions have reached EOF
+          if (eof_partition_count == *partition_count) {
+            // Kafka allows the number of partitions to increase, so we need to
+            // re-check here.
+            auto pc = client->get_partition_count(args_.topic);
+            if (not pc) {
+              diagnostic::error("failed to get partition count: {}", pc.error())
+                .primary(args_.operator_location)
+                .emit(dh);
+              co_return;
+            }
+            if (*pc == *partition_count) {
+              if (last_good_message) {
+                std::ignore = client->commit(last_good_message.get(), dh,
+                                             args_.operator_location);
+              }
+              co_yield {};
+              co_return;
+            }
+          }
+
           co_yield {};
-          co_return;
+          continue;
         }
         default: {
           if (last_good_message) {
