@@ -1,8 +1,14 @@
 name: AWS Marketplace Release
 
+permissions:
+  id-token: write
+
 on:
-  release:
-    types: [published]
+  # Trigger after the main CI workflow completes for releases
+  workflow_run:
+    workflows: ["Tenzir"]
+    types: [completed]
+    branches: [main]
 
   # Manual dispatch for testing.
   workflow_dispatch:
@@ -11,55 +17,103 @@ on:
         description: 'Tenzir Node Version to publish'
         required: true
         type: string
+      image:
+        description: 'Name of an existing Docker image to use (required)'
+        required: true
+        type: string
+
 
 jobs:
   marketplace-release:
     name: Build and Push AWS Marketplace Image
     runs-on: ubuntu-latest
+    # Only run for successful release builds or manual dispatch
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'release')
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Checkout repository at version tag
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
-
-      - name: Checkout submodules
+      - name: Get release information
+        id: get_release
         run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --recursive libtenzir
-          git submodule update --init --recursive plugins
-          git submodule update --init --recursive tenzir
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual dispatch - use provided inputs
+            RELEASE_TAG="${{ github.event.inputs.version_tag }}"
+            IMAGE="${{ github.event.inputs.image }}"
+          else
+            # workflow_run trigger - extract from head_branch
+            RELEASE_TAG="${{ github.event.workflow_run.head_branch }}"
+            IMAGE="ghcr.io/tenzir/tenzir:${RELEASE_TAG}"
+          fi
+          echo "release_tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # Login to ghcr to pull the existing image
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: tenzir-bot
+          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
 
+      # In theory it should be possible to assume this role directly, at least it's
+      # trust policy is permitting this. But somewhere along the stack there's a check
+      # that the OIDC provider is in the same AWS account as the role we're trying to
+      # assume, so we're using this two-step chain as a workaround.
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::622024652768:role/ecr-tenzir-ce-github-access
-          aws-region: us-east-1
+          aws-region: eu-west-1
+          role-session-name: GithubActionsCISession
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::390844774768:role/aws-marketplace-github-access
+          aws-region: eu-west-1
+          role-session-name: GithubActionsCISession
+          role-skip-session-tagging: true
+          role-chaining: true
 
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and Push Marketplace Image
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
+          AWS_REGION: us-east-1
+        with:
+          registries: 709825985650
+
+      - name: Tag and Push Image to Marketplace ECR
+        env:
+          IMAGE: ${{ steps.get_release.outputs.image }}
+          RELEASE_TAG: ${{ steps.get_release.outputs.release_tag }}
         run: |
-          docker buildx build . \
-            -t 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG} \
-            --target tenzir-node \
-            --platform linux/amd64,linux/arm64 \
-            --push
+          docker pull "${IMAGE}"
+          docker tag "${IMAGE}" 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG}
+          docker push 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:${RELEASE_TAG}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload CloudFormation template to S3
+        env:
+          AWS_REGION: eu-west-1
+          RELEASE_TAG: ${{ steps.get_release.outputs.release_tag }}
+        run: |
+          # Replace v0.00.0 with the actual release version
+          sed "s/v0.00.0/${RELEASE_TAG}/g" scripts/aws-marketplace-cloudformation.yaml > /tmp/tenzir-node-single-${RELEASE_TAG}.yaml
+
+          # Upload to S3
+          aws s3 cp /tmp/tenzir-node-single-${RELEASE_TAG}.yaml s3://tenzir-marketplace-resources/tenzir-node-single-${RELEASE_TAG}.yaml \
+            --region ${AWS_REGION}
 
       - name: Add new version to AWS Marketplace
         env:
           AWS_REGION: us-east-1
           PRODUCT_ID: prod-ygvc26drdwwlq
-          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.version_tag }}
+          RELEASE_TAG: ${{ steps.get_release.outputs.release_tag }}
         # This is following the process described here:
         # https://docs.aws.amazon.com/marketplace/latest/APIReference/work-with-container-products.html#working-with-container-products
         run: |
@@ -87,8 +141,8 @@ jobs:
                             "709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:$RELEASE_TAG"
                           ],
                           "CompatibleServices": ["ECS"],
-                          "Description": "Tenzir Node container image for AWS Marketplace (ECS)",
-                          "UsageInstructions": "docker pull 709825985650.dkr.ecr.us-east-1.amazonaws.com/tenzir/tenzir-node:$RELEASE_TAG"
+                          "Description": "Deploy this container to efficiently collect, shape, and route security data at scale within your AWS environment. Tenzir Node is the core building block for creating powerful and cost-effective security data pipelines.",
+                          "UsageInstructions": "Follow our detailed AWS instructions at https://docs.tenzir.com/guides/node-setup/deploy-a-node/#aws to deploy your Tenzir Node.\n\n**CloudFormation Deployment**: Deploy a single Tenzir Node into ECS: https://console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/new?templateURL=https://tenzir-marketplace-resources.s3.eu-west-1.amazonaws.com/single-node-container-${RELEASE_TAG}.yaml"
                         }
                       }
                     }
