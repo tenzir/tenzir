@@ -1,0 +1,6 @@
+error: `max` must be at least 0, but got -100
+ --> tests/functions/string/replace_max_negative_large.tql:9:28
+  |
+9 | x = x.replace(":", "", max=-100)
+  |                            ^^^^ 
+  |

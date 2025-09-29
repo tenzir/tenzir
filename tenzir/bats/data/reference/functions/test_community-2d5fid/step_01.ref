@@ -1,8 +1,0 @@
-error: required argument `proto` was not provided
- --> <input>:1:16
-  |
-1 | from {} | x0 = community_id( src_ip=null, dst_ip=null )
-  |                ^^^^^^^^^^^^ 
-  |
-  = usage: community_id(src_ip=ip, dst_ip=ip, proto=string, [src_port=int, dst_port=int, seed=int])
-  = docs: https://docs.tenzir.com/reference/functions/community_id

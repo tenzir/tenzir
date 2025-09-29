@@ -1,0 +1,16 @@
+{
+  z: -1,
+}
+{
+  z: -1,
+}
+{
+  z: -1,
+}
+warning: field `x` not found
+ --> tests/functions/otherwise/all_missing.tql:3:5
+  |
+3 | z = x.otherwise(-1)
+  |     ~ 
+  |
+  = hint: append `?` to suppress this warning
