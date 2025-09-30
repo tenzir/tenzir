@@ -7,25 +7,25 @@
 
 #pragma once
 
+#include "routes/config.hpp"
+#include "routes/proxy_actor.hpp"
+#include "tenzir/atoms.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
-#include "routes/config.hpp"
-#include "routes/proxy_actor.hpp"
-#include "tenzir/atoms.hpp"
-
 namespace tenzir::plugins::routes {
 
 struct routes_manager_actor_traits {
   using signatures = caf::type_list<
-    auto(atom::add, named_input_actor input) -> caf::result<void>,
-    auto(atom::add, named_output_actor output) -> caf::result<void>,
-    auto(atom::update, config cfg) -> caf::result<void>,
-    auto(atom::list) -> caf::result<config>
-    >::append_from<component_plugin_actor::signatures>;
+    auto(atom::add, named_input_actor input)->caf::result<void>,
+    auto(atom::add, named_output_actor output)->caf::result<void>,
+    auto(atom::update, config cfg)->caf::result<void>,
+    auto(atom::list)
+      ->caf::result<config>>::append_from<component_plugin_actor::signatures>;
 };
 
 using routes_manager_actor = caf::typed_actor<routes_manager_actor_traits>;
@@ -34,7 +34,8 @@ class routes_manager {
 public:
   [[maybe_unused]] static constexpr auto name = "routes-manager";
 
-  explicit routes_manager(routes_manager_actor::pointer self, filesystem_actor fs);
+  explicit routes_manager(routes_manager_actor::pointer self,
+                          filesystem_actor fs);
   auto make_behavior() -> routes_manager_actor::behavior_type;
 
 private:
@@ -51,12 +52,13 @@ private:
   auto list() -> caf::result<config>;
 
   auto _restore_state() -> void;
-  // TODO: Introduce strong types for input and output name.
-  auto _run_for(std::string input) -> void;
-  auto _find_outputs(std::string_view input) -> std::vector<std::string_view>;
-  auto _forward(std::string_view output, table_slice slice) -> void;
-  auto _inline_forward_to_outputs(std::string_view output, table_slice slice) -> void;
-  auto _inline_forward_to_routes(std::string_view output, table_slice slice) -> void;
+  auto _run_for(input input_name) -> void;
+  auto _find_outputs(const input& input_name) -> std::vector<output>;
+  auto _forward(const output& output_name, table_slice slice) -> void;
+  auto _inline_forward_to_outputs(const output& output_name, table_slice slice)
+    -> void;
+  auto _inline_forward_to_routes(const output& output_name, table_slice slice)
+    -> void;
 
   routes_manager_actor::pointer self_ = {};
   filesystem_actor fs_ = {};
@@ -69,8 +71,8 @@ private:
   // route-manager actor directly. This may prove to be a bottleneck, but the
   // architecture can easily be extended in a way where one actor is spawned per
   // route to distribute the load.
-  std::unordered_map<std::string, proxy_actor> inputs_;
-  std::unordered_map<std::string, proxy_actor> outputs_;
+  std::unordered_map<input, proxy_actor> inputs_;
+  std::unordered_map<output, proxy_actor> outputs_;
 };
 
 } // namespace tenzir::plugins::routes

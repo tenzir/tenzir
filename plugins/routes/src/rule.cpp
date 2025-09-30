@@ -6,10 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 
 #include "routes/rule.hpp"
+
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/view.hpp>
+
 #include <utility>
 
 namespace tenzir::plugins::routes {
@@ -45,7 +48,7 @@ auto rule::make(const view<record>& data, session ctx) -> failure_or<rule> {
         has_errors = true;
         continue;
       }
-      result.output = std::string{*output_str};
+      result.destination = output{std::string{*output_str}};
       continue;
     }
     if (key == "final") {
@@ -66,7 +69,7 @@ auto rule::make(const view<record>& data, session ctx) -> failure_or<rule> {
       .emit(ctx);
     has_errors = true;
   }
-  if (result.output.empty()) {
+  if (result.destination.name.empty()) {
     diagnostic::error("missing required field 'output'")
       .note("invalid rule definition")
       .emit(ctx);
@@ -81,12 +84,13 @@ auto rule::make(const view<record>& data, session ctx) -> failure_or<rule> {
 auto rule::to_record() const -> record {
   auto result = record{};
   result["where"] = where_str;
-  result["output"] = output;
+  result["output"] = destination.name;
   result["final"] = final;
   return result;
 }
 
-auto rule::evaluate(const table_slice& slice) const -> std::pair<table_slice, table_slice> {
+auto rule::evaluate(std::vector<table_slice> slices) const
+  -> evaluation_result {
   // TODO: Implement actual rule evaluation logic.
   // This should:
   // 1. Evaluate the 'where' expression against the input slice
@@ -94,7 +98,48 @@ auto rule::evaluate(const table_slice& slice) const -> std::pair<table_slice, ta
   //    - first: rows that match the rule (should be sent to 'output')
   //    - second: rows that don't match (should be evaluated by next rule)
   // 3. Respect the `final` attribute to stop further evaluation if needed.
-  return std::make_pair(table_slice{}, table_slice{});
+  /// TODO: diagnostics?
+  auto dh = null_diagnostic_handler{};
+  auto res = evaluation_result{};
+  res.matched.reserve(slices.size() / 2);
+  res.unmatched.reserve(slices.size() / 2);
+  for (auto& slice : slices) {
+    const auto ms = eval(where, slice, dh);
+    auto slice_start = size_t{0};
+    auto consume_n
+      = [&slice_start, slice](std::vector<table_slice>& target, size_t count) {
+          TENZIR_ASSERT(count > 0);
+          const auto slice_end = slice_start + count;
+          target.emplace_back(subslice(slice, slice_start, slice_end));
+          slice_start = slice_end;
+        };
+    for (auto&& part : ms) {
+      auto matches = part.as<bool_type>();
+      /// If it is not a boolean expression
+      if (not matches) {
+        consume_n(res.unmatched, part.length());
+        continue;
+      }
+      /// The truthiness of the current span
+      auto current = value_at(bool_type{}, *matches->array, 0);
+      /// The length of the current span
+      auto current_length = 0;
+      for (auto i = int64_t{0}; i < matches->length(); ++i) {
+        const auto v = value_at(bool_type{}, *matches->array, i);
+        /// If the value has not changed, we can continue
+        if (v == current) {
+          ++current_length;
+          continue;
+        }
+        /// We consume the current length into the result and reset current
+        consume_n(current == true ? res.matched : res.unmatched,
+                  current_length);
+        current_length = 0;
+        current = v;
+      }
+    }
+  }
+  return res;
 }
 
 } // namespace tenzir::plugins::routes

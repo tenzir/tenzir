@@ -25,7 +25,7 @@ auto connection::make(const view<record>& data, session ctx) -> failure_or<conne
         has_errors = true;
         continue;
       }
-      result.from = std::string{*from_str};
+      result.from.name = std::string{*from_str};
       continue;
     }
     if (key == "to") {
@@ -37,7 +37,7 @@ auto connection::make(const view<record>& data, session ctx) -> failure_or<conne
         has_errors = true;
         continue;
       }
-      result.to = std::string{*to_str};
+      result.to.name = std::string{*to_str};
       continue;
     }
     diagnostic::error("unknown field '{}'", key)
@@ -46,13 +46,13 @@ auto connection::make(const view<record>& data, session ctx) -> failure_or<conne
       .emit(ctx);
     has_errors = true;
   }
-  if (result.from.empty()) {
+  if (result.from.name.empty()) {
     diagnostic::error("missing required field 'from'")
       .note("invalid connection definition")
       .emit(ctx);
     has_errors = true;
   }
-  if (result.to.empty()) {
+  if (result.to.name.empty()) {
     diagnostic::error("missing required field 'to'")
       .note("invalid connection definition")
       .emit(ctx);
@@ -66,8 +66,8 @@ auto connection::make(const view<record>& data, session ctx) -> failure_or<conne
 
 auto connection::to_record() const -> record {
   auto result = record{};
-  result["from"] = from;
-  result["to"] = to;
+  result["from"] = from.name;
+  result["to"] = to.name;
   return result;
 }
 

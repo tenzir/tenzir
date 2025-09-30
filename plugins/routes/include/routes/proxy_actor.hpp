@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "routes/connection.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
@@ -20,36 +22,34 @@
 namespace tenzir::plugins::routes {
 
 struct proxy_actor_traits {
-  using signatures = caf::type_list<
-    auto(atom::get) -> caf::result<table_slice>,
-    auto(atom::put, table_slice slice) -> caf::result<void>>;
+  using signatures
+    = caf::type_list<auto(atom::get)->caf::result<table_slice>,
+                     auto(atom::put, table_slice slice)->caf::result<void>>;
 };
 
 using proxy_actor = caf::typed_actor<proxy_actor_traits>;
 
 struct named_input_actor {
-  std::string name;
+  input name;
   proxy_actor handle;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, named_input_actor& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.routes.named_input_actor")
-      .fields(f.field("name", x.name),
-              f.field("handle", x.handle));
+      .fields(f.field("name", x.name), f.field("handle", x.handle));
   }
 };
 
 struct named_output_actor {
-  std::string name;
+  output name;
   proxy_actor handle;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, named_output_actor& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.routes.named_output_actor")
-      .fields(f.field("name", x.name),
-              f.field("handle", x.handle));
+      .fields(f.field("name", x.name), f.field("handle", x.handle));
   }
 };
 

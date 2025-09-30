@@ -7,14 +7,14 @@
 
 #pragma once
 
+#include "routes/connection.hpp"
 #include "routes/rule.hpp"
 
-#include <tenzir/detail/inspection_common.hpp>
-#include <tenzir/view.hpp>
-
 #include <tenzir/data.hpp>
+#include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/view.hpp>
 
 #include <string>
 #include <vector>
@@ -24,7 +24,7 @@ namespace tenzir::plugins::routes {
 /// Represents a stateful route with cascading predicates.
 struct route {
   /// The input source for this route.
-  std::string input;
+  output input;
 
   /// Ordered list of routing rules (cascading predicates).
   std::vector<rule> rules;
@@ -39,8 +39,7 @@ struct route {
   friend auto inspect(Inspector& f, route& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.routes.route")
-      .fields(f.field("input", x.input),
-              f.field("rules", x.rules));
+      .fields(f.field("input", x.input), f.field("rules", x.rules));
   }
 };
 

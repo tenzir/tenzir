@@ -7,14 +7,15 @@
 
 #pragma once
 
-#include <tenzir/tql2/ast.hpp>
-#include <tenzir/detail/inspection_common.hpp>
-#include <tenzir/view.hpp>
+#include "routes/connection.hpp"
 
 #include <tenzir/data.hpp>
+#include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/ast.hpp>
+#include <tenzir/view.hpp>
 
 #include <string>
 #include <utility>
@@ -26,11 +27,12 @@ struct rule {
   /// The predicate condition for this rule.
   ast::expression where = ast::constant{true, location::unknown};
 
-  /// The string representation of the where expression. This is needed for roundtripping.
+  /// The string representation of the where expression. This is needed for
+  /// roundtripping.
   std::string where_str = "true";
 
   /// The output destination for matching data.
-  std::string output;
+  output destination;
 
   /// Whether this rule is final (stops further rule evaluation).
   bool final = false;
@@ -41,20 +43,24 @@ struct rule {
   /// Converts a rule to a record for printing.
   auto to_record() const -> record;
 
+  struct evaluation_result {
+    std::vector<table_slice> matched;
+    std::vector<table_slice> unmatched;
+  };
+
   /// Evaluates the rule against a table slice.
-  /// @param slice The input table slice to evaluate.
+  /// @param slices Tables slices the evaluate. This will either be the original
+  ///               input into a route or the unmatched part of the previous rule.
   /// @returns A pair where the first element contains rows that match the rule,
   ///          and the second element contains rows that need further evaluation.
-  auto evaluate(const table_slice& slice) const -> std::pair<table_slice, table_slice>;
+  auto evaluate(std::vector<table_slice> slices) const -> evaluation_result;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, rule& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.routes.rule")
-      .fields(f.field("where", x.where),
-              f.field("where_str", x.where_str),
-              f.field("output", x.output),
-              f.field("final", x.final));
+      .fields(f.field("where", x.where), f.field("where_str", x.where_str),
+              f.field("destination", x.destination), f.field("final", x.final));
   }
 };
 

@@ -5,17 +5,19 @@
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 
+#include "routes/connection.hpp"
+#include "routes/proxy_actor.hpp"
+#include "routes/routes_manager_actor.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include "routes/routes_manager_actor.hpp"
-#include "routes/proxy_actor.hpp"
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 
-namespace tenzir::plugins::routes::input {
+namespace tenzir::plugins::routes {
 
 namespace {
 
@@ -23,7 +25,7 @@ class input_operator final : public crtp_operator<input_operator> {
 public:
   input_operator() = default;
 
-  input_operator(located<std::string> name) noexcept : name_(std::move(name)) {
+  input_operator(located<input> name) noexcept : name_(std::move(name)) {
   }
 
   auto name() const -> std::string override {
@@ -42,7 +44,8 @@ public:
       name_.inner,
       ctrl.self().spawn<caf::linked>(caf::actor_from_state<proxy>),
     };
-    ctrl.self().mail(atom::add_v, input)
+    ctrl.self()
+      .mail(atom::add_v, input)
       .request(routes_manager, caf::infinite)
       .then(
         [&]() {
@@ -106,23 +109,27 @@ public:
   }
 
 private:
-  located<std::string> name_;
+  located<input> name_;
 };
 
-class plugin final : public virtual operator_plugin2<input_operator> {
+class input_plugin final : public virtual operator_plugin2<input_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto name = located<std::string>{};
+    auto name_str = located<std::string>{};
     TRY(argument_parser2::operator_(this->name())
-          .positional("name", name, "string")
+          .positional("name", name_str, "string")
           .parse(inv, ctx));
+    auto name = located<input>{
+      input{std::move(name_str.inner)},
+      name_str.source,
+    };
     return std::make_unique<input_operator>(std::move(name));
   }
 };
 
 } // namespace
 
-} // namespace tenzir::plugins::routes::input
+} // namespace tenzir::plugins::routes
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::routes::input::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::routes::input_plugin)

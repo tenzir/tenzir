@@ -25,7 +25,7 @@ auto route::make(const view<record>& data, session ctx) -> failure_or<route> {
         has_errors = true;
         continue;
       }
-      result.input = std::string{*input_str};
+      result.input = output{std::string{*input_str}};
       continue;
     }
     if (key == "rules") {
@@ -61,7 +61,7 @@ auto route::make(const view<record>& data, session ctx) -> failure_or<route> {
       .emit(ctx);
     has_errors = true;
   }
-  if (result.input.empty()) {
+  if (result.input.name.empty()) {
     diagnostic::error("missing required field 'input'")
       .note("invalid route definition")
       .emit(ctx);
@@ -81,7 +81,7 @@ auto route::make(const view<record>& data, session ctx) -> failure_or<route> {
 
 auto route::to_record() const -> record {
   auto result = record{};
-  result["input"] = input;
+  result["input"] = input.name;
   auto rules_list = list{};
   rules_list.reserve(rules.size());
   for (const auto& rule : rules) {

@@ -5,17 +5,19 @@
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 
+#include "routes/connection.hpp"
+#include "routes/proxy_actor.hpp"
+#include "routes/routes_manager_actor.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include "routes/routes_manager_actor.hpp"
-#include "routes/proxy_actor.hpp"
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 
-namespace tenzir::plugins::routes::output {
+namespace tenzir::plugins::routes {
 
 namespace {
 
@@ -23,14 +25,15 @@ class output_operator final : public crtp_operator<output_operator> {
 public:
   output_operator() = default;
 
-  output_operator(located<std::string> name) noexcept : name_(std::move(name)) {
+  output_operator(located<output> name) noexcept : name_(std::move(name)) {
   }
 
   auto name() const -> std::string override {
     return "routes::output";
   }
 
-  auto operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     co_yield {}; // signal readiness
     // Get the routes-manager actor from the registry
@@ -42,7 +45,8 @@ public:
       name_.inner,
       ctrl.self().spawn<caf::linked>(caf::actor_from_state<proxy>),
     };
-    ctrl.self().mail(atom::add_v, output)
+    ctrl.self()
+      .mail(atom::add_v, output)
       .request(routes_manager, caf::infinite)
       .then(
         [&]() {
@@ -63,7 +67,8 @@ public:
         continue;
       }
       // Forward the table slice to the proxy actor
-      ctrl.self().mail(atom::put_v, batch)
+      ctrl.self()
+        .mail(atom::put_v, batch)
         .request(output.handle, caf::infinite)
         .then(
           [&]() {
@@ -79,7 +84,8 @@ public:
       co_yield {};
     }
     // At the end of input, forward an empty table slice to signal end
-    ctrl.self().mail(atom::put_v, table_slice{})
+    ctrl.self()
+      .mail(atom::put_v, table_slice{})
       .request(output.handle, caf::infinite)
       .then(
         [&]() {
@@ -116,23 +122,27 @@ public:
   }
 
 private:
-  located<std::string> name_;
+  located<output> name_;
 };
 
-class plugin final : public virtual operator_plugin2<output_operator> {
+class output_plugin final : public virtual operator_plugin2<output_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto name = located<std::string>{};
+    auto name_str = located<std::string>{};
     TRY(argument_parser2::operator_(this->name())
-          .positional("name", name, "string")
+          .positional("name", name_str, "string")
           .parse(inv, ctx));
+    auto name = located<output>{
+      output{std::move(name_str.inner)},
+      name_str.source,
+    };
     return std::make_unique<output_operator>(std::move(name));
   }
 };
 
 } // namespace
 
-} // namespace tenzir::plugins::routes::output
+} // namespace tenzir::plugins::routes
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::routes::output::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::routes::output_plugin)
