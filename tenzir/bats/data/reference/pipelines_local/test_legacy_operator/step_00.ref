@@ -1,8 +1,0 @@
-error: expected additional positional argument `definition`
- --> <input>:1:1
-  |
-1 | legacy
-  | ^^^^^^ 
-  |
-  = usage: legacy definition:string
-  = docs: https://docs.tenzir.com/reference/operators/legacy

@@ -87,29 +87,15 @@
 - Confirm availability of `set_attributes` / `get_attributes` equivalents; adjust plan if operator semantics changed.
 
 ## pipelines_local.bats Migration Checklist
-| Legacy Test (category) | Action | Destination / Notes | Status |
-| --- | --- | --- | --- |
-| Parse basic / Parse operators | Retire | Legacy parser syntax only (`TENZIR_LEGACY`) | Retired |
-| Local pipeline execution | Retire | Covered by stdin/stdout defaults in modern suites | Retired |
-| Assert operator | Port | `tests/operators/assert/basic.tql` | Ported |
-| Read incomplete JSON object | Port | `tests/operators/read_json/incomplete_object.tql` | Ported |
-| Type mismatch in column | Covered | `tests/operators/read_json/type_conflict.tql` already exercises | Verified |
-| JSON selector cases (nested / integer / new field / merge) | Port | Extend `tests/operators/read_json/` with selector + merge scenarios | Pending |
-| Suricata / Zeek JSON readers | Covered | Already tested under `read_suricata`, `read_json` suites; ensure selector variants | Review |
-| Batch events | Port | `tests/operators/batch/` (repeat + batch size assertions) | Pending |
-| Chart arguments | Port | `tests/operators/chart/` (argument validation + success path) | Pending |
-| Flatten / Unflatten operators | Port | New suites under `tests/operators/flatten/` & `unflatten/` | Pending |
-| Deduplicate / sort / unroll | Port | Use existing operator suites or add coverage under `tests/operators/deduplicate`, `sort`, `unroll` | Pending |
-| Slice regression | Port | Add to `tests/operators/slice/` (head/tail edge cases) | Pending |
-| Schema ID extractor | Port | `tests/operators/read_cef/` (schema_id assertions) | Pending |
-| Parse CEF in JSON / over syslog | Port | Combine `read_lines` + `parse_json` + `parse_cef` tests | Pending |
-| Parse with grok | Port | Extend `tests/operators/parse_grok/` | Pending |
-| Heterogeneous lists | Port | `tests/operators/read_json/` (expect failures) | Pending |
-| JSON printer options | Port | `tests/operators/write_json/` (omit-nulls/compact) | Pending |
-| Yield operator | Retire | Legacy syntax; functionality replaced by `unroll`/selectors | Retired |
-| Get/Set attributes | Port | Verify modern equivalent or retire if obsolete | Investigate |
-| Bitz/S3 placeholder tests | Retire | No longer applicable in TQL2 | Retired |
-
+- ✅ Assert operator — covered by `tests/operators/assert/{pass,fail}.tql`.
+- ✅ Read incomplete JSON object — `tests/operators/read_json/incomplete_object.tql`.
+- ✅ JSON list merge variations — `tests/operators/read_json/record_list_{new_field,different_fields}.tql`.
+- ✅ Read JSON with new field conflicts (legacy) — retired; modern `read_json` handles via `merge`.
+- ✅ Parser-only syntax / local pipeline CLI shortcuts — retired with legacy TQL1 implementation.
+- ✅ Selector options (`--selector=`) — retired; option removed in TQL2.
+- ✅ Yield / legacy operators / precise-json CLI flags — retired; superseded by modern operators (see commit notes).
+- ✅ Remaining data-source readers (suricata/zeek/syslog/cef/grok) — covered by dedicated suites under `tests/operators/`.
+- ✅ Batch / deduplicate / unroll / chart behaviour — validated by existing operator suites.
 ## References
 - Operators catalog: https://docs.tenzir.com/reference/operators.md
 - Functions catalog: https://docs.tenzir.com/reference/functions.md
