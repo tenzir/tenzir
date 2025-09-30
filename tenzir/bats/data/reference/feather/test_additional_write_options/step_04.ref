@@ -1,9 +1,0 @@
-error: Invalid: Unrecognized compression type: wrongname
- --> <input>:1:82
-  |
-1 | read_zeek_tsv | batch 256 | write_feather compression_level=-1, compression_type="wrongname" | read_feather
-  |                                                                                  ^^^^^^^^^^^ 
-  |
-  = note: failed to parse compression type
-  = note: must be `lz4` or `zstd`
-  = note: failed to initialize `write_feather`

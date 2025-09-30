@@ -1,0 +1,25 @@
+---
+runner: multi
+---
+
+let $feather_uncompressed = f"{env("TENZIR_TMP_DIR")}/zeek.uncompressed.feather"
+let $feather_compressed = f"{env("TENZIR_TMP_DIR")}/zeek.compressed.feather"
+
+from f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
+batch
+write_feather compression_type="uncompressed"
+save_file $feather_uncompressed
+
+from f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
+batch
+write_feather compression_level=20, compression_type="zstd"
+save_file $feather_compressed
+
+shell f"python -c \"import json, os; uncompressed=os.path.getsize('{$feather_uncompressed}'); compressed=os.path.getsize('{$feather_compressed}'); assert compressed < uncompressed, f'compressed {{compressed}} >= {{uncompressed}}'; print(json.dumps({{'uncompressed': uncompressed, 'compressed': compressed}}))\""
+read_json

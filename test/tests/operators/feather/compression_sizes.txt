@@ -1,0 +1,4 @@
+{
+  uncompressed: 1418448,
+  compressed: 290864,
+}
