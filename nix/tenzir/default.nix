@@ -7,10 +7,10 @@ let
       stdenv,
       callPackage,
       tenzir-source,
+      tenzirPythonPkgs,
       cmake,
       ninja,
       pkg-config,
-      poetry,
       llvmPackages,
       boost,
       caf,
@@ -100,6 +100,7 @@ let
         p.withPackages (
           ps: with ps; [
             aiohttp
+            setuptools
             dynaconf
             pandas
             pyarrow
@@ -202,8 +203,8 @@ let
               ninja
               protobuf
               grpc
-              poetry
               makeBinaryWrapper
+              uv
             ]
             ++ lib.optionals stdenv.isLinux [
               dpkg
@@ -276,6 +277,7 @@ let
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
+            UV_PYTHON="${lib.getBin py3.python}/bin/python3";
           };
           cmakeFlags =
             [
@@ -285,6 +287,8 @@ let
               "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+              "-DTENZIR_PYTHON_CORE_WHEEL=${tenzirPythonPkgs.tenzir-core.dist}/tenzir_core-${version}-py3-none-any.whl"
+              "-DTENZIR_PYTHON_OPERATOR_WHEEL=${tenzirPythonPkgs.tenzir-operator.dist}/tenzir_operator-${version}-py3-none-any.whl"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
               "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
               "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"

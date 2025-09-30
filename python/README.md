@@ -13,7 +13,7 @@ This workspace builds three distributions:
 
 - `tenzir-core`: Shared runtime utilities and configuration helpers used across
   the Python ecosystem.
-- `tenzir-operators`: The Python operator executor that powers the `python`
+- `tenzir-operator`: The Python operator executor that powers the `python`
   pipeline stage when running inside Tenzir.
 - `tenzir`: The public CLI bindings, including compatibility shims for the
   legacy `tenzir` import path and optional bundled binaries.
@@ -30,7 +30,7 @@ uv sync --package tenzir --extra module
 ```
 
 Add `--extra operator` if you need the Python operator helpers
-(`tenzir-operators`).
+(`tenzir-operator`).
 
 ## Development
 
@@ -72,7 +72,7 @@ Update each member package individually, for example:
 
 ```bash
 uv version --package tenzir-core 2.3.1
-uv version --package tenzir-operators 2.3.1
+uv version --package tenzir-operator 2.3.1
 uv version --package tenzir 2.3.1
 ```
 
@@ -82,7 +82,7 @@ Create wheels and sdists for the packages that changed:
 
 ```bash
 uv build --package tenzir-core
-uv build --package tenzir-operators
+uv build --package tenzir-operator
 uv build --package tenzir
 ```
 
@@ -95,7 +95,9 @@ For Linux wheels, you can bundle static `tenzir` and `tenzir-ctl` binaries and t
   - `result/bin` → `python/tenzir/src/tenzir/bin/`
   - `result/libexec` → `python/tenzir/src/tenzir/libexec/` (if present)
   - `result/share` → `python/tenzir/src/tenzir/share/` (if present)
-- Build the wheel: `uv build --package tenzir`.
+- Build the wheel: `uv build --package tenzir`. The build step automatically
+  runs `nix build .#tenzir-static` (override via `TENZIR_NIX_ATTR` or
+  `TENZIR_NIX_BUILD_CMD`) unless `TENZIR_SKIP_NIX_BUILD=1` is set.
 
 The wheel exposes `tenzir` and `tenzir-ctl` console scripts that prefer the bundled
 static binaries when present, falling back to the system `PATH` otherwise. Non-Linux
@@ -117,6 +119,6 @@ platforms are supported via fallback only and are not expected to include binari
 
    ```bash
    uv publish --token pypi-XXXXXXXX dist/tenzir_core-*.whl dist/tenzir_core-*.tar.gz
-   uv publish --token pypi-XXXXXXXX dist/tenzir_operators-*.whl dist/tenzir_operators-*.tar.gz
+   uv publish --token pypi-XXXXXXXX dist/tenzir_operator-*.whl dist/tenzir_operator-*.tar.gz
    uv publish --token pypi-XXXXXXXX dist/tenzir-*.whl dist/tenzir-*.tar.gz
    ```
