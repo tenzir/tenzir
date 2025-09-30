@@ -1,8 +1,0 @@
-pipeline [
-  write json {
-    tql: false
-  },
-  save file {
-    path: "xyz.json" @ 8..16
-  }
-] @ 0..16

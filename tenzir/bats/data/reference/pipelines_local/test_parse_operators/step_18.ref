@@ -1,8 +1,0 @@
-error: loader `filee` could not be found
- --> <input>:1:6
-  |
-1 | load filee | read json
-  |      ^^^^^ 
-  |
-  = hint: must be one of -, file, stdin
-  = docs: https://docs.tenzir.com/connectors

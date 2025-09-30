@@ -9,7 +9,7 @@
 - Rely on the built-in `node` fixture; request additional hooks only when we discover gaps during individual ports.
 - Introduce a dedicated `pyarrow` fixture before migrating `feather.bats`.
 - Provide HTTP and socket helpers in-house, following `example-project/fixtures/http.py` from the `tenzir-test` repo as a template.
-- Decompose `pipelines_local.bats` so each behaviour lands in the appropriate directory under `test/tests/*`.
+- Track the `pipelines_local.bats` rewrite; move each relevant case into the appropriate operator suites and drop legacy-only coverage.
 - Prefer inline `from { … }` data (with `write_lines` when needed) over `shell` commands to keep scenarios self-contained.
 - Run `uvx tenzir-test` from the `test/` directory before staging changes so baselines capture stable relative paths.
 - Remove the corresponding `tenzir/bats/data/reference/**` artefacts once a Bats suite is ported to tenzir-test.
@@ -32,7 +32,7 @@
 | tests/udp.bats | Socket transports (UDP) | Ported | Covered by tenzir-test (`tests/operators/load_udp`, `tests/operators/save_udp`) using `test/fixtures/udp.py`; Bats suite and baselines removed. |
 | tests/shutdown.bats | Remote operator shutdown | TQL2 | Retired; behaviour covered by node lifecycle tests elsewhere. |
 | tests/version.bats | `version` smoke | TQL2 | Retire; existing CLI smoke coverage is sufficient. |
-| tests/pipelines_local.bats | Mixed parser coverage, heavy `TENZIR_LEGACY` | TQL1 | Triage: rewrite relevant behaviours in TQL2 (schema selectors, charts, deduplicate, unroll); drop legacy-only parser assertions. |
+| tests/pipelines_local.bats | Mixed parser coverage, heavy `TENZIR_LEGACY` | In progress | Triaging legacy cases; port valuable behaviours (JSON selectors, batch, chart, flatten, unflatten, yield, parse grok/CEF/syslog, deduplicate, unroll) into operator suites; retire parser-only syntax checks. |
 | tests/leef.bats | `read_leef`, `parse_leef` under legacy flag | TQL1 | Ported to `tests/operators/leef/*.tql` with modern syntax. |
 | tests/vast.bats, tests/vast_server.bats | Old node pipelines & filters | Removed | Dropped without replacement; overlapping coverage now lives in tenzir-test node/storage suites. |
 | lib/** | Vendored Bats framework self-tests | N/A | Drop after migration (not part of Tenzir coverage). |
@@ -75,8 +75,7 @@
    - Migrate database, feather, opensearch after fixtures mature.
    - Introduce reusable tenzir-test modules for HTTP mock servers, TLS cert generation, and UDP echo clients.
 4. **Legacy rewrites (Week 4+)**
-   - For pipelines_local, catalogue behaviours worth keeping (e.g., schema selectors, import filters, chart validation) and re-author them in TQL2.
-   - Drop tests that only assert legacy parser quirks (`--dump-ast`, `load file` syntax errors, etc.).
+   - pipelines_local: migrate valuable behaviours to operator suites (see checklist below); drop parser-only syntax checks (`--dump-ast`, legacy `load file`, etc.).
 5. **Cleanup**
    - Remove vendored `lib/bats` subtree and obsolete helper scripts.
    - Document the migration in CHANGELOG (tests / infrastructure) and update developer docs.
@@ -86,6 +85,30 @@
 - Decide whether to keep dynamic dependency installation (pyarrow, trustme) or rely on prebuilt fixtures.
 - Revisit warning normalization (e.g., Arrow truncation message) to make assertions stable across dependency versions.
 - Confirm availability of `set_attributes` / `get_attributes` equivalents; adjust plan if operator semantics changed.
+
+## pipelines_local.bats Migration Checklist
+| Legacy Test (category) | Action | Destination / Notes | Status |
+| --- | --- | --- | --- |
+| Parse basic / Parse operators | Retire | Legacy parser syntax only (`TENZIR_LEGACY`) | Retired |
+| Local pipeline execution | Retire | Covered by stdin/stdout defaults in modern suites | Retired |
+| Assert operator | Port | `tests/operators/assert/basic.tql` | Ported |
+| Read incomplete JSON object | Port | `tests/operators/read_json/incomplete_object.tql` | Ported |
+| Type mismatch in column | Covered | `tests/operators/read_json/type_conflict.tql` already exercises | Verified |
+| JSON selector cases (nested / integer / new field / merge) | Port | Extend `tests/operators/read_json/` with selector + merge scenarios | Pending |
+| Suricata / Zeek JSON readers | Covered | Already tested under `read_suricata`, `read_json` suites; ensure selector variants | Review |
+| Batch events | Port | `tests/operators/batch/` (repeat + batch size assertions) | Pending |
+| Chart arguments | Port | `tests/operators/chart/` (argument validation + success path) | Pending |
+| Flatten / Unflatten operators | Port | New suites under `tests/operators/flatten/` & `unflatten/` | Pending |
+| Deduplicate / sort / unroll | Port | Use existing operator suites or add coverage under `tests/operators/deduplicate`, `sort`, `unroll` | Pending |
+| Slice regression | Port | Add to `tests/operators/slice/` (head/tail edge cases) | Pending |
+| Schema ID extractor | Port | `tests/operators/read_cef/` (schema_id assertions) | Pending |
+| Parse CEF in JSON / over syslog | Port | Combine `read_lines` + `parse_json` + `parse_cef` tests | Pending |
+| Parse with grok | Port | Extend `tests/operators/parse_grok/` | Pending |
+| Heterogeneous lists | Port | `tests/operators/read_json/` (expect failures) | Pending |
+| JSON printer options | Port | `tests/operators/write_json/` (omit-nulls/compact) | Pending |
+| Yield operator | Retire | Legacy syntax; functionality replaced by `unroll`/selectors | Retired |
+| Get/Set attributes | Port | Verify modern equivalent or retire if obsolete | Investigate |
+| Bitz/S3 placeholder tests | Retire | No longer applicable in TQL2 | Retired |
 
 ## References
 - Operators catalog: https://docs.tenzir.com/reference/operators.md

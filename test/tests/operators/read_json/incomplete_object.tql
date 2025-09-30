@@ -1,0 +1,8 @@
+---
+error: true
+timeout: 30
+---
+
+from_file f"{env("TENZIR_INPUTS")}/json/incomplete-object.json" {
+  read_json
+}

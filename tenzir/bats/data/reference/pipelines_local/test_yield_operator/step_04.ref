@@ -1,7 +1,0 @@
-warning: expected a record, but got a uint64
- --> <input>:1:37
-  |
-1 | read suricata | yield dns.answers[].ttl
-  |                                     ~~~ 
-  |
-  = note: for schema `suricata.dns`

@@ -14,61 +14,8 @@ setup() {
 
 # -- tests --------------------------------------------------
 
-# bats test_tags=parser
-@test "Parse basic" {
-  export TENZIR_LEGACY=true
 
-  tenzir --dump-ast " "
-  tenzir --dump-ast "// comment"
-  tenzir --dump-ast "#!/usr/bin/env tenzir"
-}
 
-# bats test_tags=parser
-@test "Parse operators" {
-  export TENZIR_LEGACY=true
-
-  check tenzir --dump-ast "version"
-  check ! tenzir "version --tev"
-  check ! tenzir "version 42"
-  check ! tenzir "from a/b/c.json read json"
-  check tenzir --dump-ast "from file a/b/c.json"
-  check tenzir --dump-ast "from file a/b/c.json read cef"
-  check tenzir --dump-ast "head 42"
-  check tenzir --dump-ast "local remote local pass"
-  check tenzir --dump-ast "where :ip == 1.2.3.4"
-  check tenzir --dump-ast "to file xyz.json"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json"
-  check tenzir "from file://${INPUTSDIR}/json/all-types.json read json"
-  check ! tenzir "from file:///foo.json read json"
-  check ! tenzir "from scheme://foo.json read json"
-  check ! tenzir "from scheme:foo.json read json"
-  check ! tenzir "load file foo.json | read json"
-  check ! tenzir "load file | read json"
-  check ! tenzir "load ./file | read json"
-  check ! tenzir "load filee | read json"
-  check tenzir "from ${INPUTSDIR}/json/basic-types.json"
-  check tenzir "from ${INPUTSDIR}/json/dns.log.json.gz | head 2"
-  check tenzir "from ${INPUTSDIR}/json/dns.log.json.gz read json | head 2"
-  check tenzir "from ${INPUTSDIR}/suricata/eve.json | head 2"
-  check tenzir --dump-ast "from a/b/c.json | where xyz == 123 | to foo.csv"
-}
-
-# bats test_tags=pipelines
-@test "Local Pipeline Execution" {
-  export TENZIR_LEGACY=true
-
-  # - is an alternative form of stdin and stdout
-  check -c "gunzip -c '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from stdin read json | write json | save stdout'"
-  check -c "gunzip -c '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from file - read json | to stdout write json'"
-
-  # stdin and stdout are the defaults
-  check -c "gunzip -c '${INPUTSDIR}'/json/files.log.json.gz | tenzir 'read json | write json'"
-
-  # - is an alternative form of stdin and stdout
-  check -c "gunzip -c '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from - read json | to - write json '"
-
-  check -c "gunzip -c '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from file - read json | to - write json'"
-}
 
 # bats test_tags=pipelines
 @test "Read from JSON File" {
@@ -77,12 +24,6 @@ setup() {
   check tenzir "from file ${INPUTSDIR}/json/record-in-list.json read json | write json"
 }
 
-# bats test_tags=json
-@test "Read incomplete JSON object" {
-  export TENZIR_LEGACY=true
-
-  check ! tenzir "from file ${INPUTSDIR}/json/incomplete-object.json"
-}
 
 # bats test_tags=pipelines
 @test "Type mismatch in a column" {
@@ -347,23 +288,6 @@ EOF
 EOF
 }
 
-# bats test_tags=pipelines
-@test "Yield Operator" {
-  export TENZIR_LEGACY=true
-
-  cat ${INPUTSDIR}/suricata/rrdata-eve.json |
-    check tenzir "read suricata | yield dns"
-  cat ${INPUTSDIR}/suricata/rrdata-eve.json |
-    check tenzir "read suricata | yield dns.foo"
-  cat ${INPUTSDIR}/suricata/rrdata-eve.json |
-    check tenzir "read suricata | yield dns.answers"
-  cat ${INPUTSDIR}/suricata/rrdata-eve.json |
-    check tenzir "read suricata | yield dns.answers[]"
-  cat ${INPUTSDIR}/suricata/rrdata-eve.json |
-    check tenzir "read suricata | yield dns.answers[].ttl"
-  cat ${INPUTSDIR}/suricata/rrdata-eve.json |
-    check tenzir "read suricata | yield dns.answers[].soa"
-}
 
 # bats test_tags=pipelines, syslog
 @test "Syslog format" {
@@ -719,10 +643,6 @@ EOF
   check ! tenzir --dump-pipeline 'legacy "this_operator_does_not_exist"'
 }
 
-@test "assert operator" {
-  check tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
-  check ! tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
-}
 
 @test "zip" {
   check tenzir 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
