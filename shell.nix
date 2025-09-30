@@ -24,6 +24,7 @@ pkgs.mkShell (
         pkgs.shfmt
         pkgs.poetry
         pkgs.python3Packages.spdx-tools
+        pkgs.ruff
         pkgs.uv
         (pkgs.python3.withPackages (
           ps: with ps; [

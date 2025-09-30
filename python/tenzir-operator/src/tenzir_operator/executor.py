@@ -24,7 +24,7 @@ import pyarrow as pa
 from box import Box
 from box.box_list import BoxList
 
-from tenzir_core.arrow import extension_array, infer_type
+from tenzir_common.arrow import extension_array, infer_type
 
 """
 NOTE: This script is used by and developed alongside the built-in `python`
