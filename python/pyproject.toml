@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv.workspace]
 members = [
-  "tenzir-core",
-  "tenzir-operators",
+  "tenzir-common",
+  "tenzir-operator",
   "tenzir",
 ]
 
 [tool.uv.sources]
-tenzir-core = { workspace = true }
-tenzir-operators = { workspace = true }
+tenzir-common = { workspace = true }
+tenzir-operator = { workspace = true }
 tenzir = { workspace = true }
 
 [dependency-groups]

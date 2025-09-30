@@ -30,7 +30,7 @@ dependencies = [
 [project.optional-dependencies]
 module = ["numpy>=1.24,<3.0"]
 operator = [
-  "tenzir-operators[pandas]>=5.19.0,<5.20.0",
+  "tenzir-operator[pandas]>=5.19.0,<5.20.0",
   "aiohttp>=3.8,<4.0",
 ]
 

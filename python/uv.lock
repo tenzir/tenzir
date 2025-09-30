@@ -11,8 +11,8 @@ resolution-markers = [
 [manifest]
 members = [
     "tenzir",
-    "tenzir-core",
-    "tenzir-operators",
+    "tenzir-common",
+    "tenzir-operator",
 ]
 
 [manifest.dependency-groups]
@@ -986,15 +986,15 @@ module = [
 ]
 operator = [
     { name = "aiohttp" },
-    { name = "tenzir-operators", extra = ["pandas"] },
+    { name = "tenzir-operator", extra = ["pandas"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", marker = "extra == 'operator'", specifier = ">=3.8,<4.0" },
     { name = "numpy", marker = "extra == 'module'", specifier = ">=1.24,<3.0" },
-    { name = "tenzir-core", editable = "tenzir-core" },
-    { name = "tenzir-operators", extras = ["pandas"], marker = "extra == 'operator'", editable = "tenzir-operators" },
+    { name = "tenzir-common", editable = "tenzir-common" },
+    { name = "tenzir-operator", extras = ["pandas"], marker = "extra == 'operator'", editable = "tenzir-operator" },
 ]
 provides-extras = ["module", "operator"]
 
@@ -1021,9 +1021,9 @@ requires-dist = [
 provides-extras = ["pandas"]
 
 [[package]]
-name = "tenzir-operators"
+name = "tenzir-operator"
 version = "5.19.0"
-source = { editable = "tenzir-operators" }
+source = { editable = "tenzir-operator" }
 dependencies = [
     { name = "python-box" },
     { name = "tenzir-common" },

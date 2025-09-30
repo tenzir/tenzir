@@ -3,6 +3,7 @@
   nix2container,
   lib,
   pkgs,
+  tenzirPythonPkgs,
   forceClang ? false,
 }:
 rec {
@@ -13,7 +14,7 @@ rec {
     ../libtenzir
     ../libtenzir_test
     ../plugins
-    ../python
+    #../python
     ../schema
     ../scripts
     ../tenzir
@@ -57,7 +58,7 @@ rec {
     let
       tenzir-de = linkPkgs.callPackage ./tenzir (
         {
-          inherit tenzir-source toImageFn isReleaseBuild;
+          inherit tenzir-source tenzirPythonPkgs toImageFn isReleaseBuild;
         }
         // lib.optionalAttrs forceClang {
           stdenv = linkPkgs.clangStdenv;

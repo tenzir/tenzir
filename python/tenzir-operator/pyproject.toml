@@ -1,9 +1,9 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.8.14,<0.10.0"]
+build-backend = "uv_build"
 
 [project]
-name = "tenzir-operators"
+name = "tenzir-operator"
 version = "5.19.0"
 description = "Tenzir Python operator runtime"
 requires-python = ">=3.9"
@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-  "tenzir-core>=5.19.0,<5.20.0",
+  "tenzir-common>=5.19.0,<5.20.0",
   "python-box>=7.0,<8.0",
 ]
 
@@ -30,3 +30,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv.sources]
+tenzir-common = { workspace = true }
