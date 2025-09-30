@@ -66,6 +66,7 @@
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/actor_addr.hpp>
