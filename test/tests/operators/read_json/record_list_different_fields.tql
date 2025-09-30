@@ -1,0 +1,3 @@
+from_file f"{env("TENZIR_INPUTS")}/json/record-list-different-fields.json" {
+  read_json arrays_of_objects=true
+}

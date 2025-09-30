@@ -82,20 +82,7 @@ setup() {
   check tenzir "from file ${INPUTSDIR}/pcap/tshark.json"
 }
 
-# bats test_tags=json
-@test "Read JSON with new field in record list" {
-  export TENZIR_LEGACY=true
 
-  check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json read json --merge"
-  check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json"
-}
-
-# bats test_tags=json
-@test "Read JSON with differents fields in one record list" {
-  export TENZIR_LEGACY=true
-
-  check tenzir "from file ${INPUTSDIR}/json/record-list-different-fields.json"
-}
 
 # bats test_tags=json
 @test "Read JSON with list config in overwritten field" {
