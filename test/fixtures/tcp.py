@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 import shutil
 import socket
-import ssl
 import subprocess
+import ssl
 import tempfile
 import threading
 import time
@@ -61,10 +61,10 @@ def tcp_tls_source() -> dict[str, str]:
     stop_event = threading.Event()
 
     def _send_payload() -> None:
+        deadline = time.time() + 10
         context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         context.check_hostname = False
         context.load_verify_locations(cafile=ca_path)
-        deadline = time.time() + 10
         while not stop_event.is_set() and time.time() < deadline:
             try:
                 with socket.create_connection((_HOST, port), timeout=1) as raw_sock:
@@ -72,6 +72,14 @@ def tcp_tls_source() -> dict[str, str]:
                         raw_sock, server_hostname=_COMMON_NAME
                     ) as tls_sock:
                         tls_sock.sendall(b"foo\n")
+                        try:
+                            tls_sock.shutdown(socket.SHUT_WR)
+                            while not stop_event.is_set():
+                                chunk = tls_sock.recv(1024)
+                                if not chunk:
+                                    break
+                        except OSError:
+                            pass
                     break
             except (ConnectionRefusedError, ssl.SSLError, OSError):
                 time.sleep(0.1)

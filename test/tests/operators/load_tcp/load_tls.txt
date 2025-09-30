@@ -1,6 +1,6 @@
 {
   line: "foo",
 }
-warning: Connection reset by peer
+warning: stream truncated
  = note: failed to read from TCP connection
  = note: handle `16`
