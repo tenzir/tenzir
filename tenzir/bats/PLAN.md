@@ -26,7 +26,8 @@
 | tests/lines.bats | `read_lines` null delimiters | TQL2 | Ported to `tests/operators/read_delimited/null_separator.tql`. |
 | tests/database.bats | Node metrics & import/export | TQL2 | Ported to `tests/node/storage/*.tql`. |
 | tests/feather.bats | Arrow/Feather roundtrip & compression | TQL2 + Python deps | Port after providing pyarrow/uv fixture in tenzir-test or stubbing via golden files. |
-| tests/http2.bats, tests/opensearch.bats | HTTP load/save & OpenSearch bulk | TQL2 | Port with HTTP mock server support; prefer built-in runner over ad-hoc `python webserver.py`. |
+| tests/http2.bats | HTTP load/save | Ported | Covered by tenzir-test operator suites (`tests/operators/load_http`, `tests/operators/save_http`) using the `http` fixture; legacy Bats suite and baselines removed. |
+| tests/opensearch.bats | OpenSearch bulk | TQL2 | Port with HTTP mock server support; prefer built-in runner over ad-hoc `python webserver.py`. |
 | tests/tcp.bats | Socket transports (TLS) | Ported | Covered by tenzir-test (`tests/operators/load_tcp`, `tests/operators/save_tcp`) using TLS fixture `test/fixtures/tcp.py`; legacy Bats suite and baselines removed. |
 | tests/udp.bats | Socket transports (UDP) | Ported | Covered by tenzir-test (`tests/operators/load_udp`, `tests/operators/save_udp`) using `test/fixtures/udp.py`; Bats suite and baselines removed. |
 | tests/shutdown.bats | Remote operator shutdown | TQL2 | Retired; behaviour covered by node lifecycle tests elsewhere. |
@@ -71,7 +72,7 @@
    - Port pure TQL2 suites (cron, every, time, functions, from_to, gelf, lines, version).
    - Add regression coverage for `measure`, `deduplicate`, `unroll` using TQL2 syntax while porting.
 3. **Integration-heavy ports (Week 3)**
-   - Migrate database, feather, http2/opensearch, tcp/udp after fixtures mature.
+   - Migrate database, feather, opensearch after fixtures mature.
    - Introduce reusable tenzir-test modules for HTTP mock servers, TLS cert generation, and UDP echo clients.
 4. **Legacy rewrites (Week 4+)**
    - For pipelines_local, catalogue behaviours worth keeping (e.g., schema selectors, import filters, chart validation) and re-author them in TQL2.

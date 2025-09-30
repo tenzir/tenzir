@@ -1,9 +1,10 @@
 "POST / HTTP/1.1" 200 -
 
-Host: localhost:50384
+Host: 127.0.0.1:*
 Accept-Encoding: *
-User-Agent: Tenzir/*.*.*
+User-Agent: Test
 Accept: */*
+Content-Type: application/json
 Content-Length: 19
 
 {

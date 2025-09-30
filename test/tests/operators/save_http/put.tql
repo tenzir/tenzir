@@ -1,0 +1,11 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+version
+select foo="bar"
+write_json
+save_http env("HTTP_FIXTURE_URL"), method="PUT"
+
+load_file env("HTTP_CAPTURE_FILE")
