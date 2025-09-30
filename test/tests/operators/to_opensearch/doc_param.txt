@@ -1,12 +1,10 @@
 "POST /_bulk HTTP/1.1" 200 -
 
-Host: localhost:9203
+Host: 127.0.0.1:*
 Accept: */*
 Content-Type: application/json
-Content-Length: 258
+Content-Length: 173
 
-{"update":{"_index":"main"}}
-{"doc":{"x":1,"ip":"10.10.10.10"},"doc_as_upsert":true}
 {"update":{"_index":"main","_id":"1.1.1.1"}}
 {"doc":{},"doc_as_upsert":true}
 {"update":{"_index":"main","_id":"Something"}}

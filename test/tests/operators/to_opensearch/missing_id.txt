@@ -1,6 +1,6 @@
 "POST /_bulk HTTP/1.1" 200 -
 
-Host: localhost:9204
+Host: 127.0.0.1:*
 Accept: */*
 Content-Type: application/json
 Content-Length: 92

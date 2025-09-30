@@ -4,12 +4,14 @@ Usage overview:
 
 - Tests declare ``fixtures: [http]`` in their frontmatter to opt in.
 - Importing this module registers the ``@fixture`` definition below.
-- Consumers receive two environment variables:
-  - ``HTTP_FIXTURE_URL`` points at a temporary HTTP server that echoes JSON
-    payloads back to the caller (so ``load_http`` can read the response).
-  - ``HTTP_CAPTURE_FILE`` contains the last request as a plain-text transcript
-    (request line, headers, and body), enabling assertions about `save_http`
-    behaviour.
+- **HTTP_FIXTURE_URL** – Fully qualified URL pointing at the temporary HTTP
+  server. Pipelines that perform client-style requests (e.g., ``load_http``)
+  can use it directly.
+- **HTTP_FIXTURE_ENDPOINT** – Fully qualified endpoint URL, identical to
+  ``HTTP_FIXTURE_URL``; provided for compatibility with operators that expect an
+  ``endpoint`` parameter.
+- **HTTP_CAPTURE_FILE** – Path to a plain-text transcript of the most recent
+  request (request line, headers, body), suitable for response assertions.
 
 The fixture uses the generator-style ``@fixture`` decorator: it starts the
 server, yields the environment mapping, and tears everything down
@@ -106,6 +108,7 @@ def run() -> Iterator[dict[str, str]]:
         url = f"http://127.0.0.1:{port}/"
         yield {
             "HTTP_FIXTURE_URL": url,
+            "HTTP_FIXTURE_ENDPOINT": url,
             "HTTP_CAPTURE_FILE": str(capture_path),
         }
     finally:
