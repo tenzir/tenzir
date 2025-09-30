@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tenzir-operators"
-version = "5.16.0"
+name = "tenzir-operator"
+version = "5.17.0"
 description = "Tenzir Python operator runtime"
 requires-python = ">=3.9"
 license = "BSD-3-Clause"
@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-  "tenzir-core>=5.16.0,<5.17.0",
+  "tenzir-core>=5.17.0,<5.18.0",
   "python-box>=7.0,<8.0",
 ]
 
@@ -30,3 +30,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv.sources]
+tenzir-core = { workspace = true }

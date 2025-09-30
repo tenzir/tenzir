@@ -1,4 +1,4 @@
-"""Compatibility wrapper around the standalone tenzir-operators package."""
+"""Compatibility wrapper around the standalone tenzir-operator package."""
 
 from tenzir_operator.executor import *  # noqa: F401,F403
 from tenzir_operator import executor as _executor
