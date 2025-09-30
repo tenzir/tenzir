@@ -3,15 +3,15 @@ from __future__ import annotations
 import os
 import shutil
 import socket
-import subprocess
 import ssl
+import subprocess
 import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Iterator
 
-from tenzir_test import startup, teardown
+from tenzir_test import fixture
 
 _HOST = "127.0.0.1"
 _COMMON_NAME = "tenzir-node.example.org"
@@ -48,12 +48,8 @@ def _generate_self_signed_cert(temp_dir: Path) -> tuple[Path, Path, Path]:
     return cert_path, key_path, ca_path
 
 
-_TLS_STATE: Dict[str, Tuple[threading.Thread, threading.Event, Path]] = {}
-_SINK_STATE: Dict[str, Tuple[threading.Thread, threading.Event, str]] = {}
-
-
-@startup("tcp_tls_source", replace=True)
-def tcp_tls_source() -> dict[str, str]:
+@fixture(name="tcp_tls_source")
+def tcp_tls_source() -> Iterator[dict[str, str]]:
     port = _find_free_port()
     temp_dir = Path(tempfile.mkdtemp(prefix="tcp-tls-"))
     cert_path, key_path, ca_path = _generate_self_signed_cert(temp_dir)
@@ -85,33 +81,24 @@ def tcp_tls_source() -> dict[str, str]:
                 time.sleep(0.1)
         stop_event.set()
 
-    thread = threading.Thread(target=_send_payload, daemon=True)
-    thread.start()
-    _TLS_STATE[endpoint] = (thread, stop_event, temp_dir)
-    return {
-        "TCP_TLS_ENDPOINT": endpoint,
-        "TCP_TLS_CERTFILE": str(cert_path),
-        "TCP_TLS_KEYFILE": str(key_path),
-        "TCP_TLS_CAFILE": str(ca_path),
-    }
+    worker = threading.Thread(target=_send_payload, daemon=True)
+    worker.start()
 
-
-@teardown("tcp_tls_source")
-def stop_tcp_tls_source(env: dict[str, str]) -> None:
-    endpoint = env.get("TCP_TLS_ENDPOINT")
-    if not endpoint:
-        return
-    thread, stop_event, temp_dir = _TLS_STATE.pop(endpoint, (None, None, None))
-    if stop_event is not None:
+    try:
+        yield {
+            "TCP_TLS_ENDPOINT": endpoint,
+            "TCP_TLS_CERTFILE": str(cert_path),
+            "TCP_TLS_KEYFILE": str(key_path),
+            "TCP_TLS_CAFILE": str(ca_path),
+        }
+    finally:
         stop_event.set()
-    if thread is not None:
-        thread.join(timeout=1)
-    if temp_dir is not None and temp_dir.exists():
+        worker.join(timeout=1)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-@startup("tcp_sink", replace=True)
-def tcp_sink() -> dict[str, str]:
+@fixture(name="tcp_sink")
+def tcp_sink() -> Iterator[dict[str, str]]:
     port = _find_free_port()
     endpoint = f"tcp://{_HOST}:{port}"
     stop_event = threading.Event()
@@ -140,24 +127,16 @@ def tcp_sink() -> dict[str, str]:
                         fh.flush()
                 break
 
-    thread = threading.Thread(target=_serve, daemon=True)
-    thread.start()
-    _SINK_STATE[endpoint] = (thread, stop_event, path)
-    return {
-        "TCP_SINK_ENDPOINT": endpoint,
-        "TCP_SINK_FILE": path,
-    }
+    worker = threading.Thread(target=_serve, daemon=True)
+    worker.start()
 
-
-@teardown("tcp_sink")
-def stop_tcp_sink(env: dict[str, str]) -> None:
-    endpoint = env.get("TCP_SINK_ENDPOINT")
-    if not endpoint:
-        return
-    thread, stop_event, path = _SINK_STATE.pop(endpoint, (None, None, None))
-    if stop_event is not None:
+    try:
+        yield {
+            "TCP_SINK_ENDPOINT": endpoint,
+            "TCP_SINK_FILE": path,
+        }
+    finally:
         stop_event.set()
-    if thread is not None:
-        thread.join(timeout=1)
-    if path and os.path.exists(path):
-        os.remove(path)
+        worker.join(timeout=1)
+        if os.path.exists(path):
+            os.remove(path)

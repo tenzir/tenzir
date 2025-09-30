@@ -5,9 +5,9 @@ import socket
 import tempfile
 import threading
 import time
-from typing import Dict, Tuple
+from typing import Iterator
 
-from tenzir_test import startup, teardown
+from tenzir_test import fixture
 
 
 def _find_free_port() -> int:
@@ -16,12 +16,8 @@ def _find_free_port() -> int:
         return sock.getsockname()[1]
 
 
-_SOURCE_STATE: Dict[str, Tuple[threading.Thread, threading.Event]] = {}
-_SINK_STATE: Dict[str, Tuple[threading.Thread, threading.Event, str]] = {}
-
-
-@startup("udp_source", replace=True)
-def udp_source() -> dict[str, str]:
+@fixture(name="udp_source")
+def udp_source() -> Iterator[dict[str, str]]:
     port = _find_free_port()
     endpoint = f"127.0.0.1:{port}"
     stop_event = threading.Event()
@@ -33,26 +29,18 @@ def udp_source() -> dict[str, str]:
                 sock.sendto(payload, ("127.0.0.1", port))
                 time.sleep(0.05)
 
-    thread = threading.Thread(target=run, daemon=True)
-    thread.start()
-    _SOURCE_STATE[endpoint] = (thread, stop_event)
-    return {"UDP_SOURCE_ENDPOINT": endpoint}
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+
+    try:
+        yield {"UDP_SOURCE_ENDPOINT": endpoint}
+    finally:
+        stop_event.set()
+        worker.join(timeout=1)
 
 
-@teardown("udp_source")
-def stop_udp_source(env: dict[str, str]) -> None:
-    endpoint = env.get("UDP_SOURCE_ENDPOINT")
-    if not endpoint:
-        return
-    thread, stop_event = _SOURCE_STATE.pop(endpoint, (None, None))
-    if thread is None or stop_event is None:
-        return
-    stop_event.set()
-    thread.join(timeout=1)
-
-
-@startup("udp_sink", replace=True)
-def udp_sink() -> dict[str, str]:
+@fixture(name="udp_sink")
+def udp_sink() -> Iterator[dict[str, str]]:
     port = _find_free_port()
     endpoint = f"127.0.0.1:{port}"
     stop_event = threading.Event()
@@ -75,24 +63,16 @@ def udp_sink() -> dict[str, str]:
                 fh.write(data.decode("utf-8", errors="replace"))
                 fh.flush()
 
-    thread = threading.Thread(target=run, daemon=True)
-    thread.start()
-    _SINK_STATE[endpoint] = (thread, stop_event, path)
-    return {
-        "UDP_SINK_ENDPOINT": endpoint,
-        "UDP_SINK_FILE": path,
-    }
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
 
-
-@teardown("udp_sink")
-def stop_udp_sink(env: dict[str, str]) -> None:
-    endpoint = env.get("UDP_SINK_ENDPOINT")
-    if not endpoint:
-        return
-    thread, stop_event, path = _SINK_STATE.pop(endpoint, (None, None, None))
-    if thread is None or stop_event is None:
-        return
-    stop_event.set()
-    thread.join(timeout=1)
-    if path and os.path.exists(path):
-        os.remove(path)
+    try:
+        yield {
+            "UDP_SINK_ENDPOINT": endpoint,
+            "UDP_SINK_FILE": path,
+        }
+    finally:
+        stop_event.set()
+        worker.join(timeout=1)
+        if os.path.exists(path):
+            os.remove(path)
