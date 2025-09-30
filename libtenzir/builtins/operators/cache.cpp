@@ -16,6 +16,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/util/byte_size.h>
