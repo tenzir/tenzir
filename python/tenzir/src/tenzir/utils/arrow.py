@@ -3,4 +3,6 @@
 from tenzir_common.arrow import *  # noqa: F401,F403
 from tenzir_common import arrow as _arrow
 
-__all__ = getattr(_arrow, "__all__", [name for name in dir(_arrow) if not name.startswith("_")])
+__all__ = getattr(
+    _arrow, "__all__", [name for name in dir(_arrow) if not name.startswith("_")]
+)
