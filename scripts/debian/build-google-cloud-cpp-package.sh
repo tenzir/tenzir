@@ -35,7 +35,7 @@ pushd "${SOURCE_BASE}"
 
 ### crc32c
 
-git clone --depth 1 --shallow-submodules --recurse-submodules  https://github.com/google/crc32c
+git clone --depth 1 --shallow-submodules --recurse-submodules https://github.com/google/crc32c
 pushd crc32c
 cmake -B build -S . \
   -DBUILD_SHARED_LIBS=ON \

@@ -16,7 +16,7 @@ gen() {
   printf '"%s": {"url": "%s", "sha256": "%s"}' "$1" "${url}" "${sha256}"
 }
 
-cat << EOF | jq | tee "${dir}/uv-source-info.json"
+cat <<EOF | jq | tee "${dir}/uv-source-info.json"
 {
   "version": "$tag",
   $(gen aarch64-darwin aarch64-apple-darwin),

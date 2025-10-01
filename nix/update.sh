@@ -4,7 +4,7 @@ set -eu
 
 dir=$(dirname "$(readlink -f "$0")")
 
-command -v nix > /dev/null && {
+command -v nix >/dev/null && {
   echo "Updating with the local Nix installation..."
   "${dir}/update-plugins.sh"
   "${dir}/update-impl.sh"
@@ -18,7 +18,7 @@ echo "toplevel = ${toplevel}"
 echo "mainroot = ${mainroot}"
 echo "gitdir = ${gitdir}"
 
-command -v docker > /dev/null && {
+command -v docker >/dev/null && {
   echo "Updating with a nix docker container..."
   if [ "$toplevel/.git" = "$gitdir" ]; then
     docker run \
@@ -43,7 +43,7 @@ command -v docker > /dev/null && {
   exit $?
 }
 
-command -v podman > /dev/null && {
+command -v podman >/dev/null && {
   echo "Updating with with a nix container..."
   if [ "$toplevel/.git" = "$gitdir" ]; then
     podman run \

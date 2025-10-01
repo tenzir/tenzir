@@ -31,9 +31,9 @@ update-source-github() {
     _version="$(git -C "${_path}" describe --tag)"
   fi
 
-  nix-prefetch-github --no-fetch-submodules --rev="${_rev}" "${_user}" "${_repo}" \
-    | jq --arg version "${_version}" '. + {$version}' \
-    > "${dir}/${_name}/source.json"
+  nix-prefetch-github --no-fetch-submodules --rev="${_rev}" "${_user}" "${_repo}" |
+    jq --arg version "${_version}" '. + {$version}' \
+      >"${dir}/${_name}/source.json"
 }
 
 update-source() {
