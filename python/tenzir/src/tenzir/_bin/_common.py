@@ -1,6 +1,5 @@
 import os
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import NoReturn
@@ -24,12 +23,12 @@ def _candidate_paths(name: str) -> list[Path]:
 
 def exec_binary(name: str) -> NoReturn:
     # Try packaged binary first, then PATH.
-    for p in _candidate_paths(name):
+    for p in _candidate_paths("tenzir"):
         if p.is_file() and os.access(p, os.X_OK):
             os.execv(p.as_posix(), [p.name, *sys.argv[1:]])
     # Nothing found: emit a helpful error and non-zero exit.
-    sys.stderr.write(
-        f"{name} not found. On Linux wheels this should be bundled; otherwise ensure '{name}' is in PATH.\n"
+    _ = sys.stderr.write(
+        f"{name} not found. On Linux wheels this should be bundled; otherwise ensure '{name}' is in PATH.\n",
     )
-    sys.stderr.flush()
+    _ = sys.stderr.flush()
     raise SystemExit(127)
