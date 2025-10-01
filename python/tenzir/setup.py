@@ -33,9 +33,7 @@ def _run_nix() -> list[Path]:
 
     repo_root_env = os.environ.get("TENZIR_REPO_ROOT")
     repo_root = (
-        Path(repo_root_env)
-        if repo_root_env
-        else Path(__file__).resolve().parents[2]
+        Path(repo_root_env) if repo_root_env else Path(__file__).resolve().parents[2]
     )
     attr = os.environ.get(ENV_ATTR, DEFAULT_ATTR)
     custom_cmd = os.environ.get(ENV_CMD)
