@@ -972,7 +972,7 @@ wheels = [
 
 [[package]]
 name = "tenzir"
-version = "5.16.0"
+version = "5.16.0.post2"
 source = { editable = "tenzir" }
 dependencies = [
     { name = "tenzir-common" },
