@@ -48,9 +48,8 @@ Language (TQL) is domain-specific language to write data pipelines.
   - Analysis and debugging utilities
 - `tenzir/` - Main executable and integration tests
   - `tenzir.cpp` - Main entry point
-  - `bats/` - BATS integration test framework (deprecated)
-  - `tests/` - TQL test files and expected outputs
   - `services/` - System service configurations
+- `test/` - TQL integration test scenarios and expected outputs
 
 ## Key Tasks
 

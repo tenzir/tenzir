@@ -1,1 +1,0 @@
-{"rule":{"identifier":"test","namespace":"default","tags":[],"meta":{"string":"string meta data","integer":42,"boolean":true},"strings":{"$foo":"foo","$bar":"bar","$baz":"baz"}},"matches":{"$foo":[{"data":"Zm9v","base":0,"offset":0,"match_length":3}],"$bar":[{"data":"YmFy","base":0,"offset":4,"match_length":3}],"$baz":[{"data":"YmF6","base":0,"offset":8,"match_length":3}]}}

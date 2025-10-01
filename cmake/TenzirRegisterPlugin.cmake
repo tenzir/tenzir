@@ -2,29 +2,6 @@ include_guard(GLOBAL)
 
 find_package(Git)
 
-# Define a target for updating bats test references.
-macro (TenzirDefineUpdateBATSTarget _target _references_dir)
-  add_custom_target(
-    update-${_target}
-    COMMAND "${CMAKE_COMMAND}" -E env UPDATE=1 "${CMAKE_COMMAND}" --build
-            "${CMAKE_BINARY_DIR}" --target ${_target}
-    COMMENT "Updating ${_target} test references..."
-    USES_TERMINAL)
-  if (NOT EXISTS "${_references_dir}")
-    message(STATUS "disabling diff-${_target}")
-  elseif (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    add_custom_target(
-      diff-${_target}
-      COMMAND "${GIT_EXECUTABLE}" "-C" "${_references_dir}" "add"
-              "--intent-to-add" "--all"
-      COMMAND "${GIT_EXECUTABLE}" "-C" "${_references_dir}" "diff" "--exit-code"
-              "--" "${_references_dir}/**/*.ref"
-      DEPENDS update-${_target}
-      COMMENT "Diffing bats test results for ${_target}"
-      USES_TERMINAL)
-  endif ()
-endmacro ()
-
 # Normalize the GNUInstallDirs to be relative paths, if possible.
 macro (TenzirNormalizeInstallDirs)
   foreach (
@@ -824,55 +801,6 @@ function (TenzirRegisterPlugin)
         PROPERTIES FIXTURES_REQUIRED tenzir_${PLUGIN_TARGET}_unit_test_fixture
                    LABELS unit)
     endforeach ()
-  endif ()
-
-  # Ensure that a target bats always exists, even if a plugin does not
-  # define bats tests.
-  if (NOT TARGET bats)
-    add_custom_target(bats)
-    TenzirDefineUpdateBATSTarget(
-      bats "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference")
-  endif ()
-
-  # Setup bats tests.
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bats/tests")
-    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
-      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
-    else ()
-      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
-      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/bats"
-           "${CMAKE_BINARY_DIR}/share/tenzir/bats" SYMBOLIC)
-      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
-    endif ()
-    include(ProcessorCount)
-    ProcessorCount(parallel_level)
-    math(EXPR parallel_level "${parallel_level} + 2")
-    file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
-         "${CMAKE_CURRENT_SOURCE_DIR}/bats/tests/*.bats")
-    add_custom_target(bats-${PLUGIN_TARGET})
-    add_dependencies(bats bats-${PLUGIN_TARGET})
-    TenzirDefineUpdateBATSTarget(
-      bats-${PLUGIN_TARGET} "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference")
-    foreach (suite IN LISTS _suites)
-      get_filename_component(bats_suite_name "${suite}" NAME_WE)
-      string(REGEX REPLACE "_" "-" suite_name "${bats_suite_name}")
-      add_custom_target(
-        bats-${PLUGIN_TARGET}-${suite_name}
-        COMMAND
-          ${CMAKE_COMMAND} -E env
-          PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/bats/lib/bats/bin"
-          bats "-r" "-T" "--jobs" "${parallel_level}" "${suite}"
-        COMMENT "Executing ${PLUGIN_TARGET} bats test suite ${suite_name}..."
-        USES_TERMINAL)
-      add_dependencies(bats-${PLUGIN_TARGET}-${suite_name} tenzir::tenzir)
-      add_dependencies(bats-${PLUGIN_TARGET}
-                       bats-${PLUGIN_TARGET}-${suite_name})
-      TenzirDefineUpdateBATSTarget(
-        bats-${PLUGIN_TARGET}-${suite_name}
-        "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference/${bats_suite_name}")
-    endforeach ()
-    unset(parallel_level)
-    unset(TENZIR_PATH)
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")

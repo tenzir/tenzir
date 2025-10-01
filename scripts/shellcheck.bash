@@ -4,7 +4,7 @@ set -eu
 
 is_shell() {
     [[ $1 == *.sh ]] && shell="sh" && return 0
-    [[ $1 == *.bash || $1 == *.bats ]] && shell="bash" && return 0
+    [[ $1 == *.bash ]] && shell="bash" && return 0
     [[ $(file -b --mime-type "$1") != text/x-shellscript ]] && return 1
     # shellcheck disable=SC2155
     local ft=$(file -b "$1")
