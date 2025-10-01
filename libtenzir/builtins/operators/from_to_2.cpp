@@ -28,9 +28,6 @@
 #include <arrow/filesystem/api.h>
 #include <arrow/util/future.h>
 #include <arrow/util/uri.h>
-#include <boost/unordered_set.hpp>
-#include <boost/url/parse.hpp>
-#include <boost/url/url.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/mail_cache.hpp>
 

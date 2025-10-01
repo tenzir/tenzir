@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/curl.hpp"
+
 #include <tenzir/format_utils.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -242,7 +244,9 @@ auto entity_for_plugin(const plugin& plugin,
   return ast::entity{std::move(identifiers)};
 }
 
-auto get_file(const boost::urls::url_view& url) -> std::string {
+auto get_file(const std::string_view& path) -> std::string {
+  const auto escaped = curl::escape(path);
+  const auto url = boost::urls::url_view{escaped};
   if (not url.segments().empty()) {
     return url.segments().back();
   }
