@@ -8,15 +8,15 @@
 #pragma once
 
 #include "routes/fwd.hpp"
-#include "routes/connection.hpp"
-#include "routes/route.hpp"
 
-#include <tenzir/detail/inspection_common.hpp>
-#include <tenzir/view.hpp>
+#include "routes/connection.hpp"
+#include "routes/router.hpp"
 
 #include <tenzir/data.hpp>
+#include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/view.hpp>
 
 #include <string>
 #include <unordered_map>
@@ -26,11 +26,11 @@ namespace tenzir::plugins::routes {
 
 /// Complete routing configuration containing connections and routes.
 struct config {
-  /// List of input-to-output connections.
+  /// List of output-to-input connections.
   std::vector<connection> connections;
 
   /// Named routes with their routing logic.
-  std::unordered_map<std::string, route> routes;
+  std::unordered_map<std::string, router> routers;
 
   /// Creates a config from a record view.
   static auto make(const view<record>& data, session ctx) -> failure_or<config>;
@@ -43,7 +43,7 @@ struct config {
     return f.object(x)
       .pretty_name("tenzir.routes.config")
       .fields(f.field("connections", x.connections),
-              f.field("routes", x.routes));
+              f.field("routes", x.routers));
   }
 };
 

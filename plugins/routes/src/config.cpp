@@ -61,11 +61,11 @@ auto config::make(const view<record>& data, session ctx) -> failure_or<config> {
           has_errors = true;
           continue;
         }
-        auto parsed_route = route::make(*route_record, ctx);
+        auto parsed_route = router::make(*route_record, ctx);
         if (not parsed_route) {
           has_errors = true;
         } else {
-          result.routes[std::string{route_name}] = *parsed_route;
+          result.routers[std::string{route_name}] = *parsed_route;
         }
       }
       continue;
@@ -102,7 +102,7 @@ auto config::to_record() const -> record {
   result["connections"] = std::move(connections_list);
   // Convert routes
   auto routes_record = record{};
-  for (const auto& [name, route] : routes) {
+  for (const auto& [name, route] : routers) {
     routes_record[name] = route.to_record();
   }
   result["routes"] = std::move(routes_record);

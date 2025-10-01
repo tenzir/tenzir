@@ -96,7 +96,7 @@ connections:
   - from: "performance_alerts"
     to: "ops_team_input"
 
-routes:
+routers:
   security_triage:
     input: "security_events"
     rules:

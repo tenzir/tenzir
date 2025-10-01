@@ -48,7 +48,7 @@ auto rule::make(const view<record>& data, session ctx) -> failure_or<rule> {
         has_errors = true;
         continue;
       }
-      result.destination = output{std::string{*output_str}};
+      result.output = output_name{std::string{*output_str}};
       continue;
     }
     if (key == "final") {
@@ -69,7 +69,7 @@ auto rule::make(const view<record>& data, session ctx) -> failure_or<rule> {
       .emit(ctx);
     has_errors = true;
   }
-  if (result.destination.name.empty()) {
+  if (result.output.name.empty()) {
     diagnostic::error("missing required field 'output'")
       .note("invalid rule definition")
       .emit(ctx);
@@ -84,7 +84,7 @@ auto rule::make(const view<record>& data, session ctx) -> failure_or<rule> {
 auto rule::to_record() const -> record {
   auto result = record{};
   result["where"] = where_str;
-  result["output"] = destination.name;
+  result["output"] = output.name;
   result["final"] = final;
   return result;
 }

@@ -5,15 +5,15 @@
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 
-#include "routes/route.hpp"
+#include "routes/router.hpp"
 
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/view.hpp>
 
 namespace tenzir::plugins::routes {
 
-auto route::make(const view<record>& data, session ctx) -> failure_or<route> {
-  auto result = route{};
+auto router::make(const view<record>& data, session ctx) -> failure_or<router> {
+  auto result = router{};
   auto has_errors = false;
   for (const auto& [key, value] : data) {
     if (key == "input") {
@@ -25,7 +25,7 @@ auto route::make(const view<record>& data, session ctx) -> failure_or<route> {
         has_errors = true;
         continue;
       }
-      result.input = output{std::string{*input_str}};
+      result.input = input_name{std::string{*input_str}};
       continue;
     }
     if (key == "rules") {
@@ -79,7 +79,7 @@ auto route::make(const view<record>& data, session ctx) -> failure_or<route> {
   return result;
 }
 
-auto route::to_record() const -> record {
+auto router::to_record() const -> record {
   auto result = record{};
   result["input"] = input.name;
   auto rules_list = list{};

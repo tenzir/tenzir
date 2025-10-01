@@ -32,7 +32,7 @@ struct rule {
   std::string where_str = "true";
 
   /// The output destination for matching data.
-  output destination;
+  output_name output;
 
   /// Whether this rule is final (stops further rule evaluation).
   bool final = false;
@@ -60,7 +60,7 @@ struct rule {
     return f.object(x)
       .pretty_name("tenzir.routes.rule")
       .fields(f.field("where", x.where), f.field("where_str", x.where_str),
-              f.field("destination", x.destination), f.field("final", x.final));
+              f.field("destination", x.output), f.field("final", x.final));
   }
 };
 

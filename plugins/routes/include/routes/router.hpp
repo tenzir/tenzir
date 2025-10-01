@@ -21,22 +21,24 @@
 
 namespace tenzir::plugins::routes {
 
-/// Represents a stateful route with cascading predicates.
-struct route {
+/// Represents router with cascading predicates. This can be considered as
+/// equivalent to a pipeline that takes input, and then does an `if ..else
+/// if...` chain on its rules.
+struct router {
   /// The input source for this route.
-  output input;
+  input_name input;
 
   /// Ordered list of routing rules (cascading predicates).
   std::vector<rule> rules;
 
   /// Creates a route from a record view.
-  static auto make(const view<record>& data, session ctx) -> failure_or<route>;
+  static auto make(const view<record>& data, session ctx) -> failure_or<router>;
 
   /// Converts a route to a record for printing.
   auto to_record() const -> record;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, route& x) -> bool {
+  friend auto inspect(Inspector& f, router& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.routes.route")
       .fields(f.field("input", x.input), f.field("rules", x.rules));

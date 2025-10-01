@@ -30,7 +30,7 @@ struct proxy_actor_traits {
 using proxy_actor = caf::typed_actor<proxy_actor_traits>;
 
 struct named_input_actor {
-  input name;
+  input_name name;
   proxy_actor handle;
 
   template <class Inspector>
@@ -42,7 +42,7 @@ struct named_input_actor {
 };
 
 struct named_output_actor {
-  output name;
+  output_name name;
   proxy_actor handle;
 
   template <class Inspector>

@@ -57,7 +57,8 @@ auto routes_manager::add(named_input_actor input) -> caf::result<void> {
   self_->monitor(input.handle, [this, name = input.name](const caf::error&) {
     inputs_.erase(name);
   });
-  inputs_.emplace(input.name, std::move(input.handle));
+  auto name = input.name;
+  inputs_.emplace(std::move(name), std::move(input));
   return {};
 }
 
@@ -69,9 +70,9 @@ auto routes_manager::add(named_output_actor output) -> caf::result<void> {
   self_->monitor(output.handle, [this, name = output.name](const caf::error&) {
     outputs_.erase(name);
   });
-  outputs_.emplace(output.name, std::move(output.handle));
-  // TODO: Mirror _run_for.
-  _run_for(input{output.name.name});
+  auto name = output.name;
+  outputs_.emplace(std::move(name), std::move(output));
+  _pull_loop(output.name);
   return {};
 }
 
@@ -152,90 +153,95 @@ auto routes_manager::_restore_state() -> void {
       });
 }
 
-auto routes_manager::_run_for(input input_name) -> void {
+auto routes_manager::_pull_loop(output_name name) -> void {
   // Find the input proxy actor
-  const auto it = inputs_.find(input_name);
-  if (it == inputs_.end()) {
+  const auto it = outputs_.find(name);
+  if (it == outputs_.end()) {
     return;
   }
   // Get input from the corresponding proxy actor
   self_->mail(atom::get_v)
-    .request(it->second, caf::infinite)
+    .request(it->second.handle, caf::infinite)
     .then(
-      [this, input_name](table_slice slice) {
+      [this, name](table_slice slice) {
         TENZIR_ASSERT(slice.rows() != 0);
-        self_->delay_fn([this, input_name]() mutable {
-          _run_for(std::move(input_name));
+        self_->delay_fn([this, name]() mutable {
+          _pull_loop(std::move(name));
         });
-        for (auto output : _find_outputs(input_name)) {
-          _forward(output, slice);
-        }
+        _route_output(name, std::move(slice));
       },
-      [this, input_name](const caf::error& err) {
+      [this, name](const caf::error& err) {
         // TODO: Should we really continue here?
-        self_->delay_fn([this, input_name]() mutable {
-          _run_for(std::move(input_name));
+        self_->delay_fn([this, name]() mutable {
+          _pull_loop(std::move(name));
         });
-        TENZIR_WARN("failed to get input from `{}`: {}", input_name, err);
+        TENZIR_WARN("failed to get output from `{}`: {}", name, err);
       });
 }
 
-auto routes_manager::_find_outputs(const input& input_name)
-  -> std::vector<output> {
-  auto result = std::vector<output>{};
-  for (const auto& connection : cfg_.connections) {
-    if (connection.from == input_name) {
-      result.emplace_back(connection.to);
-    }
-  }
-  return result;
-}
-
-auto routes_manager::_forward(const output& output_name, table_slice slice)
+auto routes_manager::_route_output(const output_name& name, table_slice slice)
   -> void {
-  // We go through delay here to avoid stack overflows in the recursive
-  // evaluation of routes.
-  self_->delay_fn([this, output_name, slice = std::move(slice)] {
-    _inline_forward_to_outputs(output_name, slice);
-    _inline_forward_to_routes(output_name, slice);
+  /// TODO: Consider maintaining a map for all of this in parallel to config.
+  /// That would make all routing a single map lookup instead of three
+  self_->delay_fn([this, name, slice = std::move(slice)] mutable {
+    for (const auto& connection : cfg_.connections) {
+      if (connection.from != name) {
+        continue;
+      }
+      const auto dest = _typed_destination(connection.to);
+      if (is<std::monostate>(dest)) {
+        continue;
+      }
+      if (const auto* a = try_as<const named_input_actor*>(dest)) {
+        return _inline_forward_to_pipeline(**a, std::move(slice));
+      }
+      if (const auto* r = try_as<const router*>(dest)) {
+        return _inline_forward_to_router(**r, std::move(slice));
+      }
+      TENZIR_UNREACHABLE();
+    }
   });
 }
 
-auto routes_manager::_inline_forward_to_outputs(const output& output_name,
-                                                table_slice slice) -> void {
-  const auto it = outputs_.find(output_name);
-  if (it == outputs_.end()) {
-    return;
+auto routes_manager::_typed_destination(const input_name& name) -> destination {
+  if (const auto it = inputs_.find(name); it != inputs_.end()) {
+    return &it->second;
   }
+  for (const auto& [_, r] : cfg_.routers) {
+    if (r.input == name) {
+      return &r;
+    }
+  }
+  return {};
+};
+
+auto routes_manager::_inline_forward_to_pipeline(const named_input_actor& act,
+                                                 table_slice slice) -> void {
   self_->mail(atom::put_v, slice)
-    .request(it->second, caf::infinite)
+    .request(act.handle, caf::infinite)
     .then(
       []() {
         // Successfully forwarded
       },
-      [output_name](const caf::error& err) {
-        TENZIR_WARN("failed to forward to output `{}`: {}", output_name, err);
+      [name = act.name](const caf::error& err) {
+        TENZIR_WARN("failed to forward to output `{}`: {}", name, err);
       });
 }
 
-auto routes_manager::_inline_forward_to_routes(const output& output_name,
+auto routes_manager::_inline_forward_to_router(const router& r,
                                                table_slice slice) -> void {
-  for (const auto& [route_name, route] : cfg_.routes) {
-    if (route.input == output_name) {
-      // Evaluate the route's rules
-      auto remaining = std::vector<table_slice>{};
-      remaining.push_back(slice);
-      for (const auto& rule : route.rules) {
-        auto [matched, unmatched] = rule.evaluate(std::move(remaining));
-        for (auto& m : matched) {
-          _forward(rule.destination, std::move(m));
-        }
-        if (unmatched.size() == 0) {
-          break;
-        }
-        remaining = std::move(unmatched);
-      }
+  // Evaluate the route's rules
+  auto remaining = std::vector<table_slice>{};
+  remaining.push_back(slice);
+  for (const auto& rule : r.rules) {
+    auto [matched, unmatched] = rule.evaluate(std::move(remaining));
+    for (auto& m : matched) {
+      _route_output(rule.output, std::move(m));
     }
+    if (unmatched.size() == 0) {
+      break;
+    }
+    remaining = std::move(unmatched);
   }
 }
 

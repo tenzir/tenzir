@@ -25,7 +25,7 @@ class input_operator final : public crtp_operator<input_operator> {
 public:
   input_operator() = default;
 
-  input_operator(located<input> name) noexcept : name_(std::move(name)) {
+  input_operator(located<input_name> name) noexcept : name_(std::move(name)) {
   }
 
   auto name() const -> std::string override {
@@ -109,7 +109,7 @@ public:
   }
 
 private:
-  located<input> name_;
+  located<input_name> name_;
 };
 
 class input_plugin final : public virtual operator_plugin2<input_operator> {
@@ -120,8 +120,8 @@ public:
     TRY(argument_parser2::operator_(this->name())
           .positional("name", name_str, "string")
           .parse(inv, ctx));
-    auto name = located<input>{
-      input{std::move(name_str.inner)},
+    auto name = located<input_name>{
+      input_name{std::move(name_str.inner)},
       name_str.source,
     };
     return std::make_unique<input_operator>(std::move(name));

@@ -25,7 +25,7 @@ class output_operator final : public crtp_operator<output_operator> {
 public:
   output_operator() = default;
 
-  output_operator(located<output> name) noexcept : name_(std::move(name)) {
+  output_operator(located<output_name> name) noexcept : name_(std::move(name)) {
   }
 
   auto name() const -> std::string override {
@@ -122,7 +122,7 @@ public:
   }
 
 private:
-  located<output> name_;
+  located<output_name> name_;
 };
 
 class output_plugin final : public virtual operator_plugin2<output_operator> {
@@ -133,8 +133,8 @@ public:
     TRY(argument_parser2::operator_(this->name())
           .positional("name", name_str, "string")
           .parse(inv, ctx));
-    auto name = located<output>{
-      output{std::move(name_str.inner)},
+    auto name = located<output_name>{
+      output_name{std::move(name_str.inner)},
       name_str.source,
     };
     return std::make_unique<output_operator>(std::move(name));

@@ -52,13 +52,21 @@ private:
   auto list() -> caf::result<config>;
 
   auto _restore_state() -> void;
-  auto _run_for(input input_name) -> void;
-  auto _find_outputs(const input& input_name) -> std::vector<output>;
-  auto _forward(const output& output_name, table_slice slice) -> void;
-  auto _inline_forward_to_outputs(const output& output_name, table_slice slice)
-    -> void;
-  auto _inline_forward_to_routes(const output& output_name, table_slice slice)
-    -> void;
+  /// Continuously pulls data from a pipeline output
+  auto _pull_loop(output_name name) -> void;
+  /// Routes slice from an output name to all destinations
+  auto _route_output(const output_name& name, table_slice slice) -> void;
+
+  using destination
+    = std::variant<std::monostate, const named_input_actor*, const router*>;
+  /// Tries to find the typed destination (pipeline or router) with the given
+  /// name.
+  auto _typed_destination(const input_name& name) -> destination;
+  /// Forwards slice to the pipeline input actor.
+  auto _inline_forward_to_pipeline(const named_input_actor&,
+                                   const table_slice slice) -> void;
+  /// Forwards slice to the router.
+  auto _inline_forward_to_router(const router&, table_slice slice) -> void;
 
   routes_manager_actor::pointer self_ = {};
   filesystem_actor fs_ = {};
@@ -71,8 +79,8 @@ private:
   // route-manager actor directly. This may prove to be a bottleneck, but the
   // architecture can easily be extended in a way where one actor is spawned per
   // route to distribute the load.
-  std::unordered_map<input, proxy_actor> inputs_;
-  std::unordered_map<output, proxy_actor> outputs_;
+  std::unordered_map<input_name, named_input_actor> inputs_;
+  std::unordered_map<output_name, named_output_actor> outputs_;
 };
 
 } // namespace tenzir::plugins::routes

@@ -21,36 +21,36 @@ namespace tenzir::plugins::routes {
 /// Strong type for a route input name. SEEN FROM THE PoV OF THE ROUTE.
 /// A route configures an *input*, which is populated by the `routes::output`
 /// operator.
-struct input {
+struct input_name {
   std::string name;
 
-  friend auto inspect(auto& f, input& x) -> bool {
+  friend auto inspect(auto& f, input_name& x) -> bool {
     return f.apply(x.name);
   }
 
-  friend auto operator<=>(const input&, const input&) = default;
+  friend auto operator<=>(const input_name&, const input_name&) = default;
 };
 
 /// Strong type for a route output name. SEEN FROM THE PoV OF THE ROUTE.
 /// A route configures an *output*, which is consumed by the `routes::input`
 /// operator.
-struct output {
+struct output_name {
   std::string name;
 
-  friend auto inspect(auto& f, output& x) -> bool {
+  friend auto inspect(auto& f, output_name& x) -> bool {
     return f.apply(x.name);
   }
 
-  friend auto operator<=>(const output&, const output&) = default;
+  friend auto operator<=>(const output_name&, const output_name&) = default;
 };
 
 /// Represents a connection between an input and an output.
 struct connection {
-  /// The name of the input source.
-  input from;
+  /// The name of the source
+  output_name from;
 
-  /// The name of the output destination.
-  output to;
+  /// The name of the destination
+  input_name to;
 
   /// Creates a connection from a record view.
   static auto make(const view<record>& data, session ctx)
@@ -72,16 +72,16 @@ struct connection {
 namespace std {
 
 template <>
-struct hash<tenzir::plugins::routes::input> {
-  auto operator()(const tenzir::plugins::routes::input& x) const noexcept
+struct hash<tenzir::plugins::routes::input_name> {
+  auto operator()(const tenzir::plugins::routes::input_name& x) const noexcept
     -> size_t {
     return hash<string>{}(x.name);
   }
 };
 
 template <>
-struct hash<tenzir::plugins::routes::output> {
-  auto operator()(const tenzir::plugins::routes::output& x) const noexcept
+struct hash<tenzir::plugins::routes::output_name> {
+  auto operator()(const tenzir::plugins::routes::output_name& x) const noexcept
     -> size_t {
     return hash<string>{}(x.name);
   }
@@ -90,19 +90,19 @@ struct hash<tenzir::plugins::routes::output> {
 } // namespace std
 
 template <>
-struct fmt::formatter<tenzir::plugins::routes::input>
+struct fmt::formatter<tenzir::plugins::routes::input_name>
   : fmt::formatter<std::string> {
-  auto
-  format(const tenzir::plugins::routes::input& x, format_context& ctx) const {
+  auto format(const tenzir::plugins::routes::input_name& x,
+              format_context& ctx) const {
     return fmt::formatter<std::string>::format(x.name, ctx);
   }
 };
 
 template <>
-struct fmt::formatter<tenzir::plugins::routes::output>
+struct fmt::formatter<tenzir::plugins::routes::output_name>
   : fmt::formatter<std::string> {
-  auto
-  format(const tenzir::plugins::routes::output& x, format_context& ctx) const {
+  auto format(const tenzir::plugins::routes::output_name& x,
+              format_context& ctx) const {
     return fmt::formatter<std::string>::format(x.name, ctx);
   }
 };
