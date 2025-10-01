@@ -53,4 +53,32 @@ auto consumer::commit(RdKafka::Message* message, diagnostic_handler& dh,
   return {};
 }
 
+auto consumer::get_partition_count(const std::string& topic)
+  -> caf::expected<size_t> {
+  RdKafka::Metadata* metadata = nullptr;
+  auto err = consumer_->metadata(false, nullptr, &metadata, 5000);
+  if (err != RdKafka::ERR_NO_ERROR) {
+    return caf::make_error(ec::unspecified,
+                           fmt::format("failed to get metadata: {}",
+                                       RdKafka::err2str(err)));
+  }
+
+  std::unique_ptr<RdKafka::Metadata> metadata_guard(metadata);
+
+  const auto& topics = *metadata->topics();
+  for (const auto& topic_meta : topics) {
+    if (topic_meta->topic() == topic) {
+      if (topic_meta->err() != RdKafka::ERR_NO_ERROR) {
+        return caf::make_error(
+          ec::unspecified,
+          fmt::format("topic error: {}", RdKafka::err2str(topic_meta->err())));
+      }
+      return topic_meta->partitions()->size();
+    }
+  }
+
+  return caf::make_error(ec::unspecified,
+                         fmt::format("topic '{}' not found", topic));
+}
+
 } // namespace tenzir::plugins::kafka

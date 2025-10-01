@@ -151,33 +151,36 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
 }
 
 auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
-  const auto ty = event.type();
-  if (ty == RdKafka::Event::EVENT_ERROR) {
-    const auto* const severity = [&] {
-      switch (event.severity()) {
-        case RdKafka::Event::EVENT_SEVERITY_EMERG:
-          return "emergency";
-        case RdKafka::Event::EVENT_SEVERITY_ALERT:
-          return "alert";
-        case RdKafka::Event::EVENT_SEVERITY_CRITICAL:
-          return "critical";
-        case RdKafka::Event::EVENT_SEVERITY_ERROR:
-          return "error";
-        case RdKafka::Event::EVENT_SEVERITY_WARNING:
-          return "warning";
-        case RdKafka::Event::EVENT_SEVERITY_NOTICE:
-          return "notice";
-        case RdKafka::Event::EVENT_SEVERITY_INFO:
-          return "info";
-        case RdKafka::Event::EVENT_SEVERITY_DEBUG:
-          return "debug";
-        default:
-          return "unknown";
-      }
-    }();
-    const auto error_code = event.err();
-    const auto error_msg = event.str();
-    diagnostic::warning("librdkafka {}: {} ({})", severity,
+  const auto get_severity = [&] {
+    switch (event.severity()) {
+      case RdKafka::Event::EVENT_SEVERITY_EMERG:
+        return "emergency";
+      case RdKafka::Event::EVENT_SEVERITY_ALERT:
+        return "alert";
+      case RdKafka::Event::EVENT_SEVERITY_CRITICAL:
+        return "critical";
+      case RdKafka::Event::EVENT_SEVERITY_ERROR:
+        return "error";
+      case RdKafka::Event::EVENT_SEVERITY_WARNING:
+        return "warning";
+      case RdKafka::Event::EVENT_SEVERITY_NOTICE:
+        return "notice";
+      case RdKafka::Event::EVENT_SEVERITY_INFO:
+        return "info";
+      case RdKafka::Event::EVENT_SEVERITY_DEBUG:
+        return "debug";
+      default:
+        return "unknown";
+    }
+  };
+  const auto error_code = event.err();
+  const auto error_msg = event.str();
+  TENZIR_VERBOSE("librdkafka {}: {} ({})", get_severity(),
+                 error_msg.empty() ? RdKafka::err2str(error_code) : error_msg,
+                 std::to_underlying(error_code));
+  if (event.type() == RdKafka::Event::EVENT_ERROR
+      or event.severity() >= RdKafka::Event::EVENT_SEVERITY_WARNING) {
+    diagnostic::warning("librdkafka {}: {} ({})", get_severity(),
                         error_msg.empty() ? RdKafka::err2str(error_code)
                                           : error_msg,
                         std::to_underlying(error_code))
