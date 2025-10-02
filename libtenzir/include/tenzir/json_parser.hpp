@@ -119,6 +119,10 @@ public:
         const auto success = parse_object(val, builder.record(), depth + 1);
         return success ? result::success : result::failure_with_write;
       }
+      case simdjson::ondemand::json_type::unknown: {
+        report_parse_err(val, "a value");
+        return result::failure_no_change;
+      }
     }
     TENZIR_UNREACHABLE();
   }

@@ -3,7 +3,6 @@
   stdenv,
   pkgsBuildBuild,
   aws-sdk-cpp-tenzir,
-  azure-sdk-for-cpp,
   google-cloud-cpp-tenzir,
   arrow-cpp,
   sqlite,
@@ -27,18 +26,12 @@
 
   buildInputs =
     orig.buildInputs
-    ++ [
-      azure-sdk-for-cpp
-    ]
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       sqlite
     ];
 
   cmakeFlags =
     orig.cmakeFlags
-    ++ [
-      "-DARROW_AZURE=ON"
-    ]
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       "-DARROW_BUILD_TESTS=OFF"
       # TODO: Check if this is still needed or now covered by ARROW_DEPENDENCY_SOURCE.
