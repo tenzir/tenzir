@@ -8,10 +8,13 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/series_builder_view3.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
+#include <tenzir/view.hpp>
+#include <tenzir/view3.hpp>
 
 #include <arrow/compute/api.h>
 
@@ -130,6 +133,164 @@ public:
   }
 };
 
+class add : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "add";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto list_expr = ast::expression{};
+    auto element_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("xs", list_expr, "list")
+          .positional("x", element_expr, "any")
+          .parse(inv, ctx));
+
+    return function_use::make([list_expr = std::move(list_expr),
+                               element_expr = std::move(element_expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      const auto add_impl = [&](series list, series element) -> series {
+        // Handle null list case
+        if (is<null_type>(list.type)) {
+          // If list is null, create a new list with just the element
+          auto builder = series_builder{type{list_type{element.type}}};
+          for (const auto& v : values3(*element.array)) {
+            add_to_builder(builder.list(), v);
+          }
+          return builder.finish_assert_one_array();
+        }
+        auto list_list = list.as<list_type>();
+        if (not list_list) {
+          diagnostic::warning("expected `list`, but got `{}`", list.type.kind())
+            .primary(list_expr)
+            .emit(ctx);
+          return list;
+        }
+        auto final_element_type = list_list->type.value_type();
+        const auto v_kind = final_element_type.kind();
+        const auto e_kind = element.type.kind();
+        const auto list_is_integer
+          = v_kind == tag_v<int64_type> or v_kind == tag_v<uint64_type>;
+        const auto element_is_integer
+          = e_kind == tag_v<int64_type> or e_kind == tag_v<uint64_type>;
+        if (v_kind == tag_v<null_type>) {
+          final_element_type = element.type;
+        } else if (final_element_type.kind() != element.type.kind()) {
+          const auto can_add = list_is_integer and element_is_integer;
+          if (not can_add and not element.type.kind().is<null_type>()) {
+            diagnostic::warning("type mismatch between list content and value")
+              .primary(list_expr.get_location(), "list contains `{}`",
+                       final_element_type.kind())
+              .primary(element_expr, "element to add is `{}`",
+                       element.type.kind())
+              .compose([&](auto&& d) {
+                if (list_is_integer and e_kind == tag_v<double_type>) {
+                  return std::move(d).hint(
+                    "consider explicitly casting the element");
+                }
+                return std::move(d);
+              })
+              .emit(ctx);
+            return list;
+          }
+        }
+        auto builder = series_builder{type{list_type{final_element_type}}};
+        auto list_generator = values3(*list_list->array);
+        auto element_generator = values3(*element.array);
+        for (auto i = int64_t{0}; i < list.length(); ++i) {
+          const auto l = *list_generator.next();
+          auto e = *element_generator.next();
+          if (not l) {
+            builder.null();
+            continue;
+          }
+          auto lb = builder.list();
+          auto already_found = false;
+          for (const auto& v : *l) {
+            add_to_builder(lb, v);
+            if (not already_found) {
+              already_found
+                = partial_order(v, e) == std::partial_ordering::equivalent;
+            }
+          }
+          if (not already_found) {
+            add_to_builder(lb, e);
+          }
+        }
+        return builder.finish_assert_one_array();
+      };
+      return map_series(eval(list_expr), eval(element_expr), add_impl);
+    });
+  }
+};
+
+class remove : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "remove";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto list_expr = ast::expression{};
+    auto element_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("xs", list_expr, "list")
+          .positional("x", element_expr, "any")
+          .parse(inv, ctx));
+
+    return function_use::make([list_expr = std::move(list_expr),
+                               element_expr = std::move(element_expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      auto remove_impl = [&](series list, series element) -> series {
+        // Handle null list case
+        if (is<null_type>(list.type)) {
+          return series::null(null_type{}, list.length());
+        }
+        // Get the list type
+        auto list_list = list.as<list_type>();
+        if (not list_list) {
+          diagnostic::warning("expected `list`, but got `{}`", list.type.kind())
+            .primary(list_expr)
+            .emit(ctx);
+          return list;
+        }
+        auto builder = series_builder{list.type};
+        auto list_generator = values3(*list_list->array);
+        auto element_generator = values3(*element.array);
+        for (auto i = int64_t{0}; i < list.length(); ++i) {
+          const auto l = *list_generator.next();
+          const auto e = *element_generator.next();
+          if (not l) {
+            builder.null();
+            continue;
+          }
+          auto lb = builder.list();
+          for (const auto& v : *l) {
+            const auto matches
+              = partial_order(v, e) == std::partial_ordering::equivalent;
+            if (not matches) {
+              add_to_builder(lb, v);
+            }
+          }
+        }
+        return builder.finish_assert_one_array();
+      };
+      return map_series(eval(list_expr), eval(element_expr), remove_impl);
+    });
+  }
+};
+
 class zip final : public function_plugin {
 public:
   struct arguments {
@@ -241,4 +402,6 @@ using namespace tenzir::plugins::list;
 TENZIR_REGISTER_PLUGIN(prepend)
 TENZIR_REGISTER_PLUGIN(append)
 TENZIR_REGISTER_PLUGIN(concatenate)
+TENZIR_REGISTER_PLUGIN(add)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::list::remove)
 TENZIR_REGISTER_PLUGIN(zip)
