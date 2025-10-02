@@ -4,7 +4,7 @@
 {xs:[]}
 {xs:["banana","orange"]}
 {xs:["apple","banana"]}
-{xs:["one","two","two"]}
+{xs:["1","2","3"]}
 {xs:[1,3]}
 {xs:null}
 {xs:[1,3,5]}

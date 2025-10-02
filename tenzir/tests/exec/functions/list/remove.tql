@@ -37,8 +37,8 @@ write_tql(compact=true)
 save_stdout
 
 // Test with mixed types
-from {xs: ["one", "two", "two"]}
-xs = xs.remove("2")
+from {xs: ["1", "2", "3"]}
+xs = xs.remove(1)
 write_tql(compact=true)
 save_stdout
 

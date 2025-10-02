@@ -4,7 +4,7 @@ category: List
 example: "xs.add(y)"
 ---
 
-Inserts an element into a list if it doesn't already exist (set-insertion).
+Adds an element into a list if it doesn't already exist (set-insertion).
 
 ```tql
 add(xs:list, x:any) -> list
@@ -12,7 +12,7 @@ add(xs:list, x:any) -> list
 
 ## Description
 
-The `add` function returns the list `xs` with `x` inserted at the end, but only
+The `add` function returns the list `xs` with `x` added at the end, but only
 if `x` is not already present in the list. This performs a set-insertion
 operation, ensuring no duplicate values in the resulting list.
 
@@ -65,3 +65,4 @@ xs = xs.add("hello")
 [`append`](/reference/functions/append),
 [`prepend`](/reference/functions/prepend),
 [`remove`](/reference/functions/remove)
+[`distinct`](/reference/functions/distinct)

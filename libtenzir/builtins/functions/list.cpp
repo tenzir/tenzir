@@ -230,7 +230,7 @@ public:
   }
 };
 
-class remove_from_list : public virtual function_plugin {
+class remove : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "remove";
@@ -403,5 +403,5 @@ TENZIR_REGISTER_PLUGIN(prepend)
 TENZIR_REGISTER_PLUGIN(append)
 TENZIR_REGISTER_PLUGIN(concatenate)
 TENZIR_REGISTER_PLUGIN(add)
-TENZIR_REGISTER_PLUGIN(remove_from_list)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::list::remove)
 TENZIR_REGISTER_PLUGIN(zip)

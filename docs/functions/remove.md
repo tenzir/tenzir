@@ -63,3 +63,4 @@ xs = xs.remove("apple")
 [`add`](/reference/functions/add),
 [`append`](/reference/functions/append),
 [`prepend`](/reference/functions/prepend)
+[`distinct`](/reference/functions/distinct)

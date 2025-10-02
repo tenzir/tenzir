@@ -5,9 +5,7 @@ authors: [mavam,IyeOnline]
 pr: 5471
 ---
 
-Managing lists just got easier with two new functions that bring set-like
-operations to your pipelines. Say goodbye to duplicate entries and unwanted
-elements!
+We have added two new functions that make managing set-like lists easier.
 
 The `add` function ensures uniqueness when building lists. Perfect for
 maintaining deduplicated threat intel feeds or collecting unique user sessions:
