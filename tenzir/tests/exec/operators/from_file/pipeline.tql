@@ -1,5 +1,0 @@
-from_file env("INPUTS") + "/from_file/**.json", path_field=path {
-  read_lines
-  head 1
-}
-sort path

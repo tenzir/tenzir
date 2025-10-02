@@ -1,0 +1,18 @@
+---
+runner: multi
+---
+
+let $feather_zstd = f"{env("TENZIR_TMP_DIR")}/zeek.zstd.feather"
+
+// Pipeline 1: write to Feather file
+from_file f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
+batch 256
+write_feather compression_level=10, compression_type="zstd"
+save_file $feather_zstd
+
+// Pipeline 2: read from Feather file and show statistics
+from_file $feather_zstd
+top service

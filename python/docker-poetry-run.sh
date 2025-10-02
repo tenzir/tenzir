@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Run a poetry script in an isolated Docker environment with the Tenzir binary and
-# dependencies installed. 
+# dependencies installed.
 #
 # Args:
 # - arguments to `poetry run`
@@ -11,7 +11,7 @@
 
 set -eux -o pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 DOCKER_BUILDKIT=1 docker build \
   --build-arg TENZIR_VERSION=${TENZIR_CONTAINER_REF:-latest} \

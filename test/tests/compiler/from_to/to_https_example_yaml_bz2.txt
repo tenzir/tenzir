@@ -1,0 +1,42 @@
+[
+  write_yaml {
+    
+  },
+  compress {
+    type: "bz2" @ 0..0,
+    gzip_format: "gzip" @ 0..0
+  },
+  tql2.save_http {
+    is_ftp: false,
+    url: {
+      buffer: {
+        chunk: chunk(size=84),
+        table-offset: 12
+      }
+    } @ 3..41,
+    transfer_opts: {
+      verbose: false,
+      default_protocol: "https",
+      poll_timeout: "100ms",
+      ssl: {
+        uses_curl_http: false
+      }
+    },
+    http_opts: {
+      json: false,
+      form: false,
+      chunked: false,
+      multipart: false,
+      method: "",
+      body: [
+        
+      ] @ 0..0,
+      headers: [
+        
+      ] @ 0..0,
+      params: [
+        
+      ] @ 0..0
+    }
+  }
+]

@@ -7,9 +7,6 @@
 !/libtenzir/aux/fast_float/
 !/libtenzir/aux/pfs/
 !/libtenzir/aux/simdjson/
-tenzir/bats/lib/bats
-tenzir/bats/lib/bats-assert
-tenzir/bats/lib/bats-support
 CMakeUserPresets.json
 build/
 compile_commands.json

@@ -1,5 +1,0 @@
-// test: exec
-
-// Test that drop_null_fields with a specific field recursively drops null fields within that field
-from {x: {y: null, z: 42}}
-drop_null_fields x

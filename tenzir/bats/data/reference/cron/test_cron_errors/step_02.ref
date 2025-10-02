@@ -1,6 +1,0 @@
-error: bad cron expression: invalid value for at least one field
- --> <input>:1:6
-  |
-1 | cron "E * * * * *", { version }
-  |      ^^^^^^^^^^^^^ 
-  |

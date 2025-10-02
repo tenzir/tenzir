@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+cron "* * * * * *", {
+  from "./this-file-does-not-exist.json"
+}

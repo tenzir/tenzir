@@ -1,0 +1,6 @@
+error: `every` does not accept bytes as input
+ --> tests/node/scheduler/every_pipeline_invalid.tql:7:1
+  |
+7 | every 10ms {
+  | ^^^^^ 
+  |

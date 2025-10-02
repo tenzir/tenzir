@@ -1,7 +1,0 @@
-// node: true
-// error: true
-
-pipeline::detach {
-  from env("INPUTS") + "/this-file-does-not-exist.json"
-  discard
-}, id="test-id"

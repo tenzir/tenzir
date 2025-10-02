@@ -1,0 +1,6 @@
+error: interval must be a positive duration
+ --> tests/operators/every/negative_interval.tql:5:7
+  |
+5 | every -1s {
+  |       ^^^ 
+  |

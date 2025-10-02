@@ -1,0 +1,5 @@
+
+// Decapsulate an SLL2 frame.
+from f"{env("TENZIR_INPUTS")}/pcap/sll2.pcap"
+this = this.decapsulate()
+write_tql compact=true

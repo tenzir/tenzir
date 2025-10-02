@@ -1,0 +1,8 @@
+---
+fixtures: [udp_source]
+timeout: 60
+---
+
+load_udp env("UDP_SOURCE_ENDPOINT")
+read_json
+head 3

@@ -1,0 +1,10 @@
+---
+error: true
+fixtures:
+- node
+---
+
+every 10ms {
+  load_file ""
+  import
+}

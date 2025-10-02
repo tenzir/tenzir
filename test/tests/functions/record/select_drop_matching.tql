@@ -1,0 +1,11 @@
+from {
+  foo: 1,
+  bar: 2,
+  baz: 3,
+}
+
+let $pattern = "^ba"
+this = {
+  moved: this.select_matching($pattern),
+  ...this.drop_matching($pattern),
+}

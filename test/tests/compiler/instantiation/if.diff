@@ -1,0 +1,113 @@
+ {
+   lets: [
+-    {
+-      ident: `$foo` @ 4..8,
+-      expr: constant int64 1 @ 11..12,
+-      id: 1
+-    }
++    
+   ],
+   operators: [
+     legacy_ir unique_ptr export {
+       expression: {
+         node: predicate {
+           lhs: meta_extractor {
+             kind: 3
+           },
+           op: 4,
+           rhs: data bool false
+         }
+       },
+       mode: {
+         retro: true,
+         live: false,
+         internal: false,
+         parallel: 3
+       }
+     },
+     if_ir {
+       if_kw: 21..23,
+       condition: binary_expr {
+-        left: dollar_var `$foo` -> 1 @ 24..28,
++        left: constant int64 1 @ 24..28,
+         op: "eq" @ 29..31,
+         right: constant int64 1 @ 32..33
+       },
+       then: {
+         lets: [
+-          {
+-            ident: `$bar` @ 42..46,
+-            expr: constant int64 2 @ 49..50,
+-            id: 2
+-          }
++          
+         ],
+         operators: [
+           where_ir {
+             self: 53..58,
+             predicate: binary_expr {
+               left: binary_expr {
+                 left: root_field {
+                   id: `foo` @ 59..62,
+                   has_question_mark: false
+                 },
+                 op: "eq" @ 63..65,
+-                right: dollar_var `$foo` -> 1 @ 66..70
++                right: constant int64 1 @ 66..70
+               },
+               op: "and_" @ 71..74,
+               right: binary_expr {
+                 left: root_field {
+                   id: `bar` @ 75..78,
+                   has_question_mark: false
+                 },
+                 op: "eq" @ 79..81,
+-                right: dollar_var `$bar` -> 2 @ 82..86
++                right: constant int64 2 @ 82..86
+               }
+             }
+           }
+         ]
+       },
+       else: {
+         keyword: 89..93,
+         pipe: {
+           lets: [
+-            {
+-              ident: `$bar` @ 102..106,
+-              expr: constant int64 3 @ 109..110,
+-              id: 3
+-            }
++            
+           ],
+           operators: [
+             where_ir {
+               self: 113..118,
+               predicate: binary_expr {
+                 left: binary_expr {
+                   left: root_field {
+                     id: `foo` @ 119..122,
+                     has_question_mark: false
+                   },
+                   op: "eq" @ 123..125,
+-                  right: dollar_var `$foo` -> 1 @ 126..130
++                  right: constant int64 1 @ 126..130
+                 },
+                 op: "and_" @ 131..134,
+                 right: binary_expr {
+                   left: root_field {
+                     id: `bar` @ 135..138,
+                     has_question_mark: false
+                   },
+                   op: "eq" @ 139..141,
+-                  right: dollar_var `$bar` -> 3 @ 142..146
++                  right: constant int64 3 @ 142..146
+                 }
+               }
+             }
+           ]
+         }
+       }
+     }
+   ]
+ }

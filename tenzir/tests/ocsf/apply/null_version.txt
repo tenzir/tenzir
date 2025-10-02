@@ -1,6 +1,0 @@
-warning: dropping events where `metadata.version` is null
- --> ocsf/apply/null_version.tql:2:1
-  |
-2 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |

@@ -1,8 +1,0 @@
-error: expected argument of type `duration`, but got `int64`
- --> <input>:1:7
-  |
-1 | every 0 { version }
-  |       ^ 
-  |
-  = usage: every interval:duration { … }
-  = docs: https://docs.tenzir.com/reference/operators/every

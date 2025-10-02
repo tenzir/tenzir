@@ -1,5 +1,0 @@
-pipeline [
-  slice {
-    end: 42
-  }
-] @ 0..7

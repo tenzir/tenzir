@@ -1,8 +1,0 @@
-{"count":8462}
-warning: ignoring compression level option
- --> <input>:1:49
-  |
-1 | read_zeek_tsv | write_feather compression_level=7 | read_feather | summarize count=count()
-  |                                                 ~ 
-  |
-  = note: has no effect without `--compression-type`

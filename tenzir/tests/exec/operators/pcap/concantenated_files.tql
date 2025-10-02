@@ -1,7 +1,0 @@
-
-// Concatenate PCAPs and process them. The test ensures that we have the
-// right sequencing of file header and packet header events.
-shell f"cat {env("INPUTS")}/pcap/vlan-*.pcap"
-read_pcap emit_file_headers=true
-select name = @name
-write_tql compact=true

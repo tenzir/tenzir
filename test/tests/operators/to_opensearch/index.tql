@@ -1,0 +1,19 @@
+---
+runner: multi
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  x: 1,
+  ip: 10.10.10.10,
+}, {
+  id: "1.1.1.1",
+  doc: {},
+}, {
+  id: "Something",
+  doc: {x: 10.10.10.10},
+}
+to_opensearch env("HTTP_FIXTURE_ENDPOINT"), tls=false, action="index", index="main", compress=false
+
+load_file env("HTTP_CAPTURE_FILE")

@@ -1,6 +1,0 @@
-error: the file `a/b/c.json` does not exist
- --> <input>:1:6
-  |
-1 | from a/b/c.json read json
-  |      ^^^^^^^^^^ 
-  |

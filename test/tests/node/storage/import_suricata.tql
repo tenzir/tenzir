@@ -1,0 +1,12 @@
+---
+fixtures:
+- node
+timeout: 120
+---
+
+load_file f"{env("TENZIR_INPUTS")}/suricata/eve.json"
+read_suricata
+import
+
+export
+summarize count=count()

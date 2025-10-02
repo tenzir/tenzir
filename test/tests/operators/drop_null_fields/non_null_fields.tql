@@ -1,0 +1,7 @@
+from {
+  a: null,
+  b: 42,
+  c: null,
+  d: "hello"
+}
+drop_null_fields b, d

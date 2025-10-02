@@ -1,0 +1,7 @@
+error: string contains invalid utf-8
+ --> tests/language/expr/escape/unicode/last_low_surrogate.tql:6:7
+  |
+6 |   s6: "\u{DFFF}",          // Last low surrogate (not valid standalone UTF-8)
+  |       ^^^^^^^^^^ 
+  |
+  = hint: consider using a blob instead: b"…"

@@ -10,7 +10,6 @@ in
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
   arrow-adbc-go = prevPkgs.callPackage ./arrow-adbc-go { };
   azure-sdk-for-cpp = prevPkgs.callPackage ./azure-sdk-for-cpp { };
-  bats-tenzir = prevPkgs.callPackage ./bats-tenzir { };
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
   fluent-bit = prevPkgs.callPackage ./fluent-bit { };
   pfs = prevPkgs.callPackage ./pfs { };

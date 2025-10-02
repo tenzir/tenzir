@@ -1,0 +1,6 @@
+error: `stride` must be greater 0, but got -1
+ --> tests/functions/string/slice_negative_stride.tql:9:27
+  |
+9 | x = x.slice(end=6, stride=-1)
+  |                           ^^ 
+  |

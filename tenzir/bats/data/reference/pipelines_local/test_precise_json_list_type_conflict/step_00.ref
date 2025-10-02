@@ -1,3 +1,0 @@
-{"foo":["42","bar"]}
-warning: json parser: type mismatch between list elements
- = note: field `foo`

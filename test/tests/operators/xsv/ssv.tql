@@ -1,0 +1,2 @@
+from f"{env("TENZIR_INPUTS")}/xsv/sample.ssv"
+write_ssv

@@ -1,0 +1,8 @@
+every 5ms {
+  remote {
+    version
+  }
+}
+enumerate index
+select index
+head 10

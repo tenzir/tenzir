@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {
+  s1: "\xFF", // Invalid UTF-8 byte
+}

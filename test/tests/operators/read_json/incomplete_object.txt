@@ -1,0 +1,2 @@
+error: json parser: parser input ended with incomplete object
+ = note: coming from `inputs/json/incomplete-object.json`

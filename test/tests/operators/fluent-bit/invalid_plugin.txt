@@ -1,0 +1,7 @@
+error: failed to setup Fluent Bit `does-not-exist` input plugin 
+ --> tests/operators/fluent-bit/invalid_plugin.tql:5:17
+  |
+5 | from_fluent_bit "does-not-exist"
+  |                 ^^^^^^^^^^^^^^^^ 
+  |
+  = note: error code `-1`

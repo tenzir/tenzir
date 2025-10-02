@@ -1,0 +1,7 @@
+from {value: "{\"x_y_z\":1}"},
+     {value: "{\"_x_y_z\":1}"},
+     {value: "{\"x_y_z_\":1}"},
+     {value: "{\"_x_y_z_\":1}"},
+     {value: "{\"x__y_z\":1}"}
+this = value.parse_json()
+this = this.unflatten("_")

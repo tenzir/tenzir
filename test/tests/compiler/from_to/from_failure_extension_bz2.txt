@@ -1,0 +1,9 @@
+error: no known format for extension `.extension`
+ --> tests/compiler/from_to/from_failure_extension_bz2.tql:5:14
+  |
+5 | from "failure.extension.bz2"
+  |              ^^^^^^^^^^ 
+  |
+  = note: supported extensions for format deduction: `arrow`, `csv`, `feather`, `json`, `jsonl`, `jsonld`, `ndjson`, `parquet`, `pcap`, `ssv`, `tsv`, `yaml`
+  = hint: you can pass a pipeline to handle compression and format
+  = docs: https://docs.tenzir.com/reference/operators/from

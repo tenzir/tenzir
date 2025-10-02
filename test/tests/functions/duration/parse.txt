@@ -1,0 +1,23 @@
+{
+  x: 9.38d,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}
+warning: `duration` expected `string`, but got `int64`
+ --> tests/functions/duration/parse.tql:9:5
+  |
+9 | x = x.duration()
+  |     ~ 
+  |
+
+warning: failed to parse string
+ --> tests/functions/duration/parse.tql:9:5
+  |
+9 | x = x.duration()
+  |     ~ 
+  |
+  = note: tried to convert:

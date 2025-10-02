@@ -1,0 +1,10 @@
+---
+error: true
+timeout: 30
+---
+
+from {
+  msg: "x".repeat(70000),
+}
+write_json
+save_udp "127.0.0.1:54321"

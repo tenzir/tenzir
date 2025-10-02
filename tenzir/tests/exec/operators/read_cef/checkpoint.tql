@@ -1,3 +1,0 @@
-from env("INPUTS") + "/cef/checkpoint.log" {
-  read_cef
-}

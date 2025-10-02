@@ -1,4 +1,0 @@
-// error: true
-
-from {}
-chart_area x=x, y=y, x_min=1, x_max=0

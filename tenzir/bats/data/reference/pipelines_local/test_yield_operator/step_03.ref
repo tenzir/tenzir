@@ -1,5 +1,0 @@
-{"rrname":"google.com","rrtype":"MX","ttl":599,"rdata":"aspmx.l.google.com","soa":null,"sshfp":null,"srv":null}
-{"rrname":"google.com","rrtype":"MX","ttl":599,"rdata":"alt1.aspmx.l.google.com","soa":null,"sshfp":null,"srv":{"priority":null,"weight":null,"port":null,"name":"xxx"}}
-{"rrname":"google.com","rrtype":"MX","ttl":599,"rdata":"alt2.aspmx.l.google.com","soa":{"mname":"foo","rname":null,"serial":null,"refresh":null,"retry":42,"expire":null,"minimum":null},"sshfp":null,"srv":null}
-{"rrname":"google.com","rrtype":"MX","ttl":599,"rdata":"alt3.aspmx.l.google.com","soa":null,"sshfp":null,"srv":null}
-{"rrname":"google.com","rrtype":"MX","ttl":599,"rdata":"alt4.aspmx.l.google.com","soa":null,"sshfp":null,"srv":null}

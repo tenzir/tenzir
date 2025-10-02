@@ -1,0 +1,9 @@
+from {
+  n: time("2024-09-24T20:20:26.168426"),
+  x: 1,
+}
+
+y = n.year()
+m = n.month()
+d = n.day()
+invalid_year = x.year()

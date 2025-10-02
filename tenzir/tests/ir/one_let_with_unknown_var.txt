@@ -1,7 +1,0 @@
-error: unknown variable
- --> ir/one_let_with_unknown_var.tql:4:12
-  |
-4 | let $foo = $bar
-  |            ^^^^ 
-  |
-  = hint: no variables are available here

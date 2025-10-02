@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+cron "E * * * * *", {
+  version
+}

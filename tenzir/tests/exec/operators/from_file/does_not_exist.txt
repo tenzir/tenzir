@@ -1,6 +1,0 @@
-error: `inputs/from_file/does_not_exist.json` does not exist
- --> exec/operators/from_file/does_not_exist.tql:3:11
-  |
-3 | from_file env("INPUTS") + "/from_file/does_not_exist.json", path_field=path
-  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  |

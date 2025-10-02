@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+every {
+  version
+}

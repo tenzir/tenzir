@@ -17,8 +17,7 @@ apt-get -y --no-install-recommends install \
   curl \
   g++-14 \
   gcc-14 \
-  gnupg2 gnupg-agent\
-  lsb-release \
+  gnupg2 gnupg-agent lsb-release \
   golang-go
 
 curl -L "https://github.com/apache/arrow-adbc/archive/refs/tags/apache-arrow-adbc-${ARROW_ADBC_VERSION}.tar.gz" | tar -xz --strip-components=1

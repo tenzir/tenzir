@@ -1,0 +1,20 @@
+---
+runner: multi
+---
+
+let $feather_lz4 = f"{env("TENZIR_TMP_DIR")}/zeek.lz4.feather"
+
+from_file f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
+  decompress_gzip
+  read_zeek_tsv
+}
+slice begin=1150, end=1160
+batch 512
+write_feather compression_level=7, compression_type="lz4", min_space_savings=0.6
+save_file $feather_lz4
+
+// Pipeline 2: read from Feather file and show statistics.
+from_file $feather_lz4 {
+  read_feather
+}
+summarize total=count()

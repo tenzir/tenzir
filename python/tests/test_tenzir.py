@@ -55,7 +55,7 @@ async def tenzir_exec(endpoint, pipeline: str):
 
 def integration_data(path):
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    return os.path.normpath(f"{dir_path}/../../tenzir/bats/data/inputs/{path}")
+    return os.path.normpath(f"{dir_path}/../../test/inputs/{path}")
 
 
 # @pytest.mark.asyncio

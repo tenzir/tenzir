@@ -1,0 +1,12 @@
+---
+fixtures: [tcp_sink]
+timeout: 60
+---
+
+from {message: "foo"}
+write_json
+save_tcp env("TCP_SINK_ENDPOINT")
+
+load_file env("TCP_SINK_FILE")
+read_json
+head 1

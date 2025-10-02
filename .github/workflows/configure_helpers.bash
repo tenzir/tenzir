@@ -14,7 +14,7 @@ run_if_changed_default() {
     changed=true
   fi
   declare -g "$job_shellvar"="${changed}"
-  echo "run-${job}=${changed}" >> $GITHUB_OUTPUT
+  echo "run-${job}=${changed}" >>$GITHUB_OUTPUT
 }
 
 run_if_changed() {

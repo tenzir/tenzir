@@ -1,0 +1,6 @@
+from {
+  a: ceil(-2s, 2s),
+  b: ceil(-1s, 2s),
+  c: ceil(-3s, 2s),
+  d: ceil(-5s, 3s),
+}

@@ -1,6 +1,0 @@
-// test: ast
-
-where (x or y)
-where (x or y) and z
-from ({}), {}
-from 1 or 2, 3

@@ -1,0 +1,7 @@
+from {
+  duration: 120d,
+}
+year = round(duration, 1y)
+half = round(duration, 0.5y)
+week = round(duration, 1w)
+nano = round(duration, 1ns)

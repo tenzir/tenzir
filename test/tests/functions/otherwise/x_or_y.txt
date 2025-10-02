@@ -1,0 +1,44 @@
+{
+  x: 1,
+  y: -1,
+  z: 1,
+}
+{
+  x: 2,
+  y: -2,
+  z: 2,
+}
+{
+  z: null,
+}
+{
+  x: 4,
+  y: -4,
+  z: 4,
+}
+{
+  x: "5",
+  y: -5,
+  z: "5",
+}
+{
+  y: -6,
+  z: -6,
+}
+warning: field `x` not found
+  --> tests/functions/otherwise/x_or_y.tql:19:5
+   |
+19 | z = x.otherwise(y)
+   |     ~ 
+   |
+   = hint: did you mean `z`?
+   = hint: append `?` to suppress this warning
+
+warning: field `y` not found
+  --> tests/functions/otherwise/x_or_y.tql:19:17
+   |
+19 | z = x.otherwise(y)
+   |                 ~ 
+   |
+   = hint: did you mean `z`?
+   = hint: append `?` to suppress this warning

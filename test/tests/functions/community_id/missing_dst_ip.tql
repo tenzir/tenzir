@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {
+  bad: community_id(src_ip=null, proto=null),
+}

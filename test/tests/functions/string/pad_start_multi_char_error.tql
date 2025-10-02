@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {
+  // Multi-character pad should fail at parse time
+  multi_pad: "test".pad_start(10, "ab")
+}

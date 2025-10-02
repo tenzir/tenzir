@@ -1,6 +1,0 @@
-warning: dropping events where `metadata` does not exist
- --> ocsf/apply/no_metadata.tql:2:1
-  |
-2 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |

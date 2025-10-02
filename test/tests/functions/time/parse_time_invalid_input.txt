@@ -1,0 +1,9 @@
+{
+  x: null,
+}
+warning: failed to apply `parse_time`
+ --> tests/functions/time/parse_time_invalid_input.tql:5:7
+  |
+5 | x = x.parse_time("%Y-%m-%d")
+  |       ~~~~~~~~~~ 
+  |

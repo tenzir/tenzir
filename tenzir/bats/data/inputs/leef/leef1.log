@@ -1,5 +1,0 @@
-LEEF:1.0|CyberArk|PTA|14.0|1|Cat=Suspected credentials theft|sev=8|src=src1	userName=mike	dst=192.168.0.1	ExtraDataLabel=ExtraData	ExtraData=None	EventIdLabel=EventID	EventID=52b06812ec3500ed864c461e	devTime=1388577600000	LinkLabel=PTALink	PTALink=https://1.1.1.1/incidents/52b06812ec3500ed864c461e	suserLabel=SourceUserName	suser=mike2	ExternalLinkLabel=ExternalLink	ExternalLink=None
-LEEF:1.0|Tenzir|Tenzir|4.12|42|just some random junk
-LEEF:1.0|Tenzir|Tenzir|4.12|42|key=
-LEEF:1.0|Tenzir|Tenzir|4.12|42|key=trailing tab next
-LEEF:1.0|Tenzir|Tenzir|4.12|42|key=yikes	

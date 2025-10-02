@@ -1,0 +1,14 @@
+{
+  foo: "42",
+  bar: {
+    baz: 1,
+    baz2: "baz2",
+  },
+}
+warning: `load_http` is deprecated and will be removed in a future release
+ --> tests/operators/load_http/post.tql:6:1
+  |
+6 | load_http env("HTTP_FIXTURE_URL"), data={foo: "42", bar: {baz: 1, baz2: "baz2"}}
+  | ~~~~~~~~~ 
+  |
+  = hint: use `from` or `from_http` instead

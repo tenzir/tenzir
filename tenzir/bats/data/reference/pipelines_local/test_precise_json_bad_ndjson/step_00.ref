@@ -1,5 +1,0 @@
-{"foo":42}
-{"foo":43}
-warning: json parser: more than one JSON object in line
- = note: line 1
- = note: encountered a total of 2 objects

@@ -1,0 +1,4 @@
+from {
+  value: 42,
+}
+assert value == 1337

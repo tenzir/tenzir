@@ -19,12 +19,11 @@ check() {
 }
 
 beginswith() {
-  case $2 in "$1"*) true;; *) false;; esac;
+  case $2 in "$1"*) true ;; *) false ;; esac
 }
 
 # Only use colors when we have a TTY.
-if [ -t 1 ]
-then
+if [ -t 1 ]; then
   escape() { printf "\033[%sm" "$1"; }
 else
   escape() { :; }
@@ -44,11 +43,10 @@ action() {
 
 # Only prompt for user confirmation if we have a TTY.
 confirm() {
-  if [ -t 1 ]
-  then
+  if [ -t 1 ]; then
     echo
     echo "Press ${green}ENTER${normal} to continue."
-    read -r response < /dev/tty
+    read -r response </dev/tty
   fi
 }
 
@@ -67,25 +65,19 @@ echo
 action "Identifying platform"
 platform=
 os=$(uname -s)
-if [ "${os}" = "Linux" ]
-then
-    if check rpm && [ -n "$(rpm -qa 2>/dev/null)" ]
-    then
-        platform=RPM
-    elif [ -f "/etc/debian_version" ]
-    then
-        platform=Debian
-    elif [ -f "/etc/NIXOS" ]
-    then
-        platform=NixOS
-    else
-        platform=Linux
-    fi
-elif [ "${os}" = "Darwin" ]
-then
+if [ "${os}" = "Linux" ]; then
+  if check rpm && [ -n "$(rpm -qa 2>/dev/null)" ]; then
+    platform=RPM
+  elif [ -f "/etc/debian_version" ]; then
+    platform=Debian
+  elif [ -f "/etc/NIXOS" ]; then
+    platform=NixOS
+  else
+    platform=Linux
+  fi
+elif [ "${os}" = "Darwin" ]; then
   platform=macOS
-elif [ -z "${os}" ]
-then
+elif [ -z "${os}" ]; then
   echo "Could not identify platform."
   exit 1
 fi
@@ -94,21 +86,17 @@ echo "Found ${platform}."
 # Figure out if we can run privileged.
 can_root=
 sudo=
-if [ "$(id -u)" = 0 ]
-then
+if [ "$(id -u)" = 0 ]; then
   can_root=1
   sudo=""
-elif check sudo
-then
+elif check sudo; then
   can_root=1
   sudo="sudo"
-elif check doas
-then
+elif check doas; then
   can_root=1
   sudo="doas"
 fi
-if [ "$can_root" != "1" ]
-then
+if [ "$can_root" != "1" ]; then
   echo "Could not find ${bold}sudo${normal} or ${bold}doas${normal}."
   echo "This installer needs to run commands as the ${bold}root${normal} user."
   echo "Re-run this script as root or set up sudo/doas."
@@ -117,25 +105,20 @@ fi
 
 # The caller can supply a package URL with an environment variable. This should
 # only be used for testing modifications to the packaging.
-if [ -n "${TENZIR_PACKAGE_URL:-}" ]
-then
+if [ -n "${TENZIR_PACKAGE_URL:-}" ]; then
   package_url="${TENZIR_PACKAGE_URL}"
 else
   : "${TENZIR_PACKAGE_TAG:=latest}"
   # Select appropriate package.
   action "Identifying package"
   package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
-  if [ "${platform}" = "RPM" ]
-  then
+  if [ "${platform}" = "RPM" ]; then
     package_url="${package_url_base}/rpm/tenzir-static-${TENZIR_PACKAGE_TAG}.rpm"
-  elif [ "${platform}" = "Debian" ]
-  then
+  elif [ "${platform}" = "Debian" ]; then
     package_url="${package_url_base}/debian/tenzir-static-${TENZIR_PACKAGE_TAG}.deb"
-  elif [ "${platform}" = "Linux" ]
-  then
+  elif [ "${platform}" = "Linux" ]; then
     package_url="${package_url_base}/tarball/tenzir-static-${TENZIR_PACKAGE_TAG}.gz"
-  elif [ "${platform}" = "NixOS" ]
-  then
+  elif [ "${platform}" = "NixOS" ]; then
     echo "Try Tenzir with our ${bold}flake.nix${normal}:"
     echo
     echo "    ${bold}nix shell github:tenzir/tenzir/${TENZIR_PACKAGE_TAG} -c tenzir-node${normal}"
@@ -145,12 +128,11 @@ else
     echo "flake inputs, or use your preferred method to include third-party"
     echo "modules on classic NixOS."
     exit 0
-  elif [ "${platform}" = "macOS" ]
-  then
+  elif [ "${platform}" = "macOS" ]; then
     package_url="${package_url_base}/macOS/tenzir-static-${TENZIR_PACKAGE_TAG}.pkg"
   else
     echo "We do not offer pre-built packages for ${platform}." \
-        "Your options:"
+      "Your options:"
     echo
     echo "  1. Use Docker"
     echo "  2. Build from source"
@@ -167,11 +149,9 @@ tmpdir="$(dirname "$(mktemp -u)")"
 action "Downloading ${package_url}"
 rm -f "${tmpdir}/${package}"
 # Wget does not support the file:// URL scheme.
-if check wget && beginswith "${package_url}" "https://"
-then
+if check wget && beginswith "${package_url}" "https://"; then
   wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
-elif check curl
-then
+elif check curl; then
   curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
 else
   echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
@@ -199,8 +179,7 @@ confirm
 
 # Check for platform configuration.
 action "Checking for existence of platform configuration"
-if ! [ -f "${config}" ]
-then
+if ! [ -f "${config}" ]; then
   echo "Could not find config at ${bold}${config}${normal}."
   action "Using open source feature set"
   open_source=1
@@ -211,8 +190,7 @@ fi
 
 # Trigger installation.
 action "Installing package into ${prefix}"
-if [ "${platform}" = "RPM" ]
-then
+if [ "${platform}" = "RPM" ]; then
   cmd1="$sudo yum -y --nogpgcheck localinstall \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -224,8 +202,7 @@ then
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-elif [ "${platform}" = "Debian" ]
-then
+elif [ "${platform}" = "Debian" ]; then
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -237,8 +214,7 @@ then
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-elif [ "${platform}" = "Linux" ]
-then
+elif [ "${platform}" = "Linux" ]; then
   cmd1="$sudo tar xzf \"${tmpdir}/${package}\" -C /"
   cmd2="$sudo echo 'export PATH=\$PATH:/opt/tenzir/bin' > /etc/profile.d/tenzir.sh"
   echo "This script is about to run the following command:"
@@ -250,8 +226,7 @@ then
   eval "${cmd1}"
   action "Adding /opt/tenzir/bin to the system path"
   eval "${cmd2}"
-elif [ "${platform}" = "macOS" ]
-then
+elif [ "${platform}" = "macOS" ]; then
   cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"
   echo "This script is about to run the following command:"
   echo
@@ -272,12 +247,10 @@ echo "You're all set! Next steps:"
 echo
 echo "  - Ensure that ${bold}${prefix}/bin${normal} is in your \$PATH"
 echo "  - Run a pipeline via ${green}tenzir <pipeline>${normal}"
-if [ "${platform}" = "Linux" ] || [ "${platform}" = "macOS" ]
-then
+if [ "${platform}" = "Linux" ] || [ "${platform}" = "macOS" ]; then
   echo "  - Spawn a node via ${green}tenzir-node${normal}"
 fi
-if [ -z "${open_source}" ]
-then
+if [ -z "${open_source}" ]; then
   echo "  - Explore your node and manage pipelines at" \
     "${bold}https://app.tenzir.com${normal}"
 fi

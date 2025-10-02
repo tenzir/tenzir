@@ -1,0 +1,6 @@
+error: incomplete unicode escape sequence
+ --> tests/language/expr/escape/basic/incomplete_sequence.tql:6:7
+  |
+6 |   x: "\u11",
+  |       ^^^^ 
+  |

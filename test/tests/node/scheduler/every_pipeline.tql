@@ -1,0 +1,8 @@
+every 10ms {
+  from {
+    x: 42,
+  }
+  write_json
+  read_json
+}
+head 5

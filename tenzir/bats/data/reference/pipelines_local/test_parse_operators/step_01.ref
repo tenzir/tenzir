@@ -1,8 +1,0 @@
-error: unknown option `--tev`
- --> <input>:1:9
-  |
-1 | version --tev
-  |         ^^^^^ 
-  |
-  = usage: version (takes no arguments)
-  = docs: https://docs.tenzir.com/operators/version

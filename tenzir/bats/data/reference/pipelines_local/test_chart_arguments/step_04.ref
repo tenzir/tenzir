@@ -1,3 +1,0 @@
-error: failed to infer fields to use for charting
- = hint: either specify `x` and `y` as arguments explicitly, or none of them, and utilize the `select` operator
- = usage: chart bar [-x|--x-axis <field>] [--position <position>] [--x-axis-type <x_axis_type>] [--y-axis-type <y_axis_type>] [--limit <limit>] [-y|--y-axis <fields>]

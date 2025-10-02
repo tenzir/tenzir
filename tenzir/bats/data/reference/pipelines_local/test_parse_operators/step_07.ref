@@ -1,6 +1,0 @@
-internal-local-remote {
-  op: pass {
-    
-  },
-  location: "local"
-} @ 0..23

@@ -67,7 +67,7 @@ install_pre_commit() {
   PRE_COMMIT=${GIT_DIR}/hooks/pre-commit
   if [ ! -f ${PRE_COMMIT} ] || [ "$force" = TRUE ]; then
     echo 'adding pre-commit hook for format checking'
-    printf "#!/bin/sh\ngit format-show --cached" > ${PRE_COMMIT}
+    printf "#!/bin/sh\ngit format-show --cached" >${PRE_COMMIT}
     chmod +x ${PRE_COMMIT}
   else
     echo 'git pre-commit hook already exists, skipping'
@@ -83,27 +83,27 @@ clang_format_diff=${dir}/clang-format-diff.py
 format_call='$(git rev-parse --show-toplevel)/scripts/clang-format-diff.py'
 while getopts "fp:h?" opt; do
   case "$opt" in
-    f)
-      force=TRUE
-      ;;
-    p)
-      fixed_path=TRUE
-      clang_format_diff="$OPTARG"
-      ;;
-    h|\?)
-      usage
-      exit 0
+  f)
+    force=TRUE
+    ;;
+  p)
+    fixed_path=TRUE
+    clang_format_diff="$OPTARG"
+    ;;
+  h | \?)
+    usage
+    exit 0
     ;;
   esac
 done
 shift $(expr $OPTIND - 1)
 
 if [ ! "${script_git_tl}" = "${current_git_tl}" ]; then
-    fixed_path=TRUE
+  fixed_path=TRUE
 fi
 if [ "${fixed_path}" = TRUE ]; then
-    echo "using fixed path to clang_format_diff: ${clang_format_diff}"
-    format_call="${clang_format_diff}"
+  echo "using fixed path to clang_format_diff: ${clang_format_diff}"
+  format_call="${clang_format_diff}"
 fi
 
 if [ -z "$@" ]; then
@@ -115,20 +115,20 @@ if [ -z "$@" ]; then
   install_pre_commit
 else
   case "$1" in
-    format-show)
-      install_format_show
-      ;;
-    format)
-      install_format
-      ;;
-    format-show-branch)
-      install_format_show_branch
-      ;;
-    format-branch)
-      install_format_branch
-      ;;
-    pre-commit)
-      install_pre_commit
-      ;;
+  format-show)
+    install_format_show
+    ;;
+  format)
+    install_format
+    ;;
+  format-show-branch)
+    install_format_show_branch
+    ;;
+  format-branch)
+    install_format_branch
+    ;;
+  pre-commit)
+    install_pre_commit
+    ;;
   esac
 fi

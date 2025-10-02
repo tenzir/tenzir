@@ -1,0 +1,195 @@
+[
+  invocation {
+    op: {
+      path: [
+        `from` @ 0..4
+      ],
+      ref: unresolved
+    },
+    args: [
+      record {
+        begin: 5..6,
+        items: [
+          field {
+            name: `x` @ 6..7,
+            expr: constant string "{}" @ 9..13
+          }
+        ],
+        end: 13..14
+      },
+      record {
+        begin: 18..19,
+        items: [
+          field {
+            name: `x` @ 19..20,
+            expr: format_expr {
+              segments: [
+                string "\""
+              ],
+              location: 22..27
+            }
+          }
+        ],
+        end: 27..28
+      },
+      record {
+        begin: 32..33,
+        items: [
+          field {
+            name: `x` @ 33..34,
+            expr: format_expr {
+              segments: [
+                replacement root_field {
+                  id: `ident` @ 39..44,
+                  has_question_mark: false
+                }
+              ],
+              location: 36..46
+            }
+          }
+        ],
+        end: 46..47
+      },
+      record {
+        begin: 51..52,
+        items: [
+          field {
+            name: `x` @ 52..53,
+            expr: format_expr {
+              segments: [
+                replacement binary_expr {
+                  left: root_field {
+                    id: `a` @ 58..59,
+                    has_question_mark: false
+                  },
+                  op: "add" @ 59..60,
+                  right: root_field {
+                    id: `b` @ 60..61,
+                    has_question_mark: false
+                  }
+                }
+              ],
+              location: 55..63
+            }
+          }
+        ],
+        end: 63..64
+      },
+      record {
+        begin: 68..69,
+        items: [
+          field {
+            name: `x` @ 69..70,
+            expr: format_expr {
+              segments: [
+                string "pre ",
+                replacement constant string "string" @ 79..87
+              ],
+              location: 72..89
+            }
+          }
+        ],
+        end: 89..90
+      },
+      record {
+        begin: 94..95,
+        items: [
+          field {
+            name: `x` @ 95..96,
+            expr: format_expr {
+              segments: [
+                string "{}"
+              ],
+              location: 98..105
+            }
+          }
+        ],
+        end: 105..106
+      },
+      record {
+        begin: 110..111,
+        items: [
+          field {
+            name: `x` @ 111..112,
+            expr: format_expr {
+              segments: [
+                replacement record {
+                  begin: 118..119,
+                  items: [
+                    
+                  ],
+                  end: 119..120
+                }
+              ],
+              location: 114..123
+            }
+          }
+        ],
+        end: 123..124
+      },
+      record {
+        begin: 128..129,
+        items: [
+          field {
+            name: `x` @ 129..130,
+            expr: format_expr {
+              segments: [
+                replacement record {
+                  begin: 136..137,
+                  items: [
+                    field {
+                      name: `key` @ 137..140,
+                      expr: constant string "value" @ 142..149
+                    }
+                  ],
+                  end: 149..150
+                }
+              ],
+              location: 132..153
+            }
+          }
+        ],
+        end: 153..154
+      },
+      record {
+        begin: 158..159,
+        items: [
+          field {
+            name: `x` @ 159..160,
+            expr: format_expr {
+              segments: [
+                replacement record {
+                  begin: 166..167,
+                  items: [
+                    field {
+                      name: `key` @ 167..170,
+                      expr: format_expr {
+                        segments: [
+                          string "pre2",
+                          replacement record {
+                            begin: 180..181,
+                            items: [
+                              field {
+                                name: `key2` @ 181..185,
+                                expr: constant string "string" @ 187..195
+                              }
+                            ],
+                            end: 195..196
+                          }
+                        ],
+                        location: 172..199
+                      }
+                    }
+                  ],
+                  end: 199..200
+                }
+              ],
+              location: 162..203
+            }
+          }
+        ],
+        end: 204..205
+      }
+    ]
+  }
+]

@@ -6,15 +6,7 @@
   forceClang ? false,
 }:
 rec {
-  bundledPlugins = builtins.attrNames (
-    lib.filterAttrs (name: type: type == "directory") (builtins.readDir ../plugins)
-  );
-  integration-test-tree = lib.fileset.unions (
-    [
-      (lib.fileset.difference ../tenzir/bats ../tenzir/bats/lib/bats-tenzir)
-    ]
-    ++ builtins.map (x: lib.fileset.maybeMissing (./.. + "/plugins/${x}/bats")) bundledPlugins
-  );
+  integration-test-tree = lib.fileset.unions [];
   tenzir-tree = lib.fileset.difference (lib.fileset.unions [
     ../changelog
     ../cmake
@@ -39,14 +31,6 @@ rec {
     fileset = tenzir-tree;
   };
 
-  tenzir-integration-test-runner = [
-    (pkgs.bats.withLibraries (p: [
-      p.bats-support
-      p.bats-assert
-      pkgs.bats-tenzir
-    ]))
-    pkgs.parallel
-  ];
   tenzir-integration-test-deps = [
     pkgs.curl
     pkgs.jq
@@ -60,10 +44,11 @@ rec {
     #toybox
     pkgs.yara
     pkgs.uv
+    pkgs.parallel
     (pkgs.python3.withPackages (ps: [
       ps.trustme
     ]))
-  ] ++ tenzir-integration-test-runner;
+  ];
 
   toImageFn = import ./tenzir/image.nix nix2container;
 

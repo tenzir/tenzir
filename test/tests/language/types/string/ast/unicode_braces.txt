@@ -1,0 +1,6 @@
+error: incomplete unicode escape sequence
+ --> tests/language/types/string/ast/unicode_braces.tql:5:12
+  |
+5 | from {x: f"\u{0}"}
+  |            ^^ 
+  |

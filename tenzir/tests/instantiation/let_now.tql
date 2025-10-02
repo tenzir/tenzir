@@ -1,6 +1,0 @@
-// test: instantiation
-
-let $foo = now() == 2100-01-01
-
-export
-where foo == $foo

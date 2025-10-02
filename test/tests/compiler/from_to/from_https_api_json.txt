@@ -1,0 +1,16 @@
+[
+  from_http_client {
+    op: 0..4,
+    url: {
+      buffer: {
+        chunk: chunk(size=76),
+        table-offset: 12
+      }
+    } @ 5..35,
+    paginate_delay: "0s" @ 0..0,
+    connection_timeout: "5s" @ 0..0,
+    max_retry_count: 0 @ 0..0,
+    retry_delay: "1s" @ 0..0,
+    tls: false @ 0..0
+  }
+]

@@ -152,7 +152,7 @@ jobs:
           set -eo pipefail
           pip install --upgrade shfmt-py
           git add --intent-to-add --all
-          git ls-files --recurse-submodules -z -- '*.bats' ':!:tenzir/bats/lib/bats*/**' |
+          git ls-files --recurse-submodules -z -- '*.sh' '*.bash' |
             xargs -0 shfmt -l -w
           git diff --submodule=diff --exit-code
 

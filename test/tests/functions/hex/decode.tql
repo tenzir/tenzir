@@ -1,0 +1,5 @@
+from {
+  bytes: "54656E7a6972",
+}
+
+decoded = bytes.decode_hex()

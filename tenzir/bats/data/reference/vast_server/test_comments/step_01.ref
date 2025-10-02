@@ -1,6 +1,0 @@
-error: expected operator name
- --> <input>:1:50
-  |
-1 | export | sort timestamp | select timestamp | /**/
-  |                                                  ^ 
-  |

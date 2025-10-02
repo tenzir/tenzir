@@ -1,0 +1,5 @@
+// TODO: This should already be substituted earlier.
+let $foo = 42
+
+export
+where foo == $foo

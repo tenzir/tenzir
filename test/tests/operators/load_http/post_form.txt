@@ -1,0 +1,10 @@
+{
+  line: "foo=42&bar.baz=baz",
+}
+warning: `load_http` is deprecated and will be removed in a future release
+ --> tests/operators/load_http/post_form.tql:6:1
+  |
+6 | load_http env("HTTP_FIXTURE_URL"), form=true, data={foo: "42", bar: {baz: "baz"}}
+  | ~~~~~~~~~ 
+  |
+  = hint: use `from` or `from_http` instead

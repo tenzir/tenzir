@@ -1,7 +1,0 @@
-error: failed to setup Fluent Bit `please-do-not-crash` input plugin 
- --> <input>:1:12
-  |
-1 | fluent-bit please-do-not-crash
-  |            ^^^^^^^^^^^^^^^^^^^ 
-  |
-  = note: error code `-1`
