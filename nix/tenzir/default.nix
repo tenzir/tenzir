@@ -30,13 +30,13 @@ let
       google-cloud-cpp-tenzir,
       grpc,
       spdlog,
-      libyamlcpp,
       simdjson,
       robin-map,
       jemalloc,
       libunwind,
       xxHash,
       rabbitmq-c,
+      yaml-cpp,
       yara,
       rdkafka,
       reproc,
@@ -254,13 +254,13 @@ let
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb
-              libyamlcpp
               protobuf
               re2
               reproc
               robin-map
               simdjson
               spdlog
+              yaml-cpp
               xxHash
             ]
             ++ lib.optionals (!isStatic) [
