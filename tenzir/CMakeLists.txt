@@ -114,108 +114,20 @@ if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   endif ()
 endif ()
 
-# -- integration tests ---------------------------------------------------------
-
-add_test(NAME build-tenzir
-         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
-                 "$<CONFIG>" --target tenzir)
-set_tests_properties(
-  build-tenzir PROPERTIES FIXTURES_SETUP "tenzir_integration_test_fixture"
-                          LABELS integration)
-
-unset(_integration_test_dirs)
-file(
-  GLOB _integration_test_dirs
-  RELATIVE "${CMAKE_CURRENT_LIST_DIR}/tests/"
-  "${CMAKE_CURRENT_LIST_DIR}/tests/[^_]*")
-foreach (dir IN LISTS _integration_test_dirs)
-  if (NOT IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}")
-    continue()
+function(tenzir_collect_tests dir out_var)
+  get_property(_local_tests DIRECTORY "${dir}" PROPERTY TESTS)
+  if (_local_tests)
+    list(APPEND result ${_local_tests})
   endif ()
-  if ("${dir}" MATCHES "^inputs/?$")
-    continue()
-  endif ()
-  add_test(
-    NAME "tenzir/${dir}"
-    COMMAND
-      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
-      "${CMAKE_COMMAND}" "-E" "env" "--modify"
-      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-      "${TENZIR_UV_PATH}" "tool" "run" "--python" "\">=3.12\"" "tenzir-test"
-      "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
-      "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
-      "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}/")
-  set_tests_properties(
-    "tenzir/${dir}"
-    PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/test" FIXTURES_REQUIRED
-               "tenzir_integration_test_fixture" LABELS integration)
-endforeach ()
-
-add_custom_target(integration-tests DEPENDS tenzir)
-add_custom_command(
-  TARGET integration-tests
-  POST_BUILD
-  COMMAND
-    "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
-    "${CMAKE_COMMAND}" "-E" "env" "--modify"
-    "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-    "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
-    "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
-    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node" "--root"
-    "${CMAKE_SOURCE_DIR}/test"
-  USES_TERMINAL VERBATIM)
-
-add_custom_target(integration)
-add_dependencies(integration integration-tests)
-
-add_custom_target(update-integration DEPENDS tenzir)
-add_custom_command(
-  TARGET update-integration
-  POST_BUILD
-  COMMAND
-    "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
-    "${CMAKE_COMMAND}" "-E" "env" "--modify"
-    "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-    "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
-    "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
-    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node" "--root"
-    "${CMAKE_SOURCE_DIR}/test" "--update"
-  USES_TERMINAL VERBATIM)
-
-# Add a target for running integration tests with code coverage enabled
-if (TENZIR_ENABLE_CODE_COVERAGE)
-  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message(FATAL_ERROR "Code coverage is only supported in Debug builds")
-  endif ()
-
-  add_custom_target(integration-coverage DEPENDS tenzir)
-  add_custom_command(
-    TARGET integration-coverage
-    POST_BUILD
-    COMMAND
-      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
-      "${CMAKE_COMMAND}" "-E" "env" "--modify"
-      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>"
-      "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
-      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}" "--" "${TENZIR_UV_PATH}" "tool"
-      "run" "--python" ">=3.12" "tenzir-test" "--tenzir-binary"
-      "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
-      "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node" "--root"
-      "${CMAKE_SOURCE_DIR}/test" "--coverage"
-      "--coverage-source-dir=${CMAKE_SOURCE_DIR}"
-    COMMAND
-      "${CMAKE_COMMAND}" "-E" "env"
-      "VERBOSE=$<IF:$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>,1,0>" "--"
-      "${CMAKE_SOURCE_DIR}/scripts/process_coverage.sh"
-      "--coverage-dir=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
-      "--source-dir=${CMAKE_SOURCE_DIR}" "--binary-dir=${CMAKE_BINARY_DIR}"
-      "--tenzir-binary=$<TARGET_FILE:tenzir>"
-      "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
-    COMMENT "Running integration tests with code coverage enabled"
-    USES_TERMINAL VERBATIM)
-endif ()
-
-# -- add plugins ---------------------------------------------------------------
+  get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+  foreach (_subdir IN LISTS _subdirs)
+    tenzir_collect_tests("${_subdir}" _child_tests)
+    if (_child_tests)
+      list(APPEND result ${_child_tests})
+    endif ()
+  endforeach ()
+  set(${out_var} "${result}" PARENT_SCOPE)
+endfunction()
 
 set(plugins_default "plugins/*")
 if (EXISTS contrib/tenzir-plugins/.git)
@@ -264,6 +176,132 @@ if (TENZIR_PLUGINS)
     string(PREPEND plugin_binary_dir "${PROJECT_BINARY_DIR}/plugins/")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
   endforeach ()
+endif ()
+
+# -- integration tests ---------------------------------------------------------
+
+add_test(NAME build-tenzir
+         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+                 "$<CONFIG>" --target tenzir)
+set_tests_properties(
+  build-tenzir PROPERTIES FIXTURES_SETUP "tenzir_integration_test_fixture"
+                          LABELS integration)
+
+set(_integration_tests_root "${CMAKE_SOURCE_DIR}/test/tests")
+unset(_integration_test_dirs)
+if (EXISTS "${_integration_tests_root}")
+  file(
+    GLOB _integration_test_dirs
+    RELATIVE "${_integration_tests_root}"
+    "${_integration_tests_root}/[^_]*")
+endif ()
+foreach (dir IN LISTS _integration_test_dirs)
+  if (NOT IS_DIRECTORY "${_integration_tests_root}/${dir}")
+    continue()
+  endif ()
+  if ("${dir}" MATCHES "^inputs/?$")
+    continue()
+  endif ()
+  add_test(
+    NAME "tenzir/${dir}"
+    COMMAND
+      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
+      "${CMAKE_COMMAND}" "-E" "env" "--modify"
+      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
+      "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
+      "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
+      "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
+      "${_integration_tests_root}/${dir}/")
+  set_tests_properties(
+    "tenzir/${dir}"
+    PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/test" FIXTURES_REQUIRED
+               "tenzir_integration_test_fixture" LABELS integration
+               RUN_SERIAL TRUE)
+endforeach ()
+
+add_custom_target(integration-tests DEPENDS tenzir)
+add_custom_command(
+  TARGET integration-tests
+  POST_BUILD
+  COMMAND
+    "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
+    "${CMAKE_COMMAND}" "-E" "env" "--modify"
+    "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
+    "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
+    "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
+    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node" "--root"
+    "${CMAKE_SOURCE_DIR}/test"
+  USES_TERMINAL VERBATIM)
+
+add_custom_target(integration)
+add_dependencies(integration integration-tests)
+
+add_custom_target(update-integration DEPENDS tenzir)
+add_custom_command(
+  TARGET update-integration
+  POST_BUILD
+  COMMAND
+    "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
+    "${CMAKE_COMMAND}" "-E" "env" "--modify"
+    "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
+    "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
+    "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
+    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node" "--root"
+    "${CMAKE_SOURCE_DIR}/test" "--update"
+  USES_TERMINAL VERBATIM)
+
+if (TENZIR_ENABLE_CODE_COVERAGE)
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "Code coverage is only supported in Debug builds")
+  endif ()
+
+  add_custom_target(integration-coverage DEPENDS tenzir)
+  add_custom_command(
+    TARGET integration-coverage
+    POST_BUILD
+    COMMAND
+      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
+      "${CMAKE_COMMAND}" "-E" "env" "--modify"
+      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>"
+      "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
+      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}" "--" "${TENZIR_UV_PATH}" "tool"
+      "run" "--python" ">=3.12" "tenzir-test" "--tenzir-binary"
+      "$<TARGET_FILE:tenzir::tenzir>" "--tenzir-node-binary"
+      "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node" "--root"
+      "${CMAKE_SOURCE_DIR}/test" "--coverage"
+      "--coverage-source-dir=${CMAKE_SOURCE_DIR}"
+    COMMAND
+      "${CMAKE_COMMAND}" "-E" "env"
+      "VERBOSE=$<IF:$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>,1,0>" "--"
+      "${CMAKE_SOURCE_DIR}/scripts/process_coverage.sh"
+      "--coverage-dir=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
+      "--source-dir=${CMAKE_SOURCE_DIR}" "--binary-dir=${CMAKE_BINARY_DIR}"
+      "--tenzir-binary=$<TARGET_FILE:tenzir>"
+      "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
+    COMMENT "Running integration tests with code coverage enabled"
+    USES_TERMINAL VERBATIM)
+endif ()
+
+if (BUILD_TESTING)
+  tenzir_collect_tests("${CMAKE_CURRENT_SOURCE_DIR}" _all_tests)
+  foreach (_test IN LISTS _all_tests)
+    get_property(_labels TEST "${_test}" PROPERTY LABELS)
+    if (_labels AND "integration" IN_LIST _labels)
+      list(APPEND _integration_tests "${_test}")
+    else ()
+      list(APPEND _non_integration_tests "${_test}")
+    endif ()
+  endforeach ()
+  if (_integration_tests AND _non_integration_tests)
+    list(REMOVE_DUPLICATES _non_integration_tests)
+    foreach (_integration_test IN LISTS _integration_tests)
+      set_property(TEST "${_integration_test}" PROPERTY DEPENDS
+                   "${_non_integration_tests}")
+    endforeach ()
+  endif ()
+  unset(_integration_tests)
+  unset(_non_integration_tests)
+  unset(_all_tests)
 endif ()
 
 get_property(TENZIR_BUNDLED_PLUGINS GLOBAL

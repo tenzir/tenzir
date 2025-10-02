@@ -953,12 +953,8 @@ if (BUILD_TESTING)
     USES_TERMINAL VERBATIM)
   add_dependencies(unit-tests tenzir)
 
-  if (TARGET test)
-    add_dependencies(test unit-tests)
-    if (TARGET integration-tests)
-      add_dependencies(test integration-tests)
-    endif ()
-  endif ()
+  # The default CTest "test" target already covers both unit and integration
+  # tests once the integration suites are registered below.
 endif ()
 
 # -- cmake export/config installations -----------------------------------------
