@@ -1,0 +1,112 @@
+// Test basic types and structures
+from {name: "Alice", age: 30, active: true}
+found_alice = contains(this, "Alice")
+found_bob = contains(this, "Bob")
+found_30 = contains(this, 30)
+found_true = contains(this, true)
+write_tql
+save_stdout
+
+// Test nested structures
+from {user: {profile: {name: "John", settings: {theme: "dark"}}}}
+found_john = contains(this, "John")
+found_theme = contains(user, "dark")
+found_missing = contains(this, "light")
+found_settings = contains(user.profile, "dark")
+write_tql
+save_stdout
+
+// Test lists
+from {numbers: [1, 2, 3, 42], tags: ["important", "urgent"]}
+found_42 = contains(numbers, 42)
+found_important = contains(tags, "important")
+found_missing = contains(numbers, 99)
+found_in_tags = contains(this, "urgent")
+write_tql
+save_stdout
+
+// Test numeric type compatibility
+from {values: {int_val: 42, uint_val: 42.uint(), double_val: 42.0}}
+search_int = contains(values, 42)
+search_uint = contains(values, 42.uint())
+search_double = contains(values, 42.0)
+search_mismatch = contains(values, 99)
+write_tql
+save_stdout
+
+// Test string substring and exact matching
+from {message: "Hello, World!"}
+substring_match = contains(message, "World")
+exact_match = contains(message, "World", exact=true)
+partial_no_match = contains(message, "Universe")
+exact_full_match = contains(message, "Hello, World!", exact=true)
+exact_no_match = contains(message, "Hello, World", exact=true)
+substring_partial = contains(message, "lo, Wo")
+write_tql
+save_stdout
+
+// Test deeply nested structures
+from {
+  data: {
+    level1: {
+      level2: {
+        level3: {
+          target: "found"
+        }
+      }
+    }
+  }
+}
+deep_search = contains(data, "found")
+search_from_top = contains(this, "found")
+search_from_l1 = contains(data.level1, "found")
+search_missing = contains(data, "missing")
+write_tql
+save_stdout
+
+// Test mixed structures and edge cases
+from {
+  empty_list: [],
+  empty_record: {},
+  nested_lists: [[1, 2], [3, 4, 5]],
+  with_strings: {tags: ["test", "demo"], nested: {value: "found"}},
+  with_numbers: {nums: [1, 2, 3], nested: {value: 42}},
+  with_bools: {flags: [true, false], nested: {active: true}},
+}
+search_in_empty_list = contains(empty_list, 1)
+search_in_empty_record = contains(empty_record, "test")
+search_in_nested = contains(nested_lists, 4)
+search_string_in_list = contains(with_strings.tags, "test")
+search_string_in_record = contains(with_strings.nested, "found")
+search_number_in_list = contains(with_numbers.nums, 2)
+search_number_in_record = contains(with_numbers.nested, 42)
+search_bool_in_list = contains(with_bools.flags, false)
+search_bool_in_record = contains(with_bools.nested, true)
+write_tql
+save_stdout
+
+// Test subnet and IP containment
+from {subnet: 10.0.0.0/8}
+contains_ip = contains(subnet, 10.1.2.3)
+contains_subnet = contains(subnet, 10.0.0.0/16)
+exact_subnet = contains(subnet, 10.0.0.0/8, exact=true)
+not_in_subnet_ip = contains(subnet, 192.168.1.1)
+not_in_subnet = contains(subnet, 192.168.0.0/16)
+exact_no_match = contains(subnet, 10.0.0.0/16, exact=true)
+write_tql
+save_stdout
+
+// Test null detection
+from {},
+{ x: 1 },
+{ x: [] },
+{ x: {} },
+{ x: { y: 1 } },
+{ x: { y: null } },
+{ x: { y: { z: null } } },
+{ x: { y: { z: 1 } } },
+{ x: { y: { z: 1, w: null.int() } } },
+{ x: { y: [{z: 1}, {}] } }
+contains_null = x?.contains(null)
+write_tql
+save_stdout

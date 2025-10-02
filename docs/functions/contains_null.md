@@ -61,3 +61,4 @@ contains_null = this.contains_null()
 
 [`has`](/reference/functions/has),
 [`is_empty`](/reference/functions/is_empty)
+[`contains`](/reference/functions/contains)
