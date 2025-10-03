@@ -32,9 +32,11 @@ private:
     diagnostic_handler& dh_;
   };
 
-  explicit session_provider(diagnostic_handler& dh);
+  explicit session_provider(diagnostic_handler& dh,
+                            std::shared_ptr<const registry> reg);
 
   diagnostic_ctx dh_;
+  std::shared_ptr<const registry> reg_;
 };
 
 /// This is meant to be used as a value type.

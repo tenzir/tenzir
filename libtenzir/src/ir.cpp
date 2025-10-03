@@ -25,14 +25,15 @@ namespace {
 /// Create a `where` operator with the given expression.
 auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
   // TODO: This should just be a `std::make_unique<where_ir>(std::move(filter))`.
-  auto where = plugins::find<operator_compiler_plugin>("tql2.where");
+  const auto* where = plugins::find<operator_compiler_plugin>("tql2.where");
   TENZIR_ASSERT(where);
   auto args = std::vector<ast::expression>{};
   args.push_back(std::move(filter));
   // TODO: This is a terrible workaround. We are discarding diagnostics and
   // creating a new compile context, which should be created only once.
   auto dh = null_diagnostic_handler{};
-  auto ctx = compile_ctx::make_root(base_ctx{dh, global_registry()});
+  auto reg = global_registry();
+  auto ctx = compile_ctx::make_root(base_ctx{dh, *reg});
   return where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
     .unwrap();
 }
