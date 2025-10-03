@@ -157,14 +157,14 @@ void registry_update_guard::publish(std::shared_ptr<const registry>&& next) cons
 auto registry::get(const ast::function_call& call) const
   -> const function_plugin& {
   auto def = get(call.fn.ref);
-  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&def);
+  auto* fn = std::get_if<std::reference_wrapper<const function_plugin>>(&def);
   TENZIR_ASSERT(fn);
   return *fn;
 }
 
 auto registry::get(const ast::invocation& inv) const -> const operator_def& {
   auto def = get(inv.op.ref);
-  auto op = std::get_if<std::reference_wrapper<const operator_def>>(&def);
+  auto* op = std::get_if<std::reference_wrapper<const operator_def>>(&def);
   TENZIR_ASSERT(op);
   return *op;
 }
@@ -172,7 +172,7 @@ auto registry::get(const ast::invocation& inv) const -> const operator_def& {
 auto registry::try_get(const entity_path& path) const
   -> variant<entity_ref, error> {
   TENZIR_ASSERT(path.resolved());
-  auto current = &root(path.pkg());
+  const auto* current = &root(path.pkg());
   auto&& segments = path.segments();
   for (auto i = size_t{0}; i < segments.size(); ++i) {
     auto it = current->defs.find(segments[i]);
@@ -186,7 +186,7 @@ auto registry::try_get(const entity_path& path) const
       // No such entity.
       return error{i, false};
     }
-    auto& set = it->second;
+    const auto& set = it->second;
     if (i == segments.size() - 1) {
       // Failure here indicates that it has the wrong type.
       switch (path.ns()) {
@@ -250,7 +250,7 @@ void registry::add(const entity_pkg& package, std::string_view name,
   auto path = detail::split(name, "::");
   TENZIR_ASSERT(not path.empty());
   // Find the correct module first.
-  auto mod = &root(package);
+  auto* mod = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
       break;
@@ -277,9 +277,9 @@ void registry::add(const entity_pkg& package, std::string_view name,
         set.op = std::move(def);
         return;
       }
-      auto existing = try_as<native_operator>(set.op->inner());
+      auto* existing = try_as<native_operator>(set.op->inner());
       TENZIR_ASSERT(existing);
-      auto incoming = try_as<native_operator>(def.inner());
+      auto* incoming = try_as<native_operator>(def.inner());
       TENZIR_ASSERT(incoming);
       if (incoming->factory_plugin) {
         TENZIR_ASSERT(not existing->factory_plugin);
