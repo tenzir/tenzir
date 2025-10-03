@@ -36,6 +36,9 @@ struct operator_control_plane {
   /// Returns a unique id for the current run.
   virtual auto run_id() const noexcept -> uuid = 0;
 
+  /// Returns the pipeline ID.
+  virtual auto pipeline_id() const noexcept -> std::string_view = 0;
+
   /// Returns the node actor, if the operator location is remote.
   virtual auto node() noexcept -> node_actor = 0;
 
@@ -115,8 +118,7 @@ struct operator_control_plane {
   resolve_secrets_must_yield(std::vector<secret_request> requests,
                              final_callback_t final_callback
                              = noop_final_callback)
-    -> secret_resolution_sentinel
-    = 0;
+    -> secret_resolution_sentinel = 0;
 
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an

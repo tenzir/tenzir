@@ -236,6 +236,7 @@ auto exec_pipeline(pipeline pipe, std::string definition,
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
       self->state().executor
         = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
+                      fmt::format("{}", uuid::random()),
                       caf::actor_cast<receiver_actor<diagnostic>>(self),
                       caf::actor_cast<metrics_receiver_actor>(self),
                       node_actor{}, true, true);

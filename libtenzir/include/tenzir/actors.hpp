@@ -333,8 +333,8 @@ struct pipeline_shell_actor_traits {
     // Spawn a set of execution nodes for a given pipeline. Does not start the
     // execution nodes.
     auto(atom::spawn, operator_box, operator_type, std::string definition,
-         receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
-         bool is_hidden, uuid run_id)
+         std::string pipeline_id, receiver_actor<diagnostic>,
+         metrics_receiver_actor, int32_t index, bool is_hidden, uuid run_id)
       ->caf::result<exec_node_actor>>;
 };
 using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;

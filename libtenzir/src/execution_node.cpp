@@ -197,6 +197,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     return state.run_id;
   }
 
+  auto pipeline_id() const noexcept -> std::string_view override {
+    return state.pipeline_id;
+  }
+
   auto node() noexcept -> node_actor override {
     return state.weak_node.lock();
   }
@@ -480,12 +484,14 @@ struct exec_node_control_plane final : public operator_control_plane {
 template <class Input, class Output>
 struct exec_node_state {
   exec_node_state(exec_node_actor::pointer self, operator_ptr op,
-                  std::string definition, const node_actor& node,
+                  std::string definition, std::string pipeline_id,
+                  const node_actor& node,
                   const receiver_actor<diagnostic>& diagnostic_handler,
                   const metrics_receiver_actor& metrics_receiver, int index,
                   bool has_terminal, bool is_hidden, uuid run_id)
     : self{self},
       definition{std::move(definition)},
+      pipeline_id{std::move(pipeline_id)},
       run_id{run_id},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
@@ -658,6 +664,9 @@ struct exec_node_state {
 
   /// The definition of this pipeline.
   std::string definition;
+
+  /// The pipeline ID.
+  std::string pipeline_id;
 
   /// A unique identifier for the current run.
   uuid run_id = {};
@@ -1240,7 +1249,7 @@ struct exec_node_state {
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, std::string definition,
-                     node_actor node,
+                     std::string pipeline_id, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal, bool is_hidden, uuid run_id)
@@ -1265,13 +1274,13 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
         caf::actor_from_state<exec_node_state<input_type, output_type>>,
-        std::move(op), std::move(definition), std::move(node),
-        std::move(diagnostics_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden, run_id);
+        std::move(op), std::move(definition), std::move(pipeline_id),
+        std::move(node), std::move(diagnostics_handler),
+        std::move(metrics_receiver), index, has_terminal, is_hidden, run_id);
       return result;
     };
   };
-  return std::pair {
+  return std::pair{
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),

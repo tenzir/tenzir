@@ -55,7 +55,7 @@ namespace tenzir {
 /// @pre diagnostics_handler != nullptr
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, std::string definition,
-                     node_actor node,
+                     std::string pipeline_id, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal, bool is_hidden, uuid run_id)

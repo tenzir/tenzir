@@ -20,6 +20,9 @@ struct pipeline_executor_state {
   /// A unique id for the current run.
   uuid run_id = uuid::random();
 
+  /// The pipeline ID.
+  std::string pipeline_id;
+
   /// A handle to the node actor.
   node_actor node = {};
 
@@ -72,8 +75,9 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type;
+  pipeline pipe, std::string definition, std::string pipeline_id,
+  receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
+  node_actor node, bool has_terminal, bool is_hidden)
+  -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

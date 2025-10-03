@@ -163,13 +163,15 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
 from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
-  std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  std::string definition, std::string pipeline_id, node_actor node,
+  bool is_hidden, metrics_receiver_actor metrics_receiver,
+  uint64_t operator_index)
   : self_{self},
     dh_{std::move(dh)},
     args_{std::move(args)},
     order_{order},
     definition_{std::move(definition)},
+    pipeline_id_{std::move(pipeline_id)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
     operator_index_{operator_index},
@@ -202,14 +204,16 @@ from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string expanded,
   std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
-  std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  std::string definition, std::string pipeline_id, node_actor node,
+  bool is_hidden, metrics_receiver_actor metrics_receiver,
+  uint64_t operator_index)
   : self_{self},
     dh_{std::move(dh)},
     fs_{std::move(fs)},
     args_{std::move(args)},
     order_{order},
     definition_{std::move(definition)},
+    pipeline_id_{std::move(pipeline_id)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
     operator_index_{operator_index},
@@ -465,8 +469,9 @@ auto from_file_state::start_stream(
                        : std::nullopt));
     pipe = pipe.optimize_if_closed();
   }
-  auto executor = self_->spawn(pipeline_executor, std::move(pipe), definition_,
-                               self_, self_, node_, false, is_hidden_);
+  auto executor
+    = self_->spawn(pipeline_executor, std::move(pipe), definition_,
+                   pipeline_id_, self_, self_, node_, false, is_hidden_);
   self_->attach_functor([this, weak]() {
     if (auto strong = weak.lock()) {
       // FIXME: This should not be necessary to ensure that the actor is

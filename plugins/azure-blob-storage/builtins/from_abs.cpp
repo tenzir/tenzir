@@ -84,8 +84,9 @@ public:
       caf::actor_from_state<from_file_state>, args_.base_args, path, path,
       fs.MoveValueUnsafe(), order_,
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
-      std::string{ctrl.definition()}, ctrl.node(), ctrl.is_hidden(),
-      ctrl.metrics_receiver(), ctrl.operator_index())};
+      std::string{ctrl.definition()}, std::string{ctrl.pipeline_id()},
+      ctrl.node(), ctrl.is_hidden(), ctrl.metrics_receiver(),
+      ctrl.operator_index())};
     while (true) {
       auto result = table_slice{};
       ctrl.self()

@@ -78,9 +78,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                          int32_t op_index) -> caf::expected<operator_type> {
     auto description = fmt::format("{:?}", op);
     auto spawn_result
-      = spawn_exec_node(self, std::move(op), input_type, definition, node,
-                        diagnostics, metrics, op_index, has_terminal, is_hidden,
-                        run_id);
+      = spawn_exec_node(self, std::move(op), input_type, definition,
+                        pipeline_id, node, diagnostics, metrics, op_index,
+                        has_terminal, is_hidden, run_id);
     if (not spawn_result) {
       abort_start(diagnostic::error(spawn_result.error())
                     .note("failed to spawn {} locally", description)
@@ -126,7 +126,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     exec_nodes.emplace_back();
     self
       ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type, definition,
-             diagnostics, metrics, op_index, is_hidden, run_id)
+             pipeline_id, diagnostics, metrics, op_index, is_hidden, run_id)
       .request(shell, caf::infinite)
       .then(
         [this, description, index](exec_node_actor& exec_node) {
@@ -342,9 +342,10 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type {
+  pipeline pipe, std::string definition, std::string pipeline_id,
+  receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
+  node_actor node, bool has_terminal, bool is_hidden)
+  -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
   self->attach_functor([self] {
     TENZIR_TRACE("{} was destroyed", *self);
@@ -352,6 +353,7 @@ auto pipeline_executor(
   self->state().self = self;
   self->state().node = std::move(node);
   self->state().definition = std::move(definition);
+  self->state().pipeline_id = std::move(pipeline_id);
   self->state().pipe = std::move(pipe);
   self->state().diagnostics = std::move(diagnostics);
   self->state().metrics = std::move(metrics);

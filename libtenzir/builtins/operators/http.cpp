@@ -509,11 +509,10 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
       std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
   }
   TENZIR_DEBUG("[http] spawning subpipeline");
-  const auto handle
-    = ctrl.self().spawn(pipeline_executor,
-                        std::move(pipe.inner).optimize_if_closed(),
-                        std::string{ctrl.definition()}, ha, ha, ctrl.node(),
-                        ctrl.has_terminal(), ctrl.is_hidden());
+  const auto handle = ctrl.self().spawn(
+    pipeline_executor, std::move(pipe.inner).optimize_if_closed(),
+    std::string{ctrl.definition()}, std::string{ctrl.pipeline_id()}, ha, ha,
+    ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden());
   handle->link_to(ha);
   ctrl.self().attach_functor([handle] {});
   TENZIR_DEBUG("[http] requesting subpipeline start");

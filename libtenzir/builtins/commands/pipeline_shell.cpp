@@ -29,28 +29,31 @@ public:
   auto make_behavior() -> pipeline_shell_actor::behavior_type {
     return {
       [this](atom::spawn, operator_box box, operator_type input_type,
-             std::string definition,
+             std::string definition, std::string pipeline_id,
              const receiver_actor<diagnostic>& diagnostic_handler,
              const metrics_receiver_actor& metrics_receiver, int32_t index,
              bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
         return spawn_exec_node(std::move(box), input_type,
-                               std::move(definition), diagnostic_handler,
-                               metrics_receiver, index, is_hidden, run_id);
+                               std::move(definition), std::move(pipeline_id),
+                               diagnostic_handler, metrics_receiver, index,
+                               is_hidden, run_id);
       },
     };
   }
 
   auto spawn_exec_node(operator_box box, operator_type input_type,
-                       std::string definition,
+                       std::string definition, std::string pipeline_id,
                        const receiver_actor<diagnostic>& diagnostic_handler,
                        const metrics_receiver_actor& metrics_receiver,
                        int32_t index, bool is_hidden, uuid run_id)
     -> caf::result<exec_node_actor> {
     TENZIR_ASSERT(box);
     auto op = std::move(box).unwrap();
-    auto spawn_result = tenzir::spawn_exec_node(
-      self_, std::move(op), input_type, std::move(definition), node_,
-      diagnostic_handler, metrics_receiver, index, false, is_hidden, run_id);
+    auto spawn_result
+      = tenzir::spawn_exec_node(self_, std::move(op), input_type,
+                                std::move(definition), std::move(pipeline_id),
+                                node_, diagnostic_handler, metrics_receiver,
+                                index, false, is_hidden, run_id);
     if (not spawn_result) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} failed to spawn execution node "

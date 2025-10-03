@@ -92,6 +92,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto pipeline_id() const noexcept -> std::string_view override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto node() noexcept -> node_actor override {
     TENZIR_UNIMPLEMENTED();
   }

@@ -308,6 +308,7 @@ struct connection_manager_state {
 
   connection_manager_actor<Elements>::pointer self = {};
   std::string definition;
+  std::string pipeline_id;
   load_tcp_args args = {};
   shared_diagnostic_handler diagnostics = {};
   metrics_receiver_actor metrics_receiver = {};
@@ -678,7 +679,7 @@ struct connection_manager_state {
     TENZIR_ASSERT(not connection->pipeline_executor);
     connection->pipeline_executor
       = self->spawn(pipeline_executor, std::move(pipeline), definition,
-                    receiver_actor<diagnostic>{self},
+                    pipeline_id, receiver_actor<diagnostic>{self},
                     metrics_receiver_actor{self}, node, has_terminal,
                     is_hidden);
     self->monitor(
@@ -819,13 +820,14 @@ auto make_connection_manager(
   typename connection_manager_actor<Elements>::template stateful_pointer<
     connection_manager_state<Elements>>
     self,
-  std::string definition, const load_tcp_args& args,
+  std::string definition, std::string pipeline_id, const load_tcp_args& args,
   const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state().self = self;
   self->state().definition = std::move(definition);
+  self->state().pipeline_id = std::move(pipeline_id);
   self->state().args = args;
   self->state().diagnostics = diagnostics;
   self->state().metrics_receiver = metrics_receiver;
@@ -892,8 +894,9 @@ public:
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
         make_connection_manager<Elements>, std::string{ctrl.definition()},
-        args_, ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
-        ctrl.operator_index(), ctrl.is_hidden(), ctrl.node())};
+        std::string{ctrl.pipeline_id()}, args_, ctrl.shared_diagnostics(),
+        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
+        ctrl.node())};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);
