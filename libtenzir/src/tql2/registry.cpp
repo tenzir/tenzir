@@ -9,14 +9,14 @@
 #include "tenzir/tql2/registry.hpp"
 
 #include "tenzir/ir.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/exec.hpp"
 
-#include <ranges>
-#include <tenzir/logger.hpp>
-#include <atomic>
+#include <cstdlib>
 #include <memory>
-#include <mutex>
+#include <ranges>
+#include <shared_mutex>
 
 namespace tenzir {
 
@@ -73,49 +73,15 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
     });
 }
 
-thread_local const registry* g_thread_local_registry = nullptr;
+namespace {
 
-// Global snapshot holder with early atexit reset to avoid late teardown issues.
-static auto global_registry_atom()
-  -> std::atomic<std::shared_ptr<const registry>>& {
-  static std::atomic<std::shared_ptr<const registry>> atom{};
-  static std::once_flag registered;
-  std::call_once(registered, [] {
-    // Clear the snapshot early during shutdown to avoid late destruction of
-    // shared resources that may depend on other singletons.
-    std::atexit([] {
-      atom.store({}, std::memory_order_release);
-    });
-  });
-  return atom;
-}
-
-static auto global_registry_mutex() -> std::mutex& {
-  static std::mutex mtx;
-  return mtx;
-}
-
-auto thread_local_registry() -> const registry* {
-  return g_thread_local_registry;
-}
-
-void set_thread_local_registry(const registry* reg) {
-  g_thread_local_registry = reg;
-}
-
-auto global_registry() -> std::shared_ptr<const registry> {
-  auto& atom = global_registry_atom();
-  auto reg = atom.load(std::memory_order_acquire);
-  if (!reg) [[unlikely]] {
-    static std::once_flag init_once;
-    std::call_once(init_once, [&] {
-      auto init = std::make_shared<registry>();
-      for (const auto* op : plugins::get<operator_factory_plugin>()) {
-        auto name = op->name();
-        if (name.starts_with("tql2.")) {
-          name.erase(0, 5);
-        }
-        init->add(std::string{entity_pkg_std}, name, native_operator{nullptr, op});
+auto global_registry_ref() -> std::shared_ptr<const registry>& {
+  static auto reg = std::invoke([&] -> std::shared_ptr<const registry> {
+    auto init = std::make_shared<registry>();
+    for (const auto* op : plugins::get<operator_factory_plugin>()) {
+      auto name = op->name();
+      if (name.starts_with("tql2.")) {
+        name.erase(0, 5);
       }
       init->add(std::string{entity_pkg_std}, name,
                 native_operator{nullptr, op});
@@ -133,25 +99,38 @@ auto global_registry() -> std::shared_ptr<const registry> {
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      atom.store(std::shared_ptr<const registry>{init},
-                 std::memory_order_release);
-    });
-    reg = atom.load(std::memory_order_acquire);
-  }
+      init->add(std::string{entity_pkg_std}, name, std::ref(*fn));
+    }
+    return init;
+  });
+  return reg;
+}
+
+auto global_registry_mutex() -> std::shared_mutex& {
+  static std::shared_mutex mtx;
+  return mtx;
+}
+
+} // namespace
+
+auto global_registry() -> std::shared_ptr<const registry> {
+  auto lock = std::shared_lock{global_registry_mutex()};
+  auto& reg = global_registry_ref();
   return reg;
 }
 
 auto begin_registry_update() -> registry_update_guard {
-  return registry_update_guard{std::unique_lock<std::mutex>{global_registry_mutex()}};
+  return registry_update_guard{std::unique_lock{global_registry_mutex()}};
 }
 
 auto registry_update_guard::current() const -> std::shared_ptr<const registry> {
-  // Ensure a snapshot exists by going through the public accessor.
-  return global_registry();
+  // Go through the private accessor because we already hold a lock.
+  return global_registry_ref();
 }
 
-void registry_update_guard::publish(std::shared_ptr<const registry>&& next) const {
-  global_registry_atom().store(std::move(next), std::memory_order_release);
+void registry_update_guard::publish(
+  std::shared_ptr<const registry>&& next) const {
+  global_registry_ref() = std::move(next);
 }
 
 auto registry::get(const ast::function_call& call) const

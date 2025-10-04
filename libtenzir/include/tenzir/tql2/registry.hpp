@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
-#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <memory>
@@ -166,9 +165,11 @@ auto global_registry() -> std::shared_ptr<const registry>;
 class registry_update_guard {
 public:
   registry_update_guard(const registry_update_guard&) = delete;
-  registry_update_guard& operator=(const registry_update_guard&) = delete;
+  auto operator=(const registry_update_guard&)
+    -> registry_update_guard& = delete;
   registry_update_guard(registry_update_guard&&) noexcept = default;
-  registry_update_guard& operator=(registry_update_guard&&) noexcept = default;
+  auto operator=(registry_update_guard&&) noexcept
+    -> registry_update_guard& = default;
   ~registry_update_guard() = default;
 
   /// Return the current global registry snapshot while holding the lock.
@@ -178,28 +179,15 @@ public:
   void publish(std::shared_ptr<const registry>&& next) const;
 
 private:
-  friend registry_update_guard begin_registry_update();
-  explicit registry_update_guard(std::unique_lock<std::mutex> lock)
-    : lock_{std::move(lock)} {}
+  friend auto begin_registry_update() -> registry_update_guard;
+  explicit registry_update_guard(std::unique_lock<std::shared_mutex> lock)
+    : lock_{std::move(lock)} {
+  }
 
-  std::unique_lock<std::mutex> lock_;
+  std::unique_lock<std::shared_mutex> lock_;
 };
 
 /// Acquire the registry update lock to perform clone->update->publish atomically.
 auto begin_registry_update() -> registry_update_guard;
-
-auto thread_local_registry() -> const registry*;
-
-void set_thread_local_registry(const registry* reg);
-
-template <class F>
-auto with_thread_local_registry(const registry& reg, F&& f) -> decltype(auto) {
-  auto prev = thread_local_registry();
-  set_thread_local_registry(&reg);
-  auto guard = detail::scope_guard{[&]() noexcept {
-    set_thread_local_registry(prev);
-  }};
-  return std::invoke(std::forward<F>(f));
-}
 
 } // namespace tenzir
