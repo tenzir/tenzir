@@ -15,6 +15,7 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/view.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -212,8 +213,8 @@ struct package final {
 
   static auto parse(const view<record>& data) -> caf::expected<package>;
 
-  static auto load(const std::filesystem::path& dir, diagnostic_handler& dh)
-    -> failure_or<package>;
+  static auto load(const std::filesystem::path& dir, diagnostic_handler& dh,
+                   bool only_entities) -> failure_or<package>;
 
   auto to_record() const -> record;
 
@@ -229,5 +230,14 @@ struct package final {
       f.field("config", x.config));
   }
 };
+
+} // namespace tenzir
+
+namespace tenzir {
+
+struct module_def;
+
+auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
+  -> failure_or<std::unique_ptr<module_def>>;
 
 } // namespace tenzir

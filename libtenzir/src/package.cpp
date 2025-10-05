@@ -5,6 +5,8 @@
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 
+#include "tenzir/tql2/parser.hpp"
+
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/detail/env.hpp>
@@ -599,8 +601,8 @@ auto make_id(const std::filesystem::path& pkg_part,
 
 } // namespace
 
-auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
-  -> failure_or<package> {
+auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
+                   bool only_entities) -> failure_or<package> {
   bool had_errors = false;
   auto package_file = dir / "package.yaml";
   std::error_code ec;
@@ -611,6 +613,10 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
     return failure::promise();
   }
   TRY(auto package_record, yaml_file_to_record(package_file, dh));
+  if (only_entities) {
+    package_record.erase("pipelines");
+    package_record.erase("contexts");
+  }
   auto parsed_package = package::parse(make_view(package_record));
   if (not parsed_package) {
     diagnostic::error("failed to parse package.yaml")
@@ -649,39 +655,42 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
       parsed_package->config = std::move(*parsed_config);
     }
   }
-  auto pipelines_dir = dir / "pipelines";
-  if (not std::filesystem::exists(pipelines_dir, ec)) {
-    if (ec) {
-      diagnostic::error("{}", ec)
-        .note("while trying to load {}", pipelines_dir)
-        .emit(dh);
-    }
-  } else {
-    auto pipelines
-      = std::filesystem::recursive_directory_iterator{pipelines_dir, ec}
-        | std::views::filter([&](const std::filesystem::path& path) {
-            return path.extension() == ".tql";
-          });
-    if (ec) {
-      diagnostic::error("{}", ec)
-        .note("while trying to load {}", pipelines_dir)
-        .emit(dh);
-      return failure::promise();
-    }
-    try {
-      for (const auto& pipeline_file : pipelines) {
-        if (auto pipeline
-            = load_package_part<package_pipeline>(pipeline_file, dh)) {
-          TRY(auto id, make_id(pipeline_file.path(), pipelines_dir, "/"));
-          parsed_package->pipelines.emplace(std::move(id),
-                                            std::move(*pipeline));
-        }
+  if (not only_entities) {
+    auto pipelines_dir = dir / "pipelines";
+    if (not std::filesystem::exists(pipelines_dir, ec)) {
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while trying to load {}", pipelines_dir)
+          .emit(dh);
+        had_errors = true;
       }
-    } catch (std::exception& e) {
-      diagnostic::error("{}", e)
-        .note("while trying to load pipelines in {}", pipelines_dir)
-        .emit(dh);
-      return failure::promise();
+    } else {
+      auto pipelines
+        = std::filesystem::recursive_directory_iterator{pipelines_dir, ec}
+          | std::views::filter([&](const std::filesystem::path& path) {
+              return path.extension() == ".tql";
+            });
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while trying to load {}", pipelines_dir)
+          .emit(dh);
+        return failure::promise();
+      }
+      try {
+        for (const auto& pipeline_file : pipelines) {
+          if (auto pipeline
+              = load_package_part<package_pipeline>(pipeline_file, dh)) {
+            TRY(auto id, make_id(pipeline_file.path(), pipelines_dir, "/"));
+            parsed_package->pipelines.emplace(std::move(id),
+                                              std::move(*pipeline));
+          }
+        }
+      } catch (std::exception& e) {
+        diagnostic::error("{}", e)
+          .note("while trying to load pipelines in {}", pipelines_dir)
+          .emit(dh);
+        return failure::promise();
+      }
     }
   }
   auto operators_dir = dir / "operators";
@@ -761,7 +770,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh)
       }
     } catch (std::exception& e) {
       diagnostic::error("{}", e)
-        .note("while trying to load pipelines in {}", pipelines_dir)
+        .note("while trying to load operators in {}", operators_dir)
         .emit(dh);
       return failure::promise();
     }
@@ -935,6 +944,49 @@ auto package::to_record() const -> record {
   }
   info_record["inputs"] = std::move(inputs_record);
   return info_record;
+}
+
+auto build_package_operator_module(
+  const package& pkg, diagnostic_handler& dh)
+  -> failure_or<std::unique_ptr<module_def>> {
+  auto module = std::make_unique<module_def>();
+  auto provider = session_provider::make(dh);
+  auto ctx = provider.as_session();
+  auto ensure_module
+    = [&](module_def& root_mod, const auto& path) -> module_def* {
+    module_def* current = &root_mod;
+    for (const auto& path_segment : path) {
+      auto& set = current->defs[std::string{path_segment}];
+      if (! set.mod) {
+        set.mod = std::make_unique<module_def>();
+      }
+      current = set.mod.get();
+    }
+    return current;
+  };
+  for (const auto& [op_name, op] : pkg.operators) {
+    auto parsed = parse_pipeline_with_bad_diagnostics(op.definition, ctx);
+    if (! parsed) {
+      diagnostic::error("failed to parse operator '{}' in package '{}'",
+                        fmt::join(op_name, "::"), pkg.id)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto pipe = std::move(*parsed);
+    auto start_idx = size_t{0};
+    if (op_name.size() - start_idx < 1) {
+      diagnostic::error("invalid operator path in package '{}': {}", pkg.id,
+                        fmt::join(op_name, "::"))
+        .emit(dh);
+      return failure::promise();
+    }
+    auto head_span = std::span<const std::string>{op_name}.subspan(
+      start_idx, op_name.size() - start_idx - 1);
+    auto* parent = ensure_module(*module, head_span);
+    auto& set = parent->defs[op_name.back()];
+    set.op = operator_def{user_defined_operator{std::move(pipe)}};
+  }
+  return module;
 }
 
 } // namespace tenzir
