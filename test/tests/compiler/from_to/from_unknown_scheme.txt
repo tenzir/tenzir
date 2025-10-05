@@ -4,5 +4,5 @@ error: unsupported scheme `unknown`
 5 | from "unknown://example.org"
   |       ^^^^^^^ 
   |
-  = note: supported schemes for deduction: `amqp`, `amqps`, `elasticsearch`, `file`, `fluent-bit`, `ftp`, `ftps`, `http`, `https`, `inproc`, `kafka`, `opensearch`, `s3`, `sqs`, `tcp`, `udp`, `zmq`
+  = note: supported schemes for deduction: `abfs`, `abfss`, `amqp`, `amqps`, `elasticsearch`, `file`, `fluent-bit`, `ftp`, `ftps`, `gcps`, `gs`, `http`, `https`, `inproc`, `kafka`, `opensearch`, `s3`, `sqs`, `tcp`, `udp`, `zmq`
   = docs: https://docs.tenzir.com/reference/operators/from
