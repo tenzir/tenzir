@@ -254,7 +254,8 @@ foreach (dir IN LISTS _integration_test_dirs)
 endforeach ()
 
 add_custom_target(integration-tests DEPENDS tenzir)
-tenzir_build_test_command(_integration_tests_cmd)
+tenzir_build_test_command(_integration_tests_cmd
+  EXTRA_ARGS "--jobs" "4")
 add_custom_command(
   TARGET integration-tests
   POST_BUILD
