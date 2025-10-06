@@ -952,9 +952,6 @@ if (BUILD_TESTING)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     USES_TERMINAL VERBATIM)
   add_dependencies(unit-tests tenzir)
-
-  # The default CTest "test" target already covers both unit and integration
-  # tests once the integration suites are registered below.
 endif ()
 
 # -- cmake export/config installations -----------------------------------------
