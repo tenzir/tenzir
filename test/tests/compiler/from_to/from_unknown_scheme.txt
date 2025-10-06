@@ -1,8 +1,0 @@
-error: unsupported scheme `unknown`
- --> tests/compiler/from_to/from_unknown_scheme.tql:5:7
-  |
-5 | from "unknown://example.org"
-  |       ^^^^^^^ 
-  |
-  = note: supported schemes for deduction: `abfs`, `abfss`, `amqp`, `amqps`, `elasticsearch`, `file`, `fluent-bit`, `ftp`, `ftps`, `gcps`, `gs`, `http`, `https`, `inproc`, `kafka`, `opensearch`, `s3`, `sqs`, `tcp`, `udp`, `zmq`
-  = docs: https://docs.tenzir.com/reference/operators/from
