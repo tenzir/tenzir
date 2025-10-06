@@ -191,5 +191,4 @@ exact_subnet = contains(subnet, 10.0.0.0/8, exact=true)
 ## See Also
 
 [`has`](/reference/functions/has),
-[`match_regex`](/reference/functions/match_regex),
-[`search`](/reference/functions/search)
+[`match_regex`](/reference/functions/match_regex)
