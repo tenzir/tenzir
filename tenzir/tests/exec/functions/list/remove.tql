@@ -1,0 +1,61 @@
+// test: exec
+
+// Test basic remove functionality
+from {xs: [1, 2, 3, 4]}
+xs = xs.remove(2)
+write_tql(compact=true)
+save_stdout
+
+// Test removing non-existent element
+from {xs: [1, 2, 3]}
+xs = xs.remove(5)
+write_tql(compact=true)
+save_stdout
+
+// Test removing all occurrences
+from {xs: [1, 2, 3, 2, 4, 2]}
+xs = xs.remove(2)
+write_tql(compact=true)
+save_stdout
+
+// Test removing from empty list
+from {xs: []}
+xs = xs.remove(1)
+write_tql(compact=true)
+save_stdout
+
+// Test with strings
+from {xs: ["apple", "banana", "apple", "orange"]}
+xs = xs.remove("apple")
+write_tql(compact=true)
+save_stdout
+
+// Test removing non-existent string
+from {xs: ["apple", "banana"]}
+xs = xs.remove("cherry")
+write_tql(compact=true)
+save_stdout
+
+// Test with mixed types
+from {xs: ["1", "2", "3"]}
+xs = xs.remove(1)
+write_tql(compact=true)
+save_stdout
+
+// Test with null values
+from {xs: [1, null, 3, null]}
+xs = xs.remove(null)
+write_tql(compact=true)
+save_stdout
+
+// Test with null list
+from {xs: null}
+xs = xs.remove(1)
+write_tql(compact=true)
+save_stdout
+
+// Test multiple operations
+from {xs: [1, 2, 3, 4, 5]}
+xs = xs.remove(2).remove(4)
+write_tql(compact=true)
+save_stdout
