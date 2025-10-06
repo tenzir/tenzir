@@ -21,7 +21,7 @@ Language (TQL) is domain-specific language to write data pipelines.
   - `add.py` - Script to add new changelog entries
   - `release.py` - Script to generate release notes
 - `cmake/` - CMake build system modules and utilities
-  - Various Find*.cmake modules for dependencies
+  - Various Find\*.cmake modules for dependencies
   - TenzirConfig.cmake.in - CMake configuration template
   - TenzirRegisterPlugin.cmake - Plugin registration utilities
 - `docs/` - Documentation for functions and operators
@@ -89,11 +89,26 @@ Use the `tenzir` binary to execute a TQL program:
 
 ### Integration Tests
 
-Run integration tests as follows:
+Run integration tests from the repository root:
 
 ```sh
-uvx tenzir-test --python=>=3.12 --root test
+uvx tenzir-test --root test
 ```
+
+Or from within the `test/` directory:
+
+```sh
+cd test
+uvx tenzir-test
+```
+
+Common options:
+
+- `--update` or `-u`: Update reference outputs after validating changes
+- `--jobs N` or `-j N`: Control parallelism (default: number of CPUs)
+- `--debug` or `-d`: Show detailed test information
+
+For more details, see the [Test Framework Reference](https://docs.tenzir.com/reference/test-framework) and [Writing Tests Guide](https://docs.tenzir.com/guides/testing/write-tests).
 
 ### Code Quality
 

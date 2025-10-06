@@ -1,14 +1,21 @@
 **Authoritative reference:**
 
-The integration-testing workflow lives in the standalone documentation at
-<https://github.com/tenzir/test/blob/main/DOCUMENTATION.md>. Treat that file as
-source of truth for project structure, configuration semantics, and runner
-behaviour; revisit it whenever the CLI evolves.
+The integration-testing workflow is documented at:
+
+- <https://docs.tenzir.com/reference/test-framework.md> - CLI reference and configuration
+- <https://docs.tenzir.com/guides/testing/write-tests.md> - Guide for writing tests
+- <https://docs.tenzir.com/guides/testing/create-fixtures.md> - Guide for creating fixtures
+- <https://docs.tenzir.com/guides/testing/add-custom-runners.md> - Guide for adding runners
+
+Treat these as the source of truth for project structure, configuration semantics,
+and runner behaviour; revisit them whenever the CLI evolves.
 
 **Quickstart recap:**
 
-- Work from the `/test` project root (this repository) unless the task states
-  otherwise.
+- The test suite lives in the `test/` subdirectory of the Tenzir repository.
+- Work from either:
+  - The Tenzir repository root (use `--root test` flag), OR
+  - The `test/` subdirectory (no flag needed)
 - Run every command through the packaged CLI: `uvx tenzir-test …`.
 - Discover available options with `uvx tenzir-test --help`.
 - Pass paths under `tests/` (or use `--root` to target another project if the
