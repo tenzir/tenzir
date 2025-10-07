@@ -646,8 +646,15 @@ caf::error convert(const data& src, To& dst, const type& t) {
   });
 }
 
+// template <typename From, typename To>
+//   requires(concrete_type<data_to_type_t<From>>
+//            and concrete_type<data_to_type_t<To>>)
+// auto convert(const From& from, To& to) -> caf::error {
+//   return convert(from, to, data_to_type_t<std::remove_cvref_t<To>>{});
+// }
+
 template <class From, class To, class... Opts>
-concept convertible = requires(From from, To to, Opts&&... opts) {
+concept convertible = requires(From from, To& to, Opts&&... opts) {
   convert(from, to, std::forward<Opts>(opts)...);
 };
 

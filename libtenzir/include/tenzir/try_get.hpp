@@ -16,7 +16,7 @@ namespace tenzir {
 /// Tries to find the entry with the dot-sperated `path` with the given type.
 /// Attempts to convert the entry, if possible.
 /// @pre `!path.empty()`
-template <class T>
+template <concrete_data T>
 auto try_get(const record& r, std::string_view path)
   -> caf::expected<std::optional<T>> {
   auto result = descend(&r, path);
@@ -33,8 +33,29 @@ auto try_get(const record& r, std::string_view path)
     using U = std::remove_cvref_t<decltype(x)>;
     if constexpr (std::is_same_v<U, T>) {
       return x;
-    } else if constexpr (convertible<U, T, data_to_type_t<T>>) {
-      return tenzir::to<T>(x);
+    }
+    /// Some `convert` overloads do not need additional type info
+    else if constexpr (convertible<U, T>) {
+      auto r = tenzir::to<T>(x);
+      if (r) {
+        return *r;
+      }
+      return r.error();
+    }
+    /// Some `convert` overloads require a type attribute
+    else if constexpr (std::is_default_constructible_v<data_to_type_t<T>>) {
+      if constexpr (convertible<U, T, data_to_type_t<T>>) {
+        auto r = tenzir::to<T>(x, data_to_type_t<T>{});
+        if (r) {
+          return *r;
+        }
+        return r.error();
+      } else {
+        return caf::make_error(
+          ec::convert_error,
+          fmt::format("'{}' has type {}, which cannot be converted to {}", path,
+                      typeid(U).name(), typeid(T).name()));
+      }
     } else {
       return caf::make_error(
         ec::convert_error,
@@ -70,6 +91,7 @@ auto try_get_only(const record& r, std::string_view path)
 }
 
 template <class T>
+  requires concrete_type<data_to_type_t<T>>
 auto try_get_or(const record& r, std::string_view path, const T& fallback)
   -> caf::expected<T> {
   auto result = try_get<T>(r, path);
