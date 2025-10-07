@@ -458,7 +458,10 @@ jobs:
             compiler: Clang
             cc: clang
             cxx: clang++
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST="from_velociraptor;platform;snowflake"
+            cmake-extra-flags: |
+              -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
+              -DTENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL=ON \
+              -DTENZIR_PLUGINS_BLACKLIST="from_velociraptor;platform;snowflake"
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
