@@ -1,0 +1,45 @@
+{
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+}
+{
+  time: 1000,
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+}
+{
+  invalid: 1970-01-01T00:00:01Z,
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+}
+{
+  time: 1000,
+  invalid: 1970-01-01T00:00:01Z,
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+}
+{
+  metadata: {
+    profiles: [
+      "host",
+      "datetime",
+    ],
+    version: "1.6.0",
+  },
+  actor: {
+    session: {
+      created_time: 1000,
+      created_time_dt: 1970-01-01T00:00:01Z,
+      invalid: 1970-01-01T00:00:01Z,
+    },
+  },
+  class_uid: 1001,
+}
