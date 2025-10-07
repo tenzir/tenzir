@@ -1597,14 +1597,19 @@ struct type_to_data
 template <type_or_concrete_type T>
 using type_to_data_t = typename type_to_data<T>::type;
 
-template <class T>
+template <typename T>
+concept concrete_data
+  = (detail::tl_index_of<detail::tl_map_t<concrete_types, type_to_data>, T>::value
+     >= 0);
+
+template <concrete_data T>
 struct data_to_type
   : detail::tl_at<concrete_types,
                   detail::tl_index_of<
                     detail::tl_map_t<concrete_types, type_to_data>, T>::value> {
 };
 
-template <class T>
+template <concrete_data T>
 using data_to_type_t = typename data_to_type<T>::type;
 
 /// Maps type to corresponding Arrow DataType.

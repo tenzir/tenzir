@@ -759,8 +759,8 @@ public:
       return diagnostic::error("cache lifetime must be greater than zero")
         .to_error();
     }
-    TRY(cache_capacity_,
-        try_get_or(global_config, "tenzir.cache.capacity", 1_Gi));
+    TRY(cache_capacity_, try_get_or(global_config, "tenzir.cache.capacity",
+                                    static_cast<std::uint64_t>(1_Gi)));
     if (cache_capacity_ < 64_Mi) {
       return diagnostic::error("cache capacity must be at least 64 MiB")
         .to_error();
