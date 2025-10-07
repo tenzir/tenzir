@@ -1,7 +1,0 @@
-from env("INPUTS") + "/zeek/conn.log.gz" {
-  decompress_gzip
-  read_zeek_tsv
-}
-head 1
-write_ndjson
-shell "rev"

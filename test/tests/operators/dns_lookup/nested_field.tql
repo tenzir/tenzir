@@ -1,0 +1,8 @@
+from {
+  x: {
+    y: {
+      z: 8.8.8.8
+    }
+  }
+}
+dns_lookup x.y.z

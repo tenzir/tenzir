@@ -291,7 +291,6 @@ let
               # Disabled for now, takes long to compile and integration tests give
               # reasonable coverage.
               "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
-              "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
               "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
             ]
             ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [

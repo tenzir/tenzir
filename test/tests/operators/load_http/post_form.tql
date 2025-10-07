@@ -1,0 +1,8 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+load_http env("HTTP_FIXTURE_URL"), form=true, data={foo: "42", bar: {baz: "baz"}}
+read_lines
+head 1

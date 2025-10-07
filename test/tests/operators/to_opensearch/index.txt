@@ -1,0 +1,13 @@
+"POST /_bulk HTTP/1.1" 200 -
+
+Host: 127.0.0.1:*
+Accept: */*
+Content-Type: application/json
+Content-Length: 182
+
+{"index":{"_index":"main"}}
+{"x":1,"ip":"10.10.10.10"}
+{"index":{"_index":"main"}}
+{"id":"1.1.1.1","doc":{}}
+{"index":{"_index":"main"}}
+{"id":"Something","doc":{"x":"10.10.10.10"}}

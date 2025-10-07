@@ -1,8 +1,0 @@
-error: required argument `src_ip` was not provided
- --> <input>:1:16
-  |
-1 | from {} | x0 = community_id( dst_ip=null, proto=null )
-  |                ^^^^^^^^^^^^ 
-  |
-  = usage: community_id(src_ip=ip, dst_ip=ip, proto=string, [src_port=int, dst_port=int, seed=int])
-  = docs: https://docs.tenzir.com/reference/functions/community_id

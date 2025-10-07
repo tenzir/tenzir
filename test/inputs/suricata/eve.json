@@ -1,0 +1,8 @@
+{"timestamp":"2024-09-24T12:00:00.000000+0000","event_type":"alert","src_ip":"10.0.0.1","dest_ip":"10.0.0.2","proto":"TCP","alert":{"severity":1,"signature_id":1,"rev":1}}
+{"timestamp":"2024-09-24T12:00:00.100000+0000","event_type":"alert","src_ip":"10.0.0.3","dest_ip":"10.0.0.4","proto":"TCP","alert":{"severity":2,"signature_id":2,"rev":1}}
+{"timestamp":"2024-09-24T12:00:00.200000+0000","event_type":"http","src_ip":"10.0.0.5","dest_ip":"10.0.0.6","proto":"TCP","http":{"hostname":"example.com","url":"/index.html"}}
+{"timestamp":"2024-09-24T12:00:00.300000+0000","event_type":"dns","src_ip":"10.0.0.7","dest_ip":"10.0.0.8","proto":"UDP","dns":{"type":"query","rrname":"example.org"}}
+{"timestamp":"2024-09-24T12:00:00.400000+0000","event_type":"fileinfo","src_ip":"10.0.0.9","dest_ip":"10.0.0.10","proto":"TCP","fileinfo":{"filename":"test.exe","magic":"PE32"}}
+{"timestamp":"2024-09-24T12:00:00.500000+0000","event_type":"flow","src_ip":"10.0.0.11","dest_ip":"10.0.0.12","proto":"UDP","flow":{"pkts_toserver":5,"pkts_toclient":2}}
+{"timestamp":"2024-09-24T12:00:00.600000+0000","event_type":"ssh","src_ip":"10.0.0.13","dest_ip":"10.0.0.14","proto":"TCP","ssh":{"client":{"proto_version":"2.0","software_version":"OpenSSH"}}}
+{"timestamp":"2024-09-24T12:00:00.700000+0000","event_type":"tls","src_ip":"10.0.0.15","dest_ip":"10.0.0.16","proto":"TCP","tls":{"issuerdn":"CN=Example","subject":"CN=example"}}

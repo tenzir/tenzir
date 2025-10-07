@@ -1,0 +1,73 @@
+{
+  x: {
+    x: 1,
+  },
+  y: "x",
+  z: 1,
+}
+{
+  x: {
+    x: "1",
+  },
+  y: "x",
+  z: "1",
+}
+{
+  x: {
+    x: 1,
+  },
+  z: null,
+}
+{
+  x: {},
+  y: "x",
+  z: null,
+}
+{
+  y: "x",
+  z: null,
+}
+{
+  z: null,
+}
+warning: field `y` not found
+ --> tests/language/expr/record_indexing.tql:9:7
+  |
+9 | z = x[y]
+  |       ~ 
+  |
+  = hint: did you mean `x`?
+  = hint: append `?` to suppress this warning
+
+warning: cannot use `null` as index
+ --> tests/language/expr/record_indexing.tql:9:7
+  |
+9 | z = x[y]
+  |       ~ is null
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: record does not have field `x`
+ --> tests/language/expr/record_indexing.tql:9:7
+  |
+9 | z = x[y]
+  |       ~ does not exist
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: field `x` not found
+ --> tests/language/expr/record_indexing.tql:9:5
+  |
+9 | z = x[y]
+  |     ~ 
+  |
+  = hint: did you mean `y`?
+  = hint: append `?` to suppress this warning
+
+warning: tried to access field of `null`
+ --> tests/language/expr/record_indexing.tql:9:5
+  |
+9 | z = x[y]
+  |     ~ is null
+  |
+  = hint: use `[…]?` to suppress this warning

@@ -1,0 +1,9 @@
+from {
+  // Root DNS server A - one of the most stable DNS names
+  host: "a.root-servers.net"
+}
+dns_lookup host
+unroll dns_lookup
+where dns_lookup.type == "A"
+drop dns_lookup.ttl
+sort dns_lookup.type, dns_lookup.address

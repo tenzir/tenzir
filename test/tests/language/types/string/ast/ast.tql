@@ -1,0 +1,9 @@
+from {x: "{}"},
+  {x: f"\""},
+  {x: f"{ident}"},
+  {x: f"{a+b}"},
+  {x: f"pre {"string"}"},
+  {x: f"{{}}"},
+  {x: f"{ {} }"},
+  {x: f"{ {key: "value"} }"},
+  {x: f"{ {key: f"pre2{ {key2: "string"} }"} }" }

@@ -1,4 +1,0 @@
-// error: true
-
-from_fluent_bit "does-not-exist"
-discard

@@ -1,0 +1,20 @@
+{
+  x: 3,
+  y: 3.0,
+}
+{
+  x: 5,
+  y: 2.0,
+}
+{
+  x: 6,
+  y: 5.0,
+}
+warning: got more than 3 data points
+ --> tests/operators/chart/limit.tql:2:13
+  |
+2 | chart_bar x=x, y=y, x_min=2, _limit=3
+  |             ~ 
+  |
+  = note: skipping excess data points
+  = hint: consider filtering data or aggregating over a bigger `resolution`

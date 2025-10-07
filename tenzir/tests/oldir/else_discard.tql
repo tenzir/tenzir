@@ -1,8 +1,0 @@
-// test: oldir
-
-from {}
-if foo == 1 {
-  set foo = 2
-} else {
-  discard
-}

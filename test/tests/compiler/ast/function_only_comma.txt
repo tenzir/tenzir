@@ -1,0 +1,6 @@
+error: unexpected comma before any arguments
+ --> tests/compiler/ast/function_only_comma.tql:5:7
+  |
+5 | a = b(,)
+  |       ^ 
+  |

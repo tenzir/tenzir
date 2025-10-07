@@ -1,0 +1,8 @@
+{
+  foo: 1,
+  bar: null,
+}
+{
+  foo: 2,
+  bar: 3,
+}

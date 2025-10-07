@@ -1,0 +1,4 @@
+from f"{env("TENZIR_INPUTS")}/xsv/sample.csv" {
+  read_xsv field_separator=",", list_separator=";", null_value=""
+}
+write_xsv field_separator=",", list_separator=";", null_value=""

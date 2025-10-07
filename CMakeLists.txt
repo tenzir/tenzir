@@ -944,6 +944,16 @@ add_subdirectory(libtenzir)
 add_subdirectory(libtenzir_test)
 add_subdirectory(tenzir)
 
+if (BUILD_TESTING)
+  add_custom_target(
+    unit-tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --force-new-ctest-process --output-on-failure
+            --label-regex unit --build-config $<CONFIG>
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    USES_TERMINAL VERBATIM)
+  add_dependencies(unit-tests tenzir)
+endif ()
+
 # -- cmake export/config installations -----------------------------------------
 
 export(

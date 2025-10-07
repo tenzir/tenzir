@@ -1,6 +1,0 @@
-error: interval must be a positive duration
- --> <input>:1:7
-  |
-1 | every -1s { version }
-  |       ^^^ 
-  |

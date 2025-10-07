@@ -1,0 +1,7 @@
+error: string contains invalid utf-8
+ --> tests/language/expr/escape/blob/overlong_encoding.tql:6:7
+  |
+6 |   s2: "\xC0\xAF", // Invalid UTF-8 overlong encoding
+  |       ^^^^^^^^^^ 
+  |
+  = hint: consider using a blob instead: b"…"

@@ -1,2 +1,0 @@
-load_file env("INPUTS") + "/empty-file-multiline.txt"
-read_csv

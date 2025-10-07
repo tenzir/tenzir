@@ -1,5 +1,0 @@
-   line_comment "// test: lexer"
-        newline "\n"
-   line_comment "// error: true"
-        newline "\n"
-          error "/*\n"

@@ -1,0 +1,13 @@
+from {
+  is_multicast_ipv4_224: is_multicast(224.0.0.1),
+  is_multicast_ipv4_239: is_multicast(239.255.255.255),
+  is_multicast_ipv4_private: is_multicast(192.168.1.1),
+  is_multicast_ipv6_ff02: is_multicast(ff02::1),
+  is_multicast_ipv6_ff05: is_multicast(ff05::1:3),
+  is_multicast_ipv6_global: is_multicast(2001:db8::1),
+  is_multicast_broadcast: is_multicast(255.255.255.255),
+  is_multicast_loopback_v4: is_multicast(127.0.0.1),
+  is_multicast_loopback_v6: is_multicast(::1),
+  is_multicast_invalid: is_multicast(ip("not an ip")),
+  is_multicast_null: is_multicast(null),
+}

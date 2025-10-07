@@ -1,1 +1,0 @@
-shell 'echo \'{"foo": "bar", "baz": 42}\'' | read json

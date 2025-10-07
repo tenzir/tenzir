@@ -114,162 +114,8 @@ if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   endif ()
 endif ()
 
-# -- integration tests ---------------------------------------------------------
-
-add_test(NAME build-tenzir
-         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
-                 "$<CONFIG>" --target tenzir)
-set_tests_properties(build-tenzir PROPERTIES FIXTURES_SETUP
-                                             "tenzir_integration_test_fixture")
-
-unset(_integration_test_dirs)
-file(
-  GLOB _integration_test_dirs
-  RELATIVE "${CMAKE_CURRENT_LIST_DIR}/tests/"
-  "${CMAKE_CURRENT_LIST_DIR}/tests/[^_]*")
-foreach (dir IN LISTS _integration_test_dirs)
-  if (NOT IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}")
-    continue()
-  endif ()
-  if ("${dir}" MATCHES "^inputs/?$")
-    continue()
-  endif ()
-  add_test(
-    NAME "tenzir/${dir}"
-    COMMAND
-      "${CMAKE_COMMAND}" "-E" "env" "--modify"
-      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-      "${TENZIR_UV_PATH}" "run" "--python=>=3.12"
-      "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
-      "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}/")
-  set_tests_properties(
-    "tenzir/${dir}" PROPERTIES FIXTURES_REQUIRED
-                               "tenzir_integration_test_fixture")
-endforeach ()
-
-add_custom_target(
-  integration
-  COMMAND
-    "${CMAKE_COMMAND}" "-E" "env" "--modify"
-    "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-    "${TENZIR_UV_PATH}" "run" "--python=>=3.12"
-    "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
-  DEPENDS tenzir)
-add_custom_target(
-  update-integration
-  COMMAND
-    "${CMAKE_COMMAND}" "-E" "env" "--modify"
-    "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>" "--"
-    "${TENZIR_UV_PATH}" "run" "--python=>=3.12" "--"
-    "${CMAKE_CURRENT_LIST_DIR}/tests/run.py" "--update"
-  DEPENDS tenzir)
-
-# Add a target for running integration tests with code coverage enabled
-if (TENZIR_ENABLE_CODE_COVERAGE)
-  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message(FATAL_ERROR "Code coverage is only supported in Debug builds")
-  endif ()
-
-  add_custom_target(
-    integration-coverage
-    DEPENDS tenzir
-    COMMAND
-      "${CMAKE_COMMAND}" "-E" "env" "--modify"
-      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>"
-      "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
-      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}" "--" "${TENZIR_UV_PATH}" "run"
-      "--python=>=3.12" "--" "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
-      "--coverage" "--coverage-source-dir=${CMAKE_SOURCE_DIR}"
-    COMMAND
-      "${CMAKE_COMMAND}" "-E" "env"
-      "VERBOSE=$<IF:$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>,1,0>" "--"
-      "${CMAKE_CURRENT_LIST_DIR}/tests/process_coverage.sh"
-      "--coverage-dir=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
-      "--source-dir=${CMAKE_SOURCE_DIR}" "--binary-dir=${CMAKE_BINARY_DIR}"
-      "--tenzir-binary=$<TARGET_FILE:tenzir>"
-      "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
-    COMMENT "Running integration tests with code coverage enabled"
-    VERBATIM)
-endif ()
-
-add_custom_target(bats)
-TenzirDefineUpdateBATSTarget(bats OFF)
-add_custom_target(bats-tenzir)
-add_dependencies(bats bats-tenzir)
-TenzirDefineUpdateBATSTarget(bats-tenzir
-                             "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference")
-
-# This needs a custom definition instead of the one from
-# TenzirDefineUpdateBATSTarget as it requires two calls to properly diff
-# within the submodule.
-if (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-  add_custom_target(
-    diff-bats
-    COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "add"
-            "--intent-to-add" "--all"
-    COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "diff" "--exit-code"
-            "--" "*.ref"
-    COMMAND
-      "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
-      "diff" "--exit-code" "--" "*.ref"
-    DEPENDS update-bats
-    COMMENT "Diffing all bats test results"
-    USES_TERMINAL)
-endif ()
-
-include(ProcessorCount)
-ProcessorCount(parallel_level)
-math(EXPR parallel_level "${parallel_level} + 2")
-
-file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/bats/tests/*.bats")
-foreach (suite IN LISTS _suites)
-  get_filename_component(bats_suite_name "${suite}" NAME_WE)
-  string(REGEX REPLACE "_" "-" suite_name "${bats_suite_name}")
-  add_custom_target(
-    "bats-tenzir-${suite_name}"
-    COMMAND
-      "${CMAKE_COMMAND}" -E env
-      PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/bats/lib/bats/bin"
-      bats "-T" "--jobs" "${parallel_level}" "${suite}"
-    COMMENT "Executing bats test suite ${suite_name}..."
-    USES_TERMINAL)
-  add_dependencies(bats-tenzir-${suite_name} tenzir)
-  add_dependencies(bats-tenzir bats-tenzir-${suite_name})
-  TenzirDefineUpdateBATSTarget(
-    bats-tenzir-${suite_name}
-    "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference/${bats_suite_name}")
-endforeach ()
-
-unset(parallel_level)
-
-# link the full
-add_custom_target(
-  link-integration
-  COMMAND "${CMAKE_COMMAND}" -E make_directory
-          "${CMAKE_BINARY_DIR}/share/tenzir"
-  COMMAND
-    "${CMAKE_COMMAND}" -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/bats"
-    "${CMAKE_BINARY_DIR}/share/tenzir/bats"
-  COMMENT "Linking integration test directory")
-
-add_dependencies(tenzir link-integration)
-
-# We only install the tenzir extension library, users need to provide bats,
-# bats-common and bats-assert themselves when building plugins against an
-# install tree.
-option(TENZIR_ENABLE_BATS_TENZIR_INSTALLATION "Install bats-tenzir" ON)
-add_feature_info("TENZIR_ENABLE_BATS_TENZIR_INSTALLATION"
-                 TENZIR_ENABLE_BATS_TENZIR_INSTALLATION "install bats-tenzir.")
-
-if (TENZIR_ENABLE_BATS_TENZIR_INSTALLATION)
-  install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bats/lib/bats-tenzir"
-    COMPONENT Development
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/bats")
-endif ()
-
-# -- add plugins ---------------------------------------------------------------
+# Note: We use CTest's built-in mechanisms instead of recursive directory traversal
+# to avoid complexity and potential circular reference issues
 
 set(plugins_default "plugins/*")
 if (EXISTS contrib/tenzir-plugins/.git)
@@ -318,6 +164,167 @@ if (TENZIR_PLUGINS)
     string(PREPEND plugin_binary_dir "${PROJECT_BINARY_DIR}/plugins/")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
   endforeach ()
+endif ()
+
+# -- integration tests ---------------------------------------------------------
+
+# Helper function to build tenzir-test command invocations
+function(tenzir_build_test_command out_var)
+  cmake_parse_arguments(ARG "" "TEST_ROOT" "EXTRA_ENV;EXTRA_ARGS;SELECTION" ${ARGN})
+
+  set(cmd
+      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
+      "${CMAKE_COMMAND}" "-E" "env" "--modify"
+      "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>")
+
+  # Add extra environment variables if provided
+  foreach(env_var IN LISTS ARG_EXTRA_ENV)
+    list(APPEND cmd "${env_var}")
+  endforeach()
+
+  list(APPEND cmd
+      "--"
+      "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
+      "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
+      "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node")
+
+  # Add extra arguments if provided
+  if(ARG_EXTRA_ARGS)
+    list(APPEND cmd ${ARG_EXTRA_ARGS})
+  endif()
+
+  # Build test selection (positional arguments to tenzir-test)
+  set(selection)
+
+  if(ARG_TEST_ROOT)
+    list(APPEND selection "${ARG_TEST_ROOT}")
+  elseif(ARG_SELECTION)
+    list(APPEND selection ${ARG_SELECTION})
+  else()
+    # Default: all projects (test root + contrib plugins)
+    list(APPEND cmd "--all-projects")
+    list(APPEND selection "--root" "${CMAKE_SOURCE_DIR}/test")
+
+    # Add contrib/tenzir-plugins/*/test directories if they exist
+    if(EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
+      file(GLOB plugin_test_dirs
+           "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
+      if(plugin_test_dirs)
+        list(APPEND selection ${plugin_test_dirs})
+      endif()
+    endif()
+  endif()
+
+  list(APPEND cmd ${selection})
+  set(${out_var} "${cmd}" PARENT_SCOPE)
+endfunction()
+
+add_test(NAME build-tenzir
+         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+                 "$<CONFIG>" --target tenzir)
+set_tests_properties(
+  build-tenzir PROPERTIES FIXTURES_SETUP "tenzir_integration_test_fixture"
+                          LABELS integration)
+
+set(_integration_tests_root "${CMAKE_SOURCE_DIR}/test/tests")
+unset(_integration_test_dirs)
+if (EXISTS "${_integration_tests_root}")
+  file(
+    GLOB _integration_test_dirs
+    RELATIVE "${_integration_tests_root}"
+    "${_integration_tests_root}/[^_]*")
+endif ()
+foreach (dir IN LISTS _integration_test_dirs)
+  if (NOT IS_DIRECTORY "${_integration_tests_root}/${dir}")
+    continue()
+  endif ()
+  if ("${dir}" MATCHES "^inputs/?$")
+    continue()
+  endif ()
+  tenzir_build_test_command(_test_cmd
+    TEST_ROOT "${_integration_tests_root}/${dir}/")
+  add_test(
+    NAME "tenzir/${dir}"
+    COMMAND ${_test_cmd})
+  set_tests_properties(
+    "tenzir/${dir}"
+    PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/test" FIXTURES_REQUIRED
+               "tenzir_integration_test_fixture" LABELS integration
+               RUN_SERIAL TRUE)
+endforeach ()
+
+add_custom_target(integration-tests DEPENDS tenzir)
+tenzir_build_test_command(_integration_tests_cmd
+  EXTRA_ARGS "--jobs" "4")
+add_custom_command(
+  TARGET integration-tests
+  POST_BUILD
+  COMMAND ${_integration_tests_cmd}
+  USES_TERMINAL VERBATIM)
+
+add_custom_target(integration)
+add_dependencies(integration integration-tests)
+
+add_custom_target(update-integration DEPENDS tenzir)
+tenzir_build_test_command(_update_integration_cmd
+  EXTRA_ARGS "--update")
+add_custom_command(
+  TARGET update-integration
+  POST_BUILD
+  COMMAND ${_update_integration_cmd}
+  USES_TERMINAL VERBATIM)
+
+if (TENZIR_ENABLE_CODE_COVERAGE)
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "Code coverage is only supported in Debug builds")
+  endif ()
+
+  add_custom_target(integration-coverage DEPENDS tenzir)
+  tenzir_build_test_command(_integration_coverage_cmd
+    EXTRA_ENV
+      "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
+      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+    EXTRA_ARGS
+      "--coverage"
+      "--coverage-source-dir=${CMAKE_SOURCE_DIR}")
+  add_custom_command(
+    TARGET integration-coverage
+    POST_BUILD
+    COMMAND ${_integration_coverage_cmd}
+    COMMAND
+      "${CMAKE_COMMAND}" "-E" "env"
+      "VERBOSE=$<IF:$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>,1,0>" "--"
+      "${CMAKE_SOURCE_DIR}/scripts/process_coverage.sh"
+      "--coverage-dir=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
+      "--source-dir=${CMAKE_SOURCE_DIR}" "--binary-dir=${CMAKE_BINARY_DIR}"
+      "--tenzir-binary=$<TARGET_FILE:tenzir>"
+      "--llvm-profdata=${LLVM_PROFDATA_PATH}" "--llvm-cov=${LLVM_COV_PATH}"
+    COMMENT "Running integration tests with code coverage enabled"
+    USES_TERMINAL VERBATIM)
+endif ()
+
+if (BUILD_TESTING)
+  # Get all tests using CTest's own test enumeration
+  # This approach is simpler and avoids directory traversal issues
+  get_property(_all_tests_prop DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY TESTS)
+  foreach (_test IN LISTS _all_tests_prop)
+    get_property(_labels TEST "${_test}" PROPERTY LABELS)
+    if (_labels AND "integration" IN_LIST _labels)
+      list(APPEND _integration_tests "${_test}")
+    else ()
+      list(APPEND _non_integration_tests "${_test}")
+    endif ()
+  endforeach ()
+  if (_integration_tests AND _non_integration_tests)
+    list(REMOVE_DUPLICATES _non_integration_tests)
+    foreach (_integration_test IN LISTS _integration_tests)
+      set_property(TEST "${_integration_test}" PROPERTY DEPENDS
+                   "${_non_integration_tests}")
+    endforeach ()
+  endif ()
+  unset(_integration_tests)
+  unset(_non_integration_tests)
+  unset(_all_tests_prop)
 endif ()
 
 get_property(TENZIR_BUNDLED_PLUGINS GLOBAL

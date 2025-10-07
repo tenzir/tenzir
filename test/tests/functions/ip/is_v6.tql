@@ -1,0 +1,9 @@
+from {
+  is_v6_ipv4_1: is_v6(192.168.1.1),
+  is_v6_ipv4_2: is_v6(10.0.0.1),
+  is_v6_ipv6_1: is_v6(::1),
+  is_v6_ipv6_2: is_v6(2001:db8::1),
+  is_v6_ipv6_full: is_v6(2001:0db8:85a3:0000:0000:8a2e:0370:7334),
+  is_v6_invalid: is_v6(ip("not an ip")),
+  is_v6_null: is_v6(null),
+}

@@ -30,7 +30,6 @@ venv/
 /tenzir-unit-test/
 /tenzir-integration-test*/
 /tenzir-integration-state/
-/tenzir/bats/tests/.bats/
 
 # Python build artifacts
 /python/dist

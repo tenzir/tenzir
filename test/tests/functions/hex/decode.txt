@@ -1,0 +1,4 @@
+{
+  bytes: "54656E7a6972",
+  decoded: b"Tenzir",
+}

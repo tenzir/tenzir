@@ -1,0 +1,6 @@
+error: interval must be a positive duration
+ --> tests/operators/every/zero_seconds.tql:5:7
+  |
+5 | every 0s {
+  |       ^^ 
+  |

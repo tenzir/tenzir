@@ -1,0 +1,9 @@
+error: Invalid: Unrecognized compression type: wrongname
+  --> tests/operators/feather/invalid_compression.tql:10:54
+   |
+10 | write_feather compression_level=-1, compression_type="wrongname"
+   |                                                      ^^^^^^^^^^^ 
+   |
+   = note: failed to parse compression type
+   = note: must be `lz4` or `zstd`
+   = note: failed to initialize `write_feather`

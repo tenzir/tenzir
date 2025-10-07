@@ -1,7 +1,0 @@
-warning: `load_http` is deprecated and will be removed in a future release
- --> <input>:1:1
-  |
-1 | load_http "http://localhost:50381", form=true, data={foo: "42", bar: {baz: "baz"}}
-  | ~~~~~~~~~ 
-  |
-  = hint: use `from` or `from_http` instead

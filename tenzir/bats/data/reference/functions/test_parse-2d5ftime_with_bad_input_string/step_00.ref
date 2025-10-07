@@ -1,7 +1,0 @@
-{"x":null}
-warning: failed to apply `parse_time`
- --> <input>:5:11
-  |
-5 |     x = x.parse_time("%Y-%m-%d")
-  |           ~~~~~~~~~~ 
-  |

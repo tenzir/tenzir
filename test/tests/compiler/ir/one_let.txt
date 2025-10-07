@@ -1,0 +1,12 @@
+{
+  lets: [
+    {
+      ident: `$foo` @ 4..8,
+      expr: constant int64 42 @ 11..13,
+      id: 1
+    }
+  ],
+  operators: [
+    
+  ]
+}

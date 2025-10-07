@@ -1,0 +1,5 @@
+from {
+  x: "hello",
+}
+
+x = x.parse_time("%Y-%m-%d")

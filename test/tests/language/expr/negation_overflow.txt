@@ -1,0 +1,10 @@
+{
+  x: -9223372036854775808,
+  y: null,
+}
+warning: integer overflow
+ --> tests/language/expr/negation_overflow.tql:3:6
+  |
+3 |   y: -9223372036854775809,
+  |      ~~~~~~~~~~~~~~~~~~~~ 
+  |

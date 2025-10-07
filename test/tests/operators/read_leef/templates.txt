@@ -1,0 +1,3 @@
+warning: leef parser: LEEF 2.0 requires at least 7 fields
+ = note: line 1
+ = note: got 6 fields

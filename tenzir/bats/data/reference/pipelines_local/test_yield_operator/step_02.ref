@@ -1,7 +1,0 @@
-warning: expected a record, but got a list
- --> <input>:1:27
-  |
-1 | read suricata | yield dns.answers
-  |                           ~~~~~~~ 
-  |
-  = note: for schema `suricata.dns`

@@ -1,0 +1,6 @@
+warning: dropping events where `class_uid` does not exist
+  --> tests/operators/ocsf/trim/trim_missing_class_uid.tql:10:1
+   |
+10 | ocsf::trim
+   | ~~~~~~~~~~ 
+   |

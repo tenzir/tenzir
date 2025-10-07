@@ -1,0 +1,3 @@
+     whitespace "---\nerror: true\n---\n"
+        newline "\n"
+          error "/*\n\n"

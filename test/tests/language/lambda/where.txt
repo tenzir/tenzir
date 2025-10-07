@@ -1,0 +1,51 @@
+{
+  xs: [
+    2,
+    3,
+  ],
+}
+{
+  xs: [],
+}
+{
+  xs: [],
+}
+{
+  xs: [],
+}
+{
+  xs: [],
+}
+{
+  xs: null,
+}
+{
+  xs: null,
+}
+warning: expected `bool`, got `null`
+  --> tests/language/lambda/where.tql:11:20
+   |
+11 | xs = xs.where(x => x > 1 and x < 4)
+   |                    ~~~~~~~~~~~~~~~ 
+   |
+
+warning: binary operator `gt` not implemented for `string` and `int64`
+  --> tests/language/lambda/where.tql:11:20
+   |
+11 | xs = xs.where(x => x > 1 and x < 4)
+   |                    ~~~~~ 
+   |
+
+warning: binary operator `lt` not implemented for `string` and `int64`
+  --> tests/language/lambda/where.tql:11:30
+   |
+11 | xs = xs.where(x => x > 1 and x < 4)
+   |                              ~~~~~ 
+   |
+
+warning: expected `list`, got `string`
+  --> tests/language/lambda/where.tql:11:6
+   |
+11 | xs = xs.where(x => x > 1 and x < 4)
+   |      ~~ 
+   |

@@ -5,12 +5,6 @@ with section("parse"):
 
     # Specify structure for custom cmake functions
     additional_commands = {
-        "tenzirdefineupdatebatstarget": {
-            "spelling": "TenzirDefineUpdateBATSTarget",
-            "pargs": {
-                "nargs": 2,
-            },
-        },
         "tenzirexportcompilecommands": {
             "spelling": "TenzirExportCompileCommands",
             "pargs": {

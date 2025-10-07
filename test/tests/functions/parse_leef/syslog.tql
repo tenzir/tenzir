@@ -1,0 +1,3 @@
+load_file f"{env("TENZIR_INPUTS")}/syslog/leef-over-syslog.log"
+read_syslog
+content = content.parse_leef()

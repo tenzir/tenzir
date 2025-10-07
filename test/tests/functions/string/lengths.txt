@@ -1,0 +1,25 @@
+{
+  x: "é",
+  y: "👩‍👩‍👦‍👦",
+  xa: null,
+  xb: 2,
+  xc: 1,
+  ya: null,
+  yb: 25,
+  yc: 7,
+}
+warning: expected `list`, got `string`
+ --> tests/functions/string/lengths.tql:6:6
+  |
+6 | xa = x.length()
+  |      ~ 
+  |
+  = hint: use `.length_bytes()` or `.length_chars()` instead
+
+warning: expected `list`, got `string`
+ --> tests/functions/string/lengths.tql:9:6
+  |
+9 | ya = y.length()
+  |      ~ 
+  |
+  = hint: use `.length_bytes()` or `.length_chars()` instead

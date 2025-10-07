@@ -1,0 +1,6 @@
+error: Invalid: Invalid regular expression: missing ]: [0-9a-f{2})
+ --> tests/functions/string/replace_regex_invalid_pattern.tql:9:21
+  |
+9 | x = x.replace_regex("[0-9a-f{2}", "??")
+  |                     ^^^^^^^^^^^^ 
+  |

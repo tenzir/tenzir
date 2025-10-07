@@ -1,0 +1,5 @@
+from {
+  // Google Public DNS - stable reverse lookup
+  ip: 8.8.8.8
+}
+dns_lookup ip

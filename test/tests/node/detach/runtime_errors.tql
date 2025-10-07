@@ -1,0 +1,17 @@
+---
+fixtures:
+- node
+---
+
+pipeline::detach {
+  from {x: 1}
+  write_csv
+  read_json
+  discard
+}, id="test-id"
+
+diagnostics live=true, retro=true
+where pipeline_id == "test-id"
+head 1
+drop timestamp
+

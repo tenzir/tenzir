@@ -1,3 +1,0 @@
-from env("INPUTS") + "/json/lists.json"
-exists = x in y
-not_exists = x not in y

@@ -1,9 +1,0 @@
-// test: exec
-
-// Test drop_null_fields with multiple specific fields containing nested nulls
-from {
-  a: {x: null, y: 1},
-  b: {p: null, q: null},
-  c: {m: 2, n: null}
-}
-drop_null_fields a, b

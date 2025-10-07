@@ -612,11 +612,12 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}-${{ github.sha }}
           enableCrossOsArchive: true
-      - name: Run Unit and Integration Tests
-        env:
-          CTEST_OUTPUT_ON_FAILURE: YES
+      - name: Run Unit Tests
         run: |
-          cmake --build "$BUILD_DIR" --target test
+          cmake --build "$BUILD_DIR" --target unit-tests
+      - name: Run Integration Tests
+        run: |
+          cmake --build "$BUILD_DIR" --target integration-tests
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"

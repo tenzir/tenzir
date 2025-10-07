@@ -1,4 +1,0 @@
-// test: ast
-// error: true
-
-from {x: f"\{42}"}

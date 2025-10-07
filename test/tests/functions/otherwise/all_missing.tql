@@ -1,0 +1,3 @@
+from {}, {}, {}
+
+z = x.otherwise(-1)

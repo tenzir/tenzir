@@ -1,0 +1,11 @@
+// Test that drop_null_fields this behaves like drop_null_fields without arguments
+from {
+  a: 42,
+  b: null,
+  c: {
+    d: null,
+    e: "test"
+  },
+  f: null
+}
+drop_null_fields this

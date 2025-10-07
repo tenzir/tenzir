@@ -1,6 +1,0 @@
-error: the file `inputs/this-file-does-not-exist.json` does not exist
- --> node/detach/startup_errors.tql:5:8
-  |
-5 |   from env("INPUTS") + "/this-file-does-not-exist.json"
-  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  |

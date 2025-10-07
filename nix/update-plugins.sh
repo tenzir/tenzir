@@ -32,11 +32,10 @@ get-submodule-rev() {
 NETRC_DIR="$(mktemp -d)"
 on_exit=("rm -rf ${NETRC_DIR}" "${on_exit[@]}")
 
-cat <<EOF > "$NETRC_DIR/netrc"
+cat <<EOF >"$NETRC_DIR/netrc"
 machine github.com
     password $GH_TOKEN
 EOF
-
 
 echo "Updating contrib/tenzir-plugins"
 tenzir_plugins_rev="$(get-submodule-rev "${toplevel}/contrib/tenzir-plugins")"
@@ -45,9 +44,9 @@ nix --extra-experimental-features nix-command store prefetch-file \
   --name "${name}" \
   --json \
   --netrc-file "$NETRC_DIR/netrc" \
-  "${url_base}/${tenzir_plugins_rev}.tar.gz" \
-  | jq \
+  "${url_base}/${tenzir_plugins_rev}.tar.gz" |
+  jq \
     --arg url "${url_base}/${tenzir_plugins_rev}.tar.gz" \
     --arg name "${name}" \
     '.name = $name | .url = $url | del(.storePath)' \
-  > "${dir}/tenzir/plugins/source.json"
+    >"${dir}/tenzir/plugins/source.json"

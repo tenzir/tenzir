@@ -1,8 +1,0 @@
-error: expected 1 positional arguments, but got 0
- --> <input>:1:10
-  |
-1 | load file | read json
-  |          ^ 
-  |
-  = usage: file <path> [-f|--follow] [-m|--mmap] [-t|--timeout <duration>]
-  = docs: https://docs.tenzir.com/connectors/file

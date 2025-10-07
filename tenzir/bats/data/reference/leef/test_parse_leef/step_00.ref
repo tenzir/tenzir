@@ -1,7 +1,0 @@
-{"leef_version":"1.0","vendor":"CyberArk","product_name":"PTA","product_version":"14.0","event_class_id":"1","attributes":{"Cat":"Suspected credentials theft|sev=8|src=src1","userName":"mike","dst":"192.168.0.1","ExtraDataLabel":"ExtraData","ExtraData":"None","EventIdLabel":"EventID","EventID":"52b06812ec3500ed864c461e","devTime":1388577600000,"LinkLabel":"PTALink","PTALink":"https://1.1.1.1/incidents/52b06812ec3500ed864c461e","suserLabel":"SourceUserName","suser":"mike2","ExternalLinkLabel":"ExternalLink","ExternalLink":"None"}}
-{"leef_version":"1.0","vendor":"Tenzir","product_name":"Tenzir","product_version":"4.12","event_class_id":"42","attributes":{"key":""}}
-{"leef_version":"1.0","vendor":"Tenzir","product_name":"Tenzir","product_version":"4.12","event_class_id":"42","attributes":{"key":"trailing tab next"}}
-{"leef_version":"1.0","vendor":"Tenzir","product_name":"Tenzir","product_version":"4.12","event_class_id":"42","attributes":{"key":"yikes"}}
-warning: leef parser: missing key-value separator in attribute
- = note: line 2
- = note: attribute was `just some random junk`

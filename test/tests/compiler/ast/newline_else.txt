@@ -1,0 +1,33 @@
+[
+  if_stmt {
+    if_kw: 45..47,
+    condition: root_field {
+      id: `x` @ 48..49,
+      has_question_mark: false
+    },
+    then: [
+      
+    ],
+    else: {
+      kw: 53..57,
+      pipe: [
+        if_stmt {
+          if_kw: 58..60,
+          condition: root_field {
+            id: `y` @ 61..62,
+            has_question_mark: false
+          },
+          then: [
+            
+          ],
+          else: {
+            kw: 66..70,
+            pipe: [
+              
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

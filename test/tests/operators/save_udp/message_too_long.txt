@@ -1,0 +1,8 @@
+error: function `repeat` not found
+ --> tests/operators/save_udp/message_too_long.tql:7:12
+  |
+7 |   msg: "x".repeat(70000),
+  |            ^^^^^^ 
+  |
+  = hint: did you mean `prepend`?
+  = docs: https://docs.tenzir.com/reference/functions

@@ -1,7 +1,0 @@
-error: string contains invalid utf-8
- --> exec/expr/escape/unicode/last_low_surrogate.tql:4:7
-  |
-4 |   s6: "\u{DFFF}",          // Last low surrogate (not valid standalone UTF-8)
-  |       ^^^^^^^^^^ 
-  |
-  = hint: consider using a blob instead: b"…"

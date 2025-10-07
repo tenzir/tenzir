@@ -1,0 +1,11 @@
+from {
+  x: "é",
+  y: "👩‍👩‍👦‍👦",
+}
+
+xa = x.length()
+xb = x.length_bytes()
+xc = x.length_chars()
+ya = y.length()
+yb = y.length_bytes()
+yc = y.length_chars()

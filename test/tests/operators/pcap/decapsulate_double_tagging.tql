@@ -1,0 +1,7 @@
+
+// Decapsulate VLAN information. Manually verified with:
+// tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
+from f"{env("TENZIR_INPUTS")}/pcap/vlan-double-tagging.pcap"
+this = this.decapsulate()
+select vlan.outer, vlan.inner
+write_tql compact=true

@@ -1,0 +1,72 @@
+{
+  contains_null: true,
+}
+{
+  x: 1,
+  contains_null: false,
+}
+{
+  x: [],
+  contains_null: false,
+}
+{
+  x: {},
+  contains_null: false,
+}
+{
+  x: {
+    y: 1,
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: null,
+  },
+  contains_null: true,
+}
+{
+  x: {
+    y: {
+      z: null,
+    },
+  },
+  contains_null: true,
+}
+{
+  x: {
+    y: {
+      z: 1,
+    },
+  },
+  contains_null: false,
+}
+{
+  x: {
+    y: {
+      z: 1,
+      w: null,
+    },
+  },
+  contains_null: true,
+}
+{
+  x: {
+    y: [
+      {
+        z: 1,
+      },
+      {
+        z: null,
+      },
+    ],
+  },
+  contains_null: true,
+}
+warning: field `x` not found
+  --> tests/functions/contains_null.tql:11:17
+   |
+11 | contains_null = x.contains_null()
+   |                 ~ 
+   |
+   = hint: append `?` to suppress this warning

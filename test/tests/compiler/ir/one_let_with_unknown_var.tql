@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+let $foo = $bar

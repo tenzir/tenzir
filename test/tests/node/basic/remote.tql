@@ -1,0 +1,11 @@
+---
+fixtures:
+- node
+---
+
+remote {
+  from {
+    message: "Hello, world!"
+  }
+}
+

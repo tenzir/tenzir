@@ -1,6 +1,0 @@
-error: backslash is not followed by escape sequence
- --> format_strings/backslash_eoi.tql:4:12
-  |
-4 | from {x: f"\
-  |            ^ 
-  |

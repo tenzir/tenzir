@@ -1,0 +1,28 @@
+{
+  service: "dns",
+  count: 4067,
+}
+{
+  service: "http",
+  count: 2386,
+}
+{
+  service: null,
+  count: 1863,
+}
+{
+  service: "ssl",
+  count: 121,
+}
+{
+  service: "smtp",
+  count: 21,
+}
+{
+  service: "ftp-data",
+  count: 2,
+}
+{
+  service: "ftp",
+  count: 2,
+}

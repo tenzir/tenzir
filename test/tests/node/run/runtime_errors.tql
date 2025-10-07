@@ -1,0 +1,14 @@
+---
+fixtures:
+- node
+error: true
+skip: non-deterministic behavior
+---
+
+pipeline::run {
+  from {x: 1}
+  write_csv
+  read_json
+  discard
+}, id="test-id"
+

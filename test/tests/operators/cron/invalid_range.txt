@@ -1,0 +1,6 @@
+error: bad cron expression: Specified range exceeds maximum
+ --> tests/operators/cron/invalid_range.tql:5:6
+  |
+5 | cron "120 * * * * *", {
+  |      ^^^^^^^^^^^^^^^ 
+  |

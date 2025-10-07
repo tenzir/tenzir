@@ -1,0 +1,10 @@
+{
+  foo: 42,
+}
+warning: field `foo` not found
+ --> tests/operators/from_where.tql:5:7
+  |
+5 | where foo == 42
+  |       ~~~ 
+  |
+  = hint: append `?` to suppress this warning

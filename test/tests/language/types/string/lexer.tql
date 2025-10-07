@@ -1,0 +1,35 @@
+---
+runner: lexer
+---
+
+"{}"
+
+f""
+
+f"{}"
+
+f"\""
+
+f"{ident}"
+
+f"{a+b}"
+
+f"pre {}"
+
+f"pre {} post"
+
+f"pre {"string"} post"
+
+f"{{}}"
+
+f"{ {} }"
+
+f"{{{}}}"
+
+f"{{{{}}}}"
+
+f"{{{ {x: 42}}}}"
+
+f"{ {key: "value"} }"
+
+f"{ {key: f"pre2{ {key2: "string"} }"} }"

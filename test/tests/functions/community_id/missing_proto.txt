@@ -1,0 +1,8 @@
+error: required argument `proto` was not provided
+ --> tests/functions/community_id/missing_proto.tql:6:8
+  |
+6 |   bad: community_id(src_ip=null, dst_ip=null),
+  |        ^^^^^^^^^^^^ 
+  |
+  = usage: community_id(src_ip=ip, dst_ip=ip, proto=string, [src_port=int, dst_port=int, seed=int])
+  = docs: https://docs.tenzir.com/reference/functions/community_id

@@ -1,7 +1,0 @@
-error: string contains invalid utf-8
- --> exec/expr/escape/unicode/first_high_surrogate.tql:4:7
-  |
-4 |   s5: "\u{D800}",          // First high surrogate (not valid standalone UTF-8)
-  |       ^^^^^^^^^^ 
-  |
-  = hint: consider using a blob instead: b"…"
