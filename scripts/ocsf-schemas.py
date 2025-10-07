@@ -47,7 +47,7 @@ BASIC_TYPES = {
     "ip_t": "ip",
     "subnet_t": "subnet",
     # TODO: Is this the best choice?
-    "timestamp_t": "time",
+    "timestamp_t": "time #epochtime",
 }
 
 # The schema defines some recursive types which cannot be represented
