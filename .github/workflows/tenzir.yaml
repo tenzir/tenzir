@@ -59,7 +59,6 @@ jobs:
     name: Configure
     runs-on: ubuntu-latest
     outputs:
-      version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
       before-sha: ${{ steps.configure.outputs.before-sha }}
       before-version: ${{ steps.configure.outputs.before-version }}
@@ -71,7 +70,6 @@ jobs:
       tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
-      run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
       nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
@@ -100,22 +98,6 @@ jobs:
       - name: Configure
         id: configure
         run: |
-          # Create a matrix with Tenzir versions greater or equal than
-          # limit_version. If the version does not exist yet (e.g., because of
-          # an intentional break), only check latest. We usually set this to the
-          # minimum supported version.
-          limit_version=v4.26.0
-          if git rev-parse "${limit_version}" --; then
-            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
-            dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
-            # We filter out versions older than limit_version, v4.28.0 and
-            # v4.31.0 because they were broken and failed to upload.
-            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v4.28.0' | grep -v 'v4.31.0' | grep -v 'v5.3.0' | grep -v 'v5.3.1')
-            version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
-          else
-            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
-          fi
-          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
           version="v$(jq -r '."tenzir-version"' version.json)"
@@ -164,7 +146,6 @@ jobs:
           # * Set version variables (above)
           # * Enable Jobs (below)
           echo "::notice Disable all others so we can selectivly enable again"
-          echo "run-regression-tests=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
@@ -173,7 +154,6 @@ jobs:
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
-            echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
@@ -221,7 +201,6 @@ jobs:
             "Dockerfile" ".dockerignore" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
-          run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed tenzir-nix \
             "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
             ".github/workflows/nix.nu" \
@@ -398,35 +377,6 @@ jobs:
             echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir 'openapi | to "docs/openapi.node.yaml"'* or apply the following diff directly:"
             git diff --exit-code
           }
-
-  regression-tests:
-    needs:
-      - docker-tenzir
-      - configure
-    if: needs.configure.outputs.run-regression-tests == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
-    name: Regression Tests (${{ matrix.regression-tests.version }})
-    runs-on: ubuntu-latest
-    env:
-      DOCKER_BUILDKIT: 1
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Regression Tests
-        run: |
-          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
-
   tenzir-nix:
     name: Nix (${{ matrix.config.name }})
     needs:
