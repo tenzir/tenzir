@@ -34,17 +34,22 @@ requires(parseable<decltype(std::begin(rng)), To>) {
   using std::end;
   auto f = begin(rng);
   auto l = end(rng);
-  auto res = to<To>(f, l);
-  if (res && f != l)
+  caf::expected<To> t{To{}};
+  if (! parse(f, l, *t)) {
     return caf::make_error(ec::parse_error);
-  return res;
+  }
+  return t;
 }
 
 template <class To, size_t N>
-auto to(char const (&str)[N]) {
+auto to(char const (&str)[N]) -> caf::expected<To> {
   auto first = str;
   auto last = str + N - 1; // No NUL byte.
-  return to<To>(first, last);
+  caf::expected<To> t{To{}};
+  if (! parse(first, last, *t)) {
+    return caf::make_error(ec::parse_error);
+  }
+  return t;
 }
 
 } // namespace tenzir

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/ssl_options.hpp"
+#include "tenzir/try_get.hpp"
 
 #include "fluent-bit/fluent-bit_operator.hpp"
 
