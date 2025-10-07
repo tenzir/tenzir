@@ -16,6 +16,7 @@
 #include "tenzir/value_path.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/type_fwd.h>
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
 
@@ -85,12 +86,15 @@ auto make_string_list_function(std::shared_ptr<arrow::ListArray> list) -> auto {
 class caster {
 public:
   caster(location self, diagnostic_handler& dh, string_list profiles,
-         string_list extensions, bool preserve_variants)
+         string_list extensions, bool preserve_variants, bool null_fill,
+         bool timestamp_to_ms)
     : self_{self},
       dh_{dh},
       profiles_{profiles},
       extensions_{extensions},
-      preserve_variants_{preserve_variants} {
+      preserve_variants_{preserve_variants},
+      null_fill_{null_fill},
+      timestamp_to_ms_{timestamp_to_ms} {
   }
 
   auto cast(const table_slice& slice, const type& ty, std::string_view name)
@@ -118,7 +122,7 @@ private:
 
   auto cast_type(const record_type& ty) -> record_type {
     auto fields = std::vector<record_type::field_view>{};
-    for (auto [field_name, field_ty] : ty.fields()) {
+    for (const auto& [field_name, field_ty] : ty.fields()) {
       if (is_enabled(field_ty)) {
         fields.emplace_back(field_name, cast_type(field_ty));
       }
@@ -145,6 +149,10 @@ private:
       }
       // We don't know the actual type, so we just use `null`.
       return type{null_type{}};
+    }
+    if (timestamp_to_ms_ and ty.attribute("epochtime")) {
+      TENZIR_ASSERT(ty.kind().is<time_type>());
+      return type{int64_type{}};
     }
     return match(ty, [&](const auto& ty) {
       return type{cast_type(ty)};
@@ -180,13 +188,29 @@ private:
         return print_json(input, nullify_empty_records);
       }
       if (nullify_empty_records) {
-        if (auto record_ty = try_as<record_type>(input.type)) {
+        if (auto* record_ty = try_as<record_type>(input.type)) {
           if (record_ty->num_fields() == 0) {
             return series::null(record_type{}, input.length());
           }
         }
       }
       return input;
+    }
+    if (ty.attribute("epochtime")) {
+      TENZIR_ASSERT(is<time_type>(ty));
+      if (timestamp_to_ms_) {
+        const auto& array = as<arrow::TimestampArray>(*input.array);
+        auto b = arrow::Int64Builder{};
+        check(b.Reserve(array.length()));
+        for (auto val : values(time_type{}, array)) {
+          b.UnsafeAppendOrNull(val.transform([](time x) {
+            return time_point_cast<std::chrono::milliseconds>(x)
+              .time_since_epoch()
+              .count();
+          }));
+        }
+        return series{int64_type{}, finish(b)};
+      }
     }
     auto result = match(
       std::tie(*input.array, ty),
@@ -199,36 +223,34 @@ private:
           },
           ty, path);
       },
+      [&](const arrow::UInt64Array& array, const int64_type&) -> series {
+        auto int_builder = arrow::Int64Builder{};
+        check(int_builder.Reserve(array.length()));
+        auto warned = false;
+        for (auto i = int64_t{0}; i < array.length(); ++i) {
+          if (array.IsNull(i)) {
+            check(int_builder.AppendNull());
+          } else {
+            auto value = array.Value(i);
+            if (not std::in_range<int64_t>(value)) {
+              if (not warned) {
+                diagnostic::warning("integer in `{}` exceeds maximum", path)
+                  .note("found {}", value)
+                  .primary(self_)
+                  .emit(dh_);
+                warned = true;
+              }
+              check(int_builder.AppendNull());
+            } else {
+              check(int_builder.Append(static_cast<int64_t>(value)));
+            }
+          }
+        }
+        return series{int64_type{}, finish(int_builder)};
+      },
       [&]<class Array, class Type>(const Array& array, const Type& ty) -> series
         requires(not std::same_as<Array, type_to_arrow_array_t<Type>>)
       {
-        // Try a `uint64 -> int64` conversion before giving up.
-        if constexpr (std::same_as<Array, arrow::UInt64Array>
-                      and std::same_as<Type, int64_type>) {
-          auto int_builder = arrow::Int64Builder{};
-          check(int_builder.Reserve(array.length()));
-          auto warned = false;
-          for (auto i = int64_t{0}; i < array.length(); ++i) {
-            if (array.IsNull(i)) {
-              check(int_builder.AppendNull());
-            } else {
-              auto value = array.Value(i);
-              if (not std::in_range<int64_t>(value)) {
-                if (not warned) {
-                  diagnostic::warning("integer in `{}` exceeds maximum", path)
-                    .note("found {}", value)
-                    .primary(self_)
-                    .emit(dh_);
-                  warned = true;
-                }
-                check(int_builder.AppendNull());
-              } else {
-                check(int_builder.Append(static_cast<int64_t>(value)));
-              }
-            }
-          }
-          return series{int64_type{}, finish(int_builder)};
-        }
         if constexpr (not std::same_as<Array, arrow::NullArray>) {
           diagnostic::warning("expected type `{}` for `{}`, but got `{}`",
                               type_kind::of<Type>, path,
@@ -283,20 +305,22 @@ private:
         continue;
       }
       auto field_series = input.field(field.name);
-      if (not field_series) {
+      if (field_series) {
+        auto casted
+          = cast(std::move(*field_series), field.type, path.field(field.name));
+        field_arrays.push_back(std::move(casted.array));
+        fields.emplace_back(field.name, std::move(casted.type));
+        continue;
+      }
+      if (null_fill_) {
         // No warning if the a target field does not exist.
         auto cast_ty = cast_type(field.type);
         fields.emplace_back(field.name, cast_ty);
         field_arrays.push_back(check(arrow::MakeArrayOfNull(
           cast_ty.to_arrow_type(), input.array->length())));
-        continue;
       }
-      auto casted
-        = cast(std::move(*field_series), field.type, path.field(field.name));
-      field_arrays.push_back(std::move(casted.array));
-      fields.emplace_back(field.name, std::move(casted.type));
     }
-    for (auto& field : input.array->struct_type()->fields()) {
+    for (const auto& field : input.array->struct_type()->fields()) {
       // Warn for fields that do not exist in the target type.
       auto field_path = path.field(field->name());
       auto field_index = ty.resolve_field(field->name());
@@ -380,6 +404,8 @@ private:
   string_list profiles_;
   string_list extensions_;
   bool preserve_variants_;
+  bool null_fill_;
+  bool timestamp_to_ms_;
 };
 
 struct metadata {
@@ -897,8 +923,8 @@ private:
                               std::string_view enum_id, value_path int_path,
                               value_path string_path)
     -> std::pair<basic_series<int64_type>, basic_series<string_type>> {
-    auto& enum_lookup = check(get_ocsf_int_to_string(enum_id)).get();
-    auto& reverse_lookup = check(get_ocsf_string_to_int(enum_id)).get();
+    const auto& enum_lookup = check(get_ocsf_int_to_string(enum_id)).get();
+    const auto& reverse_lookup = check(get_ocsf_string_to_int(enum_id)).get();
     auto int_builder = arrow::Int64Builder{};
     auto string_builder = arrow::StringBuilder{};
     check(int_builder.Reserve(int_field.length()));
@@ -990,7 +1016,7 @@ private:
         .emit(dh_);
       return basic_series<string_type>::null(int_field.length());
     }
-    auto& int_to_string = check(get_ocsf_int_to_string(enum_id)).get();
+    const auto& int_to_string = check(get_ocsf_int_to_string(enum_id)).get();
     auto string_builder = arrow::StringBuilder{};
     check(string_builder.Reserve(int_field.length()));
     for (auto i = int64_t{0}; i < int_field.length(); ++i) {
@@ -1025,7 +1051,7 @@ private:
         .emit(dh_);
       return basic_series<int64_type>::null(string_field.length());
     }
-    auto& string_to_int = check(get_ocsf_string_to_int(enum_id)).get();
+    const auto& string_to_int = check(get_ocsf_string_to_int(enum_id)).get();
     auto int_builder = arrow::Int64Builder{};
     check(int_builder.Reserve(string_field.length()));
     for (auto i = int64_t{0}; i < string_field.length(); ++i) {
@@ -1122,12 +1148,16 @@ private:
   struct location self_;
 };
 
-class apply_operator final : public crtp_operator<apply_operator> {
+class cast_operator final : public crtp_operator<cast_operator> {
 public:
-  apply_operator() = default;
+  cast_operator() = default;
 
-  apply_operator(struct location self, bool preserve_variants)
-    : self_{self}, preserve_variants_{preserve_variants} {
+  cast_operator(struct location self, bool preserve_variants, bool null_fill,
+                bool timestamp_to_ms)
+    : self_{self},
+      preserve_variants_{preserve_variants},
+      null_fill_{null_fill},
+      timestamp_to_ms_{timestamp_to_ms} {
   }
 
   auto
@@ -1207,7 +1237,7 @@ public:
         if (dynamic_cast<arrow::NullArray*>(&*extensions_lists->values())) {
           return make_string_list_function(nullptr);
         }
-        auto extensions_structs
+        auto* extensions_structs
           = dynamic_cast<arrow::StructArray*>(&*extensions_lists->values());
         if (not extensions_structs) {
           diagnostic::warning("ignoring extensions for events where "
@@ -1243,10 +1273,10 @@ public:
       // - metadata.profiles
       // - class_uid
       // - metadata.extensions[].name
-      // Since we only support extensions that are served by the OCSF server for
-      // the corresponding version, we know that they have a non-conflicting
-      // name and there is no need to take their version into account (although
-      // we could check for consistency with the event).
+      // Since we only support extensions that are served by the OCSF server
+      // for the corresponding version, we know that they have a
+      // non-conflicting name and there is no need to take their version into
+      // account (although we could check for consistency with the event).
       auto begin = int64_t{0};
       auto end = begin;
       auto version = view_at(*version_array, begin);
@@ -1261,7 +1291,8 @@ public:
         }
         auto extension = schema->type.attribute("extension");
         if (extension and not extensions.contains(*extension)) {
-          diagnostic::warning("dropping event for class {:?} because extension "
+          diagnostic::warning("dropping event for class {:?} because "
+                              "extension "
                               "{:?} is not enabled",
                               schema->class_name, *extension)
             .primary(self_)
@@ -1269,8 +1300,9 @@ public:
           return {};
         }
         auto type_name = "ocsf." + schema->mangled_class_name;
-        return caster{self_, ctrl.diagnostics(), profiles, extensions,
-                      preserve_variants_}
+        return caster{self_,           ctrl.diagnostics(), profiles,
+                      extensions,      preserve_variants_, null_fill_,
+                      timestamp_to_ms_}
           .cast(subslice(slice, begin, end), schema->type, type_name);
       };
       for (; end < class_array->length(); ++end) {
@@ -1299,22 +1331,30 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "ocsf::apply";
+    return "ocsf::cast";
   }
 
-  friend auto inspect(auto& f, apply_operator& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_),
-                              f.field("preserve_variants",
-                                      x.preserve_variants_));
+  friend auto inspect(auto& f, cast_operator& x) -> bool {
+    return f.object(x).fields(f.field("self_", x.self_),
+                              f.field("preserve_variants_",
+                                      x.preserve_variants_),
+                              f.field("null_fill_", x.null_fill_),
+                              f.field("timestamp_to_ms_", x.timestamp_to_ms_));
   }
 
 private:
   struct location self_;
   bool preserve_variants_{};
+  bool null_fill_{};
+  bool timestamp_to_ms_{};
 };
 
-class apply_plugin final : public operator_plugin2<apply_operator> {
+class apply_plugin final : public operator_factory_plugin {
 public:
+  auto name() const -> std::string override {
+    return "ocsf::apply";
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto preserve_variants = false;
@@ -1322,8 +1362,25 @@ public:
       .named("preserve_variants", preserve_variants)
       .parse(inv, ctx)
       .ignore();
-    return std::make_unique<apply_operator>(inv.self.get_location(),
-                                            preserve_variants);
+    return std::make_unique<cast_operator>(inv.self.get_location(),
+                                           preserve_variants, true, false);
+  }
+};
+
+class cast_plugin final : public operator_plugin2<cast_operator> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto encode_variants = false;
+    auto timestamp_to_ms = false;
+    auto null_fill = false;
+    TRY(argument_parser2::operator_(name())
+          .named("encode_variants", encode_variants)
+          .named("null_fill", null_fill)
+          .named("timestamp_to_ms", timestamp_to_ms)
+          .parse(inv, ctx));
+    return std::make_unique<cast_operator>(
+      inv.self.get_location(), not encode_variants, null_fill, timestamp_to_ms);
   }
 };
 
@@ -1331,8 +1388,8 @@ class trim_plugin final : public operator_plugin2<trim_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    // TODO: Consider using a more intelligent default that is not simply based
-    // on attributes being optional.
+    // TODO: Consider using a more intelligent default that is not simply
+    // based on attributes being optional.
     auto drop_optional = true;
     auto drop_recommended = false;
     argument_parser2::operator_(name())
@@ -1358,5 +1415,6 @@ public:
 } // namespace tenzir::plugins::ocsf
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::apply_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::cast_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)

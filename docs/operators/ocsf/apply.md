@@ -10,6 +10,11 @@ Casts incoming events to their OCSF type.
 ocsf::apply [preserve_variants=bool]
 ```
 
+:::caution[Deprecated]
+The `ocsf::apply` operator is deprecated. Use
+[`ocsf::cast`](/reference/operators/ocsf/cast) instead.
+:::
+
 ## Description
 
 The `ocsf::apply` operator casts incoming events to their corresponding OCSF
@@ -112,5 +117,6 @@ to_clickhouse table="network_activity"
 
 ## See Also
 
+[`ocsf::cast`](/reference/operators/ocsf/cast),
 [`ocsf::derive`](/reference/operators/ocsf/derive),
 [`ocsf::trim`](/reference/operators/ocsf/trim)

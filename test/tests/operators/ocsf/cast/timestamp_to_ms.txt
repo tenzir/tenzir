@@ -1,0 +1,49 @@
+{
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+}
+{
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+  time: 1000,
+}
+{
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+}
+{
+  class_uid: 1001,
+  metadata: {
+    version: "1.6.0",
+  },
+  time: 1000,
+}
+{
+  actor: {
+    session: {
+      created_time: 1000,
+      created_time_dt: 1970-01-01T00:00:01Z,
+    },
+  },
+  class_uid: 1001,
+  metadata: {
+    profiles: [
+      "host",
+      "datetime",
+    ],
+    version: "1.6.0",
+  },
+}
+warning: dropping field which does not exist in schema
+  --> tests/operators/ocsf/cast/timestamp_to_ms.tql:10:1
+   |
+10 | ocsf::cast timestamp_to_ms=true
+   | ~~~~~~~~~~ 
+   |
+   = note: found `invalid`
