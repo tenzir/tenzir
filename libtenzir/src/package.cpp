@@ -9,6 +9,7 @@
 
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
+#include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/detail/string.hpp>
@@ -17,9 +18,25 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <algorithm>
 #include <string_view>
 
 namespace tenzir {
+
+namespace {
+
+// Similar to the regular TQL identifier parser, but it also allows dashes
+// because they are used in many package names in the library before we
+// introduced user defined operators in packages.
+auto is_valid_package_identifier(std::string_view value) -> bool {
+  constexpr auto package_identifier_tail = parsers::alnum | '_' | '-';
+  constexpr auto package_identifier_head = parsers::alpha | '_';
+  constexpr auto package_identifier
+    = package_identifier_head >> *package_identifier_tail;
+  return package_identifier(value);
+}
+
+} // namespace
 
 #define TRY_CONVERT_TO_STRING(name, field)                                     \
   if (key == #name) {                                                          \
@@ -516,6 +533,12 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
+  if (not is_valid_package_identifier(result.id)) {
+    return diagnostic::error("invalid package id '{}' (must match "
+                             "[A-Za-z_][A-Za-z0-9_-]*)",
+                             result.id)
+      .to_error();
+  }
   if (result.config) {
     for (auto& [name, _] : result.config->inputs) {
       if (not result.inputs.contains(name)) {
@@ -534,6 +557,12 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     }
   }
   return result;
+}
+
+auto package_module_name(std::string_view package_id) -> std::string {
+  auto sanitized = std::string{package_id};
+  std::replace(sanitized.begin(), sanitized.end(), '-', '_');
+  return sanitized;
 }
 
 namespace {
@@ -609,6 +638,10 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
   if (not std::filesystem::exists(package_file, ec)) {
     if (ec) {
       diagnostic::error("{}", ec).note("for file {}", package_file).emit(dh);
+    } else {
+      diagnostic::error("package.yaml does not exist")
+        .note("in package directory {}", dir)
+        .emit(dh);
     }
     return failure::promise();
   }
@@ -625,9 +658,17 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       .emit(dh);
     return failure::promise();
   }
+  if (parsed_package->id.find('-') != std::string::npos) {
+    diagnostic::warning("package id '{}' contains '-' characters; normalized "
+                        "module name will be '{}'",
+                        parsed_package->id,
+                        package_module_name(parsed_package->id))
+      .emit(dh);
+  }
   if (parsed_package->id != dir.filename()) {
-    TENZIR_WARN("name mismatch: found package {} in directory {}/",
-                parsed_package->id, dir);
+    diagnostic::warning("name mismatch: found package {} in directory {}/",
+                        parsed_package->id, dir)
+      .emit(dh);
   }
   // Support storing the `config` part in a separate file in the same
   // directory.
@@ -635,6 +676,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
   if (not std::filesystem::exists(config_file, ec)) {
     if (ec) {
       diagnostic::error("{}", ec).note("for file {}", config_file).emit(dh);
+      had_errors = true;
     }
   } else {
     if (parsed_package->config.has_value()) {
@@ -643,6 +685,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
         "section and a separate 'config.yaml'")
         .note("in package directory {}/", dir)
         .emit(dh);
+      had_errors = true;
     }
     TRY(auto config_record, yaml_file_to_record(config_file, dh));
     auto parsed_config = package_config::parse(make_view(config_record));
@@ -651,6 +694,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
         .note("in package directory {}/", dir)
         .note("got error: {}", parsed_config.error())
         .emit(dh);
+      had_errors = true;
     } else {
       parsed_package->config = std::move(*parsed_config);
     }
@@ -665,18 +709,12 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
         had_errors = true;
       }
     } else {
-      auto pipelines
-        = std::filesystem::recursive_directory_iterator{pipelines_dir, ec}
-          | std::views::filter([&](const std::filesystem::path& path) {
-              return path.extension() == ".tql";
-            });
-      if (ec) {
-        diagnostic::error("{}", ec)
-          .note("while trying to load {}", pipelines_dir)
-          .emit(dh);
-        return failure::promise();
-      }
       try {
+        auto pipelines
+          = std::filesystem::recursive_directory_iterator{pipelines_dir}
+            | std::views::filter([&](const std::filesystem::path& path) {
+                return path.extension() == ".tql";
+              });
         for (const auto& pipeline_file : pipelines) {
           if (auto pipeline
               = load_package_part<package_pipeline>(pipeline_file, dh)) {
@@ -685,7 +723,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                                               std::move(*pipeline));
           }
         }
-      } catch (std::exception& e) {
+      } catch (const std::exception& e) {
         diagnostic::error("{}", e)
           .note("while trying to load pipelines in {}", pipelines_dir)
           .emit(dh);
@@ -699,20 +737,15 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       diagnostic::error("{}", ec)
         .note("while trying to load {}", operators_dir)
         .emit(dh);
+      had_errors = true;
     }
   } else {
-    auto operators
-      = std::filesystem::recursive_directory_iterator{operators_dir, ec}
-        | std::views::filter([&](const std::filesystem::path& path) {
-            return path.extension() == ".tql";
-          });
-    if (ec) {
-      diagnostic::error("{}", ec)
-        .note("while trying to load {}", operators_dir)
-        .emit(dh);
-      return failure::promise();
-    }
     try {
+      auto operators
+        = std::filesystem::recursive_directory_iterator{operators_dir}
+          | std::views::filter([&](const std::filesystem::path& path) {
+              return path.extension() == ".tql";
+            });
       for (const auto& operator_file : operators) {
         if (auto operator_
             = load_package_part<package_operator>(operator_file, dh)) {
@@ -729,38 +762,19 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                          std::back_inserter(path), [](auto component) {
                            return std::string{component};
                          });
-          // Validate that all path segments are valid TQL identifiers:
-          // first char [A-Za-z_], subsequent [A-Za-z0-9_].
-          auto is_valid_ident = [](std::string_view s) -> bool {
-            if (s.empty())
-              return false;
-            auto is_alpha = [](unsigned char c) {
-              return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-            };
-            auto is_alnum_us = [&](unsigned char c) {
-              return is_alpha(c) || (c >= '0' && c <= '9') || c == '_';
-            };
-            if (!(is_alpha(static_cast<unsigned char>(s[0])) || s[0] == '_'))
-              return false;
-            for (size_t i = 1; i < s.size(); ++i) {
-              if (!is_alnum_us(static_cast<unsigned char>(s[i])))
-                return false;
-            }
-            return true;
-          };
           bool valid = true;
           for (const auto& seg : path) {
-            if (!is_valid_ident(seg)) {
-              diagnostic::error(
-                "invalid operator path segment '{}' (must match [A-Za-z_][A-Za-z0-9_]*)",
-                seg)
+            if (not token::parsers::identifier(seg)) {
+              diagnostic::error("invalid operator path segment '{}' (must "
+                                "match [A-Za-z_][A-Za-z0-9_]*)",
+                                seg)
                 .note("in operator file {}", operator_file.path())
                 .emit(dh);
               valid = false;
               break;
             }
           }
-          if (!valid) {
+          if (! valid) {
             had_errors = true;
             continue;
           }
@@ -768,7 +782,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                                             std::move(*operator_));
         }
       }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
       diagnostic::error("{}", e)
         .note("while trying to load operators in {}", operators_dir)
         .emit(dh);
@@ -781,27 +795,22 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       diagnostic::error("{}", ec)
         .note("while trying to load {}", examples_dir)
         .emit(dh);
+      had_errors = true;
     }
   } else {
-    auto examples
-      = std::filesystem::directory_iterator{examples_dir, ec}
-        | std::views::filter([&](const std::filesystem::path& path) {
-            return path.extension() == ".tql";
-          });
-    if (ec) {
-      diagnostic::error("{}", ec)
-        .note("while trying to load {}", examples_dir)
-        .emit(dh);
-      return failure::promise();
-    }
     try {
+      auto examples
+        = std::filesystem::directory_iterator{examples_dir}
+          | std::views::filter([&](const std::filesystem::path& path) {
+              return path.extension() == ".tql";
+            });
       for (const auto& example_file : examples) {
         if (auto example_
             = load_package_part<package_example>(example_file, dh)) {
           parsed_package->examples.push_back(std::move(*example_));
         }
       }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
       diagnostic::error("{}", e)
         .note("while trying to load examples in {}", examples_dir)
         .emit(dh);
@@ -946,10 +955,14 @@ auto package::to_record() const -> record {
   return info_record;
 }
 
-auto build_package_operator_module(
-  const package& pkg, diagnostic_handler& dh)
+auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
   -> failure_or<std::unique_ptr<module_def>> {
   auto module = std::make_unique<module_def>();
+  auto module_name = package_module_name(pkg.id);
+  auto& pkg_entry = module->defs[module_name];
+  TENZIR_ASSERT(! pkg_entry.mod);
+  pkg_entry.mod = std::make_unique<module_def>();
+  auto* pkg_mod = pkg_entry.mod.get();
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
   auto ensure_module
@@ -982,9 +995,13 @@ auto build_package_operator_module(
     }
     auto head_span = std::span<const std::string>{op_name}.subspan(
       start_idx, op_name.size() - start_idx - 1);
-    auto* parent = ensure_module(*module, head_span);
+    auto* parent = ensure_module(*pkg_mod, head_span);
     auto& set = parent->defs[op_name.back()];
     set.op = operator_def{user_defined_operator{std::move(pipe)}};
+  }
+  if (pkg_mod->defs.empty()) {
+    pkg_entry.mod.reset();
+    module->defs.erase(module_name);
   }
   return module;
 }

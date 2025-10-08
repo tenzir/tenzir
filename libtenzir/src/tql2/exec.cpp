@@ -38,6 +38,7 @@
 #include <map>
 #include <memory>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace tenzir {
@@ -126,11 +127,22 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
   if (had_errors) {
     return failure::promise();
   }
-  auto modules
-    = std::vector<std::pair<std::string, std::unique_ptr<module_def>>>{};
+  auto normalized_to_id = std::unordered_map<std::string, std::string>{};
+  normalized_to_id.reserve(packages_by_id.size());
+  auto modules = std::vector<std::unique_ptr<module_def>>{};
   modules.reserve(packages_by_id.size());
   for (auto& [id, pkg] : packages_by_id) {
     if (pkg.operators.empty()) {
+      continue;
+    }
+    auto normalized = package_module_name(pkg.id);
+    auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
+    if (not inserted && norm_it->second != pkg.id) {
+      diagnostic::error("package '{}' conflicts with '{}' after normalization "
+                        "to '{}'",
+                        pkg.id, norm_it->second, normalized)
+        .emit(dh);
+      had_errors = true;
       continue;
     }
     auto module = build_package_operator_module(pkg, dh);
@@ -138,7 +150,9 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
       had_errors = true;
       continue;
     }
-    modules.emplace_back(id, std::move(*module));
+    if (not (*module)->defs.empty()) {
+      modules.emplace_back(std::move(*module));
+    }
   }
   if (had_errors) {
     return failure::promise();
@@ -146,11 +160,14 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
   auto guard = begin_registry_update();
   auto base = guard.current();
   auto next = base->clone();
-  for (const auto& id : existing_packages) {
-    next->remove_module(std::string{"packages"}, id);
-  }
-  for (auto& [id, module] : modules) {
-    next->add_module(std::string{"packages"}, id, std::move(module));
+  for (auto& module : modules) {
+    for (auto& [name, set] : module->defs) {
+      if (! set.mod) {
+        TENZIR_ASSERT(! set.fn && ! set.op);
+        continue;
+      }
+      next->replace_module(std::string{"packages"}, name, std::move(set.mod));
+    }
   }
   guard.publish(std::shared_ptr<const registry>{std::move(next)});
   return {};

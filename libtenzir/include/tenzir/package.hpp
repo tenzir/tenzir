@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tenzir {
@@ -239,5 +240,7 @@ struct module_def;
 
 auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
   -> failure_or<std::unique_ptr<module_def>>;
+
+auto package_module_name(std::string_view package_id) -> std::string;
 
 } // namespace tenzir
