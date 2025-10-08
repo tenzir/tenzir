@@ -8,17 +8,14 @@
 
 #pragma once
 
+#include "tenzir/element_type.hpp"
+#include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <vector>
 
 namespace tenzir {
-
-/// The type of the input or output of an operator.
-struct operator_type2 : tag_variant<void, table_slice, chunk_ptr> {
-  using tag_variant::tag_variant;
-};
 
 namespace ir {
 
@@ -48,8 +45,8 @@ public:
   /// The operator is responsible to report any type mismatches. If the
   /// operator could potentially accept the given input type, but the output
   /// type is not known yet, then `std::nullopt` may be returned.
-  virtual auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>>;
+  virtual auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>>;
 
   /// Substitute variables from the context and potentially instantiate `this`.
   ///
@@ -73,7 +70,7 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  virtual auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> = 0;
+  virtual auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -173,11 +170,11 @@ struct pipeline {
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
   /// @see operator_base
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline>;
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline>;
 
   /// @see operator_base
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>>;
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>>;
 
   /// @see operator_base
   auto
