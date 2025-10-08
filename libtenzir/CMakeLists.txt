@@ -378,6 +378,10 @@ if (NOT simdjson_FOUND)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
                      "Dependencies")
+  # Ensure bundled simdjson includes come before system includes to avoid
+  # conflicts with system-installed simdjson headers.
+  target_include_directories(libtenzir SYSTEM BEFORE PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/include>")
 endif ()
 target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
