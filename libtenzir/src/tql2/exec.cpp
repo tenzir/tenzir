@@ -96,6 +96,36 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
       }
       continue;
     }
+    if (std::filesystem::exists(base_dir / "package.yaml", ec)) {
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while checking status of {}", base_dir / "package.yaml")
+          .emit(dh);
+        had_errors = true;
+      }
+      auto pkg = package::load(base_dir, dh, true);
+      if (not pkg) {
+        had_errors = true;
+        continue;
+      }
+      auto id = pkg->id;
+      packages_by_id.insert_or_assign(id, std::move(*pkg));
+      continue;
+    }
+    auto try_process_package = [&](const std::filesystem::path& pkg_dir) {
+      auto pkg = package::load(pkg_dir, dh, true);
+      if (not pkg) {
+        had_errors = true;
+        return true;
+      }
+      auto id = pkg->id;
+      packages_by_id.insert_or_assign(id, std::move(*pkg));
+      return true;
+    };
+    if (std::filesystem::exists(base_dir / "package.yaml")) {
+      try_process_package(base_dir);
+      continue;
+    }
     auto dir_it = std::filesystem::directory_iterator{base_dir, ec};
     if (ec) {
       diagnostic::error("{}", ec)
@@ -115,13 +145,9 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
         }
         continue;
       }
-      auto pkg = package::load(entry.path(), dh, true);
-      if (not pkg) {
-        had_errors = true;
-        continue;
+      if (std::filesystem::exists(entry.path() / "package.yaml")) {
+        try_process_package(entry.path());
       }
-      auto id = pkg->id;
-      packages_by_id.insert_or_assign(id, std::move(*pkg));
     }
   }
   if (had_errors) {
