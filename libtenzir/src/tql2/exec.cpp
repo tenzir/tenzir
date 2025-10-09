@@ -176,7 +176,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
       had_errors = true;
       continue;
     }
-    if (not (*module)->defs.empty()) {
+    if (not(*module)->defs.empty()) {
       modules.emplace_back(std::move(*module));
     }
   }
