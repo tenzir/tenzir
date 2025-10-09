@@ -78,9 +78,7 @@ public:
     return f.apply(x.id_);
   }
 
-  friend auto inspect(caf::detail::stringification_inspector& f, uuid& x) {
-    return f.apply(fmt::to_string(x));
-  }
+  friend auto inspect(caf::detail::stringification_inspector& f, uuid& x);
 
 private:
   std::array<value_type, num_bytes> id_;
@@ -124,8 +122,9 @@ struct formatter<tenzir::uuid> {
       uppercase = true;
     }
     // continue until end of range
-    while (it != end && *it != '}')
+    while (it != end && *it != '}') {
       ++it;
+    }
     return it;
   }
 
@@ -137,13 +136,14 @@ struct formatter<tenzir::uuid> {
                   "formatter");
     const auto args
       = std::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
-    if (uppercase)
+    if (uppercase) {
       return fmt::format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
                             join(args.subspan(0, 4), ""),
                             join(args.subspan(4, 2), ""),
                             join(args.subspan(6, 2), ""),
                             join(args.subspan(8, 2), ""),
                             join(args.subspan(10, 6), ""));
+    }
     return fmt::format_to(ctx.out(), "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
                           join(args.subspan(0, 4), ""),
                           join(args.subspan(4, 2), ""),

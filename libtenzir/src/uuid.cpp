@@ -114,8 +114,9 @@ uuid::size_type uuid::size() const {
 }
 
 std::strong_ordering operator<=>(const uuid& lhs, const uuid& rhs) noexcept {
-  if (&lhs == &rhs)
+  if (&lhs == &rhs) {
     return std::strong_ordering::equal;
+  }
   const auto result = std::memcmp(lhs.begin(), rhs.begin(), uuid::num_bytes);
   return result == 0  ? std::strong_ordering::equivalent
          : result < 0 ? std::strong_ordering::less
@@ -136,12 +137,16 @@ pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x) {
 }
 
 caf::error unpack(const fbs::LegacyUUID& x, uuid& y) {
-  if (x.data()->size() != uuid::num_bytes)
+  if (x.data()->size() != uuid::num_bytes) {
     return caf::make_error(ec::format_error, "wrong uuid format");
+  }
   std::span<const std::byte, uuid::num_bytes> bytes{
     reinterpret_cast<const std::byte*>(x.data()->data()), x.data()->size()};
   y = uuid{bytes};
   return caf::none;
 }
 
+auto inspect(caf::detail::stringification_inspector& f, uuid& x) {
+  return f.apply(fmt::to_string(x));
+}
 } // namespace tenzir
