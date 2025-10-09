@@ -45,6 +45,39 @@ struct every_actor_traits {
 
 using every_actor = caf::typed_actor<every_actor_traits>;
 
+class every2 {
+public:
+  friend auto inspect(auto& f, every2& x) -> bool {
+    return f.object(x).fields(f.field("interval", x.interval_),
+                              f.field("ir", x.ir_));
+  }
+
+  auto on_push(table_slice slice) {
+    pipeline_handle->push(std::move(slice));
+  }
+
+  auto spawn_subpipeline() {
+    auto plan = instantiate_subpipeline();
+    spawn_it_for_me(std::move(plan), [](table_slice slice) -> future<void> {
+      co_await push(std::move(slice));
+    });
+  }
+
+  auto instantiate_subpipeline() -> plan::pipeline {
+    auto copy = ir_;
+    auto result = copy.substitute(substitute_ctx{ctx_, nullptr}, true);
+    // TODO
+    TENZIR_ASSERT(result);
+    auto plan = std::move(copy).finalize(finalize_ctx{ctx_}).unwrap();
+    return plan;
+  }
+
+private:
+  duration interval_;
+  ir::pipeline ir_;
+  void* pipeline_handle;
+};
+
 class every_exec : public exec::basic_operator<every_actor> {
 public:
   [[maybe_unused]] static constexpr auto name = "every_exec";

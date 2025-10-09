@@ -46,6 +46,115 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
     .unwrap();
 }
 
+class stateless_transform_operator {};
+
+class set_exec final : public exec::operator_base {
+public:
+  set_exec(exec::operator_actor::pointer self,
+           std::vector<ast::assignment> assignments, event_order order)
+    : exec::operator_base{self},
+      assignments_{std::move(assignments)},
+      order_{order} {
+  }
+
+  void on_push(table_slice slice) override {
+    // TODO: Perform the actual assignment.
+    push(std::move(slice));
+  }
+  void on_push(chunk_ptr chunk) override {
+    TENZIR_TODO();
+  }
+  auto serialize() -> chunk_ptr override {
+  }
+  void on_done() override {
+    finish();
+  }
+  void on_pull(uint64_t items) {
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_;
+};
+
+class set_plan final : public plan::operator_base {
+public:
+  explicit set_plan(std::vector<ast::assignment> assignments)
+    : assignments_{std::move(assignments)} {
+  }
+
+  auto name() const -> std::string override {
+    return "set_plan";
+  }
+
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<set_exec>, assignments_);
+  }
+
+  friend auto inspect(auto& f, set_plan& x) -> bool {
+    return f.object(x).fields(f.field("assignments", x.assignments_));
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_ = event_order::ordered;
+};
+
+class set_ir final : public ir::operator_base {
+public:
+  explicit set_ir(std::vector<ast::assignment> assignments)
+    : assignments_(std::move(assignments)) {
+  }
+
+  auto name() const -> std::string override {
+    return "set_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    (void)instantiate;
+    for (auto& x : assignments_) {
+      TRY(x.right.substitute(ctx));
+    }
+    return {};
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    return std::make_unique<set_plan>(std::move(assignments_));
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    // Remember the order for potential rebatches.
+    order_ = order;
+    // TODO: FIXME
+    TENZIR_ASSERT(filter.size() == 1);
+    auto where = make_where_ir(filter[0]);
+    auto ops = std::vector<ir::operator_ptr>{};
+    ops.reserve(2);
+    ops.push_back(std::move(where));
+    ops.emplace_back(std::make_unique<set_ir>(std::move(*this)));
+    auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
+    return {{}, order_, std::move(replacement)};
+  }
+
+  friend auto inspect(auto& f, set_ir& x) -> bool {
+    return f.object(x).fields(f.field("assignments", x.assignments_));
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_ = event_order::ordered;
+};
+
+/// Create a `set` operator with the given assignment.
+auto make_set_ir(ast::assignment x) -> ir::operator_ptr {
+  auto assignments = std::vector<ast::assignment>{};
+  assignments.push_back(std::move(x));
+  return std::make_unique<set_ir>(std::move(assignments));
+}
+
 } // namespace
 
 class if_exec final : public plan::operator_base {
@@ -548,8 +657,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
     auto result = match(
-      stmt,
-      [&](ast::invocation& x) -> failure_or<void> {
+      std::move(stmt),
+      [&](ast::invocation x) -> failure_or<void> {
         auto& op = ctx.reg().get(x);
         return match(
           op.inner(),
@@ -603,19 +712,17 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           });
       },
-      [&](ast::assignment& x) -> failure_or<void> {
-        diagnostic::error("assignment is not implemented yet")
-          .primary(x)
-          .emit(ctx);
-        return failure::promise();
+      [&](ast::assignment x) -> failure_or<void> {
+        operators.push_back(make_set_ir(std::move(x)));
+        return {};
       },
-      [&](ast::let_stmt& x) -> failure_or<void> {
+      [&](ast::let_stmt x) -> failure_or<void> {
         TRY(x.expr.bind(ctx));
         auto id = scope.let(std::string{x.name_without_dollar()});
         lets.emplace_back(std::move(x.name), std::move(x.expr), id);
         return {};
       },
-      [&](ast::if_stmt& x) -> failure_or<void> {
+      [&](ast::if_stmt x) -> failure_or<void> {
         TRY(x.condition.bind(ctx));
         TRY(auto then, std::move(x.then).compile(ctx));
         auto else_ = std::optional<if_ir::else_t>{};
@@ -627,7 +734,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           x.if_kw, std::move(x.condition), std::move(then), std::move(else_)));
         return {};
       },
-      [&](ast::match_stmt& x) -> failure_or<void> {
+      [&](ast::match_stmt x) -> failure_or<void> {
         diagnostic::error("`match` is not implemented yet").primary(x).emit(ctx);
         return failure::promise();
       });

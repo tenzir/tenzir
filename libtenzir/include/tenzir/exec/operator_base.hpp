@@ -14,6 +14,7 @@
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/exec/actors.hpp"
 #include "tenzir/exec/checkpoint.hpp"
+#include "tenzir/report.hpp"
 
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
@@ -52,6 +53,8 @@ public:
   virtual void on_push(table_slice slice) = 0;
   virtual void on_push(chunk_ptr chunk) = 0;
   virtual auto serialize() -> chunk_ptr = 0;
+
+  // TODO: Have to override this sometimes?
   virtual void on_persist(checkpoint checkpoint) {
     auto forward_checkpoint = [this, checkpoint] {
       persist(checkpoint);
@@ -60,7 +63,7 @@ public:
     if (result and result->size() > 0) {
       self_->mail(checkpoint, std::move(result))
         .request(connect_.checkpoint_receiver, caf::infinite)
-        .then(forward_checkpoint);
+        .then(forward_checkpoint, TENZIR_REPORT);
     } else {
       forward_checkpoint();
     }
@@ -137,11 +140,7 @@ public:
     if (not upstream_finished_) {
       self_->mail(atom::stop_v)
         .request(connect_.upstream, caf::infinite)
-        .then([] {},
-              [](caf::error) {
-                TENZIR_WARN("??");
-                TENZIR_TODO();
-              });
+        .then([] {}, TENZIR_REPORT);
       upstream_finished_ = true;
     }
   }
@@ -150,11 +149,7 @@ public:
     if (not downstream_finished_) {
       self_->mail(atom::done_v)
         .request(connect_.downstream, caf::infinite)
-        .then([] {},
-              [](caf::error) {
-                TENZIR_WARN("??");
-                TENZIR_TODO();
-              });
+        .then([] {}, TENZIR_REPORT);
       downstream_finished_ = true;
     }
   }
@@ -169,11 +164,7 @@ public:
     if (not sent_shutdown_) {
       self_->mail(atom::shutdown_v)
         .request(connect_.shutdown, caf::infinite)
-        .then([] {},
-              [](caf::error) {
-                TENZIR_WARN("??");
-                TENZIR_TODO();
-              });
+        .then([] {}, TENZIR_REPORT);
       sent_shutdown_ = true;
     }
   }
@@ -181,41 +172,25 @@ public:
   void push(table_slice slice) {
     self_->mail(atom::push_v, payload{std::move(slice)})
       .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
+      .then([] {}, TENZIR_REPORT);
   }
 
   void push(chunk_ptr chunk) {
     self_->mail(atom::push_v, payload{std::move(chunk)})
       .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
+      .then([] {}, TENZIR_REPORT);
   }
 
   void persist(checkpoint checkpoint) {
     self_->mail(atom::persist_v, checkpoint)
       .request(connect_.downstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
+      .then([] {}, TENZIR_REPORT);
   }
 
   void pull(size_t items) {
     self_->mail(atom::pull_v, items)
       .request(connect_.upstream, caf::infinite)
-      .then([] {},
-            [](caf::error) {
-              TENZIR_WARN("??");
-              TENZIR_TODO();
-            });
+      .then([] {}, TENZIR_REPORT);
   }
 
 protected:
