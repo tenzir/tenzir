@@ -13,9 +13,5 @@
 
 namespace tenzir {
 
-template <class From, class To, class... Opts>
-concept convertible = requires(From from, To to, Opts&&... opts) {
-  convert(from, to, std::forward<Opts>(opts)...);
-};
 
 } // namespace tenzir

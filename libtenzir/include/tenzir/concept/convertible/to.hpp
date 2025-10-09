@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/concept/convertible/is_convertible.hpp"
+#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/concepts.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
@@ -25,19 +25,21 @@ namespace tenzir {
 /// @param from The instance to convert.
 /// @returns *from* converted to `T`.
 template <class To, class From, class... Opts>
-  requires(convertible<std::decay_t<From>, To, Opts...>)
+  requires(convertible<std::remove_cvref_t<From>, To, Opts...>)
 auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
   using return_type
     = decltype(convert(from, std::declval<To&>(), std::forward<Opts>(opts)...));
   if constexpr (std::is_same_v<return_type, bool>) {
     caf::expected<To> result{To()};
-    if (convert(from, *result, std::forward<Opts>(opts)...))
+    if (convert(from, *result, std::forward<Opts>(opts)...)) {
       return result;
+    }
     return caf::make_error(ec::convert_error);
   } else if constexpr (std::is_same_v<return_type, caf::error>) {
     To result;
-    if (auto err = convert(from, result, std::forward<Opts>(opts)...))
+    if (auto err = convert(from, result, std::forward<Opts>(opts)...)) {
       return err;
+    }
     return result;
   } else {
     static_assert(detail::always_false_v<return_type>, "invalid return type");
@@ -45,11 +47,12 @@ auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
 }
 
 template <class To, class From, class... Opts>
-  requires(std::same_as<To, std::string>&& convertible<std::decay_t<From>, To>)
+  requires(std::same_as<To, std::string> && convertible<std::decay_t<From>, To>)
 auto to_string(From&& from, Opts&&... opts) -> To {
   std::string str;
-  if (convert(from, str, std::forward<Opts>(opts)...))
+  if (convert(from, str, std::forward<Opts>(opts)...)) {
     return str;
+  }
   return {}; // TODO: throw?
 }
 

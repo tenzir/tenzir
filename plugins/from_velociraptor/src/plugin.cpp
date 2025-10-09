@@ -11,6 +11,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <grpc/grpc.h>

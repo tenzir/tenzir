@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/connect_request.hpp"
@@ -45,7 +46,7 @@ namespace detail {
 auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
   auto timeout_value = get_or_duration(options, "tenzir.connection-timeout",
                                        defaults::node_connection_timeout);
-  if (!timeout_value) {
+  if (! timeout_value) {
     TENZIR_ERROR("client failed to read connection-timeout: {}",
                  timeout_value.error());
     return caf::timespan{defaults::node_connection_timeout};
@@ -61,12 +62,12 @@ auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint> {
   endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
-  if (!parsers::endpoint(endpoint_str, node_endpoint)) {
+  if (! parsers::endpoint(endpoint_str, node_endpoint)) {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
   }
   // Default to port 5158/tcp if none is set.
-  if (!node_endpoint.port) {
+  if (! node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
   }
   if (node_endpoint.port->type() == port_type::unknown) {
@@ -151,12 +152,12 @@ caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
   endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
-  if (!parsers::endpoint(endpoint_str, node_endpoint)) {
+  if (! parsers::endpoint(endpoint_str, node_endpoint)) {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
   }
   // Default to port 5158/tcp if none is set.
-  if (!node_endpoint.port) {
+  if (! node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
   }
   if (node_endpoint.port->type() == port_type::unknown) {
