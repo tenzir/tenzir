@@ -11,12 +11,17 @@
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/enum.hpp"
 
+#include <string>
+
 namespace tenzir {
 
-/// Entities are currently either rooted in the standard package, or in the
-/// config package. Once we support modules from user-defined packages, this
-/// closed enum should be opened up to allow referencing them.
-TENZIR_ENUM(entity_pkg, std, cfg);
+/// The package namespace in which an entity is looked up.
+///
+/// Historically this was a closed enum with values 'std' and 'cfg'. We now use
+/// strings to allow arbitrary package roots (e.g., packages::<id>).
+using entity_pkg = std::string;
+inline constexpr std::string_view entity_pkg_std = "std";
+inline constexpr std::string_view entity_pkg_cfg = "cfg";
 
 /// Models the available entity namespaces.
 TENZIR_ENUM(entity_ns, op, fn, mod);
@@ -39,7 +44,7 @@ public:
     return not segments_.empty();
   }
 
-  auto pkg() const -> entity_pkg {
+  auto pkg() const -> const entity_pkg& {
     TENZIR_ASSERT(resolved());
     return pkg_;
   }

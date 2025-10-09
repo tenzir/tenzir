@@ -33,8 +33,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   auto result = std::vector<token>{};
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
   // behavior. We should fix them or use something different here.
-  auto continue_ident = alnum | '_';
-  auto identifier = (alpha | '_') >> *continue_ident;
+  auto continue_ident = token::parsers::continue_ident;
+  auto identifier = token::parsers::identifier;
   auto digit_us = digit | '_';
   // Note that many parsers here are not strict, but very lenient instead. This
   // is so that we can tokenize even if the input is malformed, which produces

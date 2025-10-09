@@ -114,7 +114,10 @@ public:
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.
     auto pkg = std::invoke([&]() -> std::optional<entity_pkg> {
-      for (auto pkg : {entity_pkg::cfg, entity_pkg::std}) {
+      // Resolution precedence: cfg (user overrides) -> std (builtins) ->
+      // packages (installed)
+      for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
+                       std::string{"packages"}}) {
         auto path = entity_path{pkg, {x.path[0].name}, first_ns};
         if (is<entity_ref>(reg_.try_get(path))) {
           return pkg;

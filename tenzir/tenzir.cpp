@@ -411,8 +411,6 @@ auto main(int argc, char** argv) -> int try {
           dh->emit(std::move(diag));
         }
         resolved.push_back(udo.first);
-        global_registry_mut().add(entity_pkg::cfg, udo.first,
-                                  user_defined_operator{std::move(udo.second)});
       }
       if (resolved.empty()) {
         for (auto& diag : unresolved_diags) {
@@ -421,6 +419,23 @@ auto main(int argc, char** argv) -> int try {
         TENZIR_ERROR("failed to resolve user-defined operators: `{}`",
                      fmt::join(udos | std::ranges::views::keys, "`, `"));
         return EXIT_FAILURE;
+      }
+      {
+        auto to_add = std::vector<std::pair<std::string, ast::pipeline>>{};
+        to_add.reserve(resolved.size());
+        for (const auto& name : resolved) {
+          auto it = udos.find(name);
+          TENZIR_ASSERT(it != udos.end());
+          to_add.emplace_back(it->first, std::move(it->second));
+        }
+        auto guard = begin_registry_update();
+        auto base = guard.current();
+        auto next = base->clone();
+        for (auto& [name, def] : to_add) {
+          next->add(std::string{entity_pkg_cfg}, name,
+                    user_defined_operator{std::move(def)});
+        }
+        guard.publish(std::shared_ptr<const registry>{std::move(next)});
       }
       for (const auto& name : std::exchange(resolved, {})) {
         udos.erase(name);

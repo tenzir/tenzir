@@ -13,7 +13,7 @@
 namespace tenzir {
 
 auto session_provider::make(diagnostic_handler& dh) -> session_provider {
-  return session_provider{dh};
+  return session_provider{dh, global_registry()};
 }
 
 auto session_provider::as_session() & -> session {
@@ -31,7 +31,9 @@ void session_provider::diagnostic_ctx::emit(diagnostic d) {
   dh_.emit(d);
 }
 
-session_provider::session_provider(diagnostic_handler& dh) : dh_{dh} {
+session_provider::session_provider(diagnostic_handler& dh,
+                                   std::shared_ptr<const registry> reg)
+  : dh_{dh}, reg_{std::move(reg)} {
 }
 
 session::session(session_provider& provider) : provider_{provider} {
@@ -46,8 +48,7 @@ auto session::has_failure() const -> bool {
 }
 
 auto session::reg() -> const registry& {
-  // TODO: The registry should be attached to a session instead.
-  return global_registry();
+  return *provider_.reg_;
 }
 
 auto session::dh() -> diagnostic_handler& {

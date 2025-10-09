@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
@@ -45,6 +46,12 @@ TENZIR_ENUM(
 auto describe(token_kind k) -> std::string_view;
 
 struct token {
+  struct parsers {
+    static constexpr const auto continue_ident = tenzir::parsers::alnum | '_';
+    static constexpr const auto identifier
+      = (tenzir::parsers::alpha | '_') >> *continue_ident;
+  };
+
   token(token_kind kind, size_t end) : kind{kind}, end{end} {
   }
 

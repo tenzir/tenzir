@@ -9,10 +9,14 @@
 #include "tenzir/tql2/registry.hpp"
 
 #include "tenzir/ir.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/exec.hpp"
 
+#include <cstdlib>
+#include <memory>
 #include <ranges>
+#include <shared_mutex>
 
 namespace tenzir {
 
@@ -69,63 +73,77 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
     });
 }
 
-thread_local const registry* g_thread_local_registry = nullptr;
+namespace {
 
-auto thread_local_registry() -> const registry* {
-  return g_thread_local_registry;
-}
-
-void set_thread_local_registry(const registry* reg) {
-  g_thread_local_registry = reg;
-}
-
-auto global_registry_mut() -> registry& {
-  static auto reg = std::invoke([] {
-    auto reg = registry{};
-    for (auto op : plugins::get<operator_factory_plugin>()) {
+auto global_registry_ref() -> std::shared_ptr<const registry>& {
+  static auto reg = std::invoke([&] -> std::shared_ptr<const registry> {
+    auto init = std::make_shared<registry>();
+    for (const auto* op : plugins::get<operator_factory_plugin>()) {
       auto name = op->name();
-      // TODO: We prefixed some operators with "tql2." to prevent name clashes
-      // with the legacy operators. We should get rid of this eventually.
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      reg.add(entity_pkg::std, name, native_operator{nullptr, op});
+      init->add(std::string{entity_pkg_std}, name,
+                native_operator{nullptr, op});
     }
-    for (auto op : plugins::get<operator_compiler_plugin>()) {
+    for (const auto* op : plugins::get<operator_compiler_plugin>()) {
       auto name = op->operator_name();
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      reg.add(entity_pkg::std, name, native_operator{op, nullptr});
+      init->add(std::string{entity_pkg_std}, name,
+                native_operator{op, nullptr});
     }
-    for (auto fn : plugins::get<function_plugin>()) {
+    for (const auto* fn : plugins::get<function_plugin>()) {
       auto name = fn->function_name();
-      // TODO: Same here.
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      reg.add(entity_pkg::std, name, std::ref(*fn));
+      init->add(std::string{entity_pkg_std}, name, std::ref(*fn));
     }
-    return reg;
+    return init;
   });
   return reg;
 }
 
-auto global_registry() -> const registry& {
-  return global_registry_mut();
+auto global_registry_mutex() -> std::shared_mutex& {
+  static std::shared_mutex mtx;
+  return mtx;
+}
+
+} // namespace
+
+auto global_registry() -> std::shared_ptr<const registry> {
+  auto lock = std::shared_lock{global_registry_mutex()};
+  auto& reg = global_registry_ref();
+  return reg;
+}
+
+auto begin_registry_update() -> registry_update_guard {
+  return registry_update_guard{std::unique_lock{global_registry_mutex()}};
+}
+
+auto registry_update_guard::current() const -> std::shared_ptr<const registry> {
+  // Go through the private accessor because we already hold a lock.
+  return global_registry_ref();
+}
+
+void registry_update_guard::publish(
+  std::shared_ptr<const registry>&& next) const {
+  global_registry_ref() = std::move(next);
 }
 
 auto registry::get(const ast::function_call& call) const
   -> const function_plugin& {
   auto def = get(call.fn.ref);
-  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&def);
+  auto* fn = std::get_if<std::reference_wrapper<const function_plugin>>(&def);
   TENZIR_ASSERT(fn);
   return *fn;
 }
 
 auto registry::get(const ast::invocation& inv) const -> const operator_def& {
   auto def = get(inv.op.ref);
-  auto op = std::get_if<std::reference_wrapper<const operator_def>>(&def);
+  auto* op = std::get_if<std::reference_wrapper<const operator_def>>(&def);
   TENZIR_ASSERT(op);
   return *op;
 }
@@ -133,15 +151,21 @@ auto registry::get(const ast::invocation& inv) const -> const operator_def& {
 auto registry::try_get(const entity_path& path) const
   -> variant<entity_ref, error> {
   TENZIR_ASSERT(path.resolved());
-  auto current = &root(path.pkg());
+  const auto* current = &root(path.pkg());
   auto&& segments = path.segments();
   for (auto i = size_t{0}; i < segments.size(); ++i) {
     auto it = current->defs.find(segments[i]);
     if (it == current->defs.end()) {
+      if (i == 0) {
+        TENZIR_DEBUG("registry.try_get: root '{}' missing first segment '{}' "
+                     "in ns {}. entries=[{}]",
+                     path.pkg(), segments[i], path.ns(),
+                     fmt::join(std::views::keys(current->defs), ", "));
+      }
       // No such entity.
       return error{i, false};
     }
-    auto& set = it->second;
+    const auto& set = it->second;
     if (i == segments.size() - 1) {
       // Failure here indicates that it has the wrong type.
       switch (path.ns()) {
@@ -191,21 +215,21 @@ auto registry::module_names() const -> std::vector<std::string> {
 }
 
 auto registry::entity_names(entity_ns ns) const -> std::vector<std::string> {
-  // TODO: This does not really return the reachable entity names if the names
-  // from `cfg_` shadow names from `std_`.
   auto result = std::vector<std::string>{};
-  gather_names(std_, ns, "", result);
-  gather_names(cfg_, ns, "", result);
+  for (const auto& [_, mod] : roots_) {
+    gather_names(mod, ns, "", result);
+  }
   std::ranges::sort(result);
   return result;
 }
 
-void registry::add(entity_pkg package, std::string_view name, entity_def def) {
+void registry::add(const entity_pkg& package, std::string_view name,
+                   entity_def def) {
   TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
   TENZIR_ASSERT(not path.empty());
   // Find the correct module first.
-  auto mod = &root(package);
+  auto* mod = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
       break;
@@ -232,9 +256,9 @@ void registry::add(entity_pkg package, std::string_view name, entity_def def) {
         set.op = std::move(def);
         return;
       }
-      auto existing = try_as<native_operator>(set.op->inner());
+      auto* existing = try_as<native_operator>(set.op->inner());
       TENZIR_ASSERT(existing);
-      auto incoming = try_as<native_operator>(def.inner());
+      auto* incoming = try_as<native_operator>(def.inner());
       TENZIR_ASSERT(incoming);
       if (incoming->factory_plugin) {
         TENZIR_ASSERT(not existing->factory_plugin);
@@ -247,21 +271,109 @@ void registry::add(entity_pkg package, std::string_view name, entity_def def) {
     });
 }
 
-auto registry::root(entity_pkg package) -> module_def& {
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-  return const_cast<module_def&>(std::as_const(*this).root(package));
+void registry::add_module(const entity_pkg& package, std::string_view name,
+                          std::unique_ptr<module_def> mod) {
+  TENZIR_ASSERT(! name.empty());
+  auto path = detail::split(name, "::");
+  TENZIR_ASSERT(! path.empty());
+  // Find or create parent module.
+  auto* parent = &root(package);
+  for (auto& segment : path) {
+    if (&segment == &path.back()) {
+      break;
+    }
+    auto& set = parent->defs[std::string{segment}];
+    if (not set.mod) {
+      set.mod = std::make_unique<module_def>();
+    }
+    parent = set.mod.get();
+  }
+  auto& set = parent->defs[std::string{path.back()}];
+  TENZIR_ASSERT(! set.mod && "module already exists at path");
+  set.mod = std::move(mod);
 }
 
-auto registry::root(entity_pkg package) const -> const module_def& {
-  return std::invoke([&]() -> const module_def& {
-    switch (package) {
-      case entity_pkg::std:
-        return std_;
-      case entity_pkg::cfg:
-        return cfg_;
+void registry::replace_module(const entity_pkg& package, std::string_view name,
+                              std::unique_ptr<module_def> mod) {
+  TENZIR_ASSERT(! name.empty());
+  auto path = detail::split(name, "::");
+  TENZIR_ASSERT(! path.empty());
+  auto* parent = &root(package);
+  for (auto& segment : path) {
+    if (&segment == &path.back()) {
+      break;
     }
-    TENZIR_UNREACHABLE();
-  });
+    auto& set = parent->defs[std::string{segment}];
+    if (not set.mod) {
+      set.mod = std::make_unique<module_def>();
+    }
+    parent = set.mod.get();
+  }
+  auto& set = parent->defs[std::string{path.back()}];
+  set.mod = std::move(mod);
+}
+
+void registry::remove_module(const entity_pkg& package, std::string_view name) {
+  TENZIR_ASSERT(! name.empty());
+  auto path = detail::split(name, "::");
+  TENZIR_ASSERT(! path.empty());
+  auto* parent = &root(package);
+  for (auto& segment : path) {
+    if (&segment == &path.back()) {
+      break;
+    }
+    auto it = parent->defs.find(std::string{segment});
+    if (it == parent->defs.end() || ! it->second.mod) {
+      // Nothing to remove; path does not exist.
+      return;
+    }
+    parent = it->second.mod.get();
+  }
+  auto it = parent->defs.find(std::string{path.back()});
+  if (it == parent->defs.end()) {
+    return;
+  }
+  it->second.mod.reset();
+  if (! it->second.fn && ! it->second.op && ! it->second.mod) {
+    parent->defs.erase(it);
+  }
+}
+
+namespace {
+auto clone_module(const module_def& src) -> std::unique_ptr<module_def> {
+  auto out = std::make_unique<module_def>();
+  for (const auto& [k, v] : src.defs) {
+    entity_set set{};
+    set.fn = v.fn;
+    set.op = v.op; // deep copy of optional operator_def
+    if (v.mod) {
+      set.mod = clone_module(*v.mod);
+    }
+    out->defs.emplace(k, std::move(set));
+  }
+  return out;
+}
+} // namespace
+
+auto registry::clone() const -> std::unique_ptr<registry> {
+  auto out = std::make_unique<registry>();
+  for (const auto& [name, mod] : roots_) {
+    auto cloned = clone_module(mod);
+    out->roots_.emplace(name, std::move(*cloned));
+  }
+  return out;
+}
+
+auto registry::root(const entity_pkg& package) -> module_def& {
+  return roots_[package];
+}
+
+auto registry::root(const entity_pkg& package) const -> const module_def& {
+  if (auto it = roots_.find(package); it != roots_.end()) {
+    return it->second;
+  }
+  static const module_def empty;
+  return empty;
 }
 
 } // namespace tenzir

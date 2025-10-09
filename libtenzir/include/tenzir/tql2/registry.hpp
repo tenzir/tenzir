@@ -9,8 +9,10 @@
 #pragma once
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
-#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/tql2/plugin.hpp"
+
+#include <memory>
+#include <shared_mutex>
 
 namespace tenzir {
 
@@ -120,40 +122,72 @@ public:
   auto function_names() const -> std::vector<std::string>;
   auto module_names() const -> std::vector<std::string>;
 
-  /// Register an entity. This should only be done on startup.
-  void add(entity_pkg package, std::string_view name, entity_def def);
+  /// Register an entity. This should only be done on startup or when
+  /// constructing a new snapshot of the registry.
+  void add(const entity_pkg& package, std::string_view name, entity_def def);
+
+  /// Create a deep copy of this registry. Used for snapshot-style updates.
+  auto clone() const -> std::unique_ptr<registry>;
+
+  /// Add a module definition at the given path, creating parent modules as
+  /// necessary. Fails with an assertion if a module already exists there.
+  void add_module(const entity_pkg& package, std::string_view path,
+                  std::unique_ptr<module_def> mod);
+
+  /// Replace (or create) a module definition at the given path, creating
+  /// parent modules as necessary.
+  void replace_module(const entity_pkg& package, std::string_view path,
+                      std::unique_ptr<module_def> mod);
+
+  /// Remove the module at the given path. Parent modules are left intact. If
+  /// the name entry becomes empty (no fn/op/mod), it is erased.
+  void remove_module(const entity_pkg& package, std::string_view path);
 
 private:
   /// Get the root module for the given package.
-  auto root(entity_pkg package) -> module_def&;
-  auto root(entity_pkg package) const -> const module_def&;
-
-  module_def std_;
-  module_def cfg_;
+  auto root(const entity_pkg& package) -> module_def&;
+  auto root(const entity_pkg& package) const -> const module_def&;
+  std::unordered_map<std::string, module_def, detail::heterogeneous_string_hash,
+                     std::equal_to<>>
+    roots_;
 };
 
 // TODO: This should be attached to the `session` object. However, because we
 // are still in the process of upgrading everything, we cannot consistently pass
 // this around.
-auto global_registry() -> const registry&;
+/// Return the current global registry snapshot.
+auto global_registry() -> std::shared_ptr<const registry>;
 
-/// Obtain a mutable reference to the global registry.
-///
-/// This may only be used if nothing else accesses the registry concurrently.
-auto global_registry_mut() -> registry&;
+// Note: Mutable access to a global registry is intentionally not exposed
+// anymore; use clone() and publish via a swap in higher-level control flows.
 
-auto thread_local_registry() -> const registry*;
+/// RAII guard to serialize a full clone->update->publish cycle.
+class registry_update_guard {
+public:
+  registry_update_guard(const registry_update_guard&) = delete;
+  auto operator=(const registry_update_guard&)
+    -> registry_update_guard& = delete;
+  registry_update_guard(registry_update_guard&&) noexcept = default;
+  auto operator=(registry_update_guard&&) noexcept
+    -> registry_update_guard& = default;
+  ~registry_update_guard() = default;
 
-void set_thread_local_registry(const registry* reg);
+  /// Return the current global registry snapshot while holding the lock.
+  auto current() const -> std::shared_ptr<const registry>;
 
-template <class F>
-auto with_thread_local_registry(const registry& reg, F&& f) -> decltype(auto) {
-  auto prev = thread_local_registry();
-  set_thread_local_registry(&reg);
-  auto guard = detail::scope_guard{[&]() noexcept {
-    set_thread_local_registry(prev);
-  }};
-  return std::invoke(std::forward<F>(f));
-}
+  /// Publish a new global registry snapshot while holding the lock.
+  void publish(std::shared_ptr<const registry>&& next) const;
+
+private:
+  friend auto begin_registry_update() -> registry_update_guard;
+  explicit registry_update_guard(std::unique_lock<std::shared_mutex> lock)
+    : lock_{std::move(lock)} {
+  }
+
+  std::unique_lock<std::shared_mutex> lock_;
+};
+
+/// Acquire the registry update lock to perform clone->update->publish atomically.
+auto begin_registry_update() -> registry_update_guard;
 
 } // namespace tenzir

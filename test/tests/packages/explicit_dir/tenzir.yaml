@@ -1,0 +1,3 @@
+tenzir:
+  package-dirs:
+    - inputs/package-roots/basic/basicpkg

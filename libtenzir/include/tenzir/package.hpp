@@ -15,15 +15,17 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/view.hpp>
 
+#include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tenzir {
 
 struct package_source final {
-  std::string repository = {};
-  std::string directory = {};
-  std::string revision = {};
+  std::string repository;
+  std::string directory;
+  std::string revision;
 
   auto to_record() const -> record;
 
@@ -39,11 +41,11 @@ struct package_source final {
 };
 
 struct package_config final {
-  std::optional<package_source> source = {};
-  std::optional<std::string> version = {};
-  detail::flat_map<std::string, std::string> inputs = {};
-  record metadata = {};  // opaque extra data that can be set at install time
-  record overrides = {}; // overrides for fields in the package definition
+  std::optional<package_source> source;
+  std::optional<std::string> version;
+  detail::flat_map<std::string, std::string> inputs;
+  record metadata;  // opaque extra data that can be set at install time
+  record overrides; // overrides for fields in the package definition
 
   bool disabled = {};
 
@@ -62,10 +64,10 @@ struct package_config final {
 };
 
 struct package_input final {
-  std::string name = {}; // required to be non-empty
-  std::string type = {}; // required to be non-empty
-  std::optional<std::string> description = {};
-  std::optional<std::string> default_ = {};
+  std::string name; // required to be non-empty
+  std::string type; // required to be non-empty
+  std::optional<std::string> description;
+  std::optional<std::string> default_;
 
   auto to_record() const -> record;
 
@@ -76,6 +78,24 @@ struct package_input final {
       .pretty_name("package_input")
       .fields(f.field("name", x.name), f.field("description", x.description),
               f.field("type", x.type), f.field("default", x.default_));
+  }
+};
+
+struct package_operator final {
+  std::optional<std::string> description;
+  std::string definition; // required to be non-empty
+
+  auto to_record() const -> record;
+
+  static auto parse(const view<record>& data)
+    -> caf::expected<package_operator>;
+  static auto parse(std::string_view input) -> caf::expected<package_operator>;
+
+  friend auto inspect(auto& f, package_operator& x) -> bool {
+    return f.object(x)
+      .pretty_name("package_pipeline")
+      .fields(f.field("description", x.description),
+              f.field("definition", x.definition));
   }
 };
 
@@ -108,7 +128,7 @@ struct package_pipeline final {
 struct package_context final {
   std::string type
     = "string"; // A type hint for the frontend, ignored by the node.
-  std::optional<std::string> description = {};
+  std::optional<std::string> description;
   context_parameter_map arguments = {};
   bool disabled = false;
 
@@ -149,6 +169,12 @@ struct package_inputs_map
   using super::super;
 };
 
+struct package_operators_map
+  : public detail::flat_map<std::vector<std::string>, package_operator> {
+  using super = detail::flat_map<std::vector<std::string>, package_operator>;
+  using super::super;
+};
+
 struct package_pipelines_map
   : public detail::flat_map<std::string, package_pipeline> {
   using super = detail::flat_map<std::string, package_pipeline>;
@@ -164,15 +190,16 @@ struct package_contexts_map
 using package_examples_list = std::vector<package_example>;
 
 struct package final {
-  std::string id = {};   // required to be non-empty
-  std::string name = {}; // required to be non-empty
-  std::optional<std::string> author = {};
-  std::optional<std::string> description = {};
-  std::optional<std::string> package_icon = {};
-  std::optional<std::string> author_icon = {};
-  std::vector<std::string> categories = {};
+  std::string id;   // required to be non-empty
+  std::string name; // required to be non-empty
+  std::optional<std::string> author;
+  std::optional<std::string> description;
+  std::optional<std::string> package_icon;
+  std::optional<std::string> author_icon;
+  std::vector<std::string> categories;
 
   package_inputs_map inputs;
+  package_operators_map operators;
   package_pipelines_map pipelines;
   package_contexts_map contexts;
   package_examples_list examples;
@@ -183,9 +210,12 @@ struct package final {
   // modifying the original package definition directly, by placing them next
   // to each other in a directory, or by including an `overrides` section in
   // the input.
-  std::optional<package_config> config = {};
+  std::optional<package_config> config;
 
   static auto parse(const view<record>& data) -> caf::expected<package>;
+
+  static auto load(const std::filesystem::path& dir, diagnostic_handler& dh,
+                   bool only_entities) -> failure_or<package>;
 
   auto to_record() const -> record;
 
@@ -196,9 +226,21 @@ struct package final {
       f.field("package_icon", x.package_icon),
       f.field("author_icon", x.author_icon),
       f.field("categories", x.categories), f.field("inputs", x.inputs),
-      f.field("pipelines", x.pipelines), f.field("contexts", x.contexts),
-      f.field("examples", x.examples), f.field("config", x.config));
+      f.field("operators", x.operators), f.field("pipelines", x.pipelines),
+      f.field("contexts", x.contexts), f.field("examples", x.examples),
+      f.field("config", x.config));
   }
 };
+
+} // namespace tenzir
+
+namespace tenzir {
+
+struct module_def;
+
+auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
+  -> failure_or<std::unique_ptr<module_def>>;
+
+auto package_module_name(std::string_view package_id) -> std::string;
 
 } // namespace tenzir

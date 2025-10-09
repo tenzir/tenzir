@@ -9,12 +9,14 @@
 #include "tenzir/tql2/exec.hpp"
 
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -28,12 +30,174 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
+#include <caf/config_value.hpp>
+#include <caf/settings.hpp>
 #include <tsl/robin_set.h>
 
+#include <filesystem>
+#include <map>
+#include <memory>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace tenzir {
 namespace {
+
+auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
+  -> failure_or<void> {
+  auto package_dirs = std::vector<std::filesystem::path>{};
+  for (const auto& dir : config_dirs(sys.config())) {
+    package_dirs.emplace_back(dir / "packages");
+  }
+  const auto& cfg = caf::content(sys.config());
+  if (const auto* value = caf::get_if(&cfg, "tenzir.package-dirs")) {
+    if (const auto* list = caf::get_if<caf::config_value::list>(value)) {
+      for (const auto& entry : *list) {
+        if (const auto* str = caf::get_if<std::string>(&entry)) {
+          package_dirs.emplace_back(*str);
+          continue;
+        }
+        diagnostic::error("entries in 'tenzir.package-dirs' must be strings")
+          .note("got value of type {}", entry.type_name())
+          .emit(dh);
+        return failure::promise();
+      }
+    } else {
+      diagnostic::error("'tenzir.package-dirs' must be a list of strings")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  auto packages_by_id = std::map<std::string, package>{};
+  auto had_errors = false;
+  auto processed_dirs = std::unordered_set<std::filesystem::path>{};
+  processed_dirs.reserve(package_dirs.size());
+  for (const auto& base_dir : package_dirs) {
+    if (not processed_dirs.insert(base_dir).second) {
+      continue;
+    }
+    auto ec = std::error_code{};
+    if (not std::filesystem::exists(base_dir, ec)) {
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while trying to access {}", base_dir)
+          .emit(dh);
+        had_errors = true;
+      }
+      continue;
+    }
+    if (not std::filesystem::is_directory(base_dir, ec)) {
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while checking status of {}", base_dir)
+          .emit(dh);
+        had_errors = true;
+      }
+      continue;
+    }
+    if (std::filesystem::exists(base_dir / "package.yaml", ec)) {
+      if (ec) {
+        diagnostic::error("{}", ec)
+          .note("while checking status of {}", base_dir / "package.yaml")
+          .emit(dh);
+        had_errors = true;
+      }
+      auto pkg = package::load(base_dir, dh, true);
+      if (not pkg) {
+        had_errors = true;
+        continue;
+      }
+      auto id = pkg->id;
+      packages_by_id.insert_or_assign(id, std::move(*pkg));
+      continue;
+    }
+    auto try_process_package = [&](const std::filesystem::path& pkg_dir) {
+      auto pkg = package::load(pkg_dir, dh, true);
+      if (not pkg) {
+        had_errors = true;
+        return true;
+      }
+      auto id = pkg->id;
+      packages_by_id.insert_or_assign(id, std::move(*pkg));
+      return true;
+    };
+    if (std::filesystem::exists(base_dir / "package.yaml")) {
+      try_process_package(base_dir);
+      continue;
+    }
+    auto dir_it = std::filesystem::directory_iterator{base_dir, ec};
+    if (ec) {
+      diagnostic::error("{}", ec)
+        .note("while enumerating packages in {}", base_dir)
+        .emit(dh);
+      had_errors = true;
+      continue;
+    }
+    for (const auto& entry : dir_it) {
+      auto entry_ec = std::error_code{};
+      if (not entry.is_directory(entry_ec)) {
+        if (entry_ec) {
+          diagnostic::error("{}", entry_ec)
+            .note("while checking status of {}", entry.path())
+            .emit(dh);
+          had_errors = true;
+        }
+        continue;
+      }
+      if (std::filesystem::exists(entry.path() / "package.yaml")) {
+        try_process_package(entry.path());
+      }
+    }
+  }
+  if (had_errors) {
+    return failure::promise();
+  }
+  auto normalized_to_id = std::unordered_map<std::string, std::string>{};
+  normalized_to_id.reserve(packages_by_id.size());
+  auto modules = std::vector<std::unique_ptr<module_def>>{};
+  modules.reserve(packages_by_id.size());
+  for (auto& [id, pkg] : packages_by_id) {
+    if (pkg.operators.empty()) {
+      continue;
+    }
+    auto normalized = package_module_name(pkg.id);
+    auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
+    if (not inserted && norm_it->second != pkg.id) {
+      diagnostic::error("package '{}' conflicts with '{}' after normalization "
+                        "to '{}'",
+                        pkg.id, norm_it->second, normalized)
+        .emit(dh);
+      had_errors = true;
+      continue;
+    }
+    auto module = build_package_operator_module(pkg, dh);
+    if (not module) {
+      had_errors = true;
+      continue;
+    }
+    if (not(*module)->defs.empty()) {
+      modules.emplace_back(std::move(*module));
+    }
+  }
+  if (had_errors) {
+    return failure::promise();
+  }
+  auto guard = begin_registry_update();
+  auto base = guard.current();
+  auto next = base->clone();
+  for (auto& module : modules) {
+    for (auto& [name, set] : module->defs) {
+      if (! set.mod) {
+        TENZIR_ASSERT(! set.fn && ! set.op);
+        continue;
+      }
+      next->replace_module(std::string{"packages"}, name, std::move(set.mod));
+    }
+  }
+  guard.publish(std::shared_ptr<const registry>{std::move(next)});
+  return {};
+}
 
 // TODO: This is a naive implementation and does not do scoping properly.
 class let_resolver : public ast::visitor<let_resolver> {
@@ -384,6 +548,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   TENZIR_UNUSED(sys);
   auto result = std::invoke([&]() -> failure_or<bool> {
+    TRY(load_packages_for_exec(dh, sys));
     auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source, ctx));
