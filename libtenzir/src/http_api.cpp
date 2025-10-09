@@ -110,6 +110,9 @@ auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
       }
       return xs;
     }
+    case simdjson::ondemand::json_type::unknown: {
+      return tenzir::data{"unknown json"};
+    }
   }
   TENZIR_UNREACHABLE();
 }

@@ -9,7 +9,7 @@
   };
 
   inputs.isReleaseBuild.url = "github:boolean-option/false";
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/80efaa12b886558fd0a674f5e11b550311045f90";
+  inputs.nixpkgs.url = "github:tobim/nixpkgs/11ffa81bffbcb0e71e77acacc7be74273aa131f4";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";

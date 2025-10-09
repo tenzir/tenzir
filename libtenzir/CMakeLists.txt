@@ -333,8 +333,8 @@ add_feature_info("TENZIR_ENABLE_BUNDLED_SIMDJSON"
 unset(_tenzir_bundled_simdjson)
 if (NOT TENZIR_ENABLE_BUNDLED_SIMDJSON)
   find_package(simdjson QUIET)
-  if (simdjson_FOUND AND simdjson_VERSION VERSION_LESS 3.1)
-    message(FATAL_ERROR "simdjson >= 3.1 required; found ${simdjson_VERSION}")
+  if (simdjson_FOUND AND simdjson_VERSION VERSION_LESS 4.0)
+    message(FATAL_ERROR "simdjson >= 4.0 required; found ${simdjson_VERSION}")
   endif ()
   dependency_summary("simdjson" simdjson::simdjson "Dependencies")
 endif ()
@@ -364,6 +364,9 @@ if (NOT simdjson_FOUND)
       CACHE BOOL "")
   set(SIMDJSON_ENABLE_DEVELOPER_MODE
       OFF
+      CACHE BOOL "")
+  set(SIMDJSON_SINGLEHEADER
+      ON
       CACHE BOOL "")
   add_subdirectory(aux/simdjson)
   set(_tenzir_bundled_simdjson "simdjson")

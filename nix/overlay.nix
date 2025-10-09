@@ -6,10 +6,11 @@ let
   callFunction = callFunctionWith finalPkgs;
 in
 {
+  protobuf = finalPkgs.protobuf_31;
+
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
   arrow-adbc-go = prevPkgs.callPackage ./arrow-adbc-go { };
-  azure-sdk-for-cpp = prevPkgs.callPackage ./azure-sdk-for-cpp { };
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
   fluent-bit = prevPkgs.callPackage ./fluent-bit { };
   pfs = prevPkgs.callPackage ./pfs { };

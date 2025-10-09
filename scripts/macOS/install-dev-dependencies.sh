@@ -31,7 +31,6 @@ brew install --overwrite \
   rabbitmq-c \
   reproc \
   rsync \
-  simdjson \
   socat \
   spdlog \
   tcpdump \
