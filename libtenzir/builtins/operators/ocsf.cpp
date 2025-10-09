@@ -10,15 +10,24 @@
 
 #include "tenzir/collect.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/generator.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
+#include "tenzir/operator_control_plane.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/replace_columns.hpp"
+#include "tenzir/series.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/value_path.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/type_fwd.h>
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
 
+#include <chrono>
 #include <limits>
 
 namespace tenzir::plugins::ocsf {
@@ -1243,10 +1252,10 @@ public:
       // - metadata.profiles
       // - class_uid
       // - metadata.extensions[].name
-      // Since we only support extensions that are served by the OCSF server for
-      // the corresponding version, we know that they have a non-conflicting
-      // name and there is no need to take their version into account (although
-      // we could check for consistency with the event).
+      // Since we only support extensions that are served by the OCSF server
+      // for the corresponding version, we know that they have a
+      // non-conflicting name and there is no need to take their version into
+      // account (although we could check for consistency with the event).
       auto begin = int64_t{0};
       auto end = begin;
       auto version = view_at(*version_array, begin);
@@ -1261,7 +1270,8 @@ public:
         }
         auto extension = schema->type.attribute("extension");
         if (extension and not extensions.contains(*extension)) {
-          diagnostic::warning("dropping event for class {:?} because extension "
+          diagnostic::warning("dropping event for class {:?} because "
+                              "extension "
                               "{:?} is not enabled",
                               schema->class_name, *extension)
             .primary(self_)
@@ -1313,6 +1323,132 @@ private:
   bool preserve_variants_{};
 };
 
+auto finalize(series input, const type& ty) -> series {
+  return match(
+    std::tie(input, ty),
+    [&](const basic_series<time_type>& input, const time_type&) -> series {
+      if (not ty.attribute("epochtime").has_value()) {
+        return input;
+      }
+      auto b = arrow::Int64Builder{};
+      check(b.Reserve(input.length()));
+      for (auto val : input.values()) {
+        b.UnsafeAppendOrNull(val.transform([](time x) {
+          return time_point_cast<std::chrono::milliseconds>(x)
+            .time_since_epoch()
+            .count();
+        }));
+      }
+      return series{int64_type{}, finish(b)};
+    },
+    [&](const basic_series<record_type>& input,
+        const record_type& ty) -> series {
+      auto input_fields = collect(input.fields());
+      for (auto& field : input_fields) {
+        if (auto subtype = ty.field(field.name)) {
+          field.data = finalize(field.data, *subtype);
+        }
+      }
+      return make_record_series(input_fields, *input.array);
+    },
+    [&](const basic_series<list_type>& input, const list_type& ty) -> series {
+      auto values = finalize(
+        series{
+          input.type.value_type(),
+          input.array->values(),
+        },
+        ty.value_type());
+      return make_list_series(values, *input.array);
+    },
+    [&]<class T>(const basic_series<T>& input, const T&) -> series {
+      return input;
+    },
+    [&](const auto&, const auto&) -> series {
+      TENZIR_UNREACHABLE();
+    });
+}
+
+auto finalize(const table_slice& input, const type& ty) -> table_slice {
+  auto result = finalize(series{input}, ty);
+  auto result_type = type{input.schema().name(), result.type};
+  auto arrow_schema = result_type.to_arrow_schema();
+  return table_slice{
+    arrow::RecordBatch::Make(std::move(arrow_schema), result.length(),
+                             as<arrow::StructArray>(*result.array).fields()),
+    std::move(result_type),
+  };
+}
+
+class finalize_operator final : public crtp_operator<finalize_operator> {
+public:
+  finalize_operator() = default;
+
+  finalize_operator(tenzir::location self) : self_{self} {
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      // Get the required columns `metadata.version` and `class_uid`.
+      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
+      if (not metadata) {
+        co_yield {};
+        continue;
+      }
+      auto& version_array = metadata->version_array;
+      auto& class_array = metadata->class_array;
+      // Figure out longest slices that share:
+      // - metadata.version
+      // - class_uid
+      auto begin = int64_t{0};
+      auto end = begin;
+      auto version = view_at(*version_array, begin);
+      auto class_uid = view_at(*class_array, begin);
+      auto process = [&]() -> table_slice {
+        auto schema
+          = get_ocsf_schema(version, class_uid, self_, ctrl.diagnostics());
+        if (not schema) {
+          return {};
+        }
+        return finalize(slice, schema->type);
+      };
+      for (; end < class_array->length(); ++end) {
+        auto next_version = view_at(*version_array, end);
+        auto next_class_uid = view_at(*class_array, end);
+        if (next_version == version and next_class_uid == class_uid) {
+          continue;
+        }
+        co_yield process();
+        begin = end;
+        version = next_version;
+        class_uid = next_class_uid;
+      }
+      co_yield process();
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "ocsf::finalize";
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, finalize_operator& x) -> bool {
+    return f.apply(x.self_);
+  }
+
+private:
+  tenzir::location self_;
+};
+
 class apply_plugin final : public operator_plugin2<apply_operator> {
 public:
   auto make(invocation inv, session ctx) const
@@ -1331,8 +1467,8 @@ class trim_plugin final : public operator_plugin2<trim_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    // TODO: Consider using a more intelligent default that is not simply based
-    // on attributes being optional.
+    // TODO: Consider using a more intelligent default that is not simply
+    // based on attributes being optional.
     auto drop_optional = true;
     auto drop_recommended = false;
     argument_parser2::operator_(name())
@@ -1354,9 +1490,19 @@ public:
   }
 };
 
+class finalize_plugin final : public operator_plugin2<finalize_operator> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<finalize_operator>(inv.self.get_location());
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::ocsf
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::apply_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::finalize_plugin)
