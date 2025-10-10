@@ -182,6 +182,10 @@ tenzir:
   # its size.
   active-partition-timeout: 5min
 
+  # Maximum number of events across all active partitions. This indirectly
+  # controls the maximum memory usage when importing events.
+  max-buffered-events: 12Mi
+
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
   # disable.

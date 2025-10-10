@@ -1,0 +1,16 @@
+---
+fixtures:
+- node
+---
+
+// Tests whether multiple batches of smaller size are handled correctly.
+every 0.1s {
+  from {}
+}
+head 10
+enumerate x
+import
+
+export
+sort x
+write_lines

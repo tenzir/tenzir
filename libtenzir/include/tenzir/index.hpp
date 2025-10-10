@@ -80,8 +80,8 @@ struct active_partition_info {
   /// The partition actor.
   active_partition_actor actor = {};
 
-  /// The remaining free capacity of the partition.
-  size_t capacity = {};
+  /// The number of events in the partition.
+  size_t events = 0;
 
   /// The UUID of the partition.
   uuid id = {};
@@ -90,7 +90,7 @@ struct active_partition_info {
   friend auto inspect(Inspector& f, active_partition_info& x) {
     return f.object(x)
       .pretty_name("active_partition_info")
-      .fields(f.field("actor", x.actor), f.field("capacity", x.capacity),
+      .fields(f.field("actor", x.actor), f.field("events", x.events),
               f.field("id", x.id));
   }
 };
@@ -197,7 +197,7 @@ struct index_state {
   /// the index when the partition was decommissioned.
   /// @note This invalidates iterators to the *active_partitions* map.
   void decommission_active_partition(
-    const type& schema, std::function<void(const caf::error&)> completion);
+    type schema, std::function<void(const caf::error&)> completion);
 
   auto flush() -> caf::typed_response_promise<void>;
 
@@ -245,6 +245,12 @@ struct index_state {
 
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
+
+  /// The total number of events in active partitions.
+  size_t buffered_events = 0;
+
+  /// The maximum total number of events in active partitions.
+  size_t max_buffered_events = {};
 
   /// Timeout after which an active partition is forcibly flushed.
   duration active_partition_timeout = {};
@@ -355,9 +361,9 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, duration active_partition_timeout,
-      size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups,
-      const std::filesystem::path& catalog_dir, index_config);
+      size_t max_buffered_events, size_t partition_capacity,
+      duration active_partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      const std::filesystem::path& catalog_dir, index_config index_config);
 
 } // namespace tenzir
