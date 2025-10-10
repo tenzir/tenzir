@@ -39,7 +39,11 @@
 #include <caf/actor_system_config.hpp>
 #include <caf/settings.hpp>
 
+#include <algorithm>
 #include <filesystem>
+#include <iterator>
+#include <string_view>
+#include <system_error>
 
 #if __has_include(<boost/process/v1/child.hpp>)
 
@@ -125,7 +129,7 @@ private:
 };
 
 constexpr auto PYTHON_SCAFFOLD = R"_(
-from tenzir.tools.python_operator_executor import main
+from tenzir_operator.executor import main
 
 main()
 )_";
@@ -189,10 +193,47 @@ public:
       if (config_.implicit_requirements) {
         implicit_requirements = *config_.implicit_requirements;
       } else {
-        implicit_requirements = std::string{
-          detail::install_datadir() / "python"
-          / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
-                        version::major, version::minor, version::patch)};
+        const auto wheel_dir = detail::install_datadir() / "python";
+        const auto find_wheel
+          = [&](std::string_view project) -> std::optional<std::filesystem::path> {
+          auto normalized = std::string{project};
+          std::replace(normalized.begin(), normalized.end(), '-', '_');
+          const auto prefix = fmt::format("{}-", normalized);
+          const auto suffix = std::string{".whl"};
+          auto best_path = std::optional<std::filesystem::path>{};
+          auto best_name = std::string{};
+          std::error_code ec;
+          if (! std::filesystem::exists(wheel_dir, ec)) {
+            return std::nullopt;
+          }
+          for (const auto& entry : std::filesystem::directory_iterator{wheel_dir}) {
+            if (! entry.is_regular_file()) {
+              continue;
+            }
+            const auto filename = entry.path().filename().string();
+            if (! boost::algorithm::starts_with(filename, prefix)
+                || ! boost::algorithm::ends_with(filename, suffix)) {
+              continue;
+            }
+            if (! best_path || filename > best_name) {
+              best_name = filename;
+              best_path = entry.path();
+            }
+          }
+          return best_path;
+        };
+        const auto core_wheel = find_wheel("tenzir-core");
+        const auto operator_wheel = find_wheel("tenzir-operator");
+        if (! core_wheel || ! operator_wheel) {
+          diagnostic::error("failed to locate bundled Tenzir Python wheels")
+            .note("expected to find tenzir-core and tenzir-operator wheel files in {}",
+                  wheel_dir)
+            .note("ensure both wheels are produced via `uv build --wheel` before installing Tenzir")
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        implicit_requirements = fmt::format("{} {}", core_wheel->string(),
+                                             operator_wheel->string());
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};
       if (! config_.create_venvs) {
@@ -240,25 +281,25 @@ public:
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       auto maybe_venv = std::optional<std::filesystem::path>{};
-      auto venv_cleanup = [&] {
-        if (config_.create_venvs) {
-          TENZIR_ASSERT(venv_base_dir);
-          auto ec = std::error_code{};
-          std::filesystem::create_directories(*venv_base_dir, ec);
-          auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
-          if (mkdtemp(venv.data()) == nullptr) {
-            diagnostic::error("{}", detail::describe_errno())
-              .note("failed to create a unique directory for the python "
-                    "virtual environment in {}",
-                    *venv_base_dir)
-              .throw_();
-          }
-          auto venv_path = std::filesystem::path{venv};
-          maybe_venv = venv_path;
-          env["VIRTUAL_ENV"] = venv;
-          env["UV_CACHE_DIR"]
-            = (venv_base_dir->parent_path() / "cache" / "uv").string();
+      if (config_.create_venvs) {
+        TENZIR_ASSERT(venv_base_dir);
+        auto ec = std::error_code{};
+        std::filesystem::create_directories(*venv_base_dir, ec);
+        auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
+        if (mkdtemp(venv.data()) == nullptr) {
+          diagnostic::error("{}", detail::describe_errno())
+            .note("failed to create a unique directory for the python "
+                  "virtual environment in {}",
+                  *venv_base_dir)
+            .throw_();
         }
+        auto venv_path = std::filesystem::path{venv};
+        maybe_venv = venv_path;
+        env["VIRTUAL_ENV"] = venv;
+        env["UV_CACHE_DIR"]
+          = (venv_base_dir->parent_path() / "cache" / "uv").string();
+      }
+      auto venv_cleanup = [&] {
         return detail::scope_guard([maybe_venv]() noexcept {
           if (maybe_venv) {
             std::error_code ec;

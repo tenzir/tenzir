@@ -844,8 +844,7 @@ endif ()
 
 # -- python bindings ----------------------------------------------------------
 
-option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires uv)"
-       ON)
+option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires uv)" ON)
 add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
                  "build Python bindings (requires uv).")
 
@@ -862,14 +861,18 @@ add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
 
 if (TENZIR_ENABLE_PYTHON_BINDINGS)
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
+  set(TENZIR_PYTHON_CORE_WHEEL_DST
+      "${TENZIR_PYTHON_BINARY_DIR}/tenzir_core-${TENZIR_VERSION}-py3-none-any.whl"
+  )
+  set(TENZIR_PYTHON_OPERATOR_WHEEL_DST
+      "${TENZIR_PYTHON_BINARY_DIR}/tenzir_operator-${TENZIR_VERSION}-py3-none-any.whl"
+  )
   if (TENZIR_PYTHON_OPERATOR_WHEEL)
-    set(TENZIR_PYTHON_CORE_WHEEL_DST
-        "${TENZIR_PYTHON_BINARY_DIR}/tenzir_core-${TENZIR_VERSION}-py3-none-any.whl")
-    set(TENZIR_PYTHON_OPERATOR_WHEEL_DST
-        "${TENZIR_PYTHON_BINARY_DIR}/tenzir_operators-${TENZIR_VERSION}-py3-none-any.whl")
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir/python")
-    file(COPY_FILE "${TENZIR_PYTHON_CORE_WHEEL}" "${TENZIR_PYTHON_CORE_WHEEL_DST}")
-    file(COPY_FILE "${TENZIR_PYTHON_OPERATOR_WHEEL}" "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}")
+    file(MAKE_DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}")
+    file(COPY_FILE "${TENZIR_PYTHON_CORE_WHEEL}"
+         "${TENZIR_PYTHON_CORE_WHEEL_DST}")
+    file(COPY_FILE "${TENZIR_PYTHON_OPERATOR_WHEEL}"
+         "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}")
   else ()
     find_program(UV_PATH uv)
     if (NOT UV_PATH)
@@ -878,79 +881,90 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
           "Cannot find 'uv' in PATH, which is required for building Tenzir Python bindings"
       )
     endif ()
-    # Copy the Python workspace into the build tree so uv operates on a temporary
-    # directory and does not modify the source checkout.
-    set(TENZIR_PYTHON_WHEEL
-        "${TENZIR_PYTHON_BINARY_DIR}/tenzir_operators-${TENZIR_VERSION}-py3-none-any.whl")
-    file(
-      WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
-      "\
-      cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
-
-      file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/python)
-
-      file(
-        COPY ${CMAKE_CURRENT_SOURCE_DIR}/python/
-        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/python
-        REGEX \"/dist/\" EXCLUDE)
-      set(ENV{GIT_DIR} /dev/null)
-      set(ENV{UV_CACHE_DIR} ${CMAKE_BINARY_DIR}/uv-cache)
-      set(ENV{TENZIR_SKIP_NIX_BUILD} 1)
-      set(ENV{TENZIR_REPO_ROOT} ${CMAKE_SOURCE_DIR})
-      execute_process(
-        COMMAND ${UV_PATH} build --package tenzir-operators
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/python
-        COMMAND_ERROR_IS_FATAL ANY)
-      file(
-        GLOB _wheel
-        ${CMAKE_CURRENT_BINARY_DIR}/python/dist/tenzir_operators-*.whl)
-      if (NOT _wheel)
-        message(FATAL_ERROR \"uv build did not produce a tenzir_operators wheel\")
-      endif ()
-      list(GET _wheel 0 _selected_wheel)
-      file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/share/tenzir/python)
-      file(REMOVE ${TENZIR_PYTHON_WHEEL})
-      file(COPY_FILE \"\${_selected_wheel}\" ${TENZIR_PYTHON_WHEEL})")
-  
-  add_custom_command(
-      OUTPUT "${TENZIR_PYTHON_WHEEL}"
-      COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
-      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/python)
-    add_custom_target(tenzir-python-wheel DEPENDS "${TENZIR_PYTHON_WHEEL}")
-    install(
-      DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
-      DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
-      COMPONENT Runtime)
-    if (TENZIR_ENABLE_BUNDLED_UV)
-      set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
-      if (NOT TENZIR_UV_PATH)
-        file(READ "${CMAKE_CURRENT_LIST_DIR}/python/uv-source-info.json"
-             uv_source_info)
-        set(UV_SYSTEM_arm64_Darwin "aarch64-darwin")
-        set(UV_SYSTEM_aarch64_Linux "aarch64-linux")
-        set(UV_SYSTEM_x86_64_Darwin "x86_64-darwin")
-        set(UV_SYSTEM_x86_64_Linux "x86_64-linux")
-        string(
-          JSON uv_source GET "${uv_source_info}"
-          "${UV_SYSTEM_${CMAKE_HOST_SYSTEM_PROCESSOR}_${CMAKE_HOST_SYSTEM_NAME}}")
-        string(JSON uv_url GET "${uv_source}" url)
-        string(JSON uv_sha256 GET "${uv_source}" sha256)
-        get_filename_component(uv_stem "${uv_url}" NAME_WE)
-        file(DOWNLOAD "${uv_url}" "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz"
-             EXPECTED_HASH "SHA256=${uv_sha256}")
-        file(ARCHIVE_EXTRACT INPUT "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz"
-             DESTINATION "${CMAKE_CURRENT_BINARY_DIR}" VERBOSE)
-        set(TENZIR_UV_PATH "${CMAKE_CURRENT_BINARY_DIR}/${uv_stem}/uv")
-      endif ()
-      file(MAKE_DIRECTORY "${build_libexecdir}")
-      file(COPY_FILE "${TENZIR_UV_PATH}" "${build_libexecdir}/uv")
-      install(
-        PROGRAMS "${TENZIR_UV_PATH}"
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
-        COMPONENT Runtime)
-    else ()
-      set(TENZIR_UV_PATH "uv")
+    find_package(
+      Python3
+      COMPONENTS Interpreter
+      REQUIRED)
+    set(TENZIR_PYTHON_WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/python")
+    file(GLOB_RECURSE TENZIR_PYTHON_COMMON_DEPENDENCIES CONFIGURE_DEPENDS
+         "${TENZIR_PYTHON_WORKSPACE}/tenzir-common/*")
+    file(GLOB_RECURSE TENZIR_PYTHON_OPERATOR_DEPENDENCIES CONFIGURE_DEPENDS
+         "${TENZIR_PYTHON_WORKSPACE}/tenzir-operator/*")
+    set(TENZIR_PYTHON_WORKSPACE_DENPENDENCIES
+        "${TENZIR_PYTHON_WORKSPACE}/pyproject.toml"
+        "${TENZIR_PYTHON_WORKSPACE}/uv.lock"
+        "${TENZIR_PYTHON_WORKSPACE}/README.md"
+        "${TENZIR_PYTHON_WORKSPACE}/uv-source-info.json")
+    list(FILTER TENZIR_PYTHON_COMMON_DEPENDENCIES INCLUDE REGEX ".*")
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_CORE_WHEEL_DST}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "GIT_DIR=/dev/null"
+        "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache" "TENZIR_SKIP_NIX_BUILD=1"
+        "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}" "UV_PYTHON=${Python3_EXECUTABLE}"
+        "${UV_PATH}" build -q --wheel --package tenzir-core --out-dir
+        "${TENZIR_PYTHON_BINARY_DIR}"
+      WORKING_DIRECTORY "${TENZIR_PYTHON_WORKSPACE}"
+      DEPENDS ${TENZIR_PYTHON_WORKSPACE_DENPENDENCIES}
+              ${TENZIR_PYTHON_COMMON_DEPENDENCIES}
+              ${TENZIR_PYTHON_OPERATOR_DEPENDENCIES}
+      COMMENT "Building python operator wheels"
+      VERBATIM)
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "GIT_DIR=/dev/null"
+        "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache" "TENZIR_SKIP_NIX_BUILD=1"
+        "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}" "UV_PYTHON=${Python3_EXECUTABLE}"
+        "${UV_PATH}" build -q --wheel --package tenzir-operator --out-dir
+        "${TENZIR_PYTHON_BINARY_DIR}"
+      WORKING_DIRECTORY "${TENZIR_PYTHON_WORKSPACE}"
+      DEPENDS ${TENZIR_PYTHON_COMMON_DEPENDENCIES}
+              ${TENZIR_PYTHON_OPERATOR_DEPENDENCIES}
+      COMMENT "Building tenzir-operator wheel"
+      VERBATIM)
+    add_custom_target(tenzir-python-core-wheel
+                      DEPENDS "${TENZIR_PYTHON_CORE_WHEEL_DST}")
+    add_custom_target(tenzir-python-operator-wheel
+                      DEPENDS "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}")
+    add_custom_target(tenzir-python-wheel DEPENDS tenzir-python-core-wheel
+                                                  tenzir-python-operator-wheel)
+  endif ()
+  install(
+    DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
+    COMPONENT Runtime)
+  if (TENZIR_ENABLE_BUNDLED_UV)
+    set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
+    if (NOT TENZIR_UV_PATH)
+      file(READ "${CMAKE_CURRENT_LIST_DIR}/python/uv-source-info.json"
+           uv_source_info)
+      set(UV_SYSTEM_arm64_Darwin "aarch64-darwin")
+      set(UV_SYSTEM_aarch64_Linux "aarch64-linux")
+      set(UV_SYSTEM_x86_64_Darwin "x86_64-darwin")
+      set(UV_SYSTEM_x86_64_Linux "x86_64-linux")
+      string(
+        JSON uv_source GET "${uv_source_info}"
+        "${UV_SYSTEM_${CMAKE_HOST_SYSTEM_PROCESSOR}_${CMAKE_HOST_SYSTEM_NAME}}")
+      string(JSON uv_url GET "${uv_source}" url)
+      string(JSON uv_sha256 GET "${uv_source}" sha256)
+      get_filename_component(uv_stem "${uv_url}" NAME_WE)
+      file(DOWNLOAD "${uv_url}" "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz"
+           EXPECTED_HASH "SHA256=${uv_sha256}")
+      file(ARCHIVE_EXTRACT INPUT "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz"
+           DESTINATION "${CMAKE_CURRENT_BINARY_DIR}" VERBOSE)
+      set(TENZIR_UV_PATH "${CMAKE_CURRENT_BINARY_DIR}/${uv_stem}/uv")
     endif ()
+    file(MAKE_DIRECTORY "${build_libexecdir}")
+    file(COPY_FILE "${TENZIR_UV_PATH}" "${build_libexecdir}/uv")
+    install(
+      PROGRAMS "${TENZIR_UV_PATH}"
+      DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
+      COMPONENT Runtime)
+  else ()
+    set(TENZIR_UV_PATH "uv")
   endif ()
 endif ()
 
