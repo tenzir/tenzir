@@ -183,6 +183,9 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
     return self->spawn<caf::detached>(
       tenzir::index, filesystem, catalog, self->state().dir / "index",
       std::string{defaults::store_backend},
+      // By default, we allow the event count corresponding to 3 *full*
+      // partitions. Assuming 250 bytes for each event and a default partition
+      // size of 4Mi, this works out to be around ~3 GB maximum memory.
       get_or(settings, "tenzir.max-buffered-events",
              defaults::max_partition_size * 3),
       get_or(settings, "tenzir.max-partition-size",
