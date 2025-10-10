@@ -726,6 +726,10 @@ void index_state::handle_slice(table_slice x) {
     }
     active_partition = *part;
   }
+  total_events_in_active_partitions += x.rows();
+  if (total_events_in_active_partitions >= total_capacity) {
+    // FIND largest partitions and cycle it out.
+  }
   TENZIR_ASSERT(active_partition->second.actor);
   self->mail(x).send(active_partition->second.actor);
   if (active_partition->second.capacity == partition_capacity
@@ -796,6 +800,8 @@ void index_state::decommission_active_partition(
   const auto synopsis_path = partition_synopsis_path(id);
   TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
+  total_events_in_active_partitions
+    -= (partition_capacity - active_partition->second.capacity);
   self->mail(atom::persist_v, part_path, synopsis_path)
     .request(actor, caf::infinite)
     .then(
@@ -1065,9 +1071,9 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, duration active_partition_timeout,
-      size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups,
+      size_t total_capacity, size_t partition_capacity,
+      duration active_partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   TENZIR_TRACE("index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
@@ -1111,6 +1117,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().synopsisdir = catalog_dir;
   self->state().markersdir = dir / "markers";
   self->state().partition_capacity = partition_capacity;
+  self->state().total_capacity = total_capacity;
   self->state().active_partition_timeout = active_partition_timeout;
   self->state().taste_partitions = taste_partitions;
   self->state().inmem_partitions.factory().filesystem()

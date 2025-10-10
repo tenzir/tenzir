@@ -246,6 +246,9 @@ struct index_state {
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
+  size_t total_events_in_active_partitions = 0;
+  size_t total_capacity = 0;
+
   /// Timeout after which an active partition is forcibly flushed.
   duration active_partition_timeout = {};
 

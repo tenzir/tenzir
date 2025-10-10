@@ -183,6 +183,8 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
     return self->spawn<caf::detached>(
       tenzir::index, filesystem, catalog, self->state().dir / "index",
       std::string{defaults::store_backend},
+      get_or(settings, "tenzir.max-buffered-events",
+             defaults::max_partition_size * 10),
       get_or(settings, "tenzir.max-partition-size",
              defaults::max_partition_size),
       get_or(settings, "tenzir.active-partition-timeout",
