@@ -709,7 +709,7 @@ void index_state::handle_slice(table_slice x) {
       return;
     }
     active_partition = *part;
-  } else if (x.rows() > partition_capacity - active_partition->second.events) {
+  } else if (active_partition->second.events + x.rows() > partition_capacity) {
     TENZIR_TRACE("{} flushes active partition {} with {}/{} events due to {} "
                  "incoming events",
                  *self, schema, active_partition->second.events,
