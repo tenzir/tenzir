@@ -58,7 +58,7 @@ pkgs.mkShell (
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator
       # without needing to rebuild the wheel.
-      export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e $PWD/python"
+      export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="--no-deps -e $PWD/python/tenzir-common/ -e $PWD/python/tenzir-operator"
       # uv is provided in the nativeBuildInputs above.
       export TENZIR_ENABLE_BUNDLED_UV=OFF
       export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$PWD/python"
