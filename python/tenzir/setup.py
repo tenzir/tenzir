@@ -8,18 +8,27 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from setuptools import setup
+try:
+    import platform
+except ImportError:  # pragma: no cover - platform is part of stdlib
+    platform = None
+
+from setuptools import Distribution, setup
 from setuptools.command.build_py import build_py as _build_py
 from setuptools.command.sdist import sdist as _sdist
 from typing import override
+from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 DEFAULT_ATTR = "tenzir-static"
 ENV_SKIP = "TENZIR_SKIP_NIX_BUILD"
 ENV_ATTR = "TENZIR_NIX_ATTR"
 ENV_CMD = "TENZIR_NIX_BUILD_CMD"
+ENV_PLAT = "TENZIR_WHEEL_PLATFORM"
 PACKAGE_NAME = "tenzir"
 ASSET_DIRS = ("bin", "libexec", "share")
-PACKAGE_ROOT = Path(__file__).resolve().parent / "src" / PACKAGE_NAME
+REPO_DIR = Path(__file__).resolve().parent
+PACKAGE_ROOT = REPO_DIR / "src" / PACKAGE_NAME
+BUILD_DIR = REPO_DIR / "build"
 
 
 def _assets_present() -> bool:
@@ -35,6 +44,14 @@ def _run_nix() -> list[Path]:
     repo_root = (
         Path(repo_root_env) if repo_root_env else Path(__file__).resolve().parents[2]
     )
+    if not (repo_root / "flake.nix").is_file():
+        msg = (
+            "The staged source tree does not contain the Tenzir repository; "
+            "building wheels from the sdist is not supported. "
+            "Please run `uv build --wheel` from a repository checkout or set "
+            "TENZIR_REPO_ROOT to the project root."
+        )
+        raise RuntimeError(msg)
     attr = os.environ.get(ENV_ATTR, DEFAULT_ATTR)
     custom_cmd = os.environ.get(ENV_CMD)
 
@@ -107,6 +124,10 @@ def _cleanup(staged: list[Path]) -> None:
         shutil.rmtree(path, ignore_errors=True)
 
 
+def _cleanup_build_dir() -> None:
+    shutil.rmtree(BUILD_DIR, ignore_errors=True)
+
+
 class BuildPy(_build_py):
     @override
     def run(self) -> None:
@@ -122,13 +143,59 @@ class BuildPy(_build_py):
 class Sdist(_sdist):
     @override
     def run(self) -> None:
-        staged: list[Path] = []
-        if not _assets_present():
-            staged = _run_nix()
         try:
             super().run()
         finally:
-            _cleanup(staged)
+            _cleanup_build_dir()
 
 
-_ = setup(cmdclass={"build_py": BuildPy, "sdist": Sdist})
+class BinaryDistribution(Distribution):
+    """Distribution that forces a platform-specific wheel."""
+
+    @override
+    def has_ext_modules(self) -> bool:
+        return True
+
+
+class BdistWheel(_bdist_wheel):
+    """Emit platform-specific wheels and allow overriding the tag."""
+
+    @override
+    def finalize_options(self) -> None:
+        plat_override = os.environ.get(ENV_PLAT)
+        if plat_override:
+            self.plat_name = plat_override.replace("-", "_")
+            self.plat_name_supplied = True
+        elif platform:
+            machine = platform.machine().lower()
+            system = platform.system().lower()
+            if system == "linux" and machine in {"x86_64", "amd64"}:
+                self.plat_name = "linux_x86_64"
+            elif system == "linux" and machine in {"aarch64", "arm64"}:
+                self.plat_name = "linux_aarch64"
+            elif system == "darwin" and machine in {"arm64", "aarch64"}:
+                self.plat_name = "macosx_11_0_arm64"
+            elif system == "darwin" and machine in {"x86_64", "amd64"}:
+                self.plat_name = "macosx_10_9_x86_64"
+            if getattr(self, "plat_name", None):
+                self.plat_name_supplied = True
+        super().finalize_options()
+        self.root_is_pure = False
+
+    @override
+    def get_tag(self):
+        _, _, plat_name = super().get_tag()
+        return "py3", "none", plat_name
+
+    @override
+    def run(self) -> None:
+        try:
+            super().run()
+        finally:
+            _cleanup_build_dir()
+
+
+_ = setup(
+    distclass=BinaryDistribution,
+    cmdclass={"build_py": BuildPy, "sdist": Sdist, "bdist_wheel": BdistWheel},
+)
