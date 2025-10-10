@@ -37,7 +37,4 @@ constexpr id invalid_id = std::numeric_limits<id>::max();
 /// The largest possible event ID.
 constexpr id max_id = invalid_id - 1;
 
-/// The largest number of representable events.
-constexpr id max_events = max_id + 1;
-
 } // namespace tenzir

@@ -709,11 +709,11 @@ void index_state::handle_slice(table_slice x) {
       return;
     }
     active_partition = *part;
-  } else if (x.rows() > active_partition->second.capacity) {
-    TENZIR_TRACE("{} flushes active partition {} with {} rows and {}/{} events",
-                 *self, schema, x.rows(),
-                 partition_capacity - active_partition->second.capacity,
-                 partition_capacity);
+  } else if (x.rows() > partition_capacity - active_partition->second.events) {
+    TENZIR_TRACE("{} flushes active partition {} with {}/{} events due to {} "
+                 "incoming events",
+                 *self, schema, active_partition->second.events,
+                 partition_capacity, x.rows());
     decommission_active_partition(schema, {});
     flush_to_disk();
     auto part = create_active_partition(schema);
@@ -726,21 +726,38 @@ void index_state::handle_slice(table_slice x) {
     }
     active_partition = *part;
   }
-  total_events_in_active_partitions += x.rows();
-  if (total_events_in_active_partitions >= total_capacity) {
-    // FIND largest partitions and cycle it out.
-  }
   TENZIR_ASSERT(active_partition->second.actor);
+  buffered_events += x.rows();
+  active_partition->second.events += x.rows();
   self->mail(x).send(active_partition->second.actor);
-  if (active_partition->second.capacity == partition_capacity
-      && x.rows() > active_partition->second.capacity) {
-    TENZIR_WARN("{} got table slice with {} rows that exceeds the "
-                "default partition capacity of {} rows",
-                *self, x.rows(), partition_capacity);
-    active_partition->second.capacity = 0;
-  } else {
-    TENZIR_ASSERT(active_partition->second.capacity >= x.rows());
-    active_partition->second.capacity -= x.rows();
+  // Flush the partition that was written to if it exceeds the capacity. We
+  // already check above whether the write would exceed the capacity and then
+  // flush ahead of time, but this can still happen if the single table slice we
+  // just got already exceeds it.
+  if (active_partition->second.events >= partition_capacity) {
+    decommission_active_partition(schema, {});
+    flush_to_disk();
+  }
+  // When the total number of events in active partitions exceeds the configured
+  // limit, we flush the largest partition repeatedly until we are below it.
+  // Note that this might be suboptimal in some cases, for example if the limit
+  // is 1000, we have 9 partitions with 100 events, and the final partition is
+  // the only one being written to. We then always flush it, limiting it to 100
+  // events at a time. Another strategy to try here would be LRU, but that could
+  // potentially require flushing many smaller partitions before dropping below
+  // the limit.
+  while (buffered_events > max_buffered_events) {
+    TENZIR_ASSERT(not active_partitions.empty());
+    auto max = std::ranges::max_element(active_partitions, std::less<>{},
+                                        [](auto& entry) {
+                                          return entry.second.events;
+                                        });
+    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events due to "
+                   "{}/{} buffered events",
+                   *self, max->first, max->second.events, partition_capacity,
+                   buffered_events, max_buffered_events);
+    decommission_active_partition(max->first, {});
+    flush_to_disk();
   }
 }
 
@@ -758,7 +775,6 @@ index_state::create_active_partition(const type& schema) {
   active_partition->second.actor
     = self->spawn(::tenzir::active_partition, schema, id, filesystem,
                   index_opts, synopsis_opts, store_actor_plugin, taxonomies);
-  active_partition->second.capacity = partition_capacity;
   active_partition->second.id = id;
   detail::weak_run_delayed(self, active_partition_timeout, [schema, id, this] {
     const auto it = active_partitions.find(schema);
@@ -768,8 +784,8 @@ index_state::create_active_partition(const type& schema) {
     }
     TENZIR_TRACE("{} flushes active partition {} with {}/{} {} events "
                  "after {} timeout",
-                 *self, it->second.id, partition_capacity - it->second.capacity,
-                 partition_capacity, schema, data{active_partition_timeout});
+                 *self, it->second.id, it->second.events, partition_capacity,
+                 schema, data{active_partition_timeout});
     decommission_active_partition(schema, [this, schema,
                                            id](const caf::error& err) mutable {
       if (err) {
@@ -785,9 +801,13 @@ index_state::create_active_partition(const type& schema) {
 }
 
 void index_state::decommission_active_partition(
-  const type& schema, std::function<void(const caf::error&)> completion) {
+  type schema, std::function<void(const caf::error&)> completion) {
+  // We need to take `schema` by value here because it could be derived from the
+  // key in the map which we are now going to erase.
   const auto active_partition = active_partitions.find(schema);
   TENZIR_ASSERT(active_partition != active_partitions.end());
+  TENZIR_ASSERT(buffered_events >= active_partition->second.events);
+  buffered_events -= active_partition->second.events;
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
   const auto type = active_partition->first;
@@ -800,8 +820,6 @@ void index_state::decommission_active_partition(
   const auto synopsis_path = partition_synopsis_path(id);
   TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
-  total_events_in_active_partitions
-    -= (partition_capacity - active_partition->second.capacity);
   self->mail(atom::persist_v, part_path, synopsis_path)
     .request(actor, caf::infinite)
     .then(
@@ -1071,7 +1089,7 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
-      size_t total_capacity, size_t partition_capacity,
+      size_t max_buffered_events, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
@@ -1117,7 +1135,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().synopsisdir = catalog_dir;
   self->state().markersdir = dir / "markers";
   self->state().partition_capacity = partition_capacity;
-  self->state().total_capacity = total_capacity;
+  self->state().max_buffered_events = max_buffered_events;
   self->state().active_partition_timeout = active_partition_timeout;
   self->state().taste_partitions = taste_partitions;
   self->state().inmem_partitions.factory().filesystem()
