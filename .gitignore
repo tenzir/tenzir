@@ -33,6 +33,7 @@ venv/
 
 # Python build artifacts
 /python/dist
+/python/*/build
 
 # VScode built artifacts
 /.vscode/
