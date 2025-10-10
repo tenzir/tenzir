@@ -46,7 +46,11 @@ async def endpoint():
 async def tenzir_exec(endpoint, pipeline: str):
     logger.debug(f"> tenzir -e {endpoint} {pipeline}")
     exec_proc = await asyncio.create_subprocess_exec(
-        "tenzir", "-e", endpoint, pipeline, stderr=PIPE,
+        "tenzir",
+        "-e",
+        endpoint,
+        pipeline,
+        stderr=PIPE,
     )
     (_, exec_err) = await asyncio.wait_for(exec_proc.communicate(), 3)
     assert exec_proc.returncode == 0
