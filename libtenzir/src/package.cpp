@@ -10,6 +10,7 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/detail/string.hpp>
@@ -646,6 +647,25 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
     return failure::promise();
   }
   TRY(auto package_record, yaml_file_to_record(package_file, dh));
+  const auto id_provided = package_record.contains("id");
+  if (not id_provided) {
+    auto dir_name = dir.filename().string();
+    if (dir_name.empty()) {
+      diagnostic::error("cannot derive package id from directory without name")
+        .note("while loading package from {}", dir)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not is_valid_package_identifier(dir_name)) {
+      diagnostic::error("invalid package id '{}' derived from directory name",
+                        dir_name)
+        .note("directory {}", dir)
+        .note("package ids must match [A-Za-z_][A-Za-z0-9_-]*")
+        .emit(dh);
+      return failure::promise();
+    }
+    package_record.emplace(std::string{"id"}, data{std::move(dir_name)});
+  }
   if (only_entities) {
     package_record.erase("pipelines");
     package_record.erase("contexts");
@@ -663,11 +683,6 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                         "module name will be '{}'",
                         parsed_package->id,
                         package_module_name(parsed_package->id))
-      .emit(dh);
-  }
-  if (parsed_package->id != dir.filename()) {
-    diagnostic::warning("name mismatch: found package {} in directory {}/",
-                        parsed_package->id, dir)
       .emit(dh);
   }
   // Support storing the `config` part in a separate file in the same
