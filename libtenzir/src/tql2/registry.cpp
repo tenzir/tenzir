@@ -94,6 +94,30 @@ public:
     }
   }
 
+  void visit(ast::selector& selector) {
+    // Check if the selector is a field_path containing a dollar_var
+    selector.match(
+      [&](ast::field_path& fp) {
+        // Check if the inner expression is a dollar_var that should be
+        // substituted
+        auto* dollar_var = std::get_if<ast::dollar_var>(&*fp.inner().kind);
+        if (dollar_var) {
+          auto name = std::string{dollar_var->name_without_dollar()};
+          if (substitutions_.contains(name) && ! shadowed_.contains(name)) {
+            // Try to convert the substituted expression to a selector
+            auto new_selector = ast::selector::try_from(substitutions_[name]);
+            if (new_selector) {
+              // Replace the entire selector
+              selector = std::move(*new_selector);
+            }
+          }
+        }
+      },
+      [](ast::meta&) {
+        // Meta selectors don't contain dollar_vars
+      });
+  }
+
   template <class T>
   void visit(T& x) {
     enter(x);

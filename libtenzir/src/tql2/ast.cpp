@@ -54,6 +54,11 @@ auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
         }
         return false;
       },
+      [&](ast::dollar_var&) -> variant<ast::expression*, bool> {
+        // Allow dollar_vars as field paths for UDO parameters
+        // The path will be empty, signaling this is a placeholder
+        return true;
+      },
       [](auto&) -> variant<ast::expression*, bool> {
         return false;
       });
