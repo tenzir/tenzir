@@ -32,6 +32,7 @@ pkgs.mkShell (
             dynaconf
             numpy
             pandas
+            pip
             pyarrow
             python-box
           ]
