@@ -355,7 +355,7 @@ public:
           uv_executable.string(),
           "pip",
           "install",
-          "-q",
+          "-vv",
         };
         // `split` creates an empty token in case the input was entirely
         // empty, but we don't want that so we need an extra guard.
