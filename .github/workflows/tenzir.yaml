@@ -182,8 +182,6 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
-            # Publish tenzir to Pypi.
-            echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           # Run all checks if this is a push to master or a tag.
@@ -660,7 +658,6 @@ jobs:
       matrix:
         python-version: ["3.10"]
         os: [ubuntu-latest]
-        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -669,29 +666,27 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Run poetry install
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+      - name: Install workspace dependencies
         working-directory: python
         run: |
-          poetry install -E module
+          uv sync --all-packages --group dev
       - name: Run unit tests
         working-directory: python
         run: |
-          poetry run pytest
+          uv run --all-packages --group dev --extra pytest
       - name: Run tests in Docker
         working-directory: python
         if: matrix.os == 'ubuntu-latest'
         run: |
           export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          ./docker-poetry-run.sh pytest
+          ./docker-uv-run.sh --all-packages --group dev --extra pytest
       - name: Build package
         working-directory: python
         run: |
-          poetry build
+          uv build --wheel --all-packages
 
   python-package:
     needs:
@@ -705,7 +700,6 @@ jobs:
       matrix:
         python-version: ["3.10"]
         os: ["ubuntu-latest"]
-        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -714,10 +708,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: ${{ matrix.poetry-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
       - name: Install Nix (for static binaries)
         uses: cachix/install-nix-action@v30
         with:
@@ -729,23 +721,10 @@ jobs:
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           # Avoid pushing the full enterprise edition.
           pushFilter: "tenzir-ee"
-      - name: Build static tenzir binaries with Nix
-        run: |
-          nix build .#tenzir-static
-      - name: Bundle static binaries into Python package
-        run: |
-          mkdir -p python/tenzir
-          cp -vR result/bin python/tenzir/
-          if [ -d result/libexec ]; then
-            cp -vR result/libexec python/tenzir/
-          fi
-          if [ -d result/share ]; then
-            cp -vR result/share python/tenzir/
-          fi
       - name: Build wheel for validation
         working-directory: python
         run: |
-          poetry build
+          uv build --wheel --package tenzir-common --package tenzir
       - name: Validate installed wheel exposes working tenzir binary
         working-directory: python
         run: |
@@ -754,27 +733,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install dist/*.whl
           tenzir version
-      - name: Configure PyPI
-        if: github.event_name == 'release'
-        working-directory: python
-        run: |
-          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
       - name: Publish to PyPI
         if: github.event_name == 'release'
         working-directory: python
         run: |
-          poetry publish --build --no-interaction
-      - name: Configure Test PyPI
-        if: github.event_name != 'release'
-        working-directory: python
-        run: |
-          poetry config repositories.test-pypi https://test.pypi.org/legacy/
-          poetry config pypi-token.test-pypi "${{ secrets.TEST_PYPI_TOKEN }}"
+          uv publish --no-build --token "${{ secrets.PYPI_TOKEN }}" dist/*
       - name: Publish to Test PyPI
         if: github.event_name != 'release'
         working-directory: python
         run: |
-          poetry publish --build --no-interaction -r test-pypi
+          uv publish --no-build --publish-url https://test.pypi.org/legacy/ --token "${{ secrets.TEST_PYPI_TOKEN }}" dist/*
 
   pass-branch-protections:
     needs:
