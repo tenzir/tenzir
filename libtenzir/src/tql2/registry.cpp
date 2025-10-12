@@ -8,15 +8,20 @@
 
 #include "tenzir/tql2/registry.hpp"
 
+#include "tenzir/concept/parseable/tenzir/yaml.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/exec.hpp"
+#include "tenzir/tql2/parser.hpp"
 
 #include <cstdlib>
 #include <memory>
 #include <ranges>
 #include <shared_mutex>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -46,6 +51,59 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
   }
 }
 
+// AST visitor to substitute parameter references with argument expressions
+class parameter_substituter : public ast::visitor<parameter_substituter> {
+public:
+  parameter_substituter(
+    std::unordered_map<std::string, ast::expression> substitutions)
+    : substitutions_(std::move(substitutions)) {
+  }
+
+  void visit(ast::expression& expr) {
+    // Check if this is a dollar variable that should be substituted
+    auto* dollar_var = std::get_if<ast::dollar_var>(&*expr.kind);
+    if (dollar_var) {
+      auto name = std::string{dollar_var->name_without_dollar()};
+      // Only substitute if: 1) we have a substitution for it, 2) it's not
+      // shadowed
+      if (substitutions_.contains(name) && ! shadowed_.contains(name)) {
+        // Replace the entire expression with the substitution
+        expr = substitutions_[name];
+        return;
+      }
+    }
+    // Continue visiting children
+    enter(expr);
+  }
+
+  void visit(ast::let_stmt& stmt) {
+    // Visit the RHS expression first (before the variable is bound)
+    visit(stmt.expr);
+
+    // Check if this let statement shadows a parameter
+    auto name = std::string{stmt.name_without_dollar()};
+    if (substitutions_.contains(name)) {
+      shadowed_.insert(name);
+    }
+  }
+
+  void visit(ast::pipeline& pipe) {
+    // Visit each statement, tracking scope
+    for (auto& stmt : pipe.body) {
+      visit(stmt);
+    }
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+private:
+  std::unordered_map<std::string, ast::expression> substitutions_;
+  std::unordered_set<std::string> shadowed_;
+};
+
 } // namespace
 
 auto operator_def::make(operator_factory_plugin::invocation inv,
@@ -53,13 +111,123 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
   return match(
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
-      if (not inv.args.empty()) {
-        diagnostic::error("user-defined operator does not support arguments")
-          .primary(inv.self)
-          .emit(ctx);
-        return failure::promise();
+      // If there are no parameters defined, check that no arguments were provided
+      if (udo.positional_params.empty() && udo.named_params.empty()) {
+        if (not inv.args.empty()) {
+          diagnostic::error("user-defined operator does not support arguments")
+            .primary(inv.self)
+            .emit(ctx);
+          return failure::promise();
+        }
+        TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+        return std::make_unique<pipeline>(std::move(compiled));
       }
-      TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+
+      // Parse arguments using argument_parser2
+      auto parser = argument_parser2::operator_("user_defined_operator");
+
+      // Storage for parsed argument values
+      std::vector<ast::expression> positional_values;
+      positional_values.reserve(udo.positional_params.size());
+      std::vector<std::pair<std::string, ast::expression>> named_values;
+
+      // Register positional parameters
+      for (size_t i = 0; i < udo.positional_params.size(); ++i) {
+        positional_values.emplace_back();
+        // Pass empty string for type - we use ast::expression which doesn't
+        // const_eval The actual type from frontmatter is just for documentation
+        parser.positional(udo.positional_params[i].name, positional_values[i],
+                          "");
+      }
+
+      // Register named parameters
+      // Storage for optional named parameter values
+      std::vector<std::optional<ast::expression>> optional_values;
+      optional_values.reserve(udo.named_params.size());
+
+      for (size_t i = 0; i < udo.named_params.size(); ++i) {
+        const auto& param = udo.named_params[i];
+        if (param.required) {
+          named_values.emplace_back(param.name, ast::expression{});
+          // Use the type from frontmatter for documentation/display purposes
+          parser.named(param.name, named_values.back().second, param.type);
+          optional_values.emplace_back(std::nullopt); // Placeholder
+        } else {
+          optional_values.emplace_back(std::nullopt);
+          // Use the type from frontmatter for documentation/display purposes
+          parser.named(param.name, optional_values.back(), param.type);
+        }
+      }
+
+      // Parse the invocation
+      TRY(parser.parse(inv, ctx));
+
+      // Process optional parameters - add provided values or use defaults
+      std::vector<size_t> params_needing_defaults;
+      for (size_t i = 0; i < udo.named_params.size(); ++i) {
+        const auto& param = udo.named_params[i];
+        if (param.required) {
+          continue; // Already added to named_values above
+        }
+        auto& opt_value = optional_values[i];
+        if (opt_value) {
+          named_values.emplace_back(param.name, std::move(*opt_value));
+        } else if (param.default_value) {
+          // Mark this parameter as needing its default value parsed
+          params_needing_defaults.push_back(i);
+        }
+      }
+
+      // Parse default values for parameters that weren't provided
+      for (size_t param_idx : params_needing_defaults) {
+        const auto& param = udo.named_params[param_idx];
+        // Parse the YAML default value string as data
+        auto yaml_data = from_yaml(*param.default_value);
+        if (not yaml_data) {
+          diagnostic::error("failed to parse default value for parameter '{}'",
+                            param.name)
+            .note("default value: {}", *param.default_value)
+            .note("type: {}", param.type)
+            .note("error: {}", yaml_data.error())
+            .primary(inv.self)
+            .emit(ctx);
+          return failure::promise();
+        }
+        // Convert data to constant expression
+        auto constant_value = match(
+          std::move(*yaml_data),
+          [](auto x) -> ast::constant::kind {
+            return x;
+          },
+          [](const pattern&) -> ast::constant::kind {
+            TENZIR_UNREACHABLE();
+          });
+        auto default_expr = ast::expression{
+          ast::constant{std::move(constant_value), location::unknown}};
+        named_values.emplace_back(param.name, std::move(default_expr));
+      }
+
+      // Build substitution map: parameter name -> argument expression
+      auto substitutions = std::unordered_map<std::string, ast::expression>{};
+
+      // Add positional parameters
+      for (size_t i = 0; i < positional_values.size(); ++i) {
+        substitutions[udo.positional_params[i].name]
+          = std::move(positional_values[i]);
+      }
+
+      // Add named parameters
+      for (auto& [param_name, param_value] : named_values) {
+        substitutions[param_name] = std::move(param_value);
+      }
+
+      // Substitute parameter references in the UDO pipeline
+      auto modified_pipeline = udo.definition;
+      auto substituter = parameter_substituter{std::move(substitutions)};
+      substituter.visit(modified_pipeline);
+
+      // Compile and return
+      TRY(auto compiled, compile(std::move(modified_pipeline), ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },
     [&](const native_operator& op) -> failure_or<operator_ptr> {
