@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
-  "pyarrow>=11,<19.0.1",
+  "pyarrow>=11",
   "dynaconf>=3.2,<4.0",
 ]
 
