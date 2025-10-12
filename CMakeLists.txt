@@ -861,18 +861,16 @@ add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
 
 if (TENZIR_ENABLE_PYTHON_BINDINGS)
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
-  set(TENZIR_PYTHON_CORE_WHEEL_DST
-      "${TENZIR_PYTHON_BINARY_DIR}/tenzir_core-${TENZIR_VERSION}-py3-none-any.whl"
-  )
-  set(TENZIR_PYTHON_OPERATOR_WHEEL_DST
-      "${TENZIR_PYTHON_BINARY_DIR}/tenzir_operator-${TENZIR_VERSION}-py3-none-any.whl"
-  )
-  if (TENZIR_PYTHON_OPERATOR_WHEEL)
-    file(MAKE_DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}")
-    file(COPY_FILE "${TENZIR_PYTHON_CORE_WHEEL}"
-         "${TENZIR_PYTHON_CORE_WHEEL_DST}")
-    file(COPY_FILE "${TENZIR_PYTHON_OPERATOR_WHEEL}"
-         "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}")
+  if (TENZIR_PYTHON_DEPENDENCY_WHEELS)
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMAND ${CMAKE_COMMAND} -E remove_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${TENZIR_PYTHON_DEPENDENCY_WHEELS}" "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E touch "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMENT "Copying python operator wheels"
+      VERBATIM)
   else ()
     find_program(UV_PATH uv)
     if (NOT UV_PATH)
@@ -895,43 +893,33 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
         "${TENZIR_PYTHON_WORKSPACE}/uv.lock"
         "${TENZIR_PYTHON_WORKSPACE}/README.md"
         "${TENZIR_PYTHON_WORKSPACE}/uv-source-info.json")
-    list(FILTER TENZIR_PYTHON_COMMON_DEPENDENCIES INCLUDE REGEX ".*")
+    list(FILTER TENZIR_PYTHON_WORKSPACE_DENPENDENCIES INCLUDE REGEX ".*")
     add_custom_command(
-      OUTPUT "${TENZIR_PYTHON_CORE_WHEEL_DST}"
+      OUTPUT "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMAND ${CMAKE_COMMAND} -E remove_directory "${TENZIR_PYTHON_BINARY_DIR}"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
       COMMAND
-        ${CMAKE_COMMAND} -E env "GIT_DIR=/dev/null"
-        "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache" "TENZIR_SKIP_NIX_BUILD=1"
-        "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}" "UV_PYTHON=${Python3_EXECUTABLE}"
-        "${UV_PATH}" build -q --wheel --package tenzir-core --out-dir
-        "${TENZIR_PYTHON_BINARY_DIR}"
+        ${CMAKE_COMMAND} -E env "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache"
+        "TENZIR_SKIP_NIX_BUILD=1" "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}"
+        "UV_PYTHON=${Python3_EXECUTABLE}" -- "${UV_PATH}" build -q --wheel
+        --package tenzir-common --out-dir "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache"
+        "TENZIR_SKIP_NIX_BUILD=1" "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}"
+        "UV_PYTHON=${Python3_EXECUTABLE}" -- "${UV_PATH}" build -q --wheel
+        --package tenzir-operator --out-dir "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E touch "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
       WORKING_DIRECTORY "${TENZIR_PYTHON_WORKSPACE}"
-      DEPENDS ${TENZIR_PYTHON_WORKSPACE_DENPENDENCIES}
+      DEPENDS "${TENZIR_PYTHON_REQUIREMENTS_FILE}"
               ${TENZIR_PYTHON_COMMON_DEPENDENCIES}
+              ${TENZIR_PYTHON_CORE_DEPENDENCIES}
               ${TENZIR_PYTHON_OPERATOR_DEPENDENCIES}
-      COMMENT "Building python operator wheels"
+      COMMENT "Building python operator wheelhouse"
       VERBATIM)
-    add_custom_command(
-      OUTPUT "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}"
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
-      COMMAND
-        ${CMAKE_COMMAND} -E env "GIT_DIR=/dev/null"
-        "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache" "TENZIR_SKIP_NIX_BUILD=1"
-        "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}" "UV_PYTHON=${Python3_EXECUTABLE}"
-        "${UV_PATH}" build -q --wheel --package tenzir-operator --out-dir
-        "${TENZIR_PYTHON_BINARY_DIR}"
-      WORKING_DIRECTORY "${TENZIR_PYTHON_WORKSPACE}"
-      DEPENDS ${TENZIR_PYTHON_COMMON_DEPENDENCIES}
-              ${TENZIR_PYTHON_OPERATOR_DEPENDENCIES}
-      COMMENT "Building tenzir-operator wheel"
-      VERBATIM)
-    add_custom_target(tenzir-python-core-wheel
-                      DEPENDS "${TENZIR_PYTHON_CORE_WHEEL_DST}")
-    add_custom_target(tenzir-python-operator-wheel
-                      DEPENDS "${TENZIR_PYTHON_OPERATOR_WHEEL_DST}")
-    add_custom_target(tenzir-python-wheel DEPENDS tenzir-python-core-wheel
-                                                  tenzir-python-operator-wheel)
   endif ()
+  add_custom_target(tenzir-python-wheels
+                    DEPENDS "${TENZIR_PYTHON_BINARY_DIR}/.stamp")
+  add_custom_target(tenzir-python-wheel DEPENDS tenzir-python-wheels)
   install(
     DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
