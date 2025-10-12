@@ -190,12 +190,14 @@ public:
       // `detail::install_datadir` and the venv base dir may be different
       // between the client and node process.
       auto implicit_requirements = std::string{};
+      const auto python_dir = detail::install_datadir() / "python";
       if (config_.implicit_requirements) {
         implicit_requirements = *config_.implicit_requirements;
       } else {
-        const auto wheel_dir = detail::install_datadir() / "python";
-        const auto find_wheel
-          = [&](std::string_view project) -> std::optional<std::filesystem::path> {
+        auto computed_requirements = std::optional<std::string>{};
+        const auto find_wheel = [&](const std::filesystem::path& directory,
+                                    std::string_view project)
+          -> std::optional<std::filesystem::path> {
           auto normalized = std::string{project};
           std::replace(normalized.begin(), normalized.end(), '-', '_');
           const auto prefix = fmt::format("{}-", normalized);
@@ -203,10 +205,11 @@ public:
           auto best_path = std::optional<std::filesystem::path>{};
           auto best_name = std::string{};
           std::error_code ec;
-          if (! std::filesystem::exists(wheel_dir, ec)) {
+          if (! std::filesystem::exists(directory, ec)) {
             return std::nullopt;
           }
-          for (const auto& entry : std::filesystem::directory_iterator{wheel_dir}) {
+          for (const auto& entry :
+               std::filesystem::directory_iterator{directory}) {
             if (! entry.is_regular_file()) {
               continue;
             }
@@ -222,18 +225,22 @@ public:
           }
           return best_path;
         };
-        const auto core_wheel = find_wheel("tenzir-core");
-        const auto operator_wheel = find_wheel("tenzir-operator");
-        if (! core_wheel || ! operator_wheel) {
+        if (find_wheel(wheelhouse_dir, "tenzir-operator")) {
+          computed_requirements
+            = fmt::format("--find-links={} --no-index tenzir-operator[pandas]",
+                          wheelhouse_dir.string());
+        } else {
           diagnostic::error("failed to locate bundled Tenzir Python wheels")
-            .note("expected to find tenzir-core and tenzir-operator wheel files in {}",
-                  wheel_dir)
-            .note("ensure both wheels are produced via `uv build --wheel` before installing Tenzir")
+            .note("expected to find a wheelhouse under {} containing "
+                  "tenzir-operator",
+                  wheelhouse_dir)
+            .note("ensure the build installs the bundled wheelhouse via "
+                  "CMake before installing Tenzir")
             .emit(ctrl.diagnostics());
           co_return;
         }
-        implicit_requirements = fmt::format("{} {}", core_wheel->string(),
-                                             operator_wheel->string());
+        TENZIR_ASSERT(computed_requirements);
+        implicit_requirements = std::move(*computed_requirements);
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};
       if (! config_.create_venvs) {
@@ -350,23 +357,34 @@ public:
           diagnostic::error("{}", venv_error)
             .note("failed to create virtualenv")
             .throw_();
-        }
+         }
+        const auto venv_python
+          = std::filesystem::path{*maybe_venv} / "bin" / "python3";
+        env["UV_PYTHON"] = venv_python.string();
         auto pip_invocation = std::vector<std::string>{
           uv_executable.string(),
           "pip",
           "install",
-          "-vv",
+          "--python",
+          venv_python.string(),
+          "-v",
+          "--find-links",
+          wheelhouse_dir.string(),
         };
         // `split` creates an empty token in case the input was entirely
         // empty, but we don't want that so we need an extra guard.
-        if (! implicit_requirements.empty()) {
+        if (not implicit_requirements.empty()) {
           auto implicit_requirements_vec
             = detail::split_escaped(implicit_requirements, " ", "\\");
+          if (not std::ranges::contains(implicit_requirements_vec, "-e")
+              and requirements_.empty()) {
+            pip_invocation.emplace_back("--offline");
+          }
           pip_invocation.insert(pip_invocation.end(),
                                 implicit_requirements_vec.begin(),
                                 implicit_requirements_vec.end());
         }
-        if (! requirements_.empty()) {
+        if (not requirements_.empty()) {
           auto requirements_vec = detail::split(requirements_, " ");
           pip_invocation.insert(pip_invocation.end(), requirements_vec.begin(),
                                 requirements_vec.end());
@@ -383,8 +401,7 @@ public:
             .note("failed to install pip requirements")
             .throw_();
         }
-        python_executable
-          = std::filesystem::path{*maybe_venv} / "bin" / "python3";
+        python_executable = venv_python;
       }
       bp::opstream codepipe; // pipe to transmit the code
       // If we redirect stderr to get error information, we need to switch to a
