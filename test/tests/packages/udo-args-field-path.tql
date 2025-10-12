@@ -1,0 +1,2 @@
+from {x: 1}
+argspkg::set_field this.y, "hello"
