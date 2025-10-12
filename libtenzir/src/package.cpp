@@ -318,6 +318,23 @@ auto package_input::parse(const view<record>& data)
   return result;
 }
 
+auto package_operator_parameter::parse(const view<record>& data)
+  -> caf::expected<package_operator_parameter> {
+  auto result = package_operator_parameter{};
+  for (const auto& [key, value] : data) {
+    TRY_ASSIGN_STRING_TO_RESULT(name)
+    TRY_ASSIGN_STRING_TO_RESULT(type)
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
+    TRY_CONVERT_TO_STRING(default, default_);
+    TENZIR_WARN("ignoring unknown key `{}` in `parameter` entry in package "
+                "definition",
+                key);
+  }
+  REQUIRED_FIELD(name);
+  REQUIRED_FIELD(type);
+  return result;
+}
+
 auto package_source::parse(const view<record>& data)
   -> caf::expected<package_source> {
   auto result = package_source{};
@@ -399,6 +416,8 @@ auto package_operator::parse(const view<record>& data)
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(definition);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
+    TRY_ASSIGN_LIST_TO_RESULT(args, package_operator_parameter);
+    TRY_ASSIGN_LIST_TO_RESULT(options, package_operator_parameter);
     TENZIR_WARN("ignoring unknown key `{}` in `operator` entry in package "
                 "definition",
                 key);
@@ -901,10 +920,34 @@ auto package_example::to_record() const -> record {
   };
 }
 
+auto package_operator_parameter::to_record() const -> record {
+  auto result = record{
+    {"name", name},
+    {"type", type},
+    {"description", description},
+  };
+  if (default_) {
+    result["default"] = default_;
+  }
+  return result;
+}
+
 auto package_operator::to_record() const -> record {
+  auto args_list = list{};
+  args_list.reserve(args.size());
+  for (const auto& arg : args) {
+    args_list.emplace_back(arg.to_record());
+  }
+  auto options_list = list{};
+  options_list.reserve(options.size());
+  for (const auto& opt : options) {
+    options_list.emplace_back(opt.to_record());
+  }
   auto result = record{
     {"description", description},
     {"definition", definition},
+    {"args", std::move(args_list)},
+    {"options", std::move(options_list)},
   };
   return result;
 }
@@ -1012,7 +1055,20 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       start_idx, op_name.size() - start_idx - 1);
     auto* parent = ensure_module(*pkg_mod, head_span);
     auto& set = parent->defs[op_name.back()];
-    set.op = operator_def{user_defined_operator{std::move(pipe)}};
+    // Create user_defined_operator with parameter information
+    auto udo = user_defined_operator{std::move(pipe), {}, {}};
+    // Convert positional args
+    for (const auto& arg : op.args) {
+      udo.positional_params.push_back({arg.name, arg.type, std::nullopt, true});
+    }
+    // Convert named options
+    for (const auto& opt : op.options) {
+      udo.named_params.push_back({
+        opt.name, opt.type, opt.default_,
+        ! opt.default_.has_value() // required if no default
+      });
+    }
+    set.op = operator_def{std::move(udo)};
   }
   if (pkg_mod->defs.empty()) {
     pkg_entry.mod.reset();

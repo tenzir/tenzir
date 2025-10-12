@@ -22,6 +22,16 @@ struct module_def;
 struct user_defined_operator {
   /// Definition with resolved entities, but without resolved `let`s.
   ast::pipeline definition;
+
+  /// Parameter definitions for arguments and options
+  struct parameter {
+    std::string name;
+    std::string type;
+    std::optional<std::string> default_value;
+    bool required = true;
+  };
+  std::vector<parameter> positional_params;
+  std::vector<parameter> named_params;
 };
 
 class operator_compiler_plugin;
