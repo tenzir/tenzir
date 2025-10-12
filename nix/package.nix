@@ -14,10 +14,6 @@ rec {
       ])
       (
         lib.fileset.unions [
-        # FIXME: Bundle all dependencies so the python operator works without an
-        # internet connection.
-        ../test/tests/node/secrets/python.tql
-        ../test/tests/node/secrets/python.txt
         # DNS lookup does not work in the nix sandbox.
         ../test/tests/operators/dns_lookup
         # to_sentinelone_data_lake is not supported in the nix build.

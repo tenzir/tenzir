@@ -25,8 +25,6 @@ stdenvNoCC.mkDerivation {
         ps.pyarrow
         ps.python-box
         ps.trustme
-        tenzirPythonPkgs.tenzir-core
-        tenzirPythonPkgs.tenzir-operator
       ]);
       template = path: ''
         if [ -d "${path}/test/tests" ]; then

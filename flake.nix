@@ -86,8 +86,6 @@
             tenzir-de-static-clang = package-clang.tenzir-de-static;
             tenzir-clang = package-clang.tenzir;
             tenzir-static-clang = package-clang.tenzir-static;
-            tenzir-python-core = tenzirPythonPkgs.tenzir-core;
-            tenzir-python-operator = tenzirPythonPkgs.tenzir-operator;
             integration-test-shell = pkgs.mkShell {
               packages = package.tenzir-integration-test-deps;
             };

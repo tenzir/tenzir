@@ -18,6 +18,14 @@ This workspace builds three distributions:
 - `tenzir`: The public CLI bindings, including compatibility shims for the
   legacy `tenzir` import path and optional bundled binaries.
 
+### Bundled wheels
+
+`uv` and CMake bundle the `tenzir-operator` and `tenzir-common` wheels into
+`share/tenzir/python` during the build. At runtime the Python operator installs
+them with `uv pip install --no-index`, so no network access is needed when a
+pipeline spins up. Nix builds provide both wheels via the
+`TENZIR_PYTHON_DEPENDENCY_WHEELS` CMake cache entry.
+
 ## Usage
 
 To get started, clone the Tenzir repository and install the CLI bindings via
