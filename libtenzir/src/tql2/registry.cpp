@@ -76,7 +76,7 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
 namespace {
 
 auto global_registry_ref() -> std::shared_ptr<const registry>& {
-  static auto reg = std::invoke([&] -> std::shared_ptr<const registry> {
+  static auto* reg = std::invoke([&] -> std::shared_ptr<const registry>* {
     auto init = std::make_shared<registry>();
     for (const auto* op : plugins::get<operator_factory_plugin>()) {
       auto name = op->name();
@@ -101,14 +101,16 @@ auto global_registry_ref() -> std::shared_ptr<const registry>& {
       }
       init->add(std::string{entity_pkg_std}, name, std::ref(*fn));
     }
-    return init;
+    // Leak this on purpose to prevent static destruction order fiasco.
+    return new std::shared_ptr<const registry>{std::move(init)}; // NOLINT
   });
-  return reg;
+  return *reg;
 }
 
 auto global_registry_mutex() -> std::shared_mutex& {
-  static std::shared_mutex mtx;
-  return mtx;
+  // Leak this on purpose to prevent static destruction order fiasco.
+  static auto* mtx = new std::shared_mutex{}; // NOLINT
+  return *mtx;
 }
 
 } // namespace
