@@ -1,0 +1,2 @@
+from {value: "outer"}
+argspkg::shadow_value this.value, suffix="?"
