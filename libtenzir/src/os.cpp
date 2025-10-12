@@ -327,7 +327,7 @@ auto linux_os::fetch_sockets() -> std::vector<net_socket> {
 #elif TENZIR_MACOS
 
 struct darwin_os::state {
-  struct mach_timebase_info timebase {};
+  struct mach_timebase_info timebase{};
 };
 
 auto darwin_os::make() -> std::unique_ptr<darwin_os> {
@@ -402,7 +402,7 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
       .utime = {},
       .stime = {},
     };
-    if (n < 0) {
+    if (n >= detail::narrow_cast<int>(sizeof(task))) {
       p.vsize = task.pti_virtual_size;
       p.rsize = task.pti_resident_size;
       auto timebase = state_->timebase;
@@ -410,6 +410,12 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
       auto stime = task.pti_total_system * timebase.numer / timebase.denom;
       p.utime = std::chrono::nanoseconds(utime);
       p.stime = std::chrono::nanoseconds(stime);
+    }
+    // Count open file descriptors.
+    errno = 0;
+    n = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+    if (n > 0 && errno == 0) {
+      p.open_fds = n / sizeof(proc_fdinfo);
     }
     result.push_back(std::move(p));
   }
