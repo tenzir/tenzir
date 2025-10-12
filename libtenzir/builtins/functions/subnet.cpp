@@ -43,7 +43,7 @@ public:
             },
             [](const arrow::StringArray& arg) {
               auto b
-                = subnet_type::make_arrow_builder(arrow::default_memory_pool());
+                = subnet_type::make_arrow_builder(arrow_memory_pool());
               check(b->Reserve(arg.length()));
               for (auto i = 0; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {

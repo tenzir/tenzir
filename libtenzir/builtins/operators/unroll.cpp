@@ -171,7 +171,7 @@ auto unroll(const table_slice& slice, const offset& offset, bool unordered)
   TENZIR_ASSERT(list_offsets);
   auto result_ty = unroll_type(slice.schema(), offset);
   auto builder = std::dynamic_pointer_cast<arrow::StructBuilder>(
-    result_ty.make_arrow_builder(arrow::default_memory_pool()));
+    result_ty.make_arrow_builder(arrow_memory_pool()));
   TENZIR_ASSERT(builder);
   for (auto row = int64_t{0}; row < list_array->length(); ++row) {
     if (list_array->IsNull(row)) {

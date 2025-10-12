@@ -42,7 +42,7 @@ public:
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = arrow::TimestampBuilder{
           std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
-          arrow::default_memory_pool()};
+          arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{
@@ -100,7 +100,7 @@ public:
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
-      auto b = duration_type::make_arrow_builder(arrow::default_memory_pool());
+      auto b = duration_type::make_arrow_builder(arrow_memory_pool());
       check(b->Reserve(eval.length()));
       for (auto& arg : eval(expr)) {
         auto f = detail::overload{
@@ -160,7 +160,7 @@ public:
             },
             [](const arrow::DurationArray& arg) {
               auto b
-                = time_type::make_arrow_builder(arrow::default_memory_pool());
+                = time_type::make_arrow_builder(arrow_memory_pool());
               check(b->Reserve(arg.length()));
               for (auto i = int64_t{}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {

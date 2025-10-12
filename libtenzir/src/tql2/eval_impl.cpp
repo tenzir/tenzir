@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/eval_impl.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
@@ -491,7 +492,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         }
         auto list_values = list->array->values();
         auto value_type = list->type.value_type();
-        auto b = value_type.make_arrow_builder(arrow::default_memory_pool());
+        auto b = value_type.make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(list->length()));
         auto out_of_bounds = false;
         auto list_null = false;
