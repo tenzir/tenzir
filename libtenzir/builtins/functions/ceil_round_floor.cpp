@@ -126,7 +126,7 @@ public:
         const auto f = detail::overload{
           [&](const arrow::DurationArray& array) -> series {
             auto b
-              = duration_type::make_arrow_builder(arrow::default_memory_pool());
+              = duration_type::make_arrow_builder(arrow_memory_pool());
             check(b->Reserve(array.length()));
             for (auto i = int64_t{0}; i < array.length(); i++) {
               if (array.IsNull(i)) {

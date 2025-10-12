@@ -200,7 +200,7 @@ public:
     TENZIR_ASSERT(stride > 0);
     constexpr auto make_stride_index
       = [](const int64_t offset, const int64_t rows, const int64_t stride) {
-          auto b = int64_type::make_arrow_builder(arrow::default_memory_pool());
+          auto b = int64_type::make_arrow_builder(arrow_memory_pool());
           check(b->Reserve((rows + 1) / stride));
           for (auto i = offset % stride; i < rows; i += stride) {
             check(b->Append(i));

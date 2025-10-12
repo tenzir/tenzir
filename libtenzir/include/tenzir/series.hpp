@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/offset.hpp"
@@ -106,7 +107,7 @@ struct basic_series {
   template <type_or_concrete_type Other>
     requires(std::same_as<Type, type> || std::same_as<Other, Type>)
   static auto null(Other ty, int64_t length) -> basic_series<Type> {
-    auto b = ty.make_arrow_builder(arrow::default_memory_pool());
+    auto b = ty.make_arrow_builder(arrow_memory_pool());
     // TODO
     (void)b->AppendNulls(length);
     return {std::move(ty),

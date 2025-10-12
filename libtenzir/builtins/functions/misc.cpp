@@ -334,7 +334,7 @@ public:
             };
           }
         }
-        auto b = ip_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = ip_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(eval.length()));
         for (auto& value : value) {
           auto f = detail::overload{

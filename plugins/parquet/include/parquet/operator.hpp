@@ -9,6 +9,7 @@
 #pragma once
 
 #include "parquet/chunked_buffer_output_stream.hpp"
+#include "tenzir/arrow_memory_pool.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -40,7 +41,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   }
   auto input_file = as_arrow_file(std::move(parquet_chunk));
   auto parquet_reader_properties
-    = ::parquet::ReaderProperties(arrow::default_memory_pool());
+    = ::parquet::ReaderProperties(arrow_memory_pool());
   parquet_reader_properties.enable_buffered_stream();
   std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
   auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
@@ -49,7 +50,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
     auto input_buffer = ::parquet::ParquetFileReader::Open(
       std::move(input_file), parquet_reader_properties);
     ::arrow::Status arrow_file_reader_status
-      = ::parquet::arrow::FileReader::Make(arrow::default_memory_pool(),
+      = ::parquet::arrow::FileReader::Make(arrow_memory_pool(),
                                            std::move(input_buffer),
                                            arrow_reader_properties,
                                            &out_buffer);
@@ -194,7 +195,7 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
       auto null_bitmap = array->null_bitmap();
       if (array->offset() != 0 and array->null_bitmap_data()) {
         null_bitmap = check(arrow::internal::CopyBitmap(
-          arrow::default_memory_pool(), array->null_bitmap_data(),
+          arrow_memory_pool(), array->null_bitmap_data(),
           array->offset(), array->length()));
       }
       return std::make_shared<arrow::StructArray>(
@@ -309,7 +310,7 @@ public:
                                ctrl.diagnostics());
       auto out_buffer = std::make_shared<chunked_buffer_output_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
-        *schema, arrow::default_memory_pool(), out_buffer,
+        *schema, arrow_memory_pool(), out_buffer,
         std::move(parquet_writer_props), std::move(arrow_writer_props));
       if (not file_result.ok()) {
         return diagnostic::error(

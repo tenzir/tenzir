@@ -531,7 +531,7 @@ public:
     if (not args_.group) {
       return series::null(string_type{}, slice.rows());
     }
-    auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
+    auto b = string_type::make_arrow_builder(arrow_memory_pool());
     auto gss = eval(args_.group.value(), slice, dh);
     for (auto&& gs : gss) {
       if (gs.type.kind().is<null_type>()) {
@@ -806,7 +806,7 @@ public:
       *xs.array,
       [&](const arrow::DurationArray& array) -> series {
         auto b
-          = duration_type::make_arrow_builder(arrow::default_memory_pool());
+          = duration_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(array.length()));
         for (auto i = int64_t{0}; i < array.length(); i++) {
           if (array.IsNull(i)) {
@@ -1026,7 +1026,7 @@ class chart_plugin : public virtual operator_factory_plugin {
         if (not args.res) {
           return ast::constant{t, loc};
         }
-        auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = time_type::make_arrow_builder(arrow_memory_pool());
         check(append_builder(time_type{}, *b, t));
         auto array = finish(*b);
         auto opts = make_round_temporal_options(args.res->inner);
