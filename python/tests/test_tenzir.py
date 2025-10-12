@@ -1,4 +1,11 @@
-from tenzir import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
+from tenzir import (
+    PipelineIO,
+    PipelineSpec,
+    collect_pyarrow,
+    stream_pipeline,
+    to_json_rows,
+    VastRow,
+)
 import tenzir.utils.logging
 import tenzir.utils.asyncio
 import asyncio
