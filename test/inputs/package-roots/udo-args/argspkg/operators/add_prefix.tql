@@ -1,0 +1,14 @@
+---
+description: "Add a prefix to a value"
+args:
+  - name: value
+    type: string
+    description: "The value to prefix"
+options:
+  - name: prefix
+    type: string
+    default: ">>"
+    description: "The prefix to add"
+---
+original = $value
+prefixed = $prefix + $value
