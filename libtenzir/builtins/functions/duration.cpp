@@ -37,7 +37,7 @@ public:
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr)](evaluator eval,
                                                        session ctx) -> series {
-      auto b = duration_type::make_arrow_builder(arrow::default_memory_pool());
+      auto b = duration_type::make_arrow_builder(arrow_memory_pool());
       check(b->Reserve(eval.length()));
       for (auto& arg : eval(expr)) {
         const auto f = detail::overload{
@@ -107,7 +107,7 @@ public:
     return function_use::make([this, expr = std::move(expr)](
                                 evaluator eval, session ctx) -> series {
       const auto unit = std::chrono::duration_cast<tenzir::duration>(T{1});
-      auto b = duration_type::make_arrow_builder(arrow::default_memory_pool());
+      auto b = duration_type::make_arrow_builder(arrow_memory_pool());
       check(b->Reserve(eval.length()));
       for (const auto& arg : eval(expr)) {
         match(
@@ -211,9 +211,9 @@ public:
       const auto unit = std::chrono::duration_cast<tenzir::duration>(T{1});
       auto b = std::invoke([] {
         if constexpr (std::same_as<T, std::chrono::nanoseconds>) {
-          return int64_type::make_arrow_builder(arrow::default_memory_pool());
+          return int64_type::make_arrow_builder(arrow_memory_pool());
         } else {
-          return double_type::make_arrow_builder(arrow::default_memory_pool());
+          return double_type::make_arrow_builder(arrow_memory_pool());
         }
       });
       check(b->Reserve(eval.length()));

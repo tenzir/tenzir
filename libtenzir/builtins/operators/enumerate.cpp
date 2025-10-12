@@ -55,7 +55,7 @@ public:
         co_yield {};
         continue;
       }
-      auto b = int64_type::make_arrow_builder(arrow::default_memory_pool());
+      auto b = int64_type::make_arrow_builder(arrow_memory_pool());
       check(b->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
       if (args_.group) {
         for (const auto& s : eval(args_.group.value(), slice, dh)) {

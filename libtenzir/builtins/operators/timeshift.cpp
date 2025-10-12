@@ -164,7 +164,7 @@ public:
           continue;
         }
         const auto& array = as<arrow::TimestampArray>(*s.array);
-        auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = time_type::make_arrow_builder(arrow_memory_pool());
         auto offset = int64_t{0};
         for (const auto& value : values(time_type{}, array)) {
           if (not value) {

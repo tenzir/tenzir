@@ -52,7 +52,7 @@ public:
             // TODO: Maybe slice the array for positive values
             auto overflow = false;
             auto b
-              = int64_type::make_arrow_builder(arrow::default_memory_pool());
+              = int64_type::make_arrow_builder(arrow_memory_pool());
             for (auto v : values(int64_type{}, array)) {
               if (not v) {
                 check(b->AppendNull());
@@ -74,7 +74,7 @@ public:
           [&](const arrow::DoubleArray& array) -> series {
             // TODO: Maybe slice the array for positive values
             auto b
-              = double_type::make_arrow_builder(arrow::default_memory_pool());
+              = double_type::make_arrow_builder(arrow_memory_pool());
             for (auto v : values(double_type{}, array)) {
               if (not v) {
                 check(b->AppendNull());
@@ -88,7 +88,7 @@ public:
             // TODO: Maybe slice the array for positive values
             auto overflow = false;
             auto b
-              = duration_type::make_arrow_builder(arrow::default_memory_pool());
+              = duration_type::make_arrow_builder(arrow_memory_pool());
             for (auto v : values(duration_type{}, array)) {
               if (not v) {
                 check(b->AppendNull());

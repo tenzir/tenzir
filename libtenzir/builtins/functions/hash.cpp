@@ -81,7 +81,7 @@ public:
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
       auto hashes_builder
-        = string_type::make_arrow_builder(arrow::default_memory_pool());
+        = string_type::make_arrow_builder(arrow_memory_pool());
       if (config_.salt) {
         for (const auto& value : values(field.type, *array)) {
           const auto digest = tenzir::hash(value, *config_.salt);
@@ -242,7 +242,7 @@ class fun : public virtual function_plugin {
           match(x, f);
           return std::move(hasher).finish();
         };
-        auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = string_type::make_arrow_builder(arrow_memory_pool());
         for (const auto& value : s.values()) {
           auto digest = hash(value);
           if constexpr (concepts::integer<typename HashAlgorithm::result_type>

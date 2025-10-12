@@ -8,6 +8,7 @@
 
 #include "tenzir/series_builder.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
@@ -275,8 +276,8 @@ public:
     auto result = series{};
     if (count == 0) {
       result.type = type();
-      result.array = check(
-        result.type.make_arrow_builder(arrow::default_memory_pool())->Finish());
+      result.array
+        = check(result.type.make_arrow_builder(arrow_memory_pool())->Finish());
     } else {
       result = builder_->finish(count);
     }
@@ -570,13 +571,13 @@ class typed_builder<T> final : public detail::builder_base {
 public:
   explicit typed_builder(series_builder_impl* root)
     requires basic_type<T>
-    : inner_{T::make_arrow_builder(arrow::default_memory_pool())}, type_{T{}} {
+    : inner_{T::make_arrow_builder(arrow_memory_pool())}, type_{T{}} {
     (void)root;
   }
 
   explicit typed_builder(T type)
     requires std::same_as<T, enumeration_type>
-    : inner_{type.make_arrow_builder(arrow::default_memory_pool())},
+    : inner_{type.make_arrow_builder(arrow_memory_pool())},
       type_{std::move(type)} {
   }
 
@@ -713,8 +714,8 @@ public:
     // The following call will reset the list type (and therefore destroy the
     // inner builder) if no elements remain.
     auto result_elements = elements_.finish(ending_offset);
-    auto result = check(
-      arrow::ListArray::FromArrays(*result_offsets, *result_elements.array));
+    auto result = check(arrow::ListArray::FromArrays(
+      *result_offsets, *result_elements.array, arrow_memory_pool()));
     TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
     return {list_type{result_elements.type}, result};
   }

@@ -48,7 +48,7 @@ public:
         }
         if (ps.type == fs.type) {
           // In the "easy" case, both have the same type, so we never split.
-          auto b = ps.type.make_arrow_builder(arrow::default_memory_pool());
+          auto b = ps.type.make_arrow_builder(arrow_memory_pool());
           check(b->Reserve(ps.array->length()));
           for (auto offset = int64_t{}; offset != ps.array->length();) {
             auto count = int64_t{1};

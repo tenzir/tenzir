@@ -46,7 +46,7 @@ class plugin final : public function_plugin {
             [&](const concepts::one_of<arrow::BinaryArray,
                                        arrow::StringArray> auto& array) {
               auto b
-                = return_type::make_arrow_builder(arrow::default_memory_pool());
+                = return_type::make_arrow_builder(arrow_memory_pool());
               check(b->Reserve(array.length()));
               for (auto i = int64_t{}; i < array.length(); ++i) {
                 if (array.IsNull(i)) {
