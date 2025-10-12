@@ -1,0 +1,11 @@
+---
+description: "Set a field to a specific value"
+args:
+  - name: field
+    type: field_path
+    description: "The field to set"
+  - name: value
+    type: string
+    description: "The value to set"
+---
+$field = $value

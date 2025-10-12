@@ -1,0 +1,2 @@
+from {a: 42}
+argspkg::set_field_explicit this.b, "test"
