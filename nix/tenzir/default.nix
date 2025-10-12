@@ -115,6 +115,7 @@ let
       ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
 
       withTenzirPluginsStatic =
+        { prevLayer }:
         selection:
         let
           layerPlugins = selection allPluginSrcs;
@@ -128,6 +129,7 @@ let
                     pkg = final;
                     plugins = [ ];
                   };
+                  plugins = prevLayer.plugins ++ [ layerPlugins ];
                 };
               });
         in
@@ -423,7 +425,9 @@ let
             plugins = [ ];
             withPlugins =
               if isStatic then
-                withTenzirPluginsStatic
+                withTenzirPluginsStatic {
+                  prevLayer = self;
+                }
               else
                 withTenzirPlugins {
                   prevLayer = self;
