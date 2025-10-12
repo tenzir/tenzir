@@ -1,0 +1,8 @@
+error: expected additional positional argument `age`
+ --> tests/packages/udo-args/udo-args-missing-positional.tql:5:1
+  |
+5 | argspkg::greet "Alice"
+  | ^^^^^^^^^^^^^^ 
+  |
+  = usage: argspkg::greet person:string, age:int, [prefix=string, excited=bool]
+  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator
