@@ -1,5 +1,5 @@
 ---
-title: "Fix spawning of demo nodes"
+title: "Fixed spawning of demo nodes"
 type: bugfix
 authors: lava
 pr: 5504
