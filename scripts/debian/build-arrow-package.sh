@@ -40,7 +40,7 @@ apt-get install --no-install-recommends -y \
 SOURCE_TREE="/tmp/src/arrow"
 mkdir -p "${SOURCE_TREE}"
 pushd "${SOURCE_TREE}"
-curl -L "https://github.com/apache/arrow/archive/refs/tags/${ARROW_TAG}.tar.gz" | tar -xz --strip-components=1
+curl -L "https://github.com/apache/arrow/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1
 cd cpp
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
