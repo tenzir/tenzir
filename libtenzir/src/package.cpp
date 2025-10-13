@@ -5,6 +5,8 @@
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 
+#include "tenzir/detail/overload.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 
 #include <tenzir/concept/parseable/core.hpp>
@@ -21,6 +23,8 @@
 
 #include <algorithm>
 #include <string_view>
+#include <type_traits>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -1035,6 +1039,52 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     }
     return current;
   };
+  auto to_parameter_kind = [](const package_operator_parameter& param) {
+    if (param.type == "field_path") {
+      return user_defined_operator::parameter_kind::field_path;
+    }
+    return user_defined_operator::parameter_kind::expression;
+  };
+  auto make_constant_expression = [](data value) -> ast::expression {
+    auto constant_value = match(
+      std::move(value),
+      detail::overload{[](const pattern&) -> ast::constant::kind {
+                         TENZIR_UNREACHABLE();
+                       },
+                       []<class T>(T&& x) -> ast::constant::kind
+                         requires(! std::same_as<std::decay_t<T>, pattern>)
+                       {
+                         return std::forward<T>(x);
+                       }});
+    return ast::expression{
+      ast::constant{std::move(constant_value), location::unknown}};
+  };
+  auto parse_default_expression = [&](const package_operator_parameter& param)
+    -> failure_or<std::optional<ast::expression>> {
+    if (not param.default_) {
+      return std::optional<ast::expression>{};
+    }
+    auto yaml_data = from_yaml(*param.default_);
+    if (not yaml_data) {
+      diagnostic::error("failed to parse default value for parameter '{}'",
+                        param.name)
+        .note("default value: {}", *param.default_)
+        .note("error: {}", yaml_data.error())
+        .emit(dh);
+      return failure::promise();
+    }
+    auto expr = make_constant_expression(std::move(*yaml_data));
+    if (param.type == "field_path") {
+      auto copy = ast::expression{expr};
+      if (! ast::field_path::try_from(std::move(copy))) {
+        diagnostic::error("default value for parameter '{}' must be a selector",
+                          param.name)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    return std::optional<ast::expression>{std::move(expr)};
+  };
   for (const auto& [op_name, op] : pkg.operators) {
     auto parsed = parse_pipeline_with_bad_diagnostics(op.definition, ctx);
     if (! parsed) {
@@ -1057,15 +1107,52 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto& set = parent->defs[op_name.back()];
     // Create user_defined_operator with parameter information
     auto udo = user_defined_operator{std::move(pipe), {}, {}};
+    auto seen_names = std::unordered_set<std::string>{};
+    seen_names.reserve(op.args.size() + op.options.size());
     // Convert positional args
     for (const auto& arg : op.args) {
-      udo.positional_params.push_back({arg.name, arg.type, std::nullopt, true});
+      if (not seen_names.insert(arg.name).second) {
+        diagnostic::error("duplicate parameter '{}' in operator '{}'", arg.name,
+                          fmt::join(op_name, "::"))
+          .emit(dh);
+        return failure::promise();
+      }
+      if (arg.default_) {
+        diagnostic::error("positional parameter '{}' must not specify a "
+                          "default value",
+                          arg.name)
+          .emit(dh);
+        return failure::promise();
+      }
+      udo.positional_params.push_back({
+        arg.name,
+        arg.type,
+        arg.description,
+        to_parameter_kind(arg),
+        std::nullopt,
+        true,
+      });
     }
     // Convert named options
     for (const auto& opt : op.options) {
+      if (not seen_names.insert(opt.name).second) {
+        diagnostic::error("duplicate parameter '{}' in operator '{}'", opt.name,
+                          fmt::join(op_name, "::"))
+          .emit(dh);
+        return failure::promise();
+      }
+      auto default_expr = parse_default_expression(opt);
+      if (default_expr.is_error()) {
+        return failure::promise();
+      }
+      auto required = not default_expr->has_value();
       udo.named_params.push_back({
-        opt.name, opt.type, opt.default_,
-        ! opt.default_.has_value() // required if no default
+        opt.name,
+        opt.type,
+        opt.description,
+        to_parameter_kind(opt),
+        std::move(*default_expr),
+        required,
       });
     }
     set.op = operator_def{std::move(udo)};

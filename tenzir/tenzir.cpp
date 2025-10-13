@@ -433,7 +433,7 @@ auto main(int argc, char** argv) -> int try {
         auto next = base->clone();
         for (auto& [name, def] : to_add) {
           next->add(std::string{entity_pkg_cfg}, name,
-                    user_defined_operator{std::move(def)});
+                    user_defined_operator{std::move(def), {}, {}});
         }
         guard.publish(std::shared_ptr<const registry>{std::move(next)});
       }
