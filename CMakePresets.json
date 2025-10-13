@@ -255,7 +255,6 @@
         "CURL_INCLUDE_DIR": "/opt/homebrew/opt/curl/include",
         "CURL_LIBRARY": "/opt/homebrew/opt/curl/lib/libcurl.dylib",
         "TENZIR_ENABLE_BUNDLED_SIMDJSON": "ON",
-        "TENZIR_PLUGINS": "${sourceDir}/plugins/*;${sourceDir}/contrib/tenzir-plugins/*",
         "TENZIR_PLUGINS_BLACKLIST": "from_velociraptor"
       },
       "environment": {
