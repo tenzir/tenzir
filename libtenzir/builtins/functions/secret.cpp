@@ -12,6 +12,7 @@
 #include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 #include <tenzir/view3.hpp>
 
 namespace tenzir::plugins::secrets {
