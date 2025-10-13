@@ -241,6 +241,7 @@
     },
     {
       "name": "macos-clang-release",
+      "displayName": "macOS Homebrew Clang Release Config",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/clang/release",
       "cacheVariables": {
@@ -259,6 +260,26 @@
       },
       "environment": {
         "PKG_CONFIG_PATH": "/opt/homebrew/opt/curl/lib/pkgconfig"
+      }
+    },
+    {
+      "name": "macos-clang-debug",
+      "displayName": "macOS Homebrew Clang Debug Config",
+      "inherits": ["macos-clang-release"],
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-clang-relwithdebinfo",
+      "displayName": "macOS Homebrew Clang RelWithDebInfo Config",
+      "inherits": ["macos-clang-release"],
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
     }
   ],
