@@ -46,10 +46,8 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Setup Poetry
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: latest
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Generate an app token
         id: generate_token
@@ -111,7 +109,7 @@ jobs:
             --title "$RELEASE_TITLE" \
             --description "$RELEASE_DESCRIPTION"
 
-      - name: Update version.json and poetry version
+      - name: Update version.json and Python package versions
         run: |
           # Extract version without 'v' prefix
           VERSION_NUMBER=$(echo "${{ github.event.inputs.version }}" | sed 's/^v//')
@@ -120,13 +118,19 @@ jobs:
           jq --arg version "${VERSION_NUMBER}" '.["tenzir-version"] = $version' version.json > version.json.tmp
           mv version.json.tmp version.json
 
-          # Update poetry version
-          pushd python
-          poetry version "${VERSION_NUMBER}"
-          popd
+          # Update package versions with uv
+          for package_dir in tenzir-core tenzir-operator tenzir; do
+            uv --directory "python/${package_dir}" version --frozen "${VERSION_NUMBER}"
+          done
+
+          # Keep dependency constraints in sync with the new version
+          UPPER_BOUND=$(uvx --from semver pysemver bump minor "${VERSION_NUMBER}")
+
+          uv --directory python add --package tenzir --frozen "tenzir-core>=${VERSION_NUMBER},<${UPPER_BOUND}"
+          uv --directory python add --package tenzir-operator --frozen "tenzir-core>=${VERSION_NUMBER},<${UPPER_BOUND}"
 
           echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
-          echo "Updated poetry version to: ${VERSION_NUMBER}"
+          echo "Updated Python package versions to: ${VERSION_NUMBER}"
 
       - name: Verify release file was created
         run: |
