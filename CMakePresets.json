@@ -238,6 +238,47 @@
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc-static/release",
         "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON"
       }
+    },
+    {
+      "name": "macos-clang-release",
+      "displayName": "macOS Homebrew Clang Release Config",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "/opt/homebrew/opt/llvm/bin/clang",
+        "CMAKE_CXX_COMPILER": "/opt/homebrew/opt/llvm/bin/clang++",
+        "CMAKE_CXX_FLAGS": "-nostdinc++ -isystem /opt/homebrew/opt/llvm/include/c++/v1 -include stdlib.h",
+        "CMAKE_EXE_LINKER_FLAGS": "-L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++",
+        "CMAKE_SHARED_LINKER_FLAGS": "-L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++",
+        "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/curl",
+        "CURL_ROOT": "/opt/homebrew/opt/curl",
+        "CURL_INCLUDE_DIR": "/opt/homebrew/opt/curl/include",
+        "CURL_LIBRARY": "/opt/homebrew/opt/curl/lib/libcurl.dylib",
+        "TENZIR_ENABLE_BUNDLED_SIMDJSON": "ON",
+        "TENZIR_PLUGINS_BLACKLIST": "from_velociraptor"
+      },
+      "environment": {
+        "PKG_CONFIG_PATH": "/opt/homebrew/opt/curl/lib/pkgconfig"
+      }
+    },
+    {
+      "name": "macos-clang-debug",
+      "displayName": "macOS Homebrew Clang Debug Config",
+      "inherits": ["macos-clang-release"],
+      "binaryDir": "${sourceDir}/build/clang/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-clang-relwithdebinfo",
+      "displayName": "macOS Homebrew Clang RelWithDebInfo Config",
+      "inherits": ["macos-clang-release"],
+      "binaryDir": "${sourceDir}/build/clang/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
     }
   ],
   "buildPresets": [
