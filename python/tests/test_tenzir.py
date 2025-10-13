@@ -1,10 +1,10 @@
 from tenzir import (
     PipelineIO,
     PipelineSpec,
+    TenzirRow,
     collect_pyarrow,
     stream_pipeline,
     to_json_rows,
-    VastRow,
 )
 import tenzir.utils.logging
 import tenzir.utils.asyncio
@@ -103,7 +103,7 @@ def integration_data(path):
 #     )
 #     tenzir = Tenzir(endpoint)
 #     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
-#     rows: list[VastRow] = []
+#     rows: list[TenzirRow] = []
 #     async for row in to_json_rows(result):
 #         rows.append(row)
 #     assert len(rows) == 1

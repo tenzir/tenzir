@@ -55,7 +55,7 @@ async def collect_pyarrow(
 
 
 @dataclass
-class VastRow:
+class TenzirRow:
     """A row wise representation of the data and metadata
 
     - name: the Tenzir type for the row
@@ -94,7 +94,7 @@ def arrow_dict_to_json_dict(dictionary):
 
 async def to_json_rows(
     stream: AsyncIterable[TableSlice],
-) -> AsyncIterable[VastRow]:
+) -> AsyncIterable[TenzirRow]:
     f"""Convert the TableSlice iterator to a row by row iterator with value types
     dumbed down to JSON compatible types
 
@@ -103,4 +103,4 @@ async def to_json_rows(
         batch = to_pyarrow(slice)
         name = core_arrow.name(batch.schema)
         for row in batch.to_pylist():
-            yield VastRow(name, arrow_dict_to_json_dict(row))
+            yield TenzirRow(name, arrow_dict_to_json_dict(row))
