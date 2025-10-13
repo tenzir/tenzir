@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/registry.hpp"
 
+#include "tenzir/concept/parseable/tenzir/yaml.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
@@ -15,13 +16,13 @@
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/tql2/parser.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <limits>
 #include <memory>
 #include <ranges>
 #include <shared_mutex>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -79,6 +80,17 @@ auto make_operator_name(const ast::entity& entity) -> std::string {
   return fmt::format("{}", fmt::join(parts, "::"));
 }
 
+auto parameter_default_string(const ast::expression& expr)
+  -> std::optional<std::string> {
+  if (const auto* constant = try_as<ast::constant>(expr)) {
+    auto data_value = constant->as_data();
+    if (auto yaml = to_yaml(data_value)) {
+      return *yaml;
+    }
+  }
+  return std::nullopt;
+}
+
 auto make_usage_string(std::string_view op_name,
                        const user_defined_operator& udo) -> std::string {
   auto usage = std::string{op_name};
@@ -132,6 +144,85 @@ auto make_usage_string(std::string_view op_name,
   return usage;
 }
 
+auto make_parameter_note(const user_defined_operator& udo)
+  -> std::optional<std::string> {
+  struct row {
+    std::string name;
+    std::string type;
+    std::string default_value;
+    std::vector<std::string> description_lines;
+  };
+  auto rows = std::vector<row>{};
+  rows.reserve(udo.positional_params.size() + udo.named_params.size());
+  auto append_row = [&](const user_defined_operator::parameter& param) {
+    auto default_value = std::string{"-"};
+    if (param.default_value) {
+      if (auto default_str = parameter_default_string(*param.default_value)) {
+        default_value = *default_str;
+      } else {
+        default_value = "<expr>";
+      }
+    }
+    auto description_lines = std::vector<std::string>{};
+    if (param.description && ! param.description->empty()) {
+      auto remaining = std::string_view{*param.description};
+      while (true) {
+        auto pos = remaining.find('\n');
+        if (pos == std::string_view::npos) {
+          description_lines.emplace_back(remaining);
+          break;
+        }
+        description_lines.emplace_back(remaining.substr(0, pos));
+        remaining.remove_prefix(pos + 1);
+      }
+    }
+    if (description_lines.empty()) {
+      description_lines.emplace_back("-");
+    }
+    rows.push_back(row{
+      .name = param.name,
+      .type = parameter_type_label(param),
+      .default_value = std::move(default_value),
+      .description_lines = std::move(description_lines),
+    });
+  };
+  for (const auto& param : udo.positional_params) {
+    append_row(param);
+  }
+  for (const auto& param : udo.named_params) {
+    append_row(param);
+  }
+  if (rows.empty()) {
+    return std::nullopt;
+  }
+  auto name_width = size_t{4};
+  auto type_width = size_t{4};
+  auto default_width = size_t{7};
+  for (const auto& row : rows) {
+    name_width = std::max(name_width, row.name.size());
+    type_width = std::max(type_width, row.type.size());
+    default_width = std::max(default_width, row.default_value.size());
+  }
+  auto note = std::string{"parameters:\n"};
+  note += fmt::format("  {:{}}  {:{}}  {:{}}  {}\n", "name", name_width,
+                      "type", type_width, "default", default_width,
+                      "description");
+  for (const auto& row : rows) {
+    note += fmt::format("  {:{}}  {:{}}  {:{}}  {}\n", row.name, name_width,
+                        row.type, type_width, row.default_value, default_width,
+                        row.description_lines.front());
+    for (size_t i = 1; i < row.description_lines.size(); ++i) {
+      note += fmt::format("  {:{}}  {:{}}  {:{}}  {}\n", "", name_width, "",
+                          type_width, "", default_width,
+                          row.description_lines[i]);
+    }
+  }
+  if (! note.empty() && note.back() == '\n') {
+    note.pop_back();
+  }
+  return note;
+}
+
 auto user_defined_operator_docs() -> const std::string& {
   static const auto docs
     = std::string{"https://docs.tenzir.com/reference/operators/"
@@ -149,8 +240,14 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
       auto op_name = make_operator_name(inv.self);
       auto usage = make_usage_string(op_name, udo);
       const auto& docs = user_defined_operator_docs();
+      auto parameter_note = make_parameter_note(udo);
       auto fail = [&](diagnostic_builder d) -> failure_or<operator_ptr> {
-        std::move(d).usage(usage).docs(docs).emit(ctx);
+        auto builder = std::move(d).usage(usage);
+        if (parameter_note) {
+          builder = std::move(builder).note(*parameter_note);
+        }
+        builder = std::move(builder).docs(docs);
+        std::move(builder).emit(ctx);
         return failure::promise();
       };
 
