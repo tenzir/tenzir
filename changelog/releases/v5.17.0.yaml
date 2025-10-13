@@ -1,0 +1,9 @@
+title: "Package UDOs"
+description: "This release introduces user-defined operators in packages, allowing you to extend Tenzir with custom operators defined in TQL files. It also adds list manipulation functions, a recursive search function, and improved memory management."
+changes:
+  - award-social-maybe
+  - cable-strand-plaza
+  - guest-steel-events
+  - latter-intent-export
+  - spoken-vessel-south
+  - timer-young-joint
