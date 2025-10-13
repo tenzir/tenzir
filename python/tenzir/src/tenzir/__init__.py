@@ -13,7 +13,7 @@ _PIPELINE_EXPORTS = {
     "stream_pipeline",
 }
 _CONVERT_EXPORTS = {
-    "VastRow",
+    "TenzirRow",
     "arrow_dict_to_json_dict",
     "collect_pyarrow",
     "to_json_rows",
