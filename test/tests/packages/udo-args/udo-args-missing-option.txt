@@ -5,4 +5,8 @@ error: required argument `required_opt` was not provided
   | ^^^^^^^^^^^^^^^^^^^^^^^ 
   |
   = usage: argspkg::require_option value:string, required_opt=string
+  = note: parameters:
+            name          type    default  description
+            value         string  -        -
+            required_opt  string  -        -
   = docs: https://docs.tenzir.com/reference/operators/user_defined_operator
