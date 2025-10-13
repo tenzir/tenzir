@@ -20,8 +20,95 @@
 #include <caf/detail/type_list.hpp>
 
 #include <type_traits>
+#include <unordered_set>
 
 namespace tenzir::ast {
+
+namespace {
+
+class named_expression_substituter
+  : public ast::visitor<named_expression_substituter> {
+public:
+  named_expression_substituter(
+    const std::unordered_map<std::string, ast::expression>& replacements)
+    : replacements_{replacements} {
+  }
+
+  void visit(ast::expression& expr) {
+    if (expr.kind) {
+      if (auto* var = std::get_if<ast::dollar_var>(&*expr.kind)) {
+        auto name = std::string{var->name_without_dollar()};
+        if (! shadowed_.contains(name)) {
+          if (auto it = replacements_.find(name); it != replacements_.end()) {
+            expr = it->second;
+            return;
+          }
+        }
+      }
+    }
+    enter(expr);
+  }
+
+  void visit(ast::let_stmt& stmt) {
+    visit(stmt.expr);
+    auto name = std::string{stmt.name_without_dollar()};
+    if (replacements_.contains(name)) {
+      shadowed_.insert(name);
+    }
+  }
+
+  void visit(ast::pipeline& pipe) {
+    for (auto& stmt : pipe.body) {
+      visit(stmt);
+    }
+  }
+
+  void visit(ast::selector& selector) {
+    selector.match(
+      [&](ast::field_path& fp) {
+        if (! fp.inner().kind) {
+          return;
+        }
+        if (auto* var = std::get_if<ast::dollar_var>(&*fp.inner().kind)) {
+          auto name = std::string{var->name_without_dollar()};
+          if (shadowed_.contains(name)) {
+            return;
+          }
+          auto it = replacements_.find(name);
+          if (it == replacements_.end()) {
+            return;
+          }
+          if (auto new_selector = ast::selector::try_from(it->second)) {
+            selector = std::move(*new_selector);
+          }
+        }
+      },
+      [](ast::meta&) {
+        // Nothing to do
+      });
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+private:
+  const std::unordered_map<std::string, ast::expression>& replacements_;
+  std::unordered_set<std::string> shadowed_;
+};
+
+} // namespace
+
+void substitute_named_expressions(
+  pipeline& pipe,
+  const std::unordered_map<std::string, ast::expression>& replacements) {
+  if (replacements.empty()) {
+    return;
+  }
+  auto substituter = named_expression_substituter{replacements};
+  substituter.visit(pipe);
+}
 
 auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
@@ -55,8 +142,7 @@ auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
         return false;
       },
       [&](ast::dollar_var&) -> variant<ast::expression*, bool> {
-        // Allow dollar_vars as field paths for UDO parameters
-        // The path will be empty, signaling this is a placeholder
+        // Allow dollar variables as placeholders for substitution.
         return true;
       },
       [](auto&) -> variant<ast::expression*, bool> {

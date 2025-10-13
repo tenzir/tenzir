@@ -23,11 +23,18 @@ struct user_defined_operator {
   /// Definition with resolved entities, but without resolved `let`s.
   ast::pipeline definition;
 
+  enum class parameter_kind {
+    expression,
+    field_path,
+  };
+
   /// Parameter definitions for arguments and options
   struct parameter {
     std::string name;
-    std::string type;
-    std::optional<std::string> default_value;
+    std::string type_hint;
+    std::optional<std::string> description;
+    parameter_kind kind = parameter_kind::expression;
+    std::optional<ast::expression> default_value;
     bool required = true;
   };
   std::vector<parameter> positional_params;
