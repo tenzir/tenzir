@@ -266,7 +266,6 @@
       "name": "macos-clang-debug",
       "displayName": "macOS Homebrew Clang Debug Config",
       "inherits": ["macos-clang-release"],
-      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/clang/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
@@ -276,7 +275,6 @@
       "name": "macos-clang-relwithdebinfo",
       "displayName": "macOS Homebrew Clang RelWithDebInfo Config",
       "inherits": ["macos-clang-release"],
-      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/clang/relwithdebinfo",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
