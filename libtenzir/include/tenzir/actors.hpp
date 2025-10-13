@@ -303,7 +303,8 @@ struct exec_node_actor_traits {
     // Emit a diagnostic through the exec node.
     auto(diagnostic diag)->caf::result<void>,
     // Uodate demand.
-    auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size)
+    auto(atom::pull, exec_node_sink_actor sink, uint64_t elements,
+         uint64_t batches)
       ->caf::result<void>>
     // Source.
     ::append_from<exec_node_sink_actor_traits::signatures>;

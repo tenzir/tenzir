@@ -632,11 +632,11 @@ struct exec_node_state {
             fmt::format("{} does not accept bytes as input", *self));
         }
       },
-      [this](atom::pull, exec_node_sink_actor& sink,
-             uint64_t batch_size) -> caf::result<void> {
+      [this](atom::pull, exec_node_sink_actor& sink, uint64_t elements,
+             uint64_t batches) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
         if constexpr (not std::is_same_v<Output, std::monostate>) {
-          return pull(std::move(sink), batch_size);
+          return pull(std::move(sink), elements, batches);
         } else {
           return caf::make_error(
             ec::logic_error,
@@ -701,9 +701,18 @@ struct exec_node_state {
 
   /// The currently open demand.
   struct demand {
+    demand(caf::typed_response_promise<void> rp, exec_node_sink_actor sink,
+           uint64_t remaining_elements, uint64_t remaining_batches)
+      : rp{std::move(rp)},
+        sink{std::move(sink)},
+        remaining_elements{remaining_elements},
+        remaining_batches{remaining_batches} {
+    }
+
     caf::typed_response_promise<void> rp = {};
     exec_node_sink_actor sink = {};
-    uint64_t remaining = {};
+    uint64_t remaining_elements = {};
+    uint64_t remaining_batches = {};
   };
   std::optional<struct demand> demand = {};
   bool issue_demand_inflight = {};
@@ -889,8 +898,14 @@ struct exec_node_state {
     return {};
   }
 
+  auto has_active_demand() const -> bool {
+    return demand and demand->remaining_batches > 0
+           and demand->remaining_elements > 0;
+  }
+
   auto advance_generator() -> void {
     auto time_processing_guard = make_timer_guard(metrics.time_processing);
+    TENZIR_ASSERT(instance);
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
       // generator here.
@@ -906,10 +921,9 @@ struct exec_node_state {
       }
       return;
     } else {
-      if (not demand or instance->it == instance->gen.end()) {
+      if (not has_active_demand() or instance->it == instance->gen.end()) {
         return;
       }
-      TENZIR_ASSERT(instance);
       TENZIR_TRACE("{} {} processes", *self, op->name());
       auto output = std::move(*instance->it);
       const auto output_size = size(output);
@@ -934,22 +948,25 @@ struct exec_node_state {
       metrics.outbound_measurement.num_approx_bytes += approx_bytes(output);
       TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
                    output_size);
-      if (demand->remaining <= output_size) {
-        demand->remaining = 0;
-      } else {
-        // TODO: Should we make demand->remaining available in the operator
-        // control plane?
-        demand->remaining -= output_size;
-      }
+      // We already checked that there is active demand.
+      TENZIR_ASSERT(has_active_demand());
+      demand->remaining_batches -= 1;
+      demand->remaining_elements
+        -= std::min(output_size, demand->remaining_elements);
+      // We have to remember whether this is the push that finishes the demand
+      // because there can be multiple pushes in flight in parallel.
+      auto finished = not has_active_demand();
       self->mail(atom::push_v, std::move(output))
         .request(demand->sink, caf::infinite)
         .then(
-          [this, output_size, should_quit]() {
+          [this, output_size, should_quit, finished]() {
             auto time_scheduled_guard
               = make_timer_guard(metrics.time_scheduled);
             TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
                          output_size);
-            if (demand and demand->remaining == 0) {
+            TENZIR_ASSERT(demand);
+            if (finished) {
+              TENZIR_ASSERT(demand->rp.pending());
               demand->rp.deliver();
               demand.reset();
             }
@@ -1051,33 +1068,37 @@ struct exec_node_state {
   }
 
   auto issue_demand() -> void {
-    if (not previous or inbound_buffer_size + min_elements > max_elements
-        or issue_demand_inflight) {
+    if (not previous or issue_demand_inflight) {
       return;
     }
-    const auto demand = inbound_buffer.size() < max_batches
-                          ? max_elements - inbound_buffer_size
-                          : 0;
-    TENZIR_TRACE("{} {} issues demand for up to {} elements", *self, op->name(),
-                 demand);
+    if (inbound_buffer_size + min_elements >= max_elements) {
+      return;
+    }
+    auto elements = max_elements - inbound_buffer_size;
+    if (inbound_buffer.size() >= max_batches) {
+      return;
+    }
+    auto batches = inbound_buffer.size() - max_batches;
+    TENZIR_TRACE("{} {} issues demand for up to {} elements or {} batches",
+                 *self, op->name(), elements, batches);
     issue_demand_inflight = true;
     self
-      ->mail(atom::pull_v, static_cast<exec_node_sink_actor>(self),
-             detail::narrow_cast<uint64_t>(demand))
+      ->mail(atom::pull_v, static_cast<exec_node_sink_actor>(self), elements,
+             batches)
       .request(previous, caf::infinite)
       .then(
-        [this, demand] {
+        [this] {
           auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
           TENZIR_TRACE("{} {} had its demand fulfilled", *self, op->name());
+          TENZIR_ASSERT(issue_demand_inflight);
           issue_demand_inflight = false;
-          if (demand > 0) {
-            schedule_run(false);
-          }
+          schedule_run(false);
         },
-        [this, demand](const caf::error& err) {
+        [this](const caf::error& err) {
           auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
           TENZIR_DEBUG("{} {} failed to get its demand fulfilled: {}", *self,
                        op->name(), err);
+          TENZIR_ASSERT(issue_demand_inflight);
           issue_demand_inflight = false;
           if (err and err != caf::sec::request_receiver_down
               and err != caf::exit_reason::remote_link_unreachable) {
@@ -1085,8 +1106,10 @@ struct exec_node_state {
               .note("{} {} failed to pull from previous execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());
-          } else if (demand > 0) {
-            schedule_run(false);
+          } else {
+            // TODO: We seem to assume that this error is recoverable, but I'm
+            // not sure whether that makes sense here.
+            schedule_run(true);
           }
         });
   }
@@ -1137,24 +1160,27 @@ struct exec_node_state {
     produced_output = false;
   }
 
-  auto pull(exec_node_sink_actor sink, uint64_t batch_size) -> caf::result<void>
+  auto pull(exec_node_sink_actor sink, uint64_t elements, uint64_t batches)
+    -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
-    TENZIR_TRACE("{} {} received downstream demand for {} elements", *self,
-                 op->name(), batch_size);
-    if (demand) {
-      demand->rp.deliver();
-    }
-    if (batch_size == 0) {
-      demand.reset();
-      return {};
-    }
+    TENZIR_TRACE("{} {} received downstream demand for {} elements or {} "
+                 "batches",
+                 *self, op->name(), elements, batches);
+    // We only keep one demand in flight at a time. Our implementation guarantees
+    // that the final push is answered before we get the next pull message.
+    TENZIR_ASSERT(not demand);
+    TENZIR_ASSERT(sink);
+    TENZIR_ASSERT(elements > 0);
+    TENZIR_ASSERT(batches > 0);
     if (instance->it == instance->gen.end()) {
+      // We could have already terminated in the meantime. However, we call
+      // `quit` then, so probably this could be cleaned up.
       return {};
     }
     schedule_run(false);
     auto& pr = demand.emplace(self->make_response_promise<void>(),
-                              std::move(sink), batch_size);
+                              std::move(sink), elements, batches);
     return pr.rp;
   }
 
