@@ -59,8 +59,8 @@ struct bridge_state {
 
   std::unique_ptr<diagnostic_handler> diagnostics_handler = {};
 
-  std::queue<table_slice> buffer = {};
-  caf::typed_response_promise<table_slice> buffer_rp = {};
+  std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> buffer;
+  caf::typed_response_promise<table_slice> buffer_rp;
 
   auto bind_expr(const type& schema, const expression& expr)
     -> const expression* {
@@ -144,12 +144,19 @@ struct bridge_state {
     }
   }
 
-  auto add_events(table_slice slice, event_source source) -> void {
+  auto add_events(table_slice slice, event_source source,
+                  caf::typed_response_promise<void> rp) -> void {
     if (slice.rows() == 0) {
+      if (rp.pending()) {
+        rp.deliver();
+      }
       return;
     }
     // We ignore live events if we're not asked to listen to live events.
     if (source == event_source::live and not mode.live) {
+      if (rp.pending()) {
+        rp.deliver();
+      }
       return;
     }
     // Live and unpersisted events we still need to filter.
@@ -157,11 +164,17 @@ struct bridge_state {
       const auto resolved = check(resolve(taxonomies, expr, slice.schema()));
       const auto* bound_expr = bind_expr(slice.schema(), resolved);
       if (not bound_expr) {
-        // failing to bind is not an error.
+        // Failing to bind is not an error.
+        if (rp.pending()) {
+          rp.deliver();
+        }
         return;
       }
       auto filtered = filter(slice, *bound_expr);
       if (not filtered) {
+        if (rp.pending()) {
+          rp.deliver();
+        }
         return;
       }
       slice = std::move(*filtered);
@@ -174,6 +187,9 @@ struct bridge_state {
       if (num_queued_total >= size_threshold) {
         diagnostic::warning("export failed to keep up and dropped events")
           .emit(*diagnostics_handler);
+        if (rp.pending()) {
+          rp.deliver();
+        }
         return;
       }
     }
@@ -182,11 +198,14 @@ struct bridge_state {
       TENZIR_ASSERT(not is_done());
       metrics[slice.schema()].emitted += slice.rows();
       buffer_rp.deliver(std::move(slice));
+      if (rp.pending()) {
+        rp.deliver();
+      }
       return;
     }
     metrics[slice.schema()].queued += slice.rows();
     num_queued_total += slice.rows();
-    buffer.push(std::move(slice));
+    buffer.emplace_back(std::move(slice), std::move(rp));
   }
 
   ~bridge_state() noexcept {
@@ -195,6 +214,9 @@ struct bridge_state {
     }
     if (buffer_rp.pending()) {
       buffer_rp.deliver(caf::none);
+    }
+    for (auto& [_, rp] : buffer) {
+      rp.deliver();
     }
   }
 };
@@ -288,7 +310,8 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
           for (auto& slice : *self->state().unpersisted_events) {
             if (slice.import_time() > max_import_time) {
               self->state().add_events(std::move(slice),
-                                       event_source::unpersisted);
+                                       event_source::unpersisted,
+                                       caf::typed_response_promise<void>{});
             }
           }
           self->state().unpersisted_events.reset();
@@ -311,7 +334,8 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
                                self->current_sender()
                                    == self->state().importer_address
                                  ? event_source::live
-                                 : event_source::retro);
+                                 : event_source::retro,
+                               self->make_response_promise<void>());
       return {};
     },
     [self](atom::get) -> caf::result<table_slice> {
@@ -321,8 +345,8 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
         return table_slice{};
       }
       if (not self->state().buffer.empty()) {
-        auto slice = std::move(self->state().buffer.front());
-        self->state().buffer.pop();
+        auto [slice, rp] = std::move(self->state().buffer.front());
+        self->state().buffer.pop_front();
         TENZIR_ASSERT(slice.rows() > 0);
         auto& metric = self->state().metrics[slice.schema()];
         TENZIR_ASSERT(metric.queued >= slice.rows());
@@ -330,6 +354,7 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
         metric.queued -= slice.rows();
         self->state().num_queued_total -= slice.rows();
         self->state().try_pop_partition();
+        rp.deliver();
         return slice;
       }
       self->state().buffer_rp = self->make_response_promise<table_slice>();

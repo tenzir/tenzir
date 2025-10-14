@@ -115,21 +115,24 @@ auto decode_ipc_stream(chunk_ptr chunk)
                                     get_generator_result.status().ToString()));
   }
   auto gen = get_generator_result.MoveValueUnsafe();
-  return []([[maybe_unused]] auto reader,
-            auto gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
-    while (true) {
-      auto next = gen();
-      if (not next.is_finished()) {
-        next.Wait();
+  return
+    []([[maybe_unused]] auto reader,
+       decltype(gen) gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
+      while (true) {
+        auto next = gen();
+        if (not next.is_finished()) {
+          // TODO: We block the CAF worker thread here. Presumably we are okay
+          // with this since work is happening in an Arrow worker thread.
+          next.Wait();
+        }
+        TENZIR_ASSERT(next.is_finished());
+        auto result = check(next.MoveResult());
+        if (arrow::IsIterationEnd(result)) {
+          co_return;
+        }
+        co_yield std::move(result);
       }
-      TENZIR_ASSERT(next.is_finished());
-      auto result = check(next.MoveResult());
-      if (arrow::IsIterationEnd(result)) {
-        co_return;
-      }
-      co_yield std::move(result);
-    }
-  }(std::move(reader), std::move(gen));
+    }(std::move(reader), std::move(gen));
 }
 
 class passive_feather_store final : public passive_store {

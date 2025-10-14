@@ -113,6 +113,9 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
     self->quit(std::move(policy.error()));
     return importer_actor::behavior_type::make_empty_behavior();
   }
+  self->set_error_handler([=](const caf::error& err) {
+    self->quit(err);
+  });
   if (auto timeout
       = try_get_only<duration>(config, "tenzir.import-buffer-timeout")) {
     if (*timeout) {

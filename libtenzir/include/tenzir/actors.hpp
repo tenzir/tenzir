@@ -98,12 +98,8 @@ using store_actor = typed_actor_fwd<
 
 /// Passive store default implementation actor interface.
 using default_passive_store_actor = typed_actor_fwd<
-  // Proceed with a previously received `extract` query.
-  auto(atom::internal, atom::extract, uuid)->caf::result<void>,
-  // Proceed with a previously received `count` query.
-  auto(atom::internal, atom::count, uuid)->caf::result<void>>
   // Based on the store_actor interface.
-  ::extend_with<store_actor>::unwrap;
+  >::extend_with<store_actor>::unwrap;
 
 /// The STORE BUILDER actor interface.
 using store_builder_actor = typed_actor_fwd<
@@ -118,12 +114,8 @@ using store_builder_actor = typed_actor_fwd<
 
 /// Active store default implementation actor interface.
 using default_active_store_actor = typed_actor_fwd<
-  // Proceed with a previously received `extract` query.
-  auto(atom::internal, atom::extract, uuid)->caf::result<void>,
-  // Proceed with a previously received `count` query.
-  auto(atom::internal, atom::count, uuid)->caf::result<void>>
   // Based on the store_builder_actor interface.
-  ::extend_with<store_builder_actor>::unwrap;
+  >::extend_with<store_builder_actor>::unwrap;
 
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
