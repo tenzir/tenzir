@@ -66,32 +66,32 @@ struct exec_node_defaults {
   inline static constexpr uint64_t min_elements = 1;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
-  inline static constexpr uint64_t max_elements = 0;
+  inline static constexpr uint64_t max_elements = 1;
 
   /// Defines how many batches may be buffered at most. This is an additional
   /// upper bound to the number of buffered elements that protects against a
   /// high memory usage from having too many small batches.
-  inline static constexpr uint64_t max_batches = 20;
+  inline static constexpr uint64_t max_batches = 1;
 };
 
 template <>
 struct exec_node_defaults<table_slice> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
-  inline static constexpr uint64_t min_elements = 8_Ki;
+  inline static constexpr uint64_t min_elements = 1;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
-  inline static constexpr uint64_t max_elements = 254_Ki;
+  inline static constexpr uint64_t max_elements = 1;
 };
 
 template <>
 struct exec_node_defaults<chunk_ptr> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
-  inline static constexpr uint64_t min_elements = 128_Ki;
+  inline static constexpr uint64_t min_elements = 1;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
-  inline static constexpr uint64_t max_elements = 4_Mi;
+  inline static constexpr uint64_t max_elements = 1;
 };
 
 } // namespace
@@ -697,7 +697,7 @@ struct exec_node_state {
 
   /// The inbound buffer.
   std::deque<Input> inbound_buffer = {};
-  uint64_t inbound_buffer_size = {};
+  uint64_t inbound_buffer_elements = {};
 
   /// The currently open demand.
   struct demand {
@@ -1018,7 +1018,7 @@ struct exec_node_state {
       auto input = std::move(inbound_buffer.front());
       inbound_buffer.pop_front();
       const auto input_size = size(input);
-      inbound_buffer_size -= input_size;
+      inbound_buffer_elements -= input_size;
       TENZIR_TRACE("{} {} uses {} elements", *self, op->name(), input_size);
       co_yield std::move(input);
     }
@@ -1071,14 +1071,14 @@ struct exec_node_state {
     if (not previous or issue_demand_inflight) {
       return;
     }
-    if (inbound_buffer_size + min_elements >= max_elements) {
+    if (inbound_buffer_elements + min_elements > max_elements) {
       return;
     }
-    auto elements = max_elements - inbound_buffer_size;
+    auto elements = max_elements - inbound_buffer_elements;
     if (inbound_buffer.size() >= max_batches) {
       return;
     }
-    auto batches = inbound_buffer.size() - max_batches;
+    auto batches = max_batches - inbound_buffer.size();
     TENZIR_TRACE("{} {} issues demand for up to {} elements or {} batches",
                  *self, op->name(), elements, batches);
     issue_demand_inflight = true;
@@ -1195,10 +1195,14 @@ struct exec_node_state {
     TENZIR_ASSERT(input_size > 0);
     TENZIR_TRACE("{} {} received {} elements from upstream", *self, op->name(),
                  input_size);
+    // The protocol ensures that the maximum number of batches is not exceeded.
+    // This does not apply to the element count since we do not want to perform
+    // slicing to maintain the same invariant there.
+    TENZIR_ASSERT(inbound_buffer.size() <= max_batches);
     metrics.inbound_measurement.num_elements += input_size;
     metrics.inbound_measurement.num_batches += 1;
     metrics.inbound_measurement.num_approx_bytes += approx_bytes(input);
-    inbound_buffer_size += input_size;
+    inbound_buffer_elements += input_size;
     inbound_buffer.push_back(std::move(input));
     schedule_run(false);
     return {};
