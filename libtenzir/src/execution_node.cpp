@@ -899,6 +899,10 @@ struct exec_node_state {
   }
 
   auto has_active_demand() const -> bool {
+    // We pretend that the sink always has demand.
+    if constexpr (std::is_same_v<Output, std::monostate>) {
+      return true;
+    }
     return demand and demand->remaining_batches > 0
            and demand->remaining_elements > 0;
   }
@@ -1124,31 +1128,29 @@ struct exec_node_state {
     issue_demand();
     // Advance the operator's generator.
     advance_generator();
-    // We can continue execution under the following circumstances:
-    // 1. The operator's generator is not yet completed.
-    // 2. The operator did not signal that we're supposed to wait.
-    // 3. The operator has one of the three following reasons to do work:
-    //   a. The operator has downstream demand and can produce output
-    //      independently from receiving input, or receives no further input.
-    //   b. The operator has input it can consume.
-    //   c. The operator is a command, i.e., has both a source and a sink.
-    const auto has_demand
-      = demand.has_value() or std::is_same_v<Output, std::monostate>;
-    const auto should_continue
-      = instance->it != instance->gen.end()                         // (1)
-        and not waiting                                             // (2)
-        and ((has_demand and not previous)                          // (3a)
-             or not inbound_buffer.empty()                          // (3b)
-             or detail::are_same_v<std::monostate, Input, Output>); // (3c)
-    if (should_continue) {
-      schedule_run(false);
-    } else if (not waiting and (has_demand or not previous)) {
-      // If we shouldn't continue, but there is an upstream demand, then we may
-      // be in a situation where the operator has internally buffered events and
-      // needs to be polled until some operator-internal timeout expires before
-      // it yields the results. We use exponential backoff for this with 25%
-      // increments.
-      schedule_run(true);
+    // We are only allowed to run the generator again if that is possible, it's
+    // not waiting and there is active demand.
+    auto may_continue = instance->it != instance->gen.end() and not waiting
+                        and has_active_demand();
+    if (may_continue) {
+      // If we may continue, we have to decide whether we are in a situation
+      // where there definitely is work to be done or where we are just polling
+      // the operator.
+      auto can_definitely_do_work =
+        // If we have unconsumed input, there is definitely
+        // something for the operator to do.
+        not inbound_buffer.empty()
+        // When the previous execution node exits (or we are a source in the
+        // first place), then we want to continue directly because we want to
+        // communicate to the operator that it's done. If it's still doing
+        // polling as part of it's exit routine, then this is incorrect, but we
+        // are okay with that here.
+        or not previous;
+      if (can_definitely_do_work) {
+        schedule_run(false);
+      } else {
+        schedule_run(true);
+      }
     } else {
       TENZIR_TRACE("{} {} idles", *self, op->name());
     }
