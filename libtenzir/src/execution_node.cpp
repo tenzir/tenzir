@@ -66,32 +66,32 @@ struct exec_node_defaults {
   inline static constexpr uint64_t min_elements = 1;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
-  inline static constexpr uint64_t max_elements = 1;
+  inline static constexpr uint64_t max_elements = 0;
 
   /// Defines how many batches may be buffered at most. This is an additional
   /// upper bound to the number of buffered elements that protects against a
   /// high memory usage from having too many small batches.
-  inline static constexpr uint64_t max_batches = 1;
+  inline static constexpr uint64_t max_batches = 10;
 };
 
 template <>
 struct exec_node_defaults<table_slice> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
-  inline static constexpr uint64_t min_elements = 1;
+  inline static constexpr uint64_t min_elements = 8_Ki;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
-  inline static constexpr uint64_t max_elements = 1;
+  inline static constexpr uint64_t max_elements = 254_Ki;
 };
 
 template <>
 struct exec_node_defaults<chunk_ptr> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
-  inline static constexpr uint64_t min_elements = 1;
+  inline static constexpr uint64_t min_elements = 128_Ki;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
-  inline static constexpr uint64_t max_elements = 1;
+  inline static constexpr uint64_t max_elements = 4_Mi;
 };
 
 } // namespace
