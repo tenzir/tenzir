@@ -81,12 +81,12 @@ template <class ResultType>
 struct base_query_state {
   /// Generator producing results per stored table slice.
   generator<ResultType> result_generator = {};
-  /// Iterator for result of processing current table lsice.
-  typename generator<ResultType>::iterator result_iterator = {};
   /// Aggregator for number of matching events.
   uint64_t num_hits = {};
   /// Actor to send the final / intermediate results to.
   receiver_actor<ResultType> sink = {};
+  /// Delivers the number of hits after all results have been sent.
+  caf::typed_response_promise<uint64_t> rp;
   /// Start time for metrics tracking.
   std::chrono::steady_clock::time_point start
     = std::chrono::steady_clock::now();
@@ -109,7 +109,6 @@ struct default_passive_store_state {
   std::string store_type = {};
 
   std::unordered_map<uuid, extract_query_state> running_extractions = {};
-  std::unordered_map<uuid, count_query_state> running_counts = {};
 };
 
 /// Spawns a store actor for a passive store.
