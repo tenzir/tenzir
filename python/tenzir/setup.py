@@ -4,6 +4,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -13,11 +14,13 @@ try:
 except ImportError:  # pragma: no cover - platform is part of stdlib
     platform = None
 
+from distutils import log
+from typing import override
+
 from setuptools import Distribution, setup
+from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 from setuptools.command.build_py import build_py as _build_py
 from setuptools.command.sdist import sdist as _sdist
-from typing import override
-from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 DEFAULT_ATTR = "tenzir-static"
 ENV_SKIP = "TENZIR_SKIP_NIX_BUILD"
@@ -111,20 +114,7 @@ def _run_nix() -> list[Path]:
             if child.is_symlink():
                 child.unlink()
 
-        for src_dir in extracted_root.iterdir():
-            dest_dir = PACKAGE_ROOT / src_dir.name
-            _ = shutil.copytree(src_dir, dest_dir, symlinks=True)
-            if src_dir.name == "share":
-                wheelhouse = dest_dir / "tenzir" / "python" / "wheelhouse"
-                if wheelhouse.exists():
-                    for wheel in wheelhouse.glob("*.whl"):
-                        name = wheel.name.lower()
-                        if name.startswith("tenzir_operator-") or name.startswith(
-                            "python_box-"
-                        ):
-                            continue
-                        wheel.unlink()
-            staged.append(dest_dir)
+        _ = shutil.copytree(extracted_root, PACKAGE_ROOT)
 
     return staged
 
@@ -174,15 +164,15 @@ class BdistWheel(_bdist_wheel):
     def finalize_options(self) -> None:
         plat_override = os.environ.get(ENV_PLAT)
         if plat_override:
-            self.plat_name = plat_override.replace("-", "_")
-            self.plat_name_supplied = True
+            self.plat_name : str | None = plat_override.replace("-", "_")
+            self.plat_name_supplied : bool = True
         elif platform:
             machine = platform.machine().lower()
             system = platform.system().lower()
             if system == "linux" and machine in {"x86_64", "amd64"}:
-                self.plat_name = "linux_x86_64"
+                self.plat_name = "manylinux_2_5_x86_64"
             elif system == "linux" and machine in {"aarch64", "arm64"}:
-                self.plat_name = "linux_aarch64"
+                self.plat_name = "manylinux_2_5_aarch64"
             elif system == "darwin" and machine in {"arm64", "aarch64"}:
                 self.plat_name = "macosx_11_0_arm64"
             elif system == "darwin" and machine in {"x86_64", "amd64"}:
@@ -190,7 +180,7 @@ class BdistWheel(_bdist_wheel):
             if getattr(self, "plat_name", None):
                 self.plat_name_supplied = True
         super().finalize_options()
-        self.root_is_pure = False
+        self.root_is_pure: bool | None = False
 
     @override
     def get_tag(self):
@@ -201,8 +191,49 @@ class BdistWheel(_bdist_wheel):
     def run(self) -> None:
         try:
             super().run()
+            for n, x in enumerate(self.distribution.dist_files):
+                command, pyversion, file = x
+                if not file.endswith(".whl"):
+                    continue
+                new_file = self._retag_wheel(file)
+                if not new_file:
+                    continue
+                self.distribution.dist_files[n] = (command, pyversion, new_file)
         finally:
             _cleanup_build_dir()
+
+    def _retag_wheel(self, input_path: str) -> str | None:
+        if os.environ.get(ENV_PLAT):
+            return None
+        if not platform:
+            return None
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        tag = None
+        if system == "linux" and machine in {"x86_64", "amd64"}:
+            tag = "manylinux_2_5_x86_64.musllinux_1_0_x86_64"
+        elif system == "linux" and machine in {"aarch64", "arm64"}:
+            tag = "manylinux_2_5_aarch64.musllinux_1_0_aarch64"
+        if not tag:
+            return None
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "wheel",
+                "tags",
+                input_path,
+                "--remove",
+                "--platform-tag",
+                tag,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        output_path = Path(input_path).parent / result.stdout.strip()
+        log.info(f"retagged {input_path} to {output_path}")
+        return str(output_path)
 
 
 _ = setup(
