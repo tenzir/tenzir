@@ -8,14 +8,13 @@
 
 #include "tenzir/arrow_memory_pool.hpp"
 
+#include "tenzir/allocator.hpp"
 #include "tenzir/detail/assert.hpp"
 
 #include <arrow/result.h>
 #include <arrow/status.h>
 
-#include <atomic>
 #include <cstdint>
-#include <mimalloc.h>
 
 namespace tenzir {
 
@@ -31,12 +30,7 @@ auto* const kZeroSizeArea = reinterpret_cast<uint8_t*>(&zero_size_area);
 /// system allocator for many workloads.
 class mimalloc_memory_pool final : public arrow::MemoryPool {
 public:
-  mimalloc_memory_pool() {
-    // Configure mimalloc for optimal memory management.
-    // These settings balance memory reuse with returning memory to the OS.
-    mi_option_set(mi_option_reset_delay, 100);
-    mi_option_set(mi_option_reset_decommits, 1);
-  }
+  mimalloc_memory_pool() = default;
 
   ~mimalloc_memory_pool() override = default;
 
@@ -46,36 +40,22 @@ public:
   mimalloc_memory_pool(mimalloc_memory_pool&&) = delete;
   mimalloc_memory_pool& operator=(mimalloc_memory_pool&&) = delete;
 
-  auto update_memory_usage_allocate(int64_t new_alloc) -> void {
-    total_bytes_allocated_.fetch_add(new_alloc, std::memory_order_relaxed);
-    const auto previous_current_usage
-      = bytes_allocated_.fetch_add(new_alloc, std::memory_order_relaxed);
-    const auto new_current_usage = previous_current_usage + new_alloc;
-    int64_t old_max = max_memory_;
-    while (old_max < new_current_usage
-           && ! max_memory_.compare_exchange_weak(old_max, new_current_usage,
-                                                  std::memory_order_relaxed)) {
-    }
-  }
-
   auto Allocate(int64_t size, int64_t alignment, uint8_t** out)
     -> arrow::Status override {
     if (size < 0) {
       return arrow::Status::Invalid("Allocation size must be non-negative");
     }
-    num_allocations_.fetch_add(1, std::memory_order_relaxed);
     if (size == 0) {
       *out = kZeroSizeArea;
       return arrow::Status::OK();
     }
-    void* ptr = mi_malloc_aligned(static_cast<size_t>(size),
-                                  static_cast<size_t>(alignment));
-    if (ptr == nullptr) {
+    auto blk = memory::arrow_allocator().allocate(
+      size, std::align_val_t{static_cast<size_t>(alignment)});
+    if (blk.ptr == nullptr) {
       return arrow::Status::OutOfMemory("mimalloc allocation failed for size ",
                                         size);
     }
-    *out = static_cast<uint8_t*>(ptr);
-    update_memory_usage_allocate(size);
+    *out = reinterpret_cast<std::uint8_t*>(blk.ptr);
     return arrow::Status::OK();
   }
 
@@ -85,25 +65,24 @@ public:
     if (new_size < 0) {
       return arrow::Status::Invalid("Reallocation size must be non-negative");
     }
-    num_allocations_.fetch_add(1, std::memory_order_relaxed);
     if (new_size == 0) {
       Free(*ptr, old_size, alignment);
       *ptr = kZeroSizeArea;
       return arrow::Status::OK();
     }
-
     if (*ptr == kZeroSizeArea) {
       TENZIR_ASSERT_EXPENSIVE(old_size == 0);
       return Allocate(new_size, alignment, ptr);
     }
-    void* new_ptr = mi_realloc_aligned(*ptr, static_cast<size_t>(new_size),
-                                       static_cast<size_t>(alignment));
-    if (new_ptr == nullptr) {
+    const auto result = memory::arrow_allocator().reallocate(
+      memory::block{reinterpret_cast<std::byte*>(*ptr),
+                    static_cast<std::size_t>(old_size)},
+      new_size, std::align_val_t{static_cast<size_t>(alignment)});
+    if (result.new_block.ptr == nullptr) {
       return arrow::Status::OutOfMemory(
         "mimalloc reallocation failed for size ", new_size);
     }
-    *ptr = static_cast<uint8_t*>(new_ptr);
-    update_memory_usage_allocate(new_size - old_size);
+    *ptr = reinterpret_cast<std::uint8_t*>(result.new_block.ptr);
     return arrow::Status::OK();
   }
 
@@ -114,35 +93,31 @@ public:
       TENZIR_ASSERT_EXPENSIVE(size == 0);
       return;
     }
-    mi_free(ptr);
-    bytes_allocated_.fetch_sub(size, std::memory_order_relaxed);
+    memory::arrow_allocator().deallocate(
+      memory::block{reinterpret_cast<std::byte*>(ptr),
+                    static_cast<std::size_t>(size)},
+      std::align_val_t{static_cast<std::size_t>(alignment)});
   }
 
   auto bytes_allocated() const -> int64_t override {
-    return bytes_allocated_.load(std::memory_order_relaxed);
+    return memory::arrow_allocator().stats().bytes_current;
   }
 
   auto total_bytes_allocated() const -> int64_t override {
-    return total_bytes_allocated_.load(std::memory_order_relaxed);
+    return memory::arrow_allocator().stats().bytes_total;
   }
 
   auto max_memory() const -> int64_t override {
-    return max_memory_;
+    return memory::arrow_allocator().stats().bytes_max;
   }
 
   auto num_allocations() const -> int64_t override {
-    return num_allocations_;
+    return memory::arrow_allocator().stats().num_calls;
   }
 
   auto backend_name() const -> std::string override {
     return "mimalloc";
   }
-
-private:
-  std::atomic<int64_t> bytes_allocated_{0};
-  std::atomic<int64_t> total_bytes_allocated_{0};
-  std::atomic<int64_t> max_memory_{0};
-  std::atomic<int64_t> num_allocations_{0};
 };
 
 } // namespace
