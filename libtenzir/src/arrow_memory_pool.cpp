@@ -21,7 +21,7 @@ namespace tenzir {
 
 namespace {
 
-alignas(128) int64_t zero_size_area[2];
+alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__) int64_t zero_size_area[2];
 auto* const kZeroSizeArea = reinterpret_cast<uint8_t*>(&zero_size_area);
 
 /// A custom Arrow memory pool implementation using mimalloc.
@@ -148,7 +148,6 @@ private:
 } // namespace
 
 auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
-  // Thread-safe static initialization (C++11 §6.7 [stmt.dcl] p4)
   static mimalloc_memory_pool pool;
   return &pool;
 }
