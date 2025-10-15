@@ -7,10 +7,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/cast.hpp"
-#include "tenzir/arrow_memory_pool.hpp"
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
