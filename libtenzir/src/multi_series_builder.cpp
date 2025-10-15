@@ -742,11 +742,9 @@ void multi_series_builder::make_events_available_where(
 
 void multi_series_builder::append_ready_events(
   std::vector<series>&& new_events) {
-  ready_events_.reserve(ready_events_.size() + new_events.size());
   ready_events_.insert(ready_events_.end(),
                        std::make_move_iterator(new_events.begin()),
                        std::make_move_iterator(new_events.end()));
-  new_events.clear();
 }
 
 void multi_series_builder::garbage_collect_where(
