@@ -182,8 +182,8 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
     }
     if (const auto* struct_array = try_as<arrow::StructArray>(array.get())) {
       if (struct_array->num_fields() == 0) {
-        return check(
-          arrow::MakeArrayOfNull(arrow::null(), struct_array->length(), tenzir::arrow_memory_pool()));
+        return check(arrow::MakeArrayOfNull(
+          arrow::null(), struct_array->length(), tenzir::arrow_memory_pool()));
       }
       auto arrays = struct_array->fields();
       auto fields = struct_array->struct_type()->fields();
@@ -195,8 +195,8 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
       auto null_bitmap = array->null_bitmap();
       if (array->offset() != 0 and array->null_bitmap_data()) {
         null_bitmap = check(arrow::internal::CopyBitmap(
-          arrow_memory_pool(), array->null_bitmap_data(),
-          array->offset(), array->length()));
+          arrow_memory_pool(), array->null_bitmap_data(), array->offset(),
+          array->length()));
       }
       return std::make_shared<arrow::StructArray>(
         arrow::struct_(fields), struct_array->length(), arrays,

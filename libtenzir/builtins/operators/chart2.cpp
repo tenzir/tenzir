@@ -805,8 +805,7 @@ public:
     return match(
       *xs.array,
       [&](const arrow::DurationArray& array) -> series {
-        auto b
-          = duration_type::make_arrow_builder(arrow_memory_pool());
+        auto b = duration_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(array.length()));
         for (auto i = int64_t{0}; i < array.length(); i++) {
           if (array.IsNull(i)) {
