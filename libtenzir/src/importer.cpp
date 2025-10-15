@@ -166,6 +166,10 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
     = caf::get_or(content(self->system().config()),
                   "tenzir.active-partition-timeout",
                   defaults::active_partition_timeout);
+  if (active_partition_timeout > std::chrono::minutes{1}) {
+    TENZIR_WARN("high `active-partition-timeout` detected: this can lead to "
+                "memory usage problems");
+  }
   detail::weak_run_delayed_loop(
     self, std::chrono::seconds{1},
     [this, active_partition_timeout] {
