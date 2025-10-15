@@ -1,11 +1,10 @@
 ---
-fixtures:
-- node
 error: true
+fixtures:
+ - node
 ---
 
 pipeline::detach {
   from f"{env("TENZIR_INPUTS")}/this-file-does-not-exist.json"
   discard
 }, id="test-id"
-

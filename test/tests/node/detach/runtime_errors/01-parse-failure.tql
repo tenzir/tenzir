@@ -1,0 +1,6 @@
+pipeline::detach {
+  from {x: 1}
+  write_csv
+  read_json
+  discard
+}, id="test-id"
