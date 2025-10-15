@@ -114,6 +114,16 @@ def _run_nix() -> list[Path]:
         for src_dir in extracted_root.iterdir():
             dest_dir = PACKAGE_ROOT / src_dir.name
             _ = shutil.copytree(src_dir, dest_dir, symlinks=True)
+            if src_dir.name == "share":
+                wheelhouse = dest_dir / "tenzir" / "python" / "wheelhouse"
+                if wheelhouse.exists():
+                    for wheel in wheelhouse.glob("*.whl"):
+                        name = wheel.name.lower()
+                        if name.startswith("tenzir_operator-") or name.startswith(
+                            "python_box-"
+                        ):
+                            continue
+                        wheel.unlink()
             staged.append(dest_dir)
 
     return staged

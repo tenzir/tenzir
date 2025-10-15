@@ -487,7 +487,11 @@ async def stream_pipeline(
     options = options or PipelineOptions()
 
     binary = _resolve_tenzir_binary()
-    command: list[str] = [binary.as_posix(), *map(str, options.extra_args or ()), str(resolved_spec)]
+    command: list[str] = [
+        binary.as_posix(),
+        *map(str, options.extra_args or ()),
+        str(resolved_spec),
+    ]
 
     env = os.environ.copy()
     if options.env:
