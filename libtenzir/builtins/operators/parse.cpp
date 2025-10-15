@@ -108,7 +108,7 @@ public:
         co_return;
       }
       TENZIR_ASSERT(total == string_array->length());
-      const auto children = check(check(batch->ToStructArray())->Flatten());
+      const auto children = check(check(batch->ToStructArray())->Flatten(tenzir::arrow_memory_pool()));
       auto next = int64_t{0};
       for (auto& [result_ty, result] : results) {
         auto sub = subslice(slice, next, next + result->length());

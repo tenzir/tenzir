@@ -183,7 +183,7 @@ auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch,
     if (const auto* struct_array = try_as<arrow::StructArray>(array.get())) {
       if (struct_array->num_fields() == 0) {
         return check(
-          arrow::MakeArrayOfNull(arrow::null(), struct_array->length()));
+          arrow::MakeArrayOfNull(arrow::null(), struct_array->length(), tenzir::arrow_memory_pool()));
       }
       auto arrays = struct_array->fields();
       auto fields = struct_array->struct_type()->fields();

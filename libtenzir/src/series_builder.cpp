@@ -276,8 +276,8 @@ public:
     auto result = series{};
     if (count == 0) {
       result.type = type();
-      result.array
-        = check(result.type.make_arrow_builder(arrow_memory_pool())->Finish());
+      result.array = check(
+        result.type.make_arrow_builder(tenzir::arrow_memory_pool())->Finish());
     } else {
       result = builder_->finish(count);
     }
@@ -593,6 +593,10 @@ public:
   auto finish(int64_t count) -> series override {
     TENZIR_TRACE("finishing {} of {} with type {}", count, length(), kind());
     auto array = finish();
+    TENZIR_TRACE("finish produced array of length `{}`", array->length());
+    if constexpr (std::same_as<arrow::StringArray, decltype(array)>) {
+      TENZIR_WARN("{}", array.ValueAt(0));
+    }
     TENZIR_ASSERT(count <= array->length());
     auto rest_begin = count;
     auto rest_count = array->length() - rest_begin;
@@ -716,7 +720,10 @@ public:
     auto result_elements = elements_.finish(ending_offset);
     auto result = check(arrow::ListArray::FromArrays(
       *result_offsets, *result_elements.array, arrow_memory_pool()));
-    TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
+#ifdef TENZIR_ENABLE_ASSERTIONS
+    const auto v = result->Validate();
+    TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
+#endif
     return {list_type{result_elements.type}, result};
   }
 
@@ -818,7 +825,10 @@ public:
     }
     auto result = std::make_shared<arrow::StructArray>(
       ty.to_arrow_type(), count, field_arrays, std::move(null_bitmap));
-    TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
+#ifdef TENZIR_ENABLE_ASSERTIONS
+    const auto v = result->Validate();
+    TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
+#endif
     length_ -= count;
     return {std::move(ty), result};
   }
@@ -1396,7 +1406,10 @@ auto series_builder::finish_as_table_slice(std::string_view name)
     auto batch = arrow::RecordBatch::Make(std::move(arrow_schema),
                                           cast->length(), cast->fields());
     TENZIR_ASSERT(batch);
-    TENZIR_ASSERT_EXPENSIVE(batch->Validate().ok());
+#ifdef TENZIR_ENABLE_ASSERTIONS
+    const auto v = batch->Validate();
+    TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
+#endif
     result.emplace_back(batch, array.type);
   }
   return result;

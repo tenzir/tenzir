@@ -386,7 +386,7 @@ struct cast_helper<record_type, record_type> {
         if (! index) {
           // The field does not exist, so we insert a bunch of nulls.
           children.push_back(check(arrow::MakeArrayOfNull(
-            to_field.type.to_arrow_type(), from_array->length())));
+            to_field.type.to_arrow_type(), from_array->length(), tenzir::arrow_memory_pool())));
           continue;
         }
         // The field exists, so we can insert the casted column.

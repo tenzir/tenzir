@@ -353,7 +353,7 @@ transform_columns(type schema,
           = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = check(nested_array.Flatten()),
+          .arrays = check(nested_array.Flatten(tenzir::arrow_memory_pool())),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
@@ -391,7 +391,7 @@ transform_columns(type schema,
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = check(struct_array->Flatten()),
+    .arrays = check(struct_array->Flatten(tenzir::arrow_memory_pool())),
   };
   const auto num_columns
     = detail::narrow_cast<size_t>(struct_array->num_fields());
@@ -522,7 +522,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
           = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = check(nested_array.Flatten()),
+          .arrays = check(nested_array.Flatten(tenzir::arrow_memory_pool())),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
