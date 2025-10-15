@@ -28,7 +28,23 @@ def _candidate_paths(name: str) -> list[Path]:
     return candidates
 
 
+def _prepare_environment() -> None:
+    sites = [x for x in sys.path if x.endswith("/site-packages")]
+    if "PYTHONPATH" in os.environ:
+        os.environ["PYTHONPATH"] += os.pathsep + os.pathsep.join(sites)
+    else:
+        os.environ["PYTHONPATH"] = os.pathsep.join(sites)
+    _ = os.environ.setdefault(
+        "UV_PYTHON",
+        sys.executable,
+    )
+    wheels = _pkg_wheels_dir().glob("*.whl")
+    value = f"--no-deps --offline {" ".join([str(wheel) for wheel in wheels])}"
+    os.environ["TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS"] = value
+
+
 def exec_binary(name: str) -> NoReturn:
+    _prepare_environment()
     # Try packaged binary first, then PATH.
     for p in _candidate_paths("tenzir"):
         if p.is_file() and os.access(p, os.X_OK):
