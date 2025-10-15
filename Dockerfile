@@ -358,6 +358,7 @@ RUN --mount=target=/ccache,type=cache \apt-get update && \
       libgrpc++1.51 \
       libhttp-parser2.9 \
       libmaxminddb0 \
+      libmimalloc3 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
