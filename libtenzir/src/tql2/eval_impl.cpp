@@ -80,7 +80,7 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
           // TODO: We could also make sure that record-nulls do not create any
           // fields. This will create an additional splitting point.
           for (auto [i, field_array] :
-               detail::enumerate(check(records->array->Flatten()))) {
+               detail::enumerate(check(records->array->Flatten(tenzir::arrow_memory_pool())))) {
             auto field = records->type.field(i);
             fields[field.name] = series{field.type, field_array};
           }
@@ -232,7 +232,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
           .emit(ctx_);
         return series{
           rec_ty->field(*idx).type,
-          check(s.GetFlattenedField(detail::narrow<int>(*idx))),
+          check(s.GetFlattenedField(detail::narrow<int>(*idx), tenzir::arrow_memory_pool())),
         };
       }
       return series{

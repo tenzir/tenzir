@@ -57,7 +57,7 @@ auto unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb)
   -> std::shared_ptr<arrow::RecordBatch> {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
-  auto event_rb = check(arrow::RecordBatch::FromStructArray(event_col));
+  auto event_rb = check(arrow::RecordBatch::FromStructArray(event_col, tenzir::arrow_memory_pool()));
   return event_rb->ReplaceSchemaMetadata(schema_metadata);
 }
 

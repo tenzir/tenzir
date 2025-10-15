@@ -165,17 +165,17 @@ public:
       if (index == unnest_idx) {
         auto list_array = dynamic_cast<arrow::ListArray*>(array.get());
         TENZIR_ASSERT(list_array);
-        array = check(list_array->Flatten());
+        array = check(list_array->Flatten(tenzir::arrow_memory_pool()));
       } else {
         auto struct_array = dynamic_cast<arrow::StructArray*>(array.get());
         TENZIR_ASSERT(struct_array);
         array
-          = check(struct_array->GetFlattenedField(detail::narrow<int>(index)));
+          = check(struct_array->GetFlattenedField(detail::narrow<int>(index), tenzir::arrow_memory_pool()));
       }
     }
     auto record = std::dynamic_pointer_cast<arrow::StructArray>(array);
     TENZIR_ASSERT(record);
-    auto fields = check(record->Flatten());
+    auto fields = check(record->Flatten(tenzir::arrow_memory_pool()));
     auto result
       = table_slice{arrow::RecordBatch::Make(new_type.to_arrow_schema(),
                                              array->length(), fields),
