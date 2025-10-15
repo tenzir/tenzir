@@ -1,5 +1,5 @@
 error: the file `inputs/this-file-does-not-exist.json` does not exist
- --> tests/node/detach/startup_errors.tql:8:8
+ --> tests/node/detach/startup-error.tql:8:8
   |
 8 |   from f"{env("TENZIR_INPUTS")}/this-file-does-not-exist.json"
   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
