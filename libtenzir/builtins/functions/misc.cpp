@@ -139,7 +139,8 @@ public:
           return {
             string_type{},
             check(arrow::MakeArrayFromScalar(arrow::StringScalar{*value},
-                                             eval.length(), tenzir::arrow_memory_pool())),
+                                             eval.length(),
+                                             tenzir::arrow_memory_pool())),
           };
         });
     }
@@ -330,7 +331,8 @@ public:
           if (auto subnets = value.part(0).as<subnet_type>()) {
             return series{
               ip_type{},
-              check(subnets->array->storage()->GetFlattenedField(0, tenzir::arrow_memory_pool())),
+              check(subnets->array->storage()->GetFlattenedField(
+                0, tenzir::arrow_memory_pool())),
             };
           }
         }
@@ -340,8 +342,9 @@ public:
           auto f = detail::overload{
             [&](const subnet_type::array_type& array) {
               check(append_array(*b, ip_type{},
-                                 as<ip_type::array_type>(*check(
-                                   array.storage()->GetFlattenedField(0, tenzir::arrow_memory_pool())))));
+                                 as<ip_type::array_type>(
+                                   *check(array.storage()->GetFlattenedField(
+                                     0, tenzir::arrow_memory_pool())))));
             },
             [&](const arrow::NullArray& array) {
               check(b->AppendNulls(array.length()));

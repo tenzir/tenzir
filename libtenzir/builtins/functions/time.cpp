@@ -159,8 +159,7 @@ public:
               return series::null(time_type{}, arg.length());
             },
             [](const arrow::DurationArray& arg) {
-              auto b
-                = time_type::make_arrow_builder(arrow_memory_pool());
+              auto b = time_type::make_arrow_builder(arrow_memory_pool());
               check(b->Reserve(arg.length()));
               for (auto i = int64_t{}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {

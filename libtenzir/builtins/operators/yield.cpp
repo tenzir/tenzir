@@ -169,8 +169,8 @@ public:
       } else {
         auto struct_array = dynamic_cast<arrow::StructArray*>(array.get());
         TENZIR_ASSERT(struct_array);
-        array
-          = check(struct_array->GetFlattenedField(detail::narrow<int>(index), tenzir::arrow_memory_pool()));
+        array = check(struct_array->GetFlattenedField(
+          detail::narrow<int>(index), tenzir::arrow_memory_pool()));
       }
     }
     auto record = std::dynamic_pointer_cast<arrow::StructArray>(array);

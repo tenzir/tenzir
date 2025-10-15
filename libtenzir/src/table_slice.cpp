@@ -64,9 +64,11 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
 #endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
-    auto ipc_ostream = check(arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
-    auto stream_writer = check(
-      arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema(), arrow::ipc::IpcWriteOptions{.memory_pool = tenzir::arrow_memory_pool()}));
+    auto ipc_ostream = check(
+      arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
+    auto stream_writer = check(arrow::ipc::MakeStreamWriter(
+      ipc_ostream, record_batch->schema(),
+      arrow::ipc::IpcWriteOptions{.memory_pool = tenzir::arrow_memory_pool()}));
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (not status.ok()) {
       TENZIR_ERROR("failed to write record batch: {}", status.ToString());

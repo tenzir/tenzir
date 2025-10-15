@@ -174,7 +174,8 @@ private:
         auto result_ty
           = preserve_variants_ ? type{null_type{}} : type{string_type{}};
         return series{result_ty, check(arrow::MakeArrayOfNull(
-                                   result_ty.to_arrow_type(), input.length(), tenzir::arrow_memory_pool()))};
+                                   result_ty.to_arrow_type(), input.length(),
+                                   tenzir::arrow_memory_pool()))};
       }
       if (not preserve_variants_) {
         return print_json(input, nullify_empty_records);
@@ -238,7 +239,8 @@ private:
         }
         auto cast_ty = cast_type(ty);
         return series{cast_ty, check(arrow::MakeArrayOfNull(
-                                 cast_ty.to_arrow_type(), array.length(), tenzir::arrow_memory_pool()))};
+                                 cast_ty.to_arrow_type(), array.length(),
+                                 tenzir::arrow_memory_pool()))};
       });
     return result;
   }
@@ -287,8 +289,9 @@ private:
         // No warning if the a target field does not exist.
         auto cast_ty = cast_type(field.type);
         fields.emplace_back(field.name, cast_ty);
-        field_arrays.push_back(check(arrow::MakeArrayOfNull(
-          cast_ty.to_arrow_type(), input.array->length(), tenzir::arrow_memory_pool())));
+        field_arrays.push_back(check(
+          arrow::MakeArrayOfNull(cast_ty.to_arrow_type(), input.array->length(),
+                                 tenzir::arrow_memory_pool())));
         continue;
       }
       auto casted
@@ -415,7 +418,8 @@ auto extract_metadata(const table_slice& slice, location self,
     return {};
   }
   auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
-    check(metadata_array->GetFlattenedField(version_index, tenzir::arrow_memory_pool())));
+    check(metadata_array->GetFlattenedField(version_index,
+                                            tenzir::arrow_memory_pool())));
   if (not version_array) {
     diagnostic::warning(
       "dropping events where `metadata.version` is not a string")
@@ -1153,8 +1157,8 @@ public:
         if (profiles_index == -1) {
           return make_string_list_function(nullptr);
         }
-        auto profiles_array
-          = check(metadata_array->GetFlattenedField(profiles_index, tenzir::arrow_memory_pool()));
+        auto profiles_array = check(metadata_array->GetFlattenedField(
+          profiles_index, tenzir::arrow_memory_pool()));
         if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
           return make_string_list_function(nullptr);
         };
@@ -1190,8 +1194,8 @@ public:
         if (extensions_index == -1) {
           return make_string_list_function(nullptr);
         }
-        auto extensions_array
-          = check(metadata_array->GetFlattenedField(extensions_index, tenzir::arrow_memory_pool()));
+        auto extensions_array = check(metadata_array->GetFlattenedField(
+          extensions_index, tenzir::arrow_memory_pool()));
         if (dynamic_cast<arrow::NullArray*>(&*extensions_array)) {
           return make_string_list_function(nullptr);
         };
@@ -1225,8 +1229,8 @@ public:
             .emit(ctrl.diagnostics());
           return make_string_list_function(nullptr);
         }
-        auto name_array
-          = check(extensions_structs->GetFlattenedField(name_index, tenzir::arrow_memory_pool()));
+        auto name_array = check(extensions_structs->GetFlattenedField(
+          name_index, tenzir::arrow_memory_pool()));
         if (not dynamic_cast<arrow::StringArray*>(&*name_array)) {
           diagnostic::warning("ignoring extensions for events where "
                               "`metadata.extensions[].name` is not a string")
