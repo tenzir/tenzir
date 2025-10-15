@@ -75,7 +75,7 @@ auto offset::get(const arrow::StructArray& struct_array) const noexcept
          const arrow::StructArray& array) -> std::shared_ptr<arrow::Array> {
     TENZIR_ASSERT(not index.empty());
     auto field
-      = check(array.GetFlattenedField(detail::narrow_cast<int>(index.front())));
+      = check(array.GetFlattenedField(detail::narrow_cast<int>(index.front()), tenzir::arrow_memory_pool()));
     index = index.subspan(1);
     if (index.empty()) {
       return field;

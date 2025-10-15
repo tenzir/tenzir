@@ -64,9 +64,9 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
 #endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
-    auto ipc_ostream = check(arrow::io::BufferOutputStream::Create());
+    auto ipc_ostream = check(arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
     auto stream_writer = check(
-      arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema()));
+      arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema(), arrow::ipc::IpcWriteOptions{.memory_pool = tenzir::arrow_memory_pool()}));
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (not status.ok()) {
       TENZIR_ERROR("failed to write record batch: {}", status.ToString());
@@ -1495,7 +1495,7 @@ void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
                | std::views::transform(&arrow::Field::name);
   // We need to flatten the null bitmap here because it can happen that the
   // fields are saved to a record that is made non-null by another entry.
-  auto fields = check(array.Flatten());
+  auto fields = check(array.Flatten(tenzir::arrow_memory_pool()));
   for (auto [name, data] : detail::zip_equal(names, fields)) {
     auto segments
       = name | std::views::split(sep)

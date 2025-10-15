@@ -139,7 +139,7 @@ public:
           return {
             string_type{},
             check(arrow::MakeArrayFromScalar(arrow::StringScalar{*value},
-                                             eval.length())),
+                                             eval.length(), tenzir::arrow_memory_pool())),
           };
         });
     }
@@ -330,7 +330,7 @@ public:
           if (auto subnets = value.part(0).as<subnet_type>()) {
             return series{
               ip_type{},
-              check(subnets->array->storage()->GetFlattenedField(0)),
+              check(subnets->array->storage()->GetFlattenedField(0, tenzir::arrow_memory_pool())),
             };
           }
         }
@@ -341,7 +341,7 @@ public:
             [&](const subnet_type::array_type& array) {
               check(append_array(*b, ip_type{},
                                  as<ip_type::array_type>(*check(
-                                   array.storage()->GetFlattenedField(0)))));
+                                   array.storage()->GetFlattenedField(0, tenzir::arrow_memory_pool())))));
             },
             [&](const arrow::NullArray& array) {
               check(b->AppendNulls(array.length()));
@@ -588,7 +588,7 @@ public:
                     finish(keys_builder),
                     result_type.to_arrow_type(),
                   },
-                  eval.length())),
+                  eval.length(), tenzir::arrow_memory_pool())),
               };
             },
             [&](const auto&) {
