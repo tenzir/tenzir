@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
 
@@ -30,10 +31,15 @@ auto get_raminfo() -> caf::expected<record> {
   const auto available_pages = ::sysconf(_SC_AVPHYS_PAGES);
   const auto total_bytes = phys_pages * pagesize;
   const auto free_bytes = available_pages * pagesize;
+  auto* arrow_pool = arrow_memory_pool();
   return record{
     {"total_bytes", total_bytes},
     {"free_bytes", free_bytes},
     {"used_bytes", total_bytes - free_bytes},
+    {"arrow_bytes", arrow_pool->bytes_allocated()},
+    {"arrow_max_bytes", arrow_pool->max_memory()},
+    {"arrow_total_bytes", arrow_pool->total_bytes_allocated()},
+    {"arrow_allocations", arrow_pool->num_allocations()},
   };
 }
 
@@ -96,6 +102,10 @@ public:
       {"total_bytes", uint64_type{}},
       {"free_bytes", uint64_type{}},
       {"used_bytes", uint64_type{}},
+      {"arrow_bytes", int64_type{}},
+      {"arrow_max_bytes", int64_type{}},
+      {"arrow_total_bytes", int64_type{}},
+      {"arrow_allocations", int64_type{}},
     }};
   }
 };
