@@ -26,6 +26,7 @@ apt-get -y --no-install-recommends install \
   libgrpc-dev \
   libgrpc++-dev \
   libmaxminddb-dev \
+  libmimalloc-dev \
   libpcap-dev tcpdump \
   libprotobuf-dev \
   librabbitmq-dev \
