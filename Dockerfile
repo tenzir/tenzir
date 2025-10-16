@@ -391,22 +391,22 @@ RUN tenzir 'version'
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
 
-COPY --from=amqp-plugin --chown=tenzir:tenzir /plugin/amqp /
-COPY --from=azure-blob-storage-plugin --chown=tenzir:tenzir /plugin/azure-blob-storage /
-COPY --from=clickhouse-plugin --chown=tenzir:tenzir /plugin/clickhouse /
-COPY --from=fluent-bit-plugin --chown=tenzir:tenzir /plugin/fluent-bit /
-COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
-COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
-COPY --from=kafka-plugin --chown=tenzir:tenzir /plugin/kafka /
-COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
-COPY --from=parquet-plugin --chown=tenzir:tenzir /plugin/parquet /
-COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /
-COPY --from=sigma-plugin --chown=tenzir:tenzir /plugin/sigma /
-COPY --from=sqs-plugin --chown=tenzir:tenzir /plugin/sqs /
-COPY --from=from_velociraptor-plugin --chown=tenzir:tenzir /plugin/from_velociraptor /
-COPY --from=web-plugin --chown=tenzir:tenzir /plugin/web /
-COPY --from=yara-plugin --chown=tenzir:tenzir /plugin/yara /
-COPY --from=zmq-plugin --chown=tenzir:tenzir /plugin/zmq /
+#COPY --from=amqp-plugin --chown=tenzir:tenzir /plugin/amqp /
+#COPY --from=azure-blob-storage-plugin --chown=tenzir:tenzir /plugin/azure-blob-storage /
+#COPY --from=clickhouse-plugin --chown=tenzir:tenzir /plugin/clickhouse /
+#COPY --from=fluent-bit-plugin --chown=tenzir:tenzir /plugin/fluent-bit /
+#COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
+#COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
+#COPY --from=kafka-plugin --chown=tenzir:tenzir /plugin/kafka /
+#COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
+#COPY --from=parquet-plugin --chown=tenzir:tenzir /plugin/parquet /
+#COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /
+#COPY --from=sigma-plugin --chown=tenzir:tenzir /plugin/sigma /
+#COPY --from=sqs-plugin --chown=tenzir:tenzir /plugin/sqs /
+#COPY --from=from_velociraptor-plugin --chown=tenzir:tenzir /plugin/from_velociraptor /
+#COPY --from=web-plugin --chown=tenzir:tenzir /plugin/web /
+#COPY --from=yara-plugin --chown=tenzir:tenzir /plugin/yara /
+#COPY --from=zmq-plugin --chown=tenzir:tenzir /plugin/zmq /
 
 # -- tenzir-node-de ------------------------------------------------------------
 
@@ -551,27 +551,27 @@ RUN --mount=target=/ccache,type=cache \
 
 # -- tenzir-ce-untested --------------------------------------------------------
 
-FROM tenzir-de AS tenzir-ce-untested
+FROM tenzir-de AS tenzir-ce
 
-COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
-COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
+#COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
+#COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
-COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
+#COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
-COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
-COPY --from=to_amazon_security_lake-plugin --chown=tenzir:tenzir /plugin/to_amazon_security_lake /
-COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure_log_analytics /
-COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
-COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
-COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
-COPY --from=to_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/to_sentinelone_data_lake /
+#COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
+#COPY --from=to_amazon_security_lake-plugin --chown=tenzir:tenzir /plugin/to_amazon_security_lake /
+#COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure_log_analytics /
+#COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
+#COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
+#COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
+#COPY --from=to_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/to_sentinelone_data_lake /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 USER tenzir:tenzir
 
 # -- tenzir-ce-integration -----------------------------------------------------
 
-FROM tenzir-ce-untested AS tenzir-ce-integration
+FROM tenzir-ce AS tenzir-ce-integration
 
 COPY test/ ./test
 RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp "${PREFIX}/libexec/uv" tool run \
@@ -585,8 +585,8 @@ RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp "${PREFIX}/libexec/uv" tool run \
 
 # -- tenzir-ce -----------------------------------------------------------------
 
-FROM tenzir-ce-untested AS tenzir-ce
-COPY --from=tenzir-ce-integration /tmp/tenzir-integration-result /tmp/tenzir-integration-result
+#FROM tenzir-ce-untested AS tenzir-ce
+#COPY --from=tenzir-ce-integration /tmp/tenzir-integration-result /tmp/tenzir-integration-result
 
 # -- tenzir-node-ce ------------------------------------------------------------
 

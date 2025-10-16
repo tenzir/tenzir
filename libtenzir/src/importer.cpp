@@ -69,6 +69,7 @@ void importer::flush(std::optional<type> schema) {
           }
           for (const auto& [subscriber, wants_internal] : subscribers) {
             if (is_internal == wants_internal) {
+              TENZIR_INFO("importer sending events to {}", subscriber);
               self->mail(events).send(subscriber);
             }
           }

@@ -152,6 +152,8 @@ struct bridge_state {
       }
       return;
     }
+    TENZIR_INFO("export_bridge adds: {}, source: {}", slice.schema().name(),
+                source);
     // We ignore live events if we're not asked to listen to live events.
     if (source == event_source::live and not mode.live) {
       if (rp.pending()) {
@@ -272,7 +274,7 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
     auto query_context
       = tenzir::query_context::make_extract("export", self, self->state().expr);
     query_context.id = uuid::random();
-    TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
+    TENZIR_INFO("export operator starts catalog lookup with id {} and "
                  "expression {}",
                  query_context.id, self->state().expr);
     self->mail(atom::candidates_v, query_context)
@@ -282,6 +284,11 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
           self->state().checked_candidates = true;
           auto max_import_time = time::min();
           for (auto& [type, info] : result.candidate_infos) {
+            if (fmt::to_string(query_context.expr).contains("tenzir.metrics.pipeline")) {
+              TENZIR_INFO("export bridge candidate_info: type: {}, expr: {}, "
+                          "size: {}",
+                          type.name(), info.exp, info.partition_infos.size());
+            }
             if (info.partition_infos.empty()) {
               continue;
             }
@@ -308,6 +315,7 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
           }
           TENZIR_ASSERT(self->state().unpersisted_events);
           for (auto& slice : *self->state().unpersisted_events) {
+            TENZIR_INFO("export_bridge: unpersisted events type: {}", slice.schema().name());
             if (slice.import_time() > max_import_time) {
               self->state().add_events(std::move(slice),
                                        event_source::unpersisted,
@@ -330,13 +338,18 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
   }
   return {
     [self](table_slice& slice) -> caf::result<void> {
+      TENZIR_ASSERT(self->current_sender());
+      auto rp = self->make_response_promise<void>();
+      TENZIR_INFO("export_bridge get slice from {}, importer_address is {}",
+                  self->current_sender()->address(),
+                  self->state().importer_address);
       self->state().add_events(std::move(slice),
-                               self->current_sender()
+                               self->current_sender()->address()
                                    == self->state().importer_address
                                  ? event_source::live
                                  : event_source::retro,
-                               self->make_response_promise<void>());
-      return {};
+                               rp);
+      return rp;
     },
     [self](atom::get) -> caf::result<table_slice> {
       // Forbid concurrent requests.

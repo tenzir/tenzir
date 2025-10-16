@@ -125,6 +125,7 @@ auto catalog_state::lookup(expression expr) const
   if (expr == caf::none) {
     expr = trivially_true_expression();
   }
+  TENZIR_INFO("lookup starting with {}", expr);
   auto normalized = normalize_and_validate(expr);
   if (not normalized) {
     return caf::make_error(ec::invalid_argument,
@@ -140,8 +141,13 @@ auto catalog_state::lookup(expression expr) const
                                          "{}",
                                          *self, expr, resolved.error()));
     }
+    TENZIR_INFO("catalog resolved: {}", *resolved);
     auto pruned = prune(*resolved, unprunable_fields);
+    TENZIR_INFO("catalog pruned: {}", pruned);
     auto candidates_per_type = lookup_impl(pruned, type);
+    if (candidates_per_type.partition_infos.empty()) {
+      continue;
+    }
     // Sort partitions by their max import time, returning the most recent
     // partitions first.
     std::sort(candidates_per_type.partition_infos.begin(),
@@ -157,13 +163,14 @@ auto catalog_state::lookup(expression expr) const
                                [](const auto& partition) {
                                  return partition.events;
                                });
+    TENZIR_INFO("candidates_per_type: {}: {}", type.name(), candidates_per_type.partition_infos.size());
     total_candidates.candidate_infos[type] = std::move(candidates_per_type);
   }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     stopwatch::now() - start);
-  TENZIR_VERBOSE("catalog found {} candidate partitions ({} events) in "
+  TENZIR_INFO("catalog found {} candidate partitions ({} events) for {} in "
                  "{} microseconds",
-                 num_candidate_partitions, num_candidate_events, delta.count());
+                 num_candidate_partitions, num_candidate_events, expr, delta.count());
   TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
   return total_candidates;
 }
@@ -315,6 +322,9 @@ auto catalog_state::lookup_impl(const expression& expr,
                   // SSO.
                   if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
                     result.partition_infos.emplace_back(part_id, *part_syn);
+                    TENZIR_INFO("found partition from: schema = {}, fqf = {}, "
+                                "op = {}, d = {}",
+                                schema.name(), fqf.name(), x.op, d);
                     break;
                   }
                 }

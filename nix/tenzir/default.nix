@@ -39,6 +39,7 @@ let
       yaml-cpp,
       yara,
       rdkafka,
+      cyrus_sasl,
       reproc,
       cppzmq,
       libmaxminddb,
@@ -224,6 +225,7 @@ let
               libunwind
               rabbitmq-c
               rdkafka
+              cyrus_sasl
               cppzmq
               restinio
               (restinio.override {
