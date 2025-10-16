@@ -1,4 +1,11 @@
-from tenzir import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
+from tenzir import (
+    PipelineIO,
+    PipelineSpec,
+    TenzirRow,
+    collect_pyarrow,
+    stream_pipeline,
+    to_json_rows,
+)
 import tenzir.utils.logging
 import tenzir.utils.asyncio
 import asyncio
@@ -46,7 +53,11 @@ async def endpoint():
 async def tenzir_exec(endpoint, pipeline: str):
     logger.debug(f"> tenzir -e {endpoint} {pipeline}")
     exec_proc = await asyncio.create_subprocess_exec(
-        "tenzir", "-e", endpoint, pipeline, stderr=PIPE,
+        "tenzir",
+        "-e",
+        endpoint,
+        pipeline,
+        stderr=PIPE,
     )
     (_, exec_err) = await asyncio.wait_for(exec_proc.communicate(), 3)
     assert exec_proc.returncode == 0
@@ -92,7 +103,7 @@ def integration_data(path):
 #     )
 #     tenzir = Tenzir(endpoint)
 #     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
-#     rows: list[VastRow] = []
+#     rows: list[TenzirRow] = []
 #     async for row in to_json_rows(result):
 #         rows.append(row)
 #     assert len(rows) == 1

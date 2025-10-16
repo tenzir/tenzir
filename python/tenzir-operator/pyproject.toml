@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tenzir-operator"
+version = "5.17.0"
+description = "Tenzir Python operator runtime"
+requires-python = ">=3.9"
+license = "BSD-3-Clause"
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+  { name = "Tenzir", email = "engineering@tenzir.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+  "tenzir-core>=5.17.0,<5.18.0",
+  "python-box>=7.0,<8.0",
+]
+
+[project.optional-dependencies]
+pandas = ["pandas>=2.1.3,<3.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+tenzir-core = { workspace = true }

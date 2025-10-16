@@ -8,15 +8,35 @@
     ];
   };
 
-  inputs.isReleaseBuild.url = "github:boolean-option/false";
-  inputs.nixpkgs.url = "github:tobim/nixpkgs/11ffa81bffbcb0e71e77acacc7be74273aa131f4";
-  inputs.flake-compat.url = "github:edolstra/flake-compat";
-  inputs.flake-compat.flake = false;
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nix2container.url = "github:nlewo/nix2container";
-  inputs.nix2container.inputs.nixpkgs.follows = "nixpkgs";
-  inputs.sbomnix.url = "github:tiiuae/sbomnix";
-  inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";
+  inputs = {
+    isReleaseBuild.url = "github:boolean-option/false";
+    nixpkgs.url = "github:tobim/nixpkgs/11ffa81bffbcb0e71e77acacc7be74273aa131f4";
+    flake-compat.url = "github:edolstra/flake-compat";
+    flake-compat.flake = false;
+    flake-utils.url = "github:numtide/flake-utils";
+    nix2container.url = "github:nlewo/nix2container";
+    nix2container.inputs.nixpkgs.follows = "nixpkgs";
+    sbomnix.url = "github:tiiuae/sbomnix";
+    sbomnix.inputs.nixpkgs.follows = "nixpkgs";
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
     {
@@ -40,13 +60,18 @@
       let
         overlay = import ./nix/overlay.nix;
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+        tenzirPythonPkgs = pkgs.callPackage ./python {
+          inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
+        };
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
+          inherit tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
+          inherit tenzirPythonPkgs;
           forceClang = true;
         };
       in

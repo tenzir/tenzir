@@ -39,7 +39,10 @@
 #include <caf/actor_system_config.hpp>
 #include <caf/settings.hpp>
 
+#include <algorithm>
 #include <filesystem>
+#include <string_view>
+#include <system_error>
 
 #if __has_include(<boost/process/v1/child.hpp>)
 
@@ -75,6 +78,15 @@ namespace bp = boost::process;
 namespace tenzir::plugins::python {
 namespace {
 
+auto to_strings = [](auto&& range) {
+  std::vector<std::string> out;
+  out.reserve(std::ranges::size(range));
+  for (auto&& item : range) {
+    out.emplace_back(std::string{item});
+  }
+  return out;
+};
+
 /// Arrow InputStream API implementation over a file descriptor.
 class arrow_fd_wrapper : public ::arrow::io::InputStream {
 public:
@@ -100,7 +112,7 @@ public:
 
   auto Read(int64_t nbytes, void* out) -> ::arrow::Result<int64_t> override {
     auto bytes_read = detail::read(fd_, out, nbytes);
-    if (! bytes_read) {
+    if (not bytes_read) {
       return ::arrow::Status::IOError(fmt::to_string(bytes_read.error()));
     }
     auto sbytes = detail::narrow_cast<int64_t>(*bytes_read);
@@ -125,14 +137,14 @@ private:
 };
 
 constexpr auto PYTHON_SCAFFOLD = R"_(
-from tenzir.tools.python_operator_executor import main
+from tenzir_operator.executor import main
 
 main()
 )_";
 
 struct config {
   // Implicit arguments passed to every invocation of `pip install`.
-  std::optional<std::string> implicit_requirements = {};
+  std::optional<std::string> implicit_requirements;
 
   // Whether to create a virtualenv environment for the python
   // operator.
@@ -140,7 +152,6 @@ struct config {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, config& x) -> bool {
-    auto venv_base_dir_str = std::string{};
     auto result
       = f.object(x)
           .pretty_name("tenzir.plugins.python.config")
@@ -186,16 +197,67 @@ public:
       // `detail::install_datadir` and the venv base dir may be different
       // between the client and node process.
       auto implicit_requirements = std::string{};
+      auto bundled_wheels = std::vector<std::string>{};
+      const auto python_dir = detail::install_datadir() / "python";
+      const auto wheelhouse_dir = python_dir / "wheelhouse";
       if (config_.implicit_requirements) {
         implicit_requirements = *config_.implicit_requirements;
       } else {
-        implicit_requirements = std::string{
-          detail::install_datadir() / "python"
-          / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
-                        version::major, version::minor, version::patch)};
+        const auto find_wheel = [&](const std::filesystem::path& directory,
+                                    std::string_view project)
+          -> std::optional<std::filesystem::path> {
+          auto normalized = std::string{project};
+          std::replace(normalized.begin(), normalized.end(), '-', '_');
+          const auto prefix = fmt::format("{}-", normalized);
+          const auto suffix = std::string{".whl"};
+          auto best_path = std::optional<std::filesystem::path>{};
+          auto best_name = std::string{};
+          std::error_code ec;
+          if (not std::filesystem::exists(directory, ec)) {
+            return std::nullopt;
+          }
+          for (const auto& entry :
+               std::filesystem::directory_iterator{directory}) {
+            if (not entry.is_regular_file()) {
+              continue;
+            }
+            const auto filename = entry.path().filename().string();
+            if (not boost::algorithm::starts_with(filename, prefix)
+                || ! boost::algorithm::ends_with(filename, suffix)) {
+              continue;
+            }
+            if (not best_path || filename > best_name) {
+              best_name = filename;
+              best_path = entry.path();
+            }
+          }
+          return best_path;
+        };
+        if (find_wheel(wheelhouse_dir, "tenzir-operator")) {
+          std::error_code ec;
+          for (const auto& entry :
+               std::filesystem::directory_iterator{wheelhouse_dir, ec}) {
+            if (not entry.is_regular_file()) {
+              continue;
+            }
+            if (entry.path().extension() != ".whl") {
+              continue;
+            }
+            bundled_wheels.push_back(entry.path().string());
+          }
+        } else {
+          const auto core_wheel = find_wheel(python_dir, "tenzir-core");
+          const auto operator_wheel = find_wheel(python_dir, "tenzir-operator");
+          if (core_wheel && operator_wheel) {
+            bundled_wheels.push_back(core_wheel->string());
+            bundled_wheels.push_back(operator_wheel->string());
+          } else {
+            implicit_requirements = std::string{"tenzir-operator[pandas]"};
+          }
+        }
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};
-      if (! config_.create_venvs) {
+      if (not config_.create_venvs) {
         venv_base_dir = std::nullopt;
       } else if (const auto* cache_dir
                  = get_if<std::string>(&ctrl.self().home_system().config(),
@@ -215,7 +277,7 @@ public:
       co_yield {};
       // Get the code to be executed.
       auto code = std::string{};
-      if (auto* path = try_as<std::filesystem::path>(code_.inner)) {
+      if (const auto* path = try_as<std::filesystem::path>(code_.inner)) {
         auto code_chunk = chunk::make_empty();
         if (auto err = read(*path, code_chunk)) {
           diagnostic::error(err)
@@ -224,7 +286,7 @@ public:
         }
         code = std::string{reinterpret_cast<const char*>(code_chunk->data()),
                            code_chunk->size()};
-      } else if (auto* secret = try_as<class secret>(code_.inner)) {
+      } else if (const auto* secret = try_as<class secret>(code_.inner)) {
         co_yield ctrl.resolve_secrets_must_yield({make_secret_request(
           "code", *secret, code_.source, code, ctrl.diagnostics())});
       } else {
@@ -240,25 +302,25 @@ public:
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       auto maybe_venv = std::optional<std::filesystem::path>{};
-      auto venv_cleanup = [&] {
-        if (config_.create_venvs) {
-          TENZIR_ASSERT(venv_base_dir);
-          auto ec = std::error_code{};
-          std::filesystem::create_directories(*venv_base_dir, ec);
-          auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
-          if (mkdtemp(venv.data()) == nullptr) {
-            diagnostic::error("{}", detail::describe_errno())
-              .note("failed to create a unique directory for the python "
-                    "virtual environment in {}",
-                    *venv_base_dir)
-              .throw_();
-          }
-          auto venv_path = std::filesystem::path{venv};
-          maybe_venv = venv_path;
-          env["VIRTUAL_ENV"] = venv;
-          env["UV_CACHE_DIR"]
-            = (venv_base_dir->parent_path() / "cache" / "uv").string();
+      if (config_.create_venvs) {
+        TENZIR_ASSERT(venv_base_dir);
+        auto ec = std::error_code{};
+        std::filesystem::create_directories(*venv_base_dir, ec);
+        auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
+        if (mkdtemp(venv.data()) == nullptr) {
+          diagnostic::error("{}", detail::describe_errno())
+            .note("failed to create a unique directory for the python "
+                  "virtual environment in {}",
+                  *venv_base_dir)
+            .throw_();
         }
+        auto venv_path = std::filesystem::path{venv};
+        maybe_venv = venv_path;
+        env["VIRTUAL_ENV"] = venv;
+        env["UV_CACHE_DIR"]
+          = (venv_base_dir->parent_path() / "cache" / "uv").string();
+      }
+      auto venv_cleanup = [&] {
         return detail::scope_guard([maybe_venv]() noexcept {
           if (maybe_venv) {
             std::error_code ec;
@@ -269,15 +331,15 @@ public:
                           *maybe_venv, ec);
               return;
             }
-            if (! exists) {
+            if (not exists) {
               return;
             }
             std::filesystem::remove_all(*maybe_venv, ec);
-            if (ec) {
-              // ctrl can already be gone, so we can't emit a diagnostic here.
-              TENZIR_WARN("python operator failed to remove venv at {}: {}",
-                          *maybe_venv, ec);
-            }
+            // if (ec) {
+            //   // ctrl can already be gone, so we can't emit a diagnostic here.
+            //   TENZIR_WARN("python operator failed to remove venv at {}: {}",
+            //               *maybe_venv, ec);
+            // }
           }
         });
       }();
@@ -310,40 +372,51 @@ public:
             .note("failed to create virtualenv")
             .throw_();
         }
-        auto pip_invocation = std::vector<std::string>{
-          uv_executable.string(),
-          "pip",
-          "install",
-          "-q",
-        };
-        // `split` creates an empty token in case the input was entirely
-        // empty, but we don't want that so we need an extra guard.
-        if (! implicit_requirements.empty()) {
-          auto implicit_requirements_vec
-            = detail::split_escaped(implicit_requirements, " ", "\\");
-          pip_invocation.insert(pip_invocation.end(),
-                                implicit_requirements_vec.begin(),
-                                implicit_requirements_vec.end());
-        }
-        if (! requirements_.empty()) {
-          auto requirements_vec = detail::split(requirements_, " ");
-          pip_invocation.insert(pip_invocation.end(), requirements_vec.begin(),
-                                requirements_vec.end());
-        }
-        std_err = bp::ipstream{};
-        TENZIR_VERBOSE("installing python modules with: '{}'",
-                       fmt::join(pip_invocation, "' '"));
-        if (bp::system(pip_invocation, env, bp::std_err > std_err,
-                       detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                       bp::detail::limit_handles_{})
-            != 0) {
-          auto pip_error = drain_pipe(std_err);
-          diagnostic::error("{}", pip_error)
-            .note("failed to install pip requirements")
-            .throw_();
-        }
-        python_executable
+        const auto venv_python
           = std::filesystem::path{*maybe_venv} / "bin" / "python3";
+        env["UV_PYTHON"] = venv_python.string();
+        auto run_install = [&](std::vector<std::string> extra_args,
+                               std::string_view error_note) {
+          if (extra_args.empty()) {
+            return;
+          }
+          auto args = std::vector<std::string>{
+            uv_executable.string(), "pip", "install", "--python",
+            venv_python.string(),   "-vv",
+          };
+          args.insert(args.end(), extra_args.begin(), extra_args.end());
+          bp::ipstream install_err;
+          TENZIR_VERBOSE("installing python modules with: '{}'",
+                         fmt::join(args, "' '"));
+          if (bp::system(args, env, bp::std_err > install_err,
+                         detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                         bp::detail::limit_handles_{})
+              != 0) {
+            auto pip_error = drain_pipe(install_err);
+            diagnostic::error("{}", pip_error).note("{}", error_note).throw_();
+          }
+        };
+        if (not implicit_requirements.empty()) {
+          auto implicit_vec
+            = detail::split_escaped(implicit_requirements, " ", "\\");
+          run_install(std::move(implicit_vec),
+                      "failed to install implicit requirements");
+        } else if (not bundled_wheels.empty()) {
+          auto wheel_args = std::vector<std::string>{
+            "--no-deps",
+            "--offline",
+          };
+          wheel_args.insert(wheel_args.end(), bundled_wheels.begin(),
+                            bundled_wheels.end());
+          run_install(std::move(wheel_args),
+                      "failed to install bundled Python wheels");
+        }
+        if (not requirements_.empty()) {
+          auto requirements_vec = detail::split(requirements_, " ");
+          run_install(to_strings(std::move(requirements_vec)),
+                      "failed to install additional requirements");
+        }
+        python_executable = venv_python;
       }
       bp::opstream codepipe; // pipe to transmit the code
       // If we redirect stderr to get error information, we need to switch to a
@@ -387,14 +460,14 @@ public:
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
       errpipe.pipe().assign_sink(-1);
-      if (! child.running()) {
+      if (not child.running()) {
         auto python_error = drain_pipe(errpipe);
         diagnostic::error("{}", python_error)
           .note("python process exited with error")
           .throw_();
       }
       for (auto&& slice : input) {
-        if (! child.running()) {
+        if (not child.running()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -409,7 +482,7 @@ public:
         auto stream = check(arrow::io::BufferOutputStream::Create());
         auto writer = check(arrow::ipc::MakeStreamWriter(
           stream, slice.schema().to_arrow_schema()));
-        if (! writer->WriteRecordBatch(*batch).ok()) {
+        if (not writer->WriteRecordBatch(*batch).ok()) {
           diagnostic::error("failed to convert input batch to Arrow format")
             .note(
               "failed to write in conversion from input batch to Arrow format")
@@ -424,7 +497,7 @@ public:
           co_return;
         }
         auto result = stream->Finish();
-        if (! result.status().ok()) {
+        if (not result.status().ok()) {
           diagnostic::error("{}", result.status().message())
             .note(
               "failed to flush in conversion from input batch to Arrow format")
@@ -435,7 +508,7 @@ public:
                      detail::narrow<int>((*result)->size()));
         auto file = arrow_fd_wrapper{std_out.native_source()};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
-        if (! reader.status().ok()) {
+        if (not reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -443,7 +516,7 @@ public:
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
-        if (! result_batch.status().ok()) {
+        if (not result_batch.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -506,8 +579,8 @@ public:
 
 private:
   config config_ = {};
-  std::string requirements_ = {};
-  code_or_path_t code_ = {};
+  std::string requirements_;
+  code_or_path_t code_;
 };
 
 class plugin final : public virtual operator_plugin2<python_operator> {
@@ -518,7 +591,7 @@ public:
     -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
-    if (! create_virtualenv) {
+    if (not create_virtualenv) {
       return create_virtualenv.error();
     }
     config.create_venvs = *create_virtualenv;
