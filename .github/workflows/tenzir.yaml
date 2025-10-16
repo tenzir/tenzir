@@ -741,6 +741,10 @@ jobs:
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           # Avoid pushing the full enterprise edition.
           pushFilter: "tenzir-ee"
+      - name: Build sdist
+        working-directory: python
+        run: |
+          uv build --sdist --all-packages
       - name: Build wheel for validation
         working-directory: python
         run: |
