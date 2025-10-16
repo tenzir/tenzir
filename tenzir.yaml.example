@@ -180,7 +180,7 @@ tenzir:
 
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
-  active-partition-timeout: 5min
+  active-partition-timeout: 30s
 
   # Maximum number of events across all active partitions. This indirectly
   # controls the maximum memory usage when importing events.
@@ -192,7 +192,7 @@ tenzir:
   automatic-rebuild: 1
 
   # Timeout after which an automatic rebuild is triggered.
-  rebuild-interval: 2 hours
+  rebuild-interval: 30min
 
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
