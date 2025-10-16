@@ -57,6 +57,7 @@ concept allocator
         t.reallocate(blk, size, alignment)
       } -> std::same_as<reallocation_result>;
       { t.deallocate(blk, alignment) } -> std::same_as<std::size_t>;
+      { t.backend() } -> std::same_as<std::string_view>;
     };
 
 template <typename T>
@@ -64,65 +65,26 @@ concept allocator_with_stats = allocator<T> and requires(const T t) {
   { t.stats() } -> std::same_as<const stats&>;
 };
 
-class mimallocator {
-public:
-  mimallocator() noexcept;
-  auto allocate(std::size_t size, std::align_val_t alignment) noexcept -> block;
+using allocation_function_t
+  = auto (*)(std::size_t size, std::align_val_t alignment) -> block;
+using reallocation_function_t
+  = auto (*)(block old_block, std::size_t size, std::align_val_t alignment)
+    -> reallocation_result;
+using deallocation_function_t
+  = auto (*)(block old_block, std::align_val_t alignment) -> std::size_t;
 
-  auto reallocate(block blk, std::size_t new_size,
-                  std::align_val_t alignment) noexcept -> reallocation_result;
+struct erased_allocator {
+  allocation_function_t allocate;
+  reallocation_function_t reallocate;
+  deallocation_function_t deallocate;
+  std::string_view backend_;
 
-  auto deallocate(block blk, std::align_val_t alignment) noexcept
-    -> std::size_t;
+  auto backend() const -> std::string_view {
+    return backend_;
+  }
 };
 
-static_assert(allocator<mimallocator>);
-
-namespace internal::hands::off {
-/// A C++ standard allocator that uses mimallocator for memory allocation.
-/// This allocator is suitable for use with STL containers.
-template <typename T>
-class std_mimallocator {
-public:
-  using value_type = T;
-
-  std_mimallocator() noexcept = default;
-
-  template <typename U>
-  std_mimallocator(const std_mimallocator<U>&) noexcept {
-  }
-
-  [[nodiscard]] auto allocate(std::size_t n) -> T* {
-    auto blk = alloc_.allocate(n * sizeof(T), std::align_val_t{alignof(T)});
-    if (not blk) {
-      throw std::bad_alloc{};
-    }
-    return reinterpret_cast<T*>(blk.ptr);
-  }
-
-  auto deallocate(T* p, std::size_t n) noexcept -> void {
-    alloc_.deallocate(block{reinterpret_cast<std::byte*>(p), n * sizeof(T)},
-                      std::align_val_t{alignof(T)});
-  }
-
-  template <typename U>
-  friend auto
-  operator==(const std_mimallocator&, const std_mimallocator<U>&) noexcept
-    -> bool {
-    return true;
-  }
-
-  template <typename U>
-  friend auto
-  operator!=(const std_mimallocator&, const std_mimallocator<U>&) noexcept
-    -> bool {
-    return false;
-  }
-
-private:
-  static inline mimallocator alloc_;
-};
-} // namespace internal::hands::off
+static_assert(allocator<erased_allocator>);
 
 template <allocator Inner>
 class stats_allocator {
@@ -155,6 +117,10 @@ public:
     return size;
   }
 
+  auto backend() const -> std::string_view {
+    return inner_.backend();
+  }
+
   auto stats() const -> const stats& {
     return stats_;
   }
@@ -164,62 +130,7 @@ private:
   struct stats stats_;
 };
 
-static_assert(allocator<stats_allocator<mimallocator>>);
-static_assert(allocator_with_stats<stats_allocator<mimallocator>>);
-
-template <allocator Inner>
-class tracking_allocator {
-public:
-  template <typename... Ts>
-  tracking_allocator(Ts&&... ts) : inner_{std::forward<Ts>(ts)...} {
-    sizes_.reserve(1'000'000);
-  }
-  auto allocate(std::size_t size, std::align_val_t alignment) noexcept
-    -> block {
-    auto blk = inner_.allocate(size, alignment);
-    sizes_[blk.ptr] = blk.size;
-    return blk;
-  }
-
-  auto reallocate(block blk, std::size_t new_size,
-                  std::align_val_t alignment) noexcept -> block {
-    auto new_block = inner_.reallocate(blk, new_size, alignment);
-    if (new_block.ptr != blk.ptr) {
-      sizes_[blk.ptr] = 0;
-    }
-    sizes_[new_block.ptr] = new_block.size;
-    return new_block;
-  }
-
-  auto deallocate(block blk, std::align_val_t alignment) noexcept
-    -> std::size_t {
-    auto size = inner_.deallocate(blk, alignment);
-    auto tracked = sizes_.find(blk.ptr);
-    if (tracked == sizes_.end()) {
-      TENZIR_WARN("deallocation for unaccounted allocation");
-      return size;
-    }
-    if (size != tracked->second) {
-      TENZIR_WARN("mismatched dealloc request with tracked size: {} vs {}",
-                  size, tracked->second);
-    }
-    return tracked->second;
-  }
-
-  auto stats() const -> const stats&
-    requires allocator_with_stats<Inner>
-  {
-    return inner_.stats();
-  }
-
-private:
-  tsl::robin_map<std::byte*, std::size_t, std::hash<std::byte*>,
-                 std::equal_to<std::byte*>,
-                 internal::hands::off::std_mimallocator<
-                   std::pair<std::byte* const, std::size_t>>>
-    sizes_;
-  Inner inner_;
-};
+static_assert(allocator_with_stats<stats_allocator<erased_allocator>>);
 
 template <allocator Inner>
 class wrapping_allocator {
@@ -241,6 +152,10 @@ public:
     return inner_.deallocate(blk, alignment);
   }
 
+  auto backend() const -> std::string_view {
+    return inner_.backend();
+  }
+
   auto stats() const -> const stats&
     requires allocator_with_stats<Inner>
   {
@@ -251,7 +166,11 @@ private:
   Inner& inner_;
 };
 
-using global_allocator_t = stats_allocator<mimallocator>;
+static_assert(allocator<wrapping_allocator<erased_allocator>>);
+static_assert(
+  allocator_with_stats<wrapping_allocator<stats_allocator<erased_allocator>>>);
+
+using global_allocator_t = stats_allocator<erased_allocator>;
 using separated_allocator_t
   = stats_allocator<wrapping_allocator<global_allocator_t>>;
 

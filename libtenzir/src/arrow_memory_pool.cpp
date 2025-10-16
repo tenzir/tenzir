@@ -116,7 +116,7 @@ public:
   }
 
   auto backend_name() const -> std::string override {
-    return "mimalloc";
+    return std::string{memory::arrow_allocator().backend()};
   }
 };
 
