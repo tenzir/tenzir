@@ -46,6 +46,7 @@
 #include <caf/settings.hpp>
 
 #include <chrono>
+#include <malloc.h>
 #include <ranges>
 #include <string_view>
 #include <utility>
@@ -490,6 +491,11 @@ auto node(node_actor::stateful_pointer<node_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
+  detail::weak_run_delayed_loop(self, std::chrono::minutes{10}, [self]() {
+    TENZIR_DEBUG("{} running malloc_trim to release unused memory", *self);
+    constexpr auto padding = 512 * 1024 * 1024; // 512 MiB
+    ::malloc_trim(padding);
+  });
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {
