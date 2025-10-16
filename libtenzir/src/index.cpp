@@ -1658,6 +1658,10 @@ index(index_actor::stateful_pointer<index_state> self,
           } else {
             rp.deliver(std::move(result.error()));
           }
+          // We clear the in-memory partitions here because they are only used
+          // by the partition transformer which will take quite some time to
+          // start again.
+          self->state().inmem_partitions.clear();
         };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
@@ -1774,12 +1778,11 @@ index(index_actor::stateful_pointer<index_state> self,
                               });
                         }
                       },
-                      [self, rp](caf::error& e) mutable {
+                      [deliver, self, rp](caf::error& e) mutable {
                         TENZIR_WARN("{} failed to finalize partition "
-                                    "transformer "
-                                    "output: {}",
+                                    "transformer output: {}",
                                     *self, e);
-                        rp.deliver(std::move(e));
+                        deliver(std::move(e));
                       });
                 },
                 [deliver](const caf::error& e) mutable {
