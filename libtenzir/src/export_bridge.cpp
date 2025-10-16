@@ -339,16 +339,15 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
   return {
     [self](table_slice& slice) -> caf::result<void> {
       TENZIR_ASSERT(self->current_sender());
+      // Calling `current_sender()` after `make_response_promise` is broken in
+      // the current version of CAF, as the sender will be moved-from. Hence we
+      // do it this way.
+      auto is_importer
+        = self->current_sender()->address() == self->state().importer_address;
       auto rp = self->make_response_promise<void>();
-      TENZIR_INFO("export_bridge get slice from {}, importer_address is {}",
-                  self->current_sender()->address(),
-                  self->state().importer_address);
-      self->state().add_events(std::move(slice),
-                               self->current_sender()->address()
-                                   == self->state().importer_address
-                                 ? event_source::live
-                                 : event_source::retro,
-                               rp);
+      self->state().add_events(
+        std::move(slice),
+        is_importer ? event_source::live : event_source::retro, rp);
       return rp;
     },
     [self](atom::get) -> caf::result<table_slice> {
