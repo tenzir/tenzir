@@ -33,6 +33,7 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
+#include <optional>
 #include <queue>
 #include <string_view>
 
@@ -115,72 +116,81 @@ auto decode_ipc_stream(chunk_ptr chunk)
                                     get_generator_result.status().ToString()));
   }
   auto gen = get_generator_result.MoveValueUnsafe();
-  return []([[maybe_unused]] auto reader,
-            auto gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
-    while (true) {
-      auto next = gen();
-      if (not next.is_finished()) {
-        next.Wait();
+  return
+    []([[maybe_unused]] auto reader,
+       decltype(gen) gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
+      while (true) {
+        auto next = gen();
+        if (not next.is_finished()) {
+          // TODO: We block the CAF worker thread here. Presumably we are okay
+          // with this since work is happening in an Arrow worker thread.
+          next.Wait();
+        }
+        TENZIR_ASSERT(next.is_finished());
+        auto result = check(next.MoveResult());
+        if (arrow::IsIterationEnd(result)) {
+          co_return;
+        }
+        co_yield std::move(result);
       }
-      TENZIR_ASSERT(next.is_finished());
-      auto result = check(next.MoveResult());
-      if (arrow::IsIterationEnd(result)) {
-        co_return;
-      }
-      co_yield std::move(result);
-    }
-  }(std::move(reader), std::move(gen));
+    }(std::move(reader), std::move(gen));
 }
 
 class passive_feather_store final : public passive_store {
   [[nodiscard]] auto load(chunk_ptr chunk) -> caf::error override {
-    auto decode_result = decode_ipc_stream(std::move(chunk));
-    if (not decode_result) {
+    TENZIR_ASSERT(chunk);
+    if (auto decode_result = decode_ipc_stream(chunk->slice(0, chunk->size()));
+        not decode_result) {
       return caf::make_error(ec::format_error,
                              fmt::format("failed to load feather store: {}",
                                          decode_result.error()));
     }
-    remaining_slices_generator_ = std::move(*decode_result);
-    remaining_slices_iterator_ = remaining_slices_generator_.begin();
+    chunk_ = std::move(chunk);
+    schema_.reset();
+    num_events_.reset();
     return {};
   }
 
   [[nodiscard]] auto slices() const -> generator<table_slice> override {
+    if (not chunk_) {
+      co_return;
+    }
+    auto decode_result = decode_ipc_stream(make_chunk_view());
+    if (not decode_result) {
+      TENZIR_ASSERT(false, "failed to decode feather store after load");
+      co_return;
+    }
+    auto batches = std::move(*decode_result);
     auto offset = id{};
-    auto i = size_t{};
-    while (true) {
-      if (i < cached_slices_.size()) {
-        TENZIR_ASSERT(offset == cached_slices_[i].offset());
-      } else if (remaining_slices_iterator_
-                 != remaining_slices_generator_.end()) {
-        auto batch = std::move(*remaining_slices_iterator_);
-        TENZIR_ASSERT(batch);
-        ++remaining_slices_iterator_;
-        auto import_time_column = batch->GetColumnByName("import_time");
-        auto slice = cached_slices_.empty()
-                       ? table_slice{unwrap_record_batch(batch)}
-                       : table_slice{unwrap_record_batch(batch),
-                                     cached_slices_[0].schema()};
-        slice.offset(offset);
-        slice.import_time(derive_import_time(import_time_column));
-        cached_slices_.push_back(std::move(slice));
-      } else {
-        co_return;
+    auto schema = schema_;
+    for (auto it = batches.begin(); it != batches.end(); ++it) {
+      auto batch = std::move(*it);
+      TENZIR_ASSERT(batch);
+      auto import_time_column = batch->GetColumnByName("import_time");
+      auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
+                          : table_slice{unwrap_record_batch(batch)};
+      if (not schema) {
+        schema = slice.schema();
+        schema_ = schema;
       }
-      co_yield cached_slices_[i];
-      offset += cached_slices_[i].rows();
-      ++i;
+      slice.offset(offset);
+      slice.import_time(derive_import_time(import_time_column));
+      offset += slice.rows();
+      co_yield std::move(slice);
     }
   }
 
   [[nodiscard]] auto num_events() const -> uint64_t override {
-    if (cached_num_events_ == 0) {
-      cached_num_events_ = rows(collect(slices()));
+    if (not num_events_) {
+      num_events_ = count_rows();
     }
-    return cached_num_events_;
+    return *num_events_;
   }
 
   [[nodiscard]] auto schema() const -> type override {
+    if (schema_) {
+      return *schema_;
+    }
     for (const auto& slice : slices()) {
       return slice.schema();
     }
@@ -188,11 +198,23 @@ class passive_feather_store final : public passive_store {
   }
 
 private:
-  generator<std::shared_ptr<arrow::RecordBatch>> remaining_slices_generator_;
-  mutable generator<std::shared_ptr<arrow::RecordBatch>>::iterator
-    remaining_slices_iterator_;
-  mutable uint64_t cached_num_events_ = {};
-  mutable std::vector<table_slice> cached_slices_;
+  [[nodiscard]] auto make_chunk_view() const -> chunk_ptr {
+    TENZIR_ASSERT(chunk_);
+    return chunk_->slice(0, chunk_->size());
+  }
+
+  [[nodiscard]] auto count_rows() const -> uint64_t {
+    auto reader_result = arrow::ipc::RecordBatchFileReader::Open(
+      as_arrow_file(make_chunk_view()));
+    check(reader_result.status());
+    auto reader = reader_result.MoveValueUnsafe();
+    auto rows = check(reader->CountRows());
+    return detail::narrow_cast<uint64_t>(rows);
+  }
+
+  chunk_ptr chunk_;
+  mutable std::optional<uint64_t> num_events_;
+  mutable std::optional<type> schema_;
 };
 
 class active_feather_store final : public active_store {

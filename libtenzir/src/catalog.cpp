@@ -142,6 +142,9 @@ auto catalog_state::lookup(expression expr) const
     }
     auto pruned = prune(*resolved, unprunable_fields);
     auto candidates_per_type = lookup_impl(pruned, type);
+    if (candidates_per_type.partition_infos.empty()) {
+      continue;
+    }
     // Sort partitions by their max import time, returning the most recent
     // partitions first.
     std::sort(candidates_per_type.partition_infos.begin(),

@@ -31,14 +31,41 @@ void remove_down_source(auto* self, const caf::actor_addr& source,
       break; // a sink can only have one active extract query, so we stop
     }
   }
-  for (const auto& [query_id, state] : self->state().running_counts) {
-    if (state.sink->address() == source) {
-      TENZIR_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
-                   err);
-      self->state().running_counts.erase(query_id);
-      break; // a sink can only have one active count query, so we stop
-    }
+}
+
+void continue_query(auto self, const uuid& query_id) {
+  TENZIR_TRACE("{} continues working on extract query {}", *self, query_id);
+  auto it = self->state().running_extractions.find(query_id);
+  if (it == self->state().running_extractions.end()) {
+    // We asynchronously erase when the client goes down.
+    return;
   }
+  auto& [_, state] = *it;
+  auto slice = state.result_generator.next();
+  if (not slice) {
+    TENZIR_DEBUG("{} finished working on extract query {}", *self, query_id);
+    state.rp.deliver(state.num_hits);
+    self->state().running_extractions.erase(it);
+    return;
+  }
+  state.num_hits += slice->rows();
+  self->mail(std::move(*slice))
+    .request(state.sink, caf::infinite)
+    .then(
+      [self, query_id] {
+        continue_query(self, query_id);
+      },
+      [self, query_id](caf::error& err) {
+        auto it = self->state().running_extractions.find(query_id);
+        if (it == self->state().running_extractions.end()) {
+          // We asynchronously erase when the client goes down.
+          return;
+        }
+        it->second.rp.deliver(caf::make_error(
+          ec::unspecified,
+          fmt::format("{} got error from sink: {}", *self, err)));
+        self->state().running_extractions.erase(it);
+      });
 }
 
 // A query execution is performed incrementally on individual table slices.
@@ -58,7 +85,7 @@ void remove_down_source(auto* self, const caf::actor_addr& source,
 template <class Actor>
 caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
-  TENZIR_TRACE("{} got a query: {}", *self, query_context);
+  TENZIR_DEBUG("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state().store->schema();
   const auto tailored_expr = tailor(query_context.expr, schema);
@@ -92,34 +119,10 @@ handle_query(const auto& self, const query_context& query_context) {
       }
       state->second.result_generator
         = self->state().store->extract(*tailored_expr);
-      state->second.result_iterator = state->second.result_generator.begin();
       state->second.sink = extract.sink;
       state->second.start = start;
-      self->mail(atom::internal_v, atom::extract_v, query_context.id)
-        .request(static_cast<Actor>(self), caf::infinite)
-        .then(
-          [self, issuer = query_context.issuer, query_id = query_context.id,
-           rp]() mutable {
-            TENZIR_TRACE("{} finished working on extract query {}", *self,
-                         query_id);
-            auto it = self->state().running_extractions.find(query_id);
-            if (it == self->state().running_extractions.end()) {
-              TENZIR_DEBUG("{} cancelled extract query {}", *self, query_id);
-              rp.deliver(uint64_t{0});
-              return;
-            }
-            rp.deliver(it->second.num_hits);
-            self->state().running_extractions.erase(it);
-          },
-          [self, expr = query_context.expr, query_id = query_context.id,
-           rp](caf::error& err) mutable {
-            TENZIR_WARN("{} failed to execute extract query {}: {}", *self,
-                        query_id, err);
-            rp.deliver(caf::make_error(
-              ec::unspecified, fmt::format("{} failed to complete extract "
-                                           "query '{}': {}",
-                                           *self, expr, std::move(err))));
-          });
+      state->second.rp = std::move(rp);
+      continue_query(self, query_context.id);
     },
   };
   match(query_context.cmd, f);
@@ -182,7 +185,6 @@ default_passive_store_actor::behavior_type default_passive_store(
       // For new, partition-local stores we know that we always erase
       // everything.
       const auto num_events = self->state().store->num_events();
-
       TENZIR_DEBUG("{} erases {} events", *self, num_events);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
                               || rank(selection) == num_events);
@@ -197,52 +199,6 @@ default_passive_store_actor::behavior_type default_passive_store(
             rp.deliver(std::move(error));
           });
       return rp;
-    },
-    [self](atom::internal, atom::extract,
-           const uuid& query_id) -> caf::result<void> {
-      TENZIR_TRACE("{} continuous working on extract query {}", *self,
-                   query_id);
-      auto it = self->state().running_extractions.find(query_id);
-      if (it == self->state().running_extractions.end()) {
-        return {};
-      }
-      auto& [_, state] = *it;
-      if (state.result_iterator == state.result_generator.end()) {
-        TENZIR_DEBUG("{} ignores extract continuation request for query {} "
-                     "after "
-                     "query already finished",
-                     *self, query_id);
-        return {};
-      }
-      auto slice = *state.result_iterator;
-      state.num_hits += slice.rows();
-      self->mail(std::move(slice)).send(state.sink);
-      if (++state.result_iterator == state.result_generator.end()) {
-        return {};
-      }
-      return self->mail(atom::internal_v, atom::extract_v, query_id)
-        .delegate(static_cast<default_passive_store_actor>(self));
-    },
-    [self](atom::internal, atom::count,
-           const uuid& query_id) -> caf::result<void> {
-      TENZIR_DEBUG("{} continuous working on count query {}", *self, query_id);
-      auto it = self->state().running_counts.find(query_id);
-      if (it == self->state().running_counts.end()) {
-        return {};
-      }
-      auto& [_, state] = *it;
-      if (state.result_iterator == state.result_generator.end()) {
-        TENZIR_DEBUG("{} ignores count continuation request for query {} after "
-                     "query already finished",
-                     *self, query_id);
-        return {};
-      }
-      state.num_hits += *state.result_iterator;
-      if (++state.result_iterator == state.result_generator.end()) {
-        return {};
-      }
-      return self->mail(atom::internal_v, atom::count_v, query_id)
-        .delegate(static_cast<default_passive_store_actor>(self));
     },
   };
 }
@@ -328,52 +284,6 @@ default_active_store_actor::behavior_type default_active_store(
         {"path", self->state().path.string()},
         {"store-type", self->state().store_type},
       };
-    },
-    [self](atom::internal, atom::extract,
-           const uuid& query_id) -> caf::result<void> {
-      TENZIR_DEBUG("{} continuous working on extract query {}", *self,
-                   query_id);
-      auto it = self->state().running_extractions.find(query_id);
-      if (it == self->state().running_extractions.end()) {
-        return {};
-      }
-      auto& [_, state] = *it;
-      if (state.result_iterator == state.result_generator.end()) {
-        TENZIR_DEBUG("{} ignores extract continuation request for query {} "
-                     "after "
-                     "query already finished",
-                     *self, query_id);
-        return {};
-      }
-      auto slice = *state.result_iterator;
-      state.num_hits += slice.rows();
-      self->mail(std::move(slice)).send(state.sink);
-      if (++state.result_iterator == state.result_generator.end()) {
-        return {};
-      }
-      return self->mail(atom::internal_v, atom::extract_v, query_id)
-        .delegate(static_cast<default_active_store_actor>(self));
-    },
-    [self](atom::internal, atom::count,
-           const uuid& query_id) -> caf::result<void> {
-      TENZIR_DEBUG("{} continuous working on count query {}", *self, query_id);
-      auto it = self->state().running_counts.find(query_id);
-      if (it == self->state().running_counts.end()) {
-        return {};
-      }
-      auto& [_, state] = *it;
-      if (state.result_iterator == state.result_generator.end()) {
-        TENZIR_DEBUG("{} ignores count continuation request for query {} after "
-                     "query already finished",
-                     *self, query_id);
-        return {};
-      }
-      state.num_hits += *state.result_iterator;
-      if (++state.result_iterator == state.result_generator.end()) {
-        return {};
-      }
-      return self->mail(atom::internal_v, atom::count_v, query_id)
-        .delegate(static_cast<default_active_store_actor>(self));
     },
   };
 }
