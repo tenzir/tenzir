@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/allocator.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/concept/convertible/data.hpp"
@@ -495,16 +496,21 @@ auto node(node_actor::stateful_pointer<node_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
-#if (defined(__GLIBC__))
-  const auto period = caf::get_or<duration>(self->config().content,
-                                            "tenzir.malloc-trim-interval",
-                                            duration{std::chrono::minutes{10}});
-  detail::weak_run_delayed_loop(self, period, [self] {
-    TENZIR_DEBUG("{} running malloc_trim to release unused memory", *self);
-    constexpr auto padding = 512 * 1024 * 1024; // 512 MiB
-    ::malloc_trim(padding);
+  duration trim_interval = std::chrono::minutes{10};
+  const auto allocator_trim_interval_env
+    = detail::getenv("TENZIR_ALLOCATOR_TRIM_INTERVAL");
+  if (allocator_trim_interval_env) {
+    auto begin = allocator_trim_interval_env->begin();
+    auto end = allocator_trim_interval_env->end();
+    if (not parsers::simple_duration.parse(begin, end, trim_interval)) {
+      TENZIR_WARN("failed to parsed environment variable "
+                  "`TENZIR_ALLOCATOR_TRIM_INTERVAL={}`; Using ",
+                  *allocator_trim_interval_env, trim_interval);
+    }
+  }
+  detail::weak_run_delayed_loop(self, trim_interval, []() {
+    memory::global_allocator().trim();
   });
-#endif
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {
