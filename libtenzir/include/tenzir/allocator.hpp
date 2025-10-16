@@ -52,34 +52,38 @@ struct stats {
 template <typename T>
 concept allocator
   = requires(T t, std::size_t size, std::align_val_t alignment, block blk) {
-      { t.allocate(size, alignment) } -> std::same_as<block>;
+      { t.allocate(size, alignment) } noexcept -> std::same_as<block>;
       {
         t.reallocate(blk, size, alignment)
       } -> std::same_as<reallocation_result>;
-      { t.deallocate(blk, alignment) } -> std::same_as<std::size_t>;
-      { t.backend() } -> std::same_as<std::string_view>;
+      { t.deallocate(blk, alignment) } noexcept -> std::same_as<std::size_t>;
+      { t.trim() } noexcept;
+      { t.backend() } noexcept -> std::same_as<std::string_view>;
     };
 
 template <typename T>
 concept allocator_with_stats = allocator<T> and requires(const T t) {
-  { t.stats() } -> std::same_as<const stats&>;
+  { t.stats() } noexcept -> std::same_as<const stats&>;
 };
 
 using allocation_function_t
-  = auto (*)(std::size_t size, std::align_val_t alignment) -> block;
+  = auto (*)(std::size_t size, std::align_val_t alignment) noexcept -> block;
 using reallocation_function_t
-  = auto (*)(block old_block, std::size_t size, std::align_val_t alignment)
-    -> reallocation_result;
+  = auto (*)(block old_block, std::size_t size,
+             std::align_val_t alignment) noexcept -> reallocation_result;
 using deallocation_function_t
-  = auto (*)(block old_block, std::align_val_t alignment) -> std::size_t;
+  = auto (*)(block old_block, std::align_val_t alignment) noexcept
+  -> std::size_t;
+using trim_function_t = auto (*)() noexcept -> void;
 
 struct erased_allocator {
   allocation_function_t allocate;
   reallocation_function_t reallocate;
   deallocation_function_t deallocate;
+  trim_function_t trim;
   std::string_view backend_;
 
-  auto backend() const -> std::string_view {
+  auto backend() const noexcept -> std::string_view {
     return backend_;
   }
 };
@@ -117,11 +121,15 @@ public:
     return size;
   }
 
-  auto backend() const -> std::string_view {
+  auto trim() noexcept -> void {
+    return inner_.trim();
+  }
+
+  auto backend() const noexcept -> std::string_view {
     return inner_.backend();
   }
 
-  auto stats() const -> const stats& {
+  auto stats() const noexcept -> const stats& {
     return stats_;
   }
 
@@ -152,11 +160,15 @@ public:
     return inner_.deallocate(blk, alignment);
   }
 
-  auto backend() const -> std::string_view {
+  auto trim() noexcept -> void {
+    return inner_.trim();
+  }
+
+  auto backend() const noexcept -> std::string_view {
     return inner_.backend();
   }
 
-  auto stats() const -> const stats&
+  auto stats() const noexcept -> const stats&
     requires allocator_with_stats<Inner>
   {
     return inner_.stats_();
