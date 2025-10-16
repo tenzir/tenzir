@@ -1,0 +1,7 @@
+pipeline::detach {
+  every 50ms {
+    from {message: "Hello, world!"}
+  }
+  write_lines
+  save_tcp "0.0.0.0:3000", retry_delay=1s
+}

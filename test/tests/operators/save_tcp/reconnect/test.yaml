@@ -1,0 +1,3 @@
+suite: reconnect
+fixtures: [node]
+timeout: 60

@@ -1,0 +1,3 @@
+load_file env("TCP_SINK_FILE")
+read_json
+head 1
