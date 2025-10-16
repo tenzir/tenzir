@@ -8,6 +8,8 @@
 
 #include "tenzir/allocator.hpp"
 
+#include "tenzir/si_literals.hpp"
+
 #include <caf/actor_system.hpp>
 
 #include <malloc.h>
@@ -141,6 +143,20 @@ auto reallocate(block old_block, std::size_t new_size,
   };
 }
 
+auto trim() noexcept -> void {
+  mi_collect(false);
+}
+
+auto allocator() noexcept -> erased_allocator {
+  return {
+    .allocate = mimalloc::allocate,
+    .reallocate = mimalloc::reallocate,
+    .deallocate = mimalloc::deallocate,
+    .trim = mimalloc::trim,
+    .backend_ = "mimalloc",
+  };
+}
+
 } // namespace mimalloc
 
 namespace system {
@@ -198,30 +214,41 @@ auto reallocate(block old_block, std::size_t new_size,
     .new_block = new_block,
   };
 }
+
+auto trim() noexcept -> void {
+  using namespace si_literals;
+  constexpr auto padding = 512_Mi;
+  ::malloc_trim(padding);
+}
+
+auto allocator() noexcept -> erased_allocator {
+  return {
+    .allocate = system::allocate,
+    .reallocate = system::reallocate,
+    .deallocate = system::deallocate,
+    .trim = system::trim,
+    .backend_ = "system",
+  };
+}
+
 } // namespace system
 
 auto selected_alloc() -> erased_allocator {
-  const auto env = std::string_view{::getenv("TENZIR_ALLOCATOR")};
-  if (env.empty() or env == "mimalloc") {
-    return {
-      .allocate = mimalloc::allocate,
-      .reallocate = mimalloc::reallocate,
-      .deallocate = mimalloc::deallocate,
-      .backend_ = "mimalloc",
-    };
+  const auto env = ::getenv("TENZIR_ALLOCATOR");
+  if (not env) {
+    return mimalloc::allocator();
   }
-  if (env == "system") {
-    return {
-      .allocate = system::allocate,
-      .reallocate = system::reallocate,
-      .deallocate = system::deallocate,
-      .backend_ = "system",
-    };
+  const auto env_str = std::string_view{};
+  if (env_str.empty() or env_str == "mimalloc") {
+    return mimalloc::allocator();
+  }
+  if (env_str == "system") {
+    system::allocator();
   }
   ::fprintf(::stderr,
             "FATAL ERROR: unknown TENZIR_ALLOCATOR: '%s'\n"
             "known values are 'mimalloc' and 'system'\n",
-            env.data());
+            env_str.data());
   ::exit(EXIT_FAILURE);
   __builtin_unreachable();
 }
