@@ -8,8 +8,9 @@
 
 #include "tenzir/allocator.hpp"
 
-#include "tenzir/logger.hpp"
+#include <caf/actor_system.hpp>
 
+#include <malloc.h>
 #include <mimalloc.h>
 
 namespace tenzir::memory {
@@ -64,15 +65,22 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
   bytes_current.fetch_sub(remove);
 }
 
-mimallocator::mimallocator() noexcept {
-  // Configure mimalloc for optimal memory management.
-  // These settings balance memory reuse with returning memory to the OS.
-  mi_option_set(mi_option_reset_delay, 100);
-  mi_option_set(mi_option_reset_decommits, 1);
-}
+namespace mimalloc {
 
-auto mimallocator::allocate(std::size_t size,
-                            std::align_val_t alignment) noexcept -> block {
+namespace {
+
+struct init {
+  init() {
+    // Configure mimalloc for optimal memory management.
+    // These settings balance memory reuse with returning memory to the OS.
+    mi_option_set(mi_option_reset_delay, 100);
+    mi_option_set(mi_option_reset_decommits, 1);
+  }
+} init_;
+
+} // namespace
+
+auto allocate(std::size_t size, std::align_val_t alignment) noexcept -> block {
   auto* ptr = static_cast<std::byte*>(
     mi_malloc_aligned(size, std::to_underlying(alignment)));
   size = mi_usable_size(ptr);
@@ -85,9 +93,19 @@ auto mimallocator::allocate(std::size_t size,
   };
 }
 
-auto mimallocator::reallocate(block old_block, std::size_t new_size,
-                              std::align_val_t alignment) noexcept
-  -> reallocation_result {
+auto deallocate(block blk, std::align_val_t alignment) noexcept -> std::size_t {
+  (void)alignment;
+  if (blk.ptr == nullptr) {
+    TENZIR_ASSERT_EXPENSIVE(blk.size == 0);
+    return 0;
+  }
+  blk.size = mi_usable_size(blk.ptr);
+  mi_free(blk.ptr);
+  return blk.size;
+}
+
+auto reallocate(block old_block, std::size_t new_size,
+                std::align_val_t alignment) noexcept -> reallocation_result {
   old_block.size = mi_usable_size(old_block.ptr);
   if (old_block.size == new_size) {
     return {
@@ -123,20 +141,93 @@ auto mimallocator::reallocate(block old_block, std::size_t new_size,
   };
 }
 
-auto mimallocator::deallocate(block blk, std::align_val_t alignment) noexcept
-  -> std::size_t {
-  (void)alignment;
-  if (blk.ptr == nullptr) {
-    TENZIR_ASSERT_EXPENSIVE(blk.size == 0);
-    return 0;
+} // namespace mimalloc
+
+namespace system {
+
+auto allocate(std::size_t size, std::align_val_t alignment) noexcept -> block {
+  auto* ptr = static_cast<std::byte*>(
+    ::aligned_alloc(size, std::to_underlying(alignment)));
+  size = ::malloc_usable_size(ptr);
+  if (ptr == nullptr) {
+    return {};
   }
-  blk.size = mi_usable_size(blk.ptr);
-  mi_free(blk.ptr);
+  return block{
+    ptr,
+    size,
+  };
+}
+
+auto deallocate(block blk, std::align_val_t alignment) noexcept -> std::size_t {
+  (void)alignment;
+  blk.size = ::malloc_usable_size(blk.ptr);
+  ::free(blk.ptr);
   return blk.size;
 }
 
+auto reallocate(block old_block, std::size_t new_size,
+                std::align_val_t alignment) noexcept -> reallocation_result {
+  old_block.size = malloc_usable_size(old_block.ptr);
+  if (old_block.size == new_size) {
+    return {
+      .true_old_block = old_block,
+      .new_block = old_block,
+    };
+  }
+  if (new_size == 0) {
+    deallocate(old_block, alignment);
+    return {
+      old_block,
+      block{},
+    };
+  }
+  void* new_ptr = ::realloc(old_block.ptr, new_size);
+  new_size = ::malloc_usable_size(new_ptr);
+  auto new_block = block{
+    static_cast<std::byte*>(new_ptr),
+    new_size,
+  };
+  if (new_ptr == nullptr) {
+    return {
+      old_block,
+      block{},
+    };
+  }
+  return {
+    .true_old_block = old_block,
+    .new_block = new_block,
+  };
+}
+} // namespace system
+
+auto selected_alloc() -> erased_allocator {
+  const auto env = std::string_view{::getenv("TENZIR_ALLOCATOR")};
+  if (env.empty() or env == "mimalloc") {
+    return {
+      .allocate = mimalloc::allocate,
+      .reallocate = mimalloc::reallocate,
+      .deallocate = mimalloc::deallocate,
+      .backend_ = "mimalloc",
+    };
+  }
+  if (env == "system") {
+    return {
+      .allocate = system::allocate,
+      .reallocate = system::reallocate,
+      .deallocate = system::deallocate,
+      .backend_ = "system",
+    };
+  }
+  ::fprintf(::stderr,
+            "FATAL ERROR: unknown TENZIR_ALLOCATOR: '%s'\n"
+            "known values are 'mimalloc' and 'system'\n",
+            env.data());
+  ::exit(EXIT_FAILURE);
+  __builtin_unreachable();
+}
+
 auto global_allocator() noexcept -> global_allocator_t& {
-  static auto alloc = global_allocator_t{};
+  static auto alloc = global_allocator_t{selected_alloc()};
   return alloc;
 }
 
