@@ -90,11 +90,43 @@ struct erased_allocator {
 
 static_assert(allocator<erased_allocator>);
 
+namespace mimalloc {
+class typed_allocator {
+public:
+  static auto allocate(std::size_t size, std::align_val_t alignment) noexcept
+    -> block;
+  static auto reallocate(block old_block, std::size_t new_size,
+                         std::align_val_t alignment) noexcept
+    -> reallocation_result;
+  static auto deallocate(block old_block, std::align_val_t alignment) noexcept
+    -> std::size_t;
+  static auto trim() noexcept -> void;
+  static auto backend() noexcept -> std::string_view;
+};
+static_assert(allocator<typed_allocator>);
+} // namespace mimalloc
+
+namespace system {
+class typed_allocator {
+public:
+  static auto allocate(std::size_t size, std::align_val_t alignment) noexcept
+    -> block;
+  static auto reallocate(block old_block, std::size_t new_size,
+                         std::align_val_t alignment) noexcept
+    -> reallocation_result;
+  static auto deallocate(block old_block, std::align_val_t alignment) noexcept
+    -> std::size_t;
+  static auto trim() noexcept -> void;
+  static auto backend() noexcept -> std::string_view;
+};
+static_assert(allocator<typed_allocator>);
+} // namespace system
+
 template <allocator Inner>
 class stats_allocator {
 public:
   template <typename... Ts>
-  stats_allocator(Ts&&... ts) : inner_{std::forward<Ts>(ts)...} {
+  constexpr stats_allocator(Ts&&... ts) : inner_{std::forward<Ts>(ts)...} {
   }
 
   auto allocate(std::size_t size, std::align_val_t alignment) noexcept
@@ -143,7 +175,7 @@ static_assert(allocator_with_stats<stats_allocator<erased_allocator>>);
 template <allocator Inner>
 class wrapping_allocator {
 public:
-  wrapping_allocator(Inner& inner) : inner_{inner} {
+  constexpr wrapping_allocator(Inner& inner) : inner_{inner} {
   }
   auto allocate(std::size_t size, std::align_val_t alignment) noexcept
     -> block {
