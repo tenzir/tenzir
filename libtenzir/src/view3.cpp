@@ -142,7 +142,7 @@ auto order_impl(const record_view3 l, const record_view3 r) -> Ordering {
       return name_order;
     }
     const auto l_value
-      = view_at(*l.array_.field(detail::narrow<int>(i)), r.index_);
+      = view_at(*l.array_.field(detail::narrow<int>(i)), l.index_);
     const auto r_value
       = view_at(*r.array_.field(detail::narrow<int>(i)), r.index_);
     const auto value_order = order_impl<Ordering>(l_value, r_value);
