@@ -519,7 +519,7 @@ struct exec_node_state {
     min_backoff
       = demand_settings.min_backoff
           ? *demand_settings.min_backoff
-          : read_config("min-backoff", duration{std::chrono::milliseconds{10}},
+          : read_config("min-backoff", duration{std::chrono::milliseconds{1}},
                         min_backoff, false);
     max_backoff
       = demand_settings.max_backoff
@@ -671,11 +671,11 @@ struct exec_node_state {
   operator_ptr op = {};
 
   /// The instance created by the operator. Must be created at most once.
-  struct resumable_generator {
-    generator<Output> gen = {};
-    generator<Output>::iterator it = {};
-  };
-  std::optional<resumable_generator> instance = {};
+  std::optional<generator<Output>> instance = {};
+  /// The output of the operator that was generated at the start of the
+  /// execution node. We do not have demand at that time, so we can't directly
+  /// send it to its downstream operator.
+  std::optional<Output> start_output;
 
   /// State required for keeping and sending metrics.
   std::chrono::steady_clock::time_point start_time
@@ -720,7 +720,7 @@ struct exec_node_state {
   caf::typed_response_promise<void> start_rp = {};
 
   /// Exponential backoff for scheduling.
-  duration min_backoff = std::chrono::milliseconds{30};
+  duration min_backoff = std::chrono::milliseconds{10};
   duration max_backoff = std::chrono::seconds{1};
   double backoff_rate = 2.0;
   duration backoff = duration::zero();
@@ -821,15 +821,14 @@ struct exec_node_state {
                                        operator_type_name<Output>(),
                                        operator_type_name(*output_generator)));
       }
-      instance.emplace();
-      instance->gen = std::get<generator<Output>>(std::move(*output_generator));
-      instance->it = instance->gen.begin();
+      instance = std::get<generator<Output>>(std::move(*output_generator));
+      start_output = instance->next();
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return {};
       }
       // Emit metrics once to get started.
       emit_generic_op_metrics();
-      if (instance->it == instance->gen.end()) {
+      if (not start_output) {
         TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
         if (previous) {
           // If a transformation or sink operator finishes without yielding,
@@ -913,95 +912,99 @@ struct exec_node_state {
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
       // generator here.
-      TENZIR_ASSERT(instance->it != instance->gen.end());
       TENZIR_TRACE("{} {} processes", *self, op->name());
-      ++instance->it;
-      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
+      auto output = instance->next();
+      if (not output) {
+        TENZIR_DEBUG("{} {} completes processing", *self, op->name());
+        if (demand and demand->rp.pending()) {
+          demand->rp.deliver();
+        }
+        self->quit();
         return;
       }
-      if (instance->it == instance->gen.end()) {
-        TENZIR_DEBUG("{} {} completes processing", *self, op->name());
-        self->quit();
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
+        return;
       }
       return;
     } else {
-      if (not has_active_demand() or instance->it == instance->gen.end()) {
+      if (not has_active_demand()) {
         return;
       }
       TENZIR_TRACE("{} {} processes", *self, op->name());
-      auto output = std::move(*instance->it);
-      const auto output_size = size(output);
-      ++instance->it;
+      // We just checked that we are not exhausted.
+      auto output = instance->next();
+      if (not output) {
+        TENZIR_DEBUG("{} {} completes processing", *self, op->name());
+        if (demand and demand->rp.pending()) {
+          demand->rp.deliver();
+        }
+        self->quit();
+        return;
+      }
+      const auto output_size = size(*output);
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
       }
-      const auto should_quit = instance->it == instance->gen.end();
       if (output_size == 0) {
-        if (should_quit) {
-          self->quit();
-        }
         if (not idle_since) {
           idle_since = std::chrono::steady_clock::now();
         }
         return;
       }
-      idle_since.reset();
-      produced_output = true;
-      metrics.outbound_measurement.num_elements += output_size;
-      metrics.outbound_measurement.num_batches += 1;
-      metrics.outbound_measurement.num_approx_bytes += approx_bytes(output);
-      TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
-                   output_size);
-      // We already checked that there is active demand.
-      TENZIR_ASSERT(has_active_demand());
-      demand->remaining_batches -= 1;
-      demand->remaining_elements
-        -= std::min(output_size, demand->remaining_elements);
-      // We have to remember whether this is the push that finishes the demand
-      // because there can be multiple pushes in flight in parallel.
-      auto finished = not has_active_demand();
-      self->mail(atom::push_v, std::move(output))
-        .request(demand->sink, caf::infinite)
-        .then(
-          [this, output_size, should_quit, finished]() {
-            auto time_scheduled_guard
-              = make_timer_guard(metrics.time_scheduled);
-            TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
-                         output_size);
-            TENZIR_ASSERT(demand);
-            if (finished) {
-              TENZIR_ASSERT(demand->rp.pending());
-              demand->rp.deliver();
-              demand.reset();
-            }
-            if (should_quit) {
-              TENZIR_TRACE("{} {} completes processing", *self, op->name());
-              if (demand and demand->rp.pending()) {
-                demand->rp.deliver();
-              }
-              self->quit();
-              return;
-            }
-            schedule_run(false);
-          },
-          [this, output_size](const caf::error& err) {
-            TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
-                         output_size);
-            auto time_scheduled_guard
-              = make_timer_guard(metrics.time_scheduled);
-            if (err == caf::sec::request_receiver_down) {
-              if (demand and demand->rp.pending()) {
-                demand->rp.deliver();
-              }
-              self->quit();
-              return;
-            }
-            diagnostic::error(err)
-              .note("{} {} failed to push to next execution node", *self,
-                    op->name())
-              .emit(ctrl->diagnostics());
-          });
+      send_output(std::move(*output));
     }
+  }
+
+  void send_output(Output output)
+    requires(not std::same_as<Output, std::monostate>)
+  {
+    auto output_size = size(output);
+    TENZIR_ASSERT(output_size > 0);
+    idle_since.reset();
+    produced_output = true;
+    metrics.outbound_measurement.num_elements += output_size;
+    metrics.outbound_measurement.num_batches += 1;
+    metrics.outbound_measurement.num_approx_bytes += approx_bytes(output);
+    TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
+                 output_size);
+    // We already checked that there is active demand.
+    demand->remaining_batches -= 1;
+    demand->remaining_elements
+      -= std::min(output_size, demand->remaining_elements);
+    // We have to remember whether this is the push that finishes the demand
+    // because there can be multiple pushes in flight in parallel.
+    auto finished = not has_active_demand();
+    self->mail(atom::push_v, std::move(output))
+      .request(demand->sink, caf::infinite)
+      .then(
+        [this, output_size, finished]() {
+          auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+          TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
+                       output_size);
+          TENZIR_ASSERT(demand);
+          if (finished) {
+            TENZIR_ASSERT(demand->rp.pending());
+            demand->rp.deliver();
+            demand.reset();
+          }
+          schedule_run(false);
+        },
+        [this, output_size](const caf::error& err) {
+          TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
+                       output_size);
+          auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+          if (err == caf::sec::request_receiver_down) {
+            if (demand and demand->rp.pending()) {
+              demand->rp.deliver();
+            }
+            self->quit();
+            return;
+          }
+          diagnostic::error(err)
+            .note("{} {} failed to push to next execution node", *self,
+                  op->name())
+            .emit(ctrl->diagnostics());
+        });
   }
 
   auto make_input_adapter() -> std::monostate
@@ -1130,8 +1133,8 @@ struct exec_node_state {
     advance_generator();
     // We are only allowed to run the generator again if that is possible, it's
     // not waiting and there is active demand.
-    auto may_continue = instance->it != instance->gen.end() and not waiting
-                        and has_active_demand();
+    auto may_continue
+      = not instance->exhausted() and not waiting and has_active_demand();
     if (may_continue) {
       // If we may continue, we have to decide whether we are in a situation
       // where there definitely is work to be done or where we are just polling
@@ -1145,7 +1148,11 @@ struct exec_node_state {
         // communicate to the operator that it's done. If it's still doing
         // polling as part of it's exit routine, then this is incorrect, but we
         // are okay with that here.
-        or not previous;
+        or not previous
+        // If we just got output we assume that there is more. This does not
+        // work for simple 1:1 transformations, but is needed for things that
+        // produce multiple batches or independent on input.
+        or produced_output;
       if (can_definitely_do_work) {
         schedule_run(false);
       } else {
@@ -1175,14 +1182,15 @@ struct exec_node_state {
     TENZIR_ASSERT(sink);
     TENZIR_ASSERT(elements > 0);
     TENZIR_ASSERT(batches > 0);
-    if (instance->it == instance->gen.end()) {
-      // We could have already terminated in the meantime. However, we call
-      // `quit` then, so probably this could be cleaned up.
-      return {};
-    }
-    schedule_run(false);
     auto& pr = demand.emplace(self->make_response_promise<void>(),
                               std::move(sink), elements, batches);
+    if (start_output) {
+      if (size(*start_output) > 0) {
+        send_output(std::move(*start_output));
+      }
+      start_output.reset();
+    }
+    schedule_run(false);
     return pr.rp;
   }
 
