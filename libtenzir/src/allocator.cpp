@@ -157,10 +157,10 @@ auto trim() noexcept -> void {
 
 auto allocator() noexcept -> erased_allocator {
   return {
-    .allocate = mimalloc::allocate,
-    .reallocate = mimalloc::reallocate,
-    .deallocate = mimalloc::deallocate,
-    .trim = mimalloc::trim,
+    .allocate = allocate,
+    .reallocate = reallocate,
+    .deallocate = deallocate,
+    .trim = trim,
     .backend_ = "mimalloc",
   };
 }
@@ -233,10 +233,10 @@ auto trim() noexcept -> void {
 
 auto allocator() noexcept -> erased_allocator {
   return {
-    .allocate = system::allocate,
-    .reallocate = system::reallocate,
-    .deallocate = system::deallocate,
-    .trim = system::trim,
+    .allocate = allocate,
+    .reallocate = reallocate,
+    .deallocate = deallocate,
+    .trim = trim,
     .backend_ = "system",
   };
 }
