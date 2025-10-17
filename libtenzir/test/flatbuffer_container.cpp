@@ -19,7 +19,7 @@ TEST("roundtrip") {
   auto test_data2 = std::string{"ottos mops kommt"} + '\0';
   auto test_data3 = std::string{"ottos mops kotzt"} + '\0';
   auto test_data4 = std::string{"otto: ogottogott"} + '\0';
-  auto builder = tenzir::fbs::flatbuffer_container_builder{};
+  auto builder = tenzir::fbs::flatbuffer_container_builder{2048};
   builder.add(tenzir::as_bytes(test_data0));
   builder.add(tenzir::as_bytes(test_data1));
   builder.add(tenzir::as_bytes(test_data2));

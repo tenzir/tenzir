@@ -58,7 +58,7 @@ flatbuffer_container::operator bool() const {
 
 flatbuffer_container_builder::flatbuffer_container_builder(
   size_t expected_size) {
-  file_contents_.reserve(expected_size);
+  file_contents_.reserve(expected_size + PROBABLY_ENOUGH_BYTES_FOR_HEADER);
   file_contents_.resize(PROBABLY_ENOUGH_BYTES_FOR_HEADER);
 }
 
