@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
@@ -663,7 +664,7 @@ TEST("cast lists of records") {
 
 TEST("cast int64_t array to a string builder") {
   auto int_builder
-    = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
+    = tenzir::int64_type::make_arrow_builder(arrow_memory_pool());
   auto status = int_builder->Append(1);
   status = int_builder->Append(2);
   status = int_builder->AppendNull();
@@ -687,7 +688,7 @@ TEST("cast int64_t array to a string builder") {
 
 TEST("casting builder with no compatible types results in an error") {
   auto int_builder
-    = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
+    = tenzir::int64_type::make_arrow_builder(arrow_memory_pool());
   auto status = int_builder->Append(1);
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
@@ -700,7 +701,7 @@ TEST("casting builder with no compatible types results in an error") {
 TEST("casting int64_t array to uint64_t builder works when all values can be "
      "cast") {
   auto int_builder
-    = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
+    = tenzir::int64_type::make_arrow_builder(arrow_memory_pool());
   auto status = int_builder->Append(1);
   status = int_builder->Append(2);
   status = int_builder->Append(3);
@@ -724,7 +725,7 @@ TEST("casting int64_t array to uint64_t builder works when all values can be "
 
 TEST("casting int64_t array to uint64_t builder fails due to negative value") {
   auto int_builder
-    = tenzir::int64_type::make_arrow_builder(arrow::default_memory_pool());
+    = tenzir::int64_type::make_arrow_builder(arrow_memory_pool());
   auto status = int_builder->Append(-1);
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(

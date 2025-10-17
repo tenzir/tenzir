@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/allocator.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/concept/convertible/data.hpp"
@@ -18,6 +19,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
@@ -490,6 +492,21 @@ auto node(node_actor::stateful_pointer<node_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
+  duration trim_interval = std::chrono::minutes{10};
+  const auto allocator_trim_interval_env
+    = detail::getenv("TENZIR_ALLOCATOR_TRIM_INTERVAL");
+  if (allocator_trim_interval_env) {
+    auto begin = allocator_trim_interval_env->begin();
+    auto end = allocator_trim_interval_env->end();
+    if (not parsers::simple_duration.parse(begin, end, trim_interval)) {
+      TENZIR_WARN("failed to parsed environment variable "
+                  "`TENZIR_ALLOCATOR_TRIM_INTERVAL={}`; Using ",
+                  *allocator_trim_interval_env, trim_interval);
+    }
+  }
+  detail::weak_run_delayed_loop(self, trim_interval, []() {
+    memory::global_allocator().trim();
+  });
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {

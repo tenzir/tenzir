@@ -68,7 +68,7 @@ class encrypt_cryptopan : public virtual function_plugin {
             .emit(ctx);
           return series::null(ip_type{}, s.length());
         }
-        auto b = ip_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = ip_type::make_arrow_builder(arrow_memory_pool());
         for (const auto& value : typed_series->values()) {
           if (not value) {
             check(b->AppendNull());

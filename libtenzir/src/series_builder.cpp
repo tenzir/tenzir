@@ -8,6 +8,7 @@
 
 #include "tenzir/series_builder.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
@@ -276,7 +277,7 @@ public:
     if (count == 0) {
       result.type = type();
       result.array = check(
-        result.type.make_arrow_builder(arrow::default_memory_pool())->Finish());
+        result.type.make_arrow_builder(tenzir::arrow_memory_pool())->Finish());
     } else {
       result = builder_->finish(count);
     }
@@ -570,13 +571,13 @@ class typed_builder<T> final : public detail::builder_base {
 public:
   explicit typed_builder(series_builder_impl* root)
     requires basic_type<T>
-    : inner_{T::make_arrow_builder(arrow::default_memory_pool())}, type_{T{}} {
+    : inner_{T::make_arrow_builder(arrow_memory_pool())}, type_{T{}} {
     (void)root;
   }
 
   explicit typed_builder(T type)
     requires std::same_as<T, enumeration_type>
-    : inner_{type.make_arrow_builder(arrow::default_memory_pool())},
+    : inner_{type.make_arrow_builder(arrow_memory_pool())},
       type_{std::move(type)} {
   }
 
@@ -592,6 +593,10 @@ public:
   auto finish(int64_t count) -> series override {
     TENZIR_TRACE("finishing {} of {} with type {}", count, length(), kind());
     auto array = finish();
+    TENZIR_TRACE("finish produced array of length `{}`", array->length());
+    if constexpr (std::same_as<arrow::StringArray, decltype(array)>) {
+      TENZIR_WARN("{}", array.ValueAt(0));
+    }
     TENZIR_ASSERT(count <= array->length());
     auto rest_begin = count;
     auto rest_count = array->length() - rest_begin;
@@ -713,9 +718,12 @@ public:
     // The following call will reset the list type (and therefore destroy the
     // inner builder) if no elements remain.
     auto result_elements = elements_.finish(ending_offset);
-    auto result = check(
-      arrow::ListArray::FromArrays(*result_offsets, *result_elements.array));
-    TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
+    auto result = check(arrow::ListArray::FromArrays(
+      *result_offsets, *result_elements.array, arrow_memory_pool()));
+#ifdef TENZIR_ENABLE_ASSERTIONS
+    const auto v = result->Validate();
+    TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
+#endif
     return {list_type{result_elements.type}, result};
   }
 
@@ -817,7 +825,10 @@ public:
     }
     auto result = std::make_shared<arrow::StructArray>(
       ty.to_arrow_type(), count, field_arrays, std::move(null_bitmap));
-    TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
+#ifdef TENZIR_ENABLE_ASSERTIONS
+    const auto v = result->Validate();
+    TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
+#endif
     length_ -= count;
     return {std::move(ty), result};
   }
@@ -1395,7 +1406,10 @@ auto series_builder::finish_as_table_slice(std::string_view name)
     auto batch = arrow::RecordBatch::Make(std::move(arrow_schema),
                                           cast->length(), cast->fields());
     TENZIR_ASSERT(batch);
-    TENZIR_ASSERT_EXPENSIVE(batch->Validate().ok());
+#ifdef TENZIR_ENABLE_ASSERTIONS
+    const auto v = batch->Validate();
+    TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
+#endif
     result.emplace_back(batch, array.type);
   }
   return result;
