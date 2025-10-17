@@ -52,6 +52,7 @@ SystemCallErrorNumber=EPERM
 # service specifics
 TimeoutStopSec=600
 WorkingDirectory=/var/lib/tenzir
+Environment="ARROW_DEFAULT_MEMORY_POOL=system"
 ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/tenzir-node
 
 [Install]
