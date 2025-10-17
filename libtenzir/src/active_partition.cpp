@@ -229,7 +229,7 @@ pack_full(const active_partition_state::serialization_data& x,
   auto chunk = chunk::make(builder.Release());
   // To keep things simple we always write a `SegmentedFile`,
   // even if all indices are inline.
-  fbs::flatbuffer_container_builder cbuilder;
+  auto cbuilder = fbs::flatbuffer_container_builder{chunk->size()};
   cbuilder.add(as_bytes(chunk));
   auto container = std::move(cbuilder).finish(fbs::PartitionIdentifier());
   return std::move(container).dissolve();

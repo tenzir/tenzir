@@ -69,8 +69,7 @@ private:
 
 class flatbuffer_container_builder {
 public:
-  flatbuffer_container_builder(size_t expected_size
-                               = 1024ull * 1024 * 1024 * 5 / 2); // 2.5 GiB
+  flatbuffer_container_builder(size_t expected_size);
 
   void add(std::span<const std::byte> bytes);
 
