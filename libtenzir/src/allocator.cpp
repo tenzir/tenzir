@@ -12,7 +12,10 @@
 
 #include <caf/actor_system.hpp>
 
-#include <malloc.h>
+#if (defined(__GLIBC__))
+#  include <malloc.h>
+#endif
+
 #include <mimalloc.h>
 
 namespace tenzir::memory {
@@ -216,9 +219,11 @@ auto reallocate(block old_block, std::size_t new_size,
 }
 
 auto trim() noexcept -> void {
+#if (defined(__GLIBC__))
   using namespace si_literals;
   constexpr auto padding = 512_Mi;
   ::malloc_trim(padding);
+#endif
 }
 
 auto allocator() noexcept -> erased_allocator {
@@ -245,11 +250,11 @@ auto selected_alloc() -> erased_allocator {
   if (env_str == "system") {
     system::allocator();
   }
-  ::fprintf(::stderr,
+  std::fprintf(std::stderr,
             "FATAL ERROR: unknown TENZIR_ALLOCATOR: '%s'\n"
             "known values are 'mimalloc' and 'system'\n",
             env_str.data());
-  ::exit(EXIT_FAILURE);
+  std::exit(EXIT_FAILURE);
   __builtin_unreachable();
 }
 
