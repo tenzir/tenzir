@@ -155,7 +155,32 @@ auto trim() noexcept -> void {
   mi_collect(false);
 }
 
-auto allocator() noexcept -> erased_allocator {
+auto typed_allocator::allocate(std::size_t size,
+                               std::align_val_t alignment) noexcept -> block {
+  return mimalloc::allocate(size, alignment);
+}
+
+auto typed_allocator::reallocate(block old_block, std::size_t new_size,
+                                 std::align_val_t alignment) noexcept
+  -> reallocation_result {
+  return mimalloc::reallocate(old_block, new_size, alignment);
+}
+
+auto typed_allocator::deallocate(block old_block,
+                                 std::align_val_t alignment) noexcept
+  -> std::size_t {
+  return mimalloc::deallocate(old_block, alignment);
+}
+
+auto typed_allocator::trim() noexcept -> void {
+  return mimalloc::trim();
+}
+
+auto typed_allocator::backend() noexcept -> std::string_view {
+  return "mimalloc";
+}
+
+auto erased_allocator() noexcept -> erased_allocator {
   return {
     .allocate = allocate,
     .reallocate = reallocate,
@@ -169,13 +194,21 @@ auto allocator() noexcept -> erased_allocator {
 
 namespace system {
 
+auto round_to_alignment(std::size_t size, std::align_val_t alignment) {
+  const auto alignment_s = std::to_underlying(alignment);
+  return ((size + alignment_s - 1) / alignment_s) * alignment_s;
+}
+
 auto allocate(std::size_t size, std::align_val_t alignment) noexcept -> block {
+  size = round_to_alignment(size, alignment);
   auto* ptr = static_cast<std::byte*>(
-    ::aligned_alloc(size, std::to_underlying(alignment)));
-  size = ::malloc_usable_size(ptr);
+    ::aligned_alloc(std::to_underlying(alignment), size));
   if (ptr == nullptr) {
+    std::fprintf(stderr, "null alloc for size %zu, %zu\n", size,
+                 std::to_underlying(alignment));
     return {};
   }
+  size = ::malloc_usable_size(ptr);
   return block{
     ptr,
     size,
@@ -191,7 +224,7 @@ auto deallocate(block blk, std::align_val_t alignment) noexcept -> std::size_t {
 
 auto reallocate(block old_block, std::size_t new_size,
                 std::align_val_t alignment) noexcept -> reallocation_result {
-  old_block.size = malloc_usable_size(old_block.ptr);
+  old_block.size = ::malloc_usable_size(old_block.ptr);
   if (old_block.size == new_size) {
     return {
       .true_old_block = old_block,
@@ -205,6 +238,7 @@ auto reallocate(block old_block, std::size_t new_size,
       block{},
     };
   }
+  new_size = round_to_alignment(new_size, alignment);
   void* new_ptr = ::realloc(old_block.ptr, new_size);
   new_size = ::malloc_usable_size(new_ptr);
   auto new_block = block{
@@ -231,7 +265,32 @@ auto trim() noexcept -> void {
 #endif
 }
 
-auto allocator() noexcept -> erased_allocator {
+auto typed_allocator::allocate(std::size_t size,
+                               std::align_val_t alignment) noexcept -> block {
+  return system::allocate(size, alignment);
+}
+
+auto typed_allocator::reallocate(block old_block, std::size_t new_size,
+                                 std::align_val_t alignment) noexcept
+  -> reallocation_result {
+  return system::reallocate(old_block, new_size, alignment);
+}
+
+auto typed_allocator::deallocate(block old_block,
+                                 std::align_val_t alignment) noexcept
+  -> std::size_t {
+  return system::deallocate(old_block, alignment);
+}
+
+auto typed_allocator::trim() noexcept -> void {
+  return system::trim();
+}
+
+auto typed_allocator::backend() noexcept -> std::string_view {
+  return "mimalloc";
+}
+
+auto erased_allocator() noexcept -> erased_allocator {
   return {
     .allocate = allocate,
     .reallocate = reallocate,
@@ -246,21 +305,21 @@ auto allocator() noexcept -> erased_allocator {
 auto selected_alloc() -> erased_allocator {
   const auto env = ::getenv("TENZIR_ALLOCATOR");
   if (not env) {
-    return mimalloc::allocator();
+    return mimalloc::erased_allocator();
   }
-  const auto env_str = std::string_view{};
+  const auto env_str = std::string_view{env};
   if (env_str.empty() or env_str == "mimalloc") {
-    return mimalloc::allocator();
+    return mimalloc::erased_allocator();
   }
   if (env_str == "system") {
-    system::allocator();
+    return system::erased_allocator();
   }
   std::fprintf(stderr,
-            "FATAL ERROR: unknown TENZIR_ALLOCATOR: '%s'\n"
-            "known values are 'mimalloc' and 'system'\n",
-            env_str.data());
+               "FATAL ERROR: unknown TENZIR_ALLOCATOR: '%s'\n"
+               "known values are 'mimalloc' and 'system'\n",
+               env_str.data());
   std::exit(EXIT_FAILURE);
-  __builtin_unreachable();
+  std::unreachable();
 }
 
 auto global_allocator() noexcept -> global_allocator_t& {
