@@ -59,7 +59,6 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("total_bytes", total_bytes);
   result.try_emplace("free_bytes", free_bytes);
   result.try_emplace("used_bytes", total_bytes - free_bytes);
-  result.try_emplace("combined", make_from(memory::global_allocator().stats()));
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   return result;
@@ -137,7 +136,6 @@ public:
       {"total_bytes", uint64_type{}},
       {"free_bytes", uint64_type{}},
       {"used_bytes", uint64_type{}},
-      {"combined", bytes_and_allocations},
       {"cpp", bytes_and_allocations},
       {"arrow", bytes_and_allocations},
     }};
