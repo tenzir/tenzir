@@ -68,12 +68,12 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
       arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
     auto ipc_opts = arrow::ipc::IpcWriteOptions::Defaults();
     ipc_opts.memory_pool = tenzir::arrow_memory_pool();
-      auto stream_writer = check(arrow::ipc::MakeStreamWriter(
-        ipc_ostream, record_batch->schema(), ipc_opts));
-      auto status = stream_writer->WriteRecordBatch(*record_batch);
-      if (not status.ok()) {
-        TENZIR_ERROR("failed to write record batch: {}", status.ToString());
-      }
+    auto stream_writer = check(arrow::ipc::MakeStreamWriter(
+      ipc_ostream, record_batch->schema(), ipc_opts));
+    auto status = stream_writer->WriteRecordBatch(*record_batch);
+    if (not status.ok()) {
+      TENZIR_ERROR("failed to write record batch: {}", status.ToString());
+    }
     auto arrow_ipc_buffer = check(ipc_ostream->Finish());
     fbs_ipc_buffer = builder.CreateVector(arrow_ipc_buffer->data(),
                                           arrow_ipc_buffer->size());
