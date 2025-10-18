@@ -21,9 +21,7 @@
     debug: null,
     event_code: null,
     extension: null,
-    extensions: [
-      null,
-    ],
+    extensions: null,
     labels: null,
     log_level: null,
     log_name: null,
@@ -57,9 +55,31 @@
     lineage: null,
     loaded_modules: null,
     name: null,
-    parent_process: null,
+    parent_process: {
+      ancestry: null,
+      cmd_line: null,
+      cpid: null,
+      created_time: null,
+      environment_variables: null,
+      file: null,
+      integrity: null,
+      integrity_id: null,
+      lineage: null,
+      loaded_modules: null,
+      name: null,
+      path: null,
+      pid: 5678,
+      sandbox: null,
+      session: null,
+      terminated_time: null,
+      tid: null,
+      uid: null,
+      user: null,
+      working_directory: null,
+      xattributes: null,
+    },
     path: null,
-    pid: null,
+    pid: 1234,
     sandbox: null,
     session: null,
     terminated_time: null,
@@ -85,16 +105,10 @@
   type_uid: null,
   unmapped: null,
 }
-warning: ignoring extensions for events where `metadata.extensions` is not a list of records
- --> tests/operators/ocsf/apply/wrong_inner_type_extensions.tql:9:1
-  |
-9 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |
-
-warning: expected type `record` for `metadata.extensions[]`, but got `int64`
- --> tests/operators/ocsf/apply/wrong_inner_type_extensions.tql:9:1
-  |
-9 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |
+warning: dropping field which does not exist in schema
+  --> tests/operators/ocsf/apply/parent_process_nested.tql:18:1
+   |
+18 | ocsf::apply
+   | ~~~~~~~~~~~ 
+   |
+   = note: found `process.parent_process.parent_process`
