@@ -170,11 +170,28 @@ type _ocsf.v1_7_0_dev.object.analysis_target = record{
 // The Analytic object contains details about the analytic technique used to
 // analyze and derive insights from the data or information that led to the
 // creation of a finding or conclusion.
+type _ocsf.v1_7_0_dev.object.analytic_nonrecursive = record{
+  algorithm: string #optional,
+  category: string #optional,
+  desc: string #optional,
+  name: string #recommended,
+  state: string #optional,
+  state_id: int64 #optional #enum=948ffc3f #sibling=state,
+  type: string #optional,
+  type_id: int64 #required #enum=5693f9f8 #sibling=type,
+  uid: string #recommended,
+  version: string #optional,
+}
+
+// The Analytic object contains details about the analytic technique used to
+// analyze and derive insights from the data or information that led to the
+// creation of a finding or conclusion.
 type _ocsf.v1_7_0_dev.object.analytic = record{
   algorithm: string #optional,
   category: string #optional,
   desc: string #optional,
   name: string #recommended,
+  related_analytics: list<_ocsf.v1_7_0_dev.object.analytic_nonrecursive> #optional,
   state: string #optional,
   state_id: int64 #optional #enum=948ffc3f #sibling=state,
   type: string #optional,
@@ -1336,7 +1353,7 @@ type _ocsf.v1_7_0_dev.object.job = record{
   created_time: time #recommended,
   created_time_dt: time #optional #profile=datetime,
   desc: string #recommended,
-  file: _ocsf.v1_7_0_dev.object.file #required,
+  file: _ocsf.v1_7_0_dev.object.file #optional,
   last_run_time: time #recommended,
   last_run_time_dt: time #optional #profile=datetime,
   name: string #required,
@@ -1414,6 +1431,36 @@ type _ocsf.v1_7_0_dev.object.kill_chain_phase = record{
 }
 
 // The additional LDAP attributes that describe a person.
+type _ocsf.v1_7_0_dev.object.ldap_person_nonrecursive = record{
+  cost_center: string #optional,
+  created_time: time #optional,
+  created_time_dt: time #optional #profile=datetime,
+  deleted_time: time #optional,
+  deleted_time_dt: time #optional #profile=datetime,
+  display_name: string #optional,
+  email_addrs: list<string> #optional,
+  employee_uid: string #optional,
+  given_name: string #optional,
+  hire_time: time #optional,
+  hire_time_dt: time #optional #profile=datetime,
+  job_title: string #optional,
+  labels: list<string> #optional,
+  last_login_time: time #optional,
+  last_login_time_dt: time #optional #profile=datetime,
+  ldap_cn: string #optional,
+  ldap_dn: string #optional,
+  leave_time: time #optional,
+  leave_time_dt: time #optional #profile=datetime,
+  location: _ocsf.v1_7_0_dev.object.location #optional,
+  modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
+  office_location: string #optional,
+  phone_number: string #optional,
+  surname: string #optional,
+  tags: list<_ocsf.v1_7_0_dev.object.key_value_object> #optional,
+}
+
+// The additional LDAP attributes that describe a person.
 type _ocsf.v1_7_0_dev.object.ldap_person = record{
   cost_center: string #optional,
   created_time: time #optional,
@@ -1435,6 +1482,7 @@ type _ocsf.v1_7_0_dev.object.ldap_person = record{
   leave_time: time #optional,
   leave_time_dt: time #optional #profile=datetime,
   location: _ocsf.v1_7_0_dev.object.location #optional,
+  manager: _ocsf.v1_7_0_dev.object.user_nonrecursive #optional,
   modified_time: time #optional,
   modified_time_dt: time #optional #profile=datetime,
   office_location: string #optional,
@@ -1596,6 +1644,7 @@ type _ocsf.v1_7_0_dev.object.metadata = record{
   processed_time_dt: time #optional #profile=datetime,
   product: _ocsf.v1_7_0_dev.object.product #required,
   profiles: list<string> #optional,
+  reporter: _ocsf.v1_7_0_dev.object.reporter #recommended,
   sequence: int64 #optional,
   tags: list<_ocsf.v1_7_0_dev.object.key_value_object> #optional,
   tenant_uid: string #recommended,
@@ -1669,6 +1718,8 @@ type _ocsf.v1_7_0_dev.object.network_endpoint = record{
   mac: string #optional,
   name: string #recommended,
   namespace_pid: int64 #recommended #profile=container,
+  network_scope: string #optional,
+  network_scope_id: int64 #optional #enum=8d4a9bff #sibling=network_scope,
   os: _ocsf.v1_7_0_dev.object.os #optional,
   owner: _ocsf.v1_7_0_dev.object.user #recommended,
   port: int64 #recommended,
@@ -1701,6 +1752,42 @@ type _ocsf.v1_7_0_dev.object.network_interface = record{
 // The network proxy endpoint object describes a proxy server, which acts as an
 // intermediary between a client requesting a resource and the server providing
 // that resource.
+type _ocsf.v1_7_0_dev.object.network_proxy_nonrecursive = record{
+  agent_list: list<_ocsf.v1_7_0_dev.object.agent> #optional,
+  autonomous_system: _ocsf.v1_7_0_dev.object.autonomous_system #optional,
+  container: _ocsf.v1_7_0_dev.object.container #recommended #profile=container,
+  domain: string #optional,
+  hostname: string #recommended,
+  hw_info: _ocsf.v1_7_0_dev.object.device_hw_info #optional,
+  instance_uid: string #recommended,
+  interface_name: string #recommended,
+  interface_uid: string #recommended,
+  intermediate_ips: list<ip> #optional,
+  ip: ip #recommended,
+  isp: string #optional,
+  isp_org: string #optional,
+  location: _ocsf.v1_7_0_dev.object.location #optional,
+  mac: string #optional,
+  name: string #recommended,
+  namespace_pid: int64 #recommended #profile=container,
+  network_scope: string #optional,
+  network_scope_id: int64 #optional #enum=8d4a9bff #sibling=network_scope,
+  os: _ocsf.v1_7_0_dev.object.os #optional,
+  owner: _ocsf.v1_7_0_dev.object.user #recommended,
+  port: int64 #recommended,
+  subnet_uid: string #optional,
+  svc_name: string #recommended,
+  type: string #optional,
+  type_id: int64 #recommended #enum=218e23f2 #sibling=type,
+  uid: string #recommended,
+  vlan_uid: string #optional,
+  vpc_uid: string #optional,
+  zone: string #optional,
+}
+
+// The network proxy endpoint object describes a proxy server, which acts as an
+// intermediary between a client requesting a resource and the server providing
+// that resource.
 type _ocsf.v1_7_0_dev.object.network_proxy = record{
   agent_list: list<_ocsf.v1_7_0_dev.object.agent> #optional,
   autonomous_system: _ocsf.v1_7_0_dev.object.autonomous_system #optional,
@@ -1719,9 +1806,12 @@ type _ocsf.v1_7_0_dev.object.network_proxy = record{
   mac: string #optional,
   name: string #recommended,
   namespace_pid: int64 #recommended #profile=container,
+  network_scope: string #optional,
+  network_scope_id: int64 #optional #enum=8d4a9bff #sibling=network_scope,
   os: _ocsf.v1_7_0_dev.object.os #optional,
   owner: _ocsf.v1_7_0_dev.object.user #recommended,
   port: int64 #recommended,
+  proxy_endpoint: _ocsf.v1_7_0_dev.object.network_proxy_nonrecursive #optional,
   subnet_uid: string #optional,
   svc_name: string #recommended,
   type: string #optional,
@@ -1766,10 +1856,12 @@ type _ocsf.v1_7_0_dev.object.object = record{
 // The observable object is a pivot element that contains related information
 // found in many places in the event.
 type _ocsf.v1_7_0_dev.object.observable = record{
+  event_uid: string #optional,
   name: string #recommended,
   reputation: _ocsf.v1_7_0_dev.object.reputation #optional,
   type: string #optional,
-  type_id: int64 #required #enum=e3696069 #sibling=type,
+  type_id: int64 #required #enum=08885bbf #sibling=type,
+  type_uid: int64 #optional,
   value: string #optional,
 }
 
@@ -1959,6 +2051,40 @@ type _ocsf.v1_7_0_dev.object.port_info = record{
 }
 
 // The Process object describes a running instance of a launched program.
+type _ocsf.v1_7_0_dev.object.process_nonrecursive = record{
+  ancestry: list<_ocsf.v1_7_0_dev.object.process_entity> #optional,
+  auid: int64 #optional #profile=linux/linux_users #extension=linux,
+  cmd_line: string #recommended,
+  container: _ocsf.v1_7_0_dev.object.container #recommended #profile=container,
+  cpid: string #recommended,
+  created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
+  egid: int64 #optional #profile=linux/linux_users #extension=linux,
+  environment_variables: list<_ocsf.v1_7_0_dev.object.environment_variable> #optional,
+  euid: int64 #optional #profile=linux/linux_users #extension=linux,
+  file: _ocsf.v1_7_0_dev.object.file #recommended,
+  group: _ocsf.v1_7_0_dev.object.group #recommended #profile=linux/linux_users,
+  integrity: string #optional,
+  integrity_id: int64 #optional #enum=18f0f537 #sibling=integrity,
+  lineage: list<string> #optional,
+  loaded_modules: list<string> #optional,
+  name: string #recommended,
+  namespace_pid: int64 #recommended #profile=container,
+  path: string #optional,
+  pid: int64 #recommended,
+  ptid: int64 #optional,
+  sandbox: string #optional,
+  session: _ocsf.v1_7_0_dev.object.session #optional,
+  terminated_time: time #optional,
+  terminated_time_dt: time #optional #profile=datetime,
+  tid: int64 #optional,
+  uid: string #recommended,
+  user: _ocsf.v1_7_0_dev.object.user #recommended,
+  working_directory: string #optional,
+  xattributes: null #variant #must_be_record #optional,
+}
+
+// The Process object describes a running instance of a launched program.
 type _ocsf.v1_7_0_dev.object.process = record{
   ancestry: list<_ocsf.v1_7_0_dev.object.process_entity> #optional,
   auid: int64 #optional #profile=linux/linux_users #extension=linux,
@@ -1978,6 +2104,7 @@ type _ocsf.v1_7_0_dev.object.process = record{
   loaded_modules: list<string> #optional,
   name: string #recommended,
   namespace_pid: int64 #recommended #profile=container,
+  parent_process: _ocsf.v1_7_0_dev.object.process_nonrecursive #recommended,
   path: string #optional,
   pid: int64 #recommended,
   ptid: int64 #optional,
@@ -2110,6 +2237,14 @@ type _ocsf.v1_7_0_dev.object.remediation = record{
   kb_article_list: list<_ocsf.v1_7_0_dev.object.kb_article> #optional,
   kb_articles: list<string> #optional,
   references: list<string> #optional,
+}
+
+// The entity from which an event or finding was first reported.
+type _ocsf.v1_7_0_dev.object.reporter = record{
+  hostname: string #recommended,
+  ip: ip #recommended,
+  name: string #recommended,
+  uid: string #recommended,
 }
 
 // The Reputation object describes the reputation/risk score of an entity (e.g.
@@ -2614,6 +2749,31 @@ type _ocsf.v1_7_0_dev.object.url = record{
 
 // The User object describes the characteristics of a user/person or a security
 // principal.
+type _ocsf.v1_7_0_dev.object.user_nonrecursive = record{
+  account: _ocsf.v1_7_0_dev.object.account #optional,
+  credential_uid: string #optional,
+  display_name: string #optional,
+  domain: string #optional,
+  email_addr: string #optional,
+  forward_addr: string #optional,
+  full_name: string #optional,
+  groups: list<_ocsf.v1_7_0_dev.object.group> #optional,
+  has_mfa: bool #recommended,
+  name: string #recommended,
+  org: _ocsf.v1_7_0_dev.object.organization #optional,
+  phone_number: string #optional,
+  programmatic_credentials: list<_ocsf.v1_7_0_dev.object.programmatic_credential> #optional,
+  risk_level: string #optional,
+  risk_level_id: int64 #optional #enum=a3f9a2fa #sibling=risk_level,
+  risk_score: int64 #optional,
+  type: string #optional,
+  type_id: int64 #recommended #enum=fc528b11 #sibling=type,
+  uid: string #recommended,
+  uid_alt: string #optional,
+}
+
+// The User object describes the characteristics of a user/person or a security
+// principal.
 type _ocsf.v1_7_0_dev.object.user = record{
   account: _ocsf.v1_7_0_dev.object.account #optional,
   credential_uid: string #optional,
@@ -2624,7 +2784,7 @@ type _ocsf.v1_7_0_dev.object.user = record{
   full_name: string #optional,
   groups: list<_ocsf.v1_7_0_dev.object.group> #optional,
   has_mfa: bool #recommended,
-  ldap_person: _ocsf.v1_7_0_dev.object.ldap_person #optional,
+  ldap_person: _ocsf.v1_7_0_dev.object.ldap_person_nonrecursive #optional,
   name: string #recommended,
   org: _ocsf.v1_7_0_dev.object.organization #optional,
   phone_number: string #optional,
@@ -2773,7 +2933,7 @@ type _ocsf.v1_7_0_dev.object.win_resource = record{
   svc_name: string #optional,
   tags: list<_ocsf.v1_7_0_dev.object.key_value_object> #optional,
   type: string #optional,
-  type_id: int64 #required #enum=2d7dd3b9 #sibling=type,
+  type_id: int64 #required #enum=bb48cbf1 #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
 } #extension=win
@@ -4079,6 +4239,8 @@ type _ocsf.v1_7_0_dev.dhcp_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   proxy: _ocsf.v1_7_0_dev.object.network_proxy #recommended,
@@ -4155,6 +4317,8 @@ type _ocsf.v1_7_0_dev.dns_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   proxy: _ocsf.v1_7_0_dev.object.network_proxy #recommended,
@@ -5048,6 +5212,8 @@ type _ocsf.v1_7_0_dev.ftp_activity = record{
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   name: string #recommended,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   port: int64 #recommended,
@@ -5195,6 +5361,8 @@ type _ocsf.v1_7_0_dev.http_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   proxy: _ocsf.v1_7_0_dev.object.network_proxy #recommended,
@@ -5934,6 +6102,8 @@ type _ocsf.v1_7_0_dev.network_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   proxy: _ocsf.v1_7_0_dev.object.network_proxy #recommended,
@@ -6078,6 +6248,8 @@ type _ocsf.v1_7_0_dev.network_file_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   proxy: _ocsf.v1_7_0_dev.object.network_proxy #recommended,
@@ -6284,6 +6456,8 @@ type _ocsf.v1_7_0_dev.ntp_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   precision: int64 #recommended,
@@ -6808,6 +6982,8 @@ type _ocsf.v1_7_0_dev.rdp_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   protocol_ver: string #recommended,
@@ -7347,6 +7523,8 @@ type _ocsf.v1_7_0_dev.smb_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   open_type: string #recommended,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
@@ -7494,6 +7672,8 @@ type _ocsf.v1_7_0_dev.ssh_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   protocol_ver: string #recommended,
@@ -7633,6 +7813,8 @@ type _ocsf.v1_7_0_dev.tunnel_activity = record{
   message: string #recommended,
   metadata: _ocsf.v1_7_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_7_0_dev.object.observable> #recommended,
+  observation_point: string #optional,
+  observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
   osint: list<_ocsf.v1_7_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_7_0_dev.object.policy #optional #profile=security_control,
   protocol_name: string #optional,
