@@ -75,6 +75,103 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
   bytes_current.fetch_sub(remove);
 }
 
+namespace {
+
+constexpr auto align_mask(std::align_val_t alignment) noexcept
+  -> std::uintptr_t {
+  return std::to_underlying(alignment) - 1;
+}
+
+constexpr auto is_aligned(void* ptr, std::align_val_t alignment) noexcept
+  -> bool {
+  return (reinterpret_cast<std::uintptr_t>(ptr) & align_mask(alignment)) == 0;
+}
+
+constexpr auto is_aligned(std::size_t size, std::align_val_t alignment) noexcept
+  -> bool {
+  return (size & align_mask(alignment)) == 0;
+}
+
+constexpr auto align(std::size_t size, std::align_val_t alignment) noexcept
+  -> std::size_t {
+  const auto remainder = size & align_mask(alignment);
+  return size + (remainder > 0) * (std::to_underlying(alignment) - remainder);
+}
+
+template <auto alloc_impl, auto aligned_alloc_impl,
+          std::align_val_t default_alignment, auto size_impl, auto realloc_impl,
+          auto aligned_realloc_impl, auto free_impl>
+struct allocator_impl {
+  [[gnu::hot]] static auto
+  allocate(std::size_t size, std::align_val_t alignment) noexcept -> block {
+    auto* const ptr = alignment <= default_alignment
+                        ? alloc_impl(size)
+                        : aligned_alloc_impl(align(size, alignment),
+                                             std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return {};
+    }
+    // size = size_impl(ptr);
+    return block{
+      static_cast<std::byte*>(ptr),
+      size,
+    };
+  }
+
+  [[gnu::hot]] static auto
+  deallocate(block blk, std::align_val_t alignment) noexcept -> std::size_t {
+    (void)alignment;
+    if (blk.ptr == nullptr) {
+      TENZIR_ASSERT_EXPENSIVE(blk.size == 0);
+      return 0;
+    }
+    // blk.size = size_impl(blk.ptr);
+    free_impl(blk.ptr);
+    return blk.size;
+  }
+
+  [[gnu::hot]] static auto reallocate(block old_block, std::size_t new_size,
+                                      std::align_val_t alignment) noexcept
+    -> reallocation_result {
+    // old_block.size = size_impl(old_block.ptr);
+    if (old_block.size == new_size) {
+      return {
+        .true_old_block = old_block,
+        .new_block = old_block,
+      };
+    }
+    if (new_size == 0) {
+      deallocate(old_block, alignment);
+      return {
+        old_block,
+        block{},
+      };
+    }
+    void* new_ptr
+      = alignment <= default_alignment
+          ? realloc_impl(old_block.ptr, new_size)
+          : aligned_realloc_impl(old_block.ptr, align(new_size, alignment),
+                                 std::to_underlying(alignment));
+    // new_size = size_impl(new_ptr);
+    auto new_block = block{
+      static_cast<std::byte*>(new_ptr),
+      new_size,
+    };
+    if (new_ptr == nullptr) {
+      return {
+        old_block,
+        block{},
+      };
+    }
+    return {
+      .true_old_block = old_block,
+      .new_block = new_block,
+    };
+  }
+};
+
+} // namespace
+
 namespace mimalloc {
 
 namespace {
@@ -90,101 +187,19 @@ struct init {
 
 } // namespace
 
-auto allocate(std::size_t size, std::align_val_t alignment) noexcept -> block {
-  auto* ptr = static_cast<std::byte*>(
-    mi_malloc_aligned(size, std::to_underlying(alignment)));
-  size = mi_usable_size(ptr);
-  if (ptr == nullptr) {
-    return {};
-  }
-  return block{
-    ptr,
-    size,
-  };
-}
-
-auto deallocate(block blk, std::align_val_t alignment) noexcept -> std::size_t {
-  (void)alignment;
-  if (blk.ptr == nullptr) {
-    TENZIR_ASSERT_EXPENSIVE(blk.size == 0);
-    return 0;
-  }
-  blk.size = mi_usable_size(blk.ptr);
-  mi_free(blk.ptr);
-  return blk.size;
-}
-
-auto reallocate(block old_block, std::size_t new_size,
-                std::align_val_t alignment) noexcept -> reallocation_result {
-  old_block.size = mi_usable_size(old_block.ptr);
-  if (old_block.size == new_size) {
-    return {
-      .true_old_block = old_block,
-      .new_block = old_block,
-    };
-  }
-  if (new_size == 0) {
-    deallocate(old_block, alignment);
-    return {
-      old_block,
-      block{},
-    };
-  }
-  old_block.size = mi_good_size(old_block.size);
-  new_size = mi_good_size(new_size);
-  void* new_ptr = mi_realloc_aligned(old_block.ptr, new_size,
-                                     std::to_underlying(alignment));
-  new_size = mi_usable_size(new_ptr);
-  auto new_block = block{
-    static_cast<std::byte*>(new_ptr),
-    new_size,
-  };
-  if (new_ptr == nullptr) {
-    return {
-      old_block,
-      block{},
-    };
-  }
-  return {
-    .true_old_block = old_block,
-    .new_block = new_block,
-  };
-}
+using allocator
+  = allocator_impl<mi_malloc, mi_malloc_aligned, std::align_val_t{16},
+                   mi_usable_size, mi_realloc, mi_realloc_aligned, mi_free>;
 
 auto trim() noexcept -> void {
   mi_collect(false);
 }
 
-auto typed_allocator::allocate(std::size_t size,
-                               std::align_val_t alignment) noexcept -> block {
-  return mimalloc::allocate(size, alignment);
-}
-
-auto typed_allocator::reallocate(block old_block, std::size_t new_size,
-                                 std::align_val_t alignment) noexcept
-  -> reallocation_result {
-  return mimalloc::reallocate(old_block, new_size, alignment);
-}
-
-auto typed_allocator::deallocate(block old_block,
-                                 std::align_val_t alignment) noexcept
-  -> std::size_t {
-  return mimalloc::deallocate(old_block, alignment);
-}
-
-auto typed_allocator::trim() noexcept -> void {
-  return mimalloc::trim();
-}
-
-auto typed_allocator::backend() noexcept -> std::string_view {
-  return "mimalloc";
-}
-
-auto erased_allocator() noexcept -> erased_allocator {
+constexpr auto erased_allocator() noexcept -> erased_allocator {
   return {
-    .allocate = allocate,
-    .reallocate = reallocate,
-    .deallocate = deallocate,
+    .allocate = allocator::allocate,
+    .reallocate = allocator::reallocate,
+    .deallocate = allocator::deallocate,
     .trim = trim,
     .backend_ = "mimalloc",
   };
@@ -194,68 +209,41 @@ auto erased_allocator() noexcept -> erased_allocator {
 
 namespace system {
 
-auto round_to_alignment(std::size_t size, std::align_val_t alignment) {
-  const auto alignment_s = std::to_underlying(alignment);
-  return ((size + alignment_s - 1) / alignment_s) * alignment_s;
+namespace {
+
+/// * Change to typed allocators/virtual functions. Declare the typed allocators
+/// in the header and mark them final?
+/// * Refactor stats gathering into the allocators themselves, allowing us to
+///  * only call `size_impl` conditionally ->
+///  * change the alloc signature to only deal in pointers (not blocks)
+///  * alloc_align/alloc_size attributes
+
+[[gnu::alloc_size(1), gnu::alloc_align(2)]]
+auto malloc_aligned(std::size_t size, std::size_t alignment) noexcept -> void* {
+  return std::aligned_alloc(alignment, size);
 }
 
-auto allocate(std::size_t size, std::align_val_t alignment) noexcept -> block {
-  size = round_to_alignment(size, alignment);
-  auto* ptr = static_cast<std::byte*>(
-    ::aligned_alloc(std::to_underlying(alignment), size));
-  if (ptr == nullptr) {
-    std::fprintf(stderr, "null alloc for size %zu, %zu\n", size,
-                 std::to_underlying(alignment));
-    return {};
+[[gnu::alloc_size(2), gnu::alloc_align(3)]]
+auto realloc_aligned(void* ptr, std::size_t new_size,
+                     std::size_t alignment) noexcept -> void* {
+  auto* new_ptr_happy = std::realloc(ptr, new_size);
+  if (is_aligned(new_ptr_happy, std::align_val_t{alignment})) {
+    return new_ptr_happy;
   }
-  size = ::malloc_usable_size(ptr);
-  return block{
-    ptr,
-    size,
-  };
+  if (not new_ptr_happy) {
+    new_ptr_happy = ptr;
+  }
+  auto size = malloc_usable_size(new_ptr_happy);
+  auto* new_ptr_expensive = malloc_aligned(new_size, alignment);
+  std::memcpy(new_ptr_expensive, new_ptr_happy, size);
+  free(new_ptr_happy);
+  return new_ptr_expensive;
 }
+} // namespace
 
-auto deallocate(block blk, std::align_val_t alignment) noexcept -> std::size_t {
-  (void)alignment;
-  blk.size = ::malloc_usable_size(blk.ptr);
-  ::free(blk.ptr);
-  return blk.size;
-}
-
-auto reallocate(block old_block, std::size_t new_size,
-                std::align_val_t alignment) noexcept -> reallocation_result {
-  old_block.size = ::malloc_usable_size(old_block.ptr);
-  if (old_block.size == new_size) {
-    return {
-      .true_old_block = old_block,
-      .new_block = old_block,
-    };
-  }
-  if (new_size == 0) {
-    deallocate(old_block, alignment);
-    return {
-      old_block,
-      block{},
-    };
-  }
-  new_size = round_to_alignment(new_size, alignment);
-  void* new_ptr = ::realloc(old_block.ptr, new_size);
-  new_size = ::malloc_usable_size(new_ptr);
-  auto new_block = block{
-    static_cast<std::byte*>(new_ptr),
-    new_size,
-  };
-  if (new_ptr == nullptr) {
-    return {
-      old_block,
-      block{},
-    };
-  }
-  return {
-    .true_old_block = old_block,
-    .new_block = new_block,
-  };
-}
+using allocator
+  = allocator_impl<malloc, malloc_aligned, std::align_val_t{16},
+                   malloc_usable_size, realloc, realloc_aligned, free>;
 
 auto trim() noexcept -> void {
 #if (defined(__GLIBC__))
@@ -265,36 +253,11 @@ auto trim() noexcept -> void {
 #endif
 }
 
-auto typed_allocator::allocate(std::size_t size,
-                               std::align_val_t alignment) noexcept -> block {
-  return system::allocate(size, alignment);
-}
-
-auto typed_allocator::reallocate(block old_block, std::size_t new_size,
-                                 std::align_val_t alignment) noexcept
-  -> reallocation_result {
-  return system::reallocate(old_block, new_size, alignment);
-}
-
-auto typed_allocator::deallocate(block old_block,
-                                 std::align_val_t alignment) noexcept
-  -> std::size_t {
-  return system::deallocate(old_block, alignment);
-}
-
-auto typed_allocator::trim() noexcept -> void {
-  return system::trim();
-}
-
-auto typed_allocator::backend() noexcept -> std::string_view {
-  return "mimalloc";
-}
-
-auto erased_allocator() noexcept -> erased_allocator {
+constexpr auto erased_allocator() noexcept -> erased_allocator {
   return {
-    .allocate = allocate,
-    .reallocate = reallocate,
-    .deallocate = deallocate,
+    .allocate = allocator::allocate,
+    .reallocate = allocator::reallocate,
+    .deallocate = allocator::deallocate,
     .trim = trim,
     .backend_ = "system",
   };
@@ -322,18 +285,21 @@ auto selected_alloc() -> erased_allocator {
   std::unreachable();
 }
 
-auto global_allocator() noexcept -> global_allocator_t& {
+[[nodiscard, gnu::hot, gnu::const]] auto global_allocator() noexcept
+  -> global_allocator_t& {
   static auto alloc = global_allocator_t{selected_alloc()};
   return alloc;
 }
 
-auto arrow_allocator() noexcept -> separated_allocator_t& {
-  static auto instance = separated_allocator_t{global_allocator()};
+[[nodiscard, gnu::hot, gnu::const]] auto arrow_allocator() noexcept
+  -> separated_allocator_t& {
+  static auto instance = global_allocator_t{selected_alloc()};
   return instance;
 }
 
-auto cpp_allocator() noexcept -> separated_allocator_t& {
-  static auto instance = separated_allocator_t{global_allocator()};
+[[nodiscard, gnu::hot, gnu::const]] auto cpp_allocator() noexcept
+  -> separated_allocator_t& {
+  static auto instance = global_allocator_t{selected_alloc()};
   return instance;
 }
 
