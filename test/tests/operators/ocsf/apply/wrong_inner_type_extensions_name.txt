@@ -61,6 +61,7 @@
     lineage: null,
     loaded_modules: null,
     name: null,
+    parent_process: null,
     path: null,
     pid: null,
     sandbox: null,

@@ -1,0 +1,19 @@
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 2001,
+  analytic: {
+    name: "Main Analytic",
+    type_id: 1,
+    related_analytics: [
+      {
+        name: "Related Analytic 1",
+        type_id: 2,
+      }
+    ]
+  }
+}
+ocsf::apply
+// Verify related_analytics is accessible
+assert analytic.related_analytics[0].name == "Related Analytic 1"

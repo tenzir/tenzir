@@ -50,15 +50,18 @@ BASIC_TYPES = {
     "timestamp_t": "time",
 }
 
-# TODO: The schema defines some recursive types which cannot be represented
-# faithfully. Hence, we omit some fields to break recursive cycles. Instead of
-# that, we could recursively unfold the types up to a certain depth, or perhaps
-# use a slightly different representation.
-OMIT = {
-    "ldap_person": ["manager"],
-    "process": ["parent_process"],
-    "network_proxy": ["proxy_endpoint"],
-    "analytic": ["related_analytics"],
+# The schema defines some recursive types which cannot be represented
+# faithfully. We generate nonrecursive type variants (with suffix
+# "_nonrecursive") that omit these fields, allowing one level of recursion.
+# For example, process.parent_process.pid works, but not
+# process.parent_process.parent_process.
+RECURSIVE_FIELDS: dict[str, dict[str, str]] = {
+    # entity name -> (field name -> recursive target entity)
+    "ldap_person": {"manager": "user"},
+    "process": {"parent_process": "process"},
+    "network_proxy": {"proxy_endpoint": "network_proxy"},
+    "analytic": {"related_analytics": "analytic"},
+    "user": {"ldap_person": "ldap_person"},
 }
 Schema = dict[str, typing.Any]
 TypeMap = dict[str, str]
@@ -154,17 +157,92 @@ class Writer:
         self.print(*args, **kwargs)
 
 
+def _emit_entity(
+    writer: Writer,
+    schema: Schema,
+    entity: dict,
+    entity_name: str,
+    objects: bool,
+    *,
+    type_suffix: str = "",
+    skip_fields: typing.Iterable[str] = (),
+    resolve_recursive_fields: bool = False,
+) -> None:
+    """Emit a single entity type definition.
+
+    Args:
+        writer: Writer to output to
+        schema: OCSF schema
+        entity: Entity definition
+        entity_name: Name of the entity
+        objects: True if emitting objects, False if emitting classes
+        type_suffix: Suffix to add to type name (e.g., "_nonrecursive")
+        skip_fields: List of field names to skip
+        resolve_recursive_fields: If True, resolve recursive fields to _nonrecursive variants
+    """
+    prefix = object_prefix(schema) if objects else class_prefix(schema)
+    types = schema["types"]
+    full_name = f"{prefix}.{entity_name}{type_suffix}"
+    recursive_fields = RECURSIVE_FIELDS.get(entity_name, {})
+    skip_fields = set(skip_fields)
+
+    writer.begin(f"type {full_name} = record{{")
+    for attr_name, attr_def in sorted(entity["attributes"].items()):
+        if attr_name in skip_fields:
+            continue
+        profile = attr_def.get("profile")
+        if "object_type" in attr_def:
+            type_name = attr_def["object_type"]
+            # Special-case the "Object" type to use a JSON string instead.
+            if type_name == "object":
+                resolved = "null #variant #must_be_record"
+            else:
+                # Ignore the extension written before the slash.
+                slash = type_name.find("/")
+                if slash != -1:
+                    type_name = type_name[slash + 1 :]
+                resolved = f"{object_prefix(schema)}.{type_name}"
+                if resolve_recursive_fields and attr_name in recursive_fields:
+                    target = recursive_fields[attr_name]
+                    resolved = f"{object_prefix(schema)}.{target}_nonrecursive"
+        else:
+            resolved = types[attr_def["type"]]
+            if resolved is OMIT_MARKER:
+                continue
+        if attr_def.get("is_array", False):
+            resolved = f"list<{resolved}>"
+        if DOCUMENT_FIELDS:
+            writer.comment(attr_def["description"])
+        requirement = attr_def["requirement"]
+        attributes = f" #{requirement}"
+        if profile is not None:
+            attributes += f" #profile={profile}"
+        extension = attr_def.get("extension")
+        if extension is not None:
+            attributes += f" #extension={extension}"
+        if not objects and attr_name == "unmapped":
+            attributes += " #nullify_empty_records"
+        if "enum" in attr_def:
+            sibling = attr_def.get("sibling")
+            if sibling is None:
+                log(
+                    f"Warning: Enum {attr_name} of {entity_name} doesn't have sibling"
+                )
+            else:
+                attributes += f" #enum={hash_enum(attr_def["enum"])}"
+                attributes += f" #sibling={sibling}"
+        writer.print(f"{attr_name}: {resolved}{attributes},")
+    attributes = ""
+    if extension := entity.get("extension"):
+        attributes += f" #extension={extension}"
+    writer.end(f"}}{attributes}")
+
+
 def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
     name = "objects" if objects else "classes"
-    prefix = object_prefix(schema) if objects else class_prefix(schema)
     types = schema["types"]
     first = True
     for _, entity in sorted(schema[name].items()):
-        if not first:
-            writer.print()
-        first = False
-        if DOCUMENT_ENTITIES:
-            writer.comment(entity["description"])
         # For classes, we do not use the given entity name, but instead derive
         # the name from the caption. This is due to classes such as "Device
         # Inventory Info", which have a name "inventory_info", which makes the
@@ -173,58 +251,49 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             entity_name = entity["name"]
         else:
             entity_name = entity["caption"].lower().replace(" ", "_")
-        full_name = f"{prefix}.{entity_name}"
-        if full_name == "ocsf.object.object":
+
+        # Skip special case
+        prefix = object_prefix(schema) if objects else class_prefix(schema)
+        if f"{prefix}.{entity_name}" == "ocsf.object.object":
             # Not needed because this is special-case to print JSON.
             continue
-        omit = OMIT.get(entity_name, [])
-        writer.begin(f"type {full_name} = record{{")
-        for attr_name, attr_def in sorted(entity["attributes"].items()):
-            if attr_name in omit:
-                continue
-            profile = attr_def.get("profile")
-            if "object_type" in attr_def:
-                type_name = attr_def["object_type"]
-                # Special-case the "Object" type to use a JSON string instead.
-                if type_name == "object":
-                    resolved = "null #variant #must_be_record"
-                else:
-                    # Ignore the extension written before the slash.
-                    slash = type_name.find("/")
-                    if slash != -1:
-                        type_name = type_name[slash + 1 :]
-                    resolved = f"{object_prefix(schema)}.{type_name}"
-            else:
-                resolved = types[attr_def["type"]]
-                if resolved is OMIT_MARKER:
-                    continue
-            if attr_def.get("is_array", False):
-                resolved = f"list<{resolved}>"
-            if DOCUMENT_FIELDS:
-                writer.comment(attr_def["description"])
-            requirement = attr_def["requirement"]
-            attributes = f" #{requirement}"
-            if profile is not None:
-                attributes += f" #profile={profile}"
-            extension = attr_def.get("extension")
-            if extension is not None:
-                attributes += f" #extension={extension}"
-            if not objects and attr_name == "unmapped":
-                attributes += " #nullify_empty_records"
-            if "enum" in attr_def:
-                sibling = attr_def.get("sibling")
-                if sibling is None:
-                    log(
-                        f"Warning: Enum {attr_name} of {entity_name} doesn't have sibling"
-                    )
-                else:
-                    attributes += f" #enum={hash_enum(attr_def["enum"])}"
-                    attributes += f" #sibling={sibling}"
-            writer.print(f"{attr_name}: {resolved}{attributes},")
-        attributes = ""
-        if extension := entity.get("extension"):
-            attributes += f" #extension={extension}"
-        writer.end(f"}}{attributes}")
+
+        recursive_fields = RECURSIVE_FIELDS.get(entity_name, {})
+
+        # Emit nonrecursive variant first if this entity has recursive fields
+        if recursive_fields:
+            if not first:
+                writer.print()
+            first = False
+            if DOCUMENT_ENTITIES:
+                writer.comment(entity["description"])
+            _emit_entity(
+                writer,
+                schema,
+                entity,
+                entity_name,
+                objects,
+                type_suffix="_nonrecursive",
+                skip_fields=recursive_fields.keys(),
+                resolve_recursive_fields=False,
+            )
+
+        # Emit main type
+        if not first:
+            writer.print()
+        first = False
+        if DOCUMENT_ENTITIES:
+            writer.comment(entity["description"])
+        _emit_entity(
+            writer,
+            schema,
+            entity,
+            entity_name,
+            objects,
+            type_suffix="",
+            skip_fields=[],
+            resolve_recursive_fields=True,
+        )
 
 
 def emit_classes(writer: Writer, schema: Schema) -> None:

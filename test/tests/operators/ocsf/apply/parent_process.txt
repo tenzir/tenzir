@@ -21,9 +21,8 @@
     debug: null,
     event_code: null,
     extension: null,
-    extensions: [
-      null,
-    ],
+    extensions: null,
+    is_truncated: null,
     labels: null,
     log_level: null,
     log_name: null,
@@ -41,13 +40,14 @@
     tenant_uid: null,
     transformation_info_list: null,
     uid: null,
-    version: "1.5.0",
+    untruncated_size: null,
+    version: "1.6.0",
   },
   module: null,
   observables: null,
   process: {
     ancestry: null,
-    cmd_line: null,
+    cmd_line: "command",
     cpid: null,
     created_time: null,
     environment_variables: null,
@@ -57,9 +57,33 @@
     lineage: null,
     loaded_modules: null,
     name: null,
-    parent_process: null,
+    parent_process: {
+      ancestry: null,
+      cmd_line: "command",
+      cpid: null,
+      created_time: null,
+      environment_variables: null,
+      file: null,
+      integrity: null,
+      integrity_id: null,
+      lineage: null,
+      loaded_modules: null,
+      name: null,
+      path: null,
+      pid: 5678,
+      ptid: null,
+      sandbox: null,
+      session: null,
+      terminated_time: null,
+      tid: null,
+      uid: null,
+      user: null,
+      working_directory: null,
+      xattributes: null,
+    },
     path: null,
-    pid: null,
+    pid: 1234,
+    ptid: null,
     sandbox: null,
     session: null,
     terminated_time: null,
@@ -70,6 +94,7 @@
     xattributes: null,
   },
   raw_data: null,
+  raw_data_hash: null,
   raw_data_size: null,
   requested_permissions: null,
   severity: null,
@@ -85,16 +110,3 @@
   type_uid: null,
   unmapped: null,
 }
-warning: ignoring extensions for events where `metadata.extensions` is not a list of records
- --> tests/operators/ocsf/apply/wrong_inner_type_extensions.tql:9:1
-  |
-9 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |
-
-warning: expected type `record` for `metadata.extensions[]`, but got `int64`
- --> tests/operators/ocsf/apply/wrong_inner_type_extensions.tql:9:1
-  |
-9 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |

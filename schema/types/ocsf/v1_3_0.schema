@@ -77,10 +77,24 @@ type _ocsf.v1_3_0.object.agent = record{
 // The Analytic object contains details about the analytic technique used to
 // analyze and derive insights from the data or information that led to the
 // creation of a finding or conclusion.
+type _ocsf.v1_3_0.object.analytic_nonrecursive = record{
+  category: string #optional,
+  desc: string #optional,
+  name: string #recommended,
+  type: string #optional,
+  type_id: int64 #required #enum=5693f9f8 #sibling=type,
+  uid: string #recommended,
+  version: string #optional,
+}
+
+// The Analytic object contains details about the analytic technique used to
+// analyze and derive insights from the data or information that led to the
+// creation of a finding or conclusion.
 type _ocsf.v1_3_0.object.analytic = record{
   category: string #optional,
   desc: string #optional,
   name: string #recommended,
+  related_analytics: list<_ocsf.v1_3_0.object.analytic_nonrecursive> #optional,
   type: string #optional,
   type_id: int64 #required #enum=5693f9f8 #sibling=type,
   uid: string #recommended,
@@ -1000,6 +1014,33 @@ type _ocsf.v1_3_0.object.kill_chain_phase = record{
 }
 
 // The additional LDAP attributes that describe a person.
+type _ocsf.v1_3_0.object.ldap_person_nonrecursive = record{
+  cost_center: string #optional,
+  created_time: time #optional,
+  created_time_dt: time #optional #profile=datetime,
+  deleted_time: time #optional,
+  deleted_time_dt: time #optional #profile=datetime,
+  email_addrs: list<string> #optional,
+  employee_uid: string #optional,
+  given_name: string #optional,
+  hire_time: time #optional,
+  hire_time_dt: time #optional #profile=datetime,
+  job_title: string #optional,
+  labels: list<string> #optional,
+  last_login_time: time #optional,
+  last_login_time_dt: time #optional #profile=datetime,
+  ldap_cn: string #optional,
+  ldap_dn: string #optional,
+  leave_time: time #optional,
+  leave_time_dt: time #optional #profile=datetime,
+  location: _ocsf.v1_3_0.object.location #optional,
+  modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
+  office_location: string #optional,
+  surname: string #optional,
+}
+
+// The additional LDAP attributes that describe a person.
 type _ocsf.v1_3_0.object.ldap_person = record{
   cost_center: string #optional,
   created_time: time #optional,
@@ -1020,6 +1061,7 @@ type _ocsf.v1_3_0.object.ldap_person = record{
   leave_time: time #optional,
   leave_time_dt: time #optional #profile=datetime,
   location: _ocsf.v1_3_0.object.location #optional,
+  manager: _ocsf.v1_3_0.object.user_nonrecursive #optional,
   modified_time: time #optional,
   modified_time_dt: time #optional #profile=datetime,
   office_location: string #optional,
@@ -1230,6 +1272,39 @@ type _ocsf.v1_3_0.object.network_interface = record{
 // intermediary between a client requesting a resource and the server providing
 // that resource.  Defined by D3FEND <a target='_blank' href='https://d3fend.mit
 // re.org/dao/artifact/d3f:ProxyServer/'>d3f:ProxyServer</a>.
+type _ocsf.v1_3_0.object.network_proxy_nonrecursive = record{
+  agent_list: list<_ocsf.v1_3_0.object.agent> #optional,
+  autonomous_system: _ocsf.v1_3_0.object.autonomous_system #optional,
+  container: _ocsf.v1_3_0.object.container #recommended #profile=container,
+  domain: string #optional,
+  hostname: string #recommended,
+  hw_info: _ocsf.v1_3_0.object.device_hw_info #optional,
+  instance_uid: string #recommended,
+  interface_name: string #recommended,
+  interface_uid: string #recommended,
+  intermediate_ips: list<ip> #optional,
+  ip: ip #recommended,
+  location: _ocsf.v1_3_0.object.location #optional,
+  mac: string #optional,
+  name: string #recommended,
+  namespace_pid: int64 #recommended #profile=container,
+  os: _ocsf.v1_3_0.object.os #optional,
+  owner: _ocsf.v1_3_0.object.user #recommended,
+  port: int64 #recommended,
+  subnet_uid: string #optional,
+  svc_name: string #recommended,
+  type: string #optional,
+  type_id: int64 #recommended #enum=218e23f2 #sibling=type,
+  uid: string #recommended,
+  vlan_uid: string #optional,
+  vpc_uid: string #optional,
+  zone: string #optional,
+}
+
+// The network proxy endpoint object describes a proxy server, which acts as an
+// intermediary between a client requesting a resource and the server providing
+// that resource.  Defined by D3FEND <a target='_blank' href='https://d3fend.mit
+// re.org/dao/artifact/d3f:ProxyServer/'>d3f:ProxyServer</a>.
 type _ocsf.v1_3_0.object.network_proxy = record{
   agent_list: list<_ocsf.v1_3_0.object.agent> #optional,
   autonomous_system: _ocsf.v1_3_0.object.autonomous_system #optional,
@@ -1249,6 +1324,7 @@ type _ocsf.v1_3_0.object.network_proxy = record{
   os: _ocsf.v1_3_0.object.os #optional,
   owner: _ocsf.v1_3_0.object.user #recommended,
   port: int64 #recommended,
+  proxy_endpoint: _ocsf.v1_3_0.object.network_proxy_nonrecursive #optional,
   subnet_uid: string #optional,
   svc_name: string #recommended,
   type: string #optional,
@@ -1393,6 +1469,36 @@ type _ocsf.v1_3_0.object.policy = record{
 // The Process object describes a running instance of a launched program.
 // Defined by D3FEND <a target='_blank'
 // href='https://d3fend.mitre.org/dao/artifact/d3f:Process/'>d3f:Process</a>.
+type _ocsf.v1_3_0.object.process_nonrecursive = record{
+  auid: int64 #optional #profile=linux/linux_users #extension=linux,
+  cmd_line: string #recommended,
+  container: _ocsf.v1_3_0.object.container #recommended #profile=container,
+  created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
+  egid: int64 #optional #profile=linux/linux_users #extension=linux,
+  euid: int64 #optional #profile=linux/linux_users #extension=linux,
+  file: _ocsf.v1_3_0.object.file #recommended,
+  group: _ocsf.v1_3_0.object.group #recommended #profile=linux/linux_users,
+  integrity: string #optional,
+  integrity_id: int64 #optional #enum=18f0f537 #sibling=integrity,
+  lineage: list<string> #optional,
+  loaded_modules: list<string> #optional,
+  name: string #recommended,
+  namespace_pid: int64 #recommended #profile=container,
+  pid: int64 #recommended,
+  sandbox: string #optional,
+  session: _ocsf.v1_3_0.object.session #optional,
+  terminated_time: time #optional,
+  terminated_time_dt: time #optional #profile=datetime,
+  tid: int64 #optional,
+  uid: string #recommended,
+  user: _ocsf.v1_3_0.object.user #recommended,
+  xattributes: null #variant #must_be_record #optional,
+}
+
+// The Process object describes a running instance of a launched program.
+// Defined by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Process/'>d3f:Process</a>.
 type _ocsf.v1_3_0.object.process = record{
   auid: int64 #optional #profile=linux/linux_users #extension=linux,
   cmd_line: string #recommended,
@@ -1409,6 +1515,7 @@ type _ocsf.v1_3_0.object.process = record{
   loaded_modules: list<string> #optional,
   name: string #recommended,
   namespace_pid: int64 #recommended #profile=container,
+  parent_process: _ocsf.v1_3_0.object.process_nonrecursive #recommended,
   pid: int64 #recommended,
   sandbox: string #optional,
   session: _ocsf.v1_3_0.object.session #optional,
@@ -1706,6 +1813,27 @@ type _ocsf.v1_3_0.object.url = record{
 // The User object describes the characteristics of a user/person or a security
 // principal. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.or
 // g/dao/artifact/d3f:UserAccount/'>d3f:UserAccount</a>.
+type _ocsf.v1_3_0.object.user_nonrecursive = record{
+  account: _ocsf.v1_3_0.object.account #optional,
+  credential_uid: string #optional,
+  domain: string #optional,
+  email_addr: string #optional,
+  full_name: string #optional,
+  groups: list<_ocsf.v1_3_0.object.group> #optional,
+  name: string #recommended,
+  org: _ocsf.v1_3_0.object.organization #optional,
+  risk_level: string #optional,
+  risk_level_id: int64 #optional #enum=a3f9a2fa #sibling=risk_level,
+  risk_score: int64 #optional,
+  type: string #optional,
+  type_id: int64 #recommended #enum=43c02ae7 #sibling=type,
+  uid: string #recommended,
+  uid_alt: string #optional,
+}
+
+// The User object describes the characteristics of a user/person or a security
+// principal. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.or
+// g/dao/artifact/d3f:UserAccount/'>d3f:UserAccount</a>.
 type _ocsf.v1_3_0.object.user = record{
   account: _ocsf.v1_3_0.object.account #optional,
   credential_uid: string #optional,
@@ -1713,7 +1841,7 @@ type _ocsf.v1_3_0.object.user = record{
   email_addr: string #optional,
   full_name: string #optional,
   groups: list<_ocsf.v1_3_0.object.group> #optional,
-  ldap_person: _ocsf.v1_3_0.object.ldap_person #optional,
+  ldap_person: _ocsf.v1_3_0.object.ldap_person_nonrecursive #optional,
   name: string #recommended,
   org: _ocsf.v1_3_0.object.organization #optional,
   risk_level: string #optional,
