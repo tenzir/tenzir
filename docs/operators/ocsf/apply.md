@@ -29,11 +29,14 @@ To this end, the operator performs the following steps:
 
 The types used for OCSF events are slightly adjusted. For example, timestamps
 use the native `time` type instead of an integer representing the number of
-milliseconds since the Unix epoch. Furthermore, some fields that would lead to
-infinite recursion are currently left out. We plan to support recursion up to a
-certain depth in the future. Furthermore, this operator will likely be extended
-with additional features, such as the ability to drop all optional fields, or to
-automatically assign OCSF enumerations based on their sibling ID.
+milliseconds since the Unix epoch. Fields that are part of recursive object
+relationships now point to a companion `<type>_nonrecursive` record. This lets
+you traverse one additional level, e.g., `process.parent_process.pid`, without
+creating infinitely nested schemas.
+
+Furthermore, this operator will likely be extended with additional features,
+such as the ability to drop all optional fields, or to automatically assign OCSF
+enumerations based on their sibling ID.
 
 ### `preserve_variants = bool`
 
