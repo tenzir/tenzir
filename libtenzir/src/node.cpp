@@ -505,7 +505,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
     }
   }
   detail::weak_run_delayed_loop(self, trim_interval, []() {
-    memory::global_allocator().trim();
+    memory::cpp_allocator().trim();
   });
   return {
     [self](atom::proxy, http_request_description& desc,

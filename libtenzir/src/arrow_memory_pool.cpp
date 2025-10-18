@@ -49,13 +49,13 @@ public:
       *out = kZeroSizeArea;
       return arrow::Status::OK();
     }
-    auto blk = memory::arrow_allocator().allocate(
+    auto* const ptr = memory::arrow_allocator().allocate(
       size, std::align_val_t{static_cast<size_t>(alignment)});
-    if (blk.ptr == nullptr) {
+    if (ptr == nullptr) {
       return arrow::Status::OutOfMemory("mimalloc allocation failed for size ",
                                         size);
     }
-    *out = reinterpret_cast<std::uint8_t*>(blk.ptr);
+    *out = reinterpret_cast<std::uint8_t*>(ptr);
     return arrow::Status::OK();
   }
 
@@ -74,15 +74,13 @@ public:
       TENZIR_ASSERT_EXPENSIVE(old_size == 0);
       return Allocate(new_size, alignment, ptr);
     }
-    const auto result = memory::arrow_allocator().reallocate(
-      memory::block{reinterpret_cast<std::byte*>(*ptr),
-                    static_cast<std::size_t>(old_size)},
-      new_size, std::align_val_t{static_cast<size_t>(alignment)});
-    if (result.new_block.ptr == nullptr) {
+    auto* const new_ptr = memory::arrow_allocator().reallocate(
+      *ptr, new_size, std::align_val_t{static_cast<size_t>(alignment)});
+    if (new_ptr == nullptr) {
       return arrow::Status::OutOfMemory(
         "mimalloc reallocation failed for size ", new_size);
     }
-    *ptr = reinterpret_cast<std::uint8_t*>(result.new_block.ptr);
+    *ptr = reinterpret_cast<std::uint8_t*>(new_ptr);
     return arrow::Status::OK();
   }
 
@@ -93,14 +91,8 @@ public:
       TENZIR_ASSERT_EXPENSIVE(size == 0);
       return;
     }
-    memory::arrow_allocator().deallocate(
-      memory::block{reinterpret_cast<std::byte*>(ptr),
-                    static_cast<std::size_t>(size)},
-      std::align_val_t{static_cast<std::size_t>(alignment)});
+    memory::arrow_allocator().deallocate(ptr);
   }
-
-  constexpr static auto alloc_has_stats
-    = memory::allocator_with_stats<decltype(memory::arrow_allocator())>;
 
   auto bytes_allocated() const -> int64_t override {
     return memory::arrow_allocator().stats().bytes_current;

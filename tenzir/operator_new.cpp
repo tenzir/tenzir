@@ -12,99 +12,109 @@
 
 namespace {
 
-constexpr auto default_alignment
-  = std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__};
+static_assert(std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
+              == tenzir::memory::mimalloc::allocator::default_alignment);
+static_assert(std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
+              == tenzir::memory::system::allocator::default_alignment);
 
-auto allocate_cpp(std::size_t size, std::align_val_t alignment) noexcept
-  -> void* {
-  auto& allocator = tenzir::memory::cpp_allocator();
-  auto blk = allocator.allocate(size, alignment);
-  return blk.ptr;
-}
-
-auto allocate_cpp_throw(std::size_t size, std::align_val_t alignment) -> void* {
-  auto* ptr = allocate_cpp(size, alignment);
-  if (ptr == nullptr) {
-    throw std::bad_alloc{};
+template <bool throws>
+[[nodiscard, gnu::hot, gnu::alloc_size(1)]]
+auto allocate_cpp(std::size_t size) noexcept(not throws) -> void* {
+  static auto& allocator = tenzir::memory::cpp_allocator();
+  auto ptr = allocator.allocate(size);
+  if constexpr (throws) {
+    if (ptr == nullptr) {
+      throw std::bad_alloc{};
+    }
   }
   return ptr;
 }
 
-auto deallocate_cpp(void* ptr, std::size_t size,
-                    std::align_val_t alignment) noexcept {
+template <bool throws>
+[[nodiscard, gnu::hot, gnu::alloc_size(1), gnu::alloc_align(2)]]
+auto allocate_cpp(std::size_t size,
+                  std::align_val_t alignment) noexcept(not throws) -> void* {
+  static auto& allocator = tenzir::memory::cpp_allocator();
+  auto ptr = allocator.allocate(size, alignment);
+  if constexpr (throws) {
+    if (ptr == nullptr) {
+      throw std::bad_alloc{};
+    }
+  }
+  return ptr;
+}
+
+auto deallocate_cpp(void* ptr) noexcept -> void {
   auto& allocator = tenzir::memory::cpp_allocator();
-  allocator.deallocate(
-    tenzir::memory::block{static_cast<std::byte*>(ptr), size}, alignment);
+  allocator.deallocate(ptr);
 }
 
 } // namespace
 
 // (1)
 void* operator new(std::size_t size) {
-  return allocate_cpp_throw(size, default_alignment);
+  return allocate_cpp<true>(size);
 }
 // (2)
 void* operator new[](std::size_t size) {
-  return allocate_cpp_throw(size, default_alignment);
+  return allocate_cpp<true>(size);
 }
 // (3)
 void* operator new(std::size_t size, std::align_val_t alignment) {
-  return allocate_cpp_throw(size, alignment);
+  return allocate_cpp<true>(size, alignment);
 }
 // (4)
 void* operator new[](std::size_t size, std::align_val_t alignment) {
-  return allocate_cpp_throw(size, alignment);
+  return allocate_cpp<true>(size, alignment);
 }
 // (5)
 void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
-  return allocate_cpp(size, default_alignment);
+  return allocate_cpp<false>(size);
 }
 // (6)
 void* operator new[](std::size_t size, const std::nothrow_t&) noexcept {
-  return allocate_cpp(size, default_alignment);
+  return allocate_cpp<false>(size);
 }
 // (7)
 void* operator new(std::size_t size, std::align_val_t alignment,
                    const std::nothrow_t&) noexcept {
-  return allocate_cpp(size, alignment);
+  return allocate_cpp<false>(size, alignment);
 }
 // (8)
 void* operator new[](std::size_t size, std::align_val_t alignment,
                      const std::nothrow_t&) noexcept {
-  return allocate_cpp(size, alignment);
+  return allocate_cpp<false>(size, alignment);
 }
 
 // (1)
 void operator delete(void* ptr) noexcept {
-  deallocate_cpp(ptr, 0, default_alignment);
+  deallocate_cpp(ptr);
 }
 // (2)
 void operator delete[](void* ptr) noexcept {
-  deallocate_cpp(ptr, 0, default_alignment);
+  deallocate_cpp(ptr);
 }
 // (3)
-void operator delete(void* ptr, std::align_val_t alignment) noexcept {
-  deallocate_cpp(ptr, 0, alignment);
+void operator delete(void* ptr, std::align_val_t) noexcept {
+  deallocate_cpp(ptr);
 }
 // (4)
-void operator delete[](void* ptr, std::align_val_t alignment) noexcept {
-  deallocate_cpp(ptr, 0, alignment);
+void operator delete[](void* ptr, std::align_val_t) noexcept {
+  deallocate_cpp(ptr);
 }
 // (5)
-void operator delete(void* ptr, std::size_t size) noexcept {
-  deallocate_cpp(ptr, size, default_alignment);
+void operator delete(void* ptr, std::size_t) noexcept {
+  deallocate_cpp(ptr);
 }
 // (6)
-void operator delete[](void* ptr, std::size_t size) noexcept {
-  deallocate_cpp(ptr, size, default_alignment);
+void operator delete[](void* ptr, std::size_t) noexcept {
+  deallocate_cpp(ptr);
 }
 // (7)
-void operator delete(void* ptr, std::size_t size,
-                     std::align_val_t alignment) noexcept {
-  deallocate_cpp(ptr, size, alignment);
+void operator delete(void* ptr, std::size_t, std::align_val_t) noexcept {
+  deallocate_cpp(ptr);
 }
 // (8)
-void operator delete[](void* ptr, std::size_t size,
-                       std::align_val_t alignment) noexcept {
-  deallocate_cpp(ptr, size, alignment);
+void operator delete[](void* ptr, std::size_t, std::align_val_t) noexcept {
+  deallocate_cpp(ptr);
 }
