@@ -99,6 +99,9 @@ public:
       std::align_val_t{static_cast<std::size_t>(alignment)});
   }
 
+  constexpr static auto alloc_has_stats
+    = memory::allocator_with_stats<decltype(memory::arrow_allocator())>;
+
   auto bytes_allocated() const -> int64_t override {
     return memory::arrow_allocator().stats().bytes_current;
   }

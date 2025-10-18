@@ -90,38 +90,6 @@ struct erased_allocator {
 
 static_assert(allocator<erased_allocator>);
 
-namespace mimalloc {
-class typed_allocator {
-public:
-  static auto allocate(std::size_t size, std::align_val_t alignment) noexcept
-    -> block;
-  static auto reallocate(block old_block, std::size_t new_size,
-                         std::align_val_t alignment) noexcept
-    -> reallocation_result;
-  static auto deallocate(block old_block, std::align_val_t alignment) noexcept
-    -> std::size_t;
-  static auto trim() noexcept -> void;
-  static auto backend() noexcept -> std::string_view;
-};
-static_assert(allocator<typed_allocator>);
-} // namespace mimalloc
-
-namespace system {
-class typed_allocator {
-public:
-  static auto allocate(std::size_t size, std::align_val_t alignment) noexcept
-    -> block;
-  static auto reallocate(block old_block, std::size_t new_size,
-                         std::align_val_t alignment) noexcept
-    -> reallocation_result;
-  static auto deallocate(block old_block, std::align_val_t alignment) noexcept
-    -> std::size_t;
-  static auto trim() noexcept -> void;
-  static auto backend() noexcept -> std::string_view;
-};
-static_assert(allocator<typed_allocator>);
-} // namespace system
-
 template <allocator Inner>
 class stats_allocator {
 public:
@@ -135,21 +103,21 @@ public:
     if (not blk) {
       return {};
     }
-    stats_.note_allocation(blk.size);
+    // stats_.note_allocation(blk.size);
     return blk;
   }
 
   auto reallocate(block blk, std::size_t new_size,
                   std::align_val_t alignment) noexcept -> reallocation_result {
     auto result = inner_.reallocate(blk, new_size, alignment);
-    stats_.note_reallocation(result);
+    // stats_.note_reallocation(result);
     return result;
   }
 
   auto deallocate(block blk, std::align_val_t alignment) noexcept
     -> std::size_t {
     auto size = inner_.deallocate(blk, alignment);
-    stats_.note_deallocation(size);
+    // stats_.note_deallocation(size);
     return size;
   }
 
@@ -215,18 +183,20 @@ static_assert(
   allocator_with_stats<wrapping_allocator<stats_allocator<erased_allocator>>>);
 
 using global_allocator_t = stats_allocator<erased_allocator>;
-using separated_allocator_t
-  = stats_allocator<wrapping_allocator<global_allocator_t>>;
-
-static_assert(allocator<wrapping_allocator<global_allocator_t>>);
+// using separated_allocator_t
+//   = stats_allocator<wrapping_allocator<global_allocator_t>>;
+using separated_allocator_t = global_allocator_t;
 
 /// Returns the global allocator instance
-[[nodiscard]] auto global_allocator() noexcept -> global_allocator_t&;
+[[nodiscard, gnu::hot, gnu::const]] auto global_allocator() noexcept
+  -> global_allocator_t&;
 
 // The allocation wrapper used by the arrow memory pool
-[[nodiscard]] auto arrow_allocator() noexcept -> separated_allocator_t&;
+[[nodiscard, gnu::hot, gnu::const]] auto arrow_allocator() noexcept
+  -> separated_allocator_t&;
 
 // The allocation wrapper used by operator new/delete
-[[nodiscard]] auto cpp_allocator() noexcept -> separated_allocator_t&;
+[[nodiscard, gnu::hot, gnu::const]] auto cpp_allocator() noexcept
+  -> separated_allocator_t&;
 
 } // namespace tenzir::memory
