@@ -710,10 +710,10 @@ void index_state::handle_slice(table_slice x) {
     }
     active_partition = *part;
   } else if (active_partition->second.events + x.rows() > partition_capacity) {
-    TENZIR_TRACE("{} flushes active partition {} with {}/{} events due to {} "
-                 "incoming events",
-                 *self, schema, active_partition->second.events,
-                 partition_capacity, x.rows());
+    TENZIR_WARN("{} flushes active partition {} with {}/{} events due to {} "
+                "incoming events",
+                *self, schema, active_partition->second.events,
+                partition_capacity, x.rows());
     decommission_active_partition(schema, {});
     flush_to_disk();
     auto part = create_active_partition(schema);
@@ -735,6 +735,10 @@ void index_state::handle_slice(table_slice x) {
   // flush ahead of time, but this can still happen if the single table slice we
   // just got already exceeds it.
   if (active_partition->second.events >= partition_capacity) {
+    TENZIR_WARN("{} flushes active partition {} with {}/{} events due to {} "
+                "incoming events directly exceeding capacity",
+                *self, schema, active_partition->second.events,
+                partition_capacity, x.rows());
     decommission_active_partition(schema, {});
     flush_to_disk();
   }
@@ -752,10 +756,10 @@ void index_state::handle_slice(table_slice x) {
                                         [](auto& entry) {
                                           return entry.second.events;
                                         });
-    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events due to "
-                   "{}/{} buffered events",
-                   *self, max->first, max->second.events, partition_capacity,
-                   buffered_events, max_buffered_events);
+    TENZIR_WARN("{} flushes active partition {} with {}/{} events due to "
+                "{}/{} buffered events",
+                *self, max->first, max->second.events, partition_capacity,
+                buffered_events, max_buffered_events);
     decommission_active_partition(max->first, {});
     flush_to_disk();
   }
@@ -782,10 +786,10 @@ index_state::create_active_partition(const type& schema) {
       // If the partition was already rotated then there's nothing to do for us.
       return;
     }
-    TENZIR_TRACE("{} flushes active partition {} with {}/{} {} events "
-                 "after {} timeout",
-                 *self, it->second.id, it->second.events, partition_capacity,
-                 schema, data{active_partition_timeout});
+    TENZIR_WARN("{} flushes active partition {} with {}/{} {} events "
+                "after {} timeout",
+                *self, it->second.id, it->second.events, partition_capacity,
+                schema, data{active_partition_timeout});
     decommission_active_partition(schema, [this, schema,
                                            id](const caf::error& err) mutable {
       if (err) {
@@ -796,7 +800,8 @@ index_state::create_active_partition(const type& schema) {
     });
     flush_to_disk();
   });
-  TENZIR_TRACE("{} created new partition {}", *self, id);
+  TENZIR_WARN("{} created new partition for {} ({})", *self, id, schema,
+              schema.make_fingerprint());
   return active_partition;
 }
 
@@ -824,8 +829,8 @@ void index_state::decommission_active_partition(
     .request(actor, caf::infinite)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        TENZIR_TRACE("{} successfully persisted partition {} {}", *self, schema,
-                     id);
+        TENZIR_WARN("{} successfully persisted partition {} {}", *self, schema,
+                    id);
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
@@ -835,8 +840,8 @@ void index_state::decommission_active_partition(
           .request(catalog, caf::infinite)
           .then(
             [=, this](atom::ok) {
-              TENZIR_TRACE("{} inserted partition {} {} to the catalog", *self,
-                           schema, id);
+              TENZIR_WARN("{} inserted partition {} {} to the catalog", *self,
+                          schema, id);
               for (auto& listener : partition_creation_listeners) {
                 self->mail(atom::update_v, partition_synopsis_pair{id, ps})
                   .send(listener);
@@ -897,6 +902,8 @@ auto index_state::flush() -> caf::typed_response_promise<void> {
     schemas.push_back(schema);
   }
   for (const auto& schema : schemas) {
+    TENZIR_WARN("{} flushes active partition {} due to explicit flush", *self,
+                schema);
     decommission_active_partition(schema,
                                   [counter](const caf::error& err) mutable {
                                     if (err) {
@@ -1195,6 +1202,67 @@ index(index_actor::stateful_pointer<index_state> self,
             TENZIR_WARN(
               "index failed to get list of partitions from catalog: {}", e);
           });
+    },
+    [self](atom::get, bool internal) -> caf::result<std::vector<table_slice>> {
+      auto rp = self->make_response_promise<std::vector<table_slice>>();
+      auto result = std::make_shared<std::vector<table_slice>>();
+      auto pending = std::make_shared<size_t>(0);
+      // Collect from active partitions.
+      for (const auto& [schema, info] : self->state().active_partitions) {
+        if (schema.attribute("internal").has_value() != internal) {
+          continue;
+        }
+        *pending += 1;
+        self->mail(atom::get_v)
+          .request(info.actor, caf::infinite)
+          .then(
+            [result, pending, rp](std::vector<table_slice>& slices) mutable {
+              result->insert(result->end(),
+                             std::make_move_iterator(slices.begin()),
+                             std::make_move_iterator(slices.end()));
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(std::move(*result));
+              }
+            },
+            [rp, pending](const caf::error& err) mutable {
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(err);
+              }
+            });
+      }
+      // Collect from unpersisted partitions (being written to disk).
+      for (const auto& [uuid, pair] : self->state().unpersisted) {
+        const auto& [type, actor] = pair;
+        if (type.attribute("internal").has_value() != internal) {
+          continue;
+        }
+        *pending += 1;
+        self->mail(atom::get_v)
+          .request(actor, caf::infinite)
+          .then(
+            [result, pending, rp](std::vector<table_slice>& slices) mutable {
+              result->insert(result->end(),
+                             std::make_move_iterator(slices.begin()),
+                             std::make_move_iterator(slices.end()));
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(std::move(*result));
+              }
+            },
+            [rp, pending](const caf::error& err) mutable {
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(err);
+              }
+            });
+      }
+      // If no partitions, return immediately
+      if (*pending == 0) {
+        rp.deliver(std::move(*result));
+      }
+      return rp;
     },
     [self](atom::evaluate,
            tenzir::query_context query_context) -> caf::result<query_cursor> {

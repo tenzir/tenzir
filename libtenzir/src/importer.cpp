@@ -75,7 +75,6 @@ void importer::flush(std::optional<type> schema) {
           if (retention_policy.should_be_persisted(events)) {
             self->mail(events).send(index);
           }
-          recent_events.push_back(std::move(events));
           concat_buffer_size = 0;
           concat_buffer.clear();
         };
@@ -161,31 +160,6 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       }
       handle_slice(std::move(slice));
     });
-  // Clean up unpersisted events every second.
-  const auto active_partition_timeout
-    = caf::get_or(content(self->system().config()),
-                  "tenzir.active-partition-timeout",
-                  defaults::active_partition_timeout);
-  if (active_partition_timeout > std::chrono::minutes{1}) {
-    TENZIR_WARN("high `active-partition-timeout` detected: this can lead to "
-                "memory usage problems");
-  }
-  detail::weak_run_delayed_loop(
-    self, std::chrono::seconds{1},
-    [this, active_partition_timeout] {
-      // We clear everything that's older than the active partition timeout plus
-      // a fixed 10 seconds to allow some processing to happen. This is an
-      // estimate, and it's definitely not a perfect solution, but it's good
-      // enough hopefully.
-      const auto cutoff = time::clock::now() - active_partition_timeout
-                          - std::chrono::seconds{10};
-      const auto it
-        = std::ranges::find_if(recent_events, [&](const auto& slice) {
-            return slice.import_time() > cutoff;
-          });
-      recent_events.erase(recent_events.begin(), it);
-    },
-    false);
   return {
     [this](atom::flush) -> caf::result<void> {
       flush();
@@ -195,19 +169,36 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       handle_slice(std::move(slice));
       return {};
     },
-    [this](atom::subscribe, receiver_actor<table_slice>& subscriber,
-           bool internal) -> std::vector<table_slice> {
-      self->monitor(
-        subscriber, [this, source = subscriber->address()](const caf::error&) {
-          const auto subscriber
-            = std::remove_if(subscribers.begin(), subscribers.end(),
-                             [&](const auto& subscriber) {
-                               return subscriber.first.address() == source;
-                             });
-          subscribers.erase(subscriber, subscribers.end());
+    [this](atom::get, receiver_actor<table_slice>& subscriber, bool internal,
+           bool live, bool recent) -> caf::result<std::vector<table_slice>> {
+      auto rp = self->make_response_promise<std::vector<table_slice>>();
+      if (live) {
+        self->monitor(subscriber, [this, source = subscriber->address()](
+                                    const caf::error&) {
+          const auto it = std::remove_if(subscribers.begin(), subscribers.end(),
+                                         [&](const auto& sub) {
+                                           return sub.first.address() == source;
+                                         });
+          subscribers.erase(it, subscribers.end());
         });
-      subscribers.emplace_back(std::move(subscriber), internal);
-      return recent_events;
+        subscribers.emplace_back(std::move(subscriber), internal);
+      }
+      // We must call the index ourselves here in order to return a consistent
+      // state if both `live` and `recent` are set.
+      if (recent) {
+        self->mail(atom::get_v, internal)
+          .request(index, caf::infinite)
+          .then(
+            [rp](std::vector<table_slice>& events) mutable {
+              rp.deliver(std::move(events));
+            },
+            [rp](const caf::error& err) mutable {
+              rp.deliver(err);
+            });
+      } else {
+        rp.deliver(std::vector<table_slice>{});
+      }
+      return rp;
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) { //

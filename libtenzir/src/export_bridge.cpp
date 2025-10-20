@@ -246,9 +246,10 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
   self->state().importer_address = importer->address();
   self->state().unpersisted_events.emplace();
   self
-    ->mail(atom::subscribe_v,
-           caf::actor_cast<receiver_actor<table_slice>>(self),
-           self->state().mode.internal)
+    ->mail(atom::get_v, caf::actor_cast<receiver_actor<table_slice>>(self),
+           self->state().mode.internal,
+           /*live=*/self->state().mode.live,
+           /*recent=*/self->state().mode.retro)
     .request(importer, caf::infinite)
     .await(
       [self, mode](std::vector<table_slice>& unpersisted_events) {

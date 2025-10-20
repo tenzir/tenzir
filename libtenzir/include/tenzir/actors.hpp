@@ -162,9 +162,10 @@ using catalog_actor = typed_actor_fwd<
 /// The interface of an IMPORTER actor.
 struct importer_actor_traits {
   using signatures = caf::type_list<
-    // Register a subscriber for table slices, returning the currently
-    // unpersisted events immediately.
-    auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
+    // Register a subscriber for table slices and/or get recently imported,
+    // unpersisted events, depending on the 'live' and 'recent' flags.
+    auto(atom::get, receiver_actor<table_slice>, bool internal, bool live,
+         bool recent)
       ->caf::result<std::vector<table_slice>>,
     // Push buffered slices downstream to make the data available.
     auto(atom::flush)->caf::result<void>,
@@ -206,7 +207,9 @@ using index_actor = typed_actor_fwd<
        keep_original_partition)
     ->caf::result<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
-  auto(atom::flush)->caf::result<void>>
+  auto(atom::flush)->caf::result<void>,
+  // Returns all events from active and unpersisted partitions.
+  auto(atom::get, bool internal)->caf::result<std::vector<table_slice>>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -265,7 +268,9 @@ using active_partition_actor = typed_actor_fwd<
   auto(table_slice)->caf::result<void>,
   // Persists the active partition at the specified path.
   auto(atom::persist, std::filesystem::path, std::filesystem::path)
-    ->caf::result<partition_synopsis_ptr>>
+    ->caf::result<partition_synopsis_ptr>,
+  // Get cached table slices for unpersisted events.
+  auto(atom::get)->caf::result<std::vector<table_slice>>>
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
 

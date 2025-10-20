@@ -65,7 +65,7 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
     auto* schema = try_as<record_type>(&t);
-    if (!schema) {
+    if (! schema) {
       return caf::make_error(ec::format_error, "schema field contained "
                                                "unexpected type");
     }
@@ -90,17 +90,17 @@ passive_partition_state::type_ids() const {
 caf::error unpack(const fbs::partition::LegacyPartition& partition,
                   passive_partition_state& state) {
   // Check that all fields exist.
-  if (!partition.uuid()) {
+  if (! partition.uuid()) {
     return caf::make_error(ec::format_error, //
                            "missing 'uuid' field in partition flatbuffer");
   }
   auto const* store_header = partition.store();
   // If no store_id is set, use the global store for backwards compatibility.
-  if (store_header && !store_header->id()) {
+  if (store_header && ! store_header->id()) {
     return caf::make_error(ec::format_error, //
                            "missing 'id' field in partition store header");
   }
-  if (store_header && !store_header->data()) {
+  if (store_header && ! store_header->data()) {
     return caf::make_error(ec::format_error, //
                            "missing 'data' field in partition store header");
   }
@@ -134,10 +134,10 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
 
 caf::error
 unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
-  if (!x.partition_synopsis()) {
+  if (! x.partition_synopsis()) {
     return caf::make_error(ec::format_error, "missing partition synopsis");
   }
-  if (!x.type_ids()) {
+  if (! x.type_ids()) {
     return caf::make_error(ec::format_error, "missing type_ids");
   }
   return unpack(*x.partition_synopsis(), ps);
@@ -163,7 +163,7 @@ partition_chunk::get_flatbuffer(tenzir::chunk_ptr chunk) {
   } else if (flatbuffers::BufferHasIdentifier(
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
     auto container = fbs::flatbuffer_container(chunk);
-    if (!container) {
+    if (! container) {
       return caf::make_error(ec::format_error, "invalid flatbuffer container");
     }
     return container.as_flatbuffer<fbs::Partition>(0);
@@ -177,7 +177,7 @@ caf::error
 passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
   using flatbuffers::soffset_t;
   using flatbuffers::uoffset_t;
-  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+  if (! chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
     return caf::make_error(ec::format_error, "flatbuffer failed to load or was "
                                              "smaller than the mininum size");
   }
@@ -209,7 +209,7 @@ passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
     this->partition_chunk = chunk;
     this->container = fbs::flatbuffer_container(chunk);
-    if (!this->container) {
+    if (! this->container) {
       return caf::make_error(ec::format_error, "invalid flatbuffer container");
     }
     auto partition = container->as_flatbuffer<fbs::Partition>(0);
@@ -249,7 +249,7 @@ partition_actor::behavior_type passive_partition(
       [=](chunk_ptr chunk) {
         TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
         TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
-        TENZIR_ASSERT(!self->state().partition_chunk);
+        TENZIR_ASSERT(! self->state().partition_chunk);
         if (auto err = self->state().initialize_from_chunk(chunk)) {
           TENZIR_ERROR("{} failed to initialize passive partition from file "
                        "{}: "
@@ -267,7 +267,7 @@ partition_actor::behavior_type passive_partition(
         }
         const auto* plugin
           = plugins::find<store_actor_plugin>(self->state().store_id);
-        if (!plugin) {
+        if (! plugin) {
           auto error = caf::make_error(ec::format_error,
                                        "encountered unhandled store backend");
           TENZIR_ERROR("{} encountered unknown store backend '{}'", *self,
@@ -277,7 +277,7 @@ partition_actor::behavior_type passive_partition(
         }
         auto store = plugin->make_store(self->state().filesystem,
                                         self->state().store_header);
-        if (!store) {
+        if (! store) {
           TENZIR_ERROR("{} failed to spawn store: {}", *self, store.error());
           self->quit(caf::make_error(ec::system_error, "failed to spawn "
                                                        "store"));
@@ -304,7 +304,7 @@ partition_actor::behavior_type passive_partition(
     [self](atom::query,
            tenzir::query_context query_context) -> caf::result<uint64_t> {
       TENZIR_TRACE("{} received query {}", *self, query_context);
-      if (!self->state().partition_chunk) {
+      if (! self->state().partition_chunk) {
         return std::get<1>(self->state().deferred_evaluations.emplace_back(
           std::move(query_context), self->make_response_promise<uint64_t>()));
       }
@@ -316,7 +316,7 @@ partition_actor::behavior_type passive_partition(
     },
     [self](atom::erase) -> caf::result<atom::done> {
       auto rp = self->make_response_promise<atom::done>();
-      if (!self->state().partition_chunk) {
+      if (! self->state().partition_chunk) {
         TENZIR_TRACE("{} skips an erase request", *self);
         return self->state().deferred_erasures.emplace_back(std::move(rp));
       }

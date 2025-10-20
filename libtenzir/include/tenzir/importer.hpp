@@ -49,8 +49,7 @@ private:
   struct retention_policy retention_policy = {};
   duration import_buffer_timeout = std::chrono::seconds{1};
 
-  /// Potentially unpersisted events.
-  std::vector<table_slice> recent_events = {};
+  /// Buffered events waiting to be flushed.
   std::unordered_map<type, std::vector<table_slice>> unpersisted_events = {};
 
   /// A list of subscribers for incoming events.

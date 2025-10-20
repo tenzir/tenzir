@@ -229,7 +229,8 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
-  std::unordered_map<uuid, std::pair<type, partition_actor>> unpersisted = {};
+  std::unordered_map<uuid, std::pair<type, active_partition_actor>> unpersisted
+    = {};
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
