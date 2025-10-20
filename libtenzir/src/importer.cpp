@@ -18,6 +18,7 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/try_get.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
