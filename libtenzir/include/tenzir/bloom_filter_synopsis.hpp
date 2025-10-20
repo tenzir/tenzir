@@ -33,9 +33,18 @@ public:
     return std::make_unique<self>(type(), bloom_filter_);
   }
 
-  void add(data_view x) override {
-    TENZIR_ASSERT(is<view<T>>(x), "invalid data");
-    bloom_filter_.add(as<view<T>>(x));
+  void add(const series& x) override {
+    using tenzir_type = data_to_type_t<T>;
+    using arrow_type = type_to_arrow_array_t<tenzir_type>;
+    auto array = std::dynamic_pointer_cast<arrow_type>(x.array);
+    TENZIR_ASSERT(array, "bloom_filter_synopsis::add failed to cast array");
+    for (int64_t i = 0; i < array->length(); ++i) {
+      if (array->IsNull(i)) {
+        continue;
+      }
+      auto y = value_at(tenzir_type{}, *array, i);
+      bloom_filter_.add(y);
+    }
   }
 
   [[nodiscard]] std::optional<bool>
@@ -55,7 +64,7 @@ public:
             return {};
           }
         }
-        if (!is<view<T>>(rhs)) {
+        if (! is<view<T>>(rhs)) {
           return false;
         }
         return bloom_filter_.lookup(as<view<T>>(rhs));
@@ -65,7 +74,7 @@ public:
             if (is<view<caf::none_t>>(x)) {
               return {};
             }
-            if (!is<view<T>>(x)) {
+            if (! is<view<T>>(x)) {
               continue;
             }
             if (bloom_filter_.lookup(as<view<T>>(x))) {
@@ -80,8 +89,9 @@ public:
   }
 
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
-    if (typeid(other) != typeid(bloom_filter_synopsis))
+    if (typeid(other) != typeid(bloom_filter_synopsis)) {
       return false;
+    }
     auto& rhs = static_cast<const bloom_filter_synopsis&>(other);
     return this->type() == rhs.type() && bloom_filter_ == rhs.bloom_filter_;
   }

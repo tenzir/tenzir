@@ -45,20 +45,24 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
 void partition_synopsis::shrink() {
   memusage_ = 0; // Invalidate cached size.
   for (auto& [field, synopsis] : field_synopses_) {
-    if (!synopsis)
+    if (! synopsis) {
       continue;
+    }
     auto shrinked_synopsis = synopsis->shrink();
-    if (!shrinked_synopsis)
+    if (! shrinked_synopsis) {
       continue;
+    }
     synopsis.swap(shrinked_synopsis);
   }
   // TODO: Make a utility function instead of copy/pasting
   for (auto& [field, synopsis] : type_synopses_) {
-    if (!synopsis)
+    if (! synopsis) {
       continue;
+    }
     auto shrinked_synopsis = synopsis->shrink();
-    if (!shrinked_synopsis)
+    if (! shrinked_synopsis) {
       continue;
+    }
     synopsis.swap(shrinked_synopsis);
   }
 }
@@ -71,8 +75,9 @@ std::optional<double> get_field_fprate(const index_config& config,
       if (name.size()
             == field.field_name().size() + field.schema_name().size() + 1
           && name.starts_with(field.schema_name())
-          && name.ends_with(field.field_name()))
+          && name.ends_with(field.field_name())) {
         return fprate;
+      }
     }
   }
   auto use_default_fprate = []<concrete_type T>(const T&) {
@@ -88,10 +93,11 @@ std::optional<double> get_field_fprate(const index_config& config,
 double get_type_fprate(const index_config& config, const type& type) {
   for (const auto& [targets, fprate, _] : config.rules) {
     for (const auto& name : targets) {
-      if (name == ":string" && type == string_type{})
+      if (name == ":string" && type == string_type{}) {
         return fprate;
-      else if (name == ":ip" && type == ip_type{})
+      } else if (name == ":ip" && type == ip_type{}) {
         return fprate;
+      }
     }
   }
   return config.default_fp_rate;
@@ -103,12 +109,14 @@ void partition_synopsis::add(const table_slice& slice,
   memusage_ = 0; // Invalidate cached size.
   auto make_synopsis
     = [](const type& t, const caf::settings& synopsis_options) -> synopsis_ptr {
-    if (t.attribute("skip"))
+    if (t.attribute("skip")) {
       return nullptr;
+    }
     return factory<synopsis>::make(t, synopsis_options);
   };
-  if (!schema)
+  if (! schema) {
     schema = slice.schema();
+  }
   TENZIR_ASSERT_EXPENSIVE(schema == slice.schema());
   auto each = as<record_type>(schema).leaves();
   auto leaf_it = each.begin();
@@ -124,15 +132,9 @@ void partition_synopsis::add(const table_slice& slice,
   for (size_t col = 0; col < slice.columns(); ++col, ++leaf_it) {
     auto&& leaf = *leaf_it;
     auto add_column = [&](const synopsis_ptr& syn) {
-      for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col, leaf.field.type);
-        // TODO: It would probably make sense to allow `null` in the
-        // synopsis API, so we can treat queries like `x == null` just
-        // like normal queries.
-        if (!is<caf::none_t>(view)) {
-          syn->add(std::move(view));
-        }
-      }
+      auto column_offset = as<record_type>(schema).resolve_flat_index(col);
+      auto column_series = series{slice, std::move(column_offset)};
+      syn->add(column_series);
     };
     // Make a field synopsis if it was configured.
     if (auto key = qualified_record_field{schema, leaf.index};
@@ -148,8 +150,9 @@ void partition_synopsis::add(const table_slice& slice,
         it = field_synopses_.emplace(std::move(key), std::move(syn)).first;
       }
       // If there exists a synopsis for a field, add the entire column.
-      if (auto& syn = it->second)
+      if (auto& syn = it->second) {
         add_column(syn);
+      }
     } else {
       // We still rely on having `field -> nullptr` mappings for all fields
       // without a dedicated synopsis during lookup and .
@@ -164,23 +167,27 @@ void partition_synopsis::add(const table_slice& slice,
     auto cleaned_type = match(leaf.field.type, prune);
     // Create the type synopsis
     auto tt = type_synopses_.find(cleaned_type);
-    if (tt == type_synopses_.end())
+    if (tt == type_synopses_.end()) {
       tt = type_synopses_
              .emplace(cleaned_type,
                       make_synopsis(leaf.field.type, synopsis_opts))
              .first;
-    if (auto& syn = tt->second)
+    }
+    if (auto& syn = tt->second) {
       add_column(syn);
+    }
   }
 }
 
 size_t partition_synopsis::memusage() const {
   size_t result = memusage_;
   if (result == size_t{0}) {
-    for (const auto& [field, synopsis] : field_synopses_)
+    for (const auto& [field, synopsis] : field_synopses_) {
       result += synopsis ? synopsis->memusage() : 0ull;
-    for (const auto& [type, synopsis] : type_synopses_)
+    }
+    for (const auto& [type, synopsis] : type_synopses_) {
       result += synopsis ? synopsis->memusage() : 0ull;
+    }
     memusage_ = result;
   }
   return result;
@@ -198,16 +205,18 @@ partition_synopsis* partition_synopsis::copy() const {
   result->field_synopses_.reserve(field_synopses_.size());
   result->memusage_ = memusage_.load();
   for (const auto& [type, synopsis] : type_synopses_) {
-    if (synopsis)
+    if (synopsis) {
       result->type_synopses_[type] = synopsis->clone();
-    else
+    } else {
       result->type_synopses_[type] = nullptr;
+    }
   }
   for (const auto& [field, synopsis] : field_synopses_) {
-    if (synopsis)
+    if (synopsis) {
       result->field_synopses_[field] = synopsis->clone();
-    else
+    } else {
       result->field_synopses_[field] = nullptr;
+    }
   }
   return result.release();
 }
@@ -218,15 +227,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   std::vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>> synopses;
   for (const auto& [fqf, synopsis] : x.field_synopses_) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (!maybe_synopsis)
+    if (! maybe_synopsis) {
       return maybe_synopsis.error();
+    }
     synopses.push_back(*maybe_synopsis);
   }
   for (const auto& [type, synopsis] : x.type_synopses_) {
     auto fqf = qualified_record_field{"", "", type};
     auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (!maybe_synopsis)
+    if (! maybe_synopsis) {
       return maybe_synopsis.error();
+    }
     synopses.push_back(*maybe_synopsis);
   }
   auto synopses_vector = builder.CreateVector(synopses);
@@ -254,20 +265,24 @@ caf::error unpack_(
     synopses,
   partition_synopsis& ps) {
   for (const auto* synopsis : synopses) {
-    if (!synopsis)
+    if (! synopsis) {
       return caf::make_error(ec::format_error, "synopsis is null");
+    }
     qualified_record_field qf;
     if (auto error
-        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf))
+        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf)) {
       return error;
+    }
     synopsis_ptr ptr;
-    if (auto error = unpack(*synopsis, ptr))
+    if (auto error = unpack(*synopsis, ptr)) {
       return error;
+    }
     // We mark type-level synopses by using an empty string as name.
-    if (qf.is_standalone_type())
+    if (qf.is_standalone_type()) {
       ps.type_synopses_[qf.type()] = std::move(ptr);
-    else
+    } else {
       ps.field_synopses_[qf] = std::move(ptr);
+    }
   }
   return caf::none;
 }
@@ -276,12 +291,14 @@ caf::error unpack_(
 
 caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps) {
-  if (!x.id_range())
+  if (! x.id_range()) {
     return caf::make_error(ec::format_error, "missing id range");
-  if (x.id_range()->begin() != 0)
+  }
+  if (x.id_range()->begin() != 0) {
     return caf::make_error(ec::format_error,
                            "partitions with an ID range not starting at zero "
                            "are no longer supported");
+  }
   ps.events = x.id_range()->end();
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
@@ -291,10 +308,12 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.max_import_time = time{};
   }
   ps.version = x.version();
-  if (const auto* schema = x.schema())
+  if (const auto* schema = x.schema()) {
     ps.schema = type{chunk::copy(as_bytes(*schema))};
-  if (!x.synopses())
+  }
+  if (! x.synopses()) {
     return caf::make_error(ec::format_error, "missing synopses");
+  }
   return unpack_(*x.synopses(), ps);
 }
 

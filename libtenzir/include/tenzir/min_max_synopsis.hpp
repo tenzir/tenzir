@@ -21,13 +21,23 @@ public:
     // nop
   }
 
-  void add(data_view x) override {
-    auto y = try_as<view<T>>(&x);
-    TENZIR_ASSERT(y != nullptr);
-    if (*y < min_)
-      min_ = *y;
-    if (*y > max_)
-      max_ = *y;
+  void add(const series& x) override {
+    using tenzir_type = data_to_type_t<T>;
+    using arrow_type = type_to_arrow_array_t<tenzir_type>;
+    auto array = std::dynamic_pointer_cast<arrow_type>(x.array);
+    TENZIR_ASSERT(array, "min_max_synopsis::add failed to cast array");
+    for (int64_t i = 0; i < array->length(); ++i) {
+      if (array->IsNull(i)) {
+        continue;
+      }
+      auto y = value_at(tenzir_type{}, *array, i);
+      if (y < min_) {
+        min_ = y;
+      }
+      if (y > max_) {
+        max_ = y;
+      }
+    }
   }
 
   [[nodiscard]] std::optional<bool>
@@ -36,15 +46,17 @@ public:
       = [this](relational_operator op, data_view xv) -> std::optional<bool> {
       if (auto x = try_as<view<T>>(&xv)) {
         return {lookup_impl(op, *x)};
-      } else
+      } else {
         return {};
+      }
     };
     auto membership = [&]() -> std::optional<bool> {
       if (auto xs = try_as<view<list>>(&rhs)) {
         for (auto x : **xs) {
           auto result = do_lookup(relational_operator::equal, x);
-          if (result && *result)
+          if (result && *result) {
             return true;
+          }
         }
         return false;
       }
@@ -54,10 +66,11 @@ public:
       case relational_operator::in:
         return membership();
       case relational_operator::not_in:
-        if (auto result = membership())
-          return !*result;
-        else
+        if (auto result = membership()) {
+          return ! *result;
+        } else {
           return result;
+        }
       case relational_operator::equal:
       case relational_operator::not_equal:
       case relational_operator::less:
@@ -115,23 +128,26 @@ private:
     // Thus, for range comparisons we need to test `min op rhs || max op rhs`.
     switch (op) {
       default:
-        TENZIR_ASSERT(!"unsupported operator");
+        TENZIR_ASSERT(! "unsupported operator");
         return {};
       case relational_operator::equal:
         // If the value is either the min or the max we know that it must be
         // contained.
-        if (x == min_ or x == max_)
+        if (x == min_ or x == max_) {
           return true;
+        }
         // If the value is outside of the range then it must not be contained.
-        if (x < min_ or x > max_)
+        if (x < min_ or x > max_) {
           return false;
+        }
         // Otherwise we cannot tell.
         return {};
       case relational_operator::not_equal:
         // We have at least one inequal value if the value is outside of the
         // range.
-        if (x < min_ or x > max_)
+        if (x < min_ or x > max_) {
           return true;
+        }
         // Otherwise we cannot tell.
         return {};
       case relational_operator::less:
