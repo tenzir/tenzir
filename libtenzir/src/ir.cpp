@@ -48,7 +48,7 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
 
 class stateless_transform_operator {};
 
-class set_exec final : public exec::operator_base {
+class set_exec : public exec::operator_base {
 public:
   set_exec(exec::operator_actor::pointer self,
            std::vector<ast::assignment> assignments, event_order order)
@@ -89,7 +89,8 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<set_exec>, assignments_);
+    return args.sys.spawn(caf::actor_from_state<set_exec>, assignments_,
+                          order_);
   }
 
   friend auto inspect(auto& f, set_plan& x) -> bool {
@@ -379,7 +380,10 @@ public:
     self_->mail(atom::start_v, std::vector<caf::actor>{})
       .request(actor, caf::infinite)
       .then([] {}, TENZIR_REPORT);
-    self_->mail(atom::pull_v, exec_node_sink_actor{self_}, uint64_t{10})
+    // TODO: Numbers.
+    self_
+      ->mail(atom::pull_v, exec_node_sink_actor{self_}, uint64_t{10},
+             uint64_t{10})
       .request(actor, caf::infinite)
       .then([] {}, TENZIR_REPORT);
   }
@@ -400,10 +404,10 @@ public:
         std::move(diag).modify().emit(ctx_);
         return {};
       },
-      [this](atom::pull, exec_node_sink_actor sink,
-             uint64_t batch_size) -> caf::result<void> {
+      [this](atom::pull, exec_node_sink_actor sink, uint64_t elements,
+             uint64_t batches) -> caf::result<void> {
         pull_rp_ = self_->make_response_promise<void>();
-        pull(batch_size);
+        pull(elements);
         return {};
       },
       [this](atom::push, table_slice events) -> caf::result<void> {

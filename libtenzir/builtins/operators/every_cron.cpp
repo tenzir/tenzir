@@ -45,6 +45,7 @@ struct every_actor_traits {
 
 using every_actor = caf::typed_actor<every_actor_traits>;
 
+#if 0
 class every2 {
 public:
   friend auto inspect(auto& f, every2& x) -> bool {
@@ -77,6 +78,7 @@ private:
   ir::pipeline ir_;
   void* pipeline_handle;
 };
+#endif
 
 class every_exec : public exec::basic_operator<every_actor> {
 public:

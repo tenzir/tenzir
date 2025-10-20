@@ -500,6 +500,14 @@ if (NOT APPLE)
   target_link_libraries(libtenzir_builtins PRIVATE atomic)
 endif ()
 
+set(LIBCORO_BUILD_TESTS OFF)
+set(LIBCORO_BUILD_EXAMPLES OFF)
+set(LIBCORO_FEATURE_NETWORKING OFF)
+set(LIBCORO_FEATURE_TLS OFF)
+add_subdirectory(aux/libcoro)
+target_link_libraries(libtenzir PUBLIC libcoro)
+target_link_libraries(libtenzir_builtins PUBLIC libcoro)
+
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
@@ -577,7 +585,7 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
-          ${_tenzir_bundled_pfs}
+          ${_tenzir_bundled_pfs} libcoro
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
