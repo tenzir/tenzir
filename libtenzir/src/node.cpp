@@ -514,10 +514,18 @@ auto node(node_actor::stateful_pointer<node_state> self,
     self, get_interval("TENZIR_ALLOC_CPP_TRIM_INTERVAL"), []() {
       memory::cpp_allocator().trim();
     });
-  if (memory::cpp_allocator().backend()
-      != memory::arrow_allocator().backend()) {
+  if (memory::arrow_allocator().backend()
+      != memory::cpp_allocator().backend()) {
     detail::weak_run_delayed_loop(
       self, get_interval("TENZIR_ALLOC_ARROW_TRIM_INTERVAL"), []() {
+        memory::arrow_allocator().trim();
+      });
+  }
+  if (memory::c_allocator().backend() != memory::arrow_allocator().backend()
+      and memory::c_allocator().backend()
+            != memory::cpp_allocator().backend()) {
+    detail::weak_run_delayed_loop(
+      self, get_interval("TENZIR_ALLOC_C_TRIM_INTERVAL"), []() {
         memory::arrow_allocator().trim();
       });
   }

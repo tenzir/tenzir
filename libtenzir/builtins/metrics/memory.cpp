@@ -25,8 +25,6 @@ namespace tenzir::plugins::health_memory {
 
 namespace {
 
-#ifdef _SC_AVPHYS_PAGES
-
 auto make_from(const memory::stats& stats) -> record {
   auto result = record{};
   result.reserve(2);
@@ -48,6 +46,8 @@ auto make_from(const memory::stats& stats) -> record {
   return result;
 };
 
+#ifdef _SC_AVPHYS_PAGES
+
 auto get_raminfo() -> caf::expected<record> {
   static const auto pagesize = ::sysconf(_SC_PAGESIZE);
   const auto phys_pages = ::sysconf(_SC_PHYS_PAGES);
@@ -61,6 +61,7 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("used_bytes", total_bytes - free_bytes);
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
+  result.try_emplace("c", make_from(memory::c_allocator().stats()));
   return result;
 }
 
@@ -92,9 +93,9 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("total_bytes", total_bytes);
   result.try_emplace("free_bytes", free_bytes);
   result.try_emplace("used_bytes", total_bytes - free_bytes);
-  result.try_emplace("combined", make_from(memory::global_allocator().stats()));
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
+  result.try_emplace("c", make_from(memory::c_allocator().stats()));
   return result;
 }
 

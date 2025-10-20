@@ -1,4 +1,4 @@
-add_executable(tenzir tenzir.cpp operator_new.cpp)
+add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
 target_link_libraries(tenzir PRIVATE mimalloc)
