@@ -237,7 +237,8 @@ public:
       TENZIR_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
       // Track non-optimally sized batches and rows for rebatching
-      if (slice.rows() != defaults::import::table_slice_size) {
+      if (rebatch_batches_ > 0
+          or slice.rows() != defaults::import::table_slice_size) {
         rebatch_batches_ += 1;
         rebatch_rows_ += slice.rows();
       }
@@ -247,7 +248,7 @@ public:
     // complete slice to avoid memory overhead and doing it later at once.
     auto max_rebatch_batches = size_t{512};
     if (rebatch_batches_ > max_rebatch_batches
-        || rebatch_rows_ >= defaults::import::table_slice_size) {
+        or rebatch_rows_ >= defaults::import::table_slice_size) {
       rebatch();
     }
     return {};
