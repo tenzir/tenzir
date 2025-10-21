@@ -469,17 +469,6 @@ if (TENZIR_ENABLE_UBSAN)
   target_link_libraries(libtenzir_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- jemalloc ------------------------------------------------------------------
-
-option(TENZIR_ENABLE_JEMALLOC "Use jemalloc instead of libc malloc"
-       "${TENZIR_ENABLE_STATIC_EXECUTABLE}")
-add_feature_info("TENZIR_ENABLE_JEMALLOC" TENZIR_ENABLE_JEMALLOC
-                 "use jemalloc instead of libc malloc.")
-if (TENZIR_ENABLE_JEMALLOC)
-  find_package(jemalloc REQUIRED)
-  dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
-endif ()
-
 # -- developer mode ------------------------------------------------------------
 
 option(TENZIR_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
