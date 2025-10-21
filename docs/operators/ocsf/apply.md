@@ -30,13 +30,9 @@ To this end, the operator performs the following steps:
 The types used for OCSF events are slightly adjusted. For example, timestamps
 use the native `time` type instead of an integer representing the number of
 milliseconds since the Unix epoch. Fields that are part of recursive object
-relationships now point to a companion `<type>_nonrecursive` record. This lets
-you traverse one additional level, e.g., `process.parent_process.pid`, without
-creating infinitely nested schemas.
-
-Furthermore, this operator will likely be extended with additional features,
-such as the ability to drop all optional fields, or to automatically assign OCSF
-enumerations based on their sibling ID.
+relationships exhibit one level of recursion. For example, you can work with
+`process.parent_process` but the nested object
+`process.parent_process.parent_process` does not exist.
 
 ### `preserve_variants = bool`
 

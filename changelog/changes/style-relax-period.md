@@ -5,10 +5,9 @@ authors: mavam
 pr: 5529
 ---
 
-We now generate `_nonrecursive` companions for recursive OCSF objects so that
-pipelines can safely follow one level of relationships such as
-`process.parent_process` or `analytic.related_analytics` without running into
-infinitely nested records.
+We now support recursive OCSF objects at depth one, as opposed to dropping
+recursive objects entirely. For example, pipelines can safely follow
+relationships such as `process.parent_process` or `analytic.related_analytics`:
 
 ```tql
 from {
