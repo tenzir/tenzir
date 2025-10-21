@@ -89,7 +89,7 @@ handle_query(const auto& self, const query_context& query_context) {
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state().store->schema();
   const auto tailored_expr = tailor(query_context.expr, schema);
-  if (!tailored_expr) {
+  if (! tailored_expr) {
     // In case the query was delegated from an active partition the
     // taxonomy resolution is not guaranteed to have worked (whenever the
     // type in this store did not exist in the catalog when the partition
@@ -111,7 +111,7 @@ handle_query(const auto& self, const query_context& query_context) {
       });
       auto [state, inserted] = self->state().running_extractions.try_emplace(
         query_context.id, extract_query_state{});
-      if (!inserted) {
+      if (! inserted) {
         rp.deliver(caf::make_error(
           ec::logic_error, fmt::format("{} received duplicated query id {}",
                                        *self, query_context.id)));
@@ -239,7 +239,7 @@ default_active_store_actor::behavior_type default_active_store(
         return {};
       }
       auto chunk = self->state().store->finish();
-      if (!chunk) {
+      if (! chunk) {
         self->quit(diagnostic::error(std::move(chunk.error()))
                      .note("while persisting store to disk")
                      .to_error());
@@ -277,6 +277,13 @@ default_active_store_actor::behavior_type default_active_store(
           = self->state().store->add(std::vector{std::move(slice)})) {
         self->quit(std::move(error));
       }
+    },
+    [self](atom::get) -> caf::result<std::vector<table_slice>> {
+      auto result = std::vector<table_slice>{};
+      for (auto slice : self->state().store->slices()) {
+        result.push_back(std::move(slice));
+      }
+      return result;
     },
     [self](atom::status, status_verbosity, duration) {
       return record{

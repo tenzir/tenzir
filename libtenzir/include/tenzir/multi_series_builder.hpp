@@ -254,10 +254,10 @@ public:
   /// @brief Inserts a new value into the builder.
   template <detail::data_builder::non_structured_data_type T>
   auto data(T value) -> void {
+    complete_last_event();
     if (uses_merging_builder()) {
       return merging_builder_.data(value);
     } else {
-      complete_last_event();
       return builder_raw_.data(std::move(value));
     }
   }

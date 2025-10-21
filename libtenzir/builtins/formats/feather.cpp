@@ -225,7 +225,6 @@ public:
 
   [[nodiscard]] auto add(std::vector<table_slice> new_slices)
     -> caf::error override {
-    new_slices_.reserve(new_slices.size() + new_slices_.size());
     for (auto& slice : new_slices) {
       // The index already sets the correct offset for this slice, but in some
       // unit tests we test this component separately, causing incoming table
@@ -237,26 +236,28 @@ public:
       }
       TENZIR_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
-      num_new_events_ += slice.rows();
-      new_slices_.push_back(std::move(slice));
+      // Track non-optimally sized batches and rows for rebatching
+      if (slice.rows() != defaults::import::table_slice_size) {
+        rebatch_batches_ += 1;
+        rebatch_rows_ += slice.rows();
+      }
+      slices_.push_back(std::move(slice));
     }
-    while (num_new_events_ >= defaults::import::table_slice_size) {
-      auto [lhs, rhs] = split(new_slices_, defaults::import::table_slice_size);
-      rebatched_slices_.push_back(concatenate(std::move(lhs)));
-      new_slices_ = std::move(rhs);
-      num_new_events_ -= defaults::import::table_slice_size;
+    // Rebatch when we have too many small slices or enough rows to form a
+    // complete slice to avoid memory overhead and doing it later at once.
+    auto max_rebatch_batches = size_t{512};
+    if (rebatch_batches_ > max_rebatch_batches
+        || rebatch_rows_ >= defaults::import::table_slice_size) {
+      rebatch();
     }
-    TENZIR_ASSERT(num_new_events_ == rows(new_slices_));
     return {};
   }
 
   [[nodiscard]] auto finish() -> caf::expected<chunk_ptr> override {
-    if (num_new_events_ > 0) {
-      rebatched_slices_.push_back(concatenate(std::exchange(new_slices_, {})));
-    }
+    rebatch();
     auto record_batches = arrow::RecordBatchVector{};
-    record_batches.reserve(rebatched_slices_.size());
-    for (const auto& slice : rebatched_slices_) {
+    record_batches.reserve(slices_.size());
+    for (const auto& slice : slices_) {
       record_batches.push_back(wrap_record_batch(slice));
     }
     const auto table = ::arrow::Table::FromRecordBatches(record_batches);
@@ -281,15 +282,9 @@ public:
   }
 
   [[nodiscard]] auto slices() const -> generator<table_slice> override {
-    // We need to make a copy of the slices here because the slices_ vector
-    // may get invalidated while we iterate over it.
-    auto rebatched_slices = rebatched_slices_;
-    auto new_slices = new_slices_;
-    for (auto& slice : rebatched_slices) {
-      co_yield std::move(slice);
-    }
-    for (auto& slice : new_slices) {
-      co_yield std::move(slice);
+    rebatch();
+    for (auto& slice : slices_) {
+      co_yield slice;
     }
   }
 
@@ -298,11 +293,46 @@ public:
   }
 
 private:
+  void rebatch() const {
+    auto result = std::vector<table_slice>{};
+    auto pending = std::vector<table_slice>{};
+    // Note: We move the slices of down below in order to directly release their
+    // memory once they are rebatched.
+    for (auto& slice : slices_) {
+      // If current slice is exactly target size and we have no pending slices,
+      // keep it as-is.
+      if (pending.empty()
+          && slice.rows() == defaults::import::table_slice_size) {
+        result.push_back(std::move(slice));
+        continue;
+      }
+      // Add to pending accumulator
+      pending.push_back(std::move(slice));
+      // If we've accumulated enough rows, process the batch
+      while (rows(pending) >= defaults::import::table_slice_size) {
+        auto [lhs, rhs]
+          = split(std::move(pending), defaults::import::table_slice_size);
+        result.push_back(concatenate(std::move(lhs)));
+        pending = std::move(rhs);
+      }
+    }
+    // Handle any remaining pending slices.
+    if (pending.empty()) {
+      rebatch_batches_ = 0;
+      rebatch_rows_ = 0;
+    } else {
+      result.push_back(concatenate(std::move(pending)));
+      rebatch_batches_ = 1;
+      rebatch_rows_ = result.back().rows();
+    }
+    slices_ = std::move(result);
+  }
+
   int64_t compression_level_;
-  std::vector<table_slice> rebatched_slices_;
-  std::vector<table_slice> new_slices_;
-  size_t num_new_events_ = {};
   size_t num_events_ = {};
+  mutable std::vector<table_slice> slices_;
+  mutable size_t rebatch_batches_ = {};
+  mutable size_t rebatch_rows_ = {};
 };
 
 } // namespace store

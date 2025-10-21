@@ -508,15 +508,16 @@ auto multi_series_builder::yield_ready_as_table_slice()
 }
 
 auto multi_series_builder::data(tenzir::data value) -> void {
+  complete_last_event();
   if (uses_merging_builder()) {
     return merging_builder_.data(value);
   } else {
-    complete_last_event();
     return builder_raw_.data(std::move(value));
   }
 }
 
 auto multi_series_builder::data_unparsed(std::string text) -> void {
+  complete_last_event();
   if (uses_merging_builder()) {
     auto res
       = builder_raw_.parser_(text, nullptr, value_path{}.field("<unknown>"));
@@ -530,25 +531,24 @@ auto multi_series_builder::data_unparsed(std::string text) -> void {
       merging_builder_.data(text);
     }
   } else {
-    complete_last_event();
     builder_raw_.data_unparsed(std::move(text));
   }
 }
 
 auto multi_series_builder::record() -> record_generator {
+  complete_last_event();
   if (uses_merging_builder()) {
     return record_generator{this, merging_builder_.record()};
   } else {
-    complete_last_event();
     return record_generator{this, builder_raw_.record()};
   }
 }
 
 auto multi_series_builder::list() -> list_generator {
+  complete_last_event();
   if (uses_merging_builder()) {
     return list_generator{this, merging_builder_.list()};
   } else {
-    complete_last_event();
     return list_generator{this, builder_raw_.list()};
   }
 }
@@ -584,6 +584,10 @@ auto multi_series_builder::finalize_as_table_slice()
 }
 
 void multi_series_builder::complete_last_event() {
+  make_events_available_where([](const entry_data& entry) {
+    return entry.builder.length()
+           >= detail::narrow<int64_t>(defaults::import::table_slice_size);
+  });
   if (uses_merging_builder()) {
     return; // merging mode just writes directly into a series builder
   }
