@@ -116,6 +116,9 @@ struct active_partition_state {
   // Vector of flush listeners.
   std::vector<flush_listener_actor> flush_listeners = {};
 
+  /// Cached table slices for providing unpersisted events.
+  std::vector<table_slice> cached_slices = {};
+
   // Taxonomies for resolving expressions during a query.
   std::shared_ptr<tenzir::taxonomies> taxonomies = {};
 };

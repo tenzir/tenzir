@@ -735,6 +735,10 @@ void index_state::handle_slice(table_slice x) {
   // flush ahead of time, but this can still happen if the single table slice we
   // just got already exceeds it.
   if (active_partition->second.events >= partition_capacity) {
+    TENZIR_TRACE("{} flushes active partition {} with {}/{} events due to {} "
+                 "incoming events directly exceeding capacity",
+                 *self, schema, active_partition->second.events,
+                 partition_capacity, x.rows());
     decommission_active_partition(schema, {});
     flush_to_disk();
   }
@@ -1195,6 +1199,67 @@ index(index_actor::stateful_pointer<index_state> self,
             TENZIR_WARN(
               "index failed to get list of partitions from catalog: {}", e);
           });
+    },
+    [self](atom::get, bool internal) -> caf::result<std::vector<table_slice>> {
+      auto rp = self->make_response_promise<std::vector<table_slice>>();
+      auto result = std::make_shared<std::vector<table_slice>>();
+      auto pending = std::make_shared<size_t>(0);
+      // Collect from active partitions.
+      for (const auto& [schema, info] : self->state().active_partitions) {
+        if (schema.attribute("internal").has_value() != internal) {
+          continue;
+        }
+        *pending += 1;
+        self->mail(atom::get_v)
+          .request(info.actor, caf::infinite)
+          .then(
+            [result, pending, rp](std::vector<table_slice>& slices) mutable {
+              result->insert(result->end(),
+                             std::make_move_iterator(slices.begin()),
+                             std::make_move_iterator(slices.end()));
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(std::move(*result));
+              }
+            },
+            [rp, pending](const caf::error& err) mutable {
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(err);
+              }
+            });
+      }
+      // Collect from unpersisted partitions (being written to disk).
+      for (const auto& [uuid, pair] : self->state().unpersisted) {
+        const auto& [type, actor] = pair;
+        if (type.attribute("internal").has_value() != internal) {
+          continue;
+        }
+        *pending += 1;
+        self->mail(atom::get_v)
+          .request(actor, caf::infinite)
+          .then(
+            [result, pending, rp](std::vector<table_slice>& slices) mutable {
+              result->insert(result->end(),
+                             std::make_move_iterator(slices.begin()),
+                             std::make_move_iterator(slices.end()));
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(std::move(*result));
+              }
+            },
+            [rp, pending](const caf::error& err) mutable {
+              *pending -= 1;
+              if (*pending == 0) {
+                rp.deliver(err);
+              }
+            });
+      }
+      // If no partitions, return immediately
+      if (*pending == 0) {
+        rp.deliver(std::move(*result));
+      }
+      return rp;
     },
     [self](atom::evaluate,
            tenzir::query_context query_context) -> caf::result<query_cursor> {

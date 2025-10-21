@@ -13,6 +13,7 @@
 #include "tenzir/synopsis.hpp"
 
 #include <caf/fwd.hpp>
+#include <tsl/robin_set.h>
 
 namespace tenzir {
 
@@ -56,18 +57,21 @@ public:
 
   [[nodiscard]] synopsis_ptr shrink() const override {
     // Count unique values across all series using views (no materialization)
-    std::unordered_set<view_type> unique_values;
-    for (const auto& s : data_) {
-      for (int64_t i = 0; i < s.array->length(); ++i) {
-        if (s.array->IsNull(i)) {
-          continue;
+    auto number_of_unique_values = std::invoke([&] {
+      auto unique_values = tsl::robin_set<view_type>{};
+      for (const auto& s : data_) {
+        for (int64_t i = 0; i < s.array->length(); ++i) {
+          if (s.array->IsNull(i)) {
+            continue;
+          }
+          auto y = value_at(tenzir_type{}, *s.array, i);
+          unique_values.insert(y);
         }
-        auto y = value_at(tenzir_type{}, *s.array, i);
-        unique_values.insert(y);
       }
-    }
+      return unique_values.size();
+    });
     size_t next_power_of_two = 1ull;
-    while (unique_values.size() > next_power_of_two) {
+    while (number_of_unique_values > next_power_of_two) {
       next_power_of_two *= 2;
     }
     bloom_filter_parameters params;

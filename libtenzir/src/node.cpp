@@ -18,6 +18,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
