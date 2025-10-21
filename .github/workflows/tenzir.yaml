@@ -182,6 +182,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
+            echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           # Run all checks if this is a push to master or a tag.
