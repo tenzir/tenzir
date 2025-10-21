@@ -185,9 +185,6 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
           .throw_();
       }
     }
-    TENZIR_WARN("{}", detail::getenv("TENZIR_MAX_BUFFERED_EVENTS"));
-    TENZIR_WARN("=> {}", get_or(settings, "tenzir.max-buffered-events",
-                                defaults::max_partition_size * 3));
     return self->spawn<caf::detached>(
       tenzir::index, filesystem, catalog, self->state().dir / "index",
       std::string{defaults::store_backend},
