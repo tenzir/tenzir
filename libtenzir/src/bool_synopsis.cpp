@@ -27,8 +27,8 @@ synopsis_ptr bool_synopsis::clone() const {
 }
 
 void bool_synopsis::add(const series& x) {
-  TENZIR_ASSERT(is<bool_type>(x.type));
   auto array = std::dynamic_pointer_cast<arrow::BooleanArray>(x.array);
+  TENZIR_ASSERT(array);
   for (int64_t i = 0; i < array->length(); ++i) {
     if (array->IsNull(i)) {
       continue;
