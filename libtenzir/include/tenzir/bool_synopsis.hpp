@@ -21,7 +21,7 @@ public:
 
   [[nodiscard]] synopsis_ptr clone() const override;
 
-  void add(data_view x) override;
+  void add(const series& x) override;
 
   [[nodiscard]] std::optional<bool>
   lookup(relational_operator op, data_view rhs) const override;

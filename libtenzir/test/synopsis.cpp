@@ -14,6 +14,7 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/time_synopsis.hpp"
 
+#include <arrow/builder.h>
 #include <caf/binary_serializer.hpp>
 
 using namespace std::chrono_literals;
@@ -24,6 +25,19 @@ namespace {
 
 const tenzir::time epoch;
 
+// Helper to create a series from multiple time values
+auto make_time_series(std::vector<tenzir::time> values) -> series {
+  auto builder = arrow::TimestampBuilder{
+    arrow::timestamp(arrow::TimeUnit::NANO), arrow::default_memory_pool()};
+  for (auto value : values) {
+    auto status = builder.Append(value.time_since_epoch().count());
+    TENZIR_ASSERT(status.ok());
+  }
+  auto result = builder.Finish();
+  TENZIR_ASSERT(result.ok());
+  return series{type{time_type{}}, std::move(*result)};
+}
+
 } // namespace
 
 TEST("min - max synopsis") {
@@ -32,8 +46,7 @@ TEST("min - max synopsis") {
   factory<synopsis>::initialize();
   auto x = factory<synopsis>::make(type{time_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(x, nullptr);
-  x->add(time{epoch + 4s});
-  x->add(time{epoch + 7s});
+  x->add(make_time_series({time{epoch + 4s}, time{epoch + 7s}}));
   auto verify = verifier{x.get()};
   MESSAGE("[4,7] op 0");
   time zero = epoch + 0s;

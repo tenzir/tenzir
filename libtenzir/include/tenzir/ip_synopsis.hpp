@@ -45,8 +45,9 @@ public:
   }
 
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
-    if (typeid(other) != typeid(ip_synopsis))
+    if (typeid(other) != typeid(ip_synopsis)) {
       return false;
+    }
     auto& rhs = static_cast<const ip_synopsis&>(other);
     return this->type() == rhs.type()
            && this->bloom_filter_ == rhs.bloom_filter_;
@@ -63,10 +64,21 @@ struct buffered_synopsis_traits<tenzir::ip> {
                                           std::move(seeds));
   }
 
-  // Estimate the size in bytes for an unordered_set of T.
-  static size_t memusage(const std::unordered_set<tenzir::ip>& x) {
-    using node_type = typename std::decay_t<decltype(x)>::node_type;
-    return x.size() * sizeof(node_type);
+  // Estimate the size in bytes for a vector of typed series.
+  template <typename SeriesType>
+  static size_t memusage(const std::vector<SeriesType>& data) {
+    size_t result = sizeof(data);
+    for (const auto& s : data) {
+      result += sizeof(SeriesType);
+      if (s.array) {
+        for (const auto& buffer : s.array->data()->buffers) {
+          if (buffer) {
+            result += buffer->size();
+          }
+        }
+      }
+    }
+    return result;
   }
 };
 
@@ -86,7 +98,7 @@ synopsis_ptr make_ip_synopsis(tenzir::type type, bloom_filter_parameters params,
                               std::vector<size_t> seeds) {
   TENZIR_ASSERT(is<ip_type>(type));
   auto x = make_bloom_filter<HashFunction>(params, std::move(seeds));
-  if (!x) {
+  if (! x) {
     TENZIR_WARN("{} failed to construct Bloom filter", __func__);
     return nullptr;
   }
@@ -106,7 +118,7 @@ template <class HashFunction>
 synopsis_ptr
 make_buffered_ip_synopsis(tenzir::type type, bloom_filter_parameters params) {
   TENZIR_ASSERT(is<ip_type>(type));
-  if (!params.p) {
+  if (! params.p) {
     return nullptr;
   }
   using synopsis_type = buffered_ip_synopsis<HashFunction>;
@@ -122,14 +134,15 @@ make_buffered_ip_synopsis(tenzir::type type, bloom_filter_parameters params) {
 template <class HashFunction>
 synopsis_ptr make_ip_synopsis(tenzir::type type, const caf::settings& opts) {
   TENZIR_ASSERT(is<ip_type>(type));
-  if (auto xs = parse_parameters(type))
+  if (auto xs = parse_parameters(type)) {
     return make_ip_synopsis<HashFunction>(std::move(type), *xs);
+  }
   // If no explicit Bloom filter parameters were attached to the type, we try
   // to use the maximum partition size of the index as upper bound for the
   // expected number of events.
   using int_type = caf::config_value::integer;
   auto max_part_size = caf::get_if<int_type>(&opts, "max-partition-size");
-  if (!max_part_size) {
+  if (! max_part_size) {
     TENZIR_ERROR("{} could not determine Bloom filter parameters",
                  __PRETTY_FUNCTION__);
     return nullptr;
@@ -145,9 +158,10 @@ synopsis_ptr make_ip_synopsis(tenzir::type type, const caf::settings& opts) {
     = buffered
         ? make_buffered_ip_synopsis<HashFunction>(std::move(type), params)
         : make_ip_synopsis<HashFunction>(std::move(annotated_type), params);
-  if (!result)
+  if (! result) {
     TENZIR_ERROR("{} failed to evaluate Bloom filter parameters: {} {}",
                  __func__, params.n, params.p);
+  }
   return result;
 }
 

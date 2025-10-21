@@ -25,8 +25,9 @@ struct buffered_synopsis_traits {
                            std::vector<size_t> seeds = {})
     = delete;
 
-  // Estimate the size in bytes for an unordered_set of T.
-  static size_t memusage(const std::unordered_set<T>&) = delete;
+  // Estimate the size in bytes for a vector of typed series.
+  template <typename SeriesType>
+  static size_t memusage(const std::vector<SeriesType>&) = delete;
 };
 
 /// A synopsis that stores a full copy of the input in a hash table to be able
@@ -40,6 +41,8 @@ class buffered_synopsis final : public synopsis {
 public:
   using element_type = T;
   using view_type = view<T>;
+  using tenzir_type = data_to_type_t<T>;
+  using series_type = basic_series<tenzir_type>;
 
   buffered_synopsis(tenzir::type x, double p) : synopsis{std::move(x)}, p_{p} {
     // nop
@@ -52,9 +55,21 @@ public:
   }
 
   [[nodiscard]] synopsis_ptr shrink() const override {
+    // Count unique values across all series using views (no materialization)
+    std::unordered_set<view_type> unique_values;
+    for (const auto& s : data_) {
+      for (int64_t i = 0; i < s.array->length(); ++i) {
+        if (s.array->IsNull(i)) {
+          continue;
+        }
+        auto y = value_at(tenzir_type{}, *s.array, i);
+        unique_values.insert(y);
+      }
+    }
     size_t next_power_of_two = 1ull;
-    while (data_.size() > next_power_of_two)
+    while (unique_values.size() > next_power_of_two) {
       next_power_of_two *= 2;
+    }
     bloom_filter_parameters params;
     params.p = p_;
     params.n = next_power_of_two;
@@ -65,49 +80,50 @@ public:
     auto shrunk_synopsis
       = buffered_synopsis_traits<T>::template make<HashFunction>(
         type, std::move(params));
-    if (!shrunk_synopsis)
+    if (! shrunk_synopsis) {
       return nullptr;
-    for (auto& s : data_)
-      shrunk_synopsis->add(make_view(s));
+    }
+    // Add all buffered series to the bloom filter synopsis
+    for (const auto& s : data_) {
+      shrunk_synopsis->add(series{s});
+    }
     return shrunk_synopsis;
   }
 
   // Implementation of the remainder of the `synopsis` API.
-  void add(data_view x) override {
-    auto v = try_as<view_type>(&x);
-    TENZIR_ASSERT(v);
-    data_.insert(materialize(*v));
+  void add(const series& x) override {
+    auto typed = x.as<tenzir_type>();
+    TENZIR_ASSERT(typed);
+    TENZIR_ASSERT(typed->array);
+    data_.push_back(*typed);
   }
 
   [[nodiscard]] size_t memusage() const override {
-    return sizeof(p_) + buffered_synopsis_traits<T>::memusage(data_);
+    size_t result = sizeof(p_) + sizeof(data_);
+    // Add memory for each series and its underlying Arrow array
+    for (const auto& s : data_) {
+      result += sizeof(series_type);
+      // Sum the sizes of all buffers in the Arrow array
+      for (const auto& buffer : s.array->data()->buffers) {
+        if (buffer) {
+          result += buffer->size();
+        }
+      }
+    }
+    return result;
   }
 
   [[nodiscard]] std::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
-    switch (op) {
-      default:
-        return {};
-      case relational_operator::equal: {
-        if constexpr (std::is_same_v<view_type, view<std::string>>) {
-          if (is<view<pattern>>(rhs)) {
-            return {};
-          }
-        }
-        // TODO: Switch to tsl::robin_set here for heterogeneous lookup.
-        return data_.count(materialize(as<view_type>(rhs)));
-      }
-      case relational_operator::in: {
-        if (auto xs = try_as<view<list>>(&rhs)) {
-          for (auto x : **xs)
-            if (data_.count(materialize(as<view_type>(x)))) {
-              return true;
-            }
-          return false;
-        }
-        return {};
-      }
-    }
+    // This code path should never be reached in normal operation because:
+    // 1. Buffered synopses are only used in active partitions
+    // 2. Active partitions don't perform synopsis lookups during queries
+    // 3. Before catalog lookups, buffered synopses are shrunk to bloom filters
+    TENZIR_ERROR("buffered_synopsis::lookup should never be called in normal "
+                 "operation");
+    TENZIR_UNUSED(op, rhs);
+    // Return true (false positive) to avoid breaking queries if somehow called
+    return true;
   }
 
   bool inspect_impl(supported_inspectors&) override {
@@ -116,14 +132,17 @@ public:
   }
 
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override {
-    if (auto* p = dynamic_cast<const buffered_synopsis*>(&other))
-      return data_ == p->data_;
+    // This code path should never be reached in normal operation because
+    // buffered synopses are never compared.
+    TENZIR_ERROR("buffered_synopsis::equals should never be called in normal "
+                 "operation");
+    TENZIR_UNUSED(other);
     return false;
   }
 
 private:
   double p_;
-  std::unordered_set<T> data_;
+  std::vector<series_type> data_;
 };
 
 } // namespace tenzir

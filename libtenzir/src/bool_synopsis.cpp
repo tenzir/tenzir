@@ -10,6 +10,8 @@
 
 #include "tenzir/detail/assert.hpp"
 
+#include <arrow/array.h>
+
 namespace tenzir {
 
 bool_synopsis::bool_synopsis(tenzir::type x) : synopsis{std::move(x)} {
@@ -24,12 +26,19 @@ synopsis_ptr bool_synopsis::clone() const {
   return std::make_unique<bool_synopsis>(true_, false_);
 }
 
-void bool_synopsis::add(data_view x) {
-  TENZIR_ASSERT(is<view<bool>>(x));
-  if (as<view<bool>>(x)) {
-    true_ = true;
-  } else
-    false_ = true;
+void bool_synopsis::add(const series& x) {
+  auto array = std::dynamic_pointer_cast<arrow::BooleanArray>(x.array);
+  TENZIR_ASSERT(array);
+  for (int64_t i = 0; i < array->length(); ++i) {
+    if (array->IsNull(i)) {
+      continue;
+    }
+    if (array->Value(i)) {
+      true_ = true;
+    } else {
+      false_ = true;
+    }
+  }
 }
 
 size_t bool_synopsis::memusage() const {

@@ -15,10 +15,9 @@
 #include "tenzir/fbs/synopsis.hpp"
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/operator.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
-
-#include <tenzir/detail/legacy_deserialize.hpp>
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -55,10 +54,10 @@ public:
 
   // -- API --------------------------------------------------------------------
 
-  /// Adds data from a table slice.
-  /// @param slice The table slice to process.
-  /// @pre `type_check(type(), x)`
-  virtual void add(data_view x) = 0;
+  /// Adds data from a series.
+  /// @param x The series to process.
+  /// @pre The series type matches the synopsis type.
+  virtual void add(const series& x) = 0;
 
   /// Tests whether a predicate matches. The synopsis is implicitly the LHS of
   /// the predicate.
