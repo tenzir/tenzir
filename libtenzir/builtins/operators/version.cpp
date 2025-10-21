@@ -22,10 +22,6 @@
 
 #include <yaml-cpp/yaml.h>
 
-#if TENZIR_ENABLE_JEMALLOC
-#  include <jemalloc/jemalloc.h>
-#endif
-
 namespace tenzir::plugins::version {
 
 namespace {
@@ -110,9 +106,6 @@ public:
                   FLATBUFFERS_VERSION_MINOR, FLATBUFFERS_VERSION_REVISION));
     X(fmt, fmt::format("{}.{}.{}", FMT_VERSION / 10000,
                        FMT_VERSION % 10000 / 100, FMT_VERSION % 100));
-#if TENZIR_ENABLE_JEMALLOC
-    X(jemalloc, JEMALLOC_VERSION);
-#endif
 #if TENZIR_ENABLE_LIBUNWIND
     X(libunwind, "");
 #endif
