@@ -20,12 +20,14 @@
 #include <tsl/robin_hash.h>
 
 #include <chrono>
-#include <ranges>
 
 namespace tenzir::plugins::deduplicate {
 namespace {
 
 using std::chrono::steady_clock;
+
+constexpr auto max_cleanup_duration = duration{std::chrono::minutes{15}};
+constexpr auto min_cleanup_duration = duration{std::chrono::seconds{10}};
 
 struct configuration {
   ast::expression key;
@@ -81,25 +83,32 @@ public:
     -> generator<table_slice> {
     auto states = tsl::robin_map<data, state>{};
     auto row = int64_t{};
+    constexpr auto get_duration = [](auto opt) -> duration {
+      return opt ? opt->inner : duration::max();
+    };
+    const auto min_cfg = std::min(
+      {
+        get_duration(cfg_.create_timeout),
+        get_duration(cfg_.write_timeout),
+        get_duration(cfg_.read_timeout),
+      },
+      std::less<>{});
+    const auto cleanup_duration
+      = std::clamp(min_cfg, min_cleanup_duration, max_cleanup_duration);
     auto last_cleanup_time = std::chrono::steady_clock::now();
     for (const auto& slice : input) {
       const auto now = std::chrono::steady_clock::now();
-      if (slice.rows() == 0) {
-        // We clean up every 15 minutes. This is a bit arbitrary, but there's no
-        // good mechanism for detecting whether an operator is idle from within
-        // the operator right now.
-        if (now > last_cleanup_time + std::chrono::minutes{15}) {
-          last_cleanup_time = now;
-          auto expired_keys = std::vector<data>{};
-          for (const auto& [key, value] : states) {
-            if (value.is_expired(cfg_, row, now)) {
-              expired_keys.push_back(key);
-            }
-          }
-          for (const auto& key : expired_keys) {
-            states.erase(key);
+      if (now > last_cleanup_time + cleanup_duration) {
+        last_cleanup_time = now;
+        for (auto it = states.begin(); it != states.end();) {
+          if (it->second.is_expired(cfg_, row, now)) {
+            it = states.erase(it);
+          } else {
+            ++it;
           }
         }
+      }
+      if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
