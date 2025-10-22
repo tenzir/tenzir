@@ -17,19 +17,13 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
 ]
+# Align wheels generation in /python/default.nix when you add exclusive
+# dependencies to tenzir-operator. In case a dependency relies on compiled code,
+# add it as a dependency to the `tenzir` siblingproject as well instead.
 dependencies = [
-  "tenzir-common>=5.19.0,<5.20.0",
   "python-box>=7.0,<8.0",
+  "tenzir-common>=5.19.0,<5.20.0",
 ]
-
-[project.optional-dependencies]
-pandas = ["pandas>=2.1.3,<3.0"]
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
 
 [tool.uv.sources]
 tenzir-common = { workspace = true }

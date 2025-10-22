@@ -34,11 +34,8 @@ To get started, clone the Tenzir repository and install the CLI bindings via
 ```bash
 git clone https://github.com/tenzir/tenzir.git
 cd tenzir/python
-uv sync --package tenzir --extra module
+uv sync --package tenzir
 ```
-
-Add `--extra operator` if you need the Python operator helpers
-(`tenzir-operator`).
 
 ## Development
 

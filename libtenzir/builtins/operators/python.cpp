@@ -246,7 +246,7 @@ public:
             bundled_wheels.push_back(entry.path().string());
           }
         } else {
-          implicit_requirements = std::string{"tenzir-operator[pandas]"};
+          implicit_requirements = std::string{"tenzir-operator"};
         }
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};

@@ -691,14 +691,14 @@ jobs:
       - name: Run unit tests
         working-directory: python
         run: |
-          uv run --all-packages --group dev --extra pytest
+          uv run --all-packages --group dev pytest
       - name: Run tests in Docker
         working-directory: python
         if: matrix.os == 'ubuntu-latest'
         run: |
           export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          ./docker-uv-run.sh --all-packages --group dev --extra pytest
+          ./docker-uv-run.sh --all-packages --group dev pytest
       - name: Build package
         working-directory: python
         run: |
