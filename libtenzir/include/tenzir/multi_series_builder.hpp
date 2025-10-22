@@ -458,6 +458,11 @@ private:
   /// function and thus will only be instantiated by other member functions.
   void garbage_collect_where(std::predicate<const entry_data&> auto pred);
 
+  /// Besides the `series_builder` instances in `entries_`, there also is
+  /// `merging_builder_`. This function flushes that builder, appending its
+  /// current results to `ready_events_`.
+  void flush_merging_builder();
+
   using signature_type = typename data_builder::signature_type;
 
   // the builders policy
