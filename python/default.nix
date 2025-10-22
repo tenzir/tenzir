@@ -37,15 +37,6 @@ let
   );
 
   dependencyPackages = map addDistOutput [
-    pythonSet.dynaconf
-    pythonSet.idna
-    pythonSet.numpy
-    pythonSet.pandas
-    pythonSet.pyarrow
-    pythonSet.python-box
-    pythonSet.python-dateutil
-    pythonSet.pytz
-    pythonSet.six
     pythonSet.tenzir-common
     pythonSet.tenzir-operator
   ];
