@@ -1,21 +1,25 @@
-#include "tenzir/allocator.hpp"
+#include "tenzir/allocator_config.hpp"
 
-#include <cerrno>
-#include <cstddef>
-#include <cstring>
-#include <limits>
-#include <new>
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
+
+#  include "tenzir/allocator.hpp"
+
+#  include <cerrno>
+#  include <cstddef>
+#  include <cstring>
+#  include <limits>
+#  include <new>
 
 namespace {
 
 [[nodiscard]] constexpr auto
 multiply_overflows(std::size_t lhs, std::size_t rhs,
                    std::size_t& result) noexcept -> bool {
-#if defined(__has_builtin)
-#  if __has_builtin(__builtin_mul_overflow)
+#  if defined(__has_builtin)
+#    if __has_builtin(__builtin_mul_overflow)
   return __builtin_mul_overflow(lhs, rhs, &result);
+#    endif
 #  endif
-#endif
   if (lhs == 0 || rhs == 0) {
     result = 0;
     return false;
@@ -151,3 +155,5 @@ auto posix_memalign(void** out, std::size_t alignment, std::size_t size)
 }
 
 } // extern "C"
+
+#endif

@@ -496,6 +496,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
   constexpr auto get_interval = [](const char* env) -> duration {
     duration trim_interval = std::chrono::minutes{10};
     const auto allocator_trim_interval_env = detail::getenv(env);
@@ -529,6 +530,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
         memory::arrow_allocator().trim();
       });
   }
+#endif
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {
