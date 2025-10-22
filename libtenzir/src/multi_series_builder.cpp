@@ -485,19 +485,21 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
   }
   last_yield_time_ = now;
   if (uses_merging_builder()) {
-    return merging_builder_.finish();
-  }
-  make_events_available_where(
-    [now, timeout = settings_.timeout,
-     target_size = settings_.desired_batch_size](const entry_data& e) {
+    flush_merging_builder();
+  } else {
+    make_events_available_where([now, timeout = settings_.timeout,
+                                 target_size = settings_.desired_batch_size](
+                                  const entry_data& e) {
       return e.builder.length()
                >= static_cast<int64_t>(target_size) // batch size hit
              or now - e.flushed >= timeout;         // timeout hit
     });
-  garbage_collect_where(
-    [now, timeout = settings_.timeout](const entry_data& e) {
-      return now - e.flushed >= 10 * timeout;
-    });
+    garbage_collect_where(
+      [now, timeout = settings_.timeout](const entry_data& e) {
+        return now - e.flushed >= 10 * timeout;
+      });
+  }
+
   return std::exchange(ready_events_, {});
 }
 
@@ -508,15 +510,16 @@ auto multi_series_builder::yield_ready_as_table_slice()
 }
 
 auto multi_series_builder::data(tenzir::data value) -> void {
+  complete_last_event();
   if (uses_merging_builder()) {
     return merging_builder_.data(value);
   } else {
-    complete_last_event();
     return builder_raw_.data(std::move(value));
   }
 }
 
 auto multi_series_builder::data_unparsed(std::string text) -> void {
+  complete_last_event();
   if (uses_merging_builder()) {
     auto res
       = builder_raw_.parser_(text, nullptr, value_path{}.field("<unknown>"));
@@ -530,25 +533,24 @@ auto multi_series_builder::data_unparsed(std::string text) -> void {
       merging_builder_.data(text);
     }
   } else {
-    complete_last_event();
     builder_raw_.data_unparsed(std::move(text));
   }
 }
 
 auto multi_series_builder::record() -> record_generator {
+  complete_last_event();
   if (uses_merging_builder()) {
     return record_generator{this, merging_builder_.record()};
   } else {
-    complete_last_event();
     return record_generator{this, builder_raw_.record()};
   }
 }
 
 auto multi_series_builder::list() -> list_generator {
+  complete_last_event();
   if (uses_merging_builder()) {
     return list_generator{this, merging_builder_.list()};
   } else {
-    complete_last_event();
     return list_generator{this, builder_raw_.list()};
   }
 }
@@ -569,11 +571,12 @@ void multi_series_builder::remove_last() {
 
 auto multi_series_builder::finalize() -> std::vector<series> {
   if (uses_merging_builder()) {
-    return merging_builder_.finish();
+    flush_merging_builder();
+  } else {
+    make_events_available_where([](const auto&) {
+      return true;
+    });
   }
-  make_events_available_where([](const auto&) {
-    return true;
-  });
   return std::exchange(ready_events_, {});
 }
 
@@ -584,8 +587,23 @@ auto multi_series_builder::finalize_as_table_slice()
 }
 
 void multi_series_builder::complete_last_event() {
+  // Ensure that the slices emitted by us do not exceed `table_slice_size`. We
+  // can't use `make_events_available_where` here as that would call
+  // `complete_last_event` again.
   if (uses_merging_builder()) {
-    return; // merging mode just writes directly into a series builder
+    // Merging mode just writes directly into a series builder, so we don't have
+    // anything else to do here.
+    if (merging_builder_.length()
+        >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
+      flush_merging_builder();
+    }
+    return;
+  }
+  for (auto& entry : entries_) {
+    if (entry.builder.length()
+        >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
+      append_ready_events(entry.flush());
+    }
   }
   if (not builder_raw_.has_elements()) {
     return; // an empty raw field does not need to be written back
@@ -765,4 +783,16 @@ void multi_series_builder::garbage_collect_where(
     }
   }
 }
+
+void multi_series_builder::flush_merging_builder() {
+  auto result = merging_builder_.finish();
+  if (ready_events_.empty()) {
+    ready_events_ = std::move(result);
+  } else {
+    ready_events_.insert(ready_events_.end(),
+                         std::make_move_iterator(result.begin()),
+                         std::make_move_iterator(result.end()));
+  }
+}
+
 } // namespace tenzir

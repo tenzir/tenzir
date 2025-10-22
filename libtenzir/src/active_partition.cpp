@@ -138,8 +138,6 @@ void serialize(
     .request(self->state().filesystem, caf::infinite)
     .then(
       [=](atom::ok) {
-        // Clear cached slices now that data is persisted.
-        self->state().cached_slices.clear();
         self->state().persistence_promise.deliver(self->state().data.synopsis);
       },
       [=](caf::error e) {
@@ -152,8 +150,6 @@ void serialize(
 void active_partition_state::handle_slice(table_slice x) {
   TENZIR_TRACE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
   x.offset(data.events);
-  // Cache the slice for unpersisted event queries.
-  cached_slices.push_back(x);
   // Adjust the import time range iff necessary.
   auto& mutable_synopsis = data.synopsis.unshared();
   mutable_synopsis.min_import_time
@@ -266,8 +262,7 @@ active_partition_actor::behavior_type active_partition(
     return active_partition_actor::behavior_type::make_empty_behavior();
   }
   auto& [builder, header] = *builder_and_header;
-  self->state().data.store_header = chunk::make_empty();
-  self->state().data.store_header = header;
+  self->state().data.store_header = std::move(header);
   self->state().store_builder = builder;
   TENZIR_TRACE("{} spawned new active store at {}", *self, builder);
   return {
@@ -324,7 +319,7 @@ active_partition_actor::behavior_type active_partition(
         .delegate(self->state().store_builder);
     },
     [self](atom::get) -> caf::result<std::vector<table_slice>> {
-      return self->state().cached_slices;
+      return self->mail(atom::get_v).delegate(self->state().store_builder);
     },
     [](atom::status, status_verbosity, duration) {
       return record{};

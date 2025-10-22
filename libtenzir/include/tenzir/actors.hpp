@@ -106,7 +106,9 @@ using store_builder_actor = typed_actor_fwd<
   // Append a slice to the store.
   auto(table_slice)->caf::result<void>,
   // Persist the store.
-  auto(atom::persist)->caf::result<resource>>
+  auto(atom::persist)->caf::result<resource>,
+  // Get all table slices from the store.
+  auto(atom::get)->caf::result<std::vector<table_slice>>>
   // Conform to the protocol of the STORE actor.
   ::extend_with<store_actor>
   // Conform to the protocol of the STATUS CLIENT actor.

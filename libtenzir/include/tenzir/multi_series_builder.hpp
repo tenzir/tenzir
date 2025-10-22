@@ -254,10 +254,10 @@ public:
   /// @brief Inserts a new value into the builder.
   template <detail::data_builder::non_structured_data_type T>
   auto data(T value) -> void {
+    complete_last_event();
     if (uses_merging_builder()) {
       return merging_builder_.data(value);
     } else {
-      complete_last_event();
       return builder_raw_.data(std::move(value));
     }
   }
@@ -457,6 +457,11 @@ private:
   /// The implementation is in the source file, since its a private/internal
   /// function and thus will only be instantiated by other member functions.
   void garbage_collect_where(std::predicate<const entry_data&> auto pred);
+
+  /// Besides the `series_builder` instances in `entries_`, there also is
+  /// `merging_builder_`. This function flushes that builder, appending its
+  /// current results to `ready_events_`.
+  void flush_merging_builder();
 
   using signature_type = typename data_builder::signature_type;
 
