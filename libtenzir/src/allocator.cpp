@@ -505,9 +505,9 @@ auto selected_alloc(const char* var_name) noexcept -> enum selected_alloc {
     return selected_alloc::system;
   }
   std::fprintf(stderr,
-               "FATAL ERROR: unknown TENZIR_ALLOCATOR: '%s'\n"
+               "FATAL ERROR: unknown %s: '%s'\n"
                "known values are 'mimalloc' and 'system'\n",
-               env_str.data());
+               env, env_str.data());
   std::exit(EXIT_FAILURE);
   std::unreachable();
 }

@@ -6,16 +6,22 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/allocator.hpp"
+#include "tenzir/allocator_config.hpp"
 
-#include <mimalloc.h>
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
+
+#  include "tenzir/allocator.hpp"
+
+#  include <mimalloc.h>
 
 namespace {
 
-static_assert(std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
-              == tenzir::memory::mimalloc::allocator::default_alignment);
-static_assert(std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
-              == tenzir::memory::system::allocator::default_alignment);
+static_assert(
+  std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
+  == tenzir::memory::mimalloc::polymorphic_allocator::default_alignment);
+static_assert(
+  std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
+  == tenzir::memory::system::polymorphic_allocator::default_alignment);
 
 template <bool throws>
 [[nodiscard, gnu::hot, gnu::alloc_size(1)]]
@@ -118,3 +124,5 @@ void operator delete(void* ptr, std::size_t, std::align_val_t) noexcept {
 void operator delete[](void* ptr, std::size_t, std::align_val_t) noexcept {
   deallocate_cpp(ptr);
 }
+
+#endif

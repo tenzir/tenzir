@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/allocator_config.hpp"
+
 #include <tsl/robin_map.h>
 
 #include <atomic>
@@ -48,6 +50,8 @@ concept allocator = requires(T t, std::size_t size, std::align_val_t alignment,
                              void* ptr, const void* cptr) {
   { t.allocate(size) } noexcept -> std::same_as<void*>;
   { t.allocate(size, alignment) } noexcept -> std::same_as<void*>;
+  { t.calloc(size, size) } noexcept -> std::same_as<void*>;
+  { t.calloc(size, size, alignment) } noexcept -> std::same_as<void*>;
   { t.reallocate(ptr, size) } noexcept -> std::same_as<void*>;
   { t.reallocate(ptr, size, alignment) } noexcept -> std::same_as<void*>;
   { t.deallocate(ptr) } noexcept -> std::same_as<void>;
@@ -179,7 +183,146 @@ constexpr static auto config = detail::allocator_configuration{
   .size = ::mi_malloc_usable_size,
   .trim = mimalloc::trim,
 };
-using allocator = detail::allocator_impl<config>;
+using polymorphic_allocator = detail::allocator_impl<config>;
+
+struct static_allocator {
+  constexpr explicit static_allocator(struct stats* stats) : stats_{stats} {
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::always_inline, gnu::malloc,
+    gnu::alloc_size(2)]]
+  auto allocate(std::size_t size) noexcept -> void* {
+    auto* const ptr = ::mi_malloc(size);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::mi_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2),
+    gnu::alloc_align(3)]]
+  auto allocate(std::size_t size, std::align_val_t alignment) noexcept
+    -> void* {
+    auto* const ptr = ::mi_malloc_aligned(size, std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::mi_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc,
+    gnu::alloc_size(2, 3)]]
+  auto calloc(std::size_t count, std::size_t size) noexcept -> void* {
+    auto* const ptr = ::mi_calloc(count, size);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::mi_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2, 3),
+    gnu::alloc_align(4)]]
+  auto calloc(std::size_t count, std::size_t size,
+              std::align_val_t alignment) noexcept -> void* {
+    auto* const ptr
+      = ::mi_calloc_aligned(count, size, std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::mi_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(3)]]
+  auto reallocate(void* old_ptr, std::size_t new_size) noexcept -> void* {
+    if (new_size == 0) {
+      deallocate(old_ptr);
+      return nullptr;
+    }
+    const auto old_size = ::mi_malloc_usable_size(old_ptr);
+    if (old_size >= new_size) {
+      return old_ptr;
+    }
+    void* const new_ptr = ::mi_realloc(old_ptr, new_size);
+    if (new_ptr == nullptr) {
+      return nullptr;
+    }
+    const auto actual_new_size = ::mi_malloc_usable_size(new_ptr);
+    if (stats_) {
+      stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
+    }
+    return new_ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(3), gnu::alloc_align(4)]]
+  auto reallocate(void* old_ptr, std::size_t new_size,
+                  std::align_val_t alignment) noexcept -> void* {
+    if (new_size == 0) {
+      deallocate(old_ptr);
+      return nullptr;
+    }
+    const auto old_size = ::mi_malloc_usable_size(old_ptr);
+    if (old_size >= new_size) {
+      return old_ptr;
+    }
+    void* const new_ptr
+      = ::mi_realloc_aligned(old_ptr, new_size, std::to_underlying(alignment));
+    if (new_ptr == nullptr) {
+      return nullptr;
+    }
+    const auto actual_new_size = ::mi_malloc_usable_size(new_ptr);
+    if (stats_) {
+      stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
+    }
+    return new_ptr;
+  }
+
+  [[gnu::hot, gnu::always_inline]]
+  auto deallocate(void* ptr) noexcept -> void {
+    if (ptr == nullptr) {
+      return;
+    }
+    if (stats_) {
+      stats_->note_deallocation(::mi_malloc_usable_size(ptr));
+    }
+    ::mi_free(ptr);
+  }
+
+  auto trim() noexcept -> void {
+    ::mi_collect(false);
+  }
+
+  auto stats() noexcept -> const struct stats& {
+    return stats_ ? *stats_ : detail::zero_stats;
+  }
+
+  auto backend() noexcept -> std::string_view {
+    return "mimalloc";
+  }
+
+  [[nodiscard, gnu::hot]]
+  auto size(const void* ptr) noexcept -> std::size_t {
+    if (! ptr) {
+      return 0;
+    }
+    return ::mi_malloc_usable_size(ptr);
+  }
+
+private:
+  struct stats* const stats_{nullptr};
+};
+
 } // namespace mimalloc
 
 namespace system {
@@ -282,7 +425,147 @@ constexpr static auto config = detail::allocator_configuration{
   .size = system::malloc_size,
   .trim = system::trim,
 };
-using allocator = detail::allocator_impl<config>;
+using polymorphic_allocator = detail::allocator_impl<config>;
+
+struct static_allocator {
+  constexpr explicit static_allocator(struct stats* stats) : stats_{stats} {
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::always_inline, gnu::malloc,
+    gnu::alloc_size(2)]]
+  auto allocate(std::size_t size) noexcept -> void* {
+    auto* const ptr = std::malloc(size);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(system::malloc_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2),
+    gnu::alloc_align(3)]]
+  auto allocate(std::size_t size, std::align_val_t alignment) noexcept
+    -> void* {
+    auto* const ptr
+      = system::malloc_aligned(size, std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(system::malloc_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc,
+    gnu::alloc_size(2, 3)]]
+  auto calloc(std::size_t count, std::size_t size) noexcept -> void* {
+    auto* const ptr = std::calloc(count, size);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(system::malloc_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2, 3),
+    gnu::alloc_align(4)]]
+  auto calloc(std::size_t count, std::size_t size,
+              std::align_val_t alignment) noexcept -> void* {
+    auto* const ptr
+      = system::calloc_aligned(count, size, std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(system::malloc_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(3)]]
+  auto reallocate(void* old_ptr, std::size_t new_size) noexcept -> void* {
+    if (new_size == 0) {
+      deallocate(old_ptr);
+      return nullptr;
+    }
+    const auto old_size = system::malloc_size(old_ptr);
+    if (old_size >= new_size) {
+      return old_ptr;
+    }
+    void* const new_ptr = std::realloc(old_ptr, new_size);
+    if (new_ptr == nullptr) {
+      return nullptr;
+    }
+    const auto actual_new_size = system::malloc_size(new_ptr);
+    if (stats_) {
+      stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
+    }
+    return new_ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(3), gnu::alloc_align(4)]]
+  auto reallocate(void* old_ptr, std::size_t new_size,
+                  std::align_val_t alignment) noexcept -> void* {
+    if (new_size == 0) {
+      deallocate(old_ptr);
+      return nullptr;
+    }
+    const auto old_size = system::malloc_size(old_ptr);
+    if (old_size >= new_size) {
+      return old_ptr;
+    }
+    void* const new_ptr = system::realloc_aligned(
+      old_ptr, new_size, std::to_underlying(alignment));
+    if (new_ptr == nullptr) {
+      return nullptr;
+    }
+    const auto actual_new_size = system::malloc_size(new_ptr);
+    if (stats_) {
+      stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
+    }
+    return new_ptr;
+  }
+
+  [[gnu::hot, gnu::always_inline]]
+  auto deallocate(void* ptr) noexcept -> void {
+    if (ptr == nullptr) {
+      return;
+    }
+    if (stats_) {
+      stats_->note_deallocation(system::malloc_size(ptr));
+    }
+    std::free(ptr);
+  }
+
+  auto trim() noexcept -> void {
+    system::trim();
+  }
+
+  auto stats() noexcept -> const struct stats& {
+    return stats_ ? *stats_ : detail::zero_stats;
+  }
+
+  auto backend() noexcept -> std::string_view {
+    return "system";
+  }
+
+  [[nodiscard, gnu::hot]]
+  auto size(const void* ptr) noexcept -> std::size_t {
+    if (! ptr) {
+      return 0;
+    }
+    return system::malloc_size(ptr);
+  }
+
+private:
+  struct stats* const stats_{nullptr};
+};
+
 } // namespace system
 
 enum class selected_alloc {
@@ -296,57 +579,69 @@ auto selected_alloc(const char*) noexcept -> selected_alloc;
 [[gnu::const]]
 auto enable_stats(const char*) noexcept -> bool;
 
-// The allocation wrapper used by the arrow memory pool
-[[nodiscard, gnu::hot, gnu::const]] inline auto arrow_allocator() noexcept
-  -> polymorphic_allocator& {
-  constinit static auto stats_ = stats{};
-  constinit static auto mimalloc_stats_ = mimalloc::allocator{&stats_};
-  constinit static auto mimalloc_ = mimalloc::allocator{nullptr};
-  constinit static auto system_stats_ = system::allocator{&stats_};
-  constinit static auto system_ = system::allocator{nullptr};
-  static auto& instance
-    = selected_alloc("TENZIR_ALLOC_ARROW") == selected_alloc::mimalloc
-        ? static_cast<polymorphic_allocator&>(
-            enable_stats("TENZIR_ALLOC_ARROW_STATS") ? mimalloc_stats_
-                                                     : mimalloc_)
-        : static_cast<polymorphic_allocator&>(
-            enable_stats("TENZIR_ALLOC_ARROW_STATS") ? system_stats_ : system_);
-  return instance;
-}
+#if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_RUNTIME
 
-// The allocation wrapper used by operator new/delete
-[[nodiscard, gnu::hot, gnu::const]] inline auto cpp_allocator() noexcept
-  -> polymorphic_allocator& {
-  constinit static auto stats_ = stats{};
-  constinit static auto mimalloc_stats_ = mimalloc::allocator{&stats_};
-  constinit static auto mimalloc_ = mimalloc::allocator{nullptr};
-  constinit static auto system_stats_ = system::allocator{&stats_};
-  constinit static auto system_ = system::allocator{nullptr};
-  static auto& instance
-    = selected_alloc("TENZIR_ALLOC_CPP") == selected_alloc::mimalloc
-        ? static_cast<polymorphic_allocator&>(
-            enable_stats("TENZIR_ALLOC_CPP_STATS") ? mimalloc_stats_
-                                                   : mimalloc_)
-        : static_cast<polymorphic_allocator&>(
-            enable_stats("TENZIR_ALLOC_CPP_STATS") ? system_stats_ : system_);
-  return instance;
-}
+#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_NAME)                                \
+    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
+      -> polymorphic_allocator& {                                              \
+      constinit static auto stats_ = stats{};                                  \
+      constinit static auto mimalloc_stats_                                    \
+        = mimalloc::polymorphic_allocator{&stats_};                            \
+      constinit static auto mimalloc_                                          \
+        = mimalloc::polymorphic_allocator{nullptr};                            \
+      constinit static auto system_stats_                                      \
+        = system::polymorphic_allocator{&stats_};                              \
+      constinit static auto system_ = system::polymorphic_allocator{nullptr};  \
+      static auto& instance                                                    \
+        = selected_alloc(ENV_NAME) == selected_alloc::mimalloc                 \
+            ? static_cast<polymorphic_allocator&>(                             \
+                enable_stats(ENV_NAME "_STATS") ? mimalloc_stats_ : mimalloc_) \
+            : static_cast<polymorphic_allocator&>(                             \
+                enable_stats(ENV_NAME "_STATS") ? system_stats_ : system_);    \
+      return instance;                                                         \
+    }
 
-// The allocation wrapper used by the C allocation overrides
-[[nodiscard, gnu::hot, gnu::const]] inline auto c_allocator() noexcept
-  -> polymorphic_allocator& {
-  constinit static auto stats_ = stats{};
-  constinit static auto mimalloc_stats_ = mimalloc::allocator{&stats_};
-  constinit static auto mimalloc_ = mimalloc::allocator{nullptr};
-  constinit static auto system_stats_ = system::allocator{&stats_};
-  constinit static auto system_ = system::allocator{nullptr};
-  static auto& instance
-    = selected_alloc("TENZIR_ALLOC_C") == selected_alloc::mimalloc
-        ? static_cast<polymorphic_allocator&>(
-            enable_stats("TENZIR_ALLOC_C_STATS") ? mimalloc_stats_ : mimalloc_)
-        : static_cast<polymorphic_allocator&>(
-            enable_stats("TENZIR_ALLOC_C_STATS") ? system_stats_ : system_);
-  return instance;
-}
+#elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_MIMALLOC
+
+#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_NAME)                                \
+    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
+      -> mimalloc::static_allocator& {                                         \
+      constinit static auto stats_ = stats{};                                  \
+      static auto instance = mimalloc::static_allocator{                       \
+        enable_stats(ENV_NAME "") ? &stats_ : nullptr};                        \
+      return instance;                                                         \
+    }
+
+#elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_SYSTEM
+
+#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_NAME)                                \
+    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
+      -> system::static_allocator& {                                           \
+      constinit static auto stats_ = stats{};                                  \
+      static auto instance = system::static_allocator{                         \
+        enable_stats(ENV_NAME "") ? &stats_ : nullptr};                        \
+      return instance;                                                         \
+    }
+
+#else
+
+struct dummy_allocator {
+  static auto stats() noexcept -> const stats& {
+    return detail::zero_stats;
+  }
+};
+
+#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_NAME)                                \
+    [[nodiscard]] inline auto NAME() noexcept -> dummy_allocator& {            \
+      constinit static auto instance = dummy_allocator{};                      \
+      return instance;                                                         \
+    }
+#endif
+
+TENZIR_MAKE_ALLOCATOR(arrow_allocator, "TENZIR_ALLOC_ARROW")
+TENZIR_MAKE_ALLOCATOR(cpp_allocator, "TENZIR_ALLOC_CPP")
+TENZIR_MAKE_ALLOCATOR(c_allocator, "TENZIR_ALLOC_C")
+
+#undef TENZIR_MAKE_ALLOCATOR
 
 } // namespace tenzir::memory

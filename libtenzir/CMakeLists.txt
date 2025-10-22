@@ -522,6 +522,9 @@ endif ()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp")
 
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/allocator_config.hpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp")
+
 if (CMAKE_BUILD_TYPE)
   set(TENZIR_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 elseif (CMAKE_CONFIGURATION_TYPES)
@@ -568,6 +571,7 @@ add_custom_target(
 target_sources(
   libtenzir
   PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp"
+  		  "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 

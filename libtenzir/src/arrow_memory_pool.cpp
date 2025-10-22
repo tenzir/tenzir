@@ -18,6 +18,14 @@
 
 namespace tenzir {
 
+#if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE
+
+auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
+  return arrow::default_memory_pool();
+}
+
+#else
+
 namespace {
 
 alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__) int64_t zero_size_area[2];
@@ -28,17 +36,17 @@ auto* const kZeroSizeArea = reinterpret_cast<uint8_t*>(&zero_size_area);
 /// This class provides an Arrow-compatible memory pool interface backed by
 /// mimalloc, which offers better performance characteristics than the default
 /// system allocator for many workloads.
-class mimalloc_memory_pool final : public arrow::MemoryPool {
+class memory_pool final : public arrow::MemoryPool {
 public:
-  mimalloc_memory_pool() = default;
+  memory_pool() = default;
 
-  ~mimalloc_memory_pool() override = default;
+  ~memory_pool() override = default;
 
   // Disable copy and move
-  mimalloc_memory_pool(const mimalloc_memory_pool&) = delete;
-  mimalloc_memory_pool& operator=(const mimalloc_memory_pool&) = delete;
-  mimalloc_memory_pool(mimalloc_memory_pool&&) = delete;
-  mimalloc_memory_pool& operator=(mimalloc_memory_pool&&) = delete;
+  memory_pool(const memory_pool&) = delete;
+  memory_pool& operator=(const memory_pool&) = delete;
+  memory_pool(memory_pool&&) = delete;
+  memory_pool& operator=(memory_pool&&) = delete;
 
   auto Allocate(int64_t size, int64_t alignment, uint8_t** out)
     -> arrow::Status override {
@@ -118,8 +126,10 @@ public:
 } // namespace
 
 auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
-  static mimalloc_memory_pool pool;
+  static auto pool = memory_pool{};
   return &pool;
 }
+
+#endif
 
 } // namespace tenzir
