@@ -459,11 +459,11 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 }
 
 auto node(node_actor::stateful_pointer<node_state> self,
-          std::filesystem::path dir, bool disable_pipeline_subprocesses)
+          std::filesystem::path dir, bool pipeline_subprocesses)
   -> node_actor::behavior_type {
   self->state().self = self;
   self->state().dir = std::move(dir);
-  self->state().disable_pipeline_subprocesses = disable_pipeline_subprocesses;
+  self->state().pipeline_subprocesses = pipeline_subprocesses;
   self->set_exception_handler([=](std::exception_ptr& ptr) -> caf::error {
     try {
       std::rethrow_exception(ptr);
@@ -757,14 +757,14 @@ auto node(node_actor::stateful_pointer<node_state> self,
     [self](atom::set, endpoint endpoint) {
       TENZIR_ASSERT(endpoint.port != 0);
       self->state().endpoint = std::move(endpoint);
-      if (not self->state().disable_pipeline_subprocesses) {
+      if (self->state().pipeline_subprocesses) {
         for (int i = 0; i < 5; i++) {
           self->state().create_pipeline_shell();
         }
       }
     },
     [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
-      if (self->state().disable_pipeline_subprocesses) {
+      if (not self->state().pipeline_subprocesses) {
         return pipeline_shell_actor{};
       }
       if (not self->state().endpoint) {
