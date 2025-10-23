@@ -86,7 +86,10 @@ public:
   {
     if (auto path = ast::field_path::try_from(x)) {
       captures_.push_back(std::move(*path));
+      return;
     }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    enter(const_cast<T&>(x));
   }
 
   auto result() && -> std::vector<ast::field_path> {
