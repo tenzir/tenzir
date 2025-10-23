@@ -121,6 +121,10 @@ find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 find_package(re2 REQUIRED)
 provide_find_module(re2)
 
+# -- folly ---------------------------------------------------------------------
+
+find_package(folly REQUIRED)
+
 # -- reproc --------------------------------------------------------------------
 
 find_package(reproc++ REQUIRED)
@@ -415,6 +419,11 @@ target_link_libraries(libtenzir PUBLIC re2::re2)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
 
+# Link against folly.
+target_link_libraries(libtenzir PUBLIC Folly::folly)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
+dependency_summary("folly" Folly::folly "Dependencies")
+
 # Link against reproc.
 target_link_libraries(libtenzir PUBLIC reproc++)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
@@ -500,20 +509,6 @@ if (NOT APPLE)
   target_link_libraries(libtenzir_builtins PRIVATE atomic)
 endif ()
 
-set(LIBCORO_BUILD_TESTS OFF)
-set(LIBCORO_BUILD_EXAMPLES OFF)
-set(LIBCORO_FEATURE_NETWORKING OFF)
-set(LIBCORO_FEATURE_TLS OFF)
-add_subdirectory(aux/libcoro)
-target_link_libraries(libtenzir PUBLIC libcoro)
-target_link_libraries(libtenzir_builtins PUBLIC libcoro)
-
-add_library(toomanycooks INTERFACE)
-target_include_directories(toomanycooks INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/aux/toomanycooks/include
-)
-target_link_libraries(libtenzir PRIVATE toomanycooks)
-
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
@@ -591,7 +586,7 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
-          ${_tenzir_bundled_pfs} libcoro
+          ${_tenzir_bundled_pfs}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime

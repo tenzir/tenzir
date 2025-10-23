@@ -8,15 +8,12 @@
 
 #include "tenzir/detail/assert.hpp"
 
-#define TMC_IMPL
-#include <tmc/auto_reset_event.hpp>
-#include <tmc/channel.hpp>
-#include <tmc/mutex.hpp>
+#include <folly/coro/Mutex.h>
+#include <folly/coro/UnboundedQueue.h>
 
 #include <atomic>
 #include <coroutine>
 #include <deque>
-#include <exception>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -420,15 +417,15 @@ private:
   RawAsyncMutexImpl impl_;
 };
 
-template<class T>
-class MutexGuard;
+template <class T>
+class MutexGuard2;
 
-template<class T>
-class Mutex {
+template <class T>
+class Mutex2 {
 public:
-  auto lock() & -> Future<MutexGuard<T>> {
+  auto lock() & -> Future<MutexGuard2<T>> {
     co_await raw_.lock_without_guard();
-    co_return MutexGuard<T>{*this};
+    co_return MutexGuard2<T>{*this};
   }
 
   auto unsafe_get() & -> T& {
@@ -444,27 +441,27 @@ private:
   T data_;
 };
 
-template<class T>
-class [[nodiscard]] MutexGuard {
+template <class T>
+class [[nodiscard]] MutexGuard2 {
 public:
   // TODO: Private.
-  explicit MutexGuard(Mutex<T>& mutex) : mutex_{&mutex} {
+  explicit MutexGuard2(Mutex2<T>& mutex) : mutex_{&mutex} {
   }
 
-  ~MutexGuard() {
+  ~MutexGuard2() {
     drop();
   }
 
-  MutexGuard(MutexGuard&& other) noexcept {
+  MutexGuard2(MutexGuard2&& other) noexcept {
     *this = std::move(other);
   }
-  auto operator=(MutexGuard&& other) noexcept -> MutexGuard& {
+  auto operator=(MutexGuard2&& other) noexcept -> MutexGuard2& {
     drop();
     std::swap(mutex_, other.mutex_);
     return *this;
   }
-  MutexGuard(MutexGuard& other) = delete;
-  auto operator=(MutexGuard& other) = delete;
+  MutexGuard2(MutexGuard2& other) = delete;
+  auto operator=(MutexGuard2& other) = delete;
 
   // auto operator co_await() && -> T& {
   //   return mutex_.data_;
@@ -475,7 +472,7 @@ public:
     return &mutex_->unsafe_get();
   }
 
-  auto get_locked_mutex() -> Mutex<T>& {
+  auto get_locked_mutex() -> Mutex2<T>& {
     TENZIR_ASSERT(mutex_);
     return *mutex_;
   }
@@ -488,7 +485,7 @@ public:
   }
 
 private:
-  Mutex<T>* mutex_ = nullptr;
+  Mutex2<T>* mutex_ = nullptr;
 };
 
 // class ConditionVariable {
@@ -543,60 +540,151 @@ private:
 //   std::shared_ptr<Mutex<BatchShared>> shared_;
 // };
 
+template <class T>
+class MutexGuard;
+
+template <class T>
+class Mutex {
+public:
+  explicit Mutex(T x) : value_{std::move(x)} {
+  }
+
+  auto lock() -> folly::coro::Task<MutexGuard<T>>;
+
+private:
+  friend class MutexGuard<T>;
+
+  folly::coro::Mutex mutex_;
+  T value_;
+};
+
+template <class T>
+class MutexGuard {
+public:
+  ~MutexGuard() noexcept {
+    try_unlock();
+  }
+
+  MutexGuard(MutexGuard&& other) noexcept {
+    *this = std::move(other);
+  }
+  auto operator=(MutexGuard&& other) noexcept -> MutexGuard& {
+    try_unlock();
+    locked_ = other.locked_;
+    other.locked_ = nullptr;
+    return *this;
+  }
+  MutexGuard(MutexGuard& other) = delete;
+  auto operator=(MutexGuard& other) = delete;
+
+  auto operator*() -> T& {
+    TENZIR_ASSERT(locked_);
+    return locked_->value_;
+  }
+
+  auto operator->() -> T* {
+    TENZIR_ASSERT(locked_);
+    return &locked_->value_;
+  }
+
+  auto unlock() -> void {
+    TENZIR_ASSERT(locked_);
+    locked_->mutex_.unlock();
+    locked_ = nullptr;
+  }
+
+private:
+  auto try_unlock() -> void {
+    if (locked_) {
+      locked_->mutex_.unlock();
+    }
+  }
+
+  friend class Mutex<T>;
+
+  explicit MutexGuard(Mutex<T>& mutex) : locked_{&mutex} {
+  }
+
+  Mutex<T>* locked_;
+};
+
+template <class T>
+auto Mutex<T>::lock() -> folly::coro::Task<MutexGuard<T>> {
+  co_await mutex_.co_lock();
+  co_return MutexGuard<T>{*this};
+}
+
 struct BatchShared {
-  explicit BatchShared(int limit) : remaining{limit} {
+  struct Locked {
+    explicit Locked(int limit) : remaining{limit} {
+    }
+
+    int remaining;
+    std::deque<int> queue;
+  };
+
+  explicit BatchShared(int limit) : mutex{Locked{limit}} {
   }
 
   // TODO: This can surely be written better?
-  std::atomic<int> remaining{100};
-  tmc::auto_reset_event event;
-  // The channel token is not here because it's not thread-safe.
+  Mutex<Locked> mutex;
+  folly::coro::Baton remaining_increased;
+  folly::coro::Baton queue_pushed;
 };
 
 class BatchSender {
 public:
-  BatchSender(std::shared_ptr<BatchShared> shared, tmc::chan_tok<int> channel)
-    : shared_{std::move(shared)}, channel_{std::move(channel)} {
+  BatchSender(std::shared_ptr<BatchShared> shared)
+    : shared_{std::move(shared)} {
   }
 
-  auto send(int x) -> tmc::task<void> {
-    while (x > shared_->remaining) {
-      co_await shared_->event;
+  auto send(int x) -> folly::coro::Task<void> {
+    auto lock = co_await shared_->mutex.lock();
+    while (x > lock->remaining) {
+      lock.unlock();
+      co_await shared_->remaining_increased;
+      shared_->remaining_increased.reset();
+      lock = co_await shared_->mutex.lock();
     }
-    shared_->remaining -= x;
-    co_await channel_.push(x);
+    lock->remaining -= x;
+    lock->queue.push_back(x);
+    shared_->queue_pushed.post();
   }
 
 private:
   std::shared_ptr<BatchShared> shared_;
-  tmc::chan_tok<int> channel_;
 };
 
 class BatchReceiver {
 public:
-  BatchReceiver(std::shared_ptr<BatchShared> shared, tmc::chan_tok<int> channel)
-    : shared_{std::move(shared)}, channel_{std::move(channel)} {
+  BatchReceiver(std::shared_ptr<BatchShared> shared)
+    : shared_{std::move(shared)} {
   }
 
-  auto receive() -> tmc::task<int> {
-    auto result = co_await channel_.pull();
-    TENZIR_ASSERT(result);
-    shared_->remaining += *result;
-    co_await shared_->event.co_set();
-    co_return *result;
+  auto receive() -> folly::coro::Task<int> {
+    auto lock = co_await shared_->mutex.lock();
+    while (lock->queue.empty()) {
+      lock.unlock();
+      co_await shared_->queue_pushed;
+      shared_->queue_pushed.reset();
+      lock = co_await shared_->mutex.lock();
+    }
+    auto result = std::move(lock->queue.front());
+    lock->queue.pop_front();
+    lock->remaining += result;
+    shared_->remaining_increased.post();
+    co_return result;
   }
 
 private:
   std::shared_ptr<BatchShared> shared_;
   // The channel is not shared because the token is not thread-safe.
-  tmc::chan_tok<int> channel_;
 };
 
 auto make_channel(int limit) -> std::pair<BatchSender, BatchReceiver> {
-  auto channel = tmc::make_channel<int>();
   auto shared = std::make_shared<BatchShared>(limit);
-  auto sender = BatchSender{shared, channel};
-  auto receiver = BatchReceiver{std::move(shared), std::move(channel)};
+  auto sender = BatchSender{shared};
+  auto receiver = BatchReceiver{std::move(shared)};
   return {std::move(sender), std::move(receiver)};
 }
 
@@ -605,13 +693,20 @@ auto make_channel(int limit) -> std::pair<BatchSender, BatchReceiver> {
 //   co_return 123;
 // }
 
-auto example() -> Future<int> {
+auto example2() -> Future<int> {
   auto [sender, receiver] = make_channel<int>();
   sender.send(42);
   auto n = co_await receiver.receive();
   receiver.receive([](int n) {
     (void)n;
   });
+  co_return n;
+}
+
+auto example() -> folly::coro::Task<int> {
+  auto [sender, receiver] = make_channel(42);
+  co_await sender.send(42);
+  auto n = co_await receiver.receive();
   co_return n;
 }
 
