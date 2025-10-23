@@ -1,0 +1,6 @@
+{
+  "greeting": "Hello",
+  "name": "Bob",
+  "age": 25,
+  "excited": false
+}

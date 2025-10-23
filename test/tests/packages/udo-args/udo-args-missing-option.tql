@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+argspkg::require_option "A"
