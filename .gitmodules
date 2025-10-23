@@ -33,3 +33,6 @@
 [submodule "libtenzir/aux/libcoro"]
 	path = libtenzir/aux/libcoro
 	url = https://github.com/jbaldwin/libcoro
+[submodule "libtenzir/aux/TooManyCooks"]
+	path = libtenzir/aux/TooManyCooks
+	url = https://github.com/tzcnt/TooManyCooks

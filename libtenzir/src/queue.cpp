@@ -6,19 +6,23 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
+
+#define TMC_IMPL
+#include <tmc/auto_reset_event.hpp>
+#include <tmc/channel.hpp>
+#include <tmc/mutex.hpp>
+
 #include <atomic>
 #include <coroutine>
 #include <deque>
 #include <exception>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <utility>
-#include <functional>
 
-#include "tenzir/detail/assert.hpp"
-
-
-namespace tenzir {
+namespace tenzir::queue_test {
 
 template <class T>
 concept Awaitable = requires(T x) {
@@ -172,7 +176,11 @@ public:
     }
 
     auto await_resume() -> T {
-      return *std::exchange(self_.promise().result_, std::nullopt);
+      if constexpr (std::same_as<T, void>) {
+        return;
+      } else {
+        return *std::exchange(self_.promise().result_, std::nullopt);
+      }
     }
 
   private:
@@ -235,7 +243,7 @@ class FuturePromise : public FuturePromiseBase<T> {
 public:
   void return_value(T value) {
     // TODO
-    result_ = std::move(value);
+    result_.emplace(std::move(value));
     TENZIR_ASSERT(this->continuation_);
     this->continuation_.resume();
   }
@@ -299,7 +307,7 @@ public:
 
   template<class Callback>
   auto receive(Callback callback) -> void {
-    run_with_callback(receive(), std::move(callback));
+    run_with_callback(receive().operator co_await(), std::move(callback));
   }
 
 private:
@@ -369,19 +377,28 @@ private:
 
 class [[nodiscard]] RawMutexGuard {
 public:
-  explicit RawMutexGuard(RawAsyncMutexImpl& impl) : impl_{impl} {}
+  explicit RawMutexGuard(RawAsyncMutexImpl& impl) : impl_{&impl} {
+  }
 
   ~RawMutexGuard() {
-    impl_.unlock();
+    if (impl_) {
+      impl_->unlock();
+    }
   }
 
   RawMutexGuard(const RawMutexGuard& other) = delete;
   auto operator=(const RawMutexGuard& other) = delete;
-  RawMutexGuard(RawMutexGuard&& other) = delete;
-  auto operator=(RawMutexGuard&& other) = delete;
+  RawMutexGuard(RawMutexGuard&& other) noexcept : impl_(other.impl_) {
+    other.impl_ = nullptr;
+  }
+  auto operator=(RawMutexGuard&& other) noexcept -> RawMutexGuard& {
+    impl_ = other.impl_;
+    other.impl_ = nullptr;
+    return *this;
+  }
 
 private:
-  RawAsyncMutexImpl& impl_;
+  RawAsyncMutexImpl* impl_;
 };
 
 class RawMutex {
@@ -474,62 +491,119 @@ private:
   Mutex<T>* mutex_ = nullptr;
 };
 
-class ConditionVariable {
-public:
-  class FutureGuard {
-  public:
-    auto await_ready() -> bool {
-      return false;
-    }
+// class ConditionVariable {
+// public:
+//   class FutureGuard {
+//   public:
+//     auto await_ready() -> bool {
+//       return false;
+//     }
 
-    auto await_suspend(std::coroutine_handle<> handle) -> void {
+//     auto await_suspend(std::coroutine_handle<> handle) -> void {
 
-    }
+//     }
 
-    auto await_resume() -> MutexGuard<T> {
+//     auto await_resume() -> MutexGuard<T> {
 
-    }
-  };
+//     }
+//   };
 
-  template<class T>
-  auto wait(MutexGuard<T> mutex) -> Future<MutexGuard<T>> {
-    co_await FutureGuard{};
-    co_return co_await mutex.get_locked_mutex().lock();
-  }
+//   template<class T>
+//   auto wait(MutexGuard<T> mutex) -> Future<MutexGuard<T>> {
+//     co_await FutureGuard{};
+//     co_return co_await mutex.get_locked_mutex().lock();
+//   }
 
-  void notify_one() {
-    auto guard = waiters_.lock();
-  }
+//   void notify_one() {
+//     auto guard = waiters_.lock();
+//   }
 
-private:
-  Mutex<std::deque<std::coroutine_handle<>>> waiters_;
-};
+// private:
+//   Mutex<std::deque<std::coroutine_handle<>>> waiters_;
+// };
+
+// struct BatchShared {
+//   size_t remaining{100};
+//   ConditionVariable cv;
+// };
+
+// class BatchSender {
+// public:
+//   auto send(size_t x) -> Future<void> {
+//     auto guard = co_await shared_->lock();
+//     while (x <= guard->remaining) {
+//       guard = co_await guard->cv.wait(std::move(guard));
+//     }
+//     sender_.send(x);
+//     guard->remaining -= x;
+//   }
+
+// private:
+//   Sender<size_t> sender_;
+//   std::shared_ptr<Mutex<BatchShared>> shared_;
+// };
 
 struct BatchShared {
-  size_t remaining{100};
-  ConditionVariable cv;
+  explicit BatchShared(int limit) : remaining{limit} {
+  }
+
+  // TODO: This can surely be written better?
+  std::atomic<int> remaining{100};
+  tmc::auto_reset_event event;
+  // The channel token is not here because it's not thread-safe.
 };
 
 class BatchSender {
 public:
-  auto send(size_t x) -> Future<void> {
-    auto guard = co_await shared_->lock();
-    while (x <= guard->remaining) {
-      guard = co_await guard->cv.wait(std::move(guard));
+  BatchSender(std::shared_ptr<BatchShared> shared, tmc::chan_tok<int> channel)
+    : shared_{std::move(shared)}, channel_{std::move(channel)} {
+  }
+
+  auto send(int x) -> tmc::task<void> {
+    while (x > shared_->remaining) {
+      co_await shared_->event;
     }
-    sender_.send(x);
-    guard->remaining -= x;
+    shared_->remaining -= x;
+    co_await channel_.push(x);
   }
 
 private:
-  Sender<size_t> sender_;
-  std::shared_ptr<Mutex<BatchShared>> shared_;
+  std::shared_ptr<BatchShared> shared_;
+  tmc::chan_tok<int> channel_;
 };
 
-auto example2(BatchSender sender) -> Future<int> {
-  co_await sender.send(42);
-  co_return 123;
+class BatchReceiver {
+public:
+  BatchReceiver(std::shared_ptr<BatchShared> shared, tmc::chan_tok<int> channel)
+    : shared_{std::move(shared)}, channel_{std::move(channel)} {
+  }
+
+  auto receive() -> tmc::task<int> {
+    auto result = co_await channel_.pull();
+    TENZIR_ASSERT(result);
+    shared_->remaining += *result;
+    co_await shared_->event.co_set();
+    co_return *result;
+  }
+
+private:
+  std::shared_ptr<BatchShared> shared_;
+  // The channel is not shared because the token is not thread-safe.
+  tmc::chan_tok<int> channel_;
+};
+
+auto make_channel(int limit) -> std::pair<BatchSender, BatchReceiver> {
+  auto channel = tmc::make_channel<int>();
+  auto shared = std::make_shared<BatchShared>(limit);
+  auto sender = BatchSender{shared, channel};
+  auto receiver = BatchReceiver{std::move(shared), std::move(channel)};
+  return {std::move(sender), std::move(receiver)};
 }
+
+// auto example2(BatchSender sender) -> Future<int> {
+//   co_await sender.send(42);
+//   co_return 123;
+// }
 
 auto example() -> Future<int> {
   auto [sender, receiver] = make_channel<int>();
@@ -541,4 +615,4 @@ auto example() -> Future<int> {
   co_return n;
 }
 
-} // namespace tenzir
+} // namespace tenzir::queue_test

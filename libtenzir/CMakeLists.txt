@@ -508,6 +508,12 @@ add_subdirectory(aux/libcoro)
 target_link_libraries(libtenzir PUBLIC libcoro)
 target_link_libraries(libtenzir_builtins PUBLIC libcoro)
 
+add_library(toomanycooks INTERFACE)
+target_include_directories(toomanycooks INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/aux/toomanycooks/include
+)
+target_link_libraries(libtenzir PRIVATE toomanycooks)
+
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
