@@ -496,7 +496,10 @@ auto node(node_actor::stateful_pointer<node_state> self,
       }
     });
 #if (defined(__GLIBC__))
-  detail::weak_run_delayed_loop(self, std::chrono::minutes{10}, [self]() {
+  const auto period = caf::get_or<duration>(self->config().content,
+                                            "tenzir.malloc-trim-interval",
+                                            duration{std::chrono::minutes{10}});
+  detail::weak_run_delayed_loop(self, period, [self] {
     TENZIR_DEBUG("{} running malloc_trim to release unused memory", *self);
     constexpr auto padding = 512 * 1024 * 1024; // 512 MiB
     ::malloc_trim(padding);
