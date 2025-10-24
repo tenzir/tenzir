@@ -33,9 +33,8 @@ auto spawn_node(caf::scoped_actor& self)
   // Fetch values from config.
   auto db_dir
     = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
-  auto pipeline_subprocesses
-    = get_or(opts, "tenzir.pipeline-subprocesses",
-             defaults::pipeline_subprocesses);
+  auto pipeline_subprocesses = get_or(opts, "tenzir.pipeline-subprocesses",
+                                      defaults::pipeline_subprocesses);
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err) {
@@ -45,9 +44,9 @@ auto spawn_node(caf::scoped_actor& self)
                                        db_dir, err.message()));
   }
   const auto dir_exists = std::filesystem::exists(abs_dir, err);
-  if (!dir_exists) {
+  if (! dir_exists) {
     if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
-        !created_dir) {
+        ! created_dir) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("unable to create state-directory {}: "
                                          "{}",
@@ -55,7 +54,7 @@ auto spawn_node(caf::scoped_actor& self)
     }
   }
   if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
-      !is_writable) {
+      ! is_writable) {
     return caf::make_error(
       ec::filesystem_error,
       "unable to write to state-directory:", abs_dir.string());
