@@ -223,7 +223,7 @@ public:
       if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
       }
-      auto message = ::zmq::message_t{*chunk};
+      auto message = ::zmq::message_t{chunk->begin(), chunk->end()};
       auto flags = ::zmq::send_flags::none;
       auto bytes = socket_.send(message, flags);
       TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.

@@ -101,7 +101,7 @@ inline auto make_byte_view_reader(generator<chunk_ptr> input) {
     [byte_reader = make_byte_reader(std::move(input))](
       size_t num_bytes) mutable -> std::optional<std::span<const std::byte>> {
       if (auto bytes = byte_reader(num_bytes)) {
-        return as_bytes(*bytes);
+        return as_bytes(bytes);
       }
       return std::nullopt;
     };

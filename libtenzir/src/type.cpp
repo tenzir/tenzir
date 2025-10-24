@@ -749,7 +749,7 @@ auto type::kind() const noexcept -> type_kind {
 }
 
 std::span<const std::byte> as_bytes(const type& x) noexcept {
-  return x.table_ ? as_bytes(*x.table_) : as_bytes(null_type{});
+  return x.table_ ? as_bytes(x.table_) : as_bytes(null_type{});
 }
 
 data type::construct() const noexcept {

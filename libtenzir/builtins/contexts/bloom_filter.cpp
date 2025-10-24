@@ -266,7 +266,7 @@ struct v1_loader : public context_loader {
     -> caf::expected<std::unique_ptr<context>> {
     TENZIR_ASSERT(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
-    if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
+    if (auto err = convert(as_bytes(serialized), bloom_filter)) {
       return diagnostic::error(err)
         .note("failed to deserialize Bloom filter context")
         .to_error();

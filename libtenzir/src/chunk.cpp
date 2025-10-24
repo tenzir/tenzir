@@ -214,8 +214,8 @@ chunk_ptr chunk::make(const void* data, size_type size, deleter_type&& deleter,
 
 chunk_ptr chunk::make(view_type view, deleter_type&& deleter,
                       chunk_metadata metadata) noexcept {
-  return chunk_ptr{new chunk{view, std::move(deleter), std::move(metadata)},
-                   false};
+  auto* ptr = new chunk{view, std::move(deleter), std::move(metadata)};
+  return chunk_ptr{{ptr, false}, view};
 }
 
 chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
@@ -234,8 +234,8 @@ chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
 }
 
 chunk_ptr chunk::make_empty() noexcept {
-  return chunk_ptr{new chunk{view_type{}, deleter_type{}, chunk_metadata{}},
-                   false};
+  constexpr static auto buf = std::byte{};
+  return chunk_ptr{nullptr, {&buf, 0}};
 }
 
 auto chunk::copy(const void* data, size_t size, chunk_metadata metadata)
@@ -424,13 +424,6 @@ as_arrow_file(chunk_ptr chunk) noexcept {
 
 // -- concepts -----------------------------------------------------------------
 
-std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
-  if (! x) {
-    return {};
-  }
-  return as_bytes(*x);
-}
-
 caf::error write(const std::filesystem::path& filename, const chunk_ptr& x) {
   return io::save(filename, as_bytes(x));
 }
@@ -525,6 +518,18 @@ auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
 
 auto size(const chunk_ptr& chunk) -> uint64_t {
   return chunk ? chunk->size() : 0;
+}
+
+auto chunk_ptr::proxy::metadata() const noexcept -> const chunk_metadata& {
+  if (ptr_) {
+    return ptr_->metadata();
+  }
+  constexpr static auto no_metadata = chunk_metadata{};
+  return no_metadata;
+}
+
+auto chunk_ptr::proxy::unique() const noexcept -> bool {
+  return ptr_ and ptr_->unique();
 }
 
 } // namespace tenzir
