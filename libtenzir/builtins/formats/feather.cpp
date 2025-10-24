@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/chunk.hpp>
@@ -56,14 +57,15 @@ auto unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb)
   -> std::shared_ptr<arrow::RecordBatch> {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
-  auto event_rb = check(arrow::RecordBatch::FromStructArray(event_col));
+  auto event_rb = check(arrow::RecordBatch::FromStructArray(
+    event_col, tenzir::arrow_memory_pool()));
   return event_rb->ReplaceSchemaMetadata(schema_metadata);
 }
 
 /// Create a constant column for the given import time with `rows` rows
 auto make_import_time_col(const time& import_time, int64_t rows) {
   auto v = import_time.time_since_epoch().count();
-  auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
+  auto builder = time_type::make_arrow_builder(arrow_memory_pool());
   check(builder->Reserve(rows));
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
@@ -101,8 +103,10 @@ auto decode_ipc_stream(chunk_ptr chunk)
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
                                              "Arrow IPC file");
   }
-  auto open_reader_result
-    = arrow::ipc::RecordBatchFileReader::Open(as_arrow_file(std::move(chunk)));
+  auto ipc_read_options = arrow::ipc::IpcReadOptions::Defaults();
+  ipc_read_options.memory_pool = arrow_memory_pool();
+  auto open_reader_result = arrow::ipc::RecordBatchFileReader::Open(
+    as_arrow_file(std::move(chunk)), ipc_read_options);
   if (not open_reader_result.ok()) {
     return caf::make_error(ec::format_error,
                            fmt::format("failed to open reader: {}",
@@ -265,7 +269,8 @@ public:
     if (not table.ok()) {
       return caf::make_error(ec::system_error, table.status().ToString());
     }
-    auto output_stream = check(arrow::io::BufferOutputStream::Create());
+    auto output_stream
+      = check(arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool()));
     auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
     write_properties.compression = arrow::Compression::ZSTD;
     write_properties.compression_level = compression_level_;
@@ -355,7 +360,9 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
-  auto stream_decoder = arrow::ipc::StreamDecoder(listener);
+  auto ipc_read_options = arrow::ipc::IpcReadOptions::Defaults();
+  ipc_read_options.memory_pool = arrow_memory_pool();
+  auto stream_decoder = arrow::ipc::StreamDecoder(listener, ipc_read_options);
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
   while (true) {
@@ -452,7 +459,7 @@ auto print_feather(
   co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
   // The buffer is reinit with newly allocated memory because the API does not
   // offer a Reset that just clears the original data.
-  auto reset_buffer_result = sink->Reset();
+  auto reset_buffer_result = sink->Reset(1024, arrow_memory_pool());
   if (not reset_buffer_result.ok()) {
     diagnostic::error("{}", reset_buffer_result.ToStringWithoutContextLines())
       .note("failed to reset stream")
@@ -508,7 +515,8 @@ public:
   auto instantiate([[maybe_unused]] type input_schema,
                    operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto sink = arrow::io::BufferOutputStream::Create();
+    auto sink
+      = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
     if (not sink.ok()) {
       return diagnostic::error("{}",
                                sink.status().ToStringWithoutContextLines())

@@ -32,16 +32,17 @@ let
       spdlog,
       simdjson,
       robin-map,
-      jemalloc,
       libunwind,
       xxHash,
       rabbitmq-c,
       yaml-cpp,
       yara,
       rdkafka,
+	  cyrus_sasl,
       reproc,
       cppzmq,
       libmaxminddb,
+      mimalloc,
       re2,
       dpkg,
       lz4,
@@ -224,6 +225,7 @@ let
               libunwind
               rabbitmq-c
               rdkafka
+			  cyrus_sasl
               cppzmq
               restinio
               (restinio.override {
@@ -254,6 +256,7 @@ let
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb
+              mimalloc
               protobuf
               re2
               reproc
@@ -265,9 +268,6 @@ let
             ]
             ++ lib.optionals (!isStatic) [
               arrow-adbc-cpp
-            ]
-            ++ lib.optionals isMusl [
-              jemalloc
             ];
 
           env = {
@@ -282,7 +282,6 @@ let
               "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
               "-DCAF_ROOT_DIR=${caf}"
               "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
-              "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"

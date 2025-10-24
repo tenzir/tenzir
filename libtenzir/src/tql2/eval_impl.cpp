@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/eval_impl.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
@@ -78,8 +79,8 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
           }
           // TODO: We could also make sure that record-nulls do not create any
           // fields. This will create an additional splitting point.
-          for (auto [i, field_array] :
-               detail::enumerate(check(records->array->Flatten()))) {
+          for (auto [i, field_array] : detail::enumerate(
+                 check(records->array->Flatten(tenzir::arrow_memory_pool())))) {
             auto field = records->type.field(i);
             fields[field.name] = series{field.type, field_array};
           }
@@ -231,7 +232,8 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
           .emit(ctx_);
         return series{
           rec_ty->field(*idx).type,
-          check(s.GetFlattenedField(detail::narrow<int>(*idx))),
+          check(s.GetFlattenedField(detail::narrow<int>(*idx),
+                                    tenzir::arrow_memory_pool())),
         };
       }
       return series{
@@ -491,7 +493,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         }
         auto list_values = list->array->values();
         auto value_type = list->type.value_type();
-        auto b = value_type.make_arrow_builder(arrow::default_memory_pool());
+        auto b = value_type.make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(list->length()));
         auto out_of_bounds = false;
         auto list_null = false;

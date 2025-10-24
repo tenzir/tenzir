@@ -71,7 +71,8 @@ auto data_to_series(const data& value, int64_t length) -> series {
   auto s = b.finish_assert_one_array();
   return series{
     std::move(s.type),
-    check(arrow::MakeArrayFromScalar(*check(s.array->GetScalar(0)), length)),
+    check(arrow::MakeArrayFromScalar(*check(s.array->GetScalar(0)), length,
+                                     tenzir::arrow_memory_pool())),
   };
 }
 

@@ -17,10 +17,6 @@
 
 #include <arrow/util/config.h>
 
-#if TENZIR_ENABLE_JEMALLOC
-#  include <jemalloc/jemalloc.h>
-#endif
-
 #include <iostream>
 #include <sstream>
 
@@ -45,11 +41,6 @@ record retrieve_versions(const record& cfg) {
   arrow_version << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
                 << ARROW_VERSION_PATCH;
   result["Apache Arrow"] = arrow_version.str();
-#if TENZIR_ENABLE_JEMALLOC
-  result["jemalloc"] = JEMALLOC_VERSION;
-#else
-  result["jemalloc"] = data{};
-#endif
   list plugin_names;
   for (const auto& plugin : plugins::get()) {
     if (plugin.type() == plugin_ptr::type::builtin) {

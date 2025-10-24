@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
@@ -259,8 +260,8 @@ struct cast_helper<list_type, list_type> {
     const auto cast_values = cast_helper<type, type>::cast(
       from_type.value_type(), from_array->values(), to_type.value_type());
     return check(type_to_arrow_array_t<list_type>::FromArrays(
-      *offsets, *cast_values, arrow::default_memory_pool(),
-      from_array->null_bitmap(), from_array->null_count()));
+      *offsets, *cast_values, arrow_memory_pool(), from_array->null_bitmap(),
+      from_array->null_count()));
   }
 
   template <class InputType>
@@ -385,7 +386,8 @@ struct cast_helper<record_type, record_type> {
         if (! index) {
           // The field does not exist, so we insert a bunch of nulls.
           children.push_back(check(arrow::MakeArrayOfNull(
-            to_field.type.to_arrow_type(), from_array->length())));
+            to_field.type.to_arrow_type(), from_array->length(),
+            tenzir::arrow_memory_pool())));
           continue;
         }
         // The field exists, so we can insert the casted column.
@@ -1173,7 +1175,7 @@ static auto cast_to_builder(const FromType& from_type,
                             const type_to_arrow_array_t<FromType>& in,
                             const ToType& to_type)
   -> caf::expected<std::shared_ptr<type_to_arrow_builder_t<ToType>>> {
-  auto ret = to_type.make_arrow_builder(arrow::default_memory_pool());
+  auto ret = to_type.make_arrow_builder(arrow_memory_pool());
   for (const auto& v : values(from_type, in)) {
     if (not v) {
       auto status = ret->AppendNull();

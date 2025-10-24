@@ -182,6 +182,37 @@ if (NOT TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
     COMPONENT Development)
 endif ()
 
+# -- allocator -----------------------------------------------------------------
+
+set(TENZIR_ALLOCATOR
+    "mimalloc"
+    CACHE
+      STRING
+      "Configure the allocator.\
+Possible options:\
+  * `none`: Tenzir's custom allocator API is not used. This means using the system allocator for most things and arrow uses its default alloctor\
+  * `mimalloc`: mimalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `system`: the system allocator is ussed for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `runtime`: The allocator can be selected via an environment variable at startup. You can enable stats tracking.\
+\
+Environment variables:\
+where `<COMPONENT>` is one of `ARROW`, `CPP` or `C`\
+\
+* `TENZIR_ALLOC_<COMPONENT>=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `mimalloc` or `system`\
+* `TENZIR_ALLOC_<COMPONENT>_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component"
+)
+if (TENZIR_ALLOCATOR STREQUAL "none")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_NONE")
+elseif (TENZIR_ALLOCATOR STREQUAL "mimalloc")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_MIMALLOC")
+elseif (TENZIR_ALLOCATOR STREQUAL "system")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_SYSTEM")
+elseif (TENZIR_ALLOCATOR STREQUAL "runtime")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_RUNTIME")
+else ()
+  message(ERROR "unknown TENZIR_ALLOCATOR")
+endif ()
+
 # -- internal target -----------------------------------------------------------
 
 # Create the internal target that is used for option/property propagation.
@@ -311,6 +342,7 @@ target_compile_options(
             # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
+            $<$<CXX_COMPILER_ID:GNU>:-Wno-interference-size>
             $<$<CXX_COMPILER_ID:GNU>:-Wno-error=bool-compare>)
 
 # -- build id ------------------------------------------------------------------
@@ -466,17 +498,6 @@ if (TENZIR_ENABLE_UBSAN)
   add_link_options(-fsanitize=undefined)
   target_compile_options(libtenzir_internal INTERFACE -fsanitize=undefined)
   target_link_libraries(libtenzir_internal INTERFACE -fsanitize=undefined)
-endif ()
-
-# -- jemalloc ------------------------------------------------------------------
-
-option(TENZIR_ENABLE_JEMALLOC "Use jemalloc instead of libc malloc"
-       "${TENZIR_ENABLE_STATIC_EXECUTABLE}")
-add_feature_info("TENZIR_ENABLE_JEMALLOC" TENZIR_ENABLE_JEMALLOC
-                 "use jemalloc instead of libc malloc.")
-if (TENZIR_ENABLE_JEMALLOC)
-  find_package(jemalloc REQUIRED)
-  dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
 # -- developer mode ------------------------------------------------------------

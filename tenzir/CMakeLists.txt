@@ -1,9 +1,9 @@
-add_executable(tenzir tenzir.cpp)
+add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
-if (TENZIR_ENABLE_JEMALLOC)
-  target_link_libraries(tenzir PRIVATE jemalloc::jemalloc_)
-endif ()
+# Link mimalloc. Our malloc.cpp provides the malloc override, and due to link order
+# (our object files come first), our symbols take precedence over mimalloc's.
+target_link_libraries(tenzir PRIVATE mimalloc)
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
 add_executable(tenzir::tenzir ALIAS tenzir)
 
