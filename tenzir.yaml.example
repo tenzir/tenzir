@@ -394,6 +394,9 @@ tenzir:
   secrets:
     # my-secret-name: my-secret-value
 
+  # Configure the interval for experimental trimming of unused memory.
+  malloc-trim-interval: 10min
+
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may
 # be in conflict with Tenzir options, and are only listed here for completeness.
