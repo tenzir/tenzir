@@ -1,1 +1,0 @@
-../vast/integration/misc/scripts/print-arrow.py

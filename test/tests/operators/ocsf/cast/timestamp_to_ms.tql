@@ -1,0 +1,10 @@
+let $epoch = 1s.from_epoch()
+
+from {},
+     {time: $epoch},
+     {invalid: $epoch},
+     {time: $epoch, invalid: $epoch},
+     {metadata: {profiles: ["host", "datetime"]}, actor: {session: {created_time: $epoch, created_time_dt: $epoch, invalid: $epoch}}}
+class_uid = 1001
+metadata.version = "1.6.0"
+ocsf::cast timestamp_to_ms=true
