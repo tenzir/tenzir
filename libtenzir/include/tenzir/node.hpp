@@ -99,7 +99,7 @@ struct node_state {
   std::unordered_set<caf::actor_addr> monitored_exec_nodes;
 
   /// Whether to create pipeline shells.
-  bool disable_pipeline_subprocesses = true;
+  bool pipeline_subprocesses = false;
 
   /// Response promises for pending subprocess creations.
   std::deque<caf::typed_response_promise<pipeline_shell_actor>>
@@ -126,9 +126,9 @@ struct node_state {
 /// Spawns a node.
 /// @param self The actor handle
 /// @param dir The directory where to store persistent state.
-/// @param disable_pipeline_subprocesses Whether to allow pipeline subprocesses.
+/// @param pipeline_subprocesses Whether to enable pipeline subprocesses.
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::filesystem::path dir,
-     bool disable_pipeline_subprocesses);
+     bool pipeline_subprocesses);
 
 } // namespace tenzir

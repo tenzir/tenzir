@@ -283,12 +283,12 @@ inline constexpr auto metrics_interval = std::chrono::seconds{1};
 inline constexpr auto packaged_pipeline_restart_on_error
   = std::chrono::minutes{1};
 
-/// Whether to disable pipeline subprocesses.
-inline constexpr bool disable_pipeline_subprocesses =
+/// Whether to enable pipeline subprocesses.
+inline constexpr bool pipeline_subprocesses =
 #if TENZIR_LINUX
-  true;
+  false;
 #else
-  true;
+  false;
 #endif
 
 } // namespace tenzir::defaults
