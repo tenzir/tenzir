@@ -145,7 +145,6 @@ GitHub Actions workflows in `.github/workflows/`:
 
 - `scripts/` directory contains various development utilities:
   - `git-setup.sh` - Git hooks and configuration
-  - `regression-tests.sh` - Regression testing
   - Platform-specific dependency installers
 
 ## Best Practices
