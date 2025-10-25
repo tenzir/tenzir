@@ -46,11 +46,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"tenzir" = [
-  "bin/**",
-  "libexec/**",
-  "share/**",
-]
+"tenzir" = ["bundled/**"]
 
 [tool.uv.sources]
 tenzir-common = { workspace = true }

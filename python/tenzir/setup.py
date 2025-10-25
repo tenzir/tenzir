@@ -107,14 +107,15 @@ def _run_nix() -> list[Path]:
     with tempfile.TemporaryDirectory() as tmp_dir:
         tarball = tarballs[0]
         with tarfile.open(tarball) as archive:
-            archive.extractall(tmp_dir)
+            archive.extractall(tmp_dir, filter=tarfile.tar_filter)
 
         extracted_root = Path(tmp_dir) / "opt" / "tenzir"
         for child in (extracted_root / "bin").iterdir():
             if child.is_symlink():
                 child.unlink()
 
-        _ = shutil.copytree(extracted_root, PACKAGE_ROOT)
+        shutil.rmtree(PACKAGE_ROOT / "bundled", ignore_errors=True)
+        _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
 
     return staged
 
