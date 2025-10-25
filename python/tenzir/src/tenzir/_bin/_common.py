@@ -7,11 +7,11 @@ from typing import NoReturn
 
 def _pkg_bin_dir() -> Path:
     # Resolve to .../tenzir/bin next to this package.
-    return Path(__file__).resolve().parent.parent / "tenzir" / "bin"
+    return Path(__file__).resolve().parent.parent / "bundled" / "bin"
 
 
 def _pkg_wheels_dir() -> Path:
-    root = Path(__file__).resolve().parent.parent / "tenzir"
+    root = Path(__file__).resolve().parent.parent / "bundled"
     return root / "share" / "tenzir" / "python"
 
 
