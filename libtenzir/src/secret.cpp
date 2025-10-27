@@ -110,6 +110,7 @@ constexpr auto inverse(fbs::data::SecretTransformations trafo)
     case encode_base64:
       return decode_base64;
   }
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace
