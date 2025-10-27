@@ -1,8 +1,25 @@
 """Compatibility wrapper that re-exports arrow utilities from tenzir-common."""
 
-from tenzir_common.arrow import *  # noqa: F401,F403
-import tenzir_common.arrow as _arrow
-
-__all__ = getattr(
-    _arrow, "__all__", [name for name in dir(_arrow) if not name.startswith("_")]
+from tenzir_common.arrow import (  # noqa: F401
+                                 EnumScalar,
+                                 EnumType,
+                                 IPScalar,
+                                 IPType,
+                                 SecretScalar,
+                                 SecretType,
+                                 SubnetScalar,
+                                 SubnetType,
+                                 TenzirExtensionType,
+                                 TenzirSecret,
+                                 TenzirType,
+                                 extension_array,
+                                 extension_array_scalar,
+                                 infer_type,
+                                 make_record_batch,
+                                 name,
+                                 names,
+                                 pack_ip,
+                                 pack_subnet,
+                                 py_dict_to_arrow_dict,
+                                 unpack_ip,
 )

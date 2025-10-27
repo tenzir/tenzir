@@ -1,8 +1,3 @@
 """Compatibility wrapper that re-exports logging helpers from tenzir-common."""
 
-from tenzir_common.logging import *  # noqa: F401,F403
-import tenzir_common.logging as _logging
-
-__all__ = getattr(
-    _logging, "__all__", [name for name in dir(_logging) if not name.startswith("_")]
-)
+from tenzir_common.logging import configure, get  # noqa: F401
