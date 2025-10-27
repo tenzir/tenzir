@@ -165,8 +165,8 @@ class BdistWheel(_bdist_wheel):
     def finalize_options(self) -> None:
         plat_override = os.environ.get(ENV_PLAT)
         if plat_override:
-            self.plat_name : str | None = plat_override.replace("-", "_")
-            self.plat_name_supplied : bool = True
+            self.plat_name: str | None = plat_override.replace("-", "_")
+            self.plat_name_supplied: bool = True
         elif platform:
             machine = platform.machine().lower()
             system = platform.system().lower()

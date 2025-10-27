@@ -22,7 +22,9 @@ except ImportError:
 
 class IPScalar(pa.ExtensionScalar):
     def as_py(
-        self: "IPScalar", *, maps_as_pydicts: Optional[bool] = None,
+        self: "IPScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
     ) -> Union[ip.IPv4Address, ip.IPv6Address, None]:
         del maps_as_pydicts  # New in pyarrow 19, but irrelevant for scalars here.
         return None if self.value is None else unpack_ip(self.value.as_py())
@@ -61,7 +63,9 @@ class IPType(pa.ExtensionType):
 
 class SubnetScalar(pa.ExtensionScalar):
     def as_py(
-        self: "SubnetScalar", *, maps_as_pydicts: Optional[bool] = None,
+        self: "SubnetScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
     ) -> Union[ip.IPv4Network, ip.IPv6Network, None]:
         del maps_as_pydicts
         address = self.value[0].as_py()
@@ -126,7 +130,9 @@ class SecretScalar(pa.ExtensionScalar):
     """Adapter for Tenzir secret values."""
 
     def as_py(
-        self: "SecretScalar", *, maps_as_pydicts: Optional[bool] = None,
+        self: "SecretScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
     ) -> Union[TenzirSecret, None]:
         del maps_as_pydicts
         if self.value is None:
@@ -172,7 +178,9 @@ class EnumScalar(pa.ExtensionScalar):
     """Adapter for Tenzir enumeration values."""
 
     def as_py(
-        self: "EnumScalar", *, maps_as_pydicts: Optional[bool] = None,
+        self: "EnumScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
     ) -> Union[str, None]:
         del maps_as_pydicts
         return None if self.value is None else self.value.as_py()

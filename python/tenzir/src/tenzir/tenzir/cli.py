@@ -28,9 +28,9 @@ class CLI:
         result = []
         for k, v in kwargs.items():
             if v is True:
-                result.append(f"--{k.replace('_','-')}")
+                result.append(f"--{k.replace('_', '-')}")
             else:
-                result.append(f"--{k.replace('_','-')}={v}")
+                result.append(f"--{k.replace('_', '-')}={v}")
         return result
 
     def __init__(self, **kwargs):

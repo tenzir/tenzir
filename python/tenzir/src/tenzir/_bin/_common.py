@@ -41,7 +41,7 @@ def _prepare_environment() -> None:
         sys.executable,
     )
     wheels = _pkg_wheels_dir().glob("*.whl")
-    value = f"--no-deps --offline {" ".join([str(wheel) for wheel in wheels])}"
+    value = f"--no-deps --offline {' '.join([str(wheel) for wheel in wheels])}"
     os.environ["TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS"] = value
 
 

@@ -263,7 +263,9 @@ class ResultsBuffer:
         #                 (ie. "3rd field" -> out.x3rd_field = 0)
         # default_box: Allow recursive definitions (ie. out.foo.bar = 3)
         out = DictWrapper(
-            conversion_box=True, default_box=True, default_box_attr=DictWrapper,
+            conversion_box=True,
+            default_box=True,
+            default_box_attr=DictWrapper,
         )
         for key, values in self.input_values.items():
             field = self.original_batch.schema.field(key)
@@ -398,7 +400,6 @@ def main() -> int:
     if sys.platform == "darwin":
         errpipe_bufsize = 65536
     with write_limited(os.fdopen(errfd, "a"), errpipe_bufsize) as errpipe:
-
         # The parent uses stdin and stdout to transfer the arrow record batches
         # back and forth.
         istream = pa.input_stream(sys.stdin.buffer)
