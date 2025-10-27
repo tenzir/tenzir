@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from tenzir_common import logging as core_logging
+import tenzir_common.logging as core_logging
 
 logger = core_logging.get(__name__)
 

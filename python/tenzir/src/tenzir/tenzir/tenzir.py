@@ -10,7 +10,7 @@ from types import TracebackType
 from typing import Any, AsyncIterable, Iterable, Mapping, Optional, Sequence, Union
 
 import pyarrow as pa
-from tenzir_common import logging as core_logging
+import tenzir_common.logging as core_logging
 
 logger = core_logging.get(__name__)
 
@@ -235,7 +235,7 @@ class _JsonOutputHandle(_OutputHandle):
 
     def _ensure_iterator(self) -> AsyncIterable[Any]:
         if self._iterator is None:
-            from . import convert as _convert
+            from tenzir.tenzir import convert as _convert
 
             self._iterator = _convert.to_json_rows(self._arrow_handle.stream)
         return self._iterator

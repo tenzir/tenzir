@@ -7,10 +7,9 @@ from typing import Any, AsyncIterable
 
 import numpy as np
 import pyarrow as pa
-from tenzir_common import arrow as core_arrow
-from tenzir_common import logging as core_logging
-
-from .tenzir import TableSlice
+import tenzir_common.arrow as core_arrow
+import tenzir_common.logging as core_logging
+from tenzir.tenzir.tenzir import TableSlice
 
 logger = core_logging.get("tenzir.tenzir")
 
@@ -21,7 +20,7 @@ _JSON_COMPATIBILITY_DOCSTRING_ = """JSON types are numbers, booleans, strings, a
 
 def to_pyarrow(batch: TableSlice) -> pa.RecordBatch:
     """Represent the provided TableSlice as a PyArrow RecordBatch"""
-    from .tenzir import PyArrowTableSlice
+    from tenzir.tenzir.tenzir import PyArrowTableSlice
 
     if not isinstance(batch, PyArrowTableSlice):
         raise TypeError(f"Cannot convert {type(batch)} to pyarrow.RecordBatch")

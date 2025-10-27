@@ -1,10 +1,12 @@
-from tenzir import (
-    PipelineIO,
-    PipelineSpec,
+from tenzir.tenzir.convert import (
     TenzirRow,
     collect_pyarrow,
-    stream_pipeline,
     to_json_rows,
+)
+from tenzir.tenzir.tenzir import (
+    PipelineIO,
+    PipelineSpec,
+    stream_pipeline,
 )
 import tenzir.utils.logging
 import tenzir.utils.asyncio

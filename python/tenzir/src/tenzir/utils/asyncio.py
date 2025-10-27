@@ -20,7 +20,7 @@ Example:
 import asyncio
 from signal import SIGINT, SIGTERM, SIGHUP
 
-from .logging import get as get_logger
+from tenzir.utils.logging import get as get_logger
 
 logger = get_logger(__name__)
 
