@@ -1,20 +1,12 @@
-from tenzir.tenzir.convert import (
-    TenzirRow,
-    collect_pyarrow,
-    to_json_rows,
-)
-from tenzir.tenzir.tenzir import (
-    PipelineIO,
-    PipelineSpec,
-    stream_pipeline,
-)
-import tenzir.utils.logging
-import tenzir.utils.asyncio
 import asyncio
-from asyncio.subprocess import PIPE
 import os
-import pytest
 import shutil
+from asyncio.subprocess import PIPE
+
+import pytest
+
+import tenzir.utils.asyncio
+import tenzir.utils.logging
 
 logger = tenzir.utils.logging.get("tenzir.test")
 
@@ -26,7 +18,7 @@ if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 async def endpoint():
     test = os.environ.get("PYTEST_CURRENT_TEST").split(":")[-1].split(" ")[0]
     test_db_dir = "/tmp/tenzir-test/" + test

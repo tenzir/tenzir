@@ -1,7 +1,8 @@
 import logging
 import sys
 
-from tenzir_common.config import create as create_config, Config
+from tenzir_common.config import Config
+from tenzir_common.config import create as create_config
 
 
 def configure(config: Config, logger: logging.Logger):
@@ -37,7 +38,8 @@ def configure(config: Config, logger: logging.Logger):
 
 def get(name=None):
     """Get a logger instance while ensuring that the Tenzir logger namespace
-    (loggers with name "tenzir or "tenzir.*") is properly configured"""
+    (loggers with name "tenzir or "tenzir.*") is properly configured
+    """
     # The logger "tenzir" is the root of the namespace. All loggers names tenzir.*
     # will inherit its settings
     tenzir_logger = logging.getLogger("tenzir")

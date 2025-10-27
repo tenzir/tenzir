@@ -83,9 +83,7 @@ class CLI:
         if name.startswith("__"):
             raise AttributeError(name)
         new = copy.deepcopy(self)
-        if name.endswith("_"):
-            # trim trailing underscores to overcome the 'import' keyword
-            name = name[:-1]
+        name = name.removesuffix("_")
         if not name == "__iter_":
             new.args.append(name.replace("_", "-"))
 

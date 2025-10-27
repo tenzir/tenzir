@@ -4,10 +4,11 @@ import asyncio
 import os
 import shutil
 import subprocess
+from collections.abc import AsyncIterable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Any, AsyncIterable, Iterable, Mapping, Optional, Sequence, Union
+from typing import Any, Optional, Union
 
 import pyarrow as pa
 import tenzir_common.logging as core_logging
@@ -48,7 +49,7 @@ class AsyncRecordBatchStreamReader(AsyncIterable[PyArrowTableSlice]):
     def __init__(self, source) -> None:
         self._lazy_reader = _LazyReader(source)
 
-    def __aiter__(self) -> "AsyncRecordBatchStreamReader":
+    def __aiter__(self) -> AsyncRecordBatchStreamReader:
         return self
 
     async def __anext__(self) -> PyArrowTableSlice:
@@ -81,12 +82,12 @@ class PipelineSpec:
         return self.text
 
     @classmethod
-    def from_file(cls, path: Union[str, os.PathLike[str]]) -> "PipelineSpec":
+    def from_file(cls, path: Union[str, os.PathLike[str]]) -> PipelineSpec:
         file_path = Path(path)
         return cls(file_path.read_text(), description=str(file_path))
 
     @classmethod
-    def from_stages(cls, stages: Sequence[str]) -> "PipelineSpec":
+    def from_stages(cls, stages: Sequence[str]) -> PipelineSpec:
         return cls(" | ".join(stages), description=" | ".join(stages))
 
 
@@ -258,7 +259,7 @@ class _BytesOutputHandle(_OutputHandle):
         self._stream = _BytesStream(self._stdout)
 
     @property
-    def stream(self) -> "_BytesStream":
+    def stream(self) -> _BytesStream:
         return self._stream
 
     async def collect(self) -> bytes:
@@ -271,7 +272,7 @@ class _BytesStream(AsyncIterable[bytes]):
     def __init__(self, stdout) -> None:
         self._stdout = stdout
 
-    def __aiter__(self) -> "_BytesStream":
+    def __aiter__(self) -> _BytesStream:
         return self
 
     async def __anext__(self) -> bytes:
@@ -359,7 +360,7 @@ class PipelineIO:
         *,
         input: Optional[_InputAdapter] = None,
         stderr: Optional[_StderrAdapter] = None,
-    ) -> "PipelineIO":
+    ) -> PipelineIO:
         return cls(input=input, output=cls.arrow_output(), stderr=stderr)
 
     @staticmethod
@@ -411,7 +412,7 @@ class PipelineRun:
         self.output = output_handle.stream  # type: ignore[assignment]
         self.stderr = stderr_handle
 
-    async def __aenter__(self) -> "PipelineRun":
+    async def __aenter__(self) -> PipelineRun:
         return self
 
     async def __aexit__(
@@ -481,7 +482,6 @@ async def stream_pipeline(
     options: Optional[PipelineOptions] = None,
 ) -> PipelineRun:
     """Execute a pipeline and expose streaming access to stdout."""
-
     resolved_spec = spec if isinstance(spec, PipelineSpec) else PipelineSpec(str(spec))
     io = io or PipelineIO()
     options = options or PipelineOptions()
@@ -540,7 +540,6 @@ async def run_pipeline(
     options: Optional[PipelineOptions] = None,
 ) -> CompletedPipeline:
     """Execute a pipeline and collect stdout/stderr before returning."""
-
     async with await stream_pipeline(spec, io=io, options=options) as run:
         output = await run.collect_output()
         stderr = await run.collect_stderr()
@@ -555,5 +554,4 @@ def run_pipeline_sync(
     options: Optional[PipelineOptions] = None,
 ) -> CompletedPipeline:
     """Synchronous helper for running a pipeline end-to-end."""
-
     return asyncio.run(run_pipeline(spec, io=io, options=options))

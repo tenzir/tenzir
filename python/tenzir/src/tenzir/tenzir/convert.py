@@ -1,14 +1,16 @@
 import base64
-from collections import defaultdict
-from dataclasses import dataclass
 import datetime
+from collections import defaultdict
+from collections.abc import AsyncIterable
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, AsyncIterable
+from typing import Any
 
 import numpy as np
 import pyarrow as pa
 import tenzir_common.arrow as core_arrow
 import tenzir_common.logging as core_logging
+
 from tenzir.tenzir.tenzir import TableSlice
 
 logger = core_logging.get("tenzir.tenzir")
@@ -31,7 +33,8 @@ async def collect_pyarrow(
     stream: AsyncIterable[TableSlice],
 ) -> dict[str, list[pa.Table]]:
     """Iterate through the TableSlice stream and sort the record batches by
-    schema as lists of PyArrow Tables with identical schemas"""
+    schema as lists of PyArrow Tables with identical schemas
+    """
     num_batches = 0
     num_rows = 0
     batches = defaultdict(list)
@@ -58,7 +61,8 @@ class TenzirRow:
     """A row wise representation of the data and metadata
 
     - name: the Tenzir type for the row
-    - data: the event data contained in the row"""
+    - data: the event data contained in the row
+    """
 
     name: str
     data: dict[str, Any]

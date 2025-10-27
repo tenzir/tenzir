@@ -1,6 +1,7 @@
-import pyarrow as pa
 import numpy as np
+import pyarrow as pa
 import pytest
+
 import tenzir.utils.arrow as vua
 from tenzir.tenzir.convert import arrow_dict_to_json_dict
 
