@@ -182,7 +182,6 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
-            # Publish tenzir to Pypi.
             echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -653,78 +652,120 @@ jobs:
     needs:
       - configure
       - docker-tenzir
+      - tenzir-nix
     if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.12"]
         os: [ubuntu-latest]
-        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d  # v7.1.0
         with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Run poetry install
+          version: "0.9.2"
+          python-version: ${{ matrix.python-version }}
+      - name: Install Nix (for static binaries)
+        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
+        with:
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          # Avoid pushing the full enterprise edition.
+          pushFilter: "tenzir-ee"
+      - name: Install workspace dependencies
         working-directory: python
         run: |
-          poetry install -E module
+          uv sync --all-packages --group dev
       - name: Run unit tests
         working-directory: python
         run: |
-          poetry run pytest
+          uv run --all-packages --group dev pytest
       - name: Run tests in Docker
         working-directory: python
         if: matrix.os == 'ubuntu-latest'
         run: |
           export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          ./docker-poetry-run.sh pytest
+          ./docker-uv-run.sh --all-packages --group dev pytest
       - name: Build package
         working-directory: python
         run: |
-          poetry build
+          uv build --wheel --all-packages
 
   python-package:
     needs:
       - python
       - configure
+      - tenzir-nix
     if: ${{ needs.configure.outputs.run-python-package == 'true' }}
     name: Python Package
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.12"]
         os: ["ubuntu-latest"]
-        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d  # v7.1.0
         with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Configure PyPI
+          version: "0.9.2"
+          python-version: ${{ matrix.python-version }}
+      - name: Install Nix (for static binaries)
+        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
+        with:
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          # Avoid pushing the full enterprise edition.
+          pushFilter: "tenzir-ee"
+      - name: Build sdist
         working-directory: python
         run: |
-          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
+          uv build --sdist --package tenzir-common --package tenzir
+      - name: Build wheel for validation
+        working-directory: python
+        run: |
+          uv build --wheel --package tenzir-common --package tenzir
+      - name: Validate installed wheel exposes working tenzir binary
+        working-directory: python
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          tenzir version
       - name: Publish to PyPI
+        if: github.event_name == 'release'
         working-directory: python
         run: |
-          poetry publish --build --no-interaction
+          uv publish --token "${{ secrets.PYPI_TOKEN }}" dist/*
+      - name: Publish to Test PyPI
+        if: github.event_name != 'release'
+        working-directory: python
+        run: |
+          uv publish --publish-url https://test.pypi.org/legacy/ --token "${{ secrets.TEST_PYPI_TOKEN }}" dist/*
 
   pass-branch-protections:
     needs:

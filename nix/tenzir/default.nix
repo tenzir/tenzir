@@ -7,10 +7,10 @@ let
       stdenv,
       callPackage,
       tenzir-source,
+      tenzirPythonPkgs,
       cmake,
       ninja,
       pkg-config,
-      poetry,
       llvmPackages,
       boost,
       caf,
@@ -39,6 +39,7 @@ let
       yaml-cpp,
       yara,
       rdkafka,
+      cyrus_sasl,
       reproc,
       cppzmq,
       libmaxminddb,
@@ -100,6 +101,7 @@ let
         p.withPackages (
           ps: with ps; [
             aiohttp
+            setuptools
             dynaconf
             pandas
             pyarrow
@@ -113,6 +115,7 @@ let
       ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
 
       withTenzirPluginsStatic =
+        { prevLayer }:
         selection:
         let
           layerPlugins = selection allPluginSrcs;
@@ -126,6 +129,7 @@ let
                     pkg = final;
                     plugins = [ ];
                   };
+                  plugins = prevLayer.plugins ++ [ layerPlugins ];
                 };
               });
         in
@@ -202,8 +206,8 @@ let
               ninja
               protobuf
               grpc
-              poetry
               makeBinaryWrapper
+              uv
             ]
             ++ lib.optionals stdenv.isLinux [
               dpkg
@@ -224,6 +228,7 @@ let
               libunwind
               rabbitmq-c
               rdkafka
+              cyrus_sasl
               cppzmq
               restinio
               (restinio.override {
@@ -276,6 +281,7 @@ let
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
+            UV_PYTHON="${lib.getBin py3.python}/bin/python3";
           };
           cmakeFlags =
             [
@@ -285,6 +291,7 @@ let
               "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+              "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
               "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
               "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
@@ -417,7 +424,9 @@ let
             plugins = [ ];
             withPlugins =
               if isStatic then
-                withTenzirPluginsStatic
+                withTenzirPluginsStatic {
+                  prevLayer = self;
+                }
               else
                 withTenzirPlugins {
                   prevLayer = self;

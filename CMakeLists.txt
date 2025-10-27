@@ -844,10 +844,9 @@ endif ()
 
 # -- python bindings ----------------------------------------------------------
 
-option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires poetry)"
-       ON)
+option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires uv)" ON)
 add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
-                 "build Python bindings (requires poetry).")
+                 "build Python bindings (requires uv).")
 
 set(TENZIR_ENABLE_BUNDLED_UV_default "ON")
 if (DEFINED ENV{TENZIR_ENABLE_BUNDLED_UV})
@@ -861,47 +860,66 @@ add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
                  "install a statically linked copy of uv.")
 
 if (TENZIR_ENABLE_PYTHON_BINDINGS)
-  find_program(POETRY_PATH poetry)
-  if (NOT POETRY_PATH)
-    message(
-      FATAL_ERROR
-        "Cannot find 'poetry' in PATH, which is required for building Tenzir Python bindings"
-    )
-  endif ()
-  # Poetry has no support for specifying a working directory for the build
-  # command, so in order to make the installation not modify the source directory
-  # we need to copy the Python bindings in their entirety into the build directory
-  # first.
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
-  set(TENZIR_PYTHON_WHEEL
-      "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION}-py3-none-any.whl")
-  file(
-    WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
-    "\
-    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
-    file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
-    file(
-      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
-      DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/python\"
-      REGEX \"/dist/\" EXCLUDE)
-    # Poetry evaluates the top-level gitignore, which leads it to ignore
-    # everything in case the install prefix is in an ignored path. Setting the
-    # git directory explicitly works around the issue.
-    set(ENV{GIT_DIR} \"/dev/null\")
-    execute_process(
-      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
-      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\"
-      COMMAND_ERROR_IS_FATAL ANY)
-    file(
-      GLOB _wheel
-      \"${CMAKE_CURRENT_BINARY_DIR}/python/dist/*.whl\")
-    file(MAKE_DIRECTORY \"${CMAKE_BINARY_DIR}/share/tenzir/python\")
-    file(COPY_FILE \"\${_wheel}\" \"${TENZIR_PYTHON_WHEEL}\")")
-  add_custom_command(
-    OUTPUT "${TENZIR_PYTHON_WHEEL}"
-    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/python)
-  add_custom_target(tenzir-python-wheel DEPENDS "${TENZIR_PYTHON_WHEEL}")
+  if (TENZIR_PYTHON_DEPENDENCY_WHEELS)
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMAND ${CMAKE_COMMAND} -E remove_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${TENZIR_PYTHON_DEPENDENCY_WHEELS}" "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E touch "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMENT "Copying python operator wheels"
+      VERBATIM)
+  else ()
+    find_program(UV_PATH uv)
+    if (NOT UV_PATH)
+      message(
+        FATAL_ERROR
+          "Cannot find 'uv' in PATH, which is required for building Tenzir Python bindings"
+      )
+    endif ()
+    find_package(
+      Python3
+      COMPONENTS Interpreter
+      REQUIRED)
+    set(TENZIR_PYTHON_WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/python")
+    file(GLOB_RECURSE TENZIR_PYTHON_COMMON_DEPENDENCIES CONFIGURE_DEPENDS
+         "${TENZIR_PYTHON_WORKSPACE}/tenzir-common/*")
+    file(GLOB_RECURSE TENZIR_PYTHON_OPERATOR_DEPENDENCIES CONFIGURE_DEPENDS
+         "${TENZIR_PYTHON_WORKSPACE}/tenzir-operator/*")
+    set(TENZIR_PYTHON_WORKSPACE_DENPENDENCIES
+        "${TENZIR_PYTHON_WORKSPACE}/pyproject.toml"
+        "${TENZIR_PYTHON_WORKSPACE}/uv.lock"
+        "${TENZIR_PYTHON_WORKSPACE}/README.md"
+        "${TENZIR_PYTHON_WORKSPACE}/uv-source-info.json")
+    list(FILTER TENZIR_PYTHON_WORKSPACE_DENPENDENCIES INCLUDE REGEX ".*")
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMAND ${CMAKE_COMMAND} -E remove_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache"
+        "TENZIR_SKIP_NIX_BUILD=1" "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}"
+        "UV_PYTHON=${Python3_EXECUTABLE}" -- "${UV_PATH}" build -q --wheel
+        --package tenzir-common --out-dir "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache"
+        "TENZIR_SKIP_NIX_BUILD=1" "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}"
+        "UV_PYTHON=${Python3_EXECUTABLE}" -- "${UV_PATH}" build -q --wheel
+        --package tenzir-operator --out-dir "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E touch "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      WORKING_DIRECTORY "${TENZIR_PYTHON_WORKSPACE}"
+      DEPENDS "${TENZIR_PYTHON_REQUIREMENTS_FILE}"
+              ${TENZIR_PYTHON_COMMON_DEPENDENCIES}
+              ${TENZIR_PYTHON_CORE_DEPENDENCIES}
+              ${TENZIR_PYTHON_OPERATOR_DEPENDENCIES}
+      COMMENT "Building python operator wheelhouse"
+      VERBATIM)
+  endif ()
+  add_custom_target(tenzir-python-wheels
+                    DEPENDS "${TENZIR_PYTHON_BINARY_DIR}/.stamp")
+  add_custom_target(tenzir-python-wheel DEPENDS tenzir-python-wheels)
   install(
     DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"

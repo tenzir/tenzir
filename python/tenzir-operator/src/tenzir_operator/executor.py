@@ -6,13 +6,12 @@ import os
 import sys
 import traceback
 from collections import defaultdict
+from collections.abc import Generator, Iterable
 from contextlib import suppress
-from types import MethodType, ModuleType, CodeType
+from types import CodeType, MethodType, ModuleType
 from typing import (
     Any,
     Dict,
-    Generator,
-    Iterable,
     Optional,
     SupportsIndex,
     Tuple,
@@ -23,8 +22,7 @@ from typing import (
 import pyarrow as pa
 from box import Box
 from box.box_list import BoxList
-
-from tenzir.utils.arrow import extension_array, infer_type
+from tenzir_common.arrow import extension_array, infer_type
 
 """
 NOTE: This script is used by and developed alongside the built-in `python`
@@ -265,7 +263,9 @@ class ResultsBuffer:
         #                 (ie. "3rd field" -> out.x3rd_field = 0)
         # default_box: Allow recursive definitions (ie. out.foo.bar = 3)
         out = DictWrapper(
-            conversion_box=True, default_box=True, default_box_attr=DictWrapper
+            conversion_box=True,
+            default_box=True,
+            default_box_attr=DictWrapper,
         )
         for key, values in self.input_values.items():
             field = self.original_batch.schema.field(key)
@@ -294,7 +294,7 @@ class ResultsBuffer:
                 # We need to store it in either case to handle code like
                 # `if x % 2 == 0: x = x/2` that only modifies part of a column.
                 values = self.output_values[flat_key]
-                for _ in range(0, i - len(values)):
+                for _ in range(i - len(values)):
                     values.append(None)
                 values.append(flat_value)
                 if was_touched:
@@ -317,7 +317,7 @@ class ResultsBuffer:
             if key in original_fieldnames and key not in self.changed:
                 continue
             # Fix up missing some output at the end.
-            for _ in range(0, input_rows - len(values)):
+            for _ in range(input_rows - len(values)):
                 values.append(None)
             # Build the new output array
             example_value = find_first_nonnull(values)
@@ -400,7 +400,6 @@ def main() -> int:
     if sys.platform == "darwin":
         errpipe_bufsize = 65536
     with write_limited(os.fdopen(errfd, "a"), errpipe_bufsize) as errpipe:
-
         # The parent uses stdin and stdout to transfer the arrow record batches
         # back and forth.
         istream = pa.input_stream(sys.stdin.buffer)

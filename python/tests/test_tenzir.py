@@ -1,11 +1,12 @@
-from tenzir import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
-import tenzir.utils.logging
-import tenzir.utils.asyncio
 import asyncio
-from asyncio.subprocess import PIPE
 import os
-import pytest
 import shutil
+from asyncio.subprocess import PIPE
+
+import pytest
+
+import tenzir.utils.asyncio
+import tenzir.utils.logging
 
 logger = tenzir.utils.logging.get("tenzir.test")
 
@@ -17,7 +18,7 @@ if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 async def endpoint():
     test = os.environ.get("PYTEST_CURRENT_TEST").split(":")[-1].split(" ")[0]
     test_db_dir = "/tmp/tenzir-test/" + test
@@ -46,7 +47,11 @@ async def endpoint():
 async def tenzir_exec(endpoint, pipeline: str):
     logger.debug(f"> tenzir -e {endpoint} {pipeline}")
     exec_proc = await asyncio.create_subprocess_exec(
-        "tenzir", "-e", endpoint, pipeline, stderr=PIPE,
+        "tenzir",
+        "-e",
+        endpoint,
+        pipeline,
+        stderr=PIPE,
     )
     (_, exec_err) = await asyncio.wait_for(exec_proc.communicate(), 3)
     assert exec_proc.returncode == 0
@@ -92,7 +97,7 @@ def integration_data(path):
 #     )
 #     tenzir = Tenzir(endpoint)
 #     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
-#     rows: list[VastRow] = []
+#     rows: list[TenzirRow] = []
 #     async for row in to_json_rows(result):
 #         rows.append(row)
 #     assert len(rows) == 1

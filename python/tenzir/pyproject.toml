@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tenzir"
+version = "5.19.0"
+description = "Tenzir CLI bindings and binary launchers"
+requires-python = ">=3.9"
+license = "BSD-3-Clause"
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+  { name = "Tenzir", email = "engineering@tenzir.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Plugins",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
+    "Topic :: Software Development :: Object Brokering",
+    "Topic :: System :: Distributed Computing",
+]
+dependencies = [
+  "numpy>=1.24,<3.0",
+  "python-box>=7.3.2,<8.0.0",
+  "tenzir-common>=5.19.0,<5.20.0",
+]
+
+[project.urls]
+Homepage = "https://tenzir.com"
+Documentation = "https://docs.tenzir.com/reference/python-api"
+Repository = "https://github.com/tenzir/tenzir"
+
+[project.scripts]
+tenzir = "tenzir._bin.tenzir:main"
+tenzir-ctl = "tenzir._bin.tenzir_ctl:main"
+tenzir-node = "tenzir._bin.tenzir_node:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"tenzir" = ["bundled/**"]
+
+[tool.uv.sources]
+tenzir-common = { workspace = true }

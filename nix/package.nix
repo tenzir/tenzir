@@ -3,17 +3,29 @@
   nix2container,
   lib,
   pkgs,
+  tenzirPythonPkgs,
   forceClang ? false,
 }:
 rec {
-  integration-test-tree = lib.fileset.unions [];
-  tenzir-tree = lib.fileset.difference (lib.fileset.unions [
+  integration-test-tree =
+    lib.fileset.difference
+      (lib.fileset.unions [
+        ../test
+      ])
+      (
+        lib.fileset.unions [
+        # DNS lookup does not work in the nix sandbox.
+        ../test/tests/operators/dns_lookup
+        # to_sentinelone_data_lake is not supported in the nix build.
+        ../test/tests/operators/to_sentinelone_data_lake
+        ]
+      );
+  tenzir-tree = lib.fileset.unions [
     ../changelog
     ../cmake
     ../libtenzir
     ../libtenzir_test
     ../plugins
-    ../python
     ../schema
     ../scripts
     ../tenzir
@@ -25,10 +37,30 @@ rec {
     ../VERSIONING.md
     ../tenzir.yaml.example
     ../version.json
-  ]) integration-test-tree;
+  ];
   tenzir-source = lib.fileset.toSource {
     root = ./..;
     fileset = tenzir-tree;
+  };
+
+  tenzir-test = pkgs.python3Packages.buildPythonPackage rec {
+    pname = "tenzir-test";
+    version = "0.9.5";
+    pyproject = true;
+
+    src = pkgs.fetchFromGitHub {
+      owner = "tenzir";
+      repo = "test";
+      tag = "v${version}";
+      hash = "sha256-EU/QW1zl5ejnvPxRkCIsBzDNNitk6aCC8Y9uFggzJu8=";
+    };
+
+    build-system = with pkgs.python3Packages; [ hatchling ];
+
+    dependencies = with pkgs.python3Packages; [
+      click
+      pyyaml
+    ];
   };
 
   tenzir-integration-test-deps = [
@@ -48,6 +80,7 @@ rec {
     (pkgs.python3.withPackages (ps: [
       ps.trustme
     ]))
+    tenzir-test
   ];
 
   toImageFn = import ./tenzir/image.nix nix2container;
@@ -57,7 +90,7 @@ rec {
     let
       tenzir-de = linkPkgs.callPackage ./tenzir (
         {
-          inherit tenzir-source toImageFn isReleaseBuild;
+          inherit tenzir-source tenzirPythonPkgs toImageFn isReleaseBuild;
         }
         // lib.optionalAttrs forceClang {
           stdenv = linkPkgs.clangStdenv;
@@ -110,7 +143,7 @@ rec {
     # CI and also not as important.
     if pkgs.stdenv.hostPlatform.isLinux then
       pkgs.callPackage ./tenzir/check.nix {
-        inherit tenzir-integration-test-deps;
+        inherit tenzir-integration-test-deps tenzirPythonPkgs;
         src = lib.fileset.toSource {
           root = ../.;
           fileset = lib.fileset.unions [

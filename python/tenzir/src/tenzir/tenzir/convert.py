@@ -1,18 +1,19 @@
 import base64
-from collections import defaultdict
-from dataclasses import dataclass
 import datetime
+from collections import defaultdict
+from collections.abc import AsyncIterable
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, AsyncIterable
+from typing import Any
 
 import numpy as np
 import pyarrow as pa
-import tenzir.utils.arrow
-import tenzir.utils.logging
+import tenzir_common.arrow as core_arrow
+import tenzir_common.logging as core_logging
 
-from .tenzir import TableSlice
+from tenzir.tenzir.tenzir import TableSlice
 
-logger = tenzir.utils.logging.get("tenzir.tenzir")
+logger = core_logging.get("tenzir.tenzir")
 
 _JSON_COMPATIBILITY_DOCSTRING_ = """JSON types are numbers, booleans, strings, arrays and objects
 - dates and times are formated with ISO 8601
@@ -21,7 +22,7 @@ _JSON_COMPATIBILITY_DOCSTRING_ = """JSON types are numbers, booleans, strings, a
 
 def to_pyarrow(batch: TableSlice) -> pa.RecordBatch:
     """Represent the provided TableSlice as a PyArrow RecordBatch"""
-    from .tenzir import PyArrowTableSlice
+    from tenzir.tenzir.tenzir import PyArrowTableSlice
 
     if not isinstance(batch, PyArrowTableSlice):
         raise TypeError(f"Cannot convert {type(batch)} to pyarrow.RecordBatch")
@@ -32,13 +33,14 @@ async def collect_pyarrow(
     stream: AsyncIterable[TableSlice],
 ) -> dict[str, list[pa.Table]]:
     """Iterate through the TableSlice stream and sort the record batches by
-    schema as lists of PyArrow Tables with identical schemas"""
+    schema as lists of PyArrow Tables with identical schemas
+    """
     num_batches = 0
     num_rows = 0
     batches = defaultdict(list)
     async for slice in stream:
         batch = to_pyarrow(slice)
-        name = tenzir.utils.arrow.name(batch.schema)
+        name = core_arrow.name(batch.schema)
         logger.debug(f"got batch of {name}")
         num_batches += 1
         num_rows += batch.num_rows
@@ -49,17 +51,18 @@ async def collect_pyarrow(
     result = defaultdict(list)
     for _, batches in batches.items():
         table = pa.Table.from_batches(batches)
-        name = tenzir.utils.arrow.name(table.schema)
+        name = core_arrow.name(table.schema)
         result[name].append(table)
     return result
 
 
 @dataclass
-class VastRow:
+class TenzirRow:
     """A row wise representation of the data and metadata
 
     - name: the Tenzir type for the row
-    - data: the event data contained in the row"""
+    - data: the event data contained in the row
+    """
 
     name: str
     data: dict[str, Any]
@@ -94,13 +97,13 @@ def arrow_dict_to_json_dict(dictionary):
 
 async def to_json_rows(
     stream: AsyncIterable[TableSlice],
-) -> AsyncIterable[VastRow]:
+) -> AsyncIterable[TenzirRow]:
     f"""Convert the TableSlice iterator to a row by row iterator with value types
     dumbed down to JSON compatible types
 
     {_JSON_COMPATIBILITY_DOCSTRING_}"""
     async for slice in stream:
         batch = to_pyarrow(slice)
-        name = tenzir.utils.arrow.name(batch.schema)
+        name = core_arrow.name(batch.schema)
         for row in batch.to_pylist():
-            yield VastRow(name, arrow_dict_to_json_dict(row))
+            yield TenzirRow(name, arrow_dict_to_json_dict(row))

@@ -15,14 +15,15 @@ Example:
                 await asyncio.sleep(1)
 
         run_forever(snooze())
+
 """
 
 import asyncio
-from signal import SIGINT, SIGTERM, SIGHUP
+from signal import SIGHUP, SIGINT, SIGTERM
 
-import tenzir.utils.logging
+from tenzir.utils.logging import get as get_logger
 
-logger = tenzir.utils.logging.get(__name__)
+logger = get_logger(__name__)
 
 
 async def shutdown(loop, signal=None):

@@ -1,16 +1,15 @@
 import ipaddress as ip
-import sys
 import json
-import itertools
-import copy
+import sys
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta
 from types import MappingProxyType
-from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex, Union
+from typing import Optional, SupportsBytes, SupportsIndex, Union
 
 import pyarrow as pa
 
 try:
-    from pandas import Timestamp, Timedelta
+    from pandas import Timedelta, Timestamp
 except ImportError:
     # Create dummy classes so we can safely test
     # `isinstance(x, Timestamp)` below.
@@ -22,7 +21,12 @@ except ImportError:
 
 
 class IPScalar(pa.ExtensionScalar):
-    def as_py(self: "IPScalar") -> Union[ip.IPv4Address, ip.IPv6Address, None]:
+    def as_py(
+        self: "IPScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
+    ) -> Union[ip.IPv4Address, ip.IPv6Address, None]:
+        del maps_as_pydicts  # New in pyarrow 19, but irrelevant for scalars here.
         return None if self.value is None else unpack_ip(self.value.as_py())
 
 
@@ -58,7 +62,12 @@ class IPType(pa.ExtensionType):
 
 
 class SubnetScalar(pa.ExtensionScalar):
-    def as_py(self: "SubnetScalar") -> Union[ip.IPv4Network, ip.IPv6Network, None]:
+    def as_py(
+        self: "SubnetScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
+    ) -> Union[ip.IPv4Network, ip.IPv6Network, None]:
+        del maps_as_pydicts
         address = self.value[0].as_py()
         length = self.value[1].as_py()
         if address is None or length is None:
@@ -120,7 +129,12 @@ class TenzirSecret:
 class SecretScalar(pa.ExtensionScalar):
     """Adapter for Tenzir secret values."""
 
-    def as_py(self: "SecretScalar") -> Union[TenzirSecret, None]:
+    def as_py(
+        self: "SecretScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
+    ) -> Union[TenzirSecret, None]:
+        del maps_as_pydicts
         if self.value is None:
             return None
         if self.value[0].as_py() is None:
@@ -163,7 +177,12 @@ class SecretType(pa.ExtensionType):
 class EnumScalar(pa.ExtensionScalar):
     """Adapter for Tenzir enumeration values."""
 
-    def as_py(self: "EnumScalar") -> Union[str, None]:
+    def as_py(
+        self: "EnumScalar",
+        *,
+        maps_as_pydicts: Optional[bool] = None,
+    ) -> Union[str, None]:
+        del maps_as_pydicts
         return None if self.value is None else self.value.as_py()
 
 
@@ -228,10 +247,10 @@ def pack_ip(address: Union[str, ip.IPv4Address, ip.IPv6Address]) -> bytes:
     """Convert an ip address to arrow array bytes."""
     if isinstance(address, str):
         return pack_ip(ip.ip_address(address))
-    elif isinstance(address, ip.IPv4Address):
+    if isinstance(address, ip.IPv4Address):
         prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
         return prefix + address.packed
-    elif isinstance(address, ip.IPv6Address):
+    if isinstance(address, ip.IPv6Address):
         return address.packed
 
 
@@ -258,14 +277,14 @@ def pack_subnet(
         return (None, None)
     if isinstance(subnet, str):
         return pack_subnet(ip.ip_network(subnet))
-    elif isinstance(subnet, ip.IPv4Network):
+    if isinstance(subnet, ip.IPv4Network):
         prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
         return (prefix + subnet.network_address.packed, subnet.prefixlen + 96)
-    elif isinstance(subnet, ip.IPv6Network):
+    if isinstance(subnet, ip.IPv6Network):
         return (subnet.network_address.packed, subnet.prefixlen)
 
 
-VastExtensionType = Union[IPType, EnumType, SubnetType]
+TenzirExtensionType = Union[IPType, EnumType, SubnetType]
 
 
 def py_dict_to_arrow_dict(x: dict[str, int]) -> pa.StringArray:
@@ -289,7 +308,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         arr = (pack_ip(e) for e in obj)
         storage = pa.array(arr, pa.binary(16))
         return pa.ExtensionArray.from_storage(datatype, storage)
-    elif isinstance(datatype, SubnetType):
+    if isinstance(datatype, SubnetType):
         arrs = list(zip(*[pack_subnet(e) for e in obj]))
         addr_storage = pa.array(arrs[0], pa.binary(16))
         addr_array = pa.ExtensionArray.from_storage(IPType(), addr_storage)
@@ -302,7 +321,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
             names=["address", "length"],
         )
         return pa.ExtensionArray.from_storage(datatype, storage)
-    elif isinstance(datatype, EnumType):
+    if isinstance(datatype, EnumType):
         fields = datatype.fields
         # use the mappings in the `fields` metadata as indices for building
         # the dictionary
@@ -311,8 +330,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         dictionary = py_dict_to_arrow_dict(fields)
         storage = pa.DictionaryArray.from_arrays(indices, dictionary)
         return pa.ExtensionArray.from_storage(datatype, storage)
-    else:
-        return pa.array(obj, datatype)
+    return pa.array(obj, datatype)
 
 
 def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
@@ -332,7 +350,7 @@ def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
             fields.append(inner_field)
             arrays.append(extension_array(inner_obj, inner_field.type))
         return pa.StructArray.from_arrays(arrays, fields=fields)
-    elif isinstance(datatype, pa.ListType):
+    if isinstance(datatype, pa.ListType):
         inner_type = datatype.value_type
         # Offset computation according to the rules in [1]
         # [1]: https://arrow.apache.org/docs/python/generated/pyarrow.ListArray.html#pyarrow.ListArray.from_arrays
@@ -349,8 +367,7 @@ def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         offsets.append(last_notnull_offset)
         array = extension_array(inner_sequence, inner_type)
         return pa.ListArray.from_arrays(offsets, array, datatype)
-    else:
-        return extension_array_scalar(obj, datatype)
+    return extension_array_scalar(obj, datatype)
 
 
 TenzirType = Union[
@@ -413,7 +430,7 @@ def infer_type(obj: TenzirType) -> pa.DataType:
             # The problem with structs is that we'd need to find a non-null sample for
             # every *nested* field in every subrecord or sublist.
             raise Exception(
-                "inferring the type of structs in lists is not supported yet"
+                "inferring the type of structs in lists is not supported yet",
             )
         return pa.list_(infer_type(sample_value))
     msg = f"cannot convert value of type {type(obj)} back to arrow"
