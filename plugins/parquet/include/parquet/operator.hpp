@@ -64,18 +64,15 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
       .emit(ctrl.diagnostics());
     co_return;
   }
-  std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
-  auto record_batch_reader_status
-    = out_buffer->GetRecordBatchReader(&rb_reader);
-  if (! record_batch_reader_status.ok()) {
-    diagnostic::error("{}",
-                      record_batch_reader_status.ToStringWithoutContextLines())
+  auto rb_reader = out_buffer->GetRecordBatchReader();
+  if (not rb_reader.ok()) {
+    diagnostic::error("{}", rb_reader.status().ToStringWithoutContextLines())
       .note("failed create record batches from input data")
       .emit(ctrl.diagnostics());
     co_return;
   }
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
-       *rb_reader) {
+       **rb_reader) {
     if (! maybe_batch.ok()) {
       diagnostic::error("{}",
                         maybe_batch.status().ToStringWithoutContextLines())
@@ -96,9 +93,9 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
 
 class parquet_options {
 public:
-  std::optional<located<int64_t>> compression_level{};
-  std::optional<located<std::string>> compression_type{};
-  std::optional<location> times_in_milliseconds{};
+  std::optional<located<int64_t>> compression_level;
+  std::optional<located<std::string>> compression_type;
+  std::optional<location> times_in_milliseconds;
 
   friend auto inspect(auto& f, parquet_options& x) -> bool {
     return f.object(x).fields(f.field("compression_level", x.compression_level),
