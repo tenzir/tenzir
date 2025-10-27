@@ -825,7 +825,7 @@ struct every_plugin final : public operator_plugin2<every_operator> {
       auto pipe = std::make_unique<pipeline>();
       pipe->append(std::make_unique<every_operator>(std::move(args)));
       pipe->append(std::make_unique<every_cron_sink_operator>(id, loc));
-      return std::move(pipe);
+      return failure_or<operator_ptr>{std::move(pipe)};
     }
     return std::make_unique<every_operator>(std::move(args));
   }
@@ -851,7 +851,7 @@ struct cron_plugin final : public operator_plugin2<cron_operator> {
       auto pipe = std::make_unique<pipeline>();
       pipe->append(std::make_unique<cron_operator>(std::move(args)));
       pipe->append(std::make_unique<every_cron_sink_operator>(id, loc));
-      return std::move(pipe);
+      return failure_or<operator_ptr>{std::move(pipe)};
     }
     return std::make_unique<cron_operator>(std::move(args));
   }
