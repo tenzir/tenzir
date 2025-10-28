@@ -97,7 +97,7 @@ template <class... Args>
 // caf::error can be mutated instead of creating a new object
 [[nodiscard]] caf::error
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
-  if (!in) {
+  if (! in) {
     return std::move(in);
   }
   TENZIR_ASSERT(in.category() == caf::type_id_v<tenzir::ec>);
@@ -166,14 +166,14 @@ caf::error convert(const data& src, To& dst);
 // Generic overload when `src` and `dst` are of the same type.
 // TODO: remove the `!std::integral` constraint once count is a real type.
 template <class Type, class T>
-  requires(!std::integral<T> || std::same_as<bool, T>)
+  requires(! std::integral<T> || std::same_as<bool, T>)
 caf::error convert(const T& src, T& dst, const Type&) {
   dst = src;
   return caf::none;
 }
 
 template <class From>
-  requires(!std::same_as<From, std::string>)
+  requires(! std::same_as<From, std::string>)
 caf::error convert(const From& src, std::string& dst, const string_type&) {
   // This convertible overload is essentially only used when we have YAML keys
   // that contain a scalar value (= signed integer), but want to parse a string.
@@ -214,7 +214,7 @@ caf::error convert(const int64_t& src, To& dst, const double_type&) {
 /// Overload for converting any arithmetic type to a floating point type.
 //  We need to exclude `From == To` to disambiguate overloads.
 template <concepts::arithmetic From, std::floating_point To>
-  requires(!std::same_as<From, To>)
+  requires(! std::same_as<From, To>)
 caf::error convert(const From& src, To& dst, const double_type&) {
   dst = src;
   return caf::none;
@@ -297,7 +297,7 @@ caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
 
 template <class From, class To, class Type>
 caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
-  if (!dst) {
+  if (! dst) {
     dst = To{};
   }
   if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t)) {
@@ -403,13 +403,13 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
   const auto kt = t.key_type();
   const auto vt = t.value_type();
   const auto* rvt = try_as<record_type>(&vt);
-  if (!rvt) {
+  if (! rvt) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": expected a record_type, but got {}",
                                        vt));
   }
   auto key_field_name = kt.attribute("key");
-  if (!key_field_name) {
+  if (! key_field_name) {
     return caf::make_error(
       ec::convert_error,
       fmt::format(": record type in list is missing a key field: {}", *rvt));
@@ -418,7 +418,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
   // field and and value from the pruned record type.
   for (const auto& element : src) {
     const auto* element_rec = try_as<record>(&element);
-    if (!element_rec) {
+    if (! element_rec) {
       return caf::make_error(ec::convert_error, ": expected record");
     }
     auto record_resolve_key
@@ -448,7 +448,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
     };
     auto key
       = record_resolve_key(record_resolve_key, *element_rec, *key_field_name);
-    if (!key) {
+    if (! key) {
       continue;
     }
     typename To::key_type key_dst{};
@@ -474,7 +474,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
     } else {
       // We need to strip an outer layer before handling the value of the map.
       auto stripped_vt_offset = rvt->resolve_key(stripped_record_prefix);
-      if (!stripped_vt_offset) {
+      if (! stripped_vt_offset) {
         return caf::make_error(
           ec::convert_error,
           fmt::format("failed to strip outer record {} from {} for key {}",
@@ -512,7 +512,7 @@ public:
     // Find the value from the record
     auto it = src.find(field.name);
     const auto& value = it != src.end() ? it->second : data{};
-    if (!field.type && is<caf::none_t>(value)) {
+    if (! field.type && is<caf::none_t>(value)) {
       return caf::make_error(ec::convert_error, fmt::format("failed to convert "
                                                             "field {} because "
                                                             "it has no type",
@@ -573,7 +573,7 @@ public:
 caf::error convert(const record& src, concepts::inspectable auto& dst,
                    const record_type& schema) {
   auto ri = record_inspector{schema, src};
-  if (auto result = inspect(ri, dst); !result) {
+  if (auto result = inspect(ri, dst); ! result) {
     return caf::make_error(ec::convert_error,
                            fmt::format("record inspection failed for record {} "
                                        "with schema {}",
@@ -601,7 +601,7 @@ caf::error convert(const data& src, To& dst) {
 template <registered_parser_type To>
 caf::error convert(std::string_view src, To& dst) {
   const auto* f = src.begin();
-  if (!parse(f, src.end(), dst)) {
+  if (! parse(f, src.end(), dst)) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": unable to parse \"{}\" into a {}",
                                        src, detail::pretty_type_name(dst)));
@@ -645,5 +645,17 @@ caf::error convert(const data& src, To& dst, const type& t) {
     }
   });
 }
+
+// template <typename From, typename To>
+//   requires(concrete_type<data_to_type_t<From>>
+//            and concrete_type<data_to_type_t<To>>)
+// auto convert(const From& from, To& to) -> caf::error {
+//   return convert(from, to, data_to_type_t<std::remove_cvref_t<To>>{});
+// }
+
+template <class From, class To, class... Opts>
+concept convertible = requires(From from, To& to, Opts&&... opts) {
+  convert(from, to, std::forward<Opts>(opts)...);
+};
 
 } // namespace tenzir

@@ -10,6 +10,7 @@
 #include <tenzir/secret.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 
 namespace tenzir::plugins::secret {
 

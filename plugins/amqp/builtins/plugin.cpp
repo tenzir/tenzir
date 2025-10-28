@@ -15,6 +15,7 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 
 #include <caf/expected.hpp>
 

@@ -28,6 +28,7 @@
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_get.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/api.h>
