@@ -30,9 +30,3 @@
 [submodule "plugins/web/aux/llhttp"]
 	path = plugins/web/aux/llhttp
 	url = https://github.com/nodejs/llhttp.git
-[submodule "libtenzir/aux/libcoro"]
-	path = libtenzir/aux/libcoro
-	url = https://github.com/jbaldwin/libcoro
-[submodule "libtenzir/aux/TooManyCooks"]
-	path = libtenzir/aux/TooManyCooks
-	url = https://github.com/tzcnt/TooManyCooks
