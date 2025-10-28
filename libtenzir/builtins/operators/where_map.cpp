@@ -851,6 +851,26 @@ public:
 };
 #endif
 
+class Where final : public Operator<table_slice, table_slice> {
+public:
+  explicit Where(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+    -> Task<void> override {
+    for (auto output : filter2(input, expr_, ctx, false)) {
+      co_await push(std::move(output));
+    }
+  }
+
+  friend auto inspect(auto& f, Where& x) -> bool {
+    return f.apply(x.expr_);
+  }
+
+private:
+  ast::expression expr_;
+};
+
 // TODO: Don't want to write this fully ourselves.
 class where_plan final : public plan::operator_base {
 public:
@@ -868,6 +888,10 @@ public:
     -> exec::operator_actor override {
     TENZIR_TODO();
     // return exec::spawn_operator<where_exec>(std::move(args), predicate_);
+  }
+
+  auto spawn(std::optional<chunk_ptr> restore) && -> OperatorPtr override {
+    return std::make_unique<Where>(predicate_);
   }
 
   friend auto inspect(auto& f, where_plan& x) -> bool {

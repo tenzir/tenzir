@@ -295,6 +295,21 @@ private:
   exec::subpipeline_actor sub_;
 };
 
+class Every final : public Operator<table_slice, table_slice> {
+public:
+  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+    -> Task<void> override {
+  }
+
+  auto checkpoint() -> Task<void> override {
+    co_return;
+  }
+
+private:
+  duration interval_;
+  ir::pipeline ir_;
+};
+
 class every_plan final : public plan::operator_base {
 public:
   every_plan() = default;

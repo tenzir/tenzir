@@ -24,6 +24,39 @@ namespace tenzir::plugins::head {
 
 namespace {
 
+class head_impl final : public Operator<table_slice, table_slice> {
+public:
+  explicit head_impl(size_t count) : remaining_{count} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+    -> Task<void> override {
+    // TODO: Do we want to guarantee this?
+    TENZIR_ASSERT(remaining_ > 0);
+    auto result = tenzir::head(input, remaining_);
+    TENZIR_ASSERT(result.rows() <= remaining_);
+    remaining_ -= result.rows();
+    co_await push(std::move(result));
+  }
+
+  auto checkpoint() -> Task<void> override {
+    // TODO: Save `remaining_`.
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    if (remaining_ == 0) {
+      // TODO: We also want to declare that we'll produce no more output and
+      // that we are ready to shutdown.
+      return OperatorState::no_more_input;
+    }
+    return OperatorState::unspecified;
+  }
+
+private:
+  size_t remaining_;
+};
+
 #if 0
 class head_exec : public exec::operator_base<uint64_t> {
 public:

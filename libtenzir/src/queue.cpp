@@ -540,154 +540,6 @@ private:
 //   std::shared_ptr<Mutex<BatchShared>> shared_;
 // };
 
-template <class T>
-class MutexGuard;
-
-template <class T>
-class Mutex {
-public:
-  explicit Mutex(T x) : value_{std::move(x)} {
-  }
-
-  auto lock() -> folly::coro::Task<MutexGuard<T>>;
-
-private:
-  friend class MutexGuard<T>;
-
-  folly::coro::Mutex mutex_;
-  T value_;
-};
-
-template <class T>
-class MutexGuard {
-public:
-  ~MutexGuard() noexcept {
-    try_unlock();
-  }
-
-  MutexGuard(MutexGuard&& other) noexcept {
-    *this = std::move(other);
-  }
-  auto operator=(MutexGuard&& other) noexcept -> MutexGuard& {
-    try_unlock();
-    locked_ = other.locked_;
-    other.locked_ = nullptr;
-    return *this;
-  }
-  MutexGuard(MutexGuard& other) = delete;
-  auto operator=(MutexGuard& other) = delete;
-
-  auto operator*() -> T& {
-    TENZIR_ASSERT(locked_);
-    return locked_->value_;
-  }
-
-  auto operator->() -> T* {
-    TENZIR_ASSERT(locked_);
-    return &locked_->value_;
-  }
-
-  auto unlock() -> void {
-    TENZIR_ASSERT(locked_);
-    locked_->mutex_.unlock();
-    locked_ = nullptr;
-  }
-
-private:
-  auto try_unlock() -> void {
-    if (locked_) {
-      locked_->mutex_.unlock();
-    }
-  }
-
-  friend class Mutex<T>;
-
-  explicit MutexGuard(Mutex<T>& mutex) : locked_{&mutex} {
-  }
-
-  Mutex<T>* locked_;
-};
-
-template <class T>
-auto Mutex<T>::lock() -> folly::coro::Task<MutexGuard<T>> {
-  co_await mutex_.co_lock();
-  co_return MutexGuard<T>{*this};
-}
-
-struct BatchShared {
-  struct Locked {
-    explicit Locked(int limit) : remaining{limit} {
-    }
-
-    int remaining;
-    std::deque<int> queue;
-  };
-
-  explicit BatchShared(int limit) : mutex{Locked{limit}} {
-  }
-
-  // TODO: This can surely be written better?
-  Mutex<Locked> mutex;
-  folly::coro::Baton remaining_increased;
-  folly::coro::Baton queue_pushed;
-};
-
-class BatchSender {
-public:
-  BatchSender(std::shared_ptr<BatchShared> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  auto send(int x) -> folly::coro::Task<void> {
-    auto lock = co_await shared_->mutex.lock();
-    while (x > lock->remaining) {
-      lock.unlock();
-      co_await shared_->remaining_increased;
-      shared_->remaining_increased.reset();
-      lock = co_await shared_->mutex.lock();
-    }
-    lock->remaining -= x;
-    lock->queue.push_back(x);
-    shared_->queue_pushed.post();
-  }
-
-private:
-  std::shared_ptr<BatchShared> shared_;
-};
-
-class BatchReceiver {
-public:
-  BatchReceiver(std::shared_ptr<BatchShared> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  auto receive() -> folly::coro::Task<int> {
-    auto lock = co_await shared_->mutex.lock();
-    while (lock->queue.empty()) {
-      lock.unlock();
-      co_await shared_->queue_pushed;
-      shared_->queue_pushed.reset();
-      lock = co_await shared_->mutex.lock();
-    }
-    auto result = std::move(lock->queue.front());
-    lock->queue.pop_front();
-    lock->remaining += result;
-    shared_->remaining_increased.post();
-    co_return result;
-  }
-
-private:
-  std::shared_ptr<BatchShared> shared_;
-  // The channel is not shared because the token is not thread-safe.
-};
-
-auto make_channel(int limit) -> std::pair<BatchSender, BatchReceiver> {
-  auto shared = std::make_shared<BatchShared>(limit);
-  auto sender = BatchSender{shared};
-  auto receiver = BatchReceiver{std::move(shared)};
-  return {std::move(sender), std::move(receiver)};
-}
-
 // auto example2(BatchSender sender) -> Future<int> {
 //   co_await sender.send(42);
 //   co_return 123;
@@ -703,11 +555,11 @@ auto example2() -> Future<int> {
   co_return n;
 }
 
-auto example() -> folly::coro::Task<int> {
-  auto [sender, receiver] = make_channel(42);
-  co_await sender.send(42);
-  auto n = co_await receiver.receive();
-  co_return n;
-}
+// auto example() -> folly::coro::Task<int> {
+//   auto [sender, receiver] = make_channel(42);
+//   co_await sender.send(42);
+//   auto n = co_await receiver.receive();
+//   co_return n;
+// }
 
 } // namespace tenzir::queue_test

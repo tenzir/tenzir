@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/exec/operator.hpp"
@@ -26,6 +27,7 @@
 #include <caf/actor_from_state.hpp>
 #include <caf/scheduled_actor/flow.hpp>
 #include <flatbuffers/base.h>
+#include <folly/coro/Sleep.h>
 #include <openssl/configuration.h>
 
 #include <simdjson.h>
@@ -327,6 +329,42 @@ private:
   }
 };
 #endif
+
+class version_impl final : public SourceOperator<table_slice, size_t> {
+public:
+  auto next() const -> Task<std::optional<size_t>> override {
+    // This is just a test to see what happens if we want to return the version
+    // five times with 1 second of sleep in between.
+    if (remaining_ == 0) {
+      co_return std::nullopt;
+    }
+    if (remaining_ < 5) {
+      co_await folly::coro::sleep(std::chrono::seconds{1});
+    }
+    // Just return the count here as a test.
+    co_return remaining_;
+  }
+
+  auto process(size_t result, Push<table_slice>& push, AsyncCtx& ctx)
+    -> Task<void> override {
+    TENZIR_WARN("got result: {}", result);
+    auto slice = make_version(caf::content(ctx.caf().config()));
+    co_await push(slice);
+    remaining_ -= 1;
+  }
+
+  auto checkpoint() -> Task<void> override {
+    // TODO: Checkpoint the count.
+    (void)remaining_;
+    co_return;
+  }
+
+  // Not necessary for this.
+  // auto post_commit() -> Task<void> override;
+
+private:
+  size_t remaining_ = 5;
+};
 
 class version_bp final : public plan::operator_base {
 public:

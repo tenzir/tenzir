@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/async.hpp"
 #include "tenzir/plan/operator_spawn_args.hpp"
 #include "tenzir/plugin.hpp"
 
@@ -22,8 +23,13 @@ public:
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto spawn(operator_spawn_args args) const -> exec::operator_actor
-    = 0;
+  virtual auto spawn(operator_spawn_args args) const -> exec::operator_actor {
+    TENZIR_TODO();
+  }
+
+  virtual auto spawn(std::optional<chunk_ptr> restore) && -> OperatorPtr {
+    TENZIR_TODO();
+  }
 };
 
 using operator_ptr = std::unique_ptr<operator_base>;
