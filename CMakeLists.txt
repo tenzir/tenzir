@@ -210,7 +210,7 @@ elseif (TENZIR_ALLOCATOR STREQUAL "system")
 elseif (TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_RUNTIME")
 else ()
-  message(ERROR "unknown TENZIR_ALLOCATOR")
+  message(FATAL_ERROR "unknown TENZIR_ALLOCATOR")
 endif ()
 
 # -- internal target -----------------------------------------------------------

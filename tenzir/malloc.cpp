@@ -8,9 +8,21 @@
 #  include <cstddef>
 #  include <cstring>
 #  include <limits>
+#  include <mimalloc.h>
 #  include <new>
 
 namespace {
+
+/// We know that mimallocs default alignment is 16:
+/// https://github.com/microsoft/mimalloc/blob/v3.1.5/include/mimalloc/types.h#L32-L34
+/// This header unfortunately is not installed.
+/// We now need to ensure that this is at least as strict as the default
+/// alignment of the system malloc, in order to maintain the alignment
+/// guarantees on our malloc override. This is not great as it decouples us from
+/// the actual value used by mimalloc, however it will only be an issue if we
+/// ever compile on a system where the default alignment is 32 bytes.
+static_assert(alignof(std::max_align_t) <= 16,
+              "Unexpectedly large default alignment");
 
 [[nodiscard]] constexpr auto
 multiply_overflows(std::size_t lhs, std::size_t rhs,

@@ -81,157 +81,6 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
   bytes_current.fetch_sub(remove, std::memory_order_relaxed);
 }
 
-constexpr auto align_mask(std::align_val_t alignment) noexcept
-  -> std::uintptr_t {
-  return std::to_underlying(alignment) - 1;
-}
-
-constexpr auto is_aligned(void* ptr, std::align_val_t alignment) noexcept
-  -> bool {
-  return (reinterpret_cast<std::uintptr_t>(ptr) & align_mask(alignment)) == 0;
-}
-
-constexpr auto is_aligned(std::size_t size, std::align_val_t alignment) noexcept
-  -> bool {
-  return (size & align_mask(alignment)) == 0;
-}
-
-constexpr auto align(std::size_t size, std::align_val_t alignment) noexcept
-  -> std::size_t {
-  const auto remainder = size & align_mask(alignment);
-  return size + (remainder > 0) * (std::to_underlying(alignment) - remainder);
-}
-
-namespace detail {
-
-template <allocator_configuration config>
-auto allocator_impl<config>::allocate(std::size_t size) noexcept -> void* {
-  auto* const ptr = config.alloc(size);
-  if (ptr == nullptr) {
-    return {};
-  }
-  if (stats_) {
-    stats_->note_allocation(config.size(ptr));
-  }
-  return ptr;
-}
-
-template <allocator_configuration config>
-auto allocator_impl<config>::allocate(std::size_t size,
-                                      std::align_val_t alignment) noexcept
-  -> void* {
-  if (alignment < default_alignment) {
-    return allocate(size);
-  }
-  size = align(size, alignment);
-  auto* const ptr = config.alloc_aligned(size, std::to_underlying(alignment));
-  if (ptr == nullptr) {
-    return {};
-  }
-  if (stats_) {
-    stats_->note_allocation(config.size(ptr));
-  }
-  return ptr;
-}
-
-template <allocator_configuration config>
-auto allocator_impl<config>::calloc(std::size_t count,
-                                    std::size_t size) noexcept -> void* {
-  auto* const ptr = config.calloc(count, size);
-  if (ptr == nullptr) {
-    return {};
-  }
-  if (stats_) {
-    stats_->note_allocation(config.size(ptr));
-  }
-  return ptr;
-}
-
-template <allocator_configuration config>
-auto allocator_impl<config>::calloc(std::size_t count, std::size_t size,
-                                    std::align_val_t alignment) noexcept
-  -> void* {
-  if (alignment < default_alignment) {
-    return calloc(count, size);
-  }
-  auto* const ptr
-    = config.calloc_aligned(count, size, std::to_underlying(alignment));
-  if (ptr == nullptr) {
-    return {};
-  }
-  if (stats_) {
-    stats_->note_allocation(config.size(ptr));
-  }
-  return ptr;
-}
-
-template <allocator_configuration config>
-auto allocator_impl<config>::deallocate(void* ptr) noexcept -> void {
-  if (ptr == nullptr) {
-    return;
-  }
-  if (stats_) {
-    stats_->note_deallocation(config.size(ptr));
-  }
-  config.dealloc(ptr);
-  return;
-}
-
-template <allocator_configuration config>
-auto allocator_impl<config>::reallocate(void* old_ptr,
-                                        std::size_t new_size) noexcept
-  -> void* {
-  if (new_size == 0) {
-    deallocate(old_ptr);
-    return nullptr;
-  }
-  const auto old_size = config.size(old_ptr);
-  if (old_size >= new_size) {
-    return old_ptr;
-  }
-  void* const new_ptr = config.realloc(old_ptr, new_size);
-  if (new_ptr == nullptr) {
-    return nullptr;
-  }
-  if (stats_) {
-    new_size = config.size(new_ptr);
-    stats_->note_reallocation(old_ptr != new_ptr, old_size, new_size);
-  }
-  return new_ptr;
-}
-
-template <allocator_configuration config>
-auto allocator_impl<config>::reallocate(void* old_ptr, std::size_t new_size,
-                                        std::align_val_t alignment) noexcept
-  -> void* {
-  if (new_size == 0) {
-    deallocate(old_ptr);
-    return nullptr;
-  }
-  if (alignment <= config.default_alignment) {
-    return reallocate(old_ptr, new_size);
-  }
-  const auto old_size = config.size(old_ptr);
-  if (old_size >= new_size) {
-    return old_ptr;
-  }
-  void* const new_ptr
-    = config.realloc_aligned(old_ptr, new_size, std::to_underlying(alignment));
-  if (new_ptr == nullptr) {
-    return nullptr;
-  }
-  if (stats_) {
-    new_size = config.size(new_ptr);
-    stats_->note_reallocation(old_ptr != new_ptr, old_size, new_size);
-  }
-  return new_ptr;
-}
-
-template class allocator_impl<mimalloc::config>;
-template class allocator_impl<system::config>;
-
-} // namespace detail
-
 namespace mimalloc {
 
 namespace {
@@ -253,6 +102,16 @@ auto trim() noexcept -> void {
 namespace system {
 
 namespace {
+
+constexpr auto align_mask(std::align_val_t alignment) noexcept
+  -> std::uintptr_t {
+  return std::to_underlying(alignment) - 1;
+}
+
+constexpr auto is_aligned(void* ptr, std::align_val_t alignment) noexcept
+  -> bool {
+  return (reinterpret_cast<std::uintptr_t>(ptr) & align_mask(alignment)) == 0;
+}
 
 [[nodiscard]] constexpr auto
 multiply_overflows(std::size_t lhs, std::size_t rhs,

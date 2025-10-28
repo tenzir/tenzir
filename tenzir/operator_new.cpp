@@ -16,12 +16,16 @@
 
 namespace {
 
-static_assert(
-  std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
-  == tenzir::memory::mimalloc::polymorphic_allocator::default_alignment);
-static_assert(
-  std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__}
-  == tenzir::memory::system::polymorphic_allocator::default_alignment);
+/// We know that mimallocs default alignment is 16:
+/// https://github.com/microsoft/mimalloc/blob/v3.1.5/include/mimalloc/types.h#L32-L34
+/// This header unfortunately is not installed.
+/// We now need to ensure that this is at least as strict as the default
+/// alignment of the system malloc, in order to maintain the alignment
+/// guarantees on our malloc override. This is not great as it decouples us from
+/// the actual value used by mimalloc, however it will only be an issue if we
+/// ever compile on a system where the default alignment is 32 bytes.
+static_assert(__STDCPP_DEFAULT_NEW_ALIGNMENT__ <= 16,
+              "Unexpectedly large default alignment");
 
 template <bool throws>
 [[nodiscard, gnu::hot, gnu::alloc_size(1)]]
