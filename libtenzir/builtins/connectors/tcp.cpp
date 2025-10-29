@@ -56,7 +56,9 @@ struct tcp_bridge_actor_traits {
     // Initialize listening with arguments.
     auto(atom::accept)->caf::result<void>,
     // Write a chunk to the socket.
-    auto(atom::write, chunk_ptr chunk)->caf::result<void>>;
+    auto(atom::write, chunk_ptr chunk)->caf::result<void>,
+    // Send a stop signal.
+    auto(atom::stop)->caf::result<void>>;
 };
 
 using tcp_bridge_actor = caf::typed_actor<tcp_bridge_actor_traits>;
@@ -114,13 +116,11 @@ public:
   tcp_bridge(tcp_bridge_actor::pointer self, metric_handler mh,
              shared_diagnostic_handler dh, saver_args args)
     : self_{self},
-      metrics_{.metric_handler = mh},
+      metrics_{.metric_handler = std::move(mh)},
       diagnostic_handler_{std::move(dh)},
       args_{std::move(args)} {
-    io_ctx_ = std::make_shared<boost::asio::io_context>();
     socket_.emplace(*io_ctx_);
     worker_ = std::thread([io_ctx = io_ctx_]() {
-      auto guard = boost::asio::make_work_guard(*io_ctx);
       io_ctx->run();
     });
     detail::weak_run_delayed_loop(
@@ -129,16 +129,6 @@ public:
         metrics_.emit();
       },
       /*run_immediately=*/false);
-  }
-
-  ~tcp_bridge() noexcept {
-    TENZIR_ASSERT(io_ctx_);
-    io_ctx_->stop();
-    worker_.join();
-    metrics_.emit();
-    if (retry_timer_) {
-      retry_timer_->cancel();
-    }
   }
 
   auto make_behavior() -> tcp_bridge_actor::behavior_type {
@@ -151,6 +141,9 @@ public:
       },
       [this](atom::write, chunk_ptr chunk) -> caf::result<void> {
         return write(std::move(chunk));
+      },
+      [this](atom::stop) -> caf::result<void> {
+        return stop();
       },
     };
   }
@@ -568,6 +561,16 @@ public:
     return write_rp_;
   }
 
+  auto stop() -> caf::result<void> {
+    work_guard_.reset();
+    worker_.join();
+    metrics_.emit();
+    if (retry_timer_) {
+      retry_timer_->cancel();
+    }
+    return {};
+  }
+
   tcp_bridge_actor::pointer self_ = {};
   // Retry logic members
   duration current_retry_delay_ = {};
@@ -577,7 +580,10 @@ public:
   bool is_connected_ = {};
   std::optional<std::pair<caf::typed_response_promise<void>, chunk_ptr>>
     pending_write_;
-  std::shared_ptr<boost::asio::io_context> io_ctx_;
+  std::shared_ptr<boost::asio::io_context> io_ctx_
+    = std::make_shared<boost::asio::io_context>();
+  boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
+    work_guard_ = boost::asio::make_work_guard(*io_ctx_);
   std::thread worker_;
   std::optional<boost::asio::ip::tcp::socket> socket_;
   std::optional<boost::asio::ssl::context> ssl_ctx_;
@@ -692,6 +698,20 @@ public:
       ctrl.set_waiting(true);
       co_yield {};
     }
+    ctrl.self()
+      .mail(atom::stop_v)
+      .request(tcp_bridge, caf::infinite)
+      .then(
+        [&]() {
+          ctrl.set_waiting(false);
+        },
+        [&](const caf::error& err) {
+          diagnostic::error("save_tcp encountered an error while stopping: {}",
+                            err)
+            .emit(ctrl.diagnostics());
+        });
+    ctrl.set_waiting(true);
+    co_yield {};
   }
 
   auto name() const -> std::string override {

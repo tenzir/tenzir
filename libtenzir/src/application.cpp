@@ -231,10 +231,10 @@ void render_error(const command& root, const caf::error& err,
       case ec::invalid_subcommand:
       case ec::missing_subcommand:
       case ec::unrecognized_option: {
-        auto ctx = err.context();
+        const auto& ctx = err.context();
         if (ctx.match_element<std::string>(1)) {
-          auto name = ctx.get_as<std::string>(1);
-          if (auto cmd = resolve(root, name)) {
+          const auto& name = ctx.get_as<std::string>(1);
+          if (const auto* cmd = resolve(root, name)) {
             helptext(*cmd, os);
           }
         } else {

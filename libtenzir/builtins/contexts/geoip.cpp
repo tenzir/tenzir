@@ -32,6 +32,12 @@
 #include <string_view>
 #include <utility>
 
+// In case libmaxminddb is built with cmake this var is undefined, in case it is
+// built with autotools it is set to '0'.
+#ifndef MMDB_UINT128_IS_BYTE_ARRAY
+#  define MMDB_UINT128_IS_BYTE_ARRAY 0
+#endif
+
 namespace tenzir::plugins::geoip {
 
 namespace {
@@ -97,7 +103,7 @@ auto cast_128_bit_unsigned_to_64_bit(mmdb_uint128_t uint128) -> uint64_t {
 #endif
 
 struct current_dump {
-  std::set<uint64_t> visited = {};
+  std::set<uint64_t> visited;
   int status = MMDB_SUCCESS;
   series_builder builder;
 };
