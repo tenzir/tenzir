@@ -39,11 +39,6 @@ public:
     co_await push(std::move(result));
   }
 
-  auto checkpoint() -> Task<void> override {
-    // TODO: Save `remaining_`.
-    co_return;
-  }
-
   auto state() -> OperatorState override {
     if (remaining_ == 0) {
       // TODO: We also want to declare that we'll produce no more output and
@@ -51,6 +46,11 @@ public:
       return OperatorState::no_more_input;
     }
     return OperatorState::unspecified;
+  }
+
+  auto checkpoint() -> Task<void> override {
+    // TODO: Save `remaining_`.
+    co_return;
   }
 
 private:

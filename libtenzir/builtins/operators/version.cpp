@@ -330,7 +330,7 @@ private:
 };
 #endif
 
-class version_impl final : public SourceOperator<table_slice, size_t> {
+class Version final : public SourceOperator<table_slice, size_t> {
 public:
   auto next() const -> Task<std::optional<size_t>> override {
     // This is just a test to see what happens if we want to return the version
@@ -339,7 +339,7 @@ public:
       co_return std::nullopt;
     }
     if (remaining_ < 5) {
-      co_await folly::coro::sleep(std::chrono::seconds{1});
+      co_await folly::coro::sleep(std::chrono::milliseconds{200});
     }
     // Just return the count here as a test.
     co_return remaining_;
@@ -366,12 +366,12 @@ private:
   size_t remaining_ = 5;
 };
 
-class version_bp final : public plan::operator_base {
+class version_plan final : public plan::operator_base {
 public:
-  version_bp() = default;
+  version_plan() = default;
 
   auto name() const -> std::string override {
-    return "version_bp";
+    return "version_plan";
   }
 
   auto spawn(plan::operator_spawn_args args) const
@@ -382,7 +382,12 @@ public:
     return args.sys.spawn(caf::actor_from_state<version_exec>);
   }
 
-  friend auto inspect(auto& f, version_bp& x) -> bool {
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    TENZIR_WARN("spawning version plan");
+    return SourceOperatorWrapper<table_slice, size_t>{Version{}};
+  }
+
+  friend auto inspect(auto& f, version_plan& x) -> bool {
     return f.object(x).fields();
   }
 };
@@ -406,7 +411,7 @@ public:
 
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TENZIR_UNUSED(ctx);
-    return std::make_unique<version_bp>();
+    return std::make_unique<version_plan>();
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -473,4 +478,4 @@ TENZIR_REGISTER_PLUGIN(
                             tenzir::plugins::version::version_ir>);
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::plan::operator_base,
-                            tenzir::plugins::version::version_bp>);
+                            tenzir::plugins::version::version_plan>);

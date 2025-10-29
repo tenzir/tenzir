@@ -255,12 +255,20 @@ private:
 };
 #endif
 
-class discard_bp final : public plan::operator_base {
+class DiscardImpl final : public Operator<table_slice, void> {
 public:
-  discard_bp() = default;
+  auto process(table_slice input, AsyncCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(input, ctx);
+    co_return;
+  }
+};
+
+class discard_plan final : public plan::operator_base {
+public:
+  discard_plan() = default;
 
   auto name() const -> std::string override {
-    return "discard_bp";
+    return "discard_plan";
   }
 
   auto spawn(plan::operator_spawn_args args) const
@@ -268,7 +276,12 @@ public:
     return args.sys.spawn(caf::actor_from_state<discard_exec>);
   }
 
-  friend auto inspect(auto& f, discard_bp& x) -> bool {
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    TENZIR_WARN("spawning discard plan");
+    return DiscardImpl{};
+  }
+
+  friend auto inspect(auto& f, discard_plan& x) -> bool {
     return f.object(x).fields();
   }
 };
@@ -289,7 +302,7 @@ public:
 
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TENZIR_UNUSED(ctx);
-    return std::make_unique<discard_bp>();
+    return std::make_unique<discard_plan>();
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler&) const
@@ -343,4 +356,4 @@ TENZIR_REGISTER_PLUGIN(
                             tenzir::plugins::discard::discard_ir>);
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::plan::operator_base,
-                            tenzir::plugins::discard::discard_bp>);
+                            tenzir::plugins::discard::discard_plan>);

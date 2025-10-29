@@ -31,12 +31,13 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
-#include <caf/config_value.hpp>
-#include <caf/settings.hpp>
 #include <caf/actor_from_state.hpp>
+#include <caf/config_value.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scheduler.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
+#include <folly/coro/BlockingWait.h>
 #include <tsl/robin_set.h>
 
 #include <filesystem>
@@ -523,6 +524,30 @@ auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
   return {};
 }
 
+auto run_plan(plan::pipeline pipe, caf::actor_system& sys)
+  -> Task<failure_or<void>> {
+  TENZIR_WARN("spawning plan");
+  auto ops = std::vector<AnyOperator>{};
+  for (auto& op : std::move(pipe).unwrap()) {
+    ops.push_back(std::move(*op).spawn(std::nullopt));
+  }
+  auto chain = OperatorChain<void, void>::try_from(std::move(ops));
+  // TODO
+  TENZIR_ASSERT(chain);
+  auto [outer_sender, receiver] = make_op_channel<void>(10);
+  auto [sender, outer_receiver] = make_op_channel<void>(10);
+  co_await outer_sender.send(Signal::checkpoint);
+  TENZIR_WARN("blocking on pipeline");
+  co_await run_pipeline(std::move(*chain), std::move(receiver),
+                        std::move(sender), sys);
+  co_return {};
+}
+
+auto run_plan_blocking(plan::pipeline pipe, caf::actor_system& sys)
+  -> failure_or<void> {
+  return folly::coro::blockingWait(run_plan(std::move(pipe), sys));
+}
+
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys) -> failure_or<bool> {
@@ -605,9 +630,14 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
+#if 1
+  TRY(run_plan_blocking(std::move(finalized), sys));
+  return true;
+#else
   auto exec = exec::make_pipeline(
     std::move(finalized), exec::pipeline_settings{}, std::nullopt, b_ctx);
   return run_pipeline(std::move(exec), b_ctx).is_success();
+#endif
 }
 
 // TODO: Source for diagnostic handler?

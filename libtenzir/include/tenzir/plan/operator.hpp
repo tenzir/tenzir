@@ -27,7 +27,7 @@ public:
     TENZIR_TODO();
   }
 
-  virtual auto spawn(std::optional<chunk_ptr> restore) && -> OperatorPtr {
+  virtual auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator {
     TENZIR_TODO();
   }
 };

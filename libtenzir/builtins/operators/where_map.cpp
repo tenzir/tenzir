@@ -890,8 +890,8 @@ public:
     // return exec::spawn_operator<where_exec>(std::move(args), predicate_);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> OperatorPtr override {
-    return std::make_unique<Where>(predicate_);
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    return Where{std::move(predicate_)};
   }
 
   friend auto inspect(auto& f, where_plan& x) -> bool {
