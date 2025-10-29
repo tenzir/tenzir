@@ -148,7 +148,7 @@ TEST("materialization record list record") {
   CHECK(not b.has_elements());
 }
 
-TEST("overwrite record fields") {
+TEST("duplicate record fields overwrite") {
   auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -176,6 +176,53 @@ TEST("overwrite record fields") {
   //   fmt::print("{}\n", sig);
   //   fmt::print("{}\n", expected);
   CHECK(compare_signatures(expected, sig));
+}
+
+TEST("duplicate record fields to_list") {
+  auto b = data_builder{
+    data_builder::settings{
+      .building_settings={
+        .duplicate_keys = duplicate_keys::to_list,
+      },
+    },
+  };
+  /// We expect this to get upgraded to `list<double>`, because the key is
+  /// repeated, all alternatives are numbers and one of them is a `double`.
+  auto* r = b.record();
+  r->field("0")->data(uint64_t{0});
+  r->field("0")->data(int64_t{1});
+  r->field("0")->data(2.0);
+  r->field("0")->data(uint64_t{3});
+
+  CHECK(b.has_elements());
+  detail::data_builder::signature_type sig;
+
+  b.append_signature_to(sig, nullptr);
+
+  detail::data_builder::signature_type expected;
+  {
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
+    {
+      const auto key_bytes = as_bytes("0"sv);
+      expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
+      expected.insert(expected.end(), detail::data_builder::list_start_marker);
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, double>::value));
+      expected.insert(expected.end(), detail::data_builder::list_end_marker);
+    }
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
+  }
+  //   fmt::print("{}\n", sig);
+  //   fmt::print("{}\n", expected);
+  CHECK(compare_signatures(expected, sig));
+
+  const auto d = b.materialize();
+  const auto expected_d = tenzir::data{tenzir::record{
+    {"0", tenzir::list{0.0, 1.0, 2.0, 3.0}},
+  }};
+  CHECK_EQUAL(d, expected_d);
+  // fmt::println("{}", d);
 }
 
 TEST("signature record empty") {
@@ -264,9 +311,11 @@ TEST("signature list") {
 TEST("signature list records") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
+    data_builder::settings{
+      .schema_only = true,
+    },
     detail::data_builder::basic_parser,
     &dh,
-    true,
   };
 
   auto* l = b.list();
@@ -345,9 +394,11 @@ TEST("signature list numeric unification") {
 TEST("signature list mismatch") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
+    data_builder::settings{
+      .schema_only = true,
+    },
     detail::data_builder::basic_parser,
     &dh,
-    true,
   };
   auto* l = b.list();
   l->data(0.0);
@@ -607,9 +658,11 @@ TEST("signature record seeding nested list") {
 
 TEST("signature record seeding field not in data schema_only") {
   auto b = data_builder{
+    data_builder::settings{
+      .schema_only = true,
+    },
     detail::data_builder::basic_parser,
     nullptr,
-    true,
   };
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
@@ -687,9 +740,12 @@ TEST("signature record seeding data - field not in seed") {
 
 TEST("signature record seeding data - field not in seed schema_only") {
   auto b = data_builder{
+    data_builder::settings{
+      .building_settings = {},
+      .schema_only = true,
+    },
     detail::data_builder::basic_parser,
     nullptr,
-    true,
   };
   auto* r = b.record();
   r->field("1")->data(int64_t{0});
