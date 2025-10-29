@@ -9,6 +9,8 @@
 #include "tenzir/async.hpp"
 
 #include <folly/Executor.h>
+#include <folly/coro/BlockingWait.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
@@ -68,38 +70,61 @@ struct Shutdown {};
 
 using FromControl = variant<PostCommit, Shutdown>;
 
-enum class ToControl {
-  /// Notify the host that we are ready to shutdown. After emitting this, the
-  /// operator is no longer allowed to send data, so it should tell its previous
-  /// operator to stop and its subsequent operator that it will not get any more
-  /// input.
+TENZIR_ENUM(
+  ///
+  ToControl,
+  /// Notify the host that we are ready to shutdown. After emitting
+  /// this, the operator is no longer allowed to send data, so it
+  /// should tell its previous operator to stop and its subsequent
+  /// operator that it will not get any more input.
   ready_for_shutdown,
   /// Say that we do not want any more input.
-  no_more_input,
-};
+  no_more_input);
 
 template <class T>
-using SpscQueue = folly::coro::SmallUnboundedQueue<T, true, true>;
+using UnboundedQueue = folly::coro::UnboundedQueue<T>;
 
 template <class T>
 class Receiver {
 public:
-  explicit Receiver(std::shared_ptr<SpscQueue<T>> queue)
+  explicit Receiver(std::shared_ptr<UnboundedQueue<T>> queue)
     : queue_{std::move(queue)} {
+    TENZIR_ASSERT(queue_);
   }
 
   auto receive() -> Task<T> {
-    return queue_->dequeue();
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_ERROR("CANCELLED");
+    }};
+    TENZIR_VERBOSE("waiting for queue in receiver ({})",
+                   fmt::ptr(queue_.get()));
+    TENZIR_ASSERT(queue_);
+    auto result = co_await queue_->dequeue();
+    guard.disable();
+    co_return result;
+  }
+
+  auto into_generator() && -> AsyncGenerator<T> {
+    return folly::coro::co_invoke(
+      [self = std::move(*this)] mutable -> AsyncGenerator<T> {
+        TENZIR_VERBOSE("starting receiver generator");
+        while (true) {
+          auto result = co_await self.receive();
+          TENZIR_VERBOSE("got item in receiver generator");
+          co_yield std::move(result);
+          TENZIR_VERBOSE("continuing in result generator");
+        }
+      });
   }
 
 private:
-  std::shared_ptr<SpscQueue<T>> queue_;
+  std::shared_ptr<UnboundedQueue<T>> queue_;
 };
 
 template <class T>
 class Sender {
 public:
-  explicit Sender(std::shared_ptr<SpscQueue<T>> queue)
+  explicit Sender(std::shared_ptr<UnboundedQueue<T>> queue)
     : queue_{std::move(queue)} {
   }
 
@@ -108,12 +133,12 @@ public:
   }
 
 private:
-  std::shared_ptr<SpscQueue<T>> queue_;
+  std::shared_ptr<UnboundedQueue<T>> queue_;
 };
 
 template <class T>
 auto make_unbounded_channel() -> std::pair<Sender<T>, Receiver<T>> {
-  auto shared = std::make_shared<SpscQueue<T>>();
+  auto shared = std::make_shared<UnboundedQueue<T>>();
   return {Sender<T>{shared}, Receiver<T>{shared}};
 }
 
@@ -131,14 +156,121 @@ private:
   OpSender<T>& sender_;
 };
 
+/// Convenience wrapper around `folly::coro::AsyncScope`.
+class AsyncScope {
+public:
+  ~AsyncScope() {
+    if (needs_join_) {
+      TENZIR_ERROR("did not join async scope");
+      // This might not work, but we can at least try.
+      folly::coro::blockingWait(cancel_and_join());
+    }
+  }
+
+  AsyncScope() = default;
+  AsyncScope(AsyncScope&&) = delete;
+  auto operator=(AsyncScope&&) -> AsyncScope& = delete;
+  AsyncScope(const AsyncScope&) = delete;
+  auto operator=(const AsyncScope&) -> AsyncScope& = delete;
+
+  auto add(Task<void> task) -> Task<void> {
+    auto executor = co_await folly::coro::co_current_executor;
+    scope_.add(folly::coro::co_withExecutor(executor, std::move(task)));
+    needs_join_ = true;
+  }
+
+  auto join() -> Task<void> {
+    co_await scope_.joinAsync();
+    needs_join_ = false;
+  }
+
+  auto remaining() -> size_t {
+    return scope_.remaining();
+  }
+
+  /// This MUST be called before destroying this object!
+  auto cancel_and_join() -> Task<void> {
+    co_await scope_.cancelAndJoinAsync();
+    needs_join_ = false;
+  }
+
+private:
+  bool needs_join_ = false;
+  folly::coro::CancellableAsyncScope scope_;
+};
+
+/// This is a bit similar to `folly::coro::merge`, but we can't use that because
+/// in our setup, some of the async generators would never finish. This means
+/// that the merged generator does not finish. Thus, we have to destroy early,
+/// and the docs warn against that:
+/// > If the output stream is destroyed early (before reaching end-of-stream or
+/// > exception), the remaining input generators are cancelled and detached;
+/// > beware of use-after-free.
+template <class T>
+class QueueScope {
+public:
+  template <class U>
+    requires std::constructible_from<T, U>
+  auto add(Task<U> task) -> Task<void> {
+    co_await scope_.add(folly::coro::co_invoke(
+      [this, task = std::move(task)] mutable -> Task<void> {
+        TENZIR_VERBOSE("starting task from queue");
+        co_await queue_.enqueue(co_await std::move(task));
+      }));
+  }
+
+#if 0
+  auto add(Task<void> task) -> Task<void> {
+    auto executor = co_await folly::coro::co_current_executor;
+    scope_.add(folly::coro::co_withExecutor(executor, std::move(task)));
+    needs_join_ = true;
+  }
+#endif
+
+#if 1
+  template <class U>
+  auto add(AsyncGenerator<U> gen) -> Task<void> {
+    co_await scope_.add(folly::coro::co_invoke(
+      [this, gen = std::move(gen)] mutable -> Task<void> {
+        TENZIR_VERBOSE("starting async generator from queue");
+        while (auto item = co_await gen.next()) {
+          TENZIR_VERBOSE("got item in async generator from queue");
+          co_await queue_.enqueue(std::move(*item));
+        }
+      }));
+  }
+#endif
+
+  auto next() -> Task<T> {
+    return queue_.dequeue();
+  }
+
+  auto join() -> Task<void> {
+    co_await scope_.join();
+  }
+
+  auto cancel_and_join() -> Task<void> {
+    co_await scope_.cancel_and_join();
+  }
+
+private:
+  folly::coro::BoundedQueue<T> queue_{1};
+  AsyncScope scope_;
+};
+
 template <class Input, class Output>
   requires(not std::same_as<Input, void>)
 struct NonSourceRunner {
   auto run_to_completion() -> Task<void> {
     TENZIR_INFO("entering run loop for non-source");
+    co_await queue_.add(input.receive());
+    co_await queue_.add(from_control.receive());
     while (not got_shutdown_request) {
       co_await tick();
     }
+    TENZIR_WARN("shutting down non-source");
+    co_await queue_.cancel_and_join();
+    TENZIR_WARN("shut down non-source");
   }
 
   auto tick() -> Task<void> {
@@ -154,8 +286,7 @@ struct NonSourceRunner {
     // FIXME: This might not be the best approach, because we have to cancel
     // futures. We could instead keep them running.
     TENZIR_VERBOSE("waiting in non-source for message");
-    auto message
-      = co_await select_into_variant(input.receive(), from_control.receive());
+    auto message = co_await queue_.next();
     co_await match(
       std::move(message),
       [&](OperatorMessage<Input> message) -> Task<void> {
@@ -170,7 +301,7 @@ struct NonSourceRunner {
             if constexpr (std::same_as<Output, void>) {
               co_await op->process(input, ctx);
             } else {
-              auto push = OpPush<Output>{};
+              auto push = OpPush<Output>{output};
               co_await op->process(input, push, ctx);
             }
           },
@@ -198,19 +329,22 @@ struct NonSourceRunner {
             }
             TENZIR_UNREACHABLE();
           });
+        co_await queue_.add(input.receive());
       },
       [&](FromControl message) -> Task<void> {
-        TENZIR_VERBOSE("got control message in non-source");
         co_await match(
           std::move(message),
           [&](PostCommit) -> Task<void> {
+            TENZIR_VERBOSE("got post commit in non-source");
             co_return;
           },
           [&](Shutdown) -> Task<void> {
             // We won't perform any cleanup. This might be undesirable.
+            TENZIR_VERBOSE("got shutdown in non-source");
             got_shutdown_request = true;
             co_return;
           });
+        co_await queue_.add(from_control.receive());
       });
   }
 
@@ -230,6 +364,7 @@ struct NonSourceRunner {
   Sender<ToControl> to_control;
   caf::actor_system& sys_;
 
+  QueueScope<variant<OperatorMessage<Input>, FromControl>> queue_;
   bool got_shutdown_request = false;
   bool sent_no_more_input = false;
 };
@@ -250,14 +385,16 @@ public:
 
   auto run_to_completion() -> Task<void> {
     TENZIR_INFO("entering run loop for source");
-    co_await enqueue(op->next());
-    co_await enqueue(input.receive());
-    co_await enqueue(from_control.receive());
-    while (not got_shutdown_request) {
+    co_await queue_.add(op->next());
+    co_await queue_.add(input.receive());
+    co_await queue_.add(from_control.receive());
+    while (not got_shutdown_request_) {
       co_await tick();
     }
+    TENZIR_WARN("shutting down source");
     // TODO: Do we know that we can always cancel stuff?
-    co_await scope_.cancelAndJoinAsync();
+    co_await queue_.cancel_and_join();
+    TENZIR_WARN("completed source shutdown");
   }
 
 private:
@@ -265,7 +402,7 @@ private:
     TENZIR_INFO("tick source");
     auto ctx = AsyncCtx{sys_};
     TENZIR_VERBOSE("waiting in source for message");
-    auto message = co_await queue_.dequeue();
+    auto message = co_await queue_.next();
     co_await match(
       message,
       [&](std::any message) -> Task<void> {
@@ -276,7 +413,7 @@ private:
           TENZIR_VERBOSE("...");
           auto push = OpPush<Output>{output};
           co_await op->process(std::move(message), push, ctx);
-          co_await enqueue(op->next());
+          co_await queue_.add(op->next());
           TENZIR_VERBOSE("...");
         } else {
           // The source is done.
@@ -301,31 +438,22 @@ private:
           }
           TENZIR_UNREACHABLE();
         });
-        co_await enqueue(input.receive());
+        co_await queue_.add(input.receive());
       },
       [&](FromControl message) -> Task<void> {
-        TENZIR_VERBOSE("got control message in source");
         co_await match(
           message,
           [&](PostCommit) -> Task<void> {
+            TENZIR_VERBOSE("got post commit in source");
             co_await op->post_commit();
           },
           [&](Shutdown) -> Task<void> {
-            got_shutdown_request = true;
+            TENZIR_VERBOSE("got shutdown message in source");
+            got_shutdown_request_ = true;
             co_return;
           });
-        co_await enqueue(from_control.receive());
+        co_await queue_.add(from_control.receive());
       });
-  }
-
-  template <class T>
-  auto enqueue(Task<T> task) -> Task<void> {
-    auto executor = co_await folly::coro::co_current_executor;
-    scope_.add(folly::coro::co_withExecutor(
-      executor, folly::coro::co_invoke(
-                  [this, task = std::move(task)] mutable -> Task<void> {
-                    queue_.enqueue(co_await std::move(task));
-                  })));
   }
 
   Box<Operator<void, Output>> op;
@@ -335,13 +463,11 @@ private:
   Sender<ToControl> to_control;
   caf::actor_system& sys_;
 
-  bool got_shutdown_request = false;
+  bool got_shutdown_request_ = false;
 
   using QueueItem = variant<std::any, OperatorMessage<void>, FromControl>;
 
-  // FIXME: Are those used as SPSC? No!
-  SpscQueue<QueueItem> queue_;
-  folly::coro::CancellableAsyncScope scope_;
+  QueueScope<QueueItem> queue_;
 };
 
 template <class Input, class Output>
@@ -368,8 +494,8 @@ template <class Input, class Output>
 auto run_chain(OperatorChain<Input, Output> chain, OpReceiver<Input> input,
                OpSender<Output> output, caf::actor_system& sys) -> Task<void> {
   // TODO: Just pretend that we have this case.
+#if 0
   TENZIR_ASSERT(chain.size() == 2);
-  auto operators = std::move(chain).unwrap();
   auto first = as<Box<Operator<Input, table_slice>>>(std::move(operators[0]));
   auto second = as<Box<Operator<table_slice, Output>>>(std::move(operators[1]));
   auto channel = std::make_shared<OpChannel<table_slice>>(10);
@@ -393,8 +519,79 @@ auto run_chain(OperatorChain<Input, Output> chain, OpReceiver<Input> input,
     = run_operator(std::move(second), std::move(receiver), std::move(output),
                    std::move(from_control_receiver2),
                    std::move(to_control_sender2), sys);
+  auto operator_scope = AsyncScope{};
+  auto receiver_scope = QueueScope<ToControl>{};
+  co_await operator_scope.add(std::move(run_1));
+  co_await operator_scope.add(std::move(run_2));
+  co_await receiver_scope.add(std::move(to_control_receiver1).into_generator());
+  co_await receiver_scope.add(std::move(to_control_receiver2).into_generator());
+#else
+  auto from_control = std::vector<Sender<FromControl>>{};
+  auto operator_scope = AsyncScope{};
+  auto receiver_scope = QueueScope<ToControl>{};
+  auto operators = std::move(chain).unwrap();
+  auto next_input
+    = variant<OpReceiver<void>, OpReceiver<chunk_ptr>, OpReceiver<table_slice>>{
+      std::move(input)};
+  // TODO: Polish this.
+  for (auto& op : operators) {
+    auto last = &op == &operators.back();
+    co_await match(
+      op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        auto input = as<OpReceiver<In>>(next_input);
+        auto [output_sender, output_receiver] = make_op_channel<Out>(5);
+        // TODO: This is a horrible hack.
+        if (last) {
+          if constexpr (std::same_as<Out, Output>) {
+            output_sender = std::move(output);
+          } else {
+            TENZIR_UNREACHABLE();
+          }
+        }
+        auto [from_control_sender, from_control_receiver]
+          = make_unbounded_channel<FromControl>();
+        auto [to_control_sender, to_control_receiver]
+          = make_unbounded_channel<ToControl>();
+        from_control.push_back(std::move(from_control_sender));
+        next_input = std::move(output_receiver);
+        auto task = run_operator(std::move(op), std::move(input),
+                                 std::move(output_sender),
+                                 std::move(from_control_receiver),
+                                 std::move(to_control_sender), sys);
+        co_await operator_scope.add(std::move(task));
+        co_await receiver_scope.add(
+          std::move(to_control_receiver).into_generator());
+      });
+  }
+#endif
   TENZIR_WARN("waiting for all run tasks to finish");
-  co_await folly::coro::collectAll(std::move(run_1), std::move(run_2));
+  // TODO: Or do we want to continue listening for control responses during
+  // shutdown? That would require some additional coordination.
+  auto remaining = operators.size();
+  while (remaining > 0) {
+    auto next = co_await receiver_scope.next();
+    TENZIR_WARN("got next: {}", next);
+    switch (next) {
+      case ToControl::ready_for_shutdown:
+        remaining -= 1;
+        break;
+      case ToControl::no_more_input:
+        break;
+    }
+  }
+  TENZIR_WARN("got all shutdown");
+#if 0
+  from_control_sender1.send(Shutdown{});
+  from_control_sender2.send(Shutdown{});
+#else
+  for (auto& sender : from_control) {
+    sender.send(Shutdown{});
+  }
+#endif
+  co_await receiver_scope.cancel_and_join();
+  TENZIR_WARN("joined receivers");
+  co_await operator_scope.join();
+  TENZIR_WARN("joined operators");
 }
 
 auto run_pipeline(OperatorChain<void, void> pipeline, OpReceiver<void> input,

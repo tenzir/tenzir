@@ -8,11 +8,13 @@
 
 #pragma once
 
+#include "tenzir/async/mutex.hpp"
+#include "tenzir/async/notify.hpp"
+#include "tenzir/async/task.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 
-#include <folly/coro/Baton.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Mutex.h>
 #include <folly/coro/Sleep.h>
@@ -74,81 +76,7 @@ template <class T>
 Box(T ptr) -> Box<T>;
 
 template <class T>
-using Task = folly::coro::Task<T>;
-
-template <class T>
-class MutexGuard;
-
-template <class T>
-class Mutex {
-public:
-  explicit Mutex(T x) : value_{std::move(x)} {
-  }
-
-  auto lock() -> Task<MutexGuard<T>>;
-
-private:
-  friend class MutexGuard<T>;
-
-  folly::coro::Mutex mutex_;
-  T value_;
-};
-
-template <class T>
-class MutexGuard {
-public:
-  ~MutexGuard() noexcept {
-    maybe_unlock();
-  }
-
-  MutexGuard(MutexGuard&& other) noexcept {
-    *this = std::move(other);
-  }
-  auto operator=(MutexGuard&& other) noexcept -> MutexGuard& {
-    maybe_unlock();
-    locked_ = other.locked_;
-    other.locked_ = nullptr;
-    return *this;
-  }
-  MutexGuard(MutexGuard& other) = delete;
-  auto operator=(MutexGuard& other) = delete;
-
-  auto operator*() -> T& {
-    TENZIR_ASSERT(locked_);
-    return locked_->value_;
-  }
-
-  auto operator->() -> T* {
-    TENZIR_ASSERT(locked_);
-    return &locked_->value_;
-  }
-
-  auto unlock() -> void {
-    TENZIR_ASSERT(locked_);
-    locked_->mutex_.unlock();
-    locked_ = nullptr;
-  }
-
-private:
-  auto maybe_unlock() -> void {
-    if (locked_) {
-      locked_->mutex_.unlock();
-    }
-  }
-
-  friend class Mutex<T>;
-
-  explicit MutexGuard(Mutex<T>& mutex) : locked_{&mutex} {
-  }
-
-  Mutex<T>* locked_ = nullptr;
-};
-
-template <class T>
-auto Mutex<T>::lock() -> Task<MutexGuard<T>> {
-  co_await mutex_.co_lock();
-  co_return MutexGuard<T>{*this};
-}
+using AsyncGenerator = folly::coro::AsyncGenerator<T&&>;
 
 class AsyncCtx {
 public:
@@ -404,18 +332,19 @@ struct OperatorMessage<void> : variant<Signal> {
 };
 
 template <class T>
-static auto cost(const OperatorMessage<T>& item) -> size_t {
-  return match(
-    item,
-    [](const table_slice& slice) -> size_t {
-      return slice.rows();
-    },
-    [](const chunk_ptr& chunk) -> size_t {
-      return chunk ? chunk->size() : 0;
-    },
-    [](const Signal&) {
-      return size_t{1};
-    });
+static auto cost(const OperatorMessage<T>& item, size_t limit) -> size_t {
+  return std::min(match(
+                    item,
+                    [](const table_slice& slice) -> size_t {
+                      return slice.rows();
+                    },
+                    [](const chunk_ptr& chunk) -> size_t {
+                      return chunk ? chunk->size() : 0;
+                    },
+                    [](const Signal&) {
+                      return size_t{1};
+                    }),
+                  limit);
 };
 
 template <class T>
@@ -428,34 +357,40 @@ class OpReceiver;
 template <class T>
 struct OpChannel {
 public:
-  explicit OpChannel(size_t limit) : mutex_{Locked{limit}} {
+  explicit OpChannel(size_t limit) : mutex_{Locked{limit}}, limit_{limit} {
   }
 
   auto send(OperatorMessage<T> x) -> Task<void> {
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_ERROR("CANCELLED");
+    }};
     auto lock = co_await mutex_.lock();
-    while (cost(x) > lock->remaining) {
+    while (cost(x, limit_) > lock->remaining) {
       lock.unlock();
       co_await remaining_increased_;
-      remaining_increased_.reset();
       lock = co_await mutex_.lock();
     }
-    lock->remaining -= cost(x);
+    lock->remaining -= cost(x, limit_);
     lock->queue.push_back(x);
-    queue_pushed_.post();
+    queue_pushed_.notify_one();
+    guard.disable();
   }
 
   auto receive() -> Task<OperatorMessage<T>> {
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_ERROR("CANCELLED");
+    }};
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
       lock.unlock();
-      co_await queue_pushed_;
-      queue_pushed_.reset();
+      co_await queue_pushed_.wait();
       lock = co_await mutex_.lock();
     }
     auto result = std::move(lock->queue.front());
     lock->queue.pop_front();
-    lock->remaining += cost(result);
-    remaining_increased_.post();
+    lock->remaining += cost(result, limit_);
+    remaining_increased_.notify_one();
+    guard.disable();
     co_return result;
   }
 
@@ -469,9 +404,10 @@ private:
   };
 
   // TODO: This can surely be written better?
+  size_t limit_;
   Mutex<Locked> mutex_;
-  folly::coro::Baton remaining_increased_;
-  folly::coro::Baton queue_pushed_;
+  Notify remaining_increased_;
+  Notify queue_pushed_;
 };
 
 template <class T>

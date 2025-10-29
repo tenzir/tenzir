@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/finalize_ctx.hpp"
 #include "tenzir/json_parser.hpp"
+#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -23,6 +26,7 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/generator.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
@@ -1323,13 +1327,89 @@ public:
   }
 };
 
-class write_json_plugin final : public virtual operator_plugin2<write_json> {
+class JsonImpl final : public Operator<table_slice, chunk_ptr> {
+public:
+  auto process(table_slice input, Push<chunk_ptr>& push, AsyncCtx& ctx)
+    -> Task<void> {
+    TENZIR_WARN("got table slice in JsonImpl");
+    auto opts = json_printer_options{};
+    opts.tql = true;
+    opts.style = tql_style();
+    auto printer = tenzir::json_printer{opts};
+    // TODO: Since this printer is per-schema we can write an optimized
+    // version of it that gets the schema ahead of time and only expects
+    // data corresponding to exactly that schema.
+    auto buffer = std::vector<char>{};
+    auto resolved_slice = resolve_enumerations(input);
+    auto out_iter = std::back_inserter(buffer);
+    auto rows = values3(resolved_slice);
+    auto row = rows.begin();
+    if (row != rows.end()) {
+      const auto ok = printer.print(out_iter, *row);
+      TENZIR_ASSERT(ok);
+      ++row;
+    }
+    for (; row != rows.end(); ++row) {
+      out_iter = fmt::format_to(out_iter, "\n");
+      const auto ok = printer.print(out_iter, *row);
+      TENZIR_ASSERT(ok);
+    }
+    *out_iter++ = '\n';
+    auto chunk = chunk::make(std::move(buffer));
+    co_await push(std::move(chunk));
+  }
+};
+
+class JsonPlan final : public plan::operator_base {
+public:
+  auto name() const -> std::string override {
+    return "json_plan";
+  }
+
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    return JsonImpl{};
+  }
+};
+
+class JsonIr final : public ir::operator_base {
+public:
+  auto name() const -> std::string override {
+    return "json_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return {};
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    return std::make_unique<JsonPlan>();
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    // TODO
+    return tag_v<chunk_ptr>;
+  }
+
+  friend auto inspect(auto& f, JsonIr& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class write_json_plugin final : public virtual operator_plugin2<write_json>,
+                                public virtual operator_compiler_plugin {
 public:
   explicit write_json_plugin(bool tql) : tql_{tql} {
   }
 
   auto name() const -> std::string override {
     return tql_ ? "write_tql" : "tql2.write_json";
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::operator_ptr> override {
+    return std::make_unique<JsonIr>();
   }
 
   auto make(invocation inv, session ctx) const
@@ -1488,3 +1568,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{true})
+TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::operator_base,
+                                                 tenzir::plugins::json::JsonIr>);

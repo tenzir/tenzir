@@ -336,11 +336,9 @@ public:
     // This is just a test to see what happens if we want to return the version
     // five times with 1 second of sleep in between.
     if (remaining_ == 0) {
-      co_return std::nullopt;
+      co_return {};
     }
-    if (remaining_ < 5) {
-      co_await folly::coro::sleep(std::chrono::milliseconds{200});
-    }
+    co_await folly::coro::sleep(std::chrono::milliseconds{200});
     // Just return the count here as a test.
     co_return remaining_;
   }

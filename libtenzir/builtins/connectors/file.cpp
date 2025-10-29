@@ -6,6 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/finalize_ctx.hpp"
+#include "tenzir/substitute_ctx.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -20,8 +25,10 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
+#include <tenzir/plan/operator.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -31,6 +38,7 @@
 #include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 #include <string_view>
 #include <unistd.h>
@@ -695,7 +703,54 @@ public:
   }
 };
 
-class save_stdout_plugin final : public operator_plugin2<save_file_operator> {
+class SaveStdoutImpl final : public Operator<chunk_ptr, void> {
+public:
+  auto process(chunk_ptr input, AsyncCtx& ctx) -> Task<void> override {
+    std::cout << std::string_view{reinterpret_cast<char const*>(input->data()),
+                                  input->size()};
+    co_return;
+  }
+};
+
+class SaveStdoutPlan final : public plan::operator_base {
+public:
+  auto name() const -> std::string override {
+    return "SaveStdoutPlan";
+  }
+
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    return SaveStdoutImpl{};
+  }
+};
+
+class SaveStdoutIr final : public ir::operator_base {
+public:
+  auto name() const -> std::string override {
+    return "SaveStdoutIr";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return {};
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    return std::make_unique<SaveStdoutPlan>();
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    // TODO
+    return tag_v<void>;
+  }
+
+  friend auto inspect(auto& f, SaveStdoutIr& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class save_stdout_plugin final : public operator_plugin2<save_file_operator>,
+                                 public operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "save_stdout";
@@ -707,6 +762,11 @@ public:
     auto args = saver_args{};
     args.path = located{"-", inv.self.get_location()};
     return std::make_unique<save_file_operator>(std::move(args));
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::operator_ptr> override {
+    return std::make_unique<SaveStdoutIr>();
   }
 };
 
@@ -768,3 +828,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::load_stdin_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::save_stdout_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdin_::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdout_::plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::ir::operator_base,
+                            tenzir::plugins::file::SaveStdoutIr>);
