@@ -9,12 +9,20 @@
 #include "tenzir/ir.hpp"
 
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/exec.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/exec/checkpoint.hpp"
+#include "tenzir/exec/operator_base.hpp"
+#include "tenzir/execution_node.hpp"
 #include "tenzir/finalize_ctx.hpp"
+#include "tenzir/plan/operator_spawn_args.hpp"
+#include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/report.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
+
+#include <caf/actor_from_state.hpp>
 
 #include <ranges>
 
@@ -38,13 +46,123 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
     .unwrap();
 }
 
+class stateless_transform_operator {};
+
+class set_exec : public exec::operator_base {
+public:
+  set_exec(exec::operator_actor::pointer self,
+           std::vector<ast::assignment> assignments, event_order order)
+    : exec::operator_base{self},
+      assignments_{std::move(assignments)},
+      order_{order} {
+  }
+
+  void on_push(table_slice slice) override {
+    // TODO: Perform the actual assignment.
+    push(std::move(slice));
+  }
+  void on_push(chunk_ptr chunk) override {
+    TENZIR_TODO();
+  }
+  auto serialize() -> chunk_ptr override {
+  }
+  void on_done() override {
+    finish();
+  }
+  void on_pull(uint64_t items) {
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_;
+};
+
+class set_plan final : public plan::operator_base {
+public:
+  explicit set_plan(std::vector<ast::assignment> assignments)
+    : assignments_{std::move(assignments)} {
+  }
+
+  auto name() const -> std::string override {
+    return "set_plan";
+  }
+
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<set_exec>, assignments_,
+                          order_);
+  }
+
+  friend auto inspect(auto& f, set_plan& x) -> bool {
+    return f.object(x).fields(f.field("assignments", x.assignments_));
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_ = event_order::ordered;
+};
+
+class set_ir final : public ir::operator_base {
+public:
+  explicit set_ir(std::vector<ast::assignment> assignments)
+    : assignments_(std::move(assignments)) {
+  }
+
+  auto name() const -> std::string override {
+    return "set_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    (void)instantiate;
+    for (auto& x : assignments_) {
+      TRY(x.right.substitute(ctx));
+    }
+    return {};
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    return std::make_unique<set_plan>(std::move(assignments_));
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    // Remember the order for potential rebatches.
+    order_ = order;
+    // TODO: FIXME
+    TENZIR_ASSERT(filter.size() == 1);
+    auto where = make_where_ir(filter[0]);
+    auto ops = std::vector<ir::operator_ptr>{};
+    ops.reserve(2);
+    ops.push_back(std::move(where));
+    ops.emplace_back(std::make_unique<set_ir>(std::move(*this)));
+    auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
+    return {{}, order_, std::move(replacement)};
+  }
+
+  friend auto inspect(auto& f, set_ir& x) -> bool {
+    return f.object(x).fields(f.field("assignments", x.assignments_));
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_ = event_order::ordered;
+};
+
+/// Create a `set` operator with the given assignment.
+auto make_set_ir(ast::assignment x) -> ir::operator_ptr {
+  auto assignments = std::vector<ast::assignment>{};
+  assignments.push_back(std::move(x));
+  return std::make_unique<set_ir>(std::move(assignments));
+}
+
 } // namespace
 
-class if_exec final : public exec::operator_base {
+class if_exec final : public plan::operator_base {
 public:
   if_exec() = default;
 
-  if_exec(ast::expression condition, exec::pipeline then_, exec::pipeline else_)
+  if_exec(ast::expression condition, plan::pipeline then_, plan::pipeline else_)
     : condition_{std::move(condition)},
       then_{std::move(then_)},
       else_{std::move(else_)} {
@@ -54,7 +172,7 @@ public:
     return "if_exec";
   }
 
-  auto spawn() const -> operator_actor override {
+  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
     TENZIR_TODO();
   }
 
@@ -66,8 +184,8 @@ public:
 
 private:
   ast::expression condition_;
-  exec::pipeline then_;
-  exec::pipeline else_;
+  plan::pipeline then_;
+  plan::pipeline else_;
 };
 
 class if_ir final : public ir::operator_base {
@@ -106,9 +224,9 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TRY(auto then_instance, std::move(then_).finalize(ctx));
-    auto else_instance = exec::pipeline{};
+    auto else_instance = plan::pipeline{};
     if (else_) {
       TRY(else_instance, std::move(else_->pipe).finalize(ctx));
     }
@@ -117,8 +235,8 @@ public:
                                      std::move(else_instance));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     TRY(auto then_ty, then_.infer_type(input, dh));
     auto else_ty = std::optional{input};
     if (else_) {
@@ -157,22 +275,203 @@ private:
   std::optional<else_t> else_;
 };
 
-class legacy_exec final : public exec::operator_base {
+class legacy_metrics_receiver {
 public:
-  legacy_exec() = default;
+  auto make_behavior() -> metrics_receiver_actor::behavior_type {
+    return {
+      [this](uint64_t op_index, uuid metrics_id, type) -> caf::result<void> {
+        // TODO
+        TENZIR_TODO();
+      },
+      [this](uint64_t op_index, uuid metrics_id, record) -> caf::result<void> {
+        // TODO
+        TENZIR_TODO();
+      },
+      [this](const operator_metric& metric) -> caf::result<void> {
+        // TODO
+        TENZIR_TODO();
+      },
+    };
+  }
+};
 
-  explicit legacy_exec(operator_ptr op) : op_{std::move(op)} {
+class legacy_control_plane final : public operator_control_plane {
+public:
+  explicit legacy_control_plane(exec_node_actor::base& self) {
   }
 
-  auto name() const -> std::string override {
-    return "legacy_exec";
-  }
-
-  auto spawn(/*args*/) const -> operator_actor override {
+  auto self() noexcept -> exec_node_actor::base& override {
     TENZIR_TODO();
   }
 
-  friend auto inspect(auto& f, legacy_exec& x) -> bool {
+  auto definition() const noexcept -> std::string_view override {
+    TENZIR_TODO();
+  }
+
+  auto run_id() const noexcept -> uuid override {
+    TENZIR_TODO();
+  }
+
+  auto node() noexcept -> node_actor override {
+    TENZIR_TODO();
+  }
+
+  auto operator_index() const noexcept -> uint64_t override {
+    TENZIR_TODO();
+  }
+
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    TENZIR_TODO();
+  }
+
+  auto metrics(type t) noexcept -> metric_handler override {
+    return metric_handler{
+      self().spawn(caf::actor_from_state<legacy_metrics_receiver>), 0, t};
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
+    TENZIR_TODO();
+  }
+
+  auto no_location_overrides() const noexcept -> bool override {
+    TENZIR_TODO();
+  }
+
+  auto has_terminal() const noexcept -> bool override {
+    TENZIR_TODO();
+  }
+
+  auto is_hidden() const noexcept -> bool override {
+    TENZIR_TODO();
+  }
+
+  auto set_waiting(bool value) noexcept -> void override {
+    TENZIR_TODO();
+  }
+
+  auto resolve_secrets_must_yield(std::vector<secret_request> requests,
+                                  final_callback_t final_callback)
+    -> secret_resolution_sentinel override {
+    TENZIR_TODO();
+  }
+};
+
+struct legacy_exec_trait {
+  using signatures
+    = exec::operator_actor::signatures::append_from<exec_node_actor::signatures>;
+};
+
+using legacy_exec_actor = caf::typed_actor<legacy_exec_trait>;
+
+// TODO: This cannot be final because of CAF...
+class legacy_exec : public exec::basic_operator<legacy_exec_actor> {
+public:
+  static constexpr auto name = "legacy-exec";
+
+  legacy_exec(legacy_exec_actor::pointer self, operator_ptr op, base_ctx ctx)
+    : basic_operator{self}, op_{std::move(op)}, ctx_{ctx} {
+    auto exec_node
+      = spawn_exec_node(self_, op_->copy(), operator_type::of<table_slice>,
+                        "TODO: definition", node_actor{},
+                        receiver_actor<diagnostic>{}, metrics_receiver_actor{},
+                        /*index*/ 0, false, false, uuid::random());
+    auto [actor, output_type] = check(exec_node);
+    // TODO: Pass `self_` as previous if it's not a source.
+    self_->mail(atom::start_v, std::vector<caf::actor>{})
+      .request(actor, caf::infinite)
+      .then([] {}, TENZIR_REPORT);
+    // TODO: Numbers.
+    self_
+      ->mail(atom::pull_v, exec_node_sink_actor{self_}, uint64_t{10},
+             uint64_t{10})
+      .request(actor, caf::infinite)
+      .then([] {}, TENZIR_REPORT);
+  }
+
+  auto make_behavior() -> legacy_exec_actor::behavior_type {
+    return extend_behavior(std::tuple{
+      [this](atom::start,
+             std::vector<caf::actor> all_previous) -> caf::result<void> {
+        TENZIR_ASSERT(all_previous.empty());
+      },
+      [this](atom::pause) -> caf::result<void> {
+        return {};
+      },
+      [this](atom::resume) -> caf::result<void> {
+        return {};
+      },
+      [this](diagnostic diag) -> caf::result<void> {
+        std::move(diag).modify().emit(ctx_);
+        return {};
+      },
+      [this](atom::pull, exec_node_sink_actor sink, uint64_t elements,
+             uint64_t batches) -> caf::result<void> {
+        pull_rp_ = self_->make_response_promise<void>();
+        pull(elements);
+        return {};
+      },
+      [this](atom::push, table_slice events) -> caf::result<void> {
+        push(std::move(events));
+        return {};
+      },
+      [this](atom::push, chunk_ptr bytes) -> caf::result<void> {
+        push(std::move(bytes));
+        return {};
+      },
+    });
+  }
+
+  auto on_start() -> caf::result<void> override {
+    return {};
+  }
+
+  void on_push(table_slice slice) override {
+    // TODO: Schedule execution?
+    // TODO: Check.
+    // as<std::deque<table_slice>>(input_).push_back(std::move(slice));
+    // run_once();
+  }
+
+  void on_push(chunk_ptr chunk) override {
+    // as<std::deque<chunk_ptr>>(input_).push_back(std::move(chunk));
+    // run_once();
+  }
+
+  void on_pull(uint64_t items) override {
+    // TODO: Can we ignore demand here?
+  }
+
+  auto serialize() -> chunk_ptr override {
+    return {};
+  }
+
+  void on_done() override {
+  }
+
+private:
+  operator_ptr op_;
+  base_ctx ctx_;
+  caf::typed_response_promise<void> pull_rp_;
+};
+
+class legacy_plan final : public plan::operator_base {
+public:
+  legacy_plan() = default;
+
+  explicit legacy_plan(operator_ptr op) : op_{std::move(op)} {
+  }
+
+  auto name() const -> std::string override {
+    return "legacy_plan";
+  }
+
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<legacy_exec>, op_->copy(),
+                          args.ctx);
+  }
+
+  friend auto inspect(auto& f, legacy_plan& x) -> bool {
     return plugin_inspect(f, x.op_);
   }
 
@@ -221,21 +520,21 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     auto op = as<operator_ptr>(std::move(state_));
     if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
-      auto result = std::vector<exec::operator_ptr>{};
+      auto result = std::vector<plan::operator_ptr>{};
       for (auto& op : std::move(*pipe).unwrap()) {
-        result.push_back(std::make_unique<legacy_exec>(std::move(op)));
+        result.push_back(std::make_unique<legacy_plan>(std::move(op)));
       }
       return result;
     }
-    return std::make_unique<legacy_exec>(std::move(op));
+    return std::make_unique<legacy_plan>(std::move(op));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     auto op = try_as<operator_ptr>(state_);
     if (not op) {
       return std::nullopt;
@@ -255,7 +554,7 @@ public:
         .emit(dh);
       return failure::promise();
     }
-    return match(*legacy_output, [](auto x) -> operator_type2 {
+    return match(*legacy_output, [](auto x) -> element_type_tag {
       return x;
     });
   }
@@ -336,9 +635,9 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::operator_base, legacy_ir>{},
-    new inspection_plugin<exec::operator_base, legacy_exec>{},
+    new inspection_plugin<plan::operator_base, legacy_plan>{},
     new inspection_plugin<ir::operator_base, if_ir>{},
-    new inspection_plugin<exec::operator_base, if_exec>{},
+    new inspection_plugin<plan::operator_base, if_exec>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -362,8 +661,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
     auto result = match(
-      stmt,
-      [&](ast::invocation& x) -> failure_or<void> {
+      std::move(stmt),
+      [&](ast::invocation x) -> failure_or<void> {
         auto& op = ctx.reg().get(x);
         return match(
           op.inner(),
@@ -417,19 +716,17 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           });
       },
-      [&](ast::assignment& x) -> failure_or<void> {
-        diagnostic::error("assignment is not implemented yet")
-          .primary(x)
-          .emit(ctx);
-        return failure::promise();
+      [&](ast::assignment x) -> failure_or<void> {
+        operators.push_back(make_set_ir(std::move(x)));
+        return {};
       },
-      [&](ast::let_stmt& x) -> failure_or<void> {
+      [&](ast::let_stmt x) -> failure_or<void> {
         TRY(x.expr.bind(ctx));
         auto id = scope.let(std::string{x.name_without_dollar()});
         lets.emplace_back(std::move(x.name), std::move(x.expr), id);
         return {};
       },
-      [&](ast::if_stmt& x) -> failure_or<void> {
+      [&](ast::if_stmt x) -> failure_or<void> {
         TRY(x.condition.bind(ctx));
         TRY(auto then, std::move(x.then).compile(ctx));
         auto else_ = std::optional<if_ir::else_t>{};
@@ -441,7 +738,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           x.if_kw, std::move(x.condition), std::move(then), std::move(else_)));
         return {};
       },
-      [&](ast::match_stmt& x) -> failure_or<void> {
+      [&](ast::match_stmt x) -> failure_or<void> {
         diagnostic::error("`match` is not implemented yet").primary(x).emit(ctx);
         return failure::promise();
       });
@@ -491,7 +788,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
+auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
@@ -503,7 +800,7 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
                                      make_where_ir(expr));
   }
   *this = std::move(opt.replacement);
-  auto result = std::vector<exec::operator_ptr>{};
+  auto result = std::vector<plan::operator_ptr>{};
   for (auto& op : operators) {
     TRY(auto ops, std::move(*op).finalize(ctx));
     result.insert(result.end(), std::move_iterator{ops.begin()},
@@ -515,12 +812,13 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
   TENZIR_DIAGNOSTIC_POP
 }
 
-auto ir::pipeline::infer_type(operator_type2 input,
+auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
-  -> failure_or<std::optional<operator_type2>> {
+  -> failure_or<std::optional<element_type_tag>> {
   for (auto& op : operators) {
     TRY(auto output, op->infer_type(input, dh));
     TRY(input, output);
+    // TODO: What if we get void in the middle?
   }
   return input;
 }
@@ -582,9 +880,9 @@ auto ir::operator_base::move() && -> operator_ptr {
   return copy();
 }
 
-auto ir::operator_base::infer_type(operator_type2 input,
+auto ir::operator_base::infer_type(element_type_tag input,
                                    diagnostic_handler& dh) const
-  -> failure_or<std::optional<operator_type2>> {
+  -> failure_or<std::optional<element_type_tag>> {
   // TODO: Is this a good default to have? Should probably be pure virtual.
   (void)input, (void)dh;
   return std::nullopt;
@@ -596,6 +894,15 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
     result = result.substr(5);
   }
   return result;
+}
+
+ir::operator_ptr::operator_ptr(const operator_ptr& other) {
+  *this = other;
+}
+
+auto ir::operator_ptr::operator=(const operator_ptr& other) -> operator_ptr& {
+  *this = other->copy();
+  return *this;
 }
 
 } // namespace tenzir

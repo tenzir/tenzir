@@ -12,12 +12,13 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/exec.hpp"
+#include "tenzir/exec/pipeline.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plan/operator.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -30,8 +31,13 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
+#include <caf/actor_from_state.hpp>
 #include <caf/config_value.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/scheduler.hpp>
+#include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
+#include <folly/coro/BlockingWait.h>
 #include <tsl/robin_set.h>
 
 #include <filesystem>
@@ -492,10 +498,63 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 
 namespace {
 
-auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
-  -> failure_or<bool> {
+auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
+  auto self = caf::scoped_actor{ctx};
+  self->monitor(pipe);
+  auto started
+    = self->mail(atom::start_v).request(pipe, caf::infinite).receive();
+  if (not started) {
+    if (started.error() != ec::silent) {
+      // TODO: What do we do here?
+      diagnostic::error("start failed: {}", started.error()).emit(ctx);
+    }
+    return failure::promise();
+  }
+  auto down_msg = std::optional<caf::down_msg>{};
+  self->receive_while([&] {
+    return not down_msg;
+  })([&down_msg](caf::down_msg msg) {
+    down_msg = std::move(msg);
+  });
+  TENZIR_ASSERT(down_msg);
+  if (down_msg->reason) {
+    diagnostic::error("failed: {}", down_msg->reason).emit(ctx);
+    return failure::promise();
+  }
+  return {};
+}
+
+auto run_plan(plan::pipeline pipe, caf::actor_system& sys)
+  -> Task<failure_or<void>> {
+  TENZIR_WARN("spawning plan");
+  auto ops = std::vector<AnyOperator>{};
+  for (auto& op : std::move(pipe).unwrap()) {
+    ops.push_back(std::move(*op).spawn(std::nullopt));
+  }
+  auto chain = OperatorChain<void, void>::try_from(std::move(ops));
+  // TODO
+  TENZIR_ASSERT(chain);
+  auto [outer_sender, receiver] = make_op_channel<void>(10);
+  auto [sender, outer_receiver] = make_op_channel<void>(10);
+  co_await outer_sender.send(Signal::checkpoint);
+  TENZIR_WARN("blocking on pipeline");
+  co_await run_pipeline(std::move(*chain), std::move(receiver),
+                        std::move(sender), sys);
+  co_return {};
+}
+
+auto run_plan_blocking(plan::pipeline pipe, caf::actor_system& sys)
+  -> failure_or<void> {
+  return folly::coro::blockingWait(run_plan(std::move(pipe), sys));
+}
+
+// TODO: failure_or<bool> is bad
+auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
+                  caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
-  auto c_ctx = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()});
+  auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), sys};
+  (void)b_ctx.system();
+  auto c_ctx = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(c_ctx));
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
@@ -508,13 +567,46 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // TODO: What about the case where we have an empty pipeline?
-  // Type check the instantiated IR.
+  if (ir.operators.empty()) {
+    // TODO
+    diagnostic::error("empty pipeline is not supported yet").emit(ctx);
+    return failure::promise();
+  }
+  // Type check the instantiated IR. Because we do not support implicit sources
+  // anymore, the pipeline must start with `void` if it's well-formed. After
+  // instantiation, the pipeline must know it's output type when given a fixed
+  // input type.
   TRY(auto output, ir.infer_type(tag_v<void>, ctx));
-  // TODO: Can we assume that we get a result type here?
-  TENZIR_ASSERT(output);
+  if (not output.has_value()) {
+    // TODO: Improve?
+    panic("expected pipeline to know it's output type after instantiation");
+  }
+  // Add implicit sink before optimization.
   if (output->is_not<void>()) {
-    // TODO: Add the implicit sink here, before optimization.
+    // TODO: Support bytes.
+    auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
+                                              : cfg.implicit_bytes_sink;
+    auto sink = parse_pipeline_with_bad_diagnostics(sink_def, ctx)
+                  // TODO: Error handling.
+                  .unwrap()
+                  .compile(c_ctx)
+                  .unwrap();
+    ir.lets.insert(ir.lets.end(), std::move_iterator{sink.lets.begin()},
+                   std::move_iterator{sink.lets.end()});
+    ir.operators.insert(ir.operators.end(),
+                        std::move_iterator{sink.operators.begin()},
+                        std::move_iterator{sink.operators.end()});
+    TRY(output, ir.infer_type(tag_v<void>, ctx));
+    TENZIR_ASSERT(output.has_value());
+    // TODO: This is a problem with the implicit sink config.
+    if (not output->is<void>()) {
+      diagnostic::error("last operator must close pipeline, but it returns {}",
+                        operator_type_name(*output))
+        // TODO: This location will be unknown.
+        .primary(ir.operators.back()->main_location())
+        .emit(ctx);
+      return failure::promise();
+    }
   }
   // Optimize the IR.
   auto opt
@@ -538,15 +630,34 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
     return false;
   }
   // Start the actual execution.
-  diagnostic::error("execution not implemented yet").emit(ctx);
-  return false;
+#if 1
+  TRY(run_plan_blocking(std::move(finalized), sys));
+  return true;
+#else
+  auto exec = exec::make_pipeline(
+    std::move(finalized), exec::pipeline_settings{}, std::nullopt, b_ctx);
+  return run_pipeline(std::move(exec), b_ctx).is_success();
+#endif
+}
+
+// TODO: Source for diagnostic handler?
+auto exec_restore(std::span<const std::byte> plan_bytes,
+                  exec::checkpoint_reader_actor checkpoint_reader, base_ctx ctx)
+  -> failure_or<void> {
+  auto f = caf::binary_deserializer{
+    caf::const_byte_span{plan_bytes.data(), plan_bytes.size()}};
+  auto plan = plan::pipeline{};
+  auto ok = f.apply(plan);
+  TENZIR_ASSERT(ok);
+  auto exec = exec::make_pipeline(std::move(plan), exec::pipeline_settings{},
+                                  std::move(checkpoint_reader), ctx);
+  return run_pipeline(std::move(exec), ctx);
 }
 
 } // namespace
 
 auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
-  TENZIR_UNUSED(sys);
   auto result = std::invoke([&]() -> failure_or<bool> {
     TRY(load_packages_for_exec(dh, sys));
     auto provider = session_provider::make(dh);
@@ -562,10 +673,10 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir
-        or cfg.dump_finalized) {
+    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir or cfg.dump_finalized
+        or true) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx);
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys);
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
     if (cfg.dump_pipeline) {

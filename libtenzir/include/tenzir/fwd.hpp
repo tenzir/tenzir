@@ -168,8 +168,9 @@ class plugin_ptr;
 class plugin;
 class port;
 class record_type;
-class segment;
+class report;
 class secret_type;
+class segment;
 class shared_diagnostic_handler;
 class string_type;
 class subnet_type;
@@ -195,12 +196,12 @@ struct pipeline;
 
 } // namespace ir
 
-namespace exec {
+namespace plan {
 
 class operator_base;
 class pipeline;
 
-} // namespace exec
+} // namespace plan
 
 struct active_partition_state;
 struct attribute;
@@ -336,6 +337,19 @@ using time = caf::timestamp;
 using enumeration = uint8_t;
 
 class secret;
+
+namespace exec {
+
+struct checkpoint;
+template <class T>
+struct message;
+struct exhausted;
+struct handshake;
+struct handshake_response;
+struct connect_t;
+using payload = variant<table_slice, chunk_ptr>;
+
+} // namespace exec
 
 namespace fbs {
 
@@ -490,6 +504,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::query_context))
   TENZIR_ADD_TYPE_ID((tenzir::query_options))
   TENZIR_ADD_TYPE_ID((tenzir::relational_operator))
+  TENZIR_ADD_TYPE_ID((tenzir::report))
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
   TENZIR_ADD_TYPE_ID((tenzir::series))
@@ -506,6 +521,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
 
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::chunk_ptr>))
+
+  TENZIR_ADD_TYPE_ID((tenzir::exec::connect_t))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::checkpoint))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::payload))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See tenzir/aliases.hpp for their definitions.
