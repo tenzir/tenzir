@@ -1,4 +1,4 @@
-FROM debian:trixie-slim AS runtime-base
+FROM public.ecr.aws/docker/library/debian:trixie-slim AS runtime-base
 
 FROM runtime-base AS build-base
 
@@ -16,17 +16,14 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean
 FROM build-base AS aws-sdk-cpp-package
 
 COPY scripts/debian/build-aws-sdk-cpp-package.sh .
-RUN --mount=target=/ccache,type=cache \
-    ./build-aws-sdk-cpp-package.sh
+RUN ./build-aws-sdk-cpp-package.sh
 
 # -- google-cloud-cpp-package --------------------------------------------------
 
 FROM build-base AS google-cloud-cpp-package
 
 COPY scripts/debian/build-google-cloud-cpp-package.sh .
-RUN --mount=target=/ccache,type=cache \
-    --mount=target=/ccache,type=cache \
-    ./build-google-cloud-cpp-package.sh
+RUN ./build-google-cloud-cpp-package.sh
 
 # -- arrow-package -------------------------------------------------------------
 
@@ -35,9 +32,7 @@ FROM build-base AS arrow-package
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY scripts/debian/build-arrow-package.sh .
-RUN --mount=target=/ccache,type=cache \
-    --mount=target=/ccache,type=cache \
-    apt-get update && \
+RUN apt-get update && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     ./build-arrow-package.sh
 
@@ -46,22 +41,16 @@ RUN --mount=target=/ccache,type=cache \
 FROM build-base AS fluent-bit-package
 
 COPY scripts/debian/build-fluent-bit-package.sh .
-RUN --mount=target=/ccache,type=cache \
-    --mount=target=/ccache,type=cache \
-    ./build-fluent-bit-package.sh
+RUN ./build-fluent-bit-package.sh
 
 # -- arrow-adbc-package --------------------------------------------------------
 
 FROM build-base AS arrow-adbc-package
-RUN echo ""
 COPY scripts/debian/build-arrow-adbc-package.sh .
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
-RUN --mount=target=/ccache,type=cache \
-    --mount=target=/ccache,type=cache \
-    apt-get update && \
+RUN apt-get update && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     ./build-arrow-adbc-package.sh
-RUN ls -al /usr/local/lib/cmake
 RUN dpkg -c /tmp/arrow-adbc*.deb
 
 # -- dependencies --------------------------------------------------------------
@@ -78,7 +67,7 @@ COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 
 COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
-RUN --mount=target=/ccache,type=cache \./scripts/debian/install-dev-dependencies.sh && \
+RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     rm -rf /tmp/custom-packages && \
     rm -rf /var/lib/apt/lists/*
@@ -115,7 +104,7 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 ARG TENZIR_BUILD_OPTIONS
 
 ENV LDFLAGS="-Wl,--copy-dt-needed-entries"
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -B build -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
@@ -157,7 +146,7 @@ WORKDIR /tmp/tenzir
 FROM plugins-source AS amqp-plugin
 
 COPY plugins/amqp ./plugins/amqp
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/amqp -B build-amqp -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-amqp --parallel && \
@@ -167,7 +156,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS azure-blob-storage-plugin
 
 COPY plugins/azure-blob-storage ./plugins/azure-blob-storage
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-azure-blob-storage --parallel && \
@@ -177,7 +166,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS clickhouse-plugin
 
 COPY plugins/clickhouse ./plugins/clickhouse
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/clickhouse -B build-clickhouse -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-clickhouse --parallel && \
@@ -187,7 +176,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS fluent-bit-plugin
 
 COPY plugins/fluent-bit ./plugins/fluent-bit
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/fluent-bit -B build-fluent-bit -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-fluent-bit --parallel && \
@@ -197,7 +186,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS gcs-plugin
 
 COPY plugins/gcs ./plugins/gcs
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/gcs -B build-gcs -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-gcs --parallel && \
@@ -207,7 +196,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS google-cloud-pubsub-plugin
 
 COPY plugins/google-cloud-pubsub ./plugins/google-cloud-pubsub
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
@@ -218,7 +207,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS kafka-plugin
 
 COPY plugins/kafka ./plugins/kafka
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/kafka -B build-kafka -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-kafka --parallel && \
@@ -228,7 +217,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS nic-plugin
 
 COPY plugins/nic ./plugins/nic
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/nic -B build-nic -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-nic --parallel && \
@@ -238,7 +227,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS parquet-plugin
 
 COPY plugins/parquet ./plugins/parquet
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/parquet -B build-parquet -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-parquet --parallel && \
@@ -248,7 +237,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS s3-plugin
 
 COPY plugins/s3 ./plugins/s3
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/s3 -B build-s3 -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-s3 --parallel && \
@@ -258,7 +247,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS sigma-plugin
 
 COPY plugins/sigma ./plugins/sigma
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/sigma -B build-sigma -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-sigma --parallel && \
@@ -268,7 +257,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS sqs-plugin
 
 COPY plugins/sqs ./plugins/sqs
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/sqs -B build-sqs -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-sqs --parallel && \
@@ -278,7 +267,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS from_velociraptor-plugin
 
 COPY plugins/from_velociraptor ./plugins/from_velociraptor
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/from_velociraptor -B build-from_velociraptor -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-from_velociraptor --parallel && \
@@ -288,7 +277,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS web-plugin
 
 COPY plugins/web ./plugins/web
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/web -B build-web -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-web --parallel && \
@@ -298,7 +287,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS yara-plugin
 
 COPY plugins/yara ./plugins/yara
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/yara -B build-yara -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-yara --parallel && \
@@ -308,7 +297,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS zmq-plugin
 
 COPY plugins/zmq ./plugins/zmq
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S plugins/zmq -B build-zmq -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-zmq --parallel && \
@@ -340,7 +329,7 @@ COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 
-RUN --mount=target=/ccache,type=cache \apt-get update && \
+RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ca-certificates \
       gnupg2 \
@@ -420,7 +409,7 @@ ENTRYPOINT ["tenzir-node"]
 FROM plugins-source AS compaction-plugin
 
 COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-compaction --parallel 1 && \
@@ -430,7 +419,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS context-plugin
 
 COPY contrib/tenzir-plugins/context ./contrib/tenzir-plugins/context
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-context --parallel && \
@@ -440,7 +429,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS pipeline-manager-plugin
 
 COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-manager
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-pipeline-manager --parallel && \
@@ -452,7 +441,7 @@ FROM plugins-source AS packages-plugin
 # TODO: We can't run the packages integration tests here at the moment, since
 # they require the context and pipeline-manager plugins to be available.
 COPY contrib/tenzir-plugins/packages ./contrib/tenzir-plugins/packages
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-packages --parallel && \
@@ -462,7 +451,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS platform-plugin
 
 COPY contrib/tenzir-plugins/platform ./contrib/tenzir-plugins/platform
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-platform --parallel && \
@@ -472,7 +461,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS snowflake-plugin
 
 COPY contrib/tenzir-plugins/snowflake ./contrib/tenzir-plugins/snowflake
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-snowflake --parallel && \
@@ -482,7 +471,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS to_amazon_security_lake-plugin
 
 COPY contrib/tenzir-plugins/to_amazon_security_lake ./contrib/tenzir-plugins/to_amazon_security_lake
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_amazon_security_lake -B build-to_amazon_security_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_amazon_security_lake --parallel && \
@@ -492,7 +481,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS to_azure_log_analytics-plugin
 
 COPY contrib/tenzir-plugins/to_azure_log_analytics ./contrib/tenzir-plugins/to_azure_log_analytics
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_azure_log_analytics -B build-to_azure_log_analytics -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_azure_log_analytics --parallel && \
@@ -502,7 +491,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS to_splunk-plugin
 
 COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_splunk --parallel && \
@@ -512,7 +501,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS to_google_secops-plugin
 
 COPY contrib/tenzir-plugins/to_google_secops ./contrib/tenzir-plugins/to_google_secops
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_google_secops --parallel && \
@@ -522,7 +511,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS to_google_cloud_logging-plugin
 
 COPY contrib/tenzir-plugins/to_google_cloud_logging ./contrib/tenzir-plugins/to_google_cloud_logging
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_google_cloud_logging -B build-to_google_cloud_logging -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
@@ -533,7 +522,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS to_sentinelone_data_lake-plugin
 
 COPY contrib/tenzir-plugins/to_sentinelone_data_lake ./contrib/tenzir-plugins/to_sentinelone_data_lake
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_sentinelone_data_lake --parallel && \
@@ -543,7 +532,7 @@ RUN --mount=target=/ccache,type=cache \
 FROM plugins-source AS vast-plugin
 
 COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
-RUN --mount=target=/ccache,type=cache \
+RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-vast --parallel && \
