@@ -90,9 +90,82 @@ auto deallocate_bytes(void* ptr) noexcept -> void {
   return result;
 }
 
+[[nodiscard]] auto calloc_bytes(std::size_t count, std::size_t size) noexcept
+  -> void* {
+  auto* ptr = tenzir::memory::c_allocator().calloc(count, size);
+  if (ptr == nullptr && count != 0 && size != 0) {
+    errno = ENOMEM;
+  }
+  return ptr;
+}
+
 } // namespace
 
 extern "C" {
+
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE
+
+auto __wrap_malloc(std::size_t size) -> void* {
+  return allocate_bytes(size);
+}
+
+auto __wrap_calloc(std::size_t count, std::size_t size) -> void* {
+  return calloc_bytes(count, size);
+}
+
+auto __wrap_realloc(void* ptr, std::size_t new_size) -> void* {
+  return reallocate_bytes(ptr, new_size);
+}
+
+auto __wrap_reallocarray(void* ptr, std::size_t count, std::size_t size)
+  -> void* {
+  std::size_t total = 0;
+  if (multiply_overflows(count, size, total)) {
+    errno = ENOMEM;
+    return nullptr;
+  }
+  return reallocate_bytes(ptr, total);
+}
+
+auto __wrap_free(void* ptr) -> void {
+  deallocate_bytes(ptr);
+}
+
+auto __wrap_malloc_usable_size(const void* ptr) -> std::size_t {
+  return tenzir::memory::c_allocator().size(ptr);
+}
+
+auto __wrap_aligned_alloc(std::size_t alignment, std::size_t size) -> void* {
+  if (! is_power_of_two(alignment) || size % alignment != 0) {
+    errno = EINVAL;
+    return nullptr;
+  }
+  return allocate_bytes(size, std::align_val_t{alignment});
+}
+
+auto __wrap_memalign(std::size_t alignment, std::size_t size) -> void* {
+  if (not is_valid_posix_alignment(alignment)) {
+    errno = EINVAL;
+    return nullptr;
+  }
+  return allocate_bytes(size, std::align_val_t{alignment});
+}
+
+auto __wrap_posix_memalign(void** out, std::size_t alignment, std::size_t size)
+  -> int {
+  if (not is_valid_posix_alignment(alignment)) {
+    return EINVAL;
+  }
+  auto* ptr = allocate_bytes(size, std::align_val_t{alignment});
+  if (ptr == nullptr && size != 0) {
+    *out = nullptr;
+    return ENOMEM;
+  }
+  *out = ptr;
+  return 0;
+}
+
+#  else
 
 [[gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
 auto malloc(std::size_t size) -> void* {
@@ -101,11 +174,7 @@ auto malloc(std::size_t size) -> void* {
 
 [[gnu::hot, gnu::malloc, gnu::alloc_size(1, 2)]]
 auto calloc(std::size_t count, std::size_t size) -> void* {
-  auto* ptr = tenzir::memory::c_allocator().calloc(count, size);
-  if (ptr == nullptr && count != 0 && size != 0) {
-    errno = ENOMEM;
-  }
-  return ptr;
+  return calloc_bytes(count, size);
 }
 
 [[gnu::hot, gnu::alloc_size(2)]]
@@ -128,17 +197,17 @@ auto free(void* ptr) -> void {
   deallocate_bytes(ptr);
 }
 
-#  if TENZIR_LINUX
+#    if TENZIR_LINUX
 [[gnu::hot]]
 auto malloc_usable_size(const void* ptr) -> std::size_t {
   return tenzir::memory::c_allocator().size(ptr);
 }
-#  elif TENZIR_MACOS
+#    elif TENZIR_MACOS
 [[gnu::hot]]
 auto malloc_size(const void* ptr) -> std::size_t {
   return tenzir::memory::c_allocator().size(ptr);
 }
-#  endif
+#    endif
 
 [[gnu::hot, gnu::alloc_size(2), gnu::alloc_align(1)]]
 auto aligned_alloc(std::size_t alignment, std::size_t size) -> void* {
@@ -151,7 +220,7 @@ auto aligned_alloc(std::size_t alignment, std::size_t size) -> void* {
 
 [[gnu::hot]]
 auto memalign(std::size_t alignment, std::size_t size) -> void* {
-  if (! is_power_of_two(alignment) || alignment % sizeof(void*) != 0) {
+  if (not is_valid_posix_alignment(alignment)) {
     errno = EINVAL;
     return nullptr;
   }
@@ -173,6 +242,6 @@ auto posix_memalign(void** out, std::size_t alignment, std::size_t size)
   return 0;
 }
 
+#  endif
 } // extern "C"
-
 #endif

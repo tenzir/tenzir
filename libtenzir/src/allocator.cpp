@@ -13,14 +13,11 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/si_literals.hpp"
 
-#include <caf/actor_system.hpp>
-
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
-#include <iostream>
 #include <limits>
 
 #if TENZIR_LINUX
@@ -154,9 +151,14 @@ template <typename Function>
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
 #endif
 auto native_malloc(std::size_t size) noexcept -> void* {
+#if TENZIR_ENABLE_STATIC_EXECUTABLE
+  void* __real_malloc(size_t);
+  return __real_malloc(size);
+#else
   using function_type = void* (*)(std::size_t);
   const static auto fn = lookup_symbol<function_type>("malloc");
   return fn(size);
+#endif
 }
 
 #ifndef __clang__
@@ -165,6 +167,10 @@ auto native_malloc(std::size_t size) noexcept -> void* {
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2)]]
 #endif
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
+#if TENZIR_ENABLE_STATIC_EXECUTABLE
+  void* __real_calloc(size_t, size_t);
+  return __real_calloc(count, size);
+#else
   using function_type = void* (*)(std::size_t, std::size_t);
   const static auto fn = lookup_symbol<function_type>("calloc");
   if (fn == nullptr) {
@@ -172,6 +178,7 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
     return nullptr;
   }
   return fn(count, size);
+#endif
 }
 
 #ifndef __clang__
@@ -180,16 +187,26 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2)]]
 #endif
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
+#if TENZIR_ENABLE_STATIC_EXECUTABLE
+  void* __real_realloc(void*, size_t);
+  return __real_realloc(ptr, new_size);
+#else
   using function_type = void* (*)(void*, std::size_t);
   const static auto fn = lookup_symbol<function_type>("realloc");
   return fn(ptr, new_size);
+#endif
 }
 
 [[gnu::hot]]
 auto native_free(void* ptr) noexcept -> void {
+#if TENZIR_ENABLE_STATIC_EXECUTABLE
+  void __real_free(void*);
+  return __real_free(ptr);
+#else
   using function_type = void (*)(void*);
   static auto fn = lookup_symbol<function_type>("free");
   fn(ptr);
+#endif
 }
 
 #ifndef __clang__
@@ -200,9 +217,14 @@ auto native_free(void* ptr) noexcept -> void {
 #endif
 auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
+#if TENZIR_ENABLE_STATIC_EXECUTABLE
+  void* __real_aligned_alloc(size_t, size_t);
+  return __real_aligned_alloc(alignment, size);
+#else
   using function_type = void* (*)(std::size_t, std::size_t);
   const static auto fn = lookup_symbol<function_type>("aligned_alloc");
   return fn(alignment, size);
+#endif
 }
 
 #ifndef __clang__
@@ -223,16 +245,27 @@ auto malloc_aligned(std::size_t size, std::size_t alignment) noexcept -> void* {
 #endif
 auto realloc_aligned(void* ptr, std::size_t new_size,
                      std::size_t alignment) noexcept -> void* {
+  // `realloc` does not give alignment guarantees. Because of this, we need to
+  // do more work. First we try to reallocate normally
   auto* new_ptr_happy = native_realloc(ptr, new_size);
-  if (is_aligned(new_ptr_happy, std::align_val_t{alignment})) {
+  // The the allocation satisfies our requirement, we return it
+  if (new_ptr_happy
+      and is_aligned(new_ptr_happy, std::align_val_t{alignment})) {
     return new_ptr_happy;
   }
+  // If reallocation did not happen at all, we need to reconsider the old
+  // allocation. Doing this renaming here joins the code paths where realloc
+  // failed entirely.
   if (not new_ptr_happy) {
     new_ptr_happy = ptr;
   }
-  auto size = native_malloc_size(new_ptr_happy);
+  // Capture the currently allocated size, which we need for memcpy
+  const auto size = native_malloc_usable_size(new_ptr_happy);
+  // Make an aligned alloaction
   auto* new_ptr_expensive = malloc_aligned(new_size, alignment);
+  // Copy over at most as much as the previous allocation contained.
   std::memcpy(new_ptr_expensive, new_ptr_happy, size);
+  // Free the old allocation.
   native_free(new_ptr_happy);
   return new_ptr_expensive;
 }
@@ -245,19 +278,29 @@ auto realloc_aligned(void* ptr, std::size_t new_size,
 #endif
 auto calloc_aligned(std::size_t count, std::size_t size,
                     std::size_t alignment) noexcept -> void* {
+  if (alignment < alignof(std::max_align_t)) {
+    return native_calloc(count, size);
+  }
   std::size_t total = 0;
   if (multiply_overflows(count, size, total)) {
     errno = ENOMEM;
     return nullptr;
   }
-  auto* ptr = malloc_aligned(total, alignment);
+  /// Try calloc first. There is a good chance it will satisfy our requirement.
+  auto* ptr = calloc(count, size);
+  if (ptr and is_aligned(ptr, std::align_val_t{alignment})) {
+    return ptr;
+  }
+  /// Otherwise we have to bit the very bitter bullet: Do an aligned
+  /// allocation and memset it.
+  ptr = malloc_aligned(total, alignment);
   if (ptr != nullptr) {
     std::memset(ptr, 0, total);
   }
   return ptr;
 }
 
-auto native_malloc_size(const void* ptr) noexcept -> std::size_t {
+auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
   using function_type = std::size_t (*)(const void*);
 #if TENZIR_LINUX
   static auto fn = lookup_symbol<function_type>("malloc_usable_size");
@@ -294,18 +337,18 @@ auto enable_stats_impl(const char* env_name) noexcept -> bool {
   return sv == "true" or sv == "1";
 }
 
-auto selected_alloc_impl(const char* env_name) noexcept
-  -> std::optional<enum selected_alloc> {
+auto selected_backend_impl(const char* env_name) noexcept
+  -> std::optional<enum backend> {
   const auto env_value = ::getenv(env_name);
   if (not env_value) {
     return std::nullopt;
   }
   const auto env_str = std::string_view{env_value};
   if (env_str == "mimalloc") {
-    return selected_alloc::mimalloc;
+    return backend::mimalloc;
   }
   if (env_str == "system") {
-    return selected_alloc::system;
+    return backend::system;
   }
   write_error("FATAL ERROR: unknown '");
   write_error(env_name);
@@ -323,14 +366,14 @@ auto enable_stats(const char* env_name) noexcept -> bool {
   return enable_stats_impl("TENZIR_ALLOC_STATS");
 }
 
-auto selected_alloc(const char* var_name) noexcept -> enum selected_alloc {
-  if (auto v = selected_alloc_impl(var_name)) {
+auto selected_backend(const char* var_name) noexcept -> enum backend {
+  if (auto v = selected_backend_impl(var_name)) {
     return *v;
   }
-  if (auto v = selected_alloc_impl("TENZIR_ALLOC")) {
+  if (auto v = selected_backend_impl("TENZIR_ALLOC")) {
     return *v;
   }
-  return selected_alloc::mimalloc;
+  return backend::mimalloc;
 }
 
 auto trim_interval() noexcept -> tenzir::duration {
