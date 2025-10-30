@@ -28,6 +28,20 @@
 
 #include <mimalloc.h>
 
+#if TENZIR_ENABLE_STATIC_EXECUTABLE
+
+extern "C" {
+// NOLINTBEGIN(cert-dcl37-c,cert-dcl51-cpp,bugprone-reserved-identifier)
+auto __real_malloc(size_t) -> void*;
+auto __real_calloc(size_t, size_t) -> void*;
+auto __real_realloc(void*, size_t) -> void*;
+void __real_free(void*);
+auto __real_aligned_alloc(size_t, size_t) -> void*;
+// NOLINTEND(cert-dcl37-c,cert-dcl51-cpp,bugprone-reserved-identifier)
+}
+
+#endif
+
 namespace tenzir::memory {
 
 auto stats::update_max_bytes(std::int64_t new_usage) noexcept -> void {
@@ -152,7 +166,6 @@ template <typename Function>
 #endif
 auto native_malloc(std::size_t size) noexcept -> void* {
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
-  void* __real_malloc(size_t);
   return __real_malloc(size);
 #else
   using function_type = void* (*)(std::size_t);
@@ -168,7 +181,6 @@ auto native_malloc(std::size_t size) noexcept -> void* {
 #endif
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
-  void* __real_calloc(size_t, size_t);
   return __real_calloc(count, size);
 #else
   using function_type = void* (*)(std::size_t, std::size_t);
@@ -188,7 +200,6 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 #endif
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
-  void* __real_realloc(void*, size_t);
   return __real_realloc(ptr, new_size);
 #else
   using function_type = void* (*)(void*, std::size_t);
@@ -200,8 +211,7 @@ auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 [[gnu::hot]]
 auto native_free(void* ptr) noexcept -> void {
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
-  void __real_free(void*);
-  return __real_free(ptr);
+  __real_free(ptr);
 #else
   using function_type = void (*)(void*);
   static auto fn = lookup_symbol<function_type>("free");
@@ -218,7 +228,6 @@ auto native_free(void* ptr) noexcept -> void {
 auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
-  void* __real_aligned_alloc(size_t, size_t);
   return __real_aligned_alloc(alignment, size);
 #else
   using function_type = void* (*)(std::size_t, std::size_t);

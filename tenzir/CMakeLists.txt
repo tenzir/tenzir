@@ -1,14 +1,15 @@
 add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
 target_link_options(tenzir BEFORE PRIVATE
-  LINKER:--wrap=malloc,
-  --wrap=calloc,
-  --wrap=realloc,
-  --wrap=realloc_array,
-  --wrap=aligned_alloc,
-  --wrap=malloc_usable_size,
-  --wrap=memalign,
-  --wrap=posix_memalign)
+  LINKER:--wrap=malloc
+  LINKER:--wrap=calloc
+  LINKER:--wrap=realloc
+  LINKER:--wrap=realloc_array
+  LINKER:--wrap=aligned_alloc
+  LINKER:--wrap=malloc_usable_size
+  LINKER:--wrap=memalign
+  LINKER:--wrap=posix_memalign
+  LINKER:--wrap=free)
 endif ()
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)

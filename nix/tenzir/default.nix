@@ -285,6 +285,7 @@ let
             [
               "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
               "-DCAF_ROOT_DIR=${caf}"
+              "-DTENZIR_ALLOCATOR=runtime"
               "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
