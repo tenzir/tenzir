@@ -45,11 +45,11 @@ multiply_overflows(std::size_t lhs, std::size_t rhs,
 
 [[nodiscard]] constexpr auto is_power_of_two(std::size_t value) noexcept
   -> bool {
-  return value != 0 && (value & (value - 1)) == 0;
+  return std::popcount(value) == 1;
 }
 
 [[nodiscard]] constexpr auto
-posix_alignment_valid(std::size_t alignment) noexcept -> bool {
+is_valid_posix_alignment(std::size_t alignment) noexcept -> bool {
   return is_power_of_two(alignment) && alignment % sizeof(void*) == 0;
 }
 
@@ -128,10 +128,17 @@ auto free(void* ptr) -> void {
   deallocate_bytes(ptr);
 }
 
+#  if TENZIR_LINUX
 [[gnu::hot]]
 auto malloc_usable_size(const void* ptr) -> std::size_t {
   return tenzir::memory::c_allocator().size(ptr);
 }
+#  elif TENZIR_MACOS
+[[gnu::hot]]
+auto malloc_size(const void* ptr) -> std::size_t {
+  return tenzir::memory::c_allocator().size(ptr);
+}
+#  endif
 
 [[gnu::hot, gnu::alloc_size(2), gnu::alloc_align(1)]]
 auto aligned_alloc(std::size_t alignment, std::size_t size) -> void* {
@@ -154,7 +161,7 @@ auto memalign(std::size_t alignment, std::size_t size) -> void* {
 [[gnu::hot, gnu::nonnull(1)]]
 auto posix_memalign(void** out, std::size_t alignment, std::size_t size)
   -> int {
-  if (not posix_alignment_valid(alignment)) {
+  if (not is_valid_posix_alignment(alignment)) {
     return EINVAL;
   }
   auto* ptr = allocate_bytes(size, std::align_val_t{alignment});

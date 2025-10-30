@@ -126,7 +126,7 @@ public:
 } // namespace
 
 auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
-  static auto pool = memory_pool{};
+  constinit static auto pool = memory_pool{};
   return &pool;
 }
 

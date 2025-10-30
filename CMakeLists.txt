@@ -196,11 +196,14 @@ Possible options:\
   * `runtime`: The allocator can be selected via an environment variable at startup. You can enable stats tracking.\
 \
 Environment variables:\
-where `<COMPONENT>` is one of `ARROW`, `CPP` or `C`\
 \
-* `TENZIR_ALLOC_<COMPONENT>=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `mimalloc` or `system`\
-* `TENZIR_ALLOC_<COMPONENT>_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component"
-)
+* `TENZIR_ALLOC=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `mimalloc` or `system`\
+* `TENZIR_ALLOC_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component \
+\
+There also exist specific per-component variables, which are simply suffixed by _<COMPONENT>:\
+* `ARROW`: All allocations made for arrow buffers only. Does not include things like the structure or arrow types.
+* `CPP`: All allocations made through any `operator new` (does include std::allocator by definition)
+* `C`: All allocations made through C or POSIX allocation functions.")
 if (TENZIR_ALLOCATOR STREQUAL "none")
   set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_NONE")
 elseif (TENZIR_ALLOCATOR STREQUAL "mimalloc")

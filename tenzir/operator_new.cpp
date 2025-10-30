@@ -12,8 +12,6 @@
 
 #  include "tenzir/allocator.hpp"
 
-#  include <mimalloc.h>
-
 namespace {
 
 /// We know that mimallocs default alignment is 16:

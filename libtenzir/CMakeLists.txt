@@ -278,7 +278,7 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
 
 # Link against mimalloc.
-target_link_libraries(libtenzir PRIVATE mimalloc)
+target_link_libraries(libtenzir PUBLIC mimalloc)
 
 # Link against xxHash.
 target_compile_definitions(
@@ -571,7 +571,7 @@ add_custom_target(
 target_sources(
   libtenzir
   PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp"
-  		  "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
+          "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 

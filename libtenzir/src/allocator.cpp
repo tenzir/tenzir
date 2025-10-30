@@ -8,7 +8,9 @@
 
 #include "tenzir/allocator.hpp"
 
+#include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/config.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/si_literals.hpp"
 
 #include <caf/actor_system.hpp>
@@ -18,13 +20,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
+#include <iostream>
 #include <limits>
 
 #if TENZIR_LINUX
 #  include <malloc.h>
 #elif TENZIR_MACOS
 #  include <malloc/malloc.h>
-#  define malloc_usable_size malloc_size
 #endif
 
 #include <mimalloc.h>
@@ -94,9 +96,6 @@ struct init {
 } init_;
 } // namespace
 
-auto trim() noexcept -> void {
-  ::mi_collect(false);
-}
 } // namespace mimalloc
 
 namespace system {
@@ -132,20 +131,19 @@ multiply_overflows(std::size_t lhs, std::size_t rhs,
   return false;
 }
 
+auto write_error(const char* txt) noexcept {
+  write(STDERR_FILENO, txt, strlen(txt));
+}
+
 template <typename Function>
 [[nodiscard]] auto lookup_symbol(const char* name) noexcept -> Function {
-  auto resolve = [name]() noexcept -> Function {
-    dlerror();
-    if (auto* sym = dlsym(RTLD_NEXT, name)) {
-      return reinterpret_cast<Function>(sym);
-    }
-    if (auto* sym = dlsym(RTLD_DEFAULT, name)) {
-      return reinterpret_cast<Function>(sym);
-    }
-    return nullptr;
-  };
-  static auto fn = resolve();
-  return fn;
+  dlerror();
+  if (auto* sym = dlsym(RTLD_NEXT, name)) {
+    return reinterpret_cast<Function>(sym);
+  }
+  write_error("failed to lookup symbol ");
+  write_error(name);
+  std::exit(EXIT_FAILURE);
 }
 
 } // namespace
@@ -157,11 +155,7 @@ template <typename Function>
 #endif
 auto native_malloc(std::size_t size) noexcept -> void* {
   using function_type = void* (*)(std::size_t);
-  static auto fn = lookup_symbol<function_type>("malloc");
-  if (fn == nullptr) {
-    errno = ENOSYS;
-    return nullptr;
-  }
+  const static auto fn = lookup_symbol<function_type>("malloc");
   return fn(size);
 }
 
@@ -172,7 +166,7 @@ auto native_malloc(std::size_t size) noexcept -> void* {
 #endif
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
   using function_type = void* (*)(std::size_t, std::size_t);
-  static auto fn = lookup_symbol<function_type>("calloc");
+  const static auto fn = lookup_symbol<function_type>("calloc");
   if (fn == nullptr) {
     errno = ENOSYS;
     return nullptr;
@@ -187,64 +181,15 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 #endif
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
   using function_type = void* (*)(void*, std::size_t);
-  static auto fn = lookup_symbol<function_type>("realloc");
-  if (fn == nullptr) {
-    errno = ENOSYS;
-    return nullptr;
-  }
+  const static auto fn = lookup_symbol<function_type>("realloc");
   return fn(ptr, new_size);
-}
-
-#ifndef __clang__
-[[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2, 3)]]
-#else
-[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2, 3)]]
-#endif
-auto native_reallocarray(void* ptr, std::size_t count,
-                         std::size_t size) noexcept -> void* {
-  std::size_t total = 0;
-  if (multiply_overflows(count, size, total)) {
-    errno = ENOMEM;
-    return nullptr;
-  }
-  using function_type = void* (*)(void*, std::size_t, std::size_t);
-  static auto fn = lookup_symbol<function_type>("reallocarray");
-  if (fn != nullptr) {
-    return fn(ptr, count, size);
-  }
-  return native_realloc(ptr, total);
 }
 
 [[gnu::hot]]
 auto native_free(void* ptr) noexcept -> void {
   using function_type = void (*)(void*);
   static auto fn = lookup_symbol<function_type>("free");
-  if (fn == nullptr) {
-    return;
-  }
   fn(ptr);
-}
-
-#ifndef __clang__
-[[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2),
-  gnu::alloc_align(1)]]
-#else
-[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(1)]]
-#endif
-auto native_memalign(std::size_t alignment, std::size_t size) noexcept
-  -> void* {
-  using function_type = void* (*)(std::size_t, std::size_t);
-  static auto fn = lookup_symbol<function_type>("memalign");
-  if (fn != nullptr) {
-    return fn(alignment, size);
-  }
-  using aligned_fn = void* (*)(std::size_t, std::size_t);
-  static auto aligned = lookup_symbol<aligned_fn>("aligned_alloc");
-  if (aligned != nullptr) {
-    return aligned(alignment, size);
-  }
-  errno = ENOSYS;
-  return nullptr;
 }
 
 #ifndef __clang__
@@ -256,25 +201,8 @@ auto native_memalign(std::size_t alignment, std::size_t size) noexcept
 auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
   using function_type = void* (*)(std::size_t, std::size_t);
-  static auto fn = lookup_symbol<function_type>("aligned_alloc");
-  if (fn != nullptr) {
-    return fn(alignment, size);
-  }
-  return native_memalign(alignment, size);
-}
-
-[[nodiscard, gnu::hot]]
-auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
-  using function_type = std::size_t (*)(const void*);
-#if TENZIR_LINUX
-  static auto fn = lookup_symbol<function_type>("malloc_usable_size");
-#elif TENZIR_MACOS
-  static auto fn = lookup_symbol<function_type>("malloc_size");
-#endif
-  if (fn != nullptr) {
-    return fn(ptr);
-  }
-  return 0;
+  const static auto fn = lookup_symbol<function_type>("aligned_alloc");
+  return fn(alignment, size);
 }
 
 #ifndef __clang__
@@ -302,7 +230,7 @@ auto realloc_aligned(void* ptr, std::size_t new_size,
   if (not new_ptr_happy) {
     new_ptr_happy = ptr;
   }
-  auto size = malloc_usable_size(new_ptr_happy);
+  auto size = native_malloc_size(new_ptr_happy);
   auto* new_ptr_expensive = malloc_aligned(new_size, alignment);
   std::memcpy(new_ptr_expensive, new_ptr_happy, size);
   native_free(new_ptr_happy);
@@ -329,8 +257,17 @@ auto calloc_aligned(std::size_t count, std::size_t size,
   return ptr;
 }
 
-auto malloc_size(const void* ptr) noexcept -> std::size_t {
-  return native_malloc_usable_size(ptr);
+auto native_malloc_size(const void* ptr) noexcept -> std::size_t {
+  using function_type = std::size_t (*)(const void*);
+#if TENZIR_LINUX
+  static auto fn = lookup_symbol<function_type>("malloc_usable_size");
+#elif TENZIR_MACOS
+  static auto fn = lookup_symbol<function_type>("malloc_size");
+#endif
+  if (fn != nullptr) {
+    return fn(ptr);
+  }
+  return 0;
 }
 
 auto trim() noexcept -> void {
@@ -340,10 +277,16 @@ auto trim() noexcept -> void {
   ::malloc_trim(padding);
 #endif
 }
+
 } // namespace system
 
-auto enable_stats(const char* var_name) noexcept -> bool {
-  const auto env = ::getenv(var_name);
+namespace {
+auto write_error(const char* txt) noexcept -> void {
+  write(STDERR_FILENO, txt, strlen(txt));
+}
+
+auto enable_stats_impl(const char* env_name) noexcept -> bool {
+  const auto env = ::getenv(env_name);
   if (not env) {
     return false;
   }
@@ -351,24 +294,62 @@ auto enable_stats(const char* var_name) noexcept -> bool {
   return sv == "true" or sv == "1";
 }
 
-auto selected_alloc(const char* var_name) noexcept -> enum selected_alloc {
-  const auto env = ::getenv(var_name);
-  if (not env) {
-    return selected_alloc::mimalloc;
+auto selected_alloc_impl(const char* env_name) noexcept
+  -> std::optional<enum selected_alloc> {
+  const auto env_value = ::getenv(env_name);
+  if (not env_value) {
+    return std::nullopt;
   }
-  const auto env_str = std::string_view{env};
-  if (env_str.empty() or env_str == "mimalloc") {
+  const auto env_str = std::string_view{env_value};
+  if (env_str == "mimalloc") {
     return selected_alloc::mimalloc;
   }
   if (env_str == "system") {
     return selected_alloc::system;
   }
-  std::fprintf(stderr,
-               "FATAL ERROR: unknown %s: '%s'\n"
-               "known values are 'mimalloc' and 'system'\n",
-               env, env_str.data());
+  write_error("FATAL ERROR: unknown '");
+  write_error(env_name);
+  write_error("' = '");
+  write_error(env_value);
+  write_error("'\nknown values are 'mimalloc' and 'system'\n");
   std::exit(EXIT_FAILURE);
-  std::unreachable();
+}
+} // namespace
+
+auto enable_stats(const char* env_name) noexcept -> bool {
+  if (enable_stats_impl(env_name)) {
+    return true;
+  }
+  return enable_stats_impl("TENZIR_ALLOC_STATS");
+}
+
+auto selected_alloc(const char* var_name) noexcept -> enum selected_alloc {
+  if (auto v = selected_alloc_impl(var_name)) {
+    return *v;
+  }
+  if (auto v = selected_alloc_impl("TENZIR_ALLOC")) {
+    return *v;
+  }
+  return selected_alloc::mimalloc;
+}
+
+auto trim_interval() noexcept -> tenzir::duration {
+  using namespace std::chrono_literals;
+  constexpr static auto var_name = "TENZIR_ALLOC_TRIM_INTERVAL";
+  constexpr static auto default_interval = duration{10min};
+  const auto env = ::getenv(var_name);
+  if (not env) {
+    return default_interval;
+  }
+  auto res = duration{default_interval};
+  const auto sv = std::string_view{env};
+  auto begin = sv.begin();
+  auto end = sv.end();
+  if (not parsers::simple_duration.parse(begin, end, res)) {
+    TENZIR_WARN("failed to parsed environment variable `{}={}`; Using {}",
+                var_name, sv, res);
+  }
+  return res;
 }
 
 } // namespace tenzir::memory
