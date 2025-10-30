@@ -48,7 +48,6 @@ RUN ./build-fluent-bit-package.sh
 # -- arrow-adbc-package --------------------------------------------------------
 
 FROM build-base AS arrow-adbc-package
-RUN echo ""
 COPY scripts/debian/build-arrow-adbc-package.sh .
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 RUN apt-get update && \
@@ -107,6 +106,8 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 # Additional arguments to be passed to CMake.
 ARG TENZIR_BUILD_OPTIONS
 
+COPY --from=cache-context / /ccache
+
 ENV LDFLAGS="-Wl,--copy-dt-needed-entries"
 RUN cmake -B build -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
@@ -119,8 +120,8 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-    ${TENZIR_BUILD_OPTIONS} && \
-  cmake --build build --parallel && \
+      ${TENZIR_BUILD_OPTIONS} && \
+    cmake --build build --parallel && \
     cmake --build build --target unit-tests && \
     cmake --install build --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build && \
@@ -511,6 +512,43 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
     cmake --build build-vast --parallel && \
     DESTDIR=/plugin/vast cmake --install build-vast --component Runtime && \
     rm -rf build-vast
+
+# -- cache-export --------------------------------------------------------------
+
+FROM build-base AS cache-export
+
+COPY --from=development /ccache/. /ccache
+
+COPY --from=amqp-plugin /ccache/. /ccache
+COPY --from=azure-blob-storage-plugin /ccache/. /ccache
+COPY --from=clickhouse-plugin /ccache/. /ccache
+COPY --from=fluent-bit-plugin /ccache/. /ccache
+COPY --from=gcs-plugin /ccache/. /ccache
+COPY --from=google-cloud-pubsub-plugin /ccache/. /ccache
+COPY --from=kafka-plugin /ccache/. /ccache
+COPY --from=nic-plugin /ccache/. /ccache
+COPY --from=parquet-plugin /ccache/. /ccache
+COPY --from=s3-plugin /ccache/. /ccache
+COPY --from=sigma-plugin /ccache/. /ccache
+COPY --from=sqs-plugin /ccache/. /ccache
+COPY --from=from_velociraptor-plugin /ccache/. /ccache
+COPY --from=web-plugin /ccache/. /ccache
+COPY --from=yara-plugin /ccache/. /ccache
+COPY --from=zmq-plugin /ccache/. /ccache
+
+COPY --from=compaction-plugin /ccache/. /ccache
+COPY --from=context-plugin /ccache/. /ccache
+COPY --from=pipeline-manager-plugin /ccache/. /ccache
+COPY --from=packages-plugin /ccache/. /ccache
+COPY --from=platform-plugin /ccache/. /ccache
+COPY --from=snowflake-plugin /ccache/. /ccache
+COPY --from=to_amazon_security_lake-plugin /ccache/. /ccache
+COPY --from=to_azure_log_analytics-plugin /ccache/. /ccache
+COPY --from=to_splunk-plugin /ccache/. /ccache
+COPY --from=to_google_secops-plugin /ccache/. /ccache
+COPY --from=to_google_cloud_logging-plugin /ccache/. /ccache
+COPY --from=to_sentinelone_data_lake-plugin /ccache/. /ccache
+COPY --from=vast-plugin /ccache/. /ccache
 
 # -- tenzir-ce-untested --------------------------------------------------------
 
