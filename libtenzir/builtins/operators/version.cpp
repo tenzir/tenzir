@@ -6,12 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "caf/net/actor_shell.hpp"
+#include "tenzir/actors.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/exec/operator.hpp"
 #include "tenzir/exec/operator_base.hpp"
 #include "tenzir/finalize_ctx.hpp"
+#include "tenzir/posix_filesystem.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -24,6 +27,7 @@
 
 #include <arrow/util/config.h>
 #include <boost/version.hpp>
+#include <caf/actor_companion.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/scheduled_actor/flow.hpp>
 #include <flatbuffers/base.h>
@@ -334,7 +338,7 @@ class Version final : public SourceOperator<table_slice, size_t> {
 public:
   auto next() const -> Task<std::optional<size_t>> override {
     // This is just a test to see what happens if we want to return the version
-    // five times with 1 second of sleep in between.
+    // a certain number of times with 1 second of sleep in between.
     if (remaining_ == 0) {
       co_return {};
     }
@@ -345,8 +349,22 @@ public:
 
   auto process(size_t result, Push<table_slice>& push, AsyncCtx& ctx)
     -> Task<void> override {
+    auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
+    auto license
+      = co_await ctx
+          .mail(atom::read_v,
+                std::filesystem::path{"/Users/jannis/tenzir/LICENSE"})
+          .request(fs);
+    if (license) {
+      auto& chunk = *license;
+      TENZIR_ERROR(
+        "{}", std::string_view{reinterpret_cast<const char*>(chunk->data()),
+                               chunk->size()});
+    } else {
+      TENZIR_ERROR("got error");
+    }
     TENZIR_WARN("got result: {}", result);
-    auto slice = make_version(caf::content(ctx.caf().config()));
+    auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
     remaining_ -= 1;
   }
@@ -357,11 +375,8 @@ public:
     co_return;
   }
 
-  // Not necessary for this.
-  // auto post_commit() -> Task<void> override;
-
 private:
-  size_t remaining_ = 5;
+  size_t remaining_ = 1;
 };
 
 class version_plan final : public plan::operator_base {

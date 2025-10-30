@@ -11,72 +11,76 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/task.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <caf/actor_cast.hpp>
+#include <caf/mailbox_element.hpp>
+#include <caf/response_type.hpp>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Mutex.h>
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Synchronized.h>
 #include <folly/coro/Task.h>
 #include <folly/coro/Traits.h>
+#include <folly/futures/Future.h>
 
 #include <any>
 
 namespace tenzir {
 
-/// A non-null `std::unique_ptr`.
 template <class T>
-class Box {
+using AsyncGenerator = folly::coro::AsyncGenerator<T&&>;
+
+template <class Result, class Handle, class F>
+void mail_with_callback(Handle receiver, caf::message msg, F f) {
+  auto companion = receiver->home_system().make_companion();
+  // We need to wrap non-copyable functions because CAF wants a copy...
+  companion->on_enqueue(
+    [f = std::make_shared<F>(std::move(f))](caf::mailbox_element_ptr ptr) {
+      if (ptr->payload.match_elements<caf::error>()) {
+        std::invoke(std::move(*f),
+                    caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+        return;
+      }
+      if (ptr->payload.match_element<Result>(0)) {
+        std::invoke(std::move(*f),
+                    caf::expected<Result>{ptr->payload.get_as<Result>(0)});
+        return;
+      }
+      // TODO: Apparently we cannot throw here?
+      TENZIR_ERROR("OH NO");
+      return;
+    });
+  companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
+};
+
+template <class Handle, class... Args>
+using AsyncMailResult = caf::expected<caf::detail::tl_head_t<
+  caf::response_type_t<typename Handle::signatures, std::decay_t<Args>...>>>;
+
+template <class... Args>
+class AsyncMail {
 public:
-  static auto from_non_null(std::unique_ptr<T> ptr) -> Box<T> {
-    return Box{std::move(ptr)};
+  explicit AsyncMail(caf::message msg) : msg_{std::move(msg)} {
   }
 
-  template <class U>
-    requires std::convertible_to<std::unique_ptr<U>, std::unique_ptr<T>>
-  explicit(false) Box(U x) : ptr_{std::make_unique<U>(std::move(x))} {
-  }
-
-  template <class... Ts>
-  explicit(false) Box(std::in_place_t, Ts&&... xs)
-    : ptr_{std::make_unique<T>(std::forward<Ts>(xs)...)} {
-  }
-
-  auto operator->() -> T* {
-    TENZIR_ASSERT(ptr_);
-    return ptr_.get();
-  }
-
-  auto operator->() const -> T const* {
-    TENZIR_ASSERT(ptr_);
-    return ptr_.get();
-  }
-
-  auto operator*() -> T& {
-    TENZIR_ASSERT(ptr_);
-    return *ptr_;
-  }
-
-  auto operator*() const -> T const& {
-    TENZIR_ASSERT(ptr_);
-    return *ptr_;
+  template <class Handle, class Result = AsyncMailResult<Handle, Args...>>
+  auto request(Handle receiver) && -> folly::SemiFuture<Result> {
+    auto [promise, future] = folly::makePromiseContract<Result>();
+    mail_with_callback<typename Result::value_type>(
+      receiver, std::move(msg_),
+      [promise = std::move(promise)](Result result) mutable {
+        promise.setValue(std::move(result));
+      });
+    return std::move(future);
   }
 
 private:
-  explicit Box(std::unique_ptr<T> ptr) : ptr_{std::move(ptr)} {
-    TENZIR_ASSERT(ptr_);
-  }
-
-  std::unique_ptr<T> ptr_;
+  caf::message msg_;
 };
-
-template <class T>
-Box(T ptr) -> Box<T>;
-
-template <class T>
-using AsyncGenerator = folly::coro::AsyncGenerator<T&&>;
 
 class AsyncCtx {
 public:
@@ -89,8 +93,14 @@ public:
     return dh_;
   }
 
-  auto caf() -> caf::actor_system& {
+  auto actor_system() -> caf::actor_system& {
     return sys_;
+  }
+
+  template <class... Ts>
+  auto mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
+    return AsyncMail<std::decay_t<Ts>...>{
+      caf::make_message(std::forward<Ts>(xs)...)};
   }
 
 private:
@@ -378,7 +388,7 @@ public:
 
   auto receive() -> Task<OperatorMessage<T>> {
     auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_ERROR("CANCELLED");
+      TENZIR_DEBUG("CANCELLED");
     }};
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
