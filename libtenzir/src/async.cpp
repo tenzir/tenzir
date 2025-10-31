@@ -610,7 +610,7 @@ public:
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
       lock.unlock();
-      co_await queue_pushed_.wait();
+      co_await queue_pushed_;
       lock = co_await mutex_.lock();
     }
     auto result = std::move(lock->queue.front());

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "tenzir/async/task.hpp"
-
+#include <folly/coro/Task.h>
 #include <folly/fibers/Semaphore.h>
 
 namespace tenzir {
@@ -29,10 +28,6 @@ public:
     if (tokens == 0) {
       semaphore_.signal();
     }
-  }
-
-  auto wait() -> Task<void> {
-    return semaphore_.co_wait();
   }
 
 private:

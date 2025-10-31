@@ -10,6 +10,7 @@
 
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/notify.hpp"
+#include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/table_slice.hpp"
@@ -106,31 +107,6 @@ public:
 private:
   caf::actor_system& sys_;
   null_diagnostic_handler dh_;
-};
-
-/// A type-erased, asynchronous sender.
-template <class T>
-class Push {
-public:
-  virtual ~Push() = default;
-
-  virtual auto operator()(T output) -> Task<void> = 0;
-};
-
-/// A type-erased, asynchronous receiver.
-template <class T>
-class Pull {
-public:
-  virtual ~Pull() = default;
-
-  virtual auto operator()() -> Task<T> = 0;
-};
-
-/// A pair of a type-erased, asynchronous sender and receiver.
-template <class T>
-struct PushPull {
-  Box<Push<T>> push;
-  Box<Pull<T>> pull;
 };
 
 enum class OperatorState {
