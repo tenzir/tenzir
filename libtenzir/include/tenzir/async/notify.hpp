@@ -8,18 +8,14 @@
 
 #pragma once
 
-#include <folly/coro/Task.h>
+#include "tenzir/async/task.hpp"
+
 #include <folly/fibers/Semaphore.h>
 
 namespace tenzir {
 
 class Notify {
 public:
-  auto viaIfAsync(folly::Executor::KeepAlive<> executor) {
-    return folly::coro::co_withExecutor(std::move(executor),
-                                        semaphore_.co_wait());
-  }
-
   void notify_one() {
     // TODO: This is quite bad, and there is a race where we could notify more
     // than one waiter. However, we can't just use `folly::coro::Baton` since
@@ -28,6 +24,10 @@ public:
     if (tokens == 0) {
       semaphore_.signal();
     }
+  }
+
+  auto wait() -> Task<void> {
+    return semaphore_.co_wait();
   }
 
 private:
