@@ -112,15 +112,84 @@ private:
 enum class OperatorState {
   /// The operator doesn't request any specific state.
   unspecified,
-  /// The operator doesn't want any more input.
-  no_more_input,
+  /// The operator wants to finalize.
+  done,
 };
 
 class CheckpointId {};
 
+template <class Input, class Output>
+class OperatorInputOutputBase {
+public:
+  virtual auto process(Input input, Push<Output>& push, AsyncCtx& ctx)
+    -> Task<void>
+    = 0;
+
+protected:
+  ~OperatorInputOutputBase() = default;
+};
+
+template <class Output>
+class OperatorInputOutputBase<void, Output> {};
+
+template <class Input>
+class OperatorInputOutputBase<Input, void> {
+public:
+  virtual auto process(Input input, AsyncCtx& ctx) -> Task<void> = 0;
+
+protected:
+  ~OperatorInputOutputBase() = default;
+};
+
+template <class Output>
+class OperatorOutputBase {
+public:
+  virtual auto start(Push<Output>& push, AsyncCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(push, ctx);
+    co_return;
+  }
+
+  virtual auto process_task(std::any result, Push<Output>& push, AsyncCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(result, push, ctx);
+    TENZIR_ERROR("ignoring task result in {}", typeid(*this).name());
+    co_return;
+  }
+
+  virtual auto finalize(Push<Output>& push, AsyncCtx& ctx) -> Task<void> {
+    co_return;
+  }
+
+protected:
+  ~OperatorOutputBase() = default;
+};
+
+template <>
+class OperatorOutputBase<void> {
+public:
+  virtual auto start(AsyncCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
+    co_return;
+  }
+
+  virtual auto process_task(std::any result, AsyncCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(result, ctx);
+    TENZIR_ERROR("ignoring task result in {}", typeid(*this).name());
+    co_return;
+  }
+
+  virtual auto finalize(AsyncCtx& ctx) -> Task<void> {
+    co_return;
+  }
+
+protected:
+  ~OperatorOutputBase() = default;
+};
+
 // TODO: This interface doesn't work with source operators.
 template <class Input, class Output>
-class Operator {
+class Operator : public OperatorInputOutputBase<Input, Output>,
+                 public OperatorOutputBase<Output> {
 public:
   virtual ~Operator() = default;
 
@@ -130,22 +199,9 @@ public:
   // single task that is derived from state looks like a good idea.
   virtual auto await_task() const -> Task<std::any> {
     // We craft a task that will never complete on purpose.
-    co_await folly::coro::sleep(folly::HighResDuration::max());
+    co_await folly::coro::sleep(std::chrono::years{1});
+    TENZIR_ERROR("TODO");
     TENZIR_UNREACHABLE();
-  }
-
-  virtual auto process_task(std::any result, Push<Output>& push, AsyncCtx& ctx)
-    -> Task<void> {
-    TENZIR_UNUSED(result, push, ctx);
-    TENZIR_UNREACHABLE();
-  }
-
-  virtual auto process(Input input, Push<Output>& push, AsyncCtx& ctx)
-    -> Task<void>
-    = 0;
-
-  virtual auto finalize(Push<Output>& push, AsyncCtx& ctx) -> Task<void> {
-    co_return;
   }
 
   virtual auto checkpoint() -> Task<void> {
@@ -159,50 +215,6 @@ public:
 
   virtual auto state() -> OperatorState {
     return OperatorState::unspecified;
-  }
-};
-
-// TODO: Integrate this with the above?
-template <class Input>
-class Operator<Input, void> {
-public:
-  virtual ~Operator() = default;
-
-  virtual auto process(Input input, AsyncCtx& ctx) -> Task<void> = 0;
-
-  virtual auto checkpoint() -> Task<void> {
-    // TODO: This should be implemented through `inspect`, right?
-    co_return;
-  }
-
-  virtual auto state() -> OperatorState {
-    return OperatorState::unspecified;
-  }
-};
-
-template <class Output>
-class Operator<void, Output> {
-public:
-  virtual ~Operator() = default;
-
-  /// Return a task that is used as the input of the next `process` call once it
-  /// completes. Checkpoints can be performed whenever `process` is not running.
-  /// The task must therefore not modify state relevant for checkpointing.
-  ///
-  /// Returning an empty value denotes that the source is done.
-  virtual auto next() const -> Task<std::any> = 0;
-
-  virtual auto process(std::any result, Push<Output>& push, AsyncCtx& ctx)
-    -> Task<void>
-    = 0;
-
-  virtual auto checkpoint() -> Task<void> {
-    // TODO: This should be implemented through `inspect`, right?
-    co_return;
-  }
-
-  virtual auto post_commit() -> Task<void> {
-    co_return;
   }
 };
 
@@ -235,7 +247,7 @@ public:
     : op_{std::move(op)} {
   }
 
-  auto next() const -> Task<std::any> override {
+  auto await_task() const -> Task<std::any> override {
     auto result = co_await op_->next();
     if (result.has_value()) {
       co_return std::make_any<Step>(std::move(*result));
@@ -243,7 +255,7 @@ public:
     co_return {};
   }
 
-  auto process(std::any result, Push<Output>& push, AsyncCtx& ctx)
+  auto process_task(std::any result, Push<Output>& push, AsyncCtx& ctx)
     -> Task<void> override {
     auto cast = std::any_cast<Step>(&result);
     TENZIR_ASSERT(cast);

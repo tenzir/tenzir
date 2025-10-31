@@ -16,6 +16,12 @@
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
+// TODO: Why does this not report line numbers correctly?
+#undef TENZIR_UNREACHABLE
+#define TENZIR_UNREACHABLE()                                                   \
+  TENZIR_ERROR("unreachable");                                                 \
+  tenzir::panic("unreachable")
+
 namespace tenzir {
 
 class Pass final : public Operator<table_slice, table_slice> {
@@ -202,6 +208,7 @@ public:
       [this, task = std::move(task)] mutable -> Task<void> {
         TENZIR_VERBOSE("starting task from queue");
         co_await queue_.enqueue(co_await std::move(task));
+        TENZIR_VERBOSE("finished task from queue");
       }));
   }
 
@@ -262,70 +269,107 @@ template <class T>
 OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
 template <class Input, class Output>
-  requires(not std::same_as<Input, void>)
-struct NonSourceRunner {
+class Runner {
+public:
+  Runner(Box<Operator<Input, Output>> op, Box<Pull<OperatorMsg<Input>>> input,
+         Box<Push<OperatorMsg<Output>>> output,
+         Receiver<FromControl> from_control, Sender<ToControl> to_control,
+         caf::actor_system& sys)
+    : op_{std::move(op)},
+      input_{std::move(input)},
+      output_{std::move(output)},
+      from_control_{std::move(from_control)},
+      to_control_{std::move(to_control)},
+      sys_{sys} {
+  }
+
   auto run_to_completion() -> Task<void> {
-    TENZIR_INFO("entering run loop for non-source");
+    TENZIR_INFO("entering run loop");
+    auto ctx = AsyncCtx{sys_};
+    if constexpr (std::same_as<Output, void>) {
+      co_await op_->start(ctx);
+    } else {
+      auto push = OpPushWrapper{output_};
+      co_await op_->start(push, ctx);
+    }
+    co_await queue_.add(op_->await_task());
     co_await queue_.add(input_());
     co_await queue_.add(from_control_.receive());
     while (not got_shutdown_request_) {
       co_await tick();
     }
-    TENZIR_WARN("shutting down non-source");
+    TENZIR_WARN("shutting down");
     co_await queue_.cancel_and_join();
-    TENZIR_WARN("shut down non-source");
+    TENZIR_WARN("shutdown done");
   }
 
+private:
   auto tick() -> Task<void> {
-    TENZIR_INFO("tick non-source");
+    TENZIR_INFO("tick in {}", typeid(*op_).name());
     auto ctx = AsyncCtx{sys_};
     switch (op_->state()) {
-      case OperatorState::no_more_input:
-        handle_no_more_input();
+      case OperatorState::done:
+        co_await handle_done();
         break;
       case OperatorState::unspecified:
         break;
     }
     // FIXME: This might not be the best approach, because we have to cancel
     // futures. We could instead keep them running.
-    TENZIR_VERBOSE("waiting in non-source for message");
+    TENZIR_VERBOSE("waiting in {} for message", typeid(*op_).name());
     auto message = co_await queue_.next();
     co_await match(
       std::move(message),
+      [&](std::any message) -> Task<void> {
+        // The task provided by the inner implementation completed.
+        TENZIR_VERBOSE("got future result in {}", typeid(*op_).name());
+        if constexpr (std::same_as<Output, void>) {
+          co_await op_->process_task(std::move(message), ctx);
+        } else {
+          auto push = OpPushWrapper{output_};
+          co_await op_->process_task(std::move(message), push, ctx);
+        }
+        if (op_->state() == OperatorState::done) {
+          co_await handle_done();
+        } else {
+          co_await queue_.add(op_->await_task());
+        }
+        TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
+      },
       [&](OperatorMsg<Input> message) -> Task<void> {
         co_await match(
           std::move(message),
-          [&](Input input) -> Task<void> {
-            TENZIR_VERBOSE("got input in non-source");
-            if (sent_no_more_input_) {
-              // No need to forward the input.
-              co_return;
-            }
-            if constexpr (std::same_as<Output, void>) {
-              co_await op_->process(input, ctx);
+          // The template indirection is necessary to prevent a `void` parameter.
+          [&]<std::same_as<Input> Input2>(Input2 input) -> Task<void> {
+            if constexpr (std::same_as<Input, void>) {
+              TENZIR_UNREACHABLE();
             } else {
-              auto push = OpPushWrapper{output_};
-              co_await op_->process(input, push, ctx);
+              TENZIR_VERBOSE("got input in {}", typeid(*op_).name());
+              if (is_done_) {
+                // No need to forward the input.
+                co_return;
+              }
+              if constexpr (std::same_as<Output, void>) {
+                co_await op_->process(input, ctx);
+              } else {
+                auto push = OpPushWrapper{output_};
+                co_await op_->process(input, push, ctx);
+              }
             }
           },
           [&](Signal signal) -> Task<void> {
-            TENZIR_VERBOSE("got signal in non-source");
             switch (signal) {
               case Signal::end_of_data:
-                TENZIR_VERBOSE("received end of data in non-source");
-                if constexpr (not std::same_as<Output, void>) {
-                  TENZIR_VERBOSE("finalizing in non-source");
-                  auto push = OpPushWrapper{output_};
-                  co_await op_->finalize(push, ctx);
+                TENZIR_VERBOSE("got end of data in {}", typeid(*op_).name());
+                if constexpr (std::same_as<Input, void>) {
+                  TENZIR_UNREACHABLE();
+                } else {
+                  // TODO: The default behavior is to transition to done?
+                  co_await handle_done();
                 }
-                TENZIR_VERBOSE("sending end of data from non-source");
-                co_await output_(Signal::end_of_data);
-                TENZIR_WARN("sending ready to shutdown from non-source");
-                to_control_.send(ToControl::ready_for_shutdown);
-                TENZIR_VERBOSE("finished end of data in non-source");
                 co_return;
               case Signal::checkpoint:
-                TENZIR_INFO("got checkpoint in non-source");
+                TENZIR_VERBOSE("got checkpoint in {}", typeid(*op_).name());
                 co_await op_->checkpoint();
                 co_await output_(Signal::checkpoint);
                 co_return;
@@ -338,12 +382,12 @@ struct NonSourceRunner {
         co_await match(
           std::move(message),
           [&](PostCommit) -> Task<void> {
-            TENZIR_VERBOSE("got post commit in non-source");
+            TENZIR_VERBOSE("got post commit in {}", typeid(*op_).name());
             co_return;
           },
           [&](Shutdown) -> Task<void> {
             // We won't perform any cleanup. This might be undesirable.
-            TENZIR_VERBOSE("got shutdown in non-source");
+            TENZIR_VERBOSE("got shutdown in {}", typeid(*op_).name());
             got_shutdown_request_ = true;
             co_return;
           });
@@ -351,13 +395,28 @@ struct NonSourceRunner {
       });
   }
 
-  auto handle_no_more_input() -> void {
-    TENZIR_VERBOSE("...");
-    if (sent_no_more_input_) {
-      return;
+  auto handle_done() -> Task<void> {
+    // We want to run this code once.
+    if (is_done_) {
+      co_return;
     }
-    to_control_.send(ToControl::no_more_input);
-    sent_no_more_input_ = true;
+    is_done_ = true;
+    auto ctx = AsyncCtx{sys_};
+    TENZIR_VERBOSE("...");
+    // Immediately inform control that we want no more data.
+    if constexpr (not std::same_as<Input, void>) {
+      to_control_.send(ToControl::no_more_input);
+    }
+    // Then finalize the operator, which can still produce output.
+    if constexpr (std::same_as<Output, void>) {
+      co_await op_->finalize(ctx);
+    } else {
+      auto push = OpPushWrapper{output_};
+      co_await op_->finalize(push, ctx);
+      co_await output_(Signal::end_of_data);
+    }
+    TENZIR_WARN("sending ready to shutdown");
+    to_control_.send(ToControl::ready_for_shutdown);
   }
 
   Box<Operator<Input, Output>> op_;
@@ -367,112 +426,9 @@ struct NonSourceRunner {
   Sender<ToControl> to_control_;
   caf::actor_system& sys_;
 
-  QueueScope<variant<OperatorMsg<Input>, FromControl>> queue_;
+  QueueScope<variant<std::any, OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
-  bool sent_no_more_input_ = false;
-};
-
-template <class Output>
-class SourceRunner {
-public:
-  SourceRunner(Box<Operator<void, Output>> op,
-               Box<Pull<OperatorMsg<void>>> input,
-               Box<Push<OperatorMsg<Output>>> output,
-               Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               caf::actor_system& sys)
-    : op_{std::move(op)},
-      input_{std::move(input)},
-      output_{std::move(output)},
-      from_control_{std::move(from_control)},
-      to_control_{std::move(to_control)},
-      sys_{sys} {
-  }
-
-  auto run_to_completion() -> Task<void> {
-    TENZIR_INFO("entering run loop for source");
-    co_await queue_.add(op_->next());
-    co_await queue_.add(input_());
-    co_await queue_.add(from_control_.receive());
-    while (not got_shutdown_request_) {
-      co_await tick();
-    }
-    TENZIR_WARN("shutting down source");
-    // TODO: Do we know that we can always cancel stuff?
-    co_await queue_.cancel_and_join();
-    TENZIR_WARN("completed source shutdown");
-  }
-
-private:
-  auto tick() -> Task<void> {
-    TENZIR_INFO("tick source");
-    auto ctx = AsyncCtx{sys_};
-    TENZIR_VERBOSE("waiting in source for message");
-    auto message = co_await queue_.next();
-    co_await match(
-      message,
-      [&](std::any message) -> Task<void> {
-        TENZIR_VERBOSE("got future result in source");
-        // The task provided by the inner implementation completed.
-        if (message.has_value()) {
-          // The source wants to continue.
-          TENZIR_VERBOSE("...");
-          auto push = OpPushWrapper{output_};
-          co_await op_->process(std::move(message), push, ctx);
-          co_await queue_.add(op_->next());
-          TENZIR_VERBOSE("...");
-        } else {
-          // The source is done.
-          TENZIR_VERBOSE("sending end of data from source");
-          co_await output_(Signal::end_of_data);
-          TENZIR_WARN("sending ready to shutdown from source");
-          to_control_.send(ToControl::ready_for_shutdown);
-          // Do must not enqueue the source again.
-        }
-      },
-      [&](OperatorMsg<void> message) -> Task<void> {
-        TENZIR_VERBOSE("got operator message in source");
-        co_await match(message, [&](Signal signal) -> Task<void> {
-          switch (signal) {
-            case Signal::end_of_data:
-              TENZIR_UNREACHABLE();
-            case Signal::checkpoint:
-              TENZIR_INFO("got checkpoint in source");
-              co_await op_->checkpoint();
-              co_await output_(Signal::checkpoint);
-              co_return;
-          }
-          TENZIR_UNREACHABLE();
-        });
-        co_await queue_.add(input_());
-      },
-      [&](FromControl message) -> Task<void> {
-        co_await match(
-          message,
-          [&](PostCommit) -> Task<void> {
-            TENZIR_VERBOSE("got post commit in source");
-            co_await op_->post_commit();
-          },
-          [&](Shutdown) -> Task<void> {
-            TENZIR_VERBOSE("got shutdown message in source");
-            got_shutdown_request_ = true;
-            co_return;
-          });
-        co_await queue_.add(from_control_.receive());
-      });
-  }
-
-  Box<Operator<void, Output>> op_;
-  Box<Pull<OperatorMsg<void>>> input_;
-  Box<Push<OperatorMsg<Output>>> output_;
-  Receiver<FromControl> from_control_;
-  Sender<ToControl> to_control_;
-  caf::actor_system& sys_;
-
-  bool got_shutdown_request_ = false;
-
-  using QueueItem = variant<std::any, OperatorMsg<void>, FromControl>;
-
-  QueueScope<QueueItem> queue_;
+  bool is_done_ = false;
 };
 
 template <class Input, class Output>
@@ -482,19 +438,11 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, caf::actor_system& sys)
   -> Task<void> {
-  if constexpr (std::same_as<Input, void>) {
-    co_await SourceRunner<Output>{
-      std::move(op),           std::move(input),      std::move(output),
-      std::move(from_control), std::move(to_control), sys,
-    }
-      .run_to_completion();
-  } else {
-    co_await NonSourceRunner<Input, Output>{
-      std::move(op),           std::move(input),      std::move(output),
-      std::move(from_control), std::move(to_control), sys,
-    }
-      .run_to_completion();
+  co_await Runner<Input, Output>{
+    std::move(op),           std::move(input),      std::move(output),
+    std::move(from_control), std::move(to_control), sys,
   }
+    .run_to_completion();
 }
 
 template <class Input, class Output>

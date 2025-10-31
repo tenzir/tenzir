@@ -43,7 +43,7 @@ public:
     if (remaining_ == 0) {
       // TODO: We also want to declare that we'll produce no more output and
       // that we are ready to shutdown.
-      return OperatorState::no_more_input;
+      return OperatorState::done;
     }
     return OperatorState::unspecified;
   }

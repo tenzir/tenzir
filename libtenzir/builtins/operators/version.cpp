@@ -334,20 +334,26 @@ private:
 };
 #endif
 
-class Version final : public SourceOperator<table_slice, size_t> {
+class Version final : public Operator<void, table_slice> {
 public:
-  auto next() const -> Task<std::optional<size_t>> override {
+  auto start(Push<table_slice>& push, AsyncCtx& ctx) -> Task<void> override {
+    // TODO: If we would restore, we should not emit the version again...
+    auto slice = make_version(caf::content(ctx.actor_system().config()));
+    co_await push(slice);
+  }
+
+  auto await_task() const -> Task<std::any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
     if (remaining_ == 0) {
-      co_return {};
+      co_await folly::coro::sleep(std::chrono::years{1});
     }
     co_await folly::coro::sleep(std::chrono::milliseconds{200});
     // Just return the count here as a test.
     co_return remaining_;
   }
 
-  auto process(size_t result, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process_task(std::any result, Push<table_slice>& push, AsyncCtx& ctx)
     -> Task<void> override {
     auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
     auto license
@@ -363,9 +369,10 @@ public:
     } else {
       TENZIR_ERROR("got error");
     }
-    TENZIR_WARN("got result: {}", result);
+    TENZIR_WARN("got result: {}", std::any_cast<size_t>(result));
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
+    TENZIR_ASSERT(remaining_ > 0);
     remaining_ -= 1;
   }
 
@@ -373,6 +380,14 @@ public:
     // TODO: Checkpoint the count.
     (void)remaining_;
     co_return;
+  }
+
+  auto state() -> OperatorState override {
+    TENZIR_ERROR("querying state of version with {}", remaining_);
+    if (remaining_ == 0) {
+      return OperatorState::done;
+    }
+    return OperatorState::unspecified;
   }
 
 private:
@@ -397,7 +412,7 @@ public:
 
   auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
     TENZIR_WARN("spawning version plan");
-    return SourceOperatorWrapper<table_slice, size_t>{Version{}};
+    return Version{};
   }
 
   friend auto inspect(auto& f, version_plan& x) -> bool {
