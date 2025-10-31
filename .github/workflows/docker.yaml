@@ -10,6 +10,7 @@ permissions:
   contents: read
   id-token: write
   packages: write
+  actions: write
 
 jobs:
   build:
@@ -108,12 +109,26 @@ jobs:
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr
         uses: aws-actions/amazon-ecr-login@v2
+      - name: Setup ccache
+        uses: actions/cache@v4
+        with:
+          key: ${{ matrix.build.tag }}-build-cache-${{ github.sha }}
+          restore-keys: ${{ matrix.build.tag }}-build-cache
+          path: /home/runner/work/ccache
       - name: Build Docker Images
         env:
           BUILDX_GIT_LABELS: full
           CACHE_TAG: ghcr.io/tenzir/tenzir:${{ matrix.build.tag }}-build-cache
         run: |
+          CACHE_PATH=/home/runner/work/ccache
           cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
+          test -d $CACHE_PATH || mkdir $CACHE_PATH
+          docker buildx build . \
+            --platform '${{ matrix.build.arch }}' \
+            --target cache-export \
+            --build-context cache-context=$CACHE_PATH \
+            -t cache-export \
+            --load
           jq -r '.editions[] | .name as $name | .target as $target | .registries[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
@@ -121,10 +136,12 @@ jobs:
                 -t "${registry}/tenzir/${name}:${{ matrix.build.tag }}-${tag}" --target "${target}" \
                 --platform ${{ matrix.build.arch }} --push \
                 --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
+                --build-context cache-context=$CACHE_PATH \
                 --cache-from "type=registry,ref=${CACHE_TAG}" \
                 --cache-to "type=registry,mode=max,ref=${CACHE_TAG}"
             done
           done
+          docker cp "$(docker create cache-export)":/ccache/. $CACHE_PATH
 
   push-manifest:
     name: Push Manifest
