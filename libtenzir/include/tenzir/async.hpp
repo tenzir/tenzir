@@ -108,12 +108,29 @@ private:
   null_diagnostic_handler dh_;
 };
 
+/// A type-erased, asynchronous sender.
 template <class T>
 class Push {
 public:
   virtual ~Push() = default;
 
   virtual auto operator()(T output) -> Task<void> = 0;
+};
+
+/// A type-erased, asynchronous receiver.
+template <class T>
+class Pull {
+public:
+  virtual ~Pull() = default;
+
+  virtual auto operator()() -> Task<T> = 0;
+};
+
+/// A pair of a type-erased, asynchronous sender and receiver.
+template <class T>
+struct PushPull {
+  Box<Push<T>> push;
+  Box<Pull<T>> pull;
 };
 
 enum class OperatorState {
@@ -141,8 +158,8 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  virtual auto
-  process_task(std::any result, Push<Output>& push, AsyncCtx& ctx) -> Task<void> {
+  virtual auto process_task(std::any result, Push<Output>& push, AsyncCtx& ctx)
+    -> Task<void> {
     TENZIR_UNUSED(result, push, ctx);
     TENZIR_UNREACHABLE();
   }
@@ -324,139 +341,30 @@ private:
   std::vector<AnyOperator> operators_;
 };
 
+/// A non-data message sent to an operator by its upstream.
 enum class Signal {
-  /// No more data will come after this signal.
+  /// No more data will come after this signal. Will never be sent to sources.
   end_of_data,
-  /// Request to perform a checkpoint.
+  /// Request to perform a checkpoint. To be forwarded downstream afterwards.
   checkpoint,
 };
 
 template <class T>
-struct OperatorMessage : variant<T, Signal> {
+struct OperatorMsg : variant<T, Signal> {
   using variant<T, Signal>::variant;
 };
 
 template <>
-struct OperatorMessage<void> : variant<Signal> {
+struct OperatorMsg<void> : variant<Signal> {
   using variant<Signal>::variant;
 };
 
 template <class T>
-static auto cost(const OperatorMessage<T>& item, size_t limit) -> size_t {
-  return std::min(match(
-                    item,
-                    [](const table_slice& slice) -> size_t {
-                      return slice.rows();
-                    },
-                    [](const chunk_ptr& chunk) -> size_t {
-                      return chunk ? chunk->size() : 0;
-                    },
-                    [](const Signal&) {
-                      return size_t{1};
-                    }),
-                  limit);
-};
+auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>>;
 
-template <class T>
-class OpSender;
-
-template <class T>
-class OpReceiver;
-
-/// Data channel between two operators.
-template <class T>
-struct OpChannel {
-public:
-  explicit OpChannel(size_t limit) : mutex_{Locked{limit}}, limit_{limit} {
-  }
-
-  auto send(OperatorMessage<T> x) -> Task<void> {
-    auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_ERROR("CANCELLED");
-    }};
-    auto lock = co_await mutex_.lock();
-    while (cost(x, limit_) > lock->remaining) {
-      lock.unlock();
-      co_await remaining_increased_;
-      lock = co_await mutex_.lock();
-    }
-    lock->remaining -= cost(x, limit_);
-    lock->queue.push_back(x);
-    queue_pushed_.notify_one();
-    guard.disable();
-  }
-
-  auto receive() -> Task<OperatorMessage<T>> {
-    auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_DEBUG("CANCELLED");
-    }};
-    auto lock = co_await mutex_.lock();
-    while (lock->queue.empty()) {
-      lock.unlock();
-      co_await queue_pushed_.wait();
-      lock = co_await mutex_.lock();
-    }
-    auto result = std::move(lock->queue.front());
-    lock->queue.pop_front();
-    lock->remaining += cost(result, limit_);
-    remaining_increased_.notify_one();
-    guard.disable();
-    co_return result;
-  }
-
-private:
-  struct Locked {
-    explicit Locked(size_t limit) : remaining{limit} {
-    }
-
-    size_t remaining;
-    std::deque<OperatorMessage<T>> queue;
-  };
-
-  // TODO: This can surely be written better?
-  size_t limit_;
-  Mutex<Locked> mutex_;
-  Notify remaining_increased_;
-  Notify queue_pushed_;
-};
-
-template <class T>
-class OpSender {
-public:
-  explicit OpSender(std::shared_ptr<OpChannel<T>> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  auto send(OperatorMessage<T> x) -> Task<void> {
-    return shared_->send(std::move(x));
-  }
-
-private:
-  std::shared_ptr<OpChannel<T>> shared_;
-};
-
-template <class T>
-class OpReceiver {
-public:
-  explicit OpReceiver(std::shared_ptr<OpChannel<T>> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  auto receive() -> Task<OperatorMessage<T>> {
-    return shared_->receive();
-  }
-
-private:
-  std::shared_ptr<OpChannel<T>> shared_;
-};
-
-template <class T>
-auto make_op_channel(size_t limit) -> std::pair<OpSender<T>, OpReceiver<T>> {
-  auto shared = std::make_shared<OpChannel<T>>(limit);
-  return {OpSender<T>{shared}, OpReceiver<T>{shared}};
-}
-
-auto run_pipeline(OperatorChain<void, void> pipeline, OpReceiver<void> input,
-                  OpSender<void> output, caf::actor_system& sys) -> Task<void>;
+auto run_pipeline(OperatorChain<void, void> pipeline,
+                  Box<Pull<OperatorMsg<void>>> input,
+                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys)
+  -> Task<void>;
 
 } // namespace tenzir

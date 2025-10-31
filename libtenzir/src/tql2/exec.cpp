@@ -534,12 +534,12 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys)
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  auto [outer_sender, receiver] = make_op_channel<void>(10);
-  auto [sender, outer_receiver] = make_op_channel<void>(10);
-  co_await outer_sender.send(Signal::checkpoint);
+  auto [push_input, pull_input] = make_op_channel<void>(10);
+  auto [push_output, pull_output] = make_op_channel<void>(10);
+  co_await push_input(Signal::checkpoint);
   TENZIR_WARN("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain), std::move(receiver),
-                        std::move(sender), sys);
+  co_await run_pipeline(std::move(*chain), std::move(pull_input),
+                        std::move(push_output), sys);
   co_return {};
 }
 

@@ -22,7 +22,8 @@ namespace tenzir {
 template <class T>
 class Box {
 public:
-  static auto from_non_null(std::unique_ptr<T> ptr) -> Box<T> {
+  /// Constructs a box from an existing non-null `unique_ptr`.
+  static auto from_unique_ptr(std::unique_ptr<T> ptr) -> Box<T> {
     return Box{std::move(ptr)};
   }
 
@@ -32,32 +33,46 @@ public:
   explicit(false) Box(U x) : ptr_{std::make_unique<U>(std::move(x))} {
   }
 
-  template <class... Ts>
-  explicit(false) Box(std::in_place_t, Ts&&... xs)
-    : ptr_{std::make_unique<T>(std::forward<Ts>(xs)...)} {
-  }
-
+  /// Boxes can be used as pointers.
   auto operator->() -> T* {
-    TENZIR_ASSERT(ptr_);
-    return ptr_.get();
+    return &deref();
   }
-
   auto operator->() const -> T const* {
-    TENZIR_ASSERT(ptr_);
-    return ptr_.get();
+    return &deref();
   }
 
-  auto operator*() -> T& {
-    TENZIR_ASSERT(ptr_);
-    return *ptr_;
+  /// Dereferencing a box forwards the underlying object.
+  template <class Self>
+  auto operator*(this Self&& self) -> decltype(auto) {
+    return std::forward<Self>(self).deref();
   }
 
-  auto operator*() const -> T const& {
-    TENZIR_ASSERT(ptr_);
-    return *ptr_;
+  /// Boxes are implicitly convertible to references.
+  explicit(false) operator T&() {
+    return deref();
+  }
+  explicit(false) operator T const&() const {
+    return deref();
+  }
+  explicit(false) operator T&&() && {
+    return std::move(*this).deref();
+  }
+
+  /// Boxes are callable if the underlying type is.
+  template <class Self, class... Args>
+    requires std::is_invocable_v<T, Args...>
+  auto operator()(this Self&& self, Args&&... args) -> decltype(auto) {
+    return std::invoke(std::forward<Self>(self).deref(),
+                       std::forward<Args>(args)...);
   }
 
 private:
+  template <class Self>
+  auto deref(this Self&& self) -> decltype(auto) {
+    TENZIR_ASSERT(self.ptr_);
+    return std::forward_like<Self>(*self.ptr_);
+  }
+
   explicit Box(std::unique_ptr<T> ptr) : ptr_{std::move(ptr)} {
     TENZIR_ASSERT(ptr_);
   }
@@ -66,6 +81,6 @@ private:
 };
 
 template <class T>
-Box(T ptr) -> Box<T>;
+Box(T) -> Box<T>;
 
 } // namespace tenzir

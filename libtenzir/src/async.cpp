@@ -142,20 +142,6 @@ auto make_unbounded_channel() -> std::pair<Sender<T>, Receiver<T>> {
   return {Sender<T>{shared}, Receiver<T>{shared}};
 }
 
-template <class T>
-class OpPush final : public Push<T> {
-public:
-  explicit OpPush(OpSender<T>& sender) : sender_{sender} {
-  }
-
-  auto operator()(T output) -> Task<void> override {
-    co_await sender_.send(std::move(output));
-  }
-
-private:
-  OpSender<T>& sender_;
-};
-
 /// Convenience wrapper around `folly::coro::AsyncScope`.
 class AsyncScope {
 public:
@@ -258,12 +244,29 @@ private:
   AsyncScope scope_;
 };
 
+template <class T>
+class OpPushWrapper final : public Push<T> {
+public:
+  explicit OpPushWrapper(Push<OperatorMsg<T>>& push) : push_{push} {
+  }
+
+  virtual auto operator()(T output) -> Task<void> override {
+    return push_(std::move(output));
+  }
+
+private:
+  Push<OperatorMsg<T>>& push_;
+};
+
+template <class T>
+OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
+
 template <class Input, class Output>
   requires(not std::same_as<Input, void>)
 struct NonSourceRunner {
   auto run_to_completion() -> Task<void> {
     TENZIR_INFO("entering run loop for non-source");
-    co_await queue_.add(input_.receive());
+    co_await queue_.add(input_());
     co_await queue_.add(from_control_.receive());
     while (not got_shutdown_request_) {
       co_await tick();
@@ -289,7 +292,7 @@ struct NonSourceRunner {
     auto message = co_await queue_.next();
     co_await match(
       std::move(message),
-      [&](OperatorMessage<Input> message) -> Task<void> {
+      [&](OperatorMsg<Input> message) -> Task<void> {
         co_await match(
           std::move(message),
           [&](Input input) -> Task<void> {
@@ -301,7 +304,7 @@ struct NonSourceRunner {
             if constexpr (std::same_as<Output, void>) {
               co_await op_->process(input, ctx);
             } else {
-              auto push = OpPush<Output>{output_};
+              auto push = OpPushWrapper{output_};
               co_await op_->process(input, push, ctx);
             }
           },
@@ -311,12 +314,12 @@ struct NonSourceRunner {
               case Signal::end_of_data:
                 TENZIR_VERBOSE("received end of data in non-source");
                 if constexpr (not std::same_as<Output, void>) {
-                  auto push = OpPush<Output>{output_};
                   TENZIR_VERBOSE("finalizing in non-source");
+                  auto push = OpPushWrapper{output_};
                   co_await op_->finalize(push, ctx);
                 }
                 TENZIR_VERBOSE("sending end of data from non-source");
-                co_await output_.send(Signal::end_of_data);
+                co_await output_(Signal::end_of_data);
                 TENZIR_WARN("sending ready to shutdown from non-source");
                 to_control_.send(ToControl::ready_for_shutdown);
                 TENZIR_VERBOSE("finished end of data in non-source");
@@ -324,12 +327,12 @@ struct NonSourceRunner {
               case Signal::checkpoint:
                 TENZIR_INFO("got checkpoint in non-source");
                 co_await op_->checkpoint();
-                co_await output_.send(Signal::checkpoint);
+                co_await output_(Signal::checkpoint);
                 co_return;
             }
             TENZIR_UNREACHABLE();
           });
-        co_await queue_.add(input_.receive());
+        co_await queue_.add(input_());
       },
       [&](FromControl message) -> Task<void> {
         co_await match(
@@ -358,13 +361,13 @@ struct NonSourceRunner {
   }
 
   Box<Operator<Input, Output>> op_;
-  OpReceiver<Input> input_;
-  OpSender<Output> output_;
+  Box<Pull<OperatorMsg<Input>>> input_;
+  Box<Push<OperatorMsg<Output>>> output_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   caf::actor_system& sys_;
 
-  QueueScope<variant<OperatorMessage<Input>, FromControl>> queue_;
+  QueueScope<variant<OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
   bool sent_no_more_input_ = false;
 };
@@ -372,9 +375,11 @@ struct NonSourceRunner {
 template <class Output>
 class SourceRunner {
 public:
-  SourceRunner(Box<Operator<void, Output>> op, OpReceiver<void> input,
-               OpSender<Output> output, Receiver<FromControl> from_control,
-               Sender<ToControl> to_control, caf::actor_system& sys)
+  SourceRunner(Box<Operator<void, Output>> op,
+               Box<Pull<OperatorMsg<void>>> input,
+               Box<Push<OperatorMsg<Output>>> output,
+               Receiver<FromControl> from_control, Sender<ToControl> to_control,
+               caf::actor_system& sys)
     : op_{std::move(op)},
       input_{std::move(input)},
       output_{std::move(output)},
@@ -386,7 +391,7 @@ public:
   auto run_to_completion() -> Task<void> {
     TENZIR_INFO("entering run loop for source");
     co_await queue_.add(op_->next());
-    co_await queue_.add(input_.receive());
+    co_await queue_.add(input_());
     co_await queue_.add(from_control_.receive());
     while (not got_shutdown_request_) {
       co_await tick();
@@ -411,20 +416,20 @@ private:
         if (message.has_value()) {
           // The source wants to continue.
           TENZIR_VERBOSE("...");
-          auto push = OpPush<Output>{output_};
+          auto push = OpPushWrapper{output_};
           co_await op_->process(std::move(message), push, ctx);
           co_await queue_.add(op_->next());
           TENZIR_VERBOSE("...");
         } else {
           // The source is done.
           TENZIR_VERBOSE("sending end of data from source");
-          co_await output_.send(Signal::end_of_data);
+          co_await output_(Signal::end_of_data);
           TENZIR_WARN("sending ready to shutdown from source");
           to_control_.send(ToControl::ready_for_shutdown);
           // Do must not enqueue the source again.
         }
       },
-      [&](OperatorMessage<void> message) -> Task<void> {
+      [&](OperatorMsg<void> message) -> Task<void> {
         TENZIR_VERBOSE("got operator message in source");
         co_await match(message, [&](Signal signal) -> Task<void> {
           switch (signal) {
@@ -433,12 +438,12 @@ private:
             case Signal::checkpoint:
               TENZIR_INFO("got checkpoint in source");
               co_await op_->checkpoint();
-              co_await output_.send(Signal::checkpoint);
+              co_await output_(Signal::checkpoint);
               co_return;
           }
           TENZIR_UNREACHABLE();
         });
-        co_await queue_.add(input_.receive());
+        co_await queue_.add(input_());
       },
       [&](FromControl message) -> Task<void> {
         co_await match(
@@ -457,22 +462,24 @@ private:
   }
 
   Box<Operator<void, Output>> op_;
-  OpReceiver<void> input_;
-  OpSender<Output> output_;
+  Box<Pull<OperatorMsg<void>>> input_;
+  Box<Push<OperatorMsg<Output>>> output_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   caf::actor_system& sys_;
 
   bool got_shutdown_request_ = false;
 
-  using QueueItem = variant<std::any, OperatorMessage<void>, FromControl>;
+  using QueueItem = variant<std::any, OperatorMsg<void>, FromControl>;
 
   QueueScope<QueueItem> queue_;
 };
 
 template <class Input, class Output>
-auto run_operator(Box<Operator<Input, Output>> op, OpReceiver<Input> input,
-                  OpSender<Output> output, Receiver<FromControl> from_control,
+auto run_operator(Box<Operator<Input, Output>> op,
+                  Box<Pull<OperatorMsg<Input>>> input,
+                  Box<Push<OperatorMsg<Output>>> output,
+                  Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, caf::actor_system& sys)
   -> Task<void> {
   if constexpr (std::same_as<Input, void>) {
@@ -491,21 +498,23 @@ auto run_operator(Box<Operator<Input, Output>> op, OpReceiver<Input> input,
 }
 
 template <class Input, class Output>
-auto run_chain(OperatorChain<Input, Output> chain, OpReceiver<Input> input,
-               OpSender<Output> output, caf::actor_system& sys) -> Task<void> {
+auto run_chain(OperatorChain<Input, Output> chain,
+               Box<Pull<OperatorMsg<Input>>> input,
+               Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys)
+  -> Task<void> {
   auto from_control = std::vector<Sender<FromControl>>{};
   auto operator_scope = AsyncScope{};
   auto receiver_scope = QueueScope<ToControl>{};
   auto operators = std::move(chain).unwrap();
   auto next_input
-    = variant<OpReceiver<void>, OpReceiver<chunk_ptr>, OpReceiver<table_slice>>{
-      std::move(input)};
+    = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
+              Box<Pull<OperatorMsg<table_slice>>>>{std::move(input)};
   // TODO: Polish this.
   for (auto& op : operators) {
     auto last = &op == &operators.back();
     co_await match(
       op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
-        auto input = as<OpReceiver<In>>(next_input);
+        auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
         auto [output_sender, output_receiver] = make_op_channel<Out>(5);
         // TODO: This is a horrible hack.
         if (last) {
@@ -555,8 +564,119 @@ auto run_chain(OperatorChain<Input, Output> chain, OpReceiver<Input> input,
   TENZIR_WARN("joined operators");
 }
 
-auto run_pipeline(OperatorChain<void, void> pipeline, OpReceiver<void> input,
-                  OpSender<void> output, caf::actor_system& sys) -> Task<void> {
+template <class T>
+static auto cost(const OperatorMsg<T>& item, size_t limit) -> size_t {
+  return std::min(match(
+                    item,
+                    [](const table_slice& slice) -> size_t {
+                      return slice.rows();
+                    },
+                    [](const chunk_ptr& chunk) -> size_t {
+                      return chunk ? chunk->size() : 0;
+                    },
+                    [](const Signal&) {
+                      return size_t{1};
+                    }),
+                  limit);
+};
+
+/// Data channel between two operators.
+template <class T>
+struct OpChannel {
+public:
+  explicit OpChannel(size_t limit) : mutex_{Locked{limit}}, limit_{limit} {
+  }
+
+  auto send(OperatorMsg<T> x) -> Task<void> {
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_ERROR("CANCELLED");
+    }};
+    auto lock = co_await mutex_.lock();
+    while (cost(x, limit_) > lock->remaining) {
+      lock.unlock();
+      co_await remaining_increased_;
+      lock = co_await mutex_.lock();
+    }
+    lock->remaining -= cost(x, limit_);
+    lock->queue.push_back(x);
+    queue_pushed_.notify_one();
+    guard.disable();
+  }
+
+  auto receive() -> Task<OperatorMsg<T>> {
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_DEBUG("CANCELLED");
+    }};
+    auto lock = co_await mutex_.lock();
+    while (lock->queue.empty()) {
+      lock.unlock();
+      co_await queue_pushed_.wait();
+      lock = co_await mutex_.lock();
+    }
+    auto result = std::move(lock->queue.front());
+    lock->queue.pop_front();
+    lock->remaining += cost(result, limit_);
+    remaining_increased_.notify_one();
+    guard.disable();
+    co_return result;
+  }
+
+private:
+  struct Locked {
+    explicit Locked(size_t limit) : remaining{limit} {
+    }
+
+    size_t remaining;
+    std::deque<OperatorMsg<T>> queue;
+  };
+
+  // TODO: This can surely be written better?
+  size_t limit_;
+  Mutex<Locked> mutex_;
+  Notify remaining_increased_;
+  Notify queue_pushed_;
+};
+
+template <class T>
+class OpPush final : public Push<OperatorMsg<T>> {
+public:
+  explicit OpPush(std::shared_ptr<OpChannel<T>> shared)
+    : shared_{std::move(shared)} {
+  }
+
+  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+    return shared_->send(std::move(x));
+  }
+
+private:
+  std::shared_ptr<OpChannel<T>> shared_;
+};
+
+template <class T>
+class OpPull final : public Pull<OperatorMsg<T>> {
+public:
+  explicit OpPull(std::shared_ptr<OpChannel<T>> shared)
+    : shared_{std::move(shared)} {
+  }
+
+  auto operator()() -> Task<OperatorMsg<T>> override {
+    return shared_->receive();
+  }
+
+private:
+  std::shared_ptr<OpChannel<T>> shared_;
+};
+
+template <class T>
+auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>> {
+  auto shared = std::make_shared<OpChannel<T>>(limit);
+  return {OpPush<T>{shared}, OpPull<T>{shared}};
+}
+
+auto run_pipeline(OperatorChain<void, void> pipeline,
+                  Box<Pull<OperatorMsg<void>>> input,
+                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys)
+  -> Task<void> {
   return run_chain(std::move(pipeline), std::move(input), std::move(output),
                    sys);
 }
