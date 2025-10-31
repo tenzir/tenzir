@@ -340,6 +340,7 @@ public:
     // TODO: If we would restore, we should not emit the version again...
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
+    diagnostic::warning("HELLO from version").emit(ctx);
   }
 
   auto await_task() const -> Task<std::any> override {
@@ -391,7 +392,7 @@ public:
   }
 
 private:
-  size_t remaining_ = 1;
+  size_t remaining_ = 0;
 };
 
 class version_plan final : public plan::operator_base {

@@ -85,7 +85,8 @@ private:
 
 class AsyncCtx {
 public:
-  explicit AsyncCtx(caf::actor_system& sys) : sys_{sys} {
+  AsyncCtx(caf::actor_system& sys, diagnostic_handler& dh)
+    : sys_{sys}, dh_{dh} {
   }
 
   virtual ~AsyncCtx() = default;
@@ -106,7 +107,7 @@ public:
 
 private:
   caf::actor_system& sys_;
-  null_diagnostic_handler dh_;
+  diagnostic_handler& dh_;
 };
 
 enum class OperatorState {
@@ -352,7 +353,7 @@ auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>>;
 
 auto run_pipeline(OperatorChain<void, void> pipeline,
                   Box<Pull<OperatorMsg<void>>> input,
-                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys)
-  -> Task<void>;
+                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys,
+                  diagnostic_handler& dh) -> Task<void>;
 
 } // namespace tenzir

@@ -524,8 +524,8 @@ auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
   return {};
 }
 
-auto run_plan(plan::pipeline pipe, caf::actor_system& sys)
-  -> Task<failure_or<void>> {
+auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
+              diagnostic_handler& dh) -> Task<failure_or<void>> {
   TENZIR_WARN("spawning plan");
   auto ops = std::vector<AnyOperator>{};
   for (auto& op : std::move(pipe).unwrap()) {
@@ -539,13 +539,13 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys)
   co_await push_input(Signal::checkpoint);
   TENZIR_WARN("blocking on pipeline");
   co_await run_pipeline(std::move(*chain), std::move(pull_input),
-                        std::move(push_output), sys);
+                        std::move(push_output), sys, dh);
   co_return {};
 }
 
-auto run_plan_blocking(plan::pipeline pipe, caf::actor_system& sys)
-  -> failure_or<void> {
-  return folly::coro::blockingWait(run_plan(std::move(pipe), sys));
+auto run_plan_blocking(plan::pipeline pipe, caf::actor_system& sys,
+                       diagnostic_handler& dh) -> failure_or<void> {
+  return folly::coro::blockingWait(run_plan(std::move(pipe), sys, dh));
 }
 
 // TODO: failure_or<bool> is bad
@@ -631,7 +631,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Start the actual execution.
 #if 1
-  TRY(run_plan_blocking(std::move(finalized), sys));
+  TRY(run_plan_blocking(std::move(finalized), sys, ctx));
   return true;
 #else
   auto exec = exec::make_pipeline(

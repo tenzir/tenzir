@@ -274,23 +274,22 @@ public:
   Runner(Box<Operator<Input, Output>> op, Box<Pull<OperatorMsg<Input>>> input,
          Box<Push<OperatorMsg<Output>>> output,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-         caf::actor_system& sys)
+         caf::actor_system& sys, diagnostic_handler& dh)
     : op_{std::move(op)},
       input_{std::move(input)},
       output_{std::move(output)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
-      sys_{sys} {
+      ctx_{sys, dh} {
   }
 
   auto run_to_completion() -> Task<void> {
     TENZIR_INFO("entering run loop");
-    auto ctx = AsyncCtx{sys_};
     if constexpr (std::same_as<Output, void>) {
-      co_await op_->start(ctx);
+      co_await op_->start(ctx_);
     } else {
       auto push = OpPushWrapper{output_};
-      co_await op_->start(push, ctx);
+      co_await op_->start(push, ctx_);
     }
     co_await queue_.add(op_->await_task());
     co_await queue_.add(input_());
@@ -306,7 +305,7 @@ public:
 private:
   auto tick() -> Task<void> {
     TENZIR_INFO("tick in {}", typeid(*op_).name());
-    auto ctx = AsyncCtx{sys_};
+    auto ctx = AsyncCtx{ctx_};
     switch (op_->state()) {
       case OperatorState::done:
         co_await handle_done();
@@ -401,7 +400,6 @@ private:
       co_return;
     }
     is_done_ = true;
-    auto ctx = AsyncCtx{sys_};
     TENZIR_VERBOSE("...");
     // Immediately inform control that we want no more data.
     if constexpr (not std::same_as<Input, void>) {
@@ -409,10 +407,10 @@ private:
     }
     // Then finalize the operator, which can still produce output.
     if constexpr (std::same_as<Output, void>) {
-      co_await op_->finalize(ctx);
+      co_await op_->finalize(ctx_);
     } else {
       auto push = OpPushWrapper{output_};
-      co_await op_->finalize(push, ctx);
+      co_await op_->finalize(push, ctx_);
       co_await output_(Signal::end_of_data);
     }
     TENZIR_WARN("sending ready to shutdown");
@@ -424,7 +422,7 @@ private:
   Box<Push<OperatorMsg<Output>>> output_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
-  caf::actor_system& sys_;
+  AsyncCtx ctx_;
 
   QueueScope<variant<std::any, OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
@@ -436,11 +434,16 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Box<Pull<OperatorMsg<Input>>> input,
                   Box<Push<OperatorMsg<Output>>> output,
                   Receiver<FromControl> from_control,
-                  Sender<ToControl> to_control, caf::actor_system& sys)
-  -> Task<void> {
+                  Sender<ToControl> to_control, caf::actor_system& sys,
+                  diagnostic_handler& dh) -> Task<void> {
   co_await Runner<Input, Output>{
-    std::move(op),           std::move(input),      std::move(output),
-    std::move(from_control), std::move(to_control), sys,
+    std::move(op),
+    std::move(input),
+    std::move(output),
+    std::move(from_control),
+    std::move(to_control),
+    sys,
+    dh,
   }
     .run_to_completion();
 }
@@ -448,8 +451,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
 template <class Input, class Output>
 auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> input,
-               Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys)
-  -> Task<void> {
+               Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys,
+               diagnostic_handler& dh) -> Task<void> {
   auto from_control = std::vector<Sender<FromControl>>{};
   auto operator_scope = AsyncScope{};
   auto receiver_scope = QueueScope<ToControl>{};
@@ -481,7 +484,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
-                                 std::move(to_control_sender), sys);
+                                 std::move(to_control_sender), sys, dh);
         co_await operator_scope.add(std::move(task));
         co_await receiver_scope.add(
           std::move(to_control_receiver).into_generator());
@@ -623,10 +626,10 @@ auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>> {
 
 auto run_pipeline(OperatorChain<void, void> pipeline,
                   Box<Pull<OperatorMsg<void>>> input,
-                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys)
-  -> Task<void> {
+                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys,
+                  diagnostic_handler& dh) -> Task<void> {
   return run_chain(std::move(pipeline), std::move(input), std::move(output),
-                   sys);
+                   sys, dh);
 }
 
 } // namespace tenzir
