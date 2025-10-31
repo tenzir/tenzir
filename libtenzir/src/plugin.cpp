@@ -8,6 +8,7 @@
 
 #include "tenzir/plugin.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/collect.hpp"
@@ -552,13 +553,14 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       return;
     }
     auto& last = output.back();
-    auto null_builder = as<record_type>(last.schema())
-                          .make_arrow_builder(arrow::default_memory_pool());
+    auto null_builder
+      = as<record_type>(last.schema()).make_arrow_builder(arrow_memory_pool());
     TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
     TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
-    auto null_batch = arrow::RecordBatch::Make(last.schema().to_arrow_schema(),
-                                               1, check(null_array->Flatten()));
+    auto null_batch = arrow::RecordBatch::Make(
+      last.schema().to_arrow_schema(), 1,
+      check(null_array->Flatten(tenzir::arrow_memory_pool())));
     last
       = concatenate({std::move(last), table_slice{null_batch, last.schema()}});
   };

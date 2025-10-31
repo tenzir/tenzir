@@ -1,9 +1,18 @@
-add_executable(tenzir tenzir.cpp)
+add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
+target_link_options(tenzir BEFORE PRIVATE
+  LINKER:--wrap=malloc
+  LINKER:--wrap=calloc
+  LINKER:--wrap=realloc
+  LINKER:--wrap=realloc_array
+  LINKER:--wrap=aligned_alloc
+  LINKER:--wrap=malloc_usable_size
+  LINKER:--wrap=memalign
+  LINKER:--wrap=posix_memalign
+  LINKER:--wrap=free)
+endif ()
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
-if (TENZIR_ENABLE_JEMALLOC)
-  target_link_libraries(tenzir PRIVATE jemalloc::jemalloc_)
-endif ()
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
 add_executable(tenzir::tenzir ALIAS tenzir)
 
@@ -124,13 +133,14 @@ endif ()
 
 set(TENZIR_PLUGINS
     ${plugins_default}
-    CACHE STRING "Specify a list of plugins to build with Tenzir (supports
+    CACHE STRING "Specify a list of plugin paths to build with Tenzir (supports
     globbing)")
 set(TENZIR_PLUGINS_BLACKLIST
-    ${plugins_default}
+    ""
     CACHE
       STRING
-      "Specify a list of plugins to remove after the globs in TENZIR_PLUGINS are expanded."
+      "Specify a list of plugin names to remove after the globs in TENZIR_PLUGINS
+      are expanded. (does NOT support globbing)"
 )
 cmake_dependent_option(
   TENZIR_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF

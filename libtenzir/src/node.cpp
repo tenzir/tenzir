@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/allocator.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/concept/convertible/data.hpp"
@@ -495,15 +496,24 @@ auto node(node_actor::stateful_pointer<node_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
-#if (defined(__GLIBC__))
-  const auto period = caf::get_or<duration>(self->config().content,
-                                            "tenzir.malloc-trim-interval",
-                                            duration{std::chrono::minutes{10}});
-  detail::weak_run_delayed_loop(self, period, [self] {
-    TENZIR_DEBUG("{} running malloc_trim to release unused memory", *self);
-    constexpr auto padding = 512 * 1024 * 1024; // 512 MiB
-    ::malloc_trim(padding);
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
+  const auto interval = memory::trim_interval();
+  detail::weak_run_delayed_loop(self, interval, []() {
+    memory::cpp_allocator().trim();
   });
+  if (memory::arrow_allocator().backend()
+      != memory::cpp_allocator().backend()) {
+    detail::weak_run_delayed_loop(self, interval, []() {
+      memory::arrow_allocator().trim();
+    });
+  }
+  if (memory::c_allocator().backend() != memory::arrow_allocator().backend()
+      and memory::c_allocator().backend()
+            != memory::cpp_allocator().backend()) {
+    detail::weak_run_delayed_loop(self, interval, []() {
+      memory::arrow_allocator().trim();
+    });
+  }
 #endif
   return {
     [self](atom::proxy, http_request_description& desc,

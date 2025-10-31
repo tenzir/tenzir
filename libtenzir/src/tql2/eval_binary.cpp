@@ -8,6 +8,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/checked_math.hpp"
@@ -393,7 +394,7 @@ struct EvalBinOp<Op, L, R> {
     using kernel = BinOpKernel<Op, L, R>;
     using result = kernel::result;
     using result_type = data_to_type_t<result>;
-    auto b = result_type::make_arrow_builder(arrow::default_memory_pool());
+    auto b = result_type::make_arrow_builder(arrow_memory_pool());
     auto warnings
       = detail::stack_vector<const char*, 2 * sizeof(const char*)>{};
     for (auto i = int64_t{0}; i < l.length(); ++i) {

@@ -7,7 +7,6 @@
   fetchFromGitHub,
   flex,
   musl-fts,
-  jemalloc,
   libbacktrace,
   libbpf,
   libnghttp2,
@@ -91,7 +90,6 @@ stdenv.mkDerivation (finalAttrs: {
       c-ares
       # Needed by rdkafka.
       curl
-      jemalloc
       libbacktrace
       libnghttp2
       libyaml

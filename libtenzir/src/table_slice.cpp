@@ -8,6 +8,7 @@
 
 #include "tenzir/table_slice.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/bitmap_algorithms.hpp"
@@ -63,9 +64,12 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
 #endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
-    auto ipc_ostream = check(arrow::io::BufferOutputStream::Create());
-    auto stream_writer = check(
-      arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema()));
+    auto ipc_ostream = check(
+      arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
+    auto ipc_opts = arrow::ipc::IpcWriteOptions::Defaults();
+    ipc_opts.memory_pool = tenzir::arrow_memory_pool();
+    auto stream_writer = check(arrow::ipc::MakeStreamWriter(
+      ipc_ostream, record_batch->schema(), ipc_opts));
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (not status.ok()) {
       TENZIR_ERROR("failed to write record batch: {}", status.ToString());
@@ -208,7 +212,7 @@ auto upgrade_arrays(const std::shared_ptr<arrow::Array>& array)
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
       auto values = upgrade_arrays(list_array->values());
       return check(arrow::ListArray::FromArrays(
-        *list_array->offsets(), *values, arrow::default_memory_pool(),
+        *list_array->offsets(), *values, arrow_memory_pool(),
         list_array->null_bitmap(), list_array->data()->null_count));
     }
     default: {
@@ -734,7 +738,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
                                       }),
                           "concatenate requires slices to be homogeneous");
   auto builder
-    = as<record_type>(schema).make_arrow_builder(arrow::default_memory_pool());
+    = as<record_type>(schema).make_arrow_builder(arrow_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
   const auto resize_result
     = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
@@ -958,7 +962,7 @@ constexpr static auto enumeration_to_string
   }
   auto new_type = tenzir::type{string_type{}};
   new_type.assign_metadata(s.type);
-  auto builder = string_type::make_arrow_builder(arrow::default_memory_pool());
+  auto builder = string_type::make_arrow_builder(arrow_memory_pool());
   for (const auto& value : es->values()) {
     if (not value) {
       check(builder->AppendNull());
@@ -1029,7 +1033,7 @@ auto resolve_enumerations(
   tenzir::enumeration_type type,
   const std::shared_ptr<enumeration_type::array_type>& array)
   -> std::pair<string_type, std::shared_ptr<arrow::StringArray>> {
-  auto builder = arrow::StringBuilder(arrow::default_memory_pool());
+  auto builder = arrow::StringBuilder(arrow_memory_pool());
   for (const auto& v : values3(*array)) {
     if (not v) {
       check(builder.AppendNull());
@@ -1091,16 +1095,14 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     inferred_type = *tmp_inferred_type;
     if (not inferred_type) {
       inferred_type = type{null_type{}};
-      auto builder
-        = null_type::make_arrow_builder(arrow::default_memory_pool());
+      auto builder = null_type::make_arrow_builder(arrow_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());
       TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       array = finish(*builder);
       return;
     }
     match(inferred_type, [&]<concrete_type Type>(const Type& inferred_type) {
-      auto builder
-        = inferred_type.make_arrow_builder(arrow::default_memory_pool());
+      auto builder = inferred_type.make_arrow_builder(arrow_memory_pool());
       for (int i = 0; i < batch->num_rows(); ++i) {
         const auto append_result = append_builder(
           inferred_type, *builder, make_view(as<type_to_data_t<Type>>(value)));
@@ -1213,8 +1215,8 @@ auto flatten_list(std::string_view separator, std::string_view name_prefix,
             fmt::format("{}{}", name_prefix, field.name),
             field.type,
           },
-          check(arrow::ListArray::FromArrays(*combined_offsets,
-                                             *list_array->values())),
+          check(arrow::ListArray::FromArrays(
+            *combined_offsets, *list_array->values(), arrow_memory_pool())),
         });
       }
       return result;
@@ -1296,7 +1298,8 @@ auto make_flatten_transformation(
                 fmt::format("{}{}", name_prefix, field.name),
                 type{list_type{field.type}},
               },
-              check(arrow::ListArray::FromArrays(*combined_offsets, *array)),
+              check(arrow::ListArray::FromArrays(*combined_offsets, *array,
+                                                 arrow_memory_pool())),
             },
           };
         },
@@ -1495,7 +1498,7 @@ void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
                | std::views::transform(&arrow::Field::name);
   // We need to flatten the null bitmap here because it can happen that the
   // fields are saved to a record that is made non-null by another entry.
-  auto fields = check(array.Flatten());
+  auto fields = check(array.Flatten(tenzir::arrow_memory_pool()));
   for (auto [name, data] : detail::zip_equal(names, fields)) {
     auto segments
       = name | std::views::split(sep)
@@ -1556,8 +1559,8 @@ auto unflatten(const arrow::ListArray& array, std::string_view sep)
   // Unflattening a list simply means unflattening its values.
   auto values = unflatten(array.values(), sep);
   return check(arrow::ListArray::FromArrays(
-    *array.offsets(), *values, arrow::default_memory_pool(),
-    array.null_bitmap(), array.data()->null_count));
+    *array.offsets(), *values, arrow_memory_pool(), array.null_bitmap(),
+    array.data()->null_count));
 }
 
 auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)

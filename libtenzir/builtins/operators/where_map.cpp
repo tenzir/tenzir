@@ -693,7 +693,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
         result.emplace_back(list_type{merged_series.type},
                             check(arrow::ListArray::FromArrays(
                               *offsets, *merged_series.array,
-                              arrow::default_memory_pool(), std::move(validity),
+                              arrow_memory_pool(), std::move(validity),
                               p.null_count)));
         if (merge_status != multi_series::to_series_result::status::ok) {
           /// This produces prettier error messages for the common case

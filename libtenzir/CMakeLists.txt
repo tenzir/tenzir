@@ -135,6 +135,12 @@ provide_find_module(libmaxminddb)
 find_package(c-ares REQUIRED)
 provide_find_module(c-ares)
 
+# -- mimalloc ------------------------------------------------------------------
+
+find_package(mimalloc REQUIRED CONFIG)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(mimalloc REQUIRED CONFIG)")
+dependency_summary("mimalloc" mimalloc "Dependencies")
+
 # -- libsystemd ----------------------------------------------------------------
 
 option(TENZIR_ENABLE_JOURNALD_LOGGING
@@ -270,6 +276,9 @@ endif ()
 target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
+
+# Link against mimalloc.
+target_link_libraries(libtenzir PUBLIC mimalloc)
 
 # Link against xxHash.
 target_compile_definitions(
@@ -513,6 +522,9 @@ endif ()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp")
 
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/allocator_config.hpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp")
+
 if (CMAKE_BUILD_TYPE)
   set(TENZIR_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 elseif (CMAKE_CONFIGURATION_TYPES)
@@ -559,6 +571,7 @@ add_custom_target(
 target_sources(
   libtenzir
   PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp"
+          "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
           "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp")
 

@@ -472,13 +472,16 @@ public:
         }
         auto original_schema_name = slice.schema().name();
         auto batch = to_record_batch(slice);
-        auto stream = check(arrow::io::BufferOutputStream::Create());
+        auto stream = check(arrow::io::BufferOutputStream::Create(
+          4096, tenzir::arrow_memory_pool()));
+        auto ipc_write_opts = arrow::ipc::IpcWriteOptions::Defaults();
+        ipc_write_opts.memory_pool = tenzir::arrow_memory_pool();
         auto writer = check(arrow::ipc::MakeStreamWriter(
-          stream, slice.schema().to_arrow_schema()));
+          stream, slice.schema().to_arrow_schema(), ipc_write_opts));
         if (not writer->WriteRecordBatch(*batch).ok()) {
           diagnostic::error("failed to convert input batch to Arrow format")
-            .note(
-              "failed to write in conversion from input batch to Arrow format")
+            .note("failed to write in conversion from input batch to Arrow "
+                  "format")
             .emit(ctrl.diagnostics());
           co_return;
         }
@@ -500,7 +503,10 @@ public:
         std_in.write(reinterpret_cast<const char*>((*result)->data()),
                      detail::narrow<int>((*result)->size()));
         auto file = arrow_fd_wrapper{std_out.native_source()};
-        auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
+        auto ipc_read_opts = arrow::ipc::IpcReadOptions::Defaults();
+        ipc_write_opts.memory_pool = tenzir::arrow_memory_pool();
+        auto reader
+          = arrow::ipc::RecordBatchStreamReader::Open(&file, ipc_read_opts);
         if (not reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
