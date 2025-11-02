@@ -174,40 +174,6 @@ if (NOT TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
     COMPONENT Development)
 endif ()
 
-# -- allocator -----------------------------------------------------------------
-
-set(TENZIR_ALLOCATOR
-    "mimalloc"
-    CACHE
-      STRING
-      "Configure the allocator.\
-Possible options:\
-  * `none`: Tenzir's custom allocator API is not used. This means using the system allocator for most things and arrow uses its default alloctor\
-  * `mimalloc`: mimalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
-  * `system`: the system allocator is ussed for everything (arrow, operator new, malloc). You can enable stats tracking.\
-  * `runtime`: The allocator can be selected via an environment variable at startup. You can enable stats tracking.\
-\
-Environment variables:\
-\
-* `TENZIR_ALLOC=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `mimalloc` or `system`\
-* `TENZIR_ALLOC_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component \
-\
-There also exist specific per-component variables, which are simply suffixed by _<COMPONENT>:\
-* `ARROW`: All allocations made for arrow buffers only. Does not include things like the structure or arrow types.
-* `CPP`: All allocations made through any `operator new` (does include std::allocator by definition)
-* `C`: All allocations made through C or POSIX allocation functions.")
-if (TENZIR_ALLOCATOR STREQUAL "none")
-  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_NONE")
-elseif (TENZIR_ALLOCATOR STREQUAL "mimalloc")
-  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_MIMALLOC")
-elseif (TENZIR_ALLOCATOR STREQUAL "system")
-  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_SYSTEM")
-elseif (TENZIR_ALLOCATOR STREQUAL "runtime")
-  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_RUNTIME")
-else ()
-  message(FATAL_ERROR "unknown TENZIR_ALLOCATOR")
-endif ()
-
 # -- internal target -----------------------------------------------------------
 
 # Create the internal target that is used for option/property propagation.
@@ -451,6 +417,53 @@ if (TENZIR_ENABLE_UBSAN)
   target_compile_options(libtenzir_internal INTERFACE -fsanitize=undefined)
   target_link_libraries(libtenzir_internal INTERFACE -fsanitize=undefined)
 endif ()
+
+# -- allocator -----------------------------------------------------------------
+
+set(TENZIR_ALLOCATOR_DEFAULT "mimalloc")
+if (TENZIR_ENABLE_ASAN)
+  set(TENZIR_ALLOCATOR_DEFAULT "none")
+endif ()
+
+set(TENZIR_ALLOCATOR
+    ${TENZIR_ALLOCATOR_DEFAULT}
+    CACHE
+      STRING
+      "Configure the allocator.\
+Possible options:\
+  * `none`: Tenzir's custom allocator API is not used. This means using the system allocator for most things and arrow uses its default alloctor\
+  * `mimalloc`: mimalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `system`: the system allocator is ussed for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `runtime`: The allocator can be selected via an environment variable at startup. You can enable stats tracking.\
+\
+Environment variables:\
+\
+* `TENZIR_ALLOC=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `mimalloc` or `system`\
+* `TENZIR_ALLOC_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component \
+\
+There also exist specific per-component variables, which are simply suffixed by _<COMPONENT>:\
+* `ARROW`: All allocations made for arrow buffers only. Does not include things like the structure or arrow types.
+* `CPP`: All allocations made through any `operator new` (does include std::allocator by definition)
+* `C`: All allocations made through C or POSIX allocation functions.")
+
+if (TENZIR_ENABLE_ASAN AND NOT TENZIR_ALLOCATOR STREQUAL "none")
+  message(
+    FATAL_ERROR "Allocator selection is not supported with address sanitizer.")
+endif ()
+
+if (TENZIR_ALLOCATOR STREQUAL "none")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_NONE")
+elseif (TENZIR_ALLOCATOR STREQUAL "mimalloc")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_MIMALLOC")
+elseif (TENZIR_ALLOCATOR STREQUAL "system")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_SYSTEM")
+elseif (TENZIR_ALLOCATOR STREQUAL "runtime")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_RUNTIME")
+else ()
+  message(FATAL_ERROR "unknown TENZIR_ALLOCATOR")
+endif ()
+
+add_variable_to_summary("TENZIR_ALLOCATOR")
 
 # -- developer mode ------------------------------------------------------------
 
