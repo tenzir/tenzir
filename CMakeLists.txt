@@ -739,12 +739,12 @@ set(TENZIR_CAF_LOG_LEVEL
 if (TENZIR_ENABLE_DEVELOPER_MODE
     AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt"
     AND NOT CAF_ROOT_DIR)
-  set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT ON)
+  set(_tenzir_enable_bundled_caf_default ON)
 else ()
-  set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT OFF)
+  set(_tenzir_enable_bundled_caf_default OFF)
 endif ()
 option(TENZIR_ENABLE_BUNDLED_CAF "Use the CAF submodule"
-       "${TENZIR_ENABLE_BUNDLED_CAF_DEFAULT}")
+       "${_tenzir_enable_bundled_caf_default}")
 add_feature_info("TENZIR_ENABLE_BUNDLED_CAF" TENZIR_ENABLE_BUNDLED_CAF
                  "use the CAF submodule.")
 if (NOT TENZIR_ENABLE_BUNDLED_CAF)
@@ -872,14 +872,14 @@ option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires uv)" ON)
 add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
                  "build Python bindings (requires uv).")
 
-set(TENZIR_ENABLE_BUNDLED_UV_default "ON")
+set(_tenzir_enable_bundled_uv_default "ON")
 if (DEFINED ENV{TENZIR_ENABLE_BUNDLED_UV})
-  set(TENZIR_ENABLE_BUNDLED_UV_default $ENV{TENZIR_ENABLE_BUNDLED_UV})
+  set(_tenzir_enable_bundled_uv_default $ENV{TENZIR_ENABLE_BUNDLED_UV})
 endif ()
 
 cmake_dependent_option(
   TENZIR_ENABLE_BUNDLED_UV "Install a statically linked copy of uv"
-  "${TENZIR_ENABLE_BUNDLED_UV_default}" "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
+  "${_tenzir_enable_bundled_uv_default}" "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
 add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
                  "install a statically linked copy of uv.")
 
