@@ -78,9 +78,6 @@ TenzirInstallExampleConfiguration(
 
 option(TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
        "Integrate with init systems when installing" ON)
-add_feature_info(
-  "TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION" TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
-  "integrate with init systems when installing.")
 
 if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
@@ -147,8 +144,6 @@ set(TENZIR_PLUGINS_BLACKLIST
 cmake_dependent_option(
   TENZIR_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
   "NOT TENZIR_ENABLE_STATIC_EXECUTABLE" ON)
-add_feature_info("TENZIR_ENABLE_STATIC_PLUGINS" TENZIR_ENABLE_STATIC_PLUGINS
-                 "force plugins to be linked statically.")
 if (TENZIR_PLUGINS)
   foreach (plugin_source_glob IN LISTS TENZIR_PLUGINS)
     if (IS_ABSOLUTE "${plugin_source_glob}")

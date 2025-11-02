@@ -16,9 +16,6 @@ TenzirRegisterPlugin(
 
 option(TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP
        "Always use the bundled tsl-robin-map" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP" TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP
-  "always use the bundled clickhouse-cpp library.")
 if (NOT TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP)
   find_package(clickhouse-cpp QUIET)
 endif ()
@@ -36,7 +33,8 @@ else ()
   list(APPEND CMAKE_MODULE_PATH
        "${CMAKE_CURRENT_SOURCE_DIR}/aux/clickhouse-cpp/cmake")
   find_package(lz4 REQUIRED)
-  # The targets in Findlz4 and Findzstd use different names from the upstream CMake setups.
+  # The targets in Findlz4 and Findzstd use different names from the upstream
+  # CMake setups.
   if (NOT TARGET lz4::lz4)
     add_library(lz4::lz4 ALIAS LZ4::lz4)
     set(DEBUG_DEPENDENCIES

@@ -6,9 +6,6 @@
 
 option(TENZIR_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map"
        OFF)
-add_feature_info(
-  "TENZIR_ENABLE_BUNDLED_ROBIN_MAP" TENZIR_ENABLE_BUNDLED_ROBIN_MAP
-  "always use the bundled tsl-robin-map.")
 if (NOT TENZIR_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map QUIET)
   if (tsl-robin-map_FOUND)
@@ -144,9 +141,6 @@ dependency_summary("mimalloc" mimalloc "Dependencies")
 
 option(TENZIR_ENABLE_JOURNALD_LOGGING
        "Build with support for native journald log output" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_JOURNALD_LOGGING" TENZIR_ENABLE_JOURNALD_LOGGING
-  "build with support for native journald log output.")
 
 # -- log level -----------------------------------------------------------------
 
@@ -335,8 +329,6 @@ dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson
 option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
-add_feature_info("TENZIR_ENABLE_BUNDLED_SIMDJSON"
-                 TENZIR_ENABLE_BUNDLED_SIMDJSON "use the simdjson submodule.")
 
 unset(_tenzir_bundled_simdjson)
 if (NOT TENZIR_ENABLE_BUNDLED_SIMDJSON)
@@ -433,9 +425,6 @@ dependency_summary("reproc++" reproc+++ "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_BUNDLED_FASTFLOAT" TENZIR_ENABLE_BUNDLED_FASTFLOAT
-  "use the fast_float submodule.")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
   find_package(FastFloat CONFIG)
 endif ()
@@ -459,8 +448,6 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
-  add_feature_info("TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
-                   "use the pfs submodule.")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()

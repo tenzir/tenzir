@@ -34,11 +34,6 @@ option(
   TENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS
   "Apply dynamic linking workarounds for quirky libfluent-bit.so builds on Linux"
   ON)
-add_feature_info(
-  "TENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS"
-  TENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS
-  "apply dynamic linking workarounds for quirky libfluent-bit.so builds on Linux."
-)
 
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux"
     AND NOT TENZIR_ENABLE_STATIC_PLUGINS
