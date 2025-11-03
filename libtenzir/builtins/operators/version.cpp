@@ -10,6 +10,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/backtrace.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/exec/operator.hpp"
 #include "tenzir/exec/operator_base.hpp"
@@ -32,6 +33,7 @@
 #include <caf/scheduled_actor/flow.hpp>
 #include <flatbuffers/base.h>
 #include <folly/coro/Sleep.h>
+#include <folly/debugging/symbolizer/Symbolizer.h>
 #include <openssl/configuration.h>
 
 #include <simdjson.h>
@@ -338,7 +340,7 @@ class Version final : public Operator<void, table_slice> {
 public:
   auto start(Push<table_slice>& push, AsyncCtx& ctx) -> Task<void> override {
     // TODO: If we would restore, we should not emit the version again...
-    diagnostic::warning("HELLO from version").emit(ctx);
+    // diagnostic::warning("HELLO from version").emit(ctx);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
     TENZIR_INFO("leaving Version::start");
@@ -357,6 +359,9 @@ public:
 
   auto process_task(std::any result, Push<table_slice>& push, AsyncCtx& ctx)
     -> Task<void> override {
+    // static_cast<int*>(static_cast<void*>(&push) - static_cast<void*>(&ctx))
+    //   = 1337;
+    std::abort();
     auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
     auto license
       = co_await ctx
@@ -393,7 +398,7 @@ public:
   }
 
 private:
-  size_t remaining_ = 0;
+  size_t remaining_ = 1;
 };
 
 class version_plan final : public plan::operator_base {

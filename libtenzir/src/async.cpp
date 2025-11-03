@@ -302,9 +302,11 @@ public:
     TENZIR_WARN("adding task to {} ({})", fmt::ptr(this), typeid(T).name());
     pending_ += 1;
     needs_join_ = true;
-    co_await scope_.co_schedule(
-      folly::coro::co_invoke(
-        [this, task = std::move(task)] mutable -> Task<void> {
+    scope_.add(
+      folly::coro::co_withExecutor(
+        co_await folly::coro::co_current_executor,
+        folly::coro::co_invoke([this, task
+                                      = std::move(task)] mutable -> Task<void> {
           // TODO: Do we know that we reach this if we get cancelled?
           co_await folly::coro::co_scope_exit(
             [](auto* self) -> Task<void> {
@@ -321,8 +323,10 @@ public:
           co_await queue_.enqueue(std::move(result));
           TENZIR_VERBOSE("did enqueue result of task from queue: {}",
                          fmt::ptr(this));
-        }),
-      co_await folly::coro::co_current_cancellation_token);
+        })),
+      // TODO: Inject this once in an async constructor.
+      co_await folly::coro::co_current_cancellation_token,
+      FOLLY_ASYNC_STACK_RETURN_ADDRESS());
   }
 
 #if 0

@@ -15,6 +15,7 @@
 
 #include <csignal>
 #include <cstdio>
+#include <iostream>
 #include <string.h>
 #include <unistd.h>
 
@@ -24,6 +25,14 @@ extern "C" void fatal_handler(int sig) {
   auto trace = boost::stacktrace::stacktrace{1, 1000};
   for (const auto& frame : trace) {
     ::fprintf(stderr, "%s\n", tenzir::detail::format_frame(frame).c_str());
+  }
+  //
+  if (tenzir::detail::has_async_stacktrace()) {
+    ::fprintf(stderr,
+              "\n-------------------- async stacktrace --------------------\n");
+    ::fflush(stderr);
+    tenzir::detail::print_async_stacktrace(std::cerr);
+    std::cerr.flush();
   }
   // Reinstall the default handler and call that too.
   signal(sig, SIG_DFL);

@@ -11,6 +11,9 @@
 #include "tenzir/detail/string.hpp"
 
 #include <fmt/format.h>
+#include <folly/coro/AsyncStack.h>
+
+#include <ostream>
 
 namespace tenzir::detail {
 
@@ -52,6 +55,18 @@ auto simplify_name(std::string name) -> std::string {
   return name;
 }
 
+auto format_async_frame(const boost::stacktrace::frame& frame) -> std::string {
+  auto file_name = frame.source_file();
+  if (file_name.empty()) {
+    auto function_name
+      = simplify_name(replace_all(frame.name(), " (.resume)", ""));
+    return fmt::format("{} @ {}", function_name, frame.address());
+  } else {
+    return fmt::format("{}:{} @ {}", file_name, frame.source_line(),
+                       frame.address());
+  }
+}
+
 } // namespace
 
 auto format_frame(const boost::stacktrace::frame& frame) -> std::string {
@@ -62,6 +77,24 @@ auto format_frame(const boost::stacktrace::frame& frame) -> std::string {
   } else {
     return fmt::format("{}:{} @ {}", file_name, frame.source_line(),
                        frame.address());
+  }
+}
+
+auto has_async_stacktrace() -> bool {
+  auto root = folly::tryGetCurrentAsyncStackRoot();
+  return root != nullptr;
+}
+
+void print_async_stacktrace(std::ostream& out) {
+  auto root = folly::tryGetCurrentAsyncStackRoot();
+  if (not root) {
+    return;
+  }
+  auto frame = root->getTopFrame();
+  while (frame) {
+    auto f = boost::stacktrace::frame{frame->getReturnAddress()};
+    out << detail::format_frame(f) << '\n';
+    frame = frame->getParentFrame();
   }
 }
 
