@@ -60,28 +60,24 @@ macro (TenzirNormalizeInstallDirs)
   endif ()
 endmacro ()
 
-# A replacement for target_link_libraries that links static libraries using
-# the platform-specific whole-archive options. Please test any changes to this
-# macro on all supported platforms and compilers.
+# A replacement for target_link_libraries that makes sure static plugin
+# libraries keep their registration translation units by forcing selected
+# symbols to be resolved during the final link. The actual libraries are linked
+# normally to avoid the overhead of whole-archiving everything.
 macro (TenzirTargetLinkWholeArchive target visibility library)
   get_target_property(target_type ${library} TYPE)
   if (target_type STREQUAL "STATIC_LIBRARY")
-    # Prevent elision of self-registration code in statically linked libraries,
-    # c.f., https://www.bfilipek.com/2018/02/static-vars-static-lib.html
-    # Possible PLATFORM_ID values:
-    # - Windows: Windows (Visual Studio, MinGW GCC)
-    # - Darwin: macOS/OS X (Clang, GCC)
-    # - Linux: Linux (GCC, Intel, PGI)
-    # - Android: Android NDK (GCC, Clang)
-    # - FreeBSD: FreeBSD
-    # - CrayLinuxEnvironment: Cray supercomputers (Cray compiler)
-    # - MSYS: Windows (MSYS2 shell native GCC)#
-    target_link_options(
-      ${target}
-      ${visibility}
-      $<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:${library}>>
-      $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:--whole-archive,$<TARGET_FILE:${library}>,--no-whole-archive>
-      $<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE,$<TARGET_FILE:${library}>>)
+    get_target_property(force_symbols ${library} TENZIR_FORCE_LINK_SYMBOLS)
+    if (force_symbols)
+      foreach (symbol IN LISTS force_symbols)
+        target_link_options(
+          ${target}
+          ${visibility}
+          $<$<PLATFORM_ID:Darwin>:LINKER:-u,_${symbol}>
+          $<$<OR:$<PLATFORM_ID:Linux>,$<PLATFORM_ID:FreeBSD>>:LINKER:-u,${symbol}>
+          $<$<PLATFORM_ID:Windows>:LINKER:/INCLUDE:${symbol}>)
+      endforeach ()
+    endif ()
   endif ()
   target_link_libraries(${target} ${visibility} ${library})
 endmacro ()
@@ -131,6 +127,41 @@ macro (make_absolute vars)
   unset(vars_abs)
 endmacro ()
 
+function (TenzirCollectPluginAnchors out_var prefix)
+  set(anchors "")
+  foreach (source IN LISTS ARGN)
+    if (NOT EXISTS "${source}")
+      message(FATAL_ERROR "Plugin source ${source} does not exist")
+    endif ()
+    file(STRINGS "${source}" source_lines NEWLINE_CONSUME)
+    set(has_macro OFF)
+    foreach (line IN LISTS source_lines)
+      if (line MATCHES "TENZIR_REGISTER_PLUGIN *\\(")
+        set(has_macro ON)
+        break()
+      endif ()
+    endforeach ()
+    if (has_macro)
+      file(RELATIVE_PATH relative_source "${PROJECT_SOURCE_DIR}" "${source}")
+      if (relative_source STREQUAL "")
+        set(relative_source "${source}")
+      endif ()
+      string(REPLACE "/" "_" relative_source "${relative_source}")
+      string(REPLACE "\\" "_" relative_source "${relative_source}")
+      string(MAKE_C_IDENTIFIER "${prefix}_${relative_source}" symbol)
+      set(definition "TENZIR_PLUGIN_FORCE_LINK_SYMBOL=${symbol}")
+      set_property(
+        SOURCE "${source}"
+        APPEND
+        PROPERTY COMPILE_DEFINITIONS "${definition}")
+      list(APPEND anchors "${symbol}")
+    endif ()
+  endforeach ()
+  list(REMOVE_DUPLICATES anchors)
+  set("${out_var}"
+      "${anchors}"
+      PARENT_SCOPE)
+endfunction ()
 function (TenzirCompileFlatBuffers)
   cmake_parse_arguments(
     # <prefix>
@@ -659,6 +690,12 @@ function (TenzirRegisterPlugin)
              "TENZIR_PLUGIN_DEPENDENCIES=${formatted_dependencies}")
   unset(formatted_dependencies)
 
+  set(plugin_anchor_sources "${PLUGIN_ENTRYPOINT}" ${PLUGIN_BUILTINS})
+  list(REMOVE_DUPLICATES plugin_anchor_sources)
+  tenzircollectpluginanchors(
+    plugin_force_link_symbols "tenzir_plugin_${PLUGIN_TARGET}_anchor"
+    ${plugin_anchor_sources})
+
   list(APPEND PLUGIN_ENTRYPOINT "${CMAKE_CURRENT_BINARY_DIR}/config.cpp")
 
   # Create a static library target for our plugin with the entrypoint, and use
@@ -669,6 +706,11 @@ function (TenzirRegisterPlugin)
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE tenzir::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
                              PRIVATE TENZIR_ENABLE_STATIC_PLUGINS)
+  if (plugin_force_link_symbols)
+    set_target_properties(
+      ${PLUGIN_TARGET}-static PROPERTIES TENZIR_FORCE_LINK_SYMBOLS
+                                         "${plugin_force_link_symbols}")
+  endif ()
 
   if (TENZIR_ENABLE_STATIC_PLUGINS)
     # Link our static library against the tenzir binary directly.
