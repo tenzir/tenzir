@@ -137,8 +137,9 @@ struct parameter_parser : parser_base<parameter_parser> {
     // ], ", \ must be escaped.
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     // We allow not escaping it in some situations to be more permissive.
-    auto not_escaped
-      = printable - ('"' >> (ch<' '> | ("]" >> (parsers::eoi | ' ' | '\n'))));
+    auto can_come_after_closing_bracket = parsers::eoi | ' ' | '\n' | '[';
+    auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
+    auto not_escaped = printable - ('"' >> can_come_after_quote);
     auto value = escaped | not_escaped;
     auto value_data = (*value)->*[](std::string val) {
       data d{};
