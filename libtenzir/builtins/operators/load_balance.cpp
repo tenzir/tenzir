@@ -196,8 +196,11 @@ auto make_load_balancer(
     TENZIR_DEBUG("spawning inner executor");
     auto executor = self->spawn(pipeline_executor, pipe, definition, self, self,
                                 node, has_terminal, is_hidden);
-    self->monitor(executor, [self, source
-                                   = executor->address()](const caf::error&) {
+    self->monitor(executor, [self, source = executor->address()](
+                              const caf::error& err) {
+      if (err) {
+        diagnostic::error(err).emit(self->state().diagnostics);
+      }
       auto it = std::ranges::find(self->state().executors, source,
                                   &pipeline_executor_actor::address);
       TENZIR_ASSERT(it != self->state().executors.end());
