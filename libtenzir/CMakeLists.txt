@@ -101,10 +101,8 @@ else ()
 endif ()
 if (ARROW_VERSION VERSION_GREATER_EQUAL "21.0.0")
   find_package(ArrowCompute REQUIRED CONFIG)
-  string(
-    APPEND
-    TENZIR_FIND_DEPENDENCY_LIST
-    "\nfind_package(ArrowCompute REQUIRED CONFIG)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(ArrowCompute REQUIRED CONFIG)")
   if (BUILD_SHARED_LIBS)
     set(ARROW_COMPUTE_LIBRARY ArrowCompute::arrow_compute_shared)
   else ()
@@ -138,7 +136,8 @@ provide_find_module(c-ares)
 # -- mimalloc ------------------------------------------------------------------
 
 find_package(mimalloc REQUIRED CONFIG)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(mimalloc REQUIRED CONFIG)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(mimalloc REQUIRED CONFIG)")
 dependency_summary("mimalloc" mimalloc "Dependencies")
 
 # -- libsystemd ----------------------------------------------------------------
@@ -392,8 +391,10 @@ if (NOT simdjson_FOUND)
                      "Dependencies")
   # Ensure bundled simdjson includes come before system includes to avoid
   # conflicts with system-installed simdjson headers.
-  target_include_directories(libtenzir SYSTEM BEFORE PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/include>")
+  target_include_directories(
+    libtenzir SYSTEM BEFORE
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/include>"
+  )
 endif ()
 target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
@@ -409,7 +410,8 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
-target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY} ${ARROW_COMPUTE_LIBRARY})
+target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY}
+                                       ${ARROW_COMPUTE_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
@@ -522,8 +524,9 @@ endif ()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp")
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/allocator_config.hpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp")
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/allocator_config.hpp.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp")
 
 if (CMAKE_BUILD_TYPE)
   set(TENZIR_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
