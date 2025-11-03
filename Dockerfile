@@ -94,7 +94,7 @@ COPY python ./python
 COPY schema ./schema
 COPY scripts ./scripts
 COPY tenzir ./tenzir
-COPY CMakeLists.txt LICENSE README.md tenzir.spdx.json VERSIONING.md \
+COPY CMakeLists.txt LICENSE README.md VERSIONING.md \
      tenzir.yaml.example version.json ./
 
 # -- development ---------------------------------------------------------------

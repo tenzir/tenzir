@@ -994,7 +994,6 @@ endif ()
 # be disabled.
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.spdx.json"
         "${CMAKE_CURRENT_SOURCE_DIR}/VERSIONING.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DOCDIR}"

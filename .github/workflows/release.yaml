@@ -49,6 +49,11 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate an app token
         id: generate_token
         uses: actions/create-github-app-token@v1
@@ -171,6 +176,9 @@ jobs:
           git push origin "$CURRENT_BRANCH"
           git push origin "${{ github.event.inputs.version }}"
 
+      - name: Generate SBOM artifact
+        run: nix run .#generate-sbom -- /tmp/tenzir.spdx.json
+
       - name: Copy release file to main branch (non-latest release)
         if: steps.release_type.outputs.is_latest == 'false'
         env:
@@ -241,6 +249,11 @@ jobs:
             --title "$RELEASE_TITLE" \
             --notes-file /tmp/release-notes.md \
             ${{ steps.release_type.outputs.is_latest == 'true' && '--latest' || '--latest=false' }}
+
+      - name: Attach SBOM to release
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: gh release upload "${{ github.event.inputs.version }}" /tmp/tenzir.spdx.json --clobber
 
       - name: Output success message (latest release)
         if: steps.release_type.outputs.is_latest == 'true'
