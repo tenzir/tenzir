@@ -33,7 +33,6 @@ rec {
     ../CMakeLists.txt
     ../LICENSE
     ../README.md
-    ../tenzir.spdx.json
     ../VERSIONING.md
     ../tenzir.yaml.example
     ../version.json
