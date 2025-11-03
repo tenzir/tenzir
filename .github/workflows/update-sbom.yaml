@@ -2,7 +2,7 @@ name: Update SBOM
 on: workflow_dispatch
 
 permissions:
-  pull-requests: write
+  contents: read
 
 jobs:
   sbom:
@@ -19,21 +19,11 @@ jobs:
           name: tenzir
       - name: Checkout
         uses: actions/checkout@v4
-      - uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
       - name: Regenerate SBOM
-        run: nix run .#generate-sbom
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        run: nix run .#generate-sbom -- /tmp/tenzir.spdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          committer: tenzir-bot <engineering@tenzir.com>
-          commit-message: Update SBOM
-          title: Update SBOM
-          body: Update SBOM from workflow triggered by @${{ github.actor }}.
-          labels: maintenance
-          branch: topic/update-sbom
-          delete-branch: true
+          name: tenzir-sbom
+          path: /tmp/tenzir.spdx.json
+          if-no-files-found: error

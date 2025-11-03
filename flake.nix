@@ -100,7 +100,7 @@
           drv = self.packages.${system}.tenzir-static;
         };
         apps.default = self.apps.${system}.tenzir-static;
-        # Run with `nix run .#generate-sbom`, output is created in sbom/.
+        # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
         apps.generate-sbom =
           let
             nix = nixpkgs.legacyPackages."${system}".nix;
@@ -112,6 +112,11 @@
             drv = pkgs.writeScriptBin "generate" ''
               #!${pkgs.runtimeShell}
               TMP="$(mktemp -d)"
+              OUTPUT="$1"
+              if [ -z "$OUTPUT" ]; then
+                OUTPUT="tenzir.spdx.json"
+              fi
+              mkdir -p "$(dirname "$OUTPUT")"
               echo "Writing intermediate files to $TMP"
               staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-de-static)"
               echo "Converting vendored spdx info from KV to JSON"
@@ -125,7 +130,7 @@
               name=''$(${pkgs.jq}/bin/jq -r '.name' $TMP/nix.spdx.json)
               sed -i "s|$name|SPDXRef-Tenzir|g" $TMP/nix.spdx.json
               echo "Removing the generated Tenzir package entry"
-              jq 'del(.packages[] | select(.SPDXID == "SPDXRef-Tenzir"))' $TMP/nix.spdx.json > $TMP/nix2.spdx.json
+              ${pkgs.jq}/bin/jq 'del(.packages[] | select(.SPDXID == "SPDXRef-Tenzir"))' $TMP/nix.spdx.json > $TMP/nix2.spdx.json
               echo "Merging the SPDX JSON files"
               ${pkgs.jq}/bin/jq -s 'def deepmerge(a;b):
                 reduce b[] as $item (a;
@@ -140,8 +145,8 @@
                   );
                 deepmerge({}; .)' $TMP/nix2.spdx.json $TMP/vendored.spdx.json > $TMP/nix3.spdx.json
               echo "Sorting the output"
-              jq '.packages|=sort_by(.name)|.relationships|=sort_by(.spdxElementId,.relatedSpdxElement)' $TMP/nix3.spdx.json > tenzir.spdx.json
-              echo "Wrote tenzir.spdx.json"
+              ${pkgs.jq}/bin/jq '.packages|=sort_by(.name)|.relationships|=sort_by(.spdxElementId,.relatedSpdxElement)' $TMP/nix3.spdx.json > "$OUTPUT"
+              echo "Wrote $OUTPUT"
             '';
           };
         # Legacy aliases for backwards compatibility.
