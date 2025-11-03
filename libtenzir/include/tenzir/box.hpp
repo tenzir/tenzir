@@ -33,6 +33,11 @@ public:
   explicit(false) Box(U x) : ptr_{std::make_unique<U>(std::move(x))} {
   }
 
+  template <class... Args>
+  explicit Box(std::in_place_t, Args&&... args)
+    : ptr_{std::make_unique<T>(std::forward<Args>(args)...)} {
+  }
+
   /// Boxes can be used as pointers.
   auto operator->() -> T* {
     return &deref();

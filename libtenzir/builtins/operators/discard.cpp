@@ -257,6 +257,11 @@ private:
 
 class DiscardImpl final : public Operator<table_slice, void> {
 public:
+  auto start(AsyncCtx& ctx) -> Task<void> override {
+    // TENZIR_ASSERT(false, "oops");
+    co_return;
+  }
+
   auto process(table_slice input, AsyncCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(input, ctx);
     co_return;

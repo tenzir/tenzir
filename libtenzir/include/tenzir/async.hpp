@@ -330,18 +330,21 @@ private:
   std::vector<AnyOperator> operators_;
 };
 
-/// A non-data message sent to an operator by its upstream.
-enum class Signal {
+TENZIR_ENUM(
+  /// A non-data message sent to an operator by its upstream.
+  Signal,
   /// No more data will come after this signal. Will never be sent to sources.
   end_of_data,
   /// Request to perform a checkpoint. To be forwarded downstream afterwards.
-  checkpoint,
-};
+  checkpoint);
 
 template <class T>
 struct OperatorMsg : variant<T, Signal> {
   using variant<T, Signal>::variant;
 };
+
+template <class T>
+inline constexpr auto enable_default_formatter<OperatorMsg<T>> = true;
 
 template <>
 struct OperatorMsg<void> : variant<Signal> {

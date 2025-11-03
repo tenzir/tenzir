@@ -134,9 +134,7 @@ private:
 
 template <class T>
 auto Mutex<T>::lock() -> Task<MutexGuard<T>> {
-  TENZIR_WARN("aquire");
-  co_await mutex_.lock();
-  TENZIR_WARN("got it");
+  co_await mutex_.lock_unscoped();
   co_return MutexGuard<T>{*this};
 }
 

@@ -536,7 +536,7 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
   TENZIR_ASSERT(chain);
   auto [push_input, pull_input] = make_op_channel<void>(10);
   auto [push_output, pull_output] = make_op_channel<void>(10);
-  co_await push_input(Signal::checkpoint);
+  // co_await push_input(Signal::checkpoint);
   TENZIR_WARN("blocking on pipeline");
   co_await run_pipeline(std::move(*chain), std::move(pull_input),
                         std::move(push_output), sys, dh);
@@ -545,7 +545,16 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
 
 auto run_plan_blocking(plan::pipeline pipe, caf::actor_system& sys,
                        diagnostic_handler& dh) -> failure_or<void> {
+#if 1
   return folly::coro::blockingWait(run_plan(std::move(pipe), sys, dh));
+#else
+  TENZIR_WARN("running {}/{} threads",
+              folly::getGlobalCPUExecutorCounters().numActiveThreads,
+              folly::getGlobalCPUExecutorCounters().numThreads);
+  return folly::coro::blockingWait(run_plan(std::move(pipe), sys, dh)
+                                     .semi()
+                                     .via(folly::getGlobalCPUExecutor()));
+#endif
 }
 
 // TODO: failure_or<bool> is bad

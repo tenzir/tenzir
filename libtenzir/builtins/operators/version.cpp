@@ -338,9 +338,10 @@ class Version final : public Operator<void, table_slice> {
 public:
   auto start(Push<table_slice>& push, AsyncCtx& ctx) -> Task<void> override {
     // TODO: If we would restore, we should not emit the version again...
+    diagnostic::warning("HELLO from version").emit(ctx);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
-    diagnostic::warning("HELLO from version").emit(ctx);
+    TENZIR_INFO("leaving Version::start");
   }
 
   auto await_task() const -> Task<std::any> override {
