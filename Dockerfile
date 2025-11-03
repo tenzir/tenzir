@@ -1,7 +1,5 @@
 FROM debian:trixie-slim AS runtime-base
 
-ENV ARROW_DEFAULT_MEMORY_POOL=system
-
 FROM runtime-base AS build-base
 
 ENV CC="gcc-14" \
