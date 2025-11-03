@@ -6,9 +6,6 @@
 
 option(TENZIR_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map"
        OFF)
-add_feature_info(
-  "TENZIR_ENABLE_BUNDLED_ROBIN_MAP" TENZIR_ENABLE_BUNDLED_ROBIN_MAP
-  "always use the bundled tsl-robin-map.")
 if (NOT TENZIR_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map QUIET)
   if (tsl-robin-map_FOUND)
@@ -101,10 +98,8 @@ else ()
 endif ()
 if (ARROW_VERSION VERSION_GREATER_EQUAL "21.0.0")
   find_package(ArrowCompute REQUIRED CONFIG)
-  string(
-    APPEND
-    TENZIR_FIND_DEPENDENCY_LIST
-    "\nfind_package(ArrowCompute REQUIRED CONFIG)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(ArrowCompute REQUIRED CONFIG)")
   if (BUILD_SHARED_LIBS)
     set(ARROW_COMPUTE_LIBRARY ArrowCompute::arrow_compute_shared)
   else ()
@@ -138,16 +133,14 @@ provide_find_module(c-ares)
 # -- mimalloc ------------------------------------------------------------------
 
 find_package(mimalloc REQUIRED CONFIG)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(mimalloc REQUIRED CONFIG)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(mimalloc REQUIRED CONFIG)")
 dependency_summary("mimalloc" mimalloc "Dependencies")
 
 # -- libsystemd ----------------------------------------------------------------
 
 option(TENZIR_ENABLE_JOURNALD_LOGGING
        "Build with support for native journald log output" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_JOURNALD_LOGGING" TENZIR_ENABLE_JOURNALD_LOGGING
-  "build with support for native journald log output.")
 
 # -- log level -----------------------------------------------------------------
 
@@ -336,8 +329,6 @@ dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson
 option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
-add_feature_info("TENZIR_ENABLE_BUNDLED_SIMDJSON"
-                 TENZIR_ENABLE_BUNDLED_SIMDJSON "use the simdjson submodule.")
 
 unset(_tenzir_bundled_simdjson)
 if (NOT TENZIR_ENABLE_BUNDLED_SIMDJSON)
@@ -392,8 +383,10 @@ if (NOT simdjson_FOUND)
                      "Dependencies")
   # Ensure bundled simdjson includes come before system includes to avoid
   # conflicts with system-installed simdjson headers.
-  target_include_directories(libtenzir SYSTEM BEFORE PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/include>")
+  target_include_directories(
+    libtenzir SYSTEM BEFORE
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/include>"
+  )
 endif ()
 target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
@@ -409,7 +402,8 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
-target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY} ${ARROW_COMPUTE_LIBRARY})
+target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY}
+                                       ${ARROW_COMPUTE_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
@@ -431,9 +425,6 @@ dependency_summary("reproc++" reproc+++ "Dependencies")
 
 # Link against fast_float
 option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_BUNDLED_FASTFLOAT" TENZIR_ENABLE_BUNDLED_FASTFLOAT
-  "use the fast_float submodule.")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
   find_package(FastFloat CONFIG)
 endif ()
@@ -457,8 +448,6 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
-  add_feature_info("TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
-                   "use the pfs submodule.")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()
@@ -522,8 +511,9 @@ endif ()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/config.hpp")
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/allocator_config.hpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp")
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/allocator_config.hpp.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/tenzir/allocator_config.hpp")
 
 if (CMAKE_BUILD_TYPE)
   set(TENZIR_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
