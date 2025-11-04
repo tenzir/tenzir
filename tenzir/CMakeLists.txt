@@ -7,7 +7,7 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE)
     LINKER:--wrap=malloc
     LINKER:--wrap=calloc
     LINKER:--wrap=realloc
-    LINKER:--wrap=realloc_array
+    LINKER:--wrap=reallocarray
     LINKER:--wrap=aligned_alloc
     LINKER:--wrap=malloc_usable_size
     LINKER:--wrap=memalign
