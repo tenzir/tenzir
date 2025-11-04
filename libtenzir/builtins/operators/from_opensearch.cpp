@@ -13,10 +13,12 @@
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/ssl_options.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_from_state.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/async/spsc_buffer.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
@@ -153,8 +155,8 @@ struct opensearch_args {
   }
 };
 
-auto decompress_payload(const http::request& r, diagnostic_handler& dh)
-  -> std::optional<chunk_ptr> {
+auto decompress_payload(const http::request& r,
+                        diagnostic_handler& dh) -> std::optional<chunk_ptr> {
   if (not r.header().has_field("Content-Encoding")) {
     // TODO: Can we take ownership?
     return chunk::copy(r.payload());
@@ -279,15 +281,33 @@ public:
   from_opensearch_operator(opensearch_args args) : args_{std::move(args)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto
+  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
     co_yield {};
     auto slices = std::vector<table_slice>{};
     auto stream = std::optional<caf::typed_stream<std::vector<table_slice>>>{};
     auto [ptr, launch] = ctrl.self().system().spawn_inactive();
+
+    // Query TLS min version from config
+    auto tls_min_version = ssl::tls::any;
+    if (args_.tls.has_value()) {
+      auto& config = ctrl.self().system().config();
+      if (auto* v = caf::get_if<std::string>(&config.content,
+                                             "tenzir.tls.min-version")) {
+        auto version = parse_caf_tls_version(*v);
+        if (version) {
+          tls_min_version = *version;
+        } else {
+          diagnostic::warning(version.error())
+            .note("while parsing TLS configuration for from_opensearch")
+            .emit(ctrl.diagnostics());
+        }
+      }
+    }
+
     auto context
       = ssl::context::enable(args_.tls.has_value())
-          .and_then(ssl::emplace_server(ssl::tls::any))
+          .and_then(ssl::emplace_server(tls_min_version))
           .and_then(ssl::use_private_key_file_if(args_.keyfile.transform(inner),
                                                  ssl::format::pem))
           .and_then(ssl::use_certificate_file_if(
@@ -313,7 +333,7 @@ public:
                   .flat_map([keep_actions = args_.keep_actions,
                              dh = ctrl.shared_diagnostics()](
                               const http::request& r) mutable
-                              -> std::optional<std::vector<table_slice>> {
+                            -> std::optional<std::vector<table_slice>> {
                     if (r.header().path() != "/_bulk") {
                       TENZIR_VERBOSE("unhandled {} {}",
                                      to_string(r.header().method()),
@@ -394,8 +414,8 @@ public:
     }
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -421,8 +441,8 @@ struct plugin final
     return "from_opensearch";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = opensearch_args{};
     args.op = inv.self.get_location();
     auto url_op = std::optional<located<std::string>>{};
