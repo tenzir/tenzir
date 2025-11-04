@@ -340,7 +340,7 @@ class Version final : public Operator<void, table_slice> {
 public:
   auto start(Push<table_slice>& push, AsyncCtx& ctx) -> Task<void> override {
     // TODO: If we would restore, we should not emit the version again...
-    // diagnostic::warning("HELLO from version").emit(ctx);
+    diagnostic::warning("HELLO from version").emit(ctx);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
     TENZIR_INFO("leaving Version::start");
@@ -359,9 +359,7 @@ public:
 
   auto process_task(std::any result, Push<table_slice>& push, AsyncCtx& ctx)
     -> Task<void> override {
-    // static_cast<int*>(static_cast<void*>(&push) - static_cast<void*>(&ctx))
-    //   = 1337;
-    std::abort();
+    // throw std::runtime_error{"oh no"};
     auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
     auto license
       = co_await ctx
@@ -398,7 +396,7 @@ public:
   }
 
 private:
-  size_t remaining_ = 1;
+  size_t remaining_ = 0;
 };
 
 class version_plan final : public plan::operator_base {

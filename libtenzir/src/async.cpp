@@ -153,9 +153,9 @@ auto make_unbounded_channel() -> std::pair<Sender<T>, Receiver<T>> {
 }
 
 /// Convenience wrapper around `folly::coro::AsyncScope`.
-class AsyncScope {
+class BadAsyncScope {
 public:
-  ~AsyncScope() {
+  ~BadAsyncScope() {
     if (needs_join_) {
       TENZIR_ERROR("did not join async scope");
       // This might not work, but we can at least try.
@@ -163,11 +163,11 @@ public:
     }
   }
 
-  AsyncScope() = default;
-  AsyncScope(AsyncScope&&) = delete;
-  auto operator=(AsyncScope&&) -> AsyncScope& = delete;
-  AsyncScope(const AsyncScope&) = delete;
-  auto operator=(const AsyncScope&) -> AsyncScope& = delete;
+  BadAsyncScope() = default;
+  BadAsyncScope(BadAsyncScope&&) = delete;
+  auto operator=(BadAsyncScope&&) -> BadAsyncScope& = delete;
+  BadAsyncScope(const BadAsyncScope&) = delete;
+  auto operator=(const BadAsyncScope&) -> BadAsyncScope& = delete;
 
   // FIXME: This is not safe if the task fails or is cancelled!!
   auto add(Task<void> task) -> Task<void> {
@@ -197,12 +197,14 @@ private:
   folly::coro::CancellableAsyncScope scope_;
 };
 
-/// A convenience wrapper for `folly::result<T>` and `folly::Try<T>`.
+/// The reified result of an asynchronous computation.
+///
+/// Either it produced a value, or it failed, or it was cancelled.
 template <class T>
-class FollyResult {
+class AsyncResult {
 public:
-  FollyResult() = default;
-  ~FollyResult() = default;
+  AsyncResult() = default;
+  ~AsyncResult() = default;
 
   // explicit(false) FollyResult(folly::result<T> value) {
   //   if (value_.hasValue()) {
@@ -210,33 +212,33 @@ public:
   //   }
   // }
 
-  FollyResult(FollyResult<T>&& other) = default;
-  auto operator=(FollyResult<T>&&) -> FollyResult<T>& = default;
-  FollyResult(const FollyResult<T>& other) = default;
-  auto operator=(const FollyResult<T>&) -> FollyResult<T>& = default;
+  AsyncResult(AsyncResult<T>&& other) = default;
+  auto operator=(AsyncResult<T>&&) -> AsyncResult<T>& = default;
+  AsyncResult(const AsyncResult<T>& other) = default;
+  auto operator=(const AsyncResult<T>&) -> AsyncResult<T>& = default;
 
   template <class U>
     requires std::convertible_to<U, T>
-  explicit(false) FollyResult(FollyResult<U> other)
+  explicit(false) AsyncResult(AsyncResult<U> other)
     : value_{other.is_value() ? folly::Try<T>{std::move(other).value()}
                               : folly::Try<T>{std::move(other).exception()}} {
   }
 
   template <class U>
     requires(std::convertible_to<U, T>)
-  explicit(false) FollyResult(U&& value) : value_{std::forward<U>(value)} {
+  explicit(false) AsyncResult(U&& value) : value_{std::forward<U>(value)} {
   }
 
-  explicit(false) FollyResult(folly::exception_wrapper ew)
+  explicit(false) AsyncResult(folly::exception_wrapper ew)
     : value_{std::move(ew)} {
   }
 
-  explicit(false) FollyResult(folly::Try<T> value) : value_{std::move(value)} {
+  explicit(false) AsyncResult(folly::Try<T> value) : value_{std::move(value)} {
   }
 
   template <class U>
     requires(std::convertible_to<U, T>)
-  explicit(false) FollyResult(folly::Try<U> value) {
+  explicit(false) AsyncResult(folly::Try<U> value) {
     if (value.hasValue()) {
       value_.emplace(std::move(value).value());
     } else {
@@ -285,11 +287,11 @@ private:
 /// > exception), the remaining input generators are cancelled and detached;
 /// > beware of use-after-free.
 template <class T>
-class QueueScope {
+class LegacyQueueScope {
 public:
   using Next = std::conditional_t<std::same_as<T, void>, std::monostate, T>;
 
-  ~QueueScope() {
+  ~LegacyQueueScope() {
     if (needs_join_) {
       TENZIR_ERROR("did not join {}", fmt::ptr(this));
     }
@@ -344,6 +346,7 @@ public:
     TENZIR_WARN("adding task to {}", fmt::ptr(this));
     pending_ += 1;
     needs_join_ = true;
+    // FIXME: Make it like above?
     co_await scope_.co_schedule(
       folly::coro::co_invoke([this, gen
                                     = std::move(gen)] mutable -> Task<void> {
@@ -360,7 +363,7 @@ public:
           this);
         while (true) {
           auto result
-            = FollyResult{co_await folly::coro::co_awaitTry(gen.next())};
+            = AsyncResult{co_await folly::coro::co_awaitTry(gen.next())};
           if (result.is_value()) {
             auto next = std::move(result).unwrap();
             if (not next.has_value()) {
@@ -383,7 +386,8 @@ public:
 
   /// Dequeue the next item from the queue.
   ///
-  /// Rethrows inner exceptions. Cancellations are discarded.
+  /// Rethrows inner exceptions. Cancellations of the inner task are discarded.
+  /// Returns `nullopt` if all submitted tasks have finished.
   auto next() -> Task<std::optional<Next>> {
     while (pending_ > 0) {
       TENZIR_WARN("about to dequeue from {} (cancel = {})", fmt::ptr(this),
@@ -437,7 +441,8 @@ public:
   auto join() -> Task<void> {
     auto exception = std::optional<folly::exception_wrapper>{};
     while (true) {
-      auto result = FollyResult{co_await folly::coro::co_awaitTry(next())};
+      // If we are cancelled, then we still need to wait for the inner tasks.
+      auto result = AsyncResult{co_await folly::coro::co_awaitTry(next())};
       if (result.is_value()) {
         auto next = std::move(result).unwrap();
         if (next.has_value()) {
@@ -481,8 +486,286 @@ private:
   size_t pending_ = 0;
   // TODO: Bigger/unbounded queue?
   bool needs_join_ = false;
-  folly::coro::BoundedQueue<std::optional<FollyResult<T>>> queue_{999};
+  folly::coro::BoundedQueue<std::optional<AsyncResult<T>>> queue_{999};
   folly::coro::CancellableAsyncScope scope_;
+};
+
+template <class T>
+struct AsyncHandleState {
+  bool notified = false;
+  Notify notify;
+  AsyncResult<T> value;
+};
+
+/// Handle to an asynchronous, scoped task that was spawned.
+template <class T>
+class AsyncHandle {
+public:
+  /// Wait for the associated task to complete and return its result.
+  ///
+  /// If a call to this function is cancelled, then the underlying task will not
+  /// be joined. May be called at most once.
+  auto join() -> Task<AsyncResult<T>> {
+    TENZIR_ASSERT(state_);
+    TENZIR_ASSERT(not state_->notified);
+    co_await state_->notify.wait();
+    state_->notified = true;
+    co_return std::move(state_->value).unwrap();
+  }
+
+private:
+  friend class AsyncScope;
+
+  explicit AsyncHandle(std::shared_ptr<AsyncHandleState<T>> state)
+    : state_{std::move(state)} {
+  }
+
+  std::shared_ptr<AsyncHandleState<T>> state_;
+};
+
+/// Utility type created by `async_scope`.
+class AsyncScope {
+public:
+  /// Spawn an awaitable, for example a task.
+  ///
+  /// The returned handle can be used to join the awaitable and returns its
+  /// result. When dropped without joining, the awaitable continues running.
+  template <class SemiAwaitable>
+  auto spawn(SemiAwaitable&& awaitable)
+    -> AsyncHandle<folly::coro::semi_await_result_t<SemiAwaitable>> {
+    using Result = folly::coro::semi_await_result_t<SemiAwaitable>;
+    auto state = std::make_shared<AsyncHandleState<Result>>();
+    scope_.add(
+      folly::coro::co_withExecutor(
+        executor_,
+        folly::coro::co_invoke([state, awaitable = std::forward<SemiAwaitable>(
+                                         awaitable)] mutable -> Task<void> {
+          state->value
+            = co_await folly::coro::co_awaitTry(std::move(awaitable));
+          state->notify.notify_one();
+        })),
+      std::nullopt, FOLLY_ASYNC_STACK_RETURN_ADDRESS());
+    return AsyncHandle{std::move(state)};
+  }
+
+  /// Spawn a function.
+  template <class F>
+  auto spawn(F&& f)
+    -> AsyncHandle<folly::coro::semi_await_result_t<std::invoke_result_t<F>>> {
+    // We need to `co_invoke` to ensure that the function itself is kept alive.
+    return (*this)(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  /// Cancel all remaining tasks.
+  auto cancel() {
+    // TODO: Exact behavior?
+    scope_.requestCancellation();
+  }
+
+private:
+  AsyncScope(const AsyncScope&) = delete;
+  auto operator=(const AsyncScope&) -> AsyncScope& = delete;
+  AsyncScope(AsyncScope&&) = delete;
+  auto operator=(AsyncScope&&) -> AsyncScope& = delete;
+
+  AsyncScope(folly::ExecutorKeepAlive<> executor,
+             folly::coro::CancellableAsyncScope& scope)
+    : executor_{std::move(executor)}, scope_{scope} {
+  }
+  ~AsyncScope() = default;
+
+  folly::ExecutorKeepAlive<> executor_;
+  folly::coro::CancellableAsyncScope& scope_;
+
+  template <class F>
+    requires std::invocable<F, AsyncScope&>
+  friend auto async_scope(F&& f) -> Task<
+    folly::coro::semi_await_result_t<std::invoke_result_t<F, AsyncScope&>>>;
+};
+
+/// Provides a scope that can spawn tasks for structured concurrency.
+///
+/// The given function and all tasks spawned may access external objects as long
+/// as they outlive this function call. It will only return once all spawned
+/// tasks have been completed. If the function fails or is cancelled, then all
+/// spawned tasks will be cancelled.
+///
+/// Fun fact: This function is one of the very few things that would not be
+/// possible in Rust, since implementing it requires async cancellation.
+template <class F>
+  requires std::invocable<F, AsyncScope&>
+auto async_scope(F&& f) -> Task<
+  folly::coro::semi_await_result_t<std::invoke_result_t<F, AsyncScope&>>> {
+  auto scope = folly::coro::CancellableAsyncScope{folly::CancellationToken{
+    co_await folly::coro::co_current_cancellation_token}};
+  auto spawn = AsyncScope{co_await folly::coro::co_current_executor, scope};
+  // For memory safety, after calling the user-provided function, we must under
+  // all circumstances reach the cleanup and join all spawned tasks, since they
+  // may reference objects that might be destroyed once this function returns.
+  auto result = AsyncResult{
+    co_await folly::coro::co_awaitTry(std::invoke(std::forward<F>(f), spawn))};
+  // We only cancel the jobs if the given function failed or was cancelled.
+  if (not result.is_value()) {
+    scope.requestCancellation();
+  }
+  // Provide a custom cancellation token to ensure that cancellation doesn't
+  // abort the join.
+  auto joined = AsyncResult{co_await folly::coro::co_awaitTry(
+    folly::coro::co_withCancellation({}, scope.joinAsync()))};
+  // If the join fails, then we cannot continue as that might compromise memory
+  // safety due to lifetime issues. However, because we prevent cancellation and
+  // do not ask the scope itself to store and rethrow exceptions, this should
+  // never happen. But just in case, we check and abort.
+  if (not joined.is_value()) {
+    TENZIR_ERROR("aborting because async scope join failed");
+    std::terminate();
+  }
+  /// Now return the result of the user-provided function.
+  co_return std::move(result).unwrap();
+}
+
+// TODO: Backpressure?
+template <class T>
+class QueueScope {
+public:
+  template <class U>
+  auto activate(Task<U> task) -> Task<U> {
+    co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
+      // We sneakily store the reference to the spawner here, making sure that
+      // we reset it once we leave the async scope, as required for correctness.
+      TENZIR_ASSERT(not scope_);
+      scope_ = &scope;
+      auto guard = detail::scope_guard{[&] noexcept {
+        scope_ = nullptr;
+      }};
+      co_return co_await std::move(task);
+      // TODO: What about the queue at this point?
+    });
+  }
+
+  template <class F>
+  auto activate(F&& f) -> Task<void> {
+    // TODO: Fix typing.
+    return activate(folly::coro::co_invoke(std::forward<F>(f)));
+  }
+
+  // TODO: Signature?
+  // TODO: Thread-safety?
+  template <class U>
+  void spawn(Task<U> task) {
+    TENZIR_ASSERT(scope_);
+    scope_->spawn(folly::coro::co_invoke(
+      [this, task = std::move(task)] mutable -> Task<void> {
+        queue_.enqueue(co_await folly::coro::co_awaitTry(std::move(task)));
+      }));
+    remaining_ += 1;
+  }
+
+  template <class F>
+    requires std::invocable<F>
+  void spawn(F&& f) {
+    TENZIR_ASSERT(scope_);
+    scope_->spawn(folly::coro::co_invoke(
+      [this, f = std::forward<F>(f)] mutable -> Task<void> {
+        queue_.enqueue(
+          co_await folly::coro::co_awaitTry(std::invoke(std::move(f))));
+      }));
+    remaining_ += 1;
+  }
+
+  /// Cancel all remaining tasks.
+  void cancel() {
+    // TODO: Exact behavior.
+    TENZIR_ASSERT(scope_);
+    scope_->cancel();
+  }
+
+  using Next = std::conditional_t<std::is_same_v<T, void>, std::monostate, T>;
+
+  /// Retrieve the next task result or return `nullopt` if none remain.
+  ///
+  /// This function can be called while the scope is active, but also when it
+  /// already got deactivated. If a task failed, we rethrow theexception.
+  /// TODO: What if it got cancelled?
+  auto next() -> Task<std::optional<Next>> {
+    if (remaining_ == 0) {
+      co_return {};
+    }
+    auto result = co_await queue_.dequeue();
+    remaining_ -= 1;
+    if constexpr (std::same_as<T, void>) {
+      std::move(result).unwrap();
+      co_return std::monostate{};
+    } else {
+      co_return std::move(result).unwrap();
+    }
+  }
+
+private:
+  std::atomic<size_t> remaining_ = 0;
+  folly::coro::UnboundedQueue<AsyncResult<T>> queue_;
+  AsyncScope* scope_ = nullptr;
+};
+
+template <class T>
+class AsyncScope2 {
+public:
+  /// Activate the scope for the duration of the inner task.
+  ///
+  /// You can only add tasks to scopes that are active. This function will only
+  /// return once all submitted tasks have finished. Thus, your tasks may access
+  /// external objects that outlive the function call (but not any others).
+  template <class U>
+  auto activate(Task<U> task) -> Task<U> {
+    TENZIR_ASSERT(not active_);
+    active_ = true;
+    auto result
+      = AsyncResult{co_await folly::coro::co_awaitTry(std::move(task))};
+    // We only cancel the jobs if the task failed or was cancelled.
+    if (not result.is_value()) {
+      queue_.cancel();
+    }
+    // TODO: Can this fail or be cancelled?
+    // For memory safety, we need to ensure that the joining is not cancelled.
+    // Hence, we construct a new cancellation token. We also use `co_awaitTry`
+    // because `.join()` rethrows exceptions after it's done.
+    auto join = AsyncResult{co_await folly::coro::co_awaitTry(
+      folly::coro::co_withCancellation({}, queue_.join()))};
+    active_ = false;
+    // Prefer the error from the actual task because that came earlier.
+    if (not result.is_value()) {
+      co_yield folly::coro::co_error(
+        std::move(result).exception_or_cancelled());
+    }
+    if (not join.is_value()) {
+      // TODO: We assume that the actual joining succeeded but a submitted task
+      // failed. The cancellation of inner tasks is ignored so we know that it
+      // must be an exception.
+      co_yield folly::coro::co_error(std::move(join).exception());
+    }
+    co_return std::move(result).unwrap();
+  }
+
+  template <class U>
+  auto add(Task<U> task) -> Task<void> {
+    TENZIR_ASSERT(active_);
+    return queue_.add(std::move(task));
+  }
+
+  template <class U>
+  auto add(AsyncGenerator<U> task) -> Task<void> {
+    TENZIR_ASSERT(active_);
+    return queue_.add(std::move(task));
+  }
+
+  auto next() -> Task<std::optional<T>> {
+    TENZIR_ASSERT(active_);
+    return queue_.next();
+  }
+
+private:
+  bool active_ = false;
+  LegacyQueueScope<T> queue_;
 };
 
 template <class T>
@@ -518,17 +801,23 @@ public:
       ctx_{sys, dh} {
   }
 
-  auto run_to_completion() -> Task<void> {
+  auto run_to_completion() && -> Task<void> {
+    // Immediately check for cancellation and allow rescheduling.
+    return queue_.activate(run());
+  }
+
+private:
+  auto run() -> Task<void> {
     TENZIR_INFO("entering run loop of {}", typeid(*op_).name());
-    co_await folly::coro::co_scope_exit(
-      [](Runner* self) -> Task<void> {
-        TENZIR_WARN("shutting down operator {} with {} pending",
-                    typeid(*self->op_).name(), self->queue_.pending());
-        // TODO: Can we always do this here?
-        co_await self->queue_.cancel_and_join();
-        TENZIR_WARN("shutdown done for {}", typeid(*self->op_).name());
-      },
-      this);
+    // co_await folly::coro::co_scope_exit(
+    //   [](Runner* self) -> Task<void> {
+    //     TENZIR_WARN("shutting down operator {} with {} pending",
+    //                 typeid(*self->op_).name(), self->queue_.pending());
+    //     // TODO: Can we always do this here?
+    //     co_await self->queue_.cancel_and_join();
+    //     TENZIR_WARN("shutdown done for {}", typeid(*self->op_).name());
+    //   },
+    //   this);
     try {
       TENZIR_INFO("-> pre start");
       if constexpr (std::same_as<Output, void>) {
@@ -538,15 +827,16 @@ public:
         co_await op_->start(push, ctx_);
       }
       TENZIR_INFO("-> post start");
-      co_await queue_.add(op_->await_task());
-      co_await queue_.add(pull_upstream_());
-      co_await queue_.add(from_control_.receive());
+      queue_.spawn(op_->await_task());
+      queue_.spawn(pull_upstream_());
+      queue_.spawn(from_control_.receive());
       while (not got_shutdown_request_) {
         co_await folly::coro::co_safe_point;
         co_await tick();
       }
     } catch (folly::OperationCancelled) {
       TENZIR_VERBOSE("shutting down operator after cancellation");
+      throw;
     } catch (std::exception& e) {
       TENZIR_ERROR("shutting down operator after uncaught exception: {}",
                    e.what());
@@ -555,9 +845,9 @@ public:
       TENZIR_ERROR("shutting down operator after uncaught exception");
       throw;
     }
+    queue_.cancel();
   }
 
-private:
   auto tick() -> Task<void> {
     ticks_ += 1;
     TENZIR_INFO("tick {} in {}", ticks_, typeid(*op_).name());
@@ -589,7 +879,7 @@ private:
     if (op_->state() == OperatorState::done) {
       co_await handle_done();
     } else {
-      co_await queue_.add(op_->await_task());
+      queue_.spawn(op_->await_task());
     }
     TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
   }
@@ -634,7 +924,7 @@ private:
         }
         TENZIR_UNREACHABLE();
       });
-    co_await queue_.add(pull_upstream_());
+    queue_.spawn(pull_upstream_());
   }
 
   auto process(FromControl message) -> Task<void> {
@@ -650,7 +940,7 @@ private:
         got_shutdown_request_ = true;
         co_return;
       });
-    co_await queue_.add(from_control_.receive());
+    queue_.spawn(from_control_.receive());
   }
 
   auto handle_done() -> Task<void> {
@@ -697,7 +987,6 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
-  // Immediately check for cancellation and allow rescheduling.
   co_await folly::coro::co_safe_point;
   co_await Runner<Input, Output>{
     std::move(op),
@@ -712,37 +1001,46 @@ auto run_operator(Box<Operator<Input, Output>> op,
 }
 
 template <class Input, class Output>
-auto run_chain(OperatorChain<Input, Output> chain,
-               Box<Pull<OperatorMsg<Input>>> input,
-               Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys,
-               diagnostic_handler& dh) -> Task<void> {
-  TENZIR_WARN("beginning chain setup");
-  auto from_control = std::vector<Sender<FromControl>>{};
-  auto&& [operator_scope] = co_await folly::coro::co_scope_exit(
-    [](Box<QueueScope<void>> queue) -> Task<void> {
-      co_await queue->cancel_and_join();
-    },
-    Box<QueueScope<void>>{std::in_place});
-  auto&& [receiver_scope] = co_await folly::coro::co_scope_exit(
-    [](Box<QueueScope<ToControl>> queue) -> Task<void> {
-      co_await queue->cancel_and_join();
-    },
-    Box<QueueScope<ToControl>>{std::in_place});
-  auto operators = std::move(chain).unwrap();
-  auto next_input
-    = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
-              Box<Pull<OperatorMsg<table_slice>>>>{std::move(input)};
-  // TODO: Polish this.
-  for (auto& op : operators) {
-    auto last = &op == &operators.back();
-    co_await match(
-      op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+class ChainRunner {
+public:
+  ChainRunner(OperatorChain<Input, Output> chain,
+              Box<Pull<OperatorMsg<Input>>> input,
+              Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys,
+              diagnostic_handler& dh)
+    : chain_{std::move(chain)},
+      input_{std::move(input)},
+      output_{std::move(output)},
+      sys_{sys},
+      dh_{dh} {
+  }
+
+  auto run_to_completion() && -> Task<void> {
+    return operator_queue_.activate([&] {
+      return receiver_queue_.activate([&] {
+        return run();
+      });
+    });
+  }
+
+private:
+  auto run() -> Task<void> {
+    TENZIR_WARN("beginning chain setup");
+    auto from_control = std::vector<Sender<FromControl>>{};
+    auto operators = std::move(chain_).unwrap();
+    auto next_input
+      = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
+                Box<Pull<OperatorMsg<table_slice>>>>{std::move(input_)};
+    // TODO: Polish this.
+    for (auto& op : operators) {
+      auto last = &op == &operators.back();
+      match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
+        TENZIR_INFO("got {}", typeid(*op).name());
         auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
         auto [output_sender, output_receiver] = make_op_channel<Out>(999);
         // TODO: This is a horrible hack.
         if (last) {
           if constexpr (std::same_as<Out, Output>) {
-            output_sender = std::move(output);
+            output_sender = std::move(output_);
           } else {
             TENZIR_UNREACHABLE();
           }
@@ -756,64 +1054,90 @@ auto run_chain(OperatorChain<Input, Output> chain,
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
-                                 std::move(to_control_sender), sys, dh);
-        co_await operator_scope->add(std::move(task));
-        co_await receiver_scope->add(
-          std::move(to_control_receiver).into_generator());
+                                 std::move(to_control_sender), sys_, dh_);
+        TENZIR_INFO("spawning operator task");
+        operator_queue_.spawn(std::move(task));
+        TENZIR_INFO("inserting control receiver task");
+        // FIXME: Need to receive more then once. Async gen?
+        receiver_queue_.spawn(
+          [this, to_control_receiver = std::move(to_control_receiver)](
+            this auto&& self) -> Task<ToControl> {
+            auto result = co_await to_control_receiver.receive();
+            // TODO: This might be unsafe, and also just a bad idea.
+            receiver_queue_.spawn(folly::coro::co_invoke(std::move(self)));
+            co_return result;
+          });
+        TENZIR_INFO("done with operator");
       });
-  }
-  auto test_immediate_cancellation = false;
-  if (test_immediate_cancellation) {
-    operator_scope->cancel();
-  }
-  TENZIR_WARN("waiting for all run tasks to finish");
-  // TODO: Or do we want to continue listening for control responses during
-  // shutdown? That would require some additional coordination.
-  auto remaining = operators.size();
-  auto&& [combined_scope] = co_await folly::coro::co_scope_exit(
-    [](Box<QueueScope<std::optional<ToControl>>> queue) -> Task<void> {
-      co_await queue->cancel_and_join();
-    },
-    Box<QueueScope<std::optional<ToControl>>>{std::in_place});
-  co_await combined_scope->add(receiver_scope->next());
-  co_await combined_scope->add(
-    folly::coro::co_invoke([&] -> Task<std::nullopt_t> {
-      co_await operator_scope->next();
-      co_return std::nullopt;
-    }));
-  while (remaining > 0) {
-    TENZIR_WARN("waiting for next info in chain runner");
-    auto next = co_await combined_scope->next();
-    // We should never be done here...
-    // TODO: Cancellation?
-    TENZIR_ASSERT(next);
-    TENZIR_WARN("got next: {}", *next);
-    if (next->has_value()) {
-      // Control message.
-      switch (next->value()) {
-        case ToControl::ready_for_shutdown:
-          remaining -= 1;
-          break;
-        case ToControl::no_more_input:
-          break;
-      }
-      co_await combined_scope->add(receiver_scope->next());
-    } else {
-      // Operator terminated. But we didn't send shutdown signal?
-      TENZIR_ASSERT(false, "oh no");
     }
+    auto test_immediate_cancellation = false;
+    if (test_immediate_cancellation) {
+      operator_queue_.cancel();
+    }
+    TENZIR_WARN("waiting for all run operators to finish");
+    // TODO: Or do we want to continue listening for control responses during
+    // shutdown? That would require some additional coordination.
+    auto remaining = operators.size();
+    // TODO: Refactor?
+    auto combined_queue = QueueScope<std::optional<ToControl>>{};
+    co_await combined_queue.activate([&] -> Task<void> {
+      combined_queue.spawn(receiver_queue_.next());
+      combined_queue.spawn(folly::coro::co_invoke([&] -> Task<std::nullopt_t> {
+        co_await operator_queue_.next();
+        co_return std::nullopt;
+      }));
+      while (remaining > 0) {
+        TENZIR_WARN("waiting for next info in chain runner");
+        auto next = co_await combined_queue.next();
+        // We should never be done here...
+        // TODO: Cancellation?
+        TENZIR_ASSERT(next);
+        TENZIR_WARN("got next: {}", *next);
+        if (next->has_value()) {
+          // Control message.
+          switch (next->value()) {
+            case ToControl::ready_for_shutdown:
+              remaining -= 1;
+              break;
+            case ToControl::no_more_input:
+              break;
+          }
+          combined_queue.spawn(receiver_queue_.next());
+        } else {
+          // Operator terminated. But we didn't send shutdown signal?
+          TENZIR_ASSERT(false, "oh no");
+        }
+      }
+      TENZIR_WARN("sending shutdown to all operators");
+      for (auto& sender : from_control) {
+        sender.send(Shutdown{});
+      }
+      TENZIR_WARN("cancelling combined and receiver");
+      combined_queue.cancel();
+      receiver_queue_.cancel();
+    });
   }
-  TENZIR_WARN("sending shutdown to all operators");
-  for (auto& sender : from_control) {
-    sender.send(Shutdown{});
+
+  OperatorChain<Input, Output> chain_;
+  Box<Pull<OperatorMsg<Input>>> input_;
+  Box<Push<OperatorMsg<Output>>> output_;
+  caf::actor_system& sys_;
+  diagnostic_handler& dh_;
+
+  QueueScope<void> operator_queue_;
+  QueueScope<ToControl> receiver_queue_;
+};
+
+template <class Input, class Output>
+auto run_chain(OperatorChain<Input, Output> chain,
+               Box<Pull<OperatorMsg<Input>>> input,
+               Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys,
+               diagnostic_handler& dh) -> Task<void> {
+  co_await folly::coro::co_safe_point;
+  co_await ChainRunner{
+    std::move(chain), std::move(input), std::move(output), sys, dh,
   }
-  TENZIR_WARN("joining combined scope");
-  co_await combined_scope->cancel_and_join();
-  TENZIR_WARN("joining receivers");
-  co_await receiver_scope->cancel_and_join();
-  TENZIR_WARN("joining operators");
-  co_await operator_scope->join();
-  TENZIR_WARN("exiting run");
+    .run_to_completion();
 }
 
 template <class T>
@@ -972,6 +1296,9 @@ auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>> {
   auto shared = std::make_shared<OpChannel<T>>(limit);
   return {OpPush<T>{shared}, OpPull<T>{shared}};
 }
+
+template auto make_op_channel<void>(size_t limit)
+  -> PushPull<OperatorMsg<void>>;
 
 auto run_pipeline(OperatorChain<void, void> pipeline,
                   Box<Pull<OperatorMsg<void>>> input,

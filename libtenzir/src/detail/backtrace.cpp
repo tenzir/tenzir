@@ -93,7 +93,7 @@ void print_async_stacktrace(std::ostream& out) {
   auto frame = root->getTopFrame();
   while (frame) {
     auto f = boost::stacktrace::frame{frame->getReturnAddress()};
-    out << detail::format_frame(f) << '\n';
+    out << detail::format_async_frame(f) << '\n';
     frame = frame->getParentFrame();
   }
 }
