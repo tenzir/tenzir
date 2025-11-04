@@ -22,8 +22,10 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/version.hpp>
 #include <caf/actor_from_state.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/anon_mail.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <openssl/ssl.h>
 
 #include <chrono>
 
@@ -70,6 +72,8 @@ struct saver_args : ssl_options {
   located<int64_t> max_retry_count = located{int64_t{10}, location::unknown};
   located<duration> retry_delay
     = located{std::chrono::seconds{30}, location::unknown};
+  std::string tls_min_version;
+  std::string tls_ciphers;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x).fields(
@@ -77,7 +81,9 @@ struct saver_args : ssl_options {
       f.field("hostname", x.hostname), f.field("service", x.service),
       f.field("listen", x.listen),
       f.field("max_retry_delay", x.max_retry_count),
-      f.field("retry_timeout", x.retry_delay));
+      f.field("retry_timeout", x.retry_delay),
+      f.field("tls_min_version", x.tls_min_version),
+      f.field("tls_ciphers", x.tls_ciphers));
   }
 };
 
@@ -171,7 +177,9 @@ private:
          .keyfile = keyfile,
          .skip_peer_verification = args_.skip_peer_verification.has_value(),
          .hostname = args_.hostname,
-         .service = args_.service};
+         .service = args_.service,
+         .tls_min_version = args_.tls_min_version,
+         .tls_ciphers = args_.tls_ciphers};
     current_retry_attempt_ = 0;
     is_connected_ = false;
     connection_rp_ = self_->make_response_promise<void>();
@@ -210,6 +218,28 @@ private:
     if (params.tls) {
       ssl_ctx_.emplace(boost::asio::ssl::context::tls_client);
       ssl_ctx_->set_default_verify_paths();
+
+      // Apply TLS min version from config
+      if (not params.tls_min_version.empty()) {
+        auto min_version = parse_openssl_tls_version(params.tls_min_version);
+        if (min_version) {
+          auto* native_ctx = ssl_ctx_->native_handle();
+          SSL_CTX_set_min_proto_version(native_ctx, *min_version);
+        } else {
+          TENZIR_WARN("{}", min_version.error());
+        }
+      }
+
+      // Apply cipher list from config
+      if (not params.tls_ciphers.empty()) {
+        auto* native_ctx = ssl_ctx_->native_handle();
+        if (SSL_CTX_set_cipher_list(native_ctx, params.tls_ciphers.c_str())
+            == 0) {
+          TENZIR_WARN("failed to set TLS cipher list: '{}'",
+                      params.tls_ciphers);
+        }
+      }
+
       auto ec = boost::system::error_code{};
       if (params.skip_peer_verification) {
         ssl_ctx_->set_verify_mode(boost::asio::ssl::verify_none);
@@ -407,6 +437,8 @@ private:
     bool skip_peer_verification;
     std::string hostname;
     std::string service;
+    std::string tls_min_version;
+    std::string tls_ciphers;
   };
 
 public:
@@ -482,6 +514,29 @@ public:
             = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
           if (not certfile.empty()) {
             ssl_ctx_.emplace(boost::asio::ssl::context::tls_server);
+
+            // Apply TLS min version from config
+            if (not args_.tls_min_version.empty()) {
+              auto min_version
+                = parse_openssl_tls_version(args_.tls_min_version);
+              if (min_version) {
+                auto* native_ctx = ssl_ctx_->native_handle();
+                SSL_CTX_set_min_proto_version(native_ctx, *min_version);
+              } else {
+                TENZIR_WARN("{}", min_version.error());
+              }
+            }
+
+            // Apply cipher list from config
+            if (not args_.tls_ciphers.empty()) {
+              auto* native_ctx = ssl_ctx_->native_handle();
+              if (SSL_CTX_set_cipher_list(native_ctx, args_.tls_ciphers.c_str())
+                  == 0) {
+                TENZIR_WARN("failed to set TLS cipher list: '{}'",
+                            args_.tls_ciphers);
+              }
+            }
+
             ssl_ctx_->use_certificate_chain_file(certfile);
             ssl_ctx_->use_private_key_file(keyfile,
                                            boost::asio::ssl::context::pem);
@@ -605,8 +660,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> bytes, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> bytes,
+             operator_control_plane& ctrl) const -> generator<std::monostate> {
     if (args_.get_tls().inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
@@ -641,10 +696,20 @@ public:
         {"bytes_written", uint64_type{}},
       },
     });
-    auto tcp_bridge
-      = ctrl.self().spawn<caf::linked>(caf::actor_from_state<class tcp_bridge>,
-                                       std::move(tcp_metrics),
-                                       ctrl.shared_diagnostics(), args_);
+    // Query TLS config from node configuration
+    auto args_with_config = args_;
+    auto& config = ctrl.self().system().config();
+    if (auto* v
+        = caf::get_if<std::string>(&config.content, "tenzir.tls.min-version")) {
+      args_with_config.tls_min_version = *v;
+    }
+    if (auto* v
+        = caf::get_if<std::string>(&config.content, "tenzir.tls.ciphers")) {
+      args_with_config.tls_ciphers = *v;
+    }
+    auto tcp_bridge = ctrl.self().spawn<caf::linked>(
+      caf::actor_from_state<class tcp_bridge>, std::move(tcp_metrics),
+      ctrl.shared_diagnostics(), args_with_config);
     if (not args_.listen) {
       ctrl.self()
         .mail(atom::connect_v)
@@ -718,8 +783,8 @@ public:
     return "save_tcp";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -737,8 +802,8 @@ private:
 };
 
 class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     args.tls = located{false, inv.self.get_location()};
     auto parser = argument_parser2::operator_(name());
