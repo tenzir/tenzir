@@ -19,7 +19,6 @@ let
       arrow-cpp,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
-      azure-sdk-for-cpp,
       libbacktrace,
       clickhouse-cpp,
       empty-libgcc_eh,
@@ -236,9 +235,6 @@ let
               })
               llhttp
               c-ares
-            ]
-            ++ lib.optionals isStatic [
-              azure-sdk-for-cpp
             ]
             ++ lib.optionals stdenv.isLinux [
               pfs
