@@ -509,16 +509,6 @@ jobs:
           #    is only needed inside of containerized jobs.
           #    -> https://github.com/tailscale/tailscale/issues/11039
           tailscaled-args: --tun=userspace-networking --state=$HOME/tailscaled.state --statedir=$HOME/var/lib/tailscale
-      - name: Publish tenzir.spdx.json to GitHub Release
-        if: ${{ github.event_name == 'release' && matrix.tenzir.name == 'macOS' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "tenzir.spdx.json"
-          asset_name: "tenzir.spdx.json"
-          asset_content_type: text/plain
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -742,11 +732,13 @@ jobs:
       - name: Build sdist
         working-directory: python
         run: |
-          uv build --sdist --package tenzir-common --package tenzir
+          uv build --sdist --package tenzir-common
+          uv build --sdist --package tenzir
       - name: Build wheel for validation
         working-directory: python
         run: |
-          uv build --wheel --package tenzir-common --package tenzir
+          uv build --wheel --package tenzir-common
+          uv build --wheel --package tenzir
       - name: Validate installed wheel exposes working tenzir binary
         working-directory: python
         run: |
