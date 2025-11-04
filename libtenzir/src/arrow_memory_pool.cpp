@@ -102,11 +102,11 @@ public:
   }
 
   auto total_bytes_allocated() const -> int64_t override {
-    return memory::arrow_allocator().stats().bytes_total;
+    return memory::arrow_allocator().stats().bytes_cumulative;
   }
 
   auto max_memory() const -> int64_t override {
-    return memory::arrow_allocator().stats().bytes_max;
+    return memory::arrow_allocator().stats().bytes_peak;
   }
 
   auto num_allocations() const -> int64_t override {

@@ -27,24 +27,23 @@ struct stats {
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> bytes_current;
   alignas(std::hardware_destructive_interference_size)
-    std::atomic<std::int64_t> bytes_total;
+    std::atomic<std::int64_t> bytes_cumulative;
   alignas(std::hardware_destructive_interference_size)
-    std::atomic<std::int64_t> bytes_max;
+    std::atomic<std::int64_t> bytes_peak;
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> num_calls;
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> allocations_current;
   alignas(std::hardware_destructive_interference_size)
-    std::atomic<std::int64_t> allocations_total;
+    std::atomic<std::int64_t> allocations_cumulative;
   alignas(std::hardware_destructive_interference_size)
-    std::atomic<std::int64_t> allocations_max;
+    std::atomic<std::int64_t> allocations_peak;
 
   auto note_allocation(std::int64_t add) noexcept -> void;
   auto note_reallocation(bool new_location, std::int64_t old_size,
                          std::int64_t new_size) noexcept -> void;
   auto note_deallocation(std::int64_t remove) noexcept -> void;
   auto update_max_bytes(std::int64_t new_usage) noexcept -> void;
-  auto add_allocation() noexcept -> void;
 };
 
 enum class backend {

@@ -34,8 +34,9 @@ auto make_from(const memory::stats& stats) -> record {
   bytes.reserve(3);
   bytes.try_emplace("current",
                     stats.bytes_current.load(std::memory_order_relaxed));
-  bytes.try_emplace("max", stats.bytes_max.load(std::memory_order_relaxed));
-  bytes.try_emplace("total", stats.bytes_total.load(std::memory_order_relaxed));
+  bytes.try_emplace("max", stats.bytes_peak.load(std::memory_order_relaxed));
+  bytes.try_emplace("cumulative",
+                    stats.bytes_cumulative.load(std::memory_order_relaxed));
   const auto [alloc_it, alloc_success]
     = result.try_emplace("allocations", record{});
   TENZIR_ASSERT_EXPENSIVE(alloc_success);
@@ -44,9 +45,9 @@ auto make_from(const memory::stats& stats) -> record {
   allocations.try_emplace(
     "current", stats.allocations_current.load(std::memory_order_relaxed));
   allocations.try_emplace(
-    "max", stats.allocations_max.load(std::memory_order_relaxed));
+    "peak", stats.allocations_peak.load(std::memory_order_relaxed));
   allocations.try_emplace(
-    "total", stats.allocations_total.load(std::memory_order_relaxed));
+    "total", stats.allocations_cumulative.load(std::memory_order_relaxed));
   return result;
 };
 
@@ -65,8 +66,11 @@ auto make_process_statistics() -> record {
       result.try_emplace(key, caf::none);
     }
   };
-  assign_optional("peak_bytes", process.peak_mem);
-  assign_optional("process_bytes", process.rsize);
+  // peak mem is in kb
+  assign_optional("peak_bytes", process.peak_mem.transform([](const auto v) {
+    return v * 1000;
+  }));
+  assign_optional("current_bytes", process.rsize);
   assign_optional("swap_bytes", process.swap);
   return result;
 }
@@ -164,8 +168,8 @@ public:
   auto metric_layout() const -> record_type override {
     const auto stats = record_type{
       {"current", int64_type{}},
-      {"max", int64_type{}},
-      {"total", int64_type{}},
+      {"peak", int64_type{}},
+      {"cumulative", int64_type{}},
     };
     const auto bytes_and_allocations = record_type{
       {"bytes", stats},

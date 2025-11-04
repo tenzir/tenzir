@@ -45,26 +45,22 @@ auto __real_aligned_alloc(size_t, size_t) -> void*;
 namespace tenzir::memory {
 
 auto stats::update_max_bytes(std::int64_t new_usage) noexcept -> void {
-  auto old_max = bytes_max.load();
+  auto old_max = bytes_peak.load();
   while (old_max < new_usage
-         && ! bytes_max.compare_exchange_weak(old_max, new_usage)) {
-  }
-}
-
-auto stats::add_allocation() noexcept -> void {
-  allocations_total.fetch_add(1, std::memory_order_relaxed);
-  auto new_count
-    = allocations_current.fetch_add(1, std::memory_order_relaxed) + 1;
-  auto old_max = allocations_max.load();
-  while (old_max < new_count
-         && ! allocations_max.compare_exchange_weak(old_max, new_count)) {
+         && ! bytes_peak.compare_exchange_weak(old_max, new_usage)) {
   }
 }
 
 auto stats::note_allocation(std::int64_t add) noexcept -> void {
-  bytes_total.fetch_add(add, std::memory_order_relaxed);
+  bytes_cumulative.fetch_add(add, std::memory_order_relaxed);
   num_calls.fetch_add(1, std::memory_order_relaxed);
-  add_allocation();
+  allocations_cumulative.fetch_add(1, std::memory_order_relaxed);
+  auto new_count
+    = allocations_current.fetch_add(1, std::memory_order_relaxed) + 1;
+  auto old_max = allocations_peak.load();
+  while (old_max < new_count
+         && ! allocations_peak.compare_exchange_weak(old_max, new_count)) {
+  }
   const auto previous_current_usage
     = bytes_current.fetch_add(add, std::memory_order_relaxed);
   const auto new_current_usage = previous_current_usage + add;
