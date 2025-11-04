@@ -27,9 +27,11 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/version.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/anon_mail.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
+#include <openssl/ssl.h>
 
 #include <algorithm>
 #include <iterator>
@@ -175,8 +177,8 @@ public:
     return "internal-load-tcp-source-bytes";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -221,8 +223,9 @@ public:
     }
   }
 
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
+  auto
+  operator()(generator<Elements> input,
+             operator_control_plane& ctrl) const -> generator<std::monostate> {
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
     const auto peer = ast::constant{
@@ -271,8 +274,8 @@ public:
                        operator_type_name<Elements>());
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -363,8 +366,8 @@ struct connection_manager_state {
     uint64_t bytes_read = {};
     caf::disposable next_emit_metrics = {};
 
-    auto emit_metrics(connection_manager_actor<Elements>::pointer self)
-      -> void {
+    auto
+    emit_metrics(connection_manager_actor<Elements>::pointer self) -> void {
       auto metric = record{
         {"timestamp", time{time::clock::now()}},
         {"handle", fmt::to_string(socket->native_handle())},
@@ -468,8 +471,8 @@ struct connection_manager_state {
   connection_manager_state(connection_manager_state&&) = delete;
   auto operator=(const connection_manager_state&)
     -> connection_manager_state& = delete;
-  auto operator=(connection_manager_state&&)
-    -> connection_manager_state& = delete;
+  auto
+  operator=(connection_manager_state&&) -> connection_manager_state& = delete;
 
   ~connection_manager_state() noexcept {
     io_ctx->stop();
@@ -580,6 +583,34 @@ struct connection_manager_state {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
+
+      // Apply TLS min version from config
+      auto& config = self->system().config();
+      if (auto* v = caf::get_if<std::string>(&config.content,
+                                             "tenzir.tls.min-version")) {
+        auto min_version = parse_openssl_tls_version(*v);
+        if (min_version) {
+          auto* native_ctx = connection->ssl_ctx->native_handle();
+          SSL_CTX_set_min_proto_version(native_ctx, *min_version);
+        } else {
+          diagnostic::warning(min_version.error())
+            .note("while configuring TLS for load_tcp")
+            .emit(diagnostics);
+        }
+      }
+
+      // Apply cipher list from config
+      if (auto* v
+          = caf::get_if<std::string>(&config.content, "tenzir.tls.ciphers")) {
+        if (not v->empty()) {
+          auto* native_ctx = connection->ssl_ctx->native_handle();
+          if (SSL_CTX_set_cipher_list(native_ctx, v->c_str()) == 0) {
+            diagnostic::warning("failed to set TLS cipher list: '{}'", *v)
+              .emit(diagnostics);
+          }
+        }
+      }
+
       if (args.certfile) {
         if (connection->ssl_ctx->use_certificate_chain_file(
               args.certfile->inner, ec)) {
@@ -603,16 +634,44 @@ struct connection_manager_state {
         }
       }
       if (! args.connect) {
-        // Always set verify_none in listen mode, since we don't have a flag
-        // to request client certificates yet.
-        if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
-                                                 ec)) {
-          diagnostic::warning("{}", ec.message())
-            .note("failed to set verify mode verification")
-            .note("handle `{}`", connection->socket->native_handle())
-            .primary(*args.skip_peer_verification)
-            .emit(diagnostics);
-          return;
+        // Server mode: check if client certificate authentication is enabled
+        if (args.tls_require_client_cert
+            and args.tls_require_client_cert->inner) {
+          // mTLS: Require client certificates
+          if (connection->ssl_ctx->set_verify_mode(
+                boost::asio::ssl::verify_peer
+                  | boost::asio::ssl::verify_fail_if_no_peer_cert,
+                ec)) {
+            diagnostic::warning("{}", ec.message())
+              .note("failed to enable client certificate verification")
+              .note("handle `{}`", connection->socket->native_handle())
+              .primary(*args.tls_require_client_cert)
+              .emit(diagnostics);
+            return;
+          }
+          // Load CA for validating client certificates
+          if (args.tls_client_ca) {
+            if (connection->ssl_ctx->load_verify_file(args.tls_client_ca->inner,
+                                                      ec)) {
+              diagnostic::warning("{}", ec.message())
+                .note("failed to load client CA file `{}`",
+                      args.tls_client_ca->inner)
+                .note("handle `{}`", connection->socket->native_handle())
+                .primary(*args.tls_client_ca)
+                .emit(diagnostics);
+              return;
+            }
+          }
+        } else {
+          // Default: don't verify client certificates
+          if (connection->ssl_ctx->set_verify_mode(
+                boost::asio::ssl::verify_none, ec)) {
+            diagnostic::warning("{}", ec.message())
+              .note("failed to set verify mode")
+              .note("handle `{}`", connection->socket->native_handle())
+              .emit(diagnostics);
+            return;
+          }
         }
       } else if (args.connect && args.skip_peer_verification) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
@@ -822,8 +881,8 @@ auto make_connection_manager(
   std::string definition, const load_tcp_args& args,
   const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
-  bool is_hidden, const node_actor& node)
-  -> connection_manager_actor<Elements>::behavior_type {
+  bool is_hidden,
+  const node_actor& node) -> connection_manager_actor<Elements>::behavior_type {
   self->state().self = self;
   self->state().definition = std::move(definition);
   self->state().args = args;
@@ -922,8 +981,8 @@ public:
     return fmt::format("internal-load-tcp-{}", operator_type_name<Elements>());
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
     if (not args_.pipeline) {
       return {filter, order, this->copy()};
     }
@@ -955,8 +1014,8 @@ public:
     return "load_tcp";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
     auto args = load_tcp_args{};
@@ -1036,8 +1095,8 @@ public:
       }
     }
     if (not args.pipeline) {
-      // If the user does not provide a pipeline, we fall back to just an empty
-      // pipeline, i.e., pass the bytes for all connections through.
+      // If the user does not provide a pipeline, we fall back to just an
+      // empty pipeline, i.e., pass the bytes for all connections through.
       args.pipeline.emplace(pipeline{}, location::unknown);
     }
     if (args.max_buffered_chunks and args.max_buffered_chunks->inner == 0) {
