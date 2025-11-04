@@ -32,17 +32,21 @@ auto make_from(const memory::stats& stats) -> record {
   TENZIR_ASSERT_EXPENSIVE(bytes_success);
   auto& bytes = as<record>(bytes_it->second);
   bytes.reserve(3);
-  bytes.try_emplace("current", stats.bytes_current.load());
-  bytes.try_emplace("max", stats.bytes_max.load());
-  bytes.try_emplace("total", stats.bytes_total.load());
+  bytes.try_emplace("current",
+                    stats.bytes_current.load(std::memory_order_relaxed));
+  bytes.try_emplace("max", stats.bytes_max.load(std::memory_order_relaxed));
+  bytes.try_emplace("total", stats.bytes_total.load(std::memory_order_relaxed));
   const auto [alloc_it, alloc_success]
     = result.try_emplace("allocations", record{});
   TENZIR_ASSERT_EXPENSIVE(alloc_success);
   auto& allocations = as<record>(alloc_it->second);
   allocations.reserve(3);
-  allocations.try_emplace("current", stats.allocations_current.load());
-  allocations.try_emplace("max", stats.allocations_max.load());
-  allocations.try_emplace("total", stats.allocations_total.load());
+  allocations.try_emplace(
+    "current", stats.allocations_current.load(std::memory_order_relaxed));
+  allocations.try_emplace(
+    "max", stats.allocations_max.load(std::memory_order_relaxed));
+  allocations.try_emplace(
+    "total", stats.allocations_total.load(std::memory_order_relaxed));
   return result;
 };
 

@@ -135,7 +135,7 @@ public:
     }
     auto* const ptr = ::mi_malloc_aligned(size, std::to_underlying(alignment));
     if (ptr == nullptr) {
-      return &detail::zero_size_area;
+      return nullptr;
     }
     if (stats_) {
       stats_->note_allocation(::mi_malloc_usable_size(ptr));
@@ -152,7 +152,7 @@ public:
     }
     auto* const ptr = ::mi_calloc(count, size);
     if (ptr == nullptr) {
-      return &detail::zero_size_area;
+      return nullptr;
     }
     if (stats_) {
       stats_->note_allocation(::mi_malloc_usable_size(ptr));
@@ -190,9 +190,6 @@ public:
       return allocate(new_size);
     }
     const auto old_size = ::mi_malloc_usable_size(old_ptr);
-    if (old_size >= new_size) {
-      return old_ptr;
-    }
     void* const new_ptr = ::mi_realloc(old_ptr, new_size);
     if (new_ptr == nullptr) {
       return nullptr;
@@ -216,9 +213,6 @@ public:
       return allocate(new_size, alignment);
     }
     const auto old_size = ::mi_malloc_usable_size(old_ptr);
-    if (old_size >= new_size) {
-      return old_ptr;
-    }
     void* const new_ptr
       = ::mi_realloc_aligned(old_ptr, new_size, std::to_underlying(alignment));
     if (new_ptr == nullptr) {
@@ -251,7 +245,7 @@ public:
   }
 
   auto trim() noexcept -> void final override {
-    ::mi_collect(false);
+    ::mi_collect(true);
   }
 
   [[nodiscard]]
@@ -427,9 +421,6 @@ public:
       return allocate(new_size);
     }
     const auto old_size = system::native_malloc_usable_size(old_ptr);
-    if (old_size >= new_size) {
-      return old_ptr;
-    }
     void* const new_ptr = system::native_realloc(old_ptr, new_size);
     if (new_ptr == nullptr) {
       return nullptr;
@@ -452,9 +443,6 @@ public:
       return allocate(new_size, alignment);
     }
     const auto old_size = system::native_malloc_usable_size(old_ptr);
-    if (old_size >= new_size) {
-      return old_ptr;
-    }
     void* const new_ptr = system::realloc_aligned(
       old_ptr, new_size, std::to_underlying(alignment));
     if (new_ptr == nullptr) {
@@ -497,7 +485,7 @@ public:
 
   [[nodiscard]]
   auto backend() const noexcept -> enum backend final override {
-    return backend::mimalloc;
+    return backend::system;
   }
 
   [[nodiscard]] auto backend_name() const noexcept
@@ -582,11 +570,11 @@ struct dummy_allocator {
 #endif
 
 /// The allocator used by the arrow memory pool, so for all arrow *buffers*.
-TENZIR_MAKE_ALLOCATOR(arrow_allocator, "TENZIR_ALLOC_ARROW")
+TENZIR_MAKE_ALLOCATOR(arrow_allocator, "ARROW")
 /// The allocator used by `operator new` and `operator delete`.
-TENZIR_MAKE_ALLOCATOR(cpp_allocator, "TENZIR_ALLOC_CPP")
+TENZIR_MAKE_ALLOCATOR(cpp_allocator, "CPP")
 /// The allocator used by `malloc` and other C/POSIX allocation functions.
-TENZIR_MAKE_ALLOCATOR(c_allocator, "TENZIR_ALLOC_C")
+TENZIR_MAKE_ALLOCATOR(c_allocator, "C")
 
 #undef TENZIR_MAKE_ALLOCATOR
 
