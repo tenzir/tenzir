@@ -43,5 +43,4 @@ in
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
   yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
   zeromq = callFunction ./overrides/zeromq.nix { inherit (prevPkgs) zeromq; };
-  jemalloc = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
 }
