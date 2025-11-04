@@ -11,10 +11,92 @@
 #include "tenzir/diagnostics.hpp"
 
 #include <caf/actor_system_config.hpp>
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
+#include <caf/net/ssl/context.hpp>
+#include <curl/curl.h>
+#include <openssl/ssl.h>
 
 #include <filesystem>
 
 namespace tenzir {
+
+namespace {
+
+enum class tls_version {
+  v1_0,
+  v1_1,
+  v1_2,
+  v1_3,
+};
+
+auto parse_tls_version_string(std::string_view version)
+  -> caf::expected<tls_version> {
+  if (version == "1.0") {
+    return tls_version::v1_0;
+  }
+  if (version == "1.1") {
+    return tls_version::v1_1;
+  }
+  if (version == "1.2") {
+    return tls_version::v1_2;
+  }
+  if (version == "1.3") {
+    return tls_version::v1_3;
+  }
+  return caf::make_error(ec::invalid_argument,
+                         fmt::format("invalid TLS version '{}', expected one "
+                                     "of: 1.0, 1.1, 1.2, 1.3",
+                                     version));
+}
+
+} // namespace
+
+auto parse_curl_tls_version(std::string_view version) -> caf::expected<long> {
+  TRY(auto parsed, parse_tls_version_string(version));
+  switch (parsed) {
+    case tls_version::v1_0:
+      return CURL_SSLVERSION_TLSv1_0;
+    case tls_version::v1_1:
+      return CURL_SSLVERSION_TLSv1_1;
+    case tls_version::v1_2:
+      return CURL_SSLVERSION_TLSv1_2;
+    case tls_version::v1_3:
+      return CURL_SSLVERSION_TLSv1_3;
+  }
+  __builtin_unreachable();
+}
+
+auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int> {
+  TRY(auto parsed, parse_tls_version_string(version));
+  switch (parsed) {
+    case tls_version::v1_0:
+      return TLS1_VERSION;
+    case tls_version::v1_1:
+      return TLS1_1_VERSION;
+    case tls_version::v1_2:
+      return TLS1_2_VERSION;
+    case tls_version::v1_3:
+      return TLS1_3_VERSION;
+  }
+  __builtin_unreachable();
+}
+
+auto parse_caf_tls_version(std::string_view version)
+  -> caf::expected<caf::net::ssl::tls> {
+  TRY(auto parsed, parse_tls_version_string(version));
+  switch (parsed) {
+    case tls_version::v1_0:
+      return caf::net::ssl::tls::v1_0;
+    case tls_version::v1_1:
+      return caf::net::ssl::tls::v1_1;
+    case tls_version::v1_2:
+      return caf::net::ssl::tls::v1_2;
+    case tls_version::v1_3:
+      return caf::net::ssl::tls::v1_3;
+  }
+  __builtin_unreachable();
+}
 
 ssl_options::ssl_options() = default;
 
@@ -23,7 +105,9 @@ auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
     .named("skip_peer_verification", skip_peer_verification)
     .named("cacert", cacert)
     .named("certfile", certfile)
-    .named("keyfile", keyfile);
+    .named("keyfile", keyfile)
+    .named("tls_client_ca", tls_client_ca)
+    .named("tls_require_client_cert", tls_require_client_cert);
 }
 
 auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
@@ -42,6 +126,8 @@ auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   TRY(check_option(cacert, "cacert"));
   TRY(check_option(certfile, "certfile"));
   TRY(check_option(keyfile, "keyfile"));
+  TRY(check_option(tls_client_ca, "tls_client_ca"));
+  TRY(check_option(tls_require_client_cert, "tls_require_client_cert"));
   if (tls and tls->inner and not skip_peer_verification) {
     if (cacert and not std::filesystem::exists(cacert->inner)) {
       diagnostic::error("the configured CA certificate bundle does not exist")
@@ -50,6 +136,22 @@ auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
         .emit(dh);
       return failure::promise();
     }
+  }
+  // Validate mTLS options
+  if (tls_require_client_cert and tls_require_client_cert->inner
+      and not tls_client_ca) {
+    diagnostic::error(
+      "`tls_require_client_cert` requires `tls_client_ca` to be set")
+      .primary(*tls_require_client_cert)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (tls_client_ca and not std::filesystem::exists(tls_client_ca->inner)) {
+    diagnostic::error("the configured client CA certificate does not exist")
+      .note("configured location: `{}`", tls_client_ca->inner)
+      .primary(*tls_client_ca)
+      .emit(dh);
+    return failure::promise();
   }
   if (skip_peer_verification) {
     diagnostic::warning(
@@ -148,16 +250,59 @@ auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
 
 auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
                            operator_control_plane& ctrl) const -> caf::error {
+  // Apply base options (including cacert fallback)
   if (not cacert.has_value()) {
-    return apply_to(easy, url, query_cacert_fallback(ctrl));
+    TRY(apply_to(easy, url, query_cacert_fallback(ctrl)));
+  } else {
+    TRY(apply_to(easy, url));
   }
-  return apply_to(easy, url);
+
+  // Apply TLS min version from config
+  auto min_version_str = query_tls_min_version(ctrl);
+  if (not min_version_str.empty()) {
+    auto curl_version = parse_curl_tls_version(min_version_str);
+    if (curl_version) {
+      check(easy.set(CURLOPT_SSLVERSION, *curl_version));
+    } else {
+      diagnostic::warning(curl_version.error())
+        .note("while applying TLS configuration")
+        .emit(ctrl.diagnostics());
+    }
+  }
+
+  // Apply cipher list from config
+  auto ciphers = query_tls_ciphers(ctrl);
+  if (not ciphers.empty()) {
+    check(easy.set(CURLOPT_SSL_CIPHER_LIST, ciphers));
+  }
+
+  return {};
 }
 
 auto ssl_options::query_cacert_fallback(operator_control_plane& ctrl)
   -> std::string {
   auto& config = ctrl.self().system().config();
   if (auto* v = caf::get_if<std::string>(&config.content, "tenzir.cacert")) {
+    return *v;
+  }
+  return {};
+}
+
+auto ssl_options::query_tls_min_version(operator_control_plane& ctrl)
+  -> std::string {
+  auto& config = ctrl.self().system().config();
+  if (auto* v
+      = caf::get_if<std::string>(&config.content, "tenzir.tls.min-version")) {
+    return *v;
+  }
+  return {};
+}
+
+auto ssl_options::query_tls_ciphers(operator_control_plane& ctrl)
+  -> std::string {
+  auto& config = ctrl.self().system().config();
+  if (auto* v
+      = caf::get_if<std::string>(&config.content, "tenzir.tls.ciphers")) {
     return *v;
   }
   return {};
