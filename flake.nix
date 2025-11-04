@@ -93,6 +93,7 @@
           // {
             default = self.packages.${system}.tenzir-static;
           };
+        legacyPackages = pkgs;
         apps.tenzir-de = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de; };
         apps.tenzir-de-static = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de-static; };
         apps.tenzir = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir; };
