@@ -732,11 +732,13 @@ jobs:
       - name: Build sdist
         working-directory: python
         run: |
-          uv build --sdist --package tenzir-common --package tenzir
+          uv build --sdist --package tenzir-common
+          uv build --sdist --package tenzir
       - name: Build wheel for validation
         working-directory: python
         run: |
-          uv build --wheel --package tenzir-common --package tenzir
+          uv build --wheel --package tenzir-common
+          uv build --wheel --package tenzir
       - name: Validate installed wheel exposes working tenzir binary
         working-directory: python
         run: |
