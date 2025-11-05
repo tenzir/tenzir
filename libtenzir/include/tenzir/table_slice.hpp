@@ -167,7 +167,6 @@ public:
   struct memory_stats {
     int64_t serialized_bytes = 0;
     int64_t non_serialized_bytes = 0;
-    int64_t buffer_bytes = 0;
     int64_t instances = 0;
   };
 

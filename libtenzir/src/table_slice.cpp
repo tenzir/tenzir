@@ -55,17 +55,10 @@ namespace {
 struct table_slice_accounting_state final {
   std::atomic<int64_t> serialized_bytes{0};
   std::atomic<int64_t> non_serialized_bytes{0};
-  std::atomic<int64_t> buffer_bytes{0};
   std::atomic<int64_t> instances{0};
   std::mutex mutex;
   tsl::robin_map<const chunk*, std::pair<size_t, uint64_t>> chunks;
-  struct record_batch_entry {
-    size_t refcount = 0;
-    std::vector<std::pair<const void*, uint64_t>> buffers;
-    uint64_t total_bytes = 0;
-  };
-  tsl::robin_map<const void*, record_batch_entry> record_batches;
-  tsl::robin_map<const void*, std::pair<size_t, uint64_t>> buffers;
+  tsl::robin_map<const void*, std::pair<size_t, uint64_t>> record_batches;
 };
 
 auto accounting_state() noexcept -> table_slice_accounting_state& {
@@ -82,57 +75,10 @@ void decrement_instances() noexcept {
   instances.fetch_sub(1, std::memory_order_relaxed);
 }
 
-auto gather_record_batch_buffers(
-  const std::shared_ptr<arrow::RecordBatch>& batch)
-  -> std::vector<std::pair<const void*, uint64_t>> {
-  if (! batch) {
-    return {};
-  }
-  tsl::robin_map<const void*, uint64_t> unique_buffers;
-  auto visit = [&](const std::shared_ptr<arrow::ArrayData>& data,
-                   const auto& self) -> void {
-    if (! data) {
-      return;
-    }
-    for (const auto& buffer : data->buffers) {
-      if (! buffer) {
-        continue;
-      }
-      auto base = buffer;
-      while (auto parent = base->parent()) {
-        base = std::move(parent);
-      }
-      const auto address = static_cast<const void*>(base->data());
-      const auto bytes = static_cast<uint64_t>(base->size());
-      if (! address || bytes == 0) {
-        continue;
-      }
-      auto [it, inserted] = unique_buffers.try_emplace(address, bytes);
-      if (! inserted) {
-        it.value() = std::max(it.value(), bytes);
-      }
-    }
-    if (data->dictionary) {
-      self(data->dictionary, self);
-    }
-    for (const auto& child : data->child_data) {
-      self(child, self);
-    }
-  };
-  for (const auto& column : batch->column_data()) {
-    visit(column, visit);
-  }
-  auto result = std::vector<std::pair<const void*, uint64_t>>{};
-  result.reserve(unique_buffers.size());
-  for (const auto& [address, bytes] : unique_buffers) {
-    result.emplace_back(address, bytes);
-  }
-  return result;
-}
-
 void account_table_slice_resources(
   const chunk_ptr& chunk, bool is_serialized,
-  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept {
+  const std::shared_ptr<arrow::RecordBatch>& batch,
+  uint64_t approx_bytes) noexcept {
   if (! chunk) {
     return;
   }
@@ -149,25 +95,12 @@ void account_table_slice_resources(
     return;
   }
   auto& batch_entry = state.record_batches[batch.get()];
-  if (batch_entry.refcount++ != 0) {
+  if (batch_entry.first++ != 0) {
     return;
   }
-  batch_entry.buffers = gather_record_batch_buffers(batch);
-  batch_entry.total_bytes = 0;
-  for (const auto& [address, bytes] : batch_entry.buffers) {
-    if (! address || bytes == 0) {
-      continue;
-    }
-    batch_entry.total_bytes += bytes;
-    auto& buffer_entry = state.buffers[address];
-    if (buffer_entry.first++ == 0) {
-      buffer_entry.second = bytes;
-      state.non_serialized_bytes.fetch_add(static_cast<int64_t>(bytes),
-                                           std::memory_order_relaxed);
-    }
-  }
-  state.buffer_bytes.fetch_add(static_cast<int64_t>(batch_entry.total_bytes),
-                               std::memory_order_relaxed);
+  batch_entry.second = approx_bytes;
+  state.non_serialized_bytes.fetch_add(static_cast<int64_t>(approx_bytes),
+                                       std::memory_order_relaxed);
 }
 
 void release_table_slice_resources(
@@ -195,26 +128,11 @@ void release_table_slice_resources(
   auto jt = state.record_batches.find(batch.get());
   TENZIR_ASSERT(jt != state.record_batches.end());
   auto& batch_entry = jt.value();
-  TENZIR_ASSERT(batch_entry.refcount > 0);
-  if (--batch_entry.refcount == 0) {
-    state.buffer_bytes.fetch_sub(static_cast<int64_t>(batch_entry.total_bytes),
-                                 std::memory_order_relaxed);
-    for (const auto& [address, bytes] : batch_entry.buffers) {
-      if (! address || bytes == 0) {
-        continue;
-      }
-      auto kt = state.buffers.find(address);
-      TENZIR_ASSERT(kt != state.buffers.end());
-      auto& buffer_entry = kt.value();
-      auto& buffer_refcount = buffer_entry.first;
-      auto& buffer_bytes = buffer_entry.second;
-      TENZIR_ASSERT(buffer_refcount > 0);
-      if (--buffer_refcount == 0) {
-        state.non_serialized_bytes.fetch_sub(static_cast<int64_t>(buffer_bytes),
-                                             std::memory_order_relaxed);
-        state.buffers.erase(kt);
-      }
-    }
+  TENZIR_ASSERT(batch_entry.first > 0);
+  if (--batch_entry.first == 0) {
+    state.non_serialized_bytes.fetch_sub(
+      static_cast<int64_t>(batch_entry.second),
+      std::memory_order_relaxed);
     state.record_batches.erase(jt);
   }
 }
@@ -839,7 +757,12 @@ void table_slice::retain_accounting() const noexcept {
     },
   };
   visit(f, as_flatbuffer(chunk_));
-  account_table_slice_resources(chunk_, is_serialized, record_batch);
+  auto approx_bytes = uint64_t{0};
+  if (! is_serialized && record_batch) {
+    approx_bytes = this->approx_bytes();
+  }
+  account_table_slice_resources(chunk_, is_serialized, record_batch,
+                                approx_bytes);
 }
 
 void table_slice::release_accounting() const noexcept {
@@ -1844,7 +1767,6 @@ auto table_slice::memory_stats() noexcept -> struct memory_stats {
   return {
     state.serialized_bytes.load(std::memory_order_relaxed),
     state.non_serialized_bytes.load(std::memory_order_relaxed),
-    state.buffer_bytes.load(std::memory_order_relaxed),
     state.instances.load(std::memory_order_relaxed),
   };
 }

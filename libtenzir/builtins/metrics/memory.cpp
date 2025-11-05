@@ -143,12 +143,11 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
   const auto table_slice_stats = table_slice::memory_stats();
   auto table_slice_record = record{};
-  table_slice_record.reserve(4);
+  table_slice_record.reserve(3);
   table_slice_record.try_emplace("serialized",
                                  table_slice_stats.serialized_bytes);
   table_slice_record.try_emplace("non_serialized",
                                  table_slice_stats.non_serialized_bytes);
-  table_slice_record.try_emplace("buffers", table_slice_stats.buffer_bytes);
   table_slice_record.try_emplace("count", table_slice_stats.instances);
   result.try_emplace("table_slices", std::move(table_slice_record));
   return result;
@@ -189,7 +188,6 @@ public:
     const auto table_slice_stats = record_type{
       {"serialized", int64_type{}},
       {"non_serialized", int64_type{}},
-      {"buffers", int64_type{}},
       {"count", int64_type{}},
     };
     return record_type{{
