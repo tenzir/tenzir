@@ -34,6 +34,9 @@
     orig.cmakeFlags
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       "-DARROW_BUILD_TESTS=OFF"
+      # Tenzir is using a custom memory pool.
+      "-DARROW_JEMALLOC=OFF"
+      "-DARROW_MIMALLOC=OFF"
       # TODO: Check if this is still needed or now covered by ARROW_DEPENDENCY_SOURCE.
       "-DGLOG_SOURCE=SYSTEM"
     ];
