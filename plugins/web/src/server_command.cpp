@@ -27,6 +27,7 @@
 #include <tenzir/query_cursor.hpp>
 #include <tenzir/validate.hpp>
 
+#include <caf/actor_registry.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -444,7 +445,12 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     auto const* scheme = server_config->require_tls ? "https" : "http";
     TENZIR_INFO("server listening on on {}://{}:{}", scheme,
                 server_config->bind_address, server_config->port);
-    io_context.run();
+    try {
+      io_context.run();
+    } catch (const std::exception& ex) {
+      TENZIR_ERROR("web api service went down: {}", ex.what());
+    }
+    caf::anon_mail(atom::stop_v).send(self);
   }};
   // Run main loop.
   caf::error err;
@@ -460,11 +466,14 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
           err = std::move(msg.reason);
         }
       },
-      // Only called when running this command with `tenzir -N`.
+      // Only called when running this command with `tenzir-node`.
       [&](atom::signal, int signal) {
         TENZIR_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
                      ::strsignal(signal));
         TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
+        stop = true;
+      },
+      [&](atom::stop) {
         stop = true;
       })
     .until([&] {
@@ -482,6 +491,9 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     server);
   for (auto& handler : handlers) {
     self->send_exit(handler, caf::exit_reason::user_shutdown);
+  }
+  if (self->system().node() == node->node()) {
+    self->send_exit(node, caf::exit_reason::unknown);
   }
   server_thread.join();
   return caf::make_message(std::move(err));
