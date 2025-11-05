@@ -81,6 +81,7 @@ COPY python ./python
 COPY schema ./schema
 COPY scripts ./scripts
 COPY tenzir ./tenzir
+COPY plugins ./plugins
 COPY CMakeLists.txt LICENSE README.md VERSIONING.md \
      tenzir.yaml.example version.json ./
 
@@ -140,169 +141,6 @@ CMD ["--help"]
 FROM development AS plugins-source
 
 WORKDIR /tmp/tenzir
-
-# -- bundled-plugins -------------------------------------------------------------------
-
-FROM plugins-source AS amqp-plugin
-
-COPY plugins/amqp ./plugins/amqp
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/amqp -B build-amqp -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-amqp --parallel && \
-    DESTDIR=/plugin/amqp cmake --install build-amqp --component Runtime && \
-    rm -rf build-amqp
-
-FROM plugins-source AS azure-blob-storage-plugin
-
-COPY plugins/azure-blob-storage ./plugins/azure-blob-storage
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-azure-blob-storage --parallel && \
-    DESTDIR=/plugin/azure-blob-storage cmake --install build-azure-blob-storage --component Runtime && \
-    rm -rf build-azure-blob-storage
-
-FROM plugins-source AS clickhouse-plugin
-
-COPY plugins/clickhouse ./plugins/clickhouse
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/clickhouse -B build-clickhouse -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-clickhouse --parallel && \
-    DESTDIR=/plugin/clickhouse cmake --install build-clickhouse --component Runtime && \
-    rm -rf build-clickhouse
-
-FROM plugins-source AS fluent-bit-plugin
-
-COPY plugins/fluent-bit ./plugins/fluent-bit
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/fluent-bit -B build-fluent-bit -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-fluent-bit --parallel && \
-    DESTDIR=/plugin/fluent-bit cmake --install build-fluent-bit --component Runtime && \
-    rm -rf build-fluent-bit
-
-FROM plugins-source AS gcs-plugin
-
-COPY plugins/gcs ./plugins/gcs
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/gcs -B build-gcs -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-gcs --parallel && \
-    DESTDIR=/plugin/gcs cmake --install build-gcs --component Runtime && \
-    rm -rf build-gcs
-
-FROM plugins-source AS google-cloud-pubsub-plugin
-
-COPY plugins/google-cloud-pubsub ./plugins/google-cloud-pubsub
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-      -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
-    cmake --build build-google-cloud-pubsub --parallel && \
-    DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --component Runtime && \
-    rm -rf build-google-cloud-pubsub
-
-FROM plugins-source AS kafka-plugin
-
-COPY plugins/kafka ./plugins/kafka
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/kafka -B build-kafka -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-kafka --parallel && \
-    DESTDIR=/plugin/kafka cmake --install build-kafka --component Runtime && \
-    rm -rf build-kafka
-
-FROM plugins-source AS nic-plugin
-
-COPY plugins/nic ./plugins/nic
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/nic -B build-nic -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-nic --parallel && \
-    DESTDIR=/plugin/nic cmake --install build-nic --component Runtime && \
-    rm -rf build-nic
-
-FROM plugins-source AS parquet-plugin
-
-COPY plugins/parquet ./plugins/parquet
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/parquet -B build-parquet -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-parquet --parallel && \
-    DESTDIR=/plugin/parquet cmake --install build-parquet --component Runtime && \
-    rm -rf build-parquet
-
-FROM plugins-source AS s3-plugin
-
-COPY plugins/s3 ./plugins/s3
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/s3 -B build-s3 -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-s3 --parallel && \
-    DESTDIR=/plugin/s3 cmake --install build-s3 --component Runtime && \
-    rm -rf build-s3
-
-FROM plugins-source AS sigma-plugin
-
-COPY plugins/sigma ./plugins/sigma
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/sigma -B build-sigma -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-sigma --parallel && \
-    DESTDIR=/plugin/sigma cmake --install build-sigma --component Runtime && \
-    rm -rf build-sigma
-
-FROM plugins-source AS sqs-plugin
-
-COPY plugins/sqs ./plugins/sqs
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/sqs -B build-sqs -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-sqs --parallel && \
-    DESTDIR=/plugin/sqs cmake --install build-sqs --component Runtime && \
-    rm -rf build-sqs
-
-FROM plugins-source AS from_velociraptor-plugin
-
-COPY plugins/from_velociraptor ./plugins/from_velociraptor
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/from_velociraptor -B build-from_velociraptor -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-from_velociraptor --parallel && \
-    DESTDIR=/plugin/from_velociraptor cmake --install build-from_velociraptor --component Runtime && \
-    rm -rf build-from_velociraptor
-
-FROM plugins-source AS web-plugin
-
-COPY plugins/web ./plugins/web
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/web -B build-web -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-web --parallel && \
-    DESTDIR=/plugin/web cmake --install build-web --component Runtime && \
-    rm -rf build-web
-
-FROM plugins-source AS yara-plugin
-
-COPY plugins/yara ./plugins/yara
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/yara -B build-yara -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-yara --parallel && \
-    DESTDIR=/plugin/yara cmake --install build-yara --component Runtime && \
-    rm -rf build-yara
-
-FROM plugins-source AS zmq-plugin
-
-COPY plugins/zmq ./plugins/zmq
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/zmq -B build-zmq -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-zmq --parallel && \
-    DESTDIR=/plugin/zmq cmake --install build-zmq --component Runtime && \
-    rm -rf build-zmq
 
 # -- tenzir-de -----------------------------------------------------------------
 
@@ -380,23 +218,6 @@ RUN tenzir 'version'
 
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
-
-COPY --from=amqp-plugin --chown=tenzir:tenzir /plugin/amqp /
-COPY --from=azure-blob-storage-plugin --chown=tenzir:tenzir /plugin/azure-blob-storage /
-COPY --from=clickhouse-plugin --chown=tenzir:tenzir /plugin/clickhouse /
-COPY --from=fluent-bit-plugin --chown=tenzir:tenzir /plugin/fluent-bit /
-COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
-COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
-COPY --from=kafka-plugin --chown=tenzir:tenzir /plugin/kafka /
-COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
-COPY --from=parquet-plugin --chown=tenzir:tenzir /plugin/parquet /
-COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /
-COPY --from=sigma-plugin --chown=tenzir:tenzir /plugin/sigma /
-COPY --from=sqs-plugin --chown=tenzir:tenzir /plugin/sqs /
-COPY --from=from_velociraptor-plugin --chown=tenzir:tenzir /plugin/from_velociraptor /
-COPY --from=web-plugin --chown=tenzir:tenzir /plugin/web /
-COPY --from=yara-plugin --chown=tenzir:tenzir /plugin/yara /
-COPY --from=zmq-plugin --chown=tenzir:tenzir /plugin/zmq /
 
 # -- tenzir-node-de ------------------------------------------------------------
 
