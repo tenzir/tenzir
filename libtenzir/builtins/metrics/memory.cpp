@@ -34,7 +34,7 @@ auto make_from(const memory::stats& stats) -> record {
   bytes.reserve(3);
   bytes.try_emplace("current",
                     stats.bytes_current.load(std::memory_order_relaxed));
-  bytes.try_emplace("max", stats.bytes_peak.load(std::memory_order_relaxed));
+  bytes.try_emplace("peak", stats.bytes_peak.load(std::memory_order_relaxed));
   bytes.try_emplace("cumulative",
                     stats.bytes_cumulative.load(std::memory_order_relaxed));
   const auto [alloc_it, alloc_success]
