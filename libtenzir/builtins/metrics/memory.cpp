@@ -10,6 +10,7 @@
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/os.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/table_slice.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
@@ -143,12 +144,21 @@ auto make_chunk_info() -> record {
 
 auto get_raminfo() -> caf::expected<record> {
   auto result = record{};
-  result.reserve(5);
+  result.reserve(6);
   result.try_emplace("system", make_system_info());
   result.try_emplace("process", make_process_statistics());
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
+  const auto table_slice_stats = table_slice::memory_stats();
+  auto table_slice_record = record{};
+  table_slice_record.reserve(3);
+  table_slice_record.try_emplace("serialized",
+                                 table_slice_stats.serialized_bytes);
+  table_slice_record.try_emplace("non_serialized",
+                                 table_slice_stats.non_serialized_bytes);
+  table_slice_record.try_emplace("count", table_slice_stats.instances);
+  result.try_emplace("table_slices", std::move(table_slice_record));
   result.try_emplace("chunk", make_chunk_info());
   return result;
 }
@@ -185,6 +195,11 @@ public:
       {"bytes", stats},
       {"allocations", stats},
     };
+    const auto table_slice_stats = record_type{
+      {"serialized", int64_type{}},
+      {"non_serialized", int64_type{}},
+      {"count", int64_type{}},
+    };
     const auto bytes_and_count = record_type{
       {"bytes", int64_type{}},
       {"count", int64_type{}},
@@ -205,6 +220,7 @@ public:
       {"arrow", bytes_and_allocations},
       {"cpp", bytes_and_allocations},
       {"c", bytes_and_allocations},
+      {"table_slices", table_slice_stats},
       {"chunk", bytes_and_count},
     }};
   }
