@@ -265,6 +265,16 @@ public:
   friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
                          chunk_metadata metadata);
 
+  // -- getters --------------------------------------------------------------
+
+  static auto get_count() -> int64_t {
+    return count.load(std::memory_order_relaxed);
+  }
+
+  static auto get_bytes() -> int64_t {
+    return bytes.load(std::memory_order_relaxed);
+  }
+
 private:
   // -- implementation details -------------------------------------------------
 
@@ -393,6 +403,12 @@ private:
   deleter_type deleter_;
 
   chunk_metadata metadata_ = {};
+
+  /// Track currently alive chunks.
+  inline static std::atomic_int64_t count = 0;
+
+  /// Track currently owned memory.
+  inline static std::atomic_int64_t bytes = 0;
 };
 
 template <class Inspector>
