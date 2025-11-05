@@ -45,25 +45,22 @@ auto __real_aligned_alloc(size_t, size_t) -> void*;
 namespace tenzir::memory {
 
 auto stats::update_max_bytes(std::int64_t new_usage) noexcept -> void {
-  auto old_max = bytes_max.load();
+  auto old_max = bytes_peak.load();
   while (old_max < new_usage
-         && ! bytes_max.compare_exchange_weak(old_max, new_usage)) {
-  }
-}
-
-auto stats::add_allocation() noexcept -> void {
-  auto new_count
-    = allocations_current.fetch_add(1, std::memory_order_relaxed) + 1;
-  auto old_max = allocations_max.load();
-  while (old_max < new_count
-         && ! allocations_max.compare_exchange_weak(old_max, new_count)) {
+         && ! bytes_peak.compare_exchange_weak(old_max, new_usage)) {
   }
 }
 
 auto stats::note_allocation(std::int64_t add) noexcept -> void {
-  bytes_total.fetch_add(add, std::memory_order_relaxed);
+  bytes_cumulative.fetch_add(add, std::memory_order_relaxed);
   num_calls.fetch_add(1, std::memory_order_relaxed);
-  add_allocation();
+  allocations_cumulative.fetch_add(1, std::memory_order_relaxed);
+  auto new_count
+    = allocations_current.fetch_add(1, std::memory_order_relaxed) + 1;
+  auto old_max = allocations_peak.load();
+  while (old_max < new_count
+         && ! allocations_peak.compare_exchange_weak(old_max, new_count)) {
+  }
   const auto previous_current_usage
     = bytes_current.fetch_add(add, std::memory_order_relaxed);
   const auto new_current_usage = previous_current_usage + add;
@@ -72,12 +69,12 @@ auto stats::note_allocation(std::int64_t add) noexcept -> void {
 
 auto stats::note_reallocation(bool new_location, std::int64_t old_size,
                               std::int64_t new_size) noexcept -> void {
-  num_calls.fetch_add(1, std::memory_order_relaxed);
   if (new_location) {
     note_deallocation(old_size);
     note_allocation(new_size);
     return;
   } else {
+    num_calls.fetch_add(1, std::memory_order_relaxed);
     const auto diff = static_cast<std::int64_t>(new_size)
                       - static_cast<std::int64_t>(old_size);
     const auto previous_current_usage
@@ -268,12 +265,16 @@ auto realloc_aligned(void* ptr, std::size_t new_size,
   if (not new_ptr_happy) {
     new_ptr_happy = ptr;
   }
-  // Capture the currently allocated size, which we need for memcpy
-  const auto size = native_malloc_usable_size(new_ptr_happy);
+  // Compute the size we need to copy.
+  const auto copy_size
+    = std::min(new_size, native_malloc_usable_size(new_ptr_happy));
   // Make an aligned alloaction
   auto* new_ptr_expensive = malloc_aligned(new_size, alignment);
+  if (not new_ptr_expensive) {
+    return nullptr;
+  }
   // Copy over at most as much as the previous allocation contained.
-  std::memcpy(new_ptr_expensive, new_ptr_happy, size);
+  std::memcpy(new_ptr_expensive, new_ptr_happy, copy_size);
   // Free the old allocation.
   native_free(new_ptr_happy);
   return new_ptr_expensive;
@@ -296,14 +297,15 @@ auto calloc_aligned(std::size_t count, std::size_t size,
     return nullptr;
   }
   /// Try calloc first. There is a good chance it will satisfy our requirement.
-  auto* ptr = calloc(count, size);
+  auto* ptr = native_calloc(count, size);
   if (ptr and is_aligned(ptr, std::align_val_t{alignment})) {
     return ptr;
   }
-  /// Otherwise we have to bit the very bitter bullet: Do an aligned
+  native_free(ptr);
+  /// Otherwise we have to bite the very bitter bullet: Do an aligned
   /// allocation and memset it.
   ptr = malloc_aligned(total, alignment);
-  if (ptr != nullptr) {
+  if (ptr) {
     std::memset(ptr, 0, total);
   }
   return ptr;
@@ -312,14 +314,11 @@ auto calloc_aligned(std::size_t count, std::size_t size,
 auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
   using function_type = std::size_t (*)(const void*);
 #if TENZIR_LINUX
-  static auto fn = lookup_symbol<function_type>("malloc_usable_size");
+  const static auto fn = lookup_symbol<function_type>("malloc_usable_size");
 #elif TENZIR_MACOS
-  static auto fn = lookup_symbol<function_type>("malloc_size");
+  const static auto fn = lookup_symbol<function_type>("malloc_size");
 #endif
-  if (fn != nullptr) {
-    return fn(ptr);
-  }
-  return 0;
+  return fn(ptr);
 }
 
 auto trim() noexcept -> void {

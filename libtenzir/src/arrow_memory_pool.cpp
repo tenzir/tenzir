@@ -31,11 +31,7 @@ namespace {
 alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__) int64_t zero_size_area[2];
 auto* const kZeroSizeArea = reinterpret_cast<uint8_t*>(&zero_size_area);
 
-/// A custom Arrow memory pool implementation using mimalloc.
-///
-/// This class provides an Arrow-compatible memory pool interface backed by
-/// mimalloc, which offers better performance characteristics than the default
-/// system allocator for many workloads.
+/// A custom Arrow memory pool implementation using our own allocator framework.
 class memory_pool final : public arrow::MemoryPool {
 public:
   memory_pool() = default;
@@ -60,8 +56,7 @@ public:
     auto* const ptr = memory::arrow_allocator().allocate(
       size, std::align_val_t{static_cast<size_t>(alignment)});
     if (ptr == nullptr) {
-      return arrow::Status::OutOfMemory("mimalloc allocation failed for size ",
-                                        size);
+      return arrow::Status::OutOfMemory("Allocation failed for size ", size);
     }
     *out = reinterpret_cast<std::uint8_t*>(ptr);
     return arrow::Status::OK();
@@ -85,8 +80,8 @@ public:
     auto* const new_ptr = memory::arrow_allocator().reallocate(
       *ptr, new_size, std::align_val_t{static_cast<size_t>(alignment)});
     if (new_ptr == nullptr) {
-      return arrow::Status::OutOfMemory(
-        "mimalloc reallocation failed for size ", new_size);
+      return arrow::Status::OutOfMemory("Reallocation failed for size ",
+                                        new_size);
     }
     *ptr = reinterpret_cast<std::uint8_t*>(new_ptr);
     return arrow::Status::OK();
@@ -107,11 +102,11 @@ public:
   }
 
   auto total_bytes_allocated() const -> int64_t override {
-    return memory::arrow_allocator().stats().bytes_total;
+    return memory::arrow_allocator().stats().bytes_cumulative;
   }
 
   auto max_memory() const -> int64_t override {
-    return memory::arrow_allocator().stats().bytes_max;
+    return memory::arrow_allocator().stats().bytes_peak;
   }
 
   auto num_allocations() const -> int64_t override {

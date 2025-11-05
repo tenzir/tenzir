@@ -267,37 +267,37 @@ Contains statistics about allocated memory.
   arrow: { // Information about memory allocated by Arrow buffers.
     bytes: {
       current: int, // Currently allocated bytes
-      max: int, // Maximum allocated bytes during this run
-      total: int, // Cumulative allocations during this run
+      peak: int, // Peak allocated bytes during this run
+      cumulative: int, // Cumulative allocations during this run
     },
     allocations: {
       current: int, // Number of current allocations
-      max: int, // Maximum number of allocations
-      total: int, // Cumulative allocations during this run
+      peak: int, // Peak number of allocations
+      cumulative: int, // Cumulative allocations during this run
     },
   },
   cpp: { /// Information about memory allocated by `operator new`
     bytes: {
       current: int, // Currently allocated bytes
-      max: int, // Maximum allocated bytes during this run
-      total: int, // Cumulative allocations during this run
+      peak: int, // Peak allocated bytes during this run
+      cumulative: int, // Cumulative allocations during this run
     },
     allocations: {
       current: int, // Number of current allocations
-      max: int, // Maximum number of allocations
-      total: int, // Cumulative allocations during this run
+      peak: int, // Peak number of allocations
+      cumulative: int, // Cumulative allocations during this run
     },
   },
   c: { /// Information about memory allocated `malloc` and other C/POSIX functions.
     bytes: {
       current: int, // Currently allocated bytes
-      max: int, // Maximum allocated bytes during this run
-      total: int, // Cumulative allocations during this run
+      peak: int, // Peak allocated bytes during this run
+      cumulative: int, // Cumulative allocations during this run
     },
     allocations: {
       current: int, // Number of current allocations
-      max: int, // Maximum number of allocations
-      total: int, // Cumulative allocations during this run
+      peak: int, // Peak number of allocations
+      cumulative: int, // Cumulative allocations during this run
     },
   },
 }
