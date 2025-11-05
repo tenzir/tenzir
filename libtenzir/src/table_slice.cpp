@@ -34,6 +34,7 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
+#include <tsl/robin_map.h>
 
 #include <atomic>
 #include <cstddef>
@@ -42,8 +43,6 @@
 #include <span>
 #include <string_view>
 #include <utility>
-
-#include <tsl/robin_map.h>
 
 namespace tenzir {
 
@@ -71,13 +70,13 @@ void account_table_slice_resources(
   if (! chunk) {
     return;
   }
-  const auto chunk_bytes = static_cast<uint64_t>(chunk->size());
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
   auto& chunk_entry = state.chunks[chunk.get()];
   if (chunk_entry.first++ == 0) {
-    chunk_entry.second = chunk_bytes;
-    state.serialized_bytes.fetch_add(chunk_bytes, std::memory_order_relaxed);
+    auto bytes = static_cast<uint64_t>(chunk->size());
+    chunk_entry.second = bytes;
+    state.serialized_bytes.fetch_add(bytes, std::memory_order_relaxed);
   }
   if (! is_serialized && batch) {
     auto& batch_entry = state.record_batches[batch.get()];
@@ -98,10 +97,7 @@ void release_table_slice_resources(
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
   auto it = state.chunks.find(chunk.get());
-  if (it == state.chunks.end()) {
-    TENZIR_ASSERT(it != state.chunks.end());
-    return;
-  }
+  TENZIR_ASSERT(it != state.chunks.end());
   auto& chunk_entry = it.value();
   auto& chunk_refcount = chunk_entry.first;
   auto& chunk_bytes = chunk_entry.second;
@@ -112,10 +108,7 @@ void release_table_slice_resources(
   }
   if (! is_serialized && batch) {
     auto jt = state.record_batches.find(batch.get());
-    if (jt == state.record_batches.end()) {
-      TENZIR_ASSERT(jt != state.record_batches.end());
-      return;
-    }
+    TENZIR_ASSERT(jt != state.record_batches.end());
     auto& batch_entry = jt.value();
     auto& batch_refcount = batch_entry.first;
     auto& batch_bytes = batch_entry.second;
