@@ -15,6 +15,8 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <atomic>
+
 #ifdef _SC_AVPHYS_PAGES
 #  include <filesystem>
 #elif __has_include(<mach/mach.h>)
@@ -133,6 +135,13 @@ auto make_system_info() -> record {
 
 #endif
 
+auto make_chunk_info() -> record {
+  return record{
+    {"bytes", chunk::get_bytes()},
+    {"count", chunk::get_count()},
+  };
+}
+
 auto get_raminfo() -> caf::expected<record> {
   auto result = record{};
   result.reserve(6);
@@ -150,6 +159,7 @@ auto get_raminfo() -> caf::expected<record> {
                                  table_slice_stats.non_serialized_bytes);
   table_slice_record.try_emplace("count", table_slice_stats.instances);
   result.try_emplace("table_slices", std::move(table_slice_record));
+  result.try_emplace("chunk", make_chunk_info());
   return result;
 }
 
@@ -190,6 +200,10 @@ public:
       {"non_serialized", int64_type{}},
       {"count", int64_type{}},
     };
+    const auto bytes_and_count = record_type{
+      {"bytes", int64_type{}},
+      {"count", int64_type{}},
+    };
     return record_type{{
       {"system",
        record_type{
@@ -207,6 +221,7 @@ public:
       {"cpp", bytes_and_allocations},
       {"c", bytes_and_allocations},
       {"table_slices", table_slice_stats},
+      {"chunk", bytes_and_count},
     }};
   }
 };
