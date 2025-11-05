@@ -131,8 +131,7 @@ void release_table_slice_resources(
   TENZIR_ASSERT(batch_entry.first > 0);
   if (--batch_entry.first == 0) {
     state.non_serialized_bytes.fetch_sub(
-      static_cast<int64_t>(batch_entry.second),
-      std::memory_order_relaxed);
+      static_cast<int64_t>(batch_entry.second), std::memory_order_relaxed);
     state.record_batches.erase(jt);
   }
 }
