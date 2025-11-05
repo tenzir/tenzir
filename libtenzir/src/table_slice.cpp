@@ -35,16 +35,98 @@
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
 
+#include <atomic>
 #include <cstddef>
+#include <mutex>
 #include <ranges>
 #include <span>
 #include <string_view>
+#include <utility>
+
+#include <tsl/robin_map.h>
 
 namespace tenzir {
 
 // -- utility functions --------------------------------------------------------
 
 namespace {
+
+struct table_slice_accounting_state final {
+  std::atomic<uint64_t> serialized_bytes{0};
+  std::atomic<uint64_t> non_serialized_bytes{0};
+  std::mutex mutex;
+  tsl::robin_map<const chunk*, std::pair<size_t, uint64_t>> chunks;
+  tsl::robin_map<const void*, std::pair<size_t, uint64_t>> record_batches;
+};
+
+auto accounting_state() noexcept -> table_slice_accounting_state& {
+  static auto state = table_slice_accounting_state{};
+  return state;
+}
+
+void account_table_slice_resources(
+  const chunk_ptr& chunk, bool is_serialized,
+  const std::shared_ptr<arrow::RecordBatch>& batch,
+  uint64_t record_batch_bytes) noexcept {
+  if (! chunk) {
+    return;
+  }
+  const auto chunk_bytes = static_cast<uint64_t>(chunk->size());
+  auto& state = accounting_state();
+  auto guard = std::scoped_lock{state.mutex};
+  auto& chunk_entry = state.chunks[chunk.get()];
+  if (chunk_entry.first++ == 0) {
+    chunk_entry.second = chunk_bytes;
+    state.serialized_bytes.fetch_add(chunk_bytes, std::memory_order_relaxed);
+  }
+  if (! is_serialized && batch) {
+    auto& batch_entry = state.record_batches[batch.get()];
+    if (batch_entry.first++ == 0) {
+      batch_entry.second = record_batch_bytes;
+      state.non_serialized_bytes.fetch_add(record_batch_bytes,
+                                           std::memory_order_relaxed);
+    }
+  }
+}
+
+void release_table_slice_resources(
+  const chunk_ptr& chunk, bool is_serialized,
+  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept {
+  if (! chunk) {
+    return;
+  }
+  auto& state = accounting_state();
+  auto guard = std::scoped_lock{state.mutex};
+  auto it = state.chunks.find(chunk.get());
+  if (it == state.chunks.end()) {
+    TENZIR_ASSERT(it != state.chunks.end());
+    return;
+  }
+  auto& chunk_entry = it.value();
+  auto& chunk_refcount = chunk_entry.first;
+  auto& chunk_bytes = chunk_entry.second;
+  TENZIR_ASSERT(chunk_refcount > 0);
+  if (--chunk_refcount == 0) {
+    state.serialized_bytes.fetch_sub(chunk_bytes, std::memory_order_relaxed);
+    state.chunks.erase(it);
+  }
+  if (! is_serialized && batch) {
+    auto jt = state.record_batches.find(batch.get());
+    if (jt == state.record_batches.end()) {
+      TENZIR_ASSERT(jt != state.record_batches.end());
+      return;
+    }
+    auto& batch_entry = jt.value();
+    auto& batch_refcount = batch_entry.first;
+    auto& batch_bytes = batch_entry.second;
+    TENZIR_ASSERT(batch_refcount > 0);
+    if (--batch_refcount == 0) {
+      state.non_serialized_bytes.fetch_sub(batch_bytes,
+                                           std::memory_order_relaxed);
+      state.record_batches.erase(jt);
+    }
+  }
+}
 
 /// Create a table slice from a record batch.
 /// @param record_batch The record batch to encode.
@@ -458,6 +540,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
     };
     visit(f, as_flatbuffer(chunk_));
   }
+  retain_accounting();
 }
 
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
@@ -488,15 +571,20 @@ auto table_slice::try_from(
                             serialize);
 }
 
-table_slice::table_slice(const table_slice& other) noexcept = default;
+table_slice::table_slice(const table_slice& other) noexcept
+  : chunk_{other.chunk_}, offset_{other.offset_}, state_{other.state_} {
+  retain_accounting();
+}
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   if (this == &rhs) {
     return *this;
   }
+  release_accounting();
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
   state_ = rhs.state_;
+  retain_accounting();
   return *this;
 }
 
@@ -508,13 +596,19 @@ table_slice::table_slice(table_slice&& other) noexcept
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
+  if (this == &rhs) {
+    return *this;
+  }
+  release_accounting();
   chunk_ = std::exchange(rhs.chunk_, {});
   offset_ = std::exchange(rhs.offset_, invalid_id);
   state_ = std::exchange(rhs.state_, {});
   return *this;
 }
 
-table_slice::~table_slice() noexcept = default;
+table_slice::~table_slice() noexcept {
+  release_accounting();
+}
 
 table_slice table_slice::unshare() const noexcept {
   auto result = table_slice{chunk::copy(chunk_), verify::no};
@@ -627,6 +721,59 @@ void table_slice::modify_state(F&& f) {
     },
   };
   visit(g, as_flatbuffer(chunk_));
+}
+
+void table_slice::retain_accounting() const noexcept {
+  if (! chunk_) {
+    return;
+  }
+  auto is_serialized = true;
+  auto record_batch = std::shared_ptr<arrow::RecordBatch>{};
+  const auto* accounting_state_ptr
+    = static_cast<const arrow_table_slice<fbs::table_slice::arrow::v2>*>(
+      nullptr);
+  auto f = detail::overload{
+    []() noexcept {
+      // Invalid table slices do not contribute to accounting.
+    },
+    [&](const auto& encoded) noexcept {
+      const auto* ptr = state(encoded, state_);
+      accounting_state_ptr = ptr;
+      is_serialized = ptr->is_serialized();
+      if (! is_serialized) {
+        record_batch = ptr->record_batch();
+      }
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
+  auto record_batch_bytes = uint64_t{0};
+  if (! is_serialized && record_batch && accounting_state_ptr) {
+    record_batch_bytes = accounting_state_ptr->approx_bytes();
+  }
+  account_table_slice_resources(chunk_, is_serialized, record_batch,
+                                record_batch_bytes);
+}
+
+void table_slice::release_accounting() const noexcept {
+  if (! chunk_) {
+    return;
+  }
+  auto is_serialized = true;
+  auto record_batch = std::shared_ptr<arrow::RecordBatch>{};
+  auto f = detail::overload{
+    []() noexcept {
+      // Invalid table slices do not contribute to accounting.
+    },
+    [&](const auto& encoded) noexcept {
+      const auto* ptr = state(encoded, state_);
+      is_serialized = ptr->is_serialized();
+      if (! is_serialized) {
+        record_batch = ptr->record_batch();
+      }
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
+  release_table_slice_resources(chunk_, is_serialized, record_batch);
 }
 
 bool table_slice::is_serialized() const noexcept {
@@ -1602,6 +1749,14 @@ auto table_slice::approx_bytes() const -> uint64_t {
     },
   };
   return visit(f, as_flatbuffer(chunk_));
+}
+
+auto table_slice::memory_stats() noexcept -> struct memory_stats {
+  auto& state = accounting_state();
+  return {
+    state.serialized_bytes.load(std::memory_order_relaxed),
+    state.non_serialized_bytes.load(std::memory_order_relaxed),
+  };
 }
 
 auto columns_of(const table_slice& slice) -> generator<column_view> {
