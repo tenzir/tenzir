@@ -217,6 +217,8 @@ jobs:
           run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
           run_if_changed_default docker-tenzir $run_docker_tenzir \
             "Dockerfile" ".dockerignore" \
+            "scripts/debian/build-*.sh" \
+            "scripts/debian/install-dev-dependencies.sh" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
