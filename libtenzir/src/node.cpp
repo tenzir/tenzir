@@ -496,10 +496,15 @@ auto node(node_actor::stateful_pointer<node_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
-#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
   const auto interval = memory::trim_interval();
+#if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE
+  detail::weak_run_delayed_loop(self, interval, []() {
+    memory::system::trim();
+  });
+#else
   detail::weak_run_delayed_loop(self, interval, []() {
     memory::cpp_allocator().trim();
+    memory::system::trim();
   });
   if (memory::arrow_allocator().backend()
       != memory::cpp_allocator().backend()) {
