@@ -345,6 +345,7 @@ RUN --mount=target=/ccache,type=cache \apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan8 \
+      libc6-dbg \
       libboost-filesystem1.83.0 \
       libboost-url1.83.0 \
       libboost-stacktrace1.83.0 \
@@ -379,7 +380,12 @@ RUN --mount=target=/ccache,type=cache \apt-get update && \
       wget && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     rm -rf /tmp/custom-packages && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    libpath="$(find /usr/lib -name libc_malloc_debug.so.0 -print -quit)" && \
+    test -n "${libpath}" && \
+    ln -sf "${libpath}" /usr/local/lib/libc_malloc_debug_preload.so
+
+ENV LD_PRELOAD="/usr/local/lib/libc_malloc_debug_preload.so"
 
 USER tenzir:tenzir
 
