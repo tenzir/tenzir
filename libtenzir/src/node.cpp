@@ -504,7 +504,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
 #else
   detail::weak_run_delayed_loop(self, interval, []() {
     memory::cpp_allocator().trim();
-    memory::system::trim();
   });
   if (memory::arrow_allocator().backend()
       != memory::cpp_allocator().backend()) {
