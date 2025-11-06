@@ -420,7 +420,7 @@ endif ()
 
 # -- allocator -----------------------------------------------------------------
 
-set(TENZIR_ALLOCATOR_DEFAULT "mimalloc")
+set(TENZIR_ALLOCATOR_DEFAULT "none")
 if (TENZIR_ENABLE_ASAN)
   set(TENZIR_ALLOCATOR_DEFAULT "none")
 endif ()
