@@ -1,0 +1,12 @@
+---
+description: "Greet someone with a custom message"
+args:
+  positional:
+    - name: person
+      type: string
+      description: "Name of the person to greet"
+    - name: age
+      type: int
+      description: "Age of the person"
+---
+argspkg::greet $person, $age, greeting="Sweet!",excited=true
