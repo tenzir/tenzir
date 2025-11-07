@@ -35,11 +35,13 @@ chmod +x crun
 git clone https://passt.top/passt --depth 1 --branch 2025_09_19.623dbf6 --single-branch
 make -C passt
 
-sudo mkdir -p /usr/local/{bin,libexec/podman}
+# Common ouput directory for cache
+mkdir -p buildah-output/{bin,libexec/podman}
 
-sudo mv crun /usr/local/bin/
-sudo mv buildah/bin/* /usr/local/bin/
-sudo mv netavark/bin/* /usr/local/libexec/podman/
-sudo make -C passt install
+mv crun buildah-output/bin/
+mv buildah/bin/* buildah-output/bin/
+mv netavark/bin/* buildah-output/libexec/podman/
+DESTDIR=output make -C passt install
+mv passt/output/usr/local/bin/* buildah-output/bin/
 
 rm -rf buildah netavark passt
