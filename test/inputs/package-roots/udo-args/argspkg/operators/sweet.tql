@@ -9,4 +9,4 @@ args:
       type: int
       description: "Age of the person"
 ---
-argspkg::greet $person, $age, greeting="Sweet!",excited=true
+argspkg::greet $person, $age, prefix="Sweet!",excited=true

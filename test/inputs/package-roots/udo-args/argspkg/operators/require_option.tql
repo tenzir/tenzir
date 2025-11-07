@@ -1,11 +1,12 @@
 ---
 description: "Require a named option without a default"
 args:
-  - name: value
-    type: string
-options:
-  - name: required_opt
-    type: string
+  positional:
+    - name: value
+      type: string
+  named:
+    - name: required_opt
+      type: string
 ---
 from {
   combined: $value + $required_opt

@@ -1,12 +1,13 @@
 ---
 description: "Ensure parameter substitution respects local shadowing"
 args:
-  - name: value
-    type: string
-options:
-  - name: suffix
-    type: string
-    default: "!"
+  positional:
+    - name: value
+      type: string
+  named:
+    - name: suffix
+      type: string
+      default: "!"
 ---
 original = $value
 let $value = "local"

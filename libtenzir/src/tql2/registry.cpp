@@ -152,71 +152,88 @@ auto make_parameter_note(const user_defined_operator& udo)
     std::string default_value;
     std::vector<std::string> description_lines;
   };
-  auto rows = std::vector<row>{};
-  rows.reserve(udo.positional_params.size() + udo.named_params.size());
-  auto append_row = [&](const user_defined_operator::parameter& param) {
-    auto default_value = std::string{"-"};
-    if (param.default_value) {
-      if (auto default_str = parameter_default_string(*param.default_value)) {
-        default_value = *default_str;
-      } else {
-        default_value = "<expr>";
-      }
-    }
-    auto description_lines = std::vector<std::string>{};
-    if (param.description && ! param.description->empty()) {
-      auto remaining = std::string_view{*param.description};
-      while (true) {
-        auto pos = remaining.find('\n');
-        if (pos == std::string_view::npos) {
-          description_lines.emplace_back(remaining);
-          break;
+  auto make_rows = [](const auto& params) {
+    auto rows = std::vector<row>{};
+    rows.reserve(params.size());
+    for (const auto& param : params) {
+      auto default_value = std::string{"-"};
+      if (param.default_value) {
+        if (auto default_str = parameter_default_string(*param.default_value)) {
+          default_value = *default_str;
+        } else {
+          default_value = "<expr>";
         }
-        description_lines.emplace_back(remaining.substr(0, pos));
-        remaining.remove_prefix(pos + 1);
+      }
+      auto description_lines = std::vector<std::string>{};
+      if (param.description && ! param.description->empty()) {
+        auto remaining = std::string_view{*param.description};
+        while (true) {
+          auto pos = remaining.find('\n');
+          if (pos == std::string_view::npos) {
+            description_lines.emplace_back(remaining);
+            break;
+          }
+          description_lines.emplace_back(remaining.substr(0, pos));
+          remaining.remove_prefix(pos + 1);
+        }
+      }
+      if (description_lines.empty()) {
+        description_lines.emplace_back("-");
+      }
+      rows.push_back(row{
+        .name = param.name,
+        .type = parameter_type_label(param),
+        .default_value = std::move(default_value),
+        .description_lines = std::move(description_lines),
+      });
+    }
+    return rows;
+  };
+  auto update_widths = [](const std::vector<row>& rows, size_t& name_width,
+                          size_t& type_width, size_t& default_width) {
+    for (const auto& row : rows) {
+      name_width = std::max(name_width, row.name.size());
+      type_width = std::max(type_width, row.type.size());
+      default_width = std::max(default_width, row.default_value.size());
+    }
+  };
+  auto format_section = [](std::string_view heading,
+                           const std::vector<row>& rows, size_t name_width,
+                           size_t type_width, size_t default_width) -> std::string {
+    if (rows.empty()) {
+      return {};
+    }
+    auto section = fmt::format("  {}:\n", heading);
+    section += fmt::format("    {:{}}  {:{}}  {:{}}  {}\n", "name", name_width,
+                           "type", type_width, "default", default_width,
+                           "description");
+    for (const auto& row : rows) {
+      section += fmt::format("    {:{}}  {:{}}  {:{}}  {}\n", row.name,
+                             name_width, row.type, type_width, row.default_value,
+                             default_width, row.description_lines.front());
+      for (size_t i = 1; i < row.description_lines.size(); ++i) {
+        section += fmt::format("    {:{}}  {:{}}  {:{}}  {}\n", "", name_width,
+                               "", type_width, "", default_width,
+                               row.description_lines[i]);
       }
     }
-    if (description_lines.empty()) {
-      description_lines.emplace_back("-");
-    }
-    rows.push_back(row{
-      .name = param.name,
-      .type = parameter_type_label(param),
-      .default_value = std::move(default_value),
-      .description_lines = std::move(description_lines),
-    });
+    return section;
   };
-  for (const auto& param : udo.positional_params) {
-    append_row(param);
-  }
-  for (const auto& param : udo.named_params) {
-    append_row(param);
-  }
-  if (rows.empty()) {
-    return std::nullopt;
-  }
+  auto positional_rows = make_rows(udo.positional_params);
+  auto named_rows = make_rows(udo.named_params);
   auto name_width = size_t{4};
   auto type_width = size_t{4};
   auto default_width = size_t{7};
-  for (const auto& row : rows) {
-    name_width = std::max(name_width, row.name.size());
-    type_width = std::max(type_width, row.type.size());
-    default_width = std::max(default_width, row.default_value.size());
+  update_widths(positional_rows, name_width, type_width, default_width);
+  update_widths(named_rows, name_width, type_width, default_width);
+  if (positional_rows.empty() && named_rows.empty()) {
+    return std::nullopt;
   }
   auto note = std::string{"parameters:\n"};
-  note += fmt::format("  {:{}}  {:{}}  {:{}}  {}\n", "name", name_width,
-                      "type", type_width, "default", default_width,
-                      "description");
-  for (const auto& row : rows) {
-    note += fmt::format("  {:{}}  {:{}}  {:{}}  {}\n", row.name, name_width,
-                        row.type, type_width, row.default_value, default_width,
-                        row.description_lines.front());
-    for (size_t i = 1; i < row.description_lines.size(); ++i) {
-      note += fmt::format("  {:{}}  {:{}}  {:{}}  {}\n", "", name_width, "",
-                          type_width, "", default_width,
-                          row.description_lines[i]);
-    }
-  }
+  note += format_section("positional", positional_rows, name_width, type_width,
+                         default_width);
+  note += format_section("named", named_rows, name_width, type_width,
+                         default_width);
   if (! note.empty() && note.back() == '\n') {
     note.pop_back();
   }
@@ -284,12 +301,12 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
       }
 
       auto next_arg = size_t{0};
-      for (size_t i = 0; i < udo.positional_params.size(); ++i) {
+      for (const auto & positional_param : udo.positional_params) {
         if (next_arg >= inv.args.size()
             || try_as<ast::assignment>(inv.args[next_arg])) {
           return fail(
             diagnostic::error("expected additional positional argument `{}`",
-                              udo.positional_params[i].name)
+                              positional_param.name)
               .primary(inv.self));
         }
         positional_values.push_back(std::move(inv.args[next_arg]));

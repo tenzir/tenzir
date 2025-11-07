@@ -1,21 +1,22 @@
 ---
 description: "Greet someone with a custom message"
 args:
-  - name: person
-    type: string
-    description: "Name of the person to greet"
-  - name: age
-    type: int
-    description: "Age of the person"
-options:
-  - name: prefix
-    type: string
-    default: "Hello"
-    description: "Greeting prefix"
-  - name: excited
-    type: bool
-    default: false
-    description: "Use exclamation mark"
+  positional:
+    - name: person
+      type: string
+      description: "Name of the person to greet"
+    - name: age
+      type: int
+      description: "Age of the person"
+  named:
+    - name: prefix
+      type: string
+      default: "Hello"
+      description: "Greeting prefix"
+    - name: excited
+      type: bool
+      default: false
+      description: "Use exclamation mark"
 ---
 from {
   greeting: $prefix,
