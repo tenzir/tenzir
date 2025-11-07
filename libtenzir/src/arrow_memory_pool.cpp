@@ -18,7 +18,7 @@
 
 namespace tenzir {
 
-#if 1
+#if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE
 
 auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
   return arrow::default_memory_pool();

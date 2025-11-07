@@ -17,7 +17,9 @@
 #include <atomic>
 #include <concepts>
 #include <cstddef>
-#include <mimalloc.h>
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
+#  include <mimalloc.h>
+#endif
 #include <new>
 #include <string_view>
 
@@ -103,6 +105,7 @@ alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__) inline std::byte
 
 } // namespace detail
 
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
 namespace mimalloc {
 
 class allocator final : public polymorphic_allocator {
@@ -267,7 +270,9 @@ private:
 };
 
 } // namespace mimalloc
+#endif
 
+#if TENZIR_ALLOCATOR_HAS_SYSTEM
 namespace system {
 
 [[gnu::hot]]
@@ -497,6 +502,7 @@ private:
 };
 
 } // namespace system
+#endif
 
 [[gnu::const]]
 /// Checks if stats collection is enabled for the specific component or a in

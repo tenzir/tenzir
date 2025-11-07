@@ -91,6 +91,7 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
   bytes_current.fetch_sub(remove, std::memory_order_relaxed);
 }
 
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
 namespace mimalloc {
 
 namespace {
@@ -105,7 +106,9 @@ struct init {
 } // namespace
 
 } // namespace mimalloc
+#endif
 
+#if TENZIR_ALLOCATOR_HAS_SYSTEM
 namespace system {
 
 namespace {
@@ -330,6 +333,7 @@ auto trim() noexcept -> void {
 }
 
 } // namespace system
+#endif
 
 namespace {
 auto write_error(const char* txt) noexcept -> void {

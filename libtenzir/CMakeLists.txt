@@ -132,10 +132,12 @@ provide_find_module(c-ares)
 
 # -- mimalloc ------------------------------------------------------------------
 
+if (NOT TENZIR_ALLOCATOR STREQUAL "none")
 find_package(mimalloc REQUIRED CONFIG)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(mimalloc REQUIRED CONFIG)")
 dependency_summary("mimalloc" mimalloc "Dependencies")
+endif ()
 
 # -- libsystemd ----------------------------------------------------------------
 

@@ -159,7 +159,7 @@ auto make_chunk_info() -> record {
   };
 }
 
-auto make_allocator_metrics() -> record {
+auto make_malloc_metrics() -> record {
   auto result = record{};
   result.reserve(7);
   for (const auto* key : {
@@ -433,10 +433,20 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("system", make_system_info());
   result.try_emplace("process", make_process_statistics());
   result.try_emplace("procfs", make_procfs_metrics());
+#if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE
+  result.try_emplace("arrow", caf::none);
+  result.try_emplace("cpp", caf::none);
+  result.try_emplace("c", caf::none);
+#else
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
-  result.try_emplace("malloc", make_allocator_metrics());
+#endif
+#if TENZIR_ALLOCATOR_HAS_SYSTEM
+  result.try_emplace("malloc", make_malloc_metrics());
+#else
+  result.try_emplace("malloc", caf::none);
+#endif
   const auto table_slice_stats = table_slice::memory_stats();
   auto table_slice_record = record{};
   table_slice_record.reserve(3);
