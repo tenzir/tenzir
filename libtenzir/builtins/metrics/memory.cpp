@@ -442,7 +442,7 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
 #endif
-#if TENZIR_ALLOCATOR_HAS_SYSTEM
+#if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
   result.try_emplace("malloc", make_malloc_metrics());
 #else
   result.try_emplace("malloc", caf::none);

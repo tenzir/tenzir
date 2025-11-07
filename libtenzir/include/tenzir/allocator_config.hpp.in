@@ -16,3 +16,6 @@
 #define TENZIR_ALLOCATOR_HAS_SYSTEM                                            \
   (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_SYSTEM                   \
    || TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_RUNTIME)
+/// Whether we might use the system allocator (wrapped or not).
+#define TENZIR_ALLOCATOR_MAY_USE_SYSTEM                                        \
+  (TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_MIMALLOC)

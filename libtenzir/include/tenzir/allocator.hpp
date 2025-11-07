@@ -272,6 +272,14 @@ private:
 } // namespace mimalloc
 #endif
 
+#if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
+namespace system {
+
+[[gnu::hot]] auto trim() noexcept -> void;
+
+}
+#endif
+
 #if TENZIR_ALLOCATOR_HAS_SYSTEM
 namespace system {
 
@@ -336,8 +344,6 @@ auto realloc_aligned(void* ptr, std::size_t new_size,
 /// We fake our own `calloc_aligned`, as that does not exist in C or POSIX.
 auto calloc_aligned(std::size_t count, std::size_t size,
                     std::size_t alignment) noexcept -> void*;
-
-[[gnu::hot]] auto trim() noexcept -> void;
 
 class allocator final : public polymorphic_allocator {
 public:

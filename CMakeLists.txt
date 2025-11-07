@@ -420,7 +420,7 @@ endif ()
 
 # -- allocator -----------------------------------------------------------------
 
-set(TENZIR_ALLOCATOR_DEFAULT "runtime")
+set(TENZIR_ALLOCATOR_DEFAULT "system")
 if (TENZIR_ENABLE_ASAN)
   set(TENZIR_ALLOCATOR_DEFAULT "none")
 endif ()

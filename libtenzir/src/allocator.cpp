@@ -26,7 +26,9 @@
 #  include <malloc/malloc.h>
 #endif
 
-#include <mimalloc.h>
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
+#  include <mimalloc.h>
+#endif
 
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
 
@@ -106,6 +108,20 @@ struct init {
 } // namespace
 
 } // namespace mimalloc
+#endif
+
+#if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
+namespace system {
+
+auto trim() noexcept -> void {
+#  if (defined(__GLIBC__))
+  using namespace si_literals;
+  constexpr static auto padding = 512_Mi;
+  ::malloc_trim(padding);
+#  endif
+}
+
+} // namespace system
 #endif
 
 #if TENZIR_ALLOCATOR_HAS_SYSTEM
@@ -322,14 +338,6 @@ auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
   const static auto fn = lookup_symbol<function_type>("malloc_size");
 #endif
   return fn(ptr);
-}
-
-auto trim() noexcept -> void {
-#if (defined(__GLIBC__))
-  using namespace si_literals;
-  constexpr static auto padding = 512_Mi;
-  ::malloc_trim(padding);
-#endif
 }
 
 } // namespace system

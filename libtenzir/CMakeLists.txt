@@ -132,11 +132,17 @@ provide_find_module(c-ares)
 
 # -- mimalloc ------------------------------------------------------------------
 
-if (NOT TENZIR_ALLOCATOR STREQUAL "none")
-find_package(mimalloc REQUIRED CONFIG)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(mimalloc REQUIRED CONFIG)")
-dependency_summary("mimalloc" mimalloc "Dependencies")
+set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC OFF)
+if (TENZIR_ALLOCATOR STREQUAL "mimalloc"
+    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+  set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC ON)
+endif ()
+
+if (TENZIR_ALLOCATOR_NEEDS_MIMALLOC)
+  find_package(mimalloc REQUIRED CONFIG)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(mimalloc REQUIRED CONFIG)")
+  dependency_summary("mimalloc" mimalloc "Dependencies")
 endif ()
 
 # -- libsystemd ----------------------------------------------------------------
@@ -273,7 +279,9 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
 
 # Link against mimalloc.
-target_link_libraries(libtenzir PUBLIC mimalloc)
+if (TENZIR_ALLOCATOR_NEEDS_MIMALLOC)
+  target_link_libraries(libtenzir PUBLIC mimalloc)
+endif ()
 
 # Link against xxHash.
 target_compile_definitions(
