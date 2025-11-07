@@ -6,9 +6,12 @@ error: expected additional positional argument `age`
   |
   = usage: argspkg::greet person:string, age:int, [prefix=string, excited=bool]
   = note: parameters:
-            name     type    default  description
-            person   string  -        Name of the person to greet
-            age      int     -        Age of the person
-            prefix   string  Hello    Greeting prefix
-            excited  bool    false    Use exclamation mark
+            positional:
+              name     type    default  description
+              person   string  -        Name of the person to greet
+              age      int     -        Age of the person
+            named:
+              name     type    default  description
+              prefix   string  Hello    Greeting prefix
+              excited  bool    false    Use exclamation mark
   = docs: https://docs.tenzir.com/reference/operators/user_defined_operator

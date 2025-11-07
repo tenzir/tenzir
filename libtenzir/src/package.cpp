@@ -375,6 +375,34 @@ auto package_config::parse(const view<record>& data)
 
 namespace {
 
+template <class Value>
+auto parse_operator_parameter_list(std::string_view field_name,
+                                   const Value& value)
+  -> caf::expected<std::vector<package_operator_parameter>> {
+  auto result = std::vector<package_operator_parameter>{};
+  if (is<caf::none_t>(value)) {
+    return result;
+  }
+  const auto* lst = try_as<view<list>>(&value);
+  if (not lst) {
+    return diagnostic::error("{} must be a list", field_name)
+      .note("invalid package definition")
+      .to_error();
+  }
+  result.reserve(lst->size());
+  for (const auto& elem : *lst) {
+    const auto* rec = try_as<view<record>>(elem);
+    if (not rec) {
+      return diagnostic::error("{} entries must be records", field_name)
+        .note("invalid package definition")
+        .to_error();
+    }
+    TRY(auto param, package_operator_parameter::parse(*rec));
+    result.push_back(std::move(param));
+  }
+  return result;
+}
+
 auto load_tql_with_frontmatter(std::string_view input)
   -> caf::expected<record> {
   auto rec = record{};
@@ -417,11 +445,78 @@ auto load_tql_with_frontmatter(std::string_view input)
 auto package_operator::parse(const view<record>& data)
   -> caf::expected<package_operator> {
   auto result = package_operator{};
+  auto positional_source = std::optional<std::string>{};
+  auto named_source = std::optional<std::string>{};
+  auto assign_parameters
+    = [&](std::string_view field_name, const auto& field_value,
+          std::vector<package_operator_parameter>& target,
+          std::optional<std::string>& source) -> caf::expected<void> {
+    if (source) {
+      return diagnostic::error("`{}` already defined (previously via `{}`)",
+                               field_name, *source)
+        .note("invalid package definition")
+        .to_error();
+    }
+    TRY(auto parsed, parse_operator_parameter_list(field_name, field_value));
+    target = std::move(parsed);
+    source = std::string{field_name};
+    return {};
+  };
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(definition);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
-    TRY_ASSIGN_LIST_TO_RESULT(args, package_operator_parameter);
-    TRY_ASSIGN_LIST_TO_RESULT(options, package_operator_parameter);
+    if (key == "args") {
+      if (is<caf::none_t>(value)) {
+        continue;
+      }
+      if (const auto* args_record = try_as<view<record>>(&value)) {
+        for (const auto& [subkey, subvalue] : *args_record) {
+          if (subkey == "positional") {
+            if (auto assigned
+                = assign_parameters("args.positional", subvalue,
+                                    result.args.positional, positional_source);
+                ! assigned) {
+              return assigned.error();
+            }
+            continue;
+          }
+          if (subkey == "named") {
+            if (auto assigned = assign_parameters(
+                  "args.named", subvalue, result.args.named, named_source);
+                ! assigned) {
+              return assigned.error();
+            }
+            continue;
+          }
+          TENZIR_WARN("ignoring unknown key `{}` in `args` entry in package "
+                      "definition",
+                      subkey);
+        }
+        continue;
+      }
+      if (try_as<view<list>>(&value)) {
+        if (auto assigned = assign_parameters(
+              "args", value, result.args.positional, positional_source);
+            ! assigned) {
+          return assigned.error();
+        }
+        continue;
+      }
+      return diagnostic::error("`args` must be a record or list")
+        .note("invalid package definition")
+        .to_error();
+    }
+    if (key == "options") {
+      if (is<caf::none_t>(value)) {
+        continue;
+      }
+      if (auto assigned = assign_parameters("options", value, result.args.named,
+                                            named_source);
+          ! assigned) {
+        return assigned.error();
+      }
+      continue;
+    }
     TENZIR_WARN("ignoring unknown key `{}` in `operator` entry in package "
                 "definition",
                 key);
@@ -937,21 +1032,24 @@ auto package_operator_parameter::to_record() const -> record {
 }
 
 auto package_operator::to_record() const -> record {
-  auto args_list = list{};
-  args_list.reserve(args.size());
-  for (const auto& arg : args) {
-    args_list.emplace_back(arg.to_record());
+  auto positional_list = list{};
+  positional_list.reserve(args.positional.size());
+  for (const auto& arg : args.positional) {
+    positional_list.emplace_back(arg.to_record());
   }
-  auto options_list = list{};
-  options_list.reserve(options.size());
-  for (const auto& opt : options) {
-    options_list.emplace_back(opt.to_record());
+  auto named_list = list{};
+  named_list.reserve(args.named.size());
+  for (const auto& opt : args.named) {
+    named_list.emplace_back(opt.to_record());
   }
+  auto args_record = record{
+    {"positional", std::move(positional_list)},
+    {"named", std::move(named_list)},
+  };
   auto result = record{
     {"description", description},
     {"definition", definition},
-    {"args", std::move(args_list)},
-    {"options", std::move(options_list)},
+    {"args", std::move(args_record)},
   };
   return result;
 }
@@ -1108,9 +1206,9 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     // Create user_defined_operator with parameter information
     auto udo = user_defined_operator{std::move(pipe), {}, {}};
     auto seen_names = std::unordered_set<std::string>{};
-    seen_names.reserve(op.args.size() + op.options.size());
+    seen_names.reserve(op.args.positional.size() + op.args.named.size());
     // Convert positional args
-    for (const auto& arg : op.args) {
+    for (const auto& arg : op.args.positional) {
       if (not seen_names.insert(arg.name).second) {
         diagnostic::error("duplicate parameter '{}' in operator '{}'", arg.name,
                           fmt::join(op_name, "::"))
@@ -1134,7 +1232,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       });
     }
     // Convert named options
-    for (const auto& opt : op.options) {
+    for (const auto& opt : op.args.named) {
       if (not seen_names.insert(opt.name).second) {
         diagnostic::error("duplicate parameter '{}' in operator '{}'", opt.name,
                           fmt::join(op_name, "::"))

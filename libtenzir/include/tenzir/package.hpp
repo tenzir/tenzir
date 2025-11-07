@@ -101,11 +101,21 @@ struct package_operator_parameter final {
   }
 };
 
+struct package_operator_arguments final {
+  std::vector<package_operator_parameter> positional;
+  std::vector<package_operator_parameter> named;
+
+  friend auto inspect(auto& f, package_operator_arguments& x) -> bool {
+    return f.object(x)
+      .pretty_name("package_operator_arguments")
+      .fields(f.field("positional", x.positional), f.field("named", x.named));
+  }
+};
+
 struct package_operator final {
   std::optional<std::string> description;
   std::string definition; // required to be non-empty
-  std::vector<package_operator_parameter> args;
-  std::vector<package_operator_parameter> options;
+  package_operator_arguments args;
 
   auto to_record() const -> record;
 
@@ -117,8 +127,7 @@ struct package_operator final {
     return f.object(x)
       .pretty_name("package_pipeline")
       .fields(f.field("description", x.description),
-              f.field("definition", x.definition), f.field("args", x.args),
-              f.field("options", x.options));
+              f.field("definition", x.definition), f.field("args", x.args));
   }
 };
 
