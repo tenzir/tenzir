@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async.hpp>
+#include <tenzir/async/queue_scope.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/exec/pipeline.hpp>
 #include <tenzir/finalize_ctx.hpp>
@@ -105,6 +107,46 @@ private:
   base_ctx ctx_;
 };
 #endif
+
+class OpenPipeline {
+public:
+  auto push(table_slice input) -> Task<void>;
+
+  auto pull() -> Task<table_slice>;
+};
+
+template <class Output>
+class Group final : public Operator<table_slice, Output> {
+public:
+  Group(ast::expression over, ir::pipeline pipe)
+    : over_{std::move(over)}, pipe_{std::move(pipe)} {
+  }
+
+  auto await_task() const -> Task<std::any> override {
+    co_return co_await pipe_output_.next();
+  }
+
+  auto process(table_slice input, Push<Output>& push, AsyncCtx& ctx)
+    -> Task<void> {
+    // TODO
+    auto key = data{"hi"};
+    auto it = pipes_.find(key);
+    // TODO
+    TENZIR_ASSERT(it != pipes_.end());
+    auto& pipe = it.value();
+    // TODO: Earlier, when spawning the pipeline
+    pipe_output_.spawn(pipe.pull());
+    co_await pipe.feed(input);
+    co_return;
+  }
+
+private:
+  ast::expression over_;
+  ir::pipeline pipe_;
+  mutable QueueScope<table_slice> pipe_output_;
+  tsl::robin_map<data, OpenPipeline> pipes_;
+};
+
 class group_bp final : public plan::operator_base {
 public:
   group_bp() = default;
@@ -122,6 +164,10 @@ public:
     TENZIR_TODO();
     // return args.sys.spawn(caf::actor_from_state<group>, over_, pipe_, id_,
     //                       args.ctx);
+  }
+
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator {
+    return Group<table_slice>{std::move(over_), std::move(pipe_)};
   }
 
   friend auto inspect(auto& f, group_bp& x) -> bool {
@@ -154,6 +200,11 @@ public:
     (void)instantiate;
     TRY(pipe_.substitute(ctx, false));
     return {};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    return pipe_.infer_type(input, dh);
   }
 
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {

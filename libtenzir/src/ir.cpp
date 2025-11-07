@@ -104,6 +104,8 @@ private:
 
 class set_ir final : public ir::operator_base {
 public:
+  set_ir() = default;
+
   explicit set_ir(std::vector<ast::assignment> assignments)
     : assignments_(std::move(assignments)) {
   }
@@ -138,6 +140,15 @@ public:
     ops.emplace_back(std::make_unique<set_ir>(std::move(*this)));
     auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
     return {{}, order_, std::move(replacement)};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("set operator expected events").emit(dh);
+      return failure::promise();
+    }
+    return input;
   }
 
   friend auto inspect(auto& f, set_ir& x) -> bool {
@@ -638,6 +649,7 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
     new inspection_plugin<plan::operator_base, legacy_plan>{},
     new inspection_plugin<ir::operator_base, if_ir>{},
     new inspection_plugin<plan::operator_base, if_exec>{},
+    new inspection_plugin<ir::operator_base, set_ir>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
