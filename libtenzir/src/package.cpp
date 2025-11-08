@@ -12,16 +12,19 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
+#include <tenzir/concept/parseable/tenzir/legacy_type.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/legacy_type.hpp>
 #include <tenzir/package.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <string_view>
 #include <type_traits>
 #include <unordered_set>
@@ -327,7 +330,7 @@ auto package_operator_parameter::parse(const view<record>& data)
   auto result = package_operator_parameter{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(name)
-    TRY_ASSIGN_STRING_TO_RESULT(type)
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(type)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
     TRY_CONVERT_TO_STRING(default, default_);
     TENZIR_WARN("ignoring unknown key `{}` in `parameter` entry in package "
@@ -335,7 +338,6 @@ auto package_operator_parameter::parse(const view<record>& data)
                 key);
   }
   REQUIRED_FIELD(name);
-  REQUIRED_FIELD(type);
   return result;
 }
 
@@ -401,6 +403,50 @@ auto parse_operator_parameter_list(std::string_view field_name,
     result.push_back(std::move(param));
   }
   return result;
+}
+
+auto ascii_iequals(std::string_view lhs, std::string_view rhs) -> bool {
+  return lhs.size() == rhs.size()
+         && std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+                       [](char l, char r) {
+                         return std::tolower(l) == std::tolower(r);
+                       });
+}
+
+auto is_field_path_type(const package_operator_parameter& param) -> bool {
+  return param.type && ascii_iequals(*param.type, "field_path");
+}
+
+auto normalize_basic_type_name(std::string_view name) -> std::string {
+  if (ascii_iequals(name, "int") || ascii_iequals(name, "integer")) {
+    return "int64";
+  }
+  if (ascii_iequals(name, "count")) {
+    return "uint64";
+  }
+  if (ascii_iequals(name, "float") || ascii_iequals(name, "real")) {
+    return "double";
+  }
+  return std::string{name};
+}
+
+auto parse_parameter_value_type(const package_operator_parameter& param,
+                                std::string_view op_id, diagnostic_handler& dh)
+  -> failure_or<std::optional<type>> {
+  if (! param.type || is_field_path_type(param)) {
+    return std::optional<type>{};
+  }
+  auto normalized = normalize_basic_type_name(*param.type);
+  auto legacy = legacy_type{};
+  auto f = normalized.begin();
+  auto l = normalized.end();
+  if (! parsers::legacy_type(f, l, legacy) || f != l) {
+    diagnostic::error("invalid type '{}' for parameter '{}' in operator '{}'",
+                      *param.type, param.name, op_id)
+      .emit(dh);
+    return failure::promise();
+  }
+  return std::optional<type>{type::from_legacy_type(std::move(legacy))};
 }
 
 auto load_tql_with_frontmatter(std::string_view input)
@@ -1022,9 +1068,11 @@ auto package_example::to_record() const -> record {
 auto package_operator_parameter::to_record() const -> record {
   auto result = record{
     {"name", name},
-    {"type", type},
     {"description", description},
   };
+  if (type) {
+    result["type"] = *type;
+  }
   if (default_) {
     result["default"] = default_;
   }
@@ -1138,7 +1186,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     return current;
   };
   auto to_parameter_kind = [](const package_operator_parameter& param) {
-    if (param.type == "field_path") {
+    if (is_field_path_type(param)) {
       return user_defined_operator::parameter_kind::field_path;
     }
     return user_defined_operator::parameter_kind::expression;
@@ -1172,7 +1220,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       return failure::promise();
     }
     auto expr = make_constant_expression(std::move(*yaml_data));
-    if (param.type == "field_path") {
+    if (is_field_path_type(param)) {
       auto copy = ast::expression{expr};
       if (! ast::field_path::try_from(std::move(copy))) {
         diagnostic::error("default value for parameter '{}' must be a selector",
@@ -1192,6 +1240,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       return failure::promise();
     }
     auto pipe = std::move(*parsed);
+    auto op_id = fmt::format("{}", fmt::join(op_name, "::"));
     auto start_idx = size_t{0};
     if (op_name.size() - start_idx < 1) {
       diagnostic::error("invalid operator path in package '{}': {}", pkg.id,
@@ -1222,13 +1271,18 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
+      auto value_type = parse_parameter_value_type(arg, op_id, dh);
+      if (value_type.is_error()) {
+        return failure::promise();
+      }
       udo.positional_params.push_back({
         arg.name,
-        arg.type,
+        arg.type.value_or(""),
         arg.description,
         to_parameter_kind(arg),
         std::nullopt,
         true,
+        std::move(*value_type),
       });
     }
     // Convert named options
@@ -1243,14 +1297,19 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       if (default_expr.is_error()) {
         return failure::promise();
       }
+      auto value_type = parse_parameter_value_type(opt, op_id, dh);
+      if (value_type.is_error()) {
+        return failure::promise();
+      }
       auto required = not default_expr->has_value();
       udo.named_params.push_back({
         opt.name,
-        opt.type,
+        opt.type.value_or(""),
         opt.description,
         to_parameter_kind(opt),
         std::move(*default_expr),
         required,
+        std::move(*value_type),
       });
     }
     set.op = operator_def{std::move(udo)};

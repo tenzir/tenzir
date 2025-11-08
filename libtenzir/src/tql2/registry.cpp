@@ -15,6 +15,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/eval.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -268,6 +269,35 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
         return failure::promise();
       };
 
+      auto make_type_error =
+        [&](const user_defined_operator::parameter& param,
+            const ast::expression& expr,
+            std::optional<location> explicit_location)
+        -> std::optional<diagnostic_builder> {
+        if (! param.value_type) {
+          return std::nullopt;
+        }
+        auto diag_loc = explicit_location.value_or(expr.get_location());
+        if (auto value = try_const_eval(expr, ctx)) {
+          if (type_check(*param.value_type, *value)) {
+            return std::nullopt;
+          }
+          auto actual_type = type::infer(*value);
+          auto actual_str
+            = actual_type ? fmt::format("{}", *actual_type)
+                          : std::string{"unknown"};
+          return diagnostic::error(
+                   "argument `{}` must be of type `{}` (got `{}`)", param.name,
+                   fmt::format("{}", *param.value_type), actual_str)
+            .primary(diag_loc);
+        }
+        return diagnostic::error(
+                 "argument `{}` must be a constant expression because it "
+                 "declares type `{}`",
+                 param.name, parameter_type_label(param))
+          .primary(diag_loc);
+      };
+
       // If there are no parameters defined, check that no arguments were provided
       if (udo.positional_params.empty() && udo.named_params.empty()) {
         if (! inv.args.empty()) {
@@ -388,6 +418,9 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
             return fail(diagnostic::error("expected a selector").primary(expr));
           }
         }
+        if (auto err = make_type_error(param, expr, std::nullopt)) {
+          return fail(std::move(*err));
+        }
         substitutions.emplace(param.name, std::move(expr));
       }
 
@@ -407,6 +440,10 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
             return fail(
               diagnostic::error("expected a selector").primary(inv.self));
           }
+        }
+        if (auto err
+            = make_type_error(param, value, named_value_locations[i])) {
+          return fail(std::move(*err));
         }
         substitutions.emplace(param.name, std::move(value));
       }

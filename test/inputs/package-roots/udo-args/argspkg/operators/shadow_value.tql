@@ -3,7 +3,6 @@ description: "Ensure parameter substitution respects local shadowing"
 args:
   positional:
     - name: value
-      type: string
   named:
     - name: suffix
       type: string

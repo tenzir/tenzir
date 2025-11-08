@@ -83,7 +83,7 @@ struct package_input final {
 
 struct package_operator_parameter final {
   std::string name; // required to be non-empty
-  std::string type; // required to be non-empty
+  std::optional<std::string> type;
   std::optional<std::string> description;
   std::optional<std::string> default_; // for named params only
 
