@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/type.hpp"
 
 #include <memory>
 #include <shared_mutex>
@@ -36,6 +37,7 @@ struct user_defined_operator {
     parameter_kind kind = parameter_kind::expression;
     std::optional<ast::expression> default_value;
     bool required = true;
+    std::optional<type> value_type;
   };
   std::vector<parameter> positional_params;
   std::vector<parameter> named_params;

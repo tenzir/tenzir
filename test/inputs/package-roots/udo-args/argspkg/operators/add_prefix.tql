@@ -3,7 +3,6 @@ description: "Add a prefix to a value"
 args:
   positional:
     - name: value
-      type: string
       description: "The value to prefix"
   named:
     - name: prefix
