@@ -12,9 +12,11 @@
 #include "tenzir/exec.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
 
@@ -394,15 +396,32 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
-            // TODO: What about diagnostics that end up being emitted here?
-            // We need to provide a context that does not feature any outer
-            // variables.
             auto udo_ctx = ctx.without_env();
-            auto definition = op.definition;
-            // By compiling the operator every time from AST to IR, we assign
-            // new let IDs. This is important because if an operator is used
-            // twice, it could have different values for its bindings.
-            TRY(auto pipe, std::move(definition).compile(udo_ctx));
+            auto op_name = make_operator_name(x.op);
+            auto usage = make_usage_string(op_name, op);
+            auto parameter_note = make_parameter_note(op);
+            const auto& docs = user_defined_operator_docs();
+            auto fail_ast = udo_failure_handler{
+              [&](diagnostic_builder d) -> failure_or<ast::pipeline> {
+                auto builder = std::move(d).usage(usage);
+                if (parameter_note) {
+                  builder = std::move(builder).note(*parameter_note);
+                }
+                builder = std::move(builder).docs(docs);
+                std::move(builder).emit(ctx);
+                return failure::promise();
+              }};
+            auto factory_invocation
+              = operator_factory_plugin::invocation{x.op, std::move(x.args)};
+            auto sp
+              = session_provider::make(static_cast<diagnostic_handler&>(ctx));
+            auto helper_session = sp.as_session();
+            auto instantiated = instantiate_user_defined_operator(
+              op, factory_invocation, helper_session, fail_ast);
+            if (! instantiated) {
+              return failure::promise();
+            }
+            TRY(auto pipe, std::move(*instantiated).compile(udo_ctx));
             // If it would have arguments, we need to create appropriate
             // bindings now. For constant arguments, we could bind the
             // parameters to a new `let` that stores that value. For
