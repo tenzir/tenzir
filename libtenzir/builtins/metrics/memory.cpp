@@ -449,12 +449,13 @@ auto get_raminfo() -> caf::expected<record> {
 #endif
   const auto table_slice_stats = table_slice::memory_stats();
   auto table_slice_record = record{};
-  table_slice_record.reserve(3);
+  table_slice_record.reserve(4);
   table_slice_record.try_emplace("serialized",
                                  table_slice_stats.serialized_bytes);
   table_slice_record.try_emplace("non_serialized",
                                  table_slice_stats.non_serialized_bytes);
   table_slice_record.try_emplace("count", table_slice_stats.instances);
+  table_slice_record.try_emplace("rows", table_slice_stats.rows);
   result.try_emplace("table_slices", std::move(table_slice_record));
   result.try_emplace("chunk", make_chunk_info());
   return result;
@@ -496,6 +497,7 @@ public:
       {"serialized", int64_type{}},
       {"non_serialized", int64_type{}},
       {"count", int64_type{}},
+      {"rows", int64_type{}},
     };
     const auto bytes_and_count = record_type{
       {"bytes", int64_type{}},
