@@ -399,7 +399,7 @@ auto selected_backend(const char* var_name) noexcept -> enum backend {
 auto trim_interval() noexcept -> tenzir::duration {
   using namespace std::chrono_literals;
   constexpr static auto var_name = "TENZIR_ALLOC_TRIM_INTERVAL";
-  constexpr static auto default_interval = duration{10min};
+  constexpr static auto default_interval = duration{1min};
   const auto env = ::getenv(var_name);
   if (not env) {
     return default_interval;
