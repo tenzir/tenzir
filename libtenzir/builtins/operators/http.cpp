@@ -195,14 +195,14 @@ struct internal_sink final : public crtp_operator<internal_sink> {
         co_yield {};
         continue;
       }
-      TENZIR_DEBUG("[internal-http-sink] pushing slice");
+      TENZIR_TRACE("[internal-http-sink] pushing slice");
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::internal_v, atom::push_v, std::move(slice))
         .request(actor_, caf::infinite)
         .then(
           [&] {
-            TENZIR_DEBUG("[internal-http-sink] pushed slice");
+            TENZIR_TRACE("[internal-http-sink] pushed slice");
             ctrl.set_waiting(false);
           },
           [&](const caf::error& e) {
@@ -218,7 +218,7 @@ struct internal_sink final : public crtp_operator<internal_sink> {
       .request(actor_, caf::infinite)
       .then(
         [&] {
-          TENZIR_DEBUG("[internal-http-sink] pushed final slice");
+          TENZIR_TRACE("[internal-http-sink] pushed final slice");
           ctrl.set_waiting(false);
         },
         [&](const caf::error& e) {
@@ -344,7 +344,7 @@ auto find_decompression_plugin(std::string_view ext, location op,
   for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
     if (std::ranges::contains(plugin->decompress_properties().extensions,
                               ext)) {
-      TENZIR_DEBUG("[http] inferred plugin `{}` for extension `{}`",
+      TENZIR_TRACE("[http] inferred plugin `{}` for extension `{}`",
                    plugin->name(), ext);
       auto inv = operator_factory_plugin::invocation{
         ast::entity{
@@ -364,7 +364,7 @@ auto find_parser_plugin(std::string_view ext, location op,
                         diagnostic_handler& dh) -> failure_or<operator_ptr> {
   for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
     if (std::ranges::contains(plugin->read_properties().extensions, ext)) {
-      TENZIR_DEBUG("[http] inferred plugin `{}` for extension `{}`",
+      TENZIR_TRACE("[http] inferred plugin `{}` for extension `{}`",
                    plugin->name(), ext);
       auto inv = operator_factory_plugin::invocation{
         ast::entity{
@@ -421,7 +421,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
         and last_dot != 0) {
       auto extension = segment.substr(last_dot + 1);
       auto v = std::vector<operator_ptr>{};
-      TENZIR_DEBUG("[http] finding decompression plugin for extension `{}`",
+      TENZIR_TRACE("[http] finding decompression plugin for extension `{}`",
                    extension);
       TRY(auto decompressor, find_decompression_plugin(extension, oploc, dh));
       if (decompressor) {
@@ -431,7 +431,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
           extension = segment.substr(first_dot + 1, last_dot - first_dot - 1);
         }
       }
-      TENZIR_DEBUG("[http] finding parser plugin for extension `{}`",
+      TENZIR_TRACE("[http] finding parser plugin for extension `{}`",
                    extension);
       TRY(auto parser, find_parser_plugin(extension, oploc, dh));
       if (parser) {
@@ -485,7 +485,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
 auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
                     std::optional<expression> filter, chunk_ptr ptr,
                     bool is_warning) -> http_actor {
-  TENZIR_DEBUG("[http] spawning http_actor");
+  TENZIR_TRACE("[http] spawning http_actor");
   // TODO: Figure out why only `from_http` shuts down when spawned as linked
   auto ha = ctrl.self().spawn(caf::actor_from_state<http_state>,
                               ctrl.shared_diagnostics(),
@@ -508,7 +508,7 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
     pipe.inner.append(
       std::make_unique<internal_sink>(ha, std::move(filter), pipe.source));
   }
-  TENZIR_DEBUG("[http] spawning subpipeline");
+  TENZIR_TRACE("[http] spawning subpipeline");
   const auto handle
     = ctrl.self().spawn(pipeline_executor,
                         std::move(pipe.inner).optimize_if_closed(),
@@ -516,16 +516,16 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
                         ctrl.has_terminal(), ctrl.is_hidden());
   handle->link_to(ha);
   ctrl.self().attach_functor([handle] {});
-  TENZIR_DEBUG("[http] requesting subpipeline start");
+  TENZIR_TRACE("[http] requesting subpipeline start");
   ctrl.self()
     .mail(atom::start_v)
     .request(handle, caf::infinite)
     .then(
       [] {
-        TENZIR_DEBUG("[http] subpipeline started");
+        TENZIR_TRACE("[http] subpipeline started");
       },
       [&ctrl, is_warning, loc = pipe.source](const caf::error& e) {
-        TENZIR_DEBUG("[http] failed to start subpipeline: {}", e);
+        TENZIR_TRACE("[http] failed to start subpipeline: {}", e);
         diagnostic::error(e)
           .primary(loc)
           .severity(is_warning ? severity::warning : severity::error)
@@ -552,11 +552,11 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
   return match(
     val,
     [](const caf::none_t&) -> std::optional<std::string> {
-      TENZIR_DEBUG("[http] finishing pagination");
+      TENZIR_TRACE("[http] finishing pagination");
       return std::nullopt;
     },
     [](const std::string_view& url) -> std::optional<std::string> {
-      TENZIR_DEBUG("[http] paginating: {}", url);
+      TENZIR_TRACE("[http] paginating: {}", url);
       return std::string{url};
     },
     [&](const auto&) -> std::optional<std::string> {
@@ -1042,7 +1042,7 @@ public:
       .make_observable()
       .from_resource(std::move(*pull))
       .for_each([&](const http::request& r) mutable {
-        TENZIR_DEBUG("[http] handling request with size: {}B",
+        TENZIR_TRACE("[http] handling request with size: {}B",
                      r.body().size_bytes());
         if (args_.responses) {
           const auto it = args_.responses->inner.find(r.header().path());
@@ -1077,15 +1077,15 @@ public:
         }
         std::invoke(
           [&, &args_ = args_, r, actor](this const auto& pull) -> void {
-            TENZIR_DEBUG("[http] requesting slice");
+            TENZIR_TRACE("[http] requesting slice");
             ctrl.self()
               .mail(atom::pull_v)
               .request(actor, caf::infinite)
               .then(
                 [&, r, pull, actor](table_slice slice) {
-                  TENZIR_DEBUG("[http] pulled slice");
+                  TENZIR_TRACE("[http] pulled slice");
                   if (slice.rows() == 0) {
-                    TENZIR_DEBUG("[http] finishing subpipeline");
+                    TENZIR_TRACE("[http] finishing subpipeline");
                     ctrl.set_waiting(false);
                     return;
                   }
@@ -1100,7 +1100,7 @@ public:
                   TENZIR_TRACE("[http] failed to get slice: {}", e);
                 });
           });
-        TENZIR_DEBUG("[http] handled request");
+        TENZIR_TRACE("[http] handled request");
       });
     while (true) {
       ctrl.set_waiting(true);
@@ -1189,7 +1189,7 @@ public:
       return [&, hdrs = headers,
               uri = std::move(uri)](const http::response& r) {
         ctrl.set_waiting(false);
-        TENZIR_DEBUG("[http] handling response with size: {}B",
+        TENZIR_TRACE("[http] handling response with size: {}B",
                      r.body().size_bytes());
         const auto& headers = r.header_fields();
         const auto* eit = std::ranges::find_if(headers, [](const auto& x) {
@@ -1245,16 +1245,16 @@ public:
                                           args_.filter, make_chunk(), false);
         std::invoke(
           [&, &args_ = args_, r, actor, hdrs](this const auto& pull) -> void {
-            TENZIR_DEBUG("[http] requesting slice");
+            TENZIR_TRACE("[http] requesting slice");
             ctrl.self()
               .mail(atom::pull_v)
               .request(actor, caf::infinite)
               .then(
                 [&, r, pull, actor, hdrs](table_slice slice) {
-                  TENZIR_DEBUG("[http] pulled slice");
+                  TENZIR_TRACE("[http] pulled slice");
                   ctrl.set_waiting(false);
                   if (slice.rows() == 0) {
-                    TENZIR_DEBUG("[http] finishing subpipeline");
+                    TENZIR_TRACE("[http] finishing subpipeline");
                     --awaiting;
                     return;
                   }
@@ -1281,7 +1281,7 @@ public:
                     }
                     paginate_queue.emplace_back(std::move(*uri), hdrs);
                   } else {
-                    TENZIR_DEBUG("[http] done paginating");
+                    TENZIR_TRACE("[http] done paginating");
                   }
                   slices.push_back(std::move(slice));
                 },
@@ -1292,7 +1292,7 @@ public:
                     .emit(ctrl.diagnostics());
                 });
           });
-        TENZIR_DEBUG("[http] handled response");
+        TENZIR_TRACE("[http] handled response");
       };
     };
     auto uri = caf::make_uri(url);
@@ -1712,7 +1712,7 @@ public:
             std::unordered_map<std::string, std::string> hdrs) {
           return [&, hdrs = std::move(hdrs), uri = std::move(uri),
                   og = materialize(std::move(og))](const http::response& r) {
-            TENZIR_DEBUG("[http] handling response with size: {}B",
+            TENZIR_TRACE("[http] handling response with size: {}B",
                          r.body().size_bytes());
             ctrl.set_waiting(false);
             const auto& headers = r.header_fields();
@@ -1774,16 +1774,16 @@ public:
               = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
             std::invoke([&, &args_ = args_, r, og, hdrs,
                          actor](this const auto& pull) -> void {
-              TENZIR_DEBUG("[http] requesting slice");
+              TENZIR_TRACE("[http] requesting slice");
               ctrl.self()
                 .mail(atom::pull_v)
                 .request(actor, caf::infinite)
                 .then(
                   [&, r, hdrs, pull, og, actor](table_slice slice) {
-                    TENZIR_DEBUG("[http] pulled slice");
+                    TENZIR_TRACE("[http] pulled slice");
                     ctrl.set_waiting(false);
                     if (slice.rows() == 0) {
-                      TENZIR_DEBUG("[http] finishing subpipeline");
+                      TENZIR_TRACE("[http] finishing subpipeline");
                       --awaiting;
                       return;
                     }
@@ -1822,7 +1822,7 @@ public:
                           std::move(*caf_uri), std::move(hdrs)});
                       }
                     } else {
-                      TENZIR_DEBUG("[http] done paginating");
+                      TENZIR_TRACE("[http] done paginating");
                     }
                     slices.push_back(std::move(slice));
                   },
@@ -1835,7 +1835,7 @@ public:
                       .emit(ctrl.diagnostics());
                   });
             });
-            TENZIR_DEBUG("[http] handled response");
+            TENZIR_TRACE("[http] handled response");
           };
         };
     for (const auto& slice : input) {

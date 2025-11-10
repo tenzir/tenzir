@@ -66,7 +66,7 @@ struct table_slice_accounting_state final {
 
   // Mutex that must be locked while the maps are accessed.
   std::mutex mutex;
-  tsl::robin_map<const chunk*, entry> chunks;
+  tsl::robin_map<const std::byte*, entry> chunks;
   tsl::robin_map<const arrow::RecordBatch*, entry> record_batches;
 };
 
@@ -94,7 +94,7 @@ void account_table_slice_resources(
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
   const auto account_rows_with_chunk = is_serialized || ! batch;
-  auto& chunk_entry = state.chunks[chunk.get()];
+  auto& chunk_entry = state.chunks[chunk->data()];
   if (chunk_entry.refcount++ == 0) {
     auto bytes = static_cast<uint64_t>(chunk->size());
     chunk_entry.bytes = bytes;
@@ -131,7 +131,7 @@ void release_table_slice_resources(
   }
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
-  auto it = state.chunks.find(chunk.get());
+  auto it = state.chunks.find(chunk->data());
   TENZIR_ASSERT(it != state.chunks.end());
   auto& chunk_entry = it.value();
   TENZIR_ASSERT(chunk_entry.refcount > 0);
