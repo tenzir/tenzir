@@ -204,7 +204,7 @@ public:
     // like an antipattern. It is safe for this particular case because the
     // memory for basic types is guaranteed to have static lifetime that
     // exceeds the lifetime of all types.
-    table_ = chunk::make(as_bytes(other), []() noexcept {});
+    table_ = chunk_ptr{nullptr, as_bytes(other)};
   }
 
   /// Explicitly construct a type from a complex concrete type.

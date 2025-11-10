@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
+#include <iterator>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -37,6 +38,142 @@ struct chunk_metadata {
       .pretty_name("tenzir.chunk_metadata")
       .fields(f.field("content_type", x.content_type));
   }
+};
+
+/// Optionally reference-counted view of some data.
+class chunk_ptr {
+public:
+  using view_type = std::span<const std::byte>;
+
+  // Proxy the original `caf::intrusive_ptr<chunk>` interface.
+  class proxy {
+  public:
+    proxy() = default;
+
+    proxy(caf::intrusive_ptr<chunk> ptr, view_type view)
+      : ptr_{std::move(ptr)}, view_{view} {
+    }
+
+    auto view() const noexcept -> view_type {
+      return view_;
+    }
+
+    auto data() noexcept -> view_type::pointer {
+      return view_.data();
+    }
+
+    auto data() const noexcept -> view_type::const_pointer {
+      return view_.data();
+    }
+
+    auto size() const noexcept -> view_type::size_type {
+      return view_.size();
+    }
+
+    auto begin() const noexcept -> view_type::iterator {
+      return view_.begin();
+    }
+
+    auto end() const noexcept -> view_type::iterator {
+      return view_.end();
+    }
+
+    auto metadata() const noexcept -> const chunk_metadata&;
+
+    auto unique() const noexcept -> bool;
+
+    auto slice(view_type view) const -> chunk_ptr {
+      TENZIR_ASSERT(view.begin() >= begin());
+      TENZIR_ASSERT(view.end() <= end());
+      return chunk_ptr{ptr_, view};
+    }
+
+    auto slice(view_type::size_type offset, view_type::size_type count
+                                            = std::dynamic_extent) const
+      -> chunk_ptr {
+      TENZIR_ASSERT(offset <= view_.size());
+      count = std::min(count, view_.size() - offset);
+      return chunk_ptr{ptr_, view_.subspan(offset, count)};
+    }
+
+    auto add_deletion_step(auto&& step) noexcept -> void;
+
+    friend class chunk_ptr;
+
+  private:
+    caf::intrusive_ptr<chunk> ptr_ = nullptr;
+    view_type view_;
+  };
+
+  chunk_ptr() = default;
+
+  chunk_ptr(caf::intrusive_ptr<chunk> ptr, view_type view)
+    : proxy_{std::move(ptr), view} {
+  }
+
+  chunk_ptr(std::nullptr_t) : chunk_ptr{} {
+  }
+
+  operator bool() const {
+    return proxy_.view_.data() != nullptr;
+  }
+
+  auto operator==(std::nullptr_t) const -> bool {
+    return proxy_.view_.data() == nullptr;
+  }
+
+  auto operator->() -> proxy* {
+    return &proxy_;
+  }
+
+  auto operator->() const -> const proxy* {
+    return &proxy_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, chunk_ptr& x) -> bool;
+
+  template <class Inspector>
+  friend auto load_impl(Inspector& f, chunk_ptr& x) -> bool;
+
+  template <class Inspector>
+  friend auto save_impl(Inspector& f, chunk_ptr& x) -> bool;
+
+  // -- free functions --------------------------------------------------------
+
+  /// Create an Arrow Buffer that structurally shares the lifetime of the chunk.
+  friend auto as_arrow_buffer(chunk_ptr chunk) noexcept
+    -> std::shared_ptr<arrow::Buffer>;
+
+  /// Create an Arrow RandomAccessFile with zero-copy support that structurally
+  /// shares the lifetime of the chunk.
+  friend auto as_arrow_file(chunk_ptr chunk) noexcept
+    -> std::shared_ptr<arrow::io::RandomAccessFile>;
+
+  // -- concepts --------------------------------------------------------------
+
+  friend auto as_bytes(const chunk_ptr& x) noexcept -> view_type {
+    return x.proxy_.view_;
+  }
+
+  friend auto write(const std::filesystem::path& filename, const chunk_ptr& x)
+    -> caf::error;
+
+  friend auto read(const std::filesystem::path& filename, chunk_ptr& x,
+                   chunk_metadata metadata) -> caf::error;
+
+private:
+  friend fmt::formatter<chunk_ptr>;
+
+  auto get() -> chunk* {
+    return proxy_.ptr_.get();
+  }
+
+  auto get() const -> const chunk* {
+    return proxy_.ptr_.get();
+  }
+
+  proxy proxy_;
 };
 
 /// A reference-counted contiguous block of memory. A chunk supports custom
@@ -290,7 +427,7 @@ private:
 
   template <class Inspector>
   friend bool load_impl(Inspector& f, chunk_ptr& x) {
-    x = nullptr;
+    x = chunk_ptr{};
     if (not f.template begin_object_t<chunk_ptr>()) {
       return false;
     }
@@ -304,6 +441,7 @@ private:
         return false;
       }
       auto buffer = std::make_unique_for_overwrite<std::byte[]>(size); // NOLINT
+      TENZIR_ASSERT(buffer);
       for (auto* it = buffer.get(); it != buffer.get() + size; ++it) {
         if (not f.value(*it)) {
           return false;
@@ -314,11 +452,7 @@ private:
       }
       const auto view = chunk::view_type{buffer.get(), size};
       x = chunk::make(
-        view,
-        [buffer = std::move(buffer)]() noexcept {
-          static_cast<void>(buffer);
-        },
-        chunk_metadata{});
+        view, [buffer = std::move(buffer)] noexcept {}, chunk_metadata{});
     }
     if (not f.end_field()) {
       return false;
@@ -328,15 +462,14 @@ private:
       return false;
     }
     if (has_metadata) {
-      if (not x) {
-        // If we're here then we got a non-nullptr chunk with metadata, which is
+      if (not x.get()) {
+        // If we're here then we got a nullptr chunk with metadata, which is
         // a logic error in the serializer.
         f.set_error(caf::make_error(ec::logic_error,
-                                    "non-nullptr chunk cannot have metadata"));
+                                    "nullptr chunk cannot have metadata"));
         return false;
       }
-      TENZIR_ASSERT(x, "got chunk without data but with metadata");
-      if (not f.apply(x->metadata_)) {
+      if (not f.apply(x.get()->metadata_)) {
         return false;
       }
     }
@@ -367,7 +500,7 @@ private:
       if (not f.begin_sequence(x->size())) {
         return false;
       }
-      for (auto byte : x->view_) {
+      for (auto byte : x->view()) {
         if (not f.value(byte)) {
           return false;
         }
@@ -379,11 +512,11 @@ private:
     if (not f.end_field()) {
       return false;
     }
-    if (not f.begin_field("metadata", x != nullptr)) {
+    if (not f.begin_field("metadata", x.get() != nullptr)) {
       return false;
     }
-    if (x) {
-      if (not f.apply(x->metadata_)) {
+    if (x.get()) {
+      if (not f.apply(x.get()->metadata_)) {
         return false;
       }
     }
@@ -418,6 +551,11 @@ bool inspect(Inspector& f, chunk_ptr& x) {
   } else {
     return save_impl(f, x);
   }
+}
+
+template <class Step>
+auto chunk_ptr::proxy::add_deletion_step(Step&& step) noexcept -> void {
+  ptr_->add_deletion_step(std::forward<Step>(step));
 }
 
 caf::error read(const std::filesystem::path& filename, chunk_ptr& x,

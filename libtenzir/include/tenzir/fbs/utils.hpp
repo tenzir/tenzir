@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/chunk.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
@@ -57,7 +58,7 @@ serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
   caf::byte_buffer buf;
   caf::binary_serializer source(buf);
-  if (!source.apply(x)) {
+  if (not source.apply(x)) {
     return caf::make_error(ec::serialization_error, "failed to serialize "
                                                     "bytes");
   }
@@ -70,11 +71,11 @@ serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
 template <class T, class Byte = uint8_t>
 caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
-  if (!v) {
+  if (not v) {
     return caf::make_error(ec::format_error, "no input");
   }
   detail::legacy_deserializer sink(as_bytes(*v));
-  if (!sink.apply(x)) {
+  if (not sink.apply(x)) {
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to deserialize {}",
                                        detail::pretty_type_name(x)));
@@ -95,7 +96,7 @@ const Flatbuffer* as_flatbuffer(std::span<const std::byte, Extent> xs) {
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   auto size = xs.size();
   flatbuffers::Verifier verifier{data, size};
-  if (!verifier.template VerifyBuffer<Flatbuffer>()) {
+  if (not verifier.template VerifyBuffer<Flatbuffer>()) {
     return nullptr;
   }
   return flatbuffers::GetRoot<Flatbuffer>(data);
@@ -118,7 +119,7 @@ caf::expected<chunk_ptr>
 wrap(T const& x, const char* file_identifier = nullptr) {
   flatbuffers::FlatBufferBuilder builder;
   auto root = pack(builder, x);
-  if (!root) {
+  if (not root) {
     return root.error();
   }
   builder.Finish(*root, file_identifier);

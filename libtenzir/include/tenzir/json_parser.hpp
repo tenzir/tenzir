@@ -299,7 +299,7 @@ public:
       arrays_of_objects_{arrays_of_objects} {
   }
 
-  auto parse(const chunk& json_chunk) -> void;
+  auto parse(const chunk::view_type& json_chunk) -> void;
   auto validate_completion() -> void;
 
 private:

@@ -57,7 +57,7 @@ struct table_slice_accounting_state final {
   std::atomic<int64_t> non_serialized_bytes{0};
   std::atomic<int64_t> instances{0};
   std::mutex mutex;
-  tsl::robin_map<const chunk*, std::pair<size_t, uint64_t>> chunks;
+  tsl::robin_map<const std::byte*, std::pair<size_t, uint64_t>> chunks;
   tsl::robin_map<const void*, std::pair<size_t, uint64_t>> record_batches;
 };
 
@@ -84,7 +84,7 @@ void account_table_slice_resources(
   }
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
-  auto& chunk_entry = state.chunks[chunk.get()];
+  auto& chunk_entry = state.chunks[chunk->data()];
   if (chunk_entry.first++ == 0) {
     auto bytes = static_cast<uint64_t>(chunk->size());
     chunk_entry.second = bytes;
@@ -111,7 +111,7 @@ void release_table_slice_resources(
   }
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
-  auto it = state.chunks.find(chunk.get());
+  auto it = state.chunks.find(chunk->data());
   TENZIR_ASSERT(it != state.chunks.end());
   auto& chunk_entry = it.value();
   auto& chunk_refcount = chunk_entry.first;

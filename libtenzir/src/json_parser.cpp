@@ -89,7 +89,7 @@ auto ndjson_parser::validate_completion() const -> void {
   // noop, just exists for easy of implementation
 }
 
-auto default_parser::parse(const chunk& json_chunk) -> void {
+auto default_parser::parse(const chunk::view_type& json_chunk) -> void {
   // Whether to retry on a capacity error
   auto retry_capacity_failure = false;
   // How many documents passed the simdjson batch_size.
