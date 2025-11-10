@@ -442,9 +442,11 @@ type _ocsf.v1_7_0_dev.object.classifier_details = record{
   uid: string #recommended,
 }
 
-// The Cloud object contains information about a cloud or Software-as-a-Service
-// account or similar construct, such as AWS Account ID, regions, organizations,
-// folders, compartments, tenants, etc.
+// The Cloud object describes the cloud computing environment where an event or
+// finding originated. It provides comprehensive context about the cloud
+// infrastructure, including the cloud service provider, account or subscription
+// details, organizational structure, geographic regions, availability zones,
+// and logical partitions.
 type _ocsf.v1_7_0_dev.object.cloud = record{
   account: _ocsf.v1_7_0_dev.object.account #optional,
   cloud_partition: string #optional,
@@ -789,7 +791,7 @@ type _ocsf.v1_7_0_dev.object.digital_signature = record{
   developer_uid: string #optional,
   digest: _ocsf.v1_7_0_dev.object.fingerprint #optional,
   state: string #optional,
-  state_id: int64 #optional #enum=3251408c #sibling=state,
+  state_id: int64 #optional #enum=70ec1806 #sibling=state,
 }
 
 // The Discovery Details object describes results of a discovery task/job.
@@ -1033,8 +1035,8 @@ type _ocsf.v1_7_0_dev.object.evidences = record{
 // registered in the <a target='_blank' href='https://github.com/ocsf/ocsf-
 // schema/blob/main/extensions.md'>extensions.md</a> file.
 type _ocsf.v1_7_0_dev.object.extension = record{
-  name: string #required,
-  uid: string #required,
+  name: string #recommended,
+  uid: string #recommended,
   version: string #required,
 }
 
@@ -1182,6 +1184,14 @@ type _ocsf.v1_7_0_dev.object.firewall_rule = record{
   type: string #optional,
   uid: string #recommended,
   version: string #optional,
+}
+
+// The Function Invocation object provides details regarding the invocation of a
+// function.
+type _ocsf.v1_7_0_dev.object.function_invocation = record{
+  error: string #optional,
+  parameters: list<_ocsf.v1_7_0_dev.object.parameter> #optional,
+  return_value: string #optional,
 }
 
 // A graph data structure representation with nodes and edges.
@@ -1669,13 +1679,14 @@ type _ocsf.v1_7_0_dev.object.mitigation = record{
   uid: string #recommended,
 }
 
-// The Module object describes the load attributes of a module.
+// The Module object describes the attributes of a module.
 type _ocsf.v1_7_0_dev.object.module = record{
   base_address: string #recommended,
   file: _ocsf.v1_7_0_dev.object.file #recommended,
-  function_name: string #optional,
+  function_invocation: _ocsf.v1_7_0_dev.object.function_invocation #optional,
+  function_name: string #recommended,
   load_type: string #optional,
-  load_type_id: int64 #required #enum=e44e26f5 #sibling=load_type,
+  load_type_id: int64 #recommended #enum=e44e26f5 #sibling=load_type,
   start_address: string #recommended,
   type: string #recommended,
 }
@@ -1998,6 +2009,13 @@ type _ocsf.v1_7_0_dev.object.package = record{
   version: string #required,
 }
 
+// The Parameter object provides details regarding a parameter of a a function.
+type _ocsf.v1_7_0_dev.object.parameter = record{
+  name: string #optional,
+  post_value: string #optional,
+  pre_value: string #optional,
+}
+
 // The peripheral device object describes the properties of external,
 // connectable, and detachable hardware.
 type _ocsf.v1_7_0_dev.object.peripheral_device = record{
@@ -2239,11 +2257,12 @@ type _ocsf.v1_7_0_dev.object.remediation = record{
   references: list<string> #optional,
 }
 
-// The entity from which an event or finding was first reported.
+// The entity from which an event or finding was reported.
 type _ocsf.v1_7_0_dev.object.reporter = record{
   hostname: string #recommended,
   ip: ip #recommended,
   name: string #recommended,
+  org: _ocsf.v1_7_0_dev.object.organization #optional,
   uid: string #recommended,
 }
 
@@ -5940,12 +5959,12 @@ type _ocsf.v1_7_0_dev.memory_activity = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
-// Module  Activity events report when a process loads or unloads the
+// Module Activity events report when an endpoint process acts on a
 // <code>module</code>.
 type _ocsf.v1_7_0_dev.module_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=967f5042 #sibling=activity_name,
+  activity_id: int64 #required #enum=134834f9 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_7_0_dev.object.actor #required,
   api: _ocsf.v1_7_0_dev.object.api #optional #profile=cloud,
@@ -5996,7 +6015,7 @@ type _ocsf.v1_7_0_dev.module_activity = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=3d807cc5 #sibling=type_name,
+  type_uid: int64 #required #enum=693141b9 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
@@ -6776,6 +6795,8 @@ type _ocsf.v1_7_0_dev.process_activity = record{
   injection_type: string #recommended,
   injection_type_id: int64 #recommended #enum=2b763504 #sibling=injection_type,
   is_alert: bool #recommended #profile=security_control,
+  launch_type: string #optional,
+  launch_type_id: int64 #recommended #enum=87080cc9 #sibling=launch_type,
   malware: list<_ocsf.v1_7_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_7_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
