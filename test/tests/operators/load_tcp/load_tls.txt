@@ -1,6 +1,0 @@
-{
-  line: "foo",
-}
-warning: stream truncated
- = note: failed to read from TCP connection
- = note: handle `16`
