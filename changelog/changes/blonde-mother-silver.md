@@ -1,12 +1,13 @@
 ---
-title: "Improved Memory Usage"
+title: "Fixed excessive memory allocation"
 type: bugfix
 authors: [IyeOnline,jachris,raxyte]
 pr: 5561
 ---
 
-We have switched the allocator back to the system/glibc allocator, as the `mimalloc`
-setup ran into issues on some systems.
+We have switched the allocator back to the system allocator for now, as the
+`mimalloc` setup led to significant memory usage issues on some systems.
 
-With this, we also added many more detailed metrics to `metrics "memory"` that
-should help us track down the cause of high memory usage.
+Furthermore, we added quite a few experimental memory-usage related metrics to
+`metrics "memory"`, providing additional insight into the memory usage of
+Tenzir.
