@@ -112,7 +112,7 @@ auto make_from(const memory::stats& stats) -> record {
   allocations.try_emplace(
     "peak", stats.allocations_peak.load(std::memory_order_relaxed));
   allocations.try_emplace(
-    "total", stats.allocations_cumulative.load(std::memory_order_relaxed));
+    "cumulative", stats.allocations_cumulative.load(std::memory_order_relaxed));
   return result;
 };
 
@@ -464,8 +464,6 @@ auto make_procfs_metrics() -> record {
       set_record_field(
         heap, "break_bytes",
         static_cast<uint64_t>(current_break - *program_break_base));
-    } else {
-      set_record_field(heap, "break_bytes", caf::none);
     }
   }
 #endif
@@ -507,7 +505,7 @@ auto get_raminfo() -> caf::expected<record> {
   table_slice_record.try_emplace("batch_count", table_slice_stats.instances);
   table_slice_record.try_emplace("event_count", table_slice_stats.rows);
   result.try_emplace("table_slices", std::move(table_slice_record));
-  result.try_emplace("chunk", make_chunk_info());
+  result.try_emplace("chunks", make_chunk_info());
   return result;
 }
 
@@ -606,7 +604,7 @@ public:
       {"c", bytes_and_allocations},
       {"malloc", malloc_stats},
       {"table_slices", table_slice_stats},
-      {"chunk", bytes_and_count},
+      {"chunks", bytes_and_count},
     }};
   }
 };
