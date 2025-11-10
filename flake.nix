@@ -55,7 +55,7 @@
         };
       };
     }
-    // flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ] (
+    // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ] (
       system:
       let
         overlay = import ./nix/overlay.nix;
@@ -93,6 +93,7 @@
           // {
             default = self.packages.${system}.tenzir-static;
           };
+        legacyPackages = pkgs;
         apps.tenzir-de = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de; };
         apps.tenzir-de-static = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de-static; };
         apps.tenzir = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir; };

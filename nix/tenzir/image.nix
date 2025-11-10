@@ -3,6 +3,7 @@ nix2container:
   lib,
   runCommand,
   bashInteractive,
+  cacert,
   coreutils,
   libcap,
   isStatic,
@@ -61,6 +62,7 @@ let
 
   layerDefs = [
     tmp
+    { copyToRoot = cacert; }
     { deps = extraTools; }
     { deps = [ pkg ]; }
   ] ++ builtins.map (pluginLayer: { deps = pluginLayer; }) plugins;
