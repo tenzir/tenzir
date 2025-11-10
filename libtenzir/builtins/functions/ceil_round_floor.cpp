@@ -62,7 +62,7 @@ public:
             },
             [&](const arrow::DoubleArray& arg) {
               // overflow logic from int.cpp
-              auto b = arrow::Int64Builder{};
+              auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
               check(b.Reserve(length));
               constexpr auto min
                 = static_cast<double>(std::numeric_limits<int64_t>::lowest())

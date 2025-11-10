@@ -49,7 +49,7 @@ public:
                                arg_expr = std::move(arg_expr),
                                this](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
-      auto b = arrow::BooleanBuilder{};
+      auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(eval.length()));
       for (auto [subject, arg] :
            split_multi_series(eval(subject_expr), eval(arg_expr))) {
@@ -118,7 +118,7 @@ public:
         return map_series(eval(subject_expr), [&](series subject) {
           auto f = detail::overload{
             [&](const arrow::StringArray& array) -> multi_series {
-              auto b = arrow::BooleanBuilder{};
+              auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
               for (auto i = int64_t{0}; i < subject.length(); ++i) {
                 if (array.IsNull(i)) {
                   check(b.AppendNull());

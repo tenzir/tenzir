@@ -45,7 +45,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::DoubleBuilder{};
+        auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         auto append_sqrt = [&](const arrow::DoubleArray& x) {
           for (auto y : x) {
@@ -70,7 +70,7 @@ public:
             [&](const arrow::Int64Array& value) {
               // TODO: Conversation should be automatic (if not
               // part of the kernel).
-              auto b = arrow::DoubleBuilder{};
+              auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
               check(b.Reserve(value.length()));
               for (auto y : value) {
                 if (y) {
@@ -115,7 +115,7 @@ public:
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
-      auto b = arrow::DoubleBuilder{};
+      auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(eval.length()));
       auto engine = std::default_random_engine{std::random_device{}()};
       auto dist = std::uniform_real_distribution<double>{0.0, 1.0};

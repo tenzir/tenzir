@@ -1344,7 +1344,7 @@ auto combine_offsets(
   TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
-  auto builder = arrow::Int32Builder{};
+  auto builder = arrow::Int32Builder{tenzir::arrow_memory_pool()};
   for (; it < list_offsets.end(); ++it) {
     for (const auto& index : static_cast<const arrow::Int32Array&>(*result)) {
       TENZIR_ASSERT(index);

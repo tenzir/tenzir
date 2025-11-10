@@ -457,7 +457,7 @@ template <>
 struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       if (l.IsNull(i) || r.IsNull(i)) {
@@ -477,7 +477,7 @@ struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
   static auto
   eval(const ip_type::array_type& l, const subnet_type::array_type& r, auto&&)
     -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       if (l.IsNull(i) || r.IsNull(i)) {
@@ -498,7 +498,7 @@ struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
   static auto eval(const subnet_type::array_type& l,
                    const subnet_type::array_type& r, auto&&)
     -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       if (l.IsNull(i) || r.IsNull(i)) {
@@ -521,7 +521,7 @@ struct EvalBinOp<Op, L, null_type> {
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     TENZIR_UNUSED(r);
     constexpr auto invert = Op == ast::binary_op::neq;
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       check(b.Append(l.IsNull(i) != invert));
     }
@@ -546,7 +546,7 @@ struct EvalBinOp<Op, ip_type, ip_type> {
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
@@ -572,7 +572,7 @@ struct EvalBinOp<Op, string_type, string_type> {
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
@@ -595,7 +595,7 @@ template <concrete_type L>
 struct EvalBinOp<ast::binary_op::in, L, list_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
                    auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(b.Reserve(l.length()));
     const auto lty = type::from_arrow(*l.type());
     const auto rty = type::from_arrow(*r.value_type());
@@ -679,7 +679,7 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
 
 template <ast::binary_op Op>
 auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
-  auto builder = arrow::BooleanBuilder{};
+  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
   check(builder.Reserve(self.length()));
   auto left_offset = int64_t{0};
   for (const auto& left : self.eval(x.left)) {
