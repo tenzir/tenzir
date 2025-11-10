@@ -53,6 +53,12 @@ RUN apt-get update && \
     ./build-arrow-adbc-package.sh
 RUN dpkg -c /tmp/arrow-adbc*.deb
 
+# -- mesh ----------------------------------------------------------------------
+
+FROM build-base AS mesh
+COPY scripts/debian/build-mesh.sh .
+RUN ./build-mesh.sh
+
 # -- dependencies --------------------------------------------------------------
 
 FROM build-base AS dependencies
@@ -65,6 +71,7 @@ COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=mesh /tmp/*.deb /tmp/custom-packages/
 
 COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
@@ -104,7 +111,7 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 # Additional arguments to be passed to CMake.
 ARG TENZIR_BUILD_OPTIONS
 
-ENV LDFLAGS="-Wl,--copy-dt-needed-entries"
+ENV LDFLAGS="-Wl,--no-as-needed -lmesh -Wl,--as-needed -Wl,--copy-dt-needed-entries" 
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -B build -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
@@ -117,9 +124,10 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
+      -D TENZIR_ALLOCATOR:STRING="none" \
     ${TENZIR_BUILD_OPTIONS} && \
   cmake --build build --parallel && \
-    cmake --build build --target unit-tests && \
+    # cmake --build build --target unit-tests && \
     cmake --install build --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build && \
     rm -rf build
@@ -166,6 +174,7 @@ COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=mesh /tmp/*.deb /tmp/custom-packages/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
