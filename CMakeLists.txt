@@ -186,7 +186,7 @@ install(
   COMPONENT Development)
 
 # Require standard C++26.
-target_compile_features(libtenzir_internal INTERFACE cxx_std_23)
+target_compile_features(libtenzir_internal INTERFACE cxx_std_26)
 
 # Enable coroutines for GCC < 11.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
