@@ -17,8 +17,8 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <atomic>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <fstream>
 #include <optional>
@@ -243,7 +243,7 @@ auto make_malloc_metrics() -> record {
 #if TENZIR_LINUX
 auto parse_proc_kb_value(std::string_view line, std::string_view key)
   -> std::optional<uint64_t> {
-  if (!line.starts_with(key)) {
+  if (! line.starts_with(key)) {
     return std::nullopt;
   }
   const auto key_length = key.size();
@@ -251,7 +251,7 @@ auto parse_proc_kb_value(std::string_view line, std::string_view key)
     return std::nullopt;
   }
   auto rest = line.substr(key_length + 1);
-  while (!rest.empty()
+  while (! rest.empty()
          && std::isspace(static_cast<unsigned char>(rest.front()))) {
     rest.remove_prefix(1);
   }
@@ -269,7 +269,7 @@ auto parse_proc_kb_value(std::string_view line, std::string_view key)
   }
   if (delimiter != std::string_view::npos) {
     auto unit = rest.substr(delimiter);
-    while (!unit.empty()
+    while (! unit.empty()
            && std::isspace(static_cast<unsigned char>(unit.front()))) {
       unit.remove_prefix(1);
     }
@@ -315,14 +315,14 @@ auto make_procfs_metrics() -> record {
   auto smaps = make_smaps_record();
   auto heap = make_heap_record();
 #if TENZIR_LINUX
-  auto set_record_field = [](record& rec, std::string_view key,
-                             uint64_t value) {
-    if (auto it = rec.find(std::string{key}); it != rec.end()) {
-      it->second = value;
-    } else {
-      rec.emplace(std::string{key}, value);
-    }
-  };
+  auto set_record_field
+    = [](record& rec, std::string_view key, uint64_t value) {
+        if (auto it = rec.find(std::string{key}); it != rec.end()) {
+          it->second = value;
+        } else {
+          rec.emplace(std::string{key}, value);
+        }
+      };
   auto add_value = [](std::optional<uint64_t>& target, uint64_t value) {
     if (target) {
       *target += value;
@@ -350,9 +350,11 @@ auto make_procfs_metrics() -> record {
         add_value(rss, *value);
       } else if (const auto value = parse_proc_kb_value(view, "Pss")) {
         add_value(pss, *value);
-      } else if (const auto value = parse_proc_kb_value(view, "Private_Clean")) {
+      } else if (const auto value
+                 = parse_proc_kb_value(view, "Private_Clean")) {
         add_value(private_clean, *value);
-      } else if (const auto value = parse_proc_kb_value(view, "Private_Dirty")) {
+      } else if (const auto value
+                 = parse_proc_kb_value(view, "Private_Dirty")) {
         add_value(private_dirty, *value);
       } else if (const auto value = parse_proc_kb_value(view, "Anonymous")) {
         add_value(anonymous_bytes, *value);
@@ -399,7 +401,7 @@ auto make_procfs_metrics() -> record {
   if (private_hugetlb) {
     add_value(hugetlb_bytes, *private_hugetlb);
   }
-  if (!hugetlb_bytes && hugetlb_total) {
+  if (! hugetlb_bytes && hugetlb_total) {
     assign_value(hugetlb_bytes, *hugetlb_total);
   }
   if (hugetlb_bytes) {
@@ -432,7 +434,7 @@ auto make_procfs_metrics() -> record {
   }
   if (vm_rss) {
     set_record_field(status, "vm_rss_bytes", *vm_rss);
-    if (!rss) {
+    if (! rss) {
       set_record_field(smaps, "rss_bytes", *vm_rss);
     }
   }
@@ -441,13 +443,13 @@ auto make_procfs_metrics() -> record {
   }
   if (vm_swap) {
     set_record_field(status, "vm_swap_bytes", *vm_swap);
-    if (!swap) {
+    if (! swap) {
       set_record_field(smaps, "swap_bytes", *vm_swap);
     }
   }
   if (rss_anon) {
     set_record_field(status, "rss_anon_bytes", *rss_anon);
-    if (!anonymous_bytes) {
+    if (! anonymous_bytes) {
       set_record_field(smaps, "anonymous_rss_bytes", *rss_anon);
     }
   }
@@ -552,12 +554,9 @@ public:
       {"count", int64_type{}},
     };
     const auto procfs_status = record_type{
-      {"vm_rss_bytes", uint64_type{}},
-      {"vm_data_bytes", uint64_type{}},
-      {"vm_swap_bytes", uint64_type{}},
-      {"rss_anon_bytes", uint64_type{}},
-      {"file_rss_bytes", uint64_type{}},
-      {"rss_shmem_bytes", uint64_type{}},
+      {"vm_rss_bytes", uint64_type{}},   {"vm_data_bytes", uint64_type{}},
+      {"vm_swap_bytes", uint64_type{}},  {"rss_anon_bytes", uint64_type{}},
+      {"file_rss_bytes", uint64_type{}}, {"rss_shmem_bytes", uint64_type{}},
     };
     const auto procfs_smaps = record_type{
       {"rss_bytes", uint64_type{}},
@@ -577,12 +576,9 @@ public:
       {"heap", procfs_heap},
     };
     const auto malloc_stats = record_type{
-      {"arena_bytes", uint64_type{}},
-      {"uordblks_bytes", uint64_type{}},
-      {"fordblks_bytes", uint64_type{}},
-      {"keepcost_bytes", uint64_type{}},
-      {"hblkhd_bytes", uint64_type{}},
-      {"ordblks_count", uint64_type{}},
+      {"arena_bytes", uint64_type{}},    {"uordblks_bytes", uint64_type{}},
+      {"fordblks_bytes", uint64_type{}}, {"keepcost_bytes", uint64_type{}},
+      {"hblkhd_bytes", uint64_type{}},   {"ordblks_count", uint64_type{}},
       {"smblks_count", uint64_type{}},
     };
     return record_type{{
