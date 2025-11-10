@@ -45,6 +45,51 @@ namespace tenzir::plugins::health_memory {
 
 namespace {
 
+#if TENZIR_LINUX
+auto read_heap_base_from_proc() -> std::optional<std::uintptr_t> {
+  auto parse_hex = [](std::string_view text) -> std::optional<std::uintptr_t> {
+    std::uintptr_t value = 0;
+    const auto result
+      = std::from_chars(text.data(), text.data() + text.size(), value, 16);
+    if (result.ec != std::errc{}) {
+      return std::nullopt;
+    }
+    return value;
+  };
+  std::ifstream maps{"/proc/self/maps"};
+  if (! maps) {
+    return std::nullopt;
+  }
+  std::string line;
+  while (std::getline(maps, line)) {
+    if (line.find("[heap]") == std::string::npos) {
+      continue;
+    }
+    const auto view = std::string_view{line};
+    const auto dash = view.find('-');
+    if (dash == std::string_view::npos) {
+      continue;
+    }
+    const auto start_sv = view.substr(0, dash);
+    const auto rest = view.substr(dash + 1);
+    const auto space = rest.find_first_of(" \t");
+    if (space == std::string_view::npos) {
+      continue;
+    }
+    const auto end_sv = rest.substr(0, space);
+    auto start = parse_hex(start_sv);
+    auto end = parse_hex(end_sv);
+    if (! start || ! end || *start >= *end) {
+      continue;
+    }
+    return start;
+  }
+  return std::nullopt;
+}
+
+const auto program_break_base = read_heap_base_from_proc();
+#endif
+
 auto make_from(const memory::stats& stats) -> record {
   auto result = record{};
   result.reserve(2);
@@ -414,9 +459,14 @@ auto make_procfs_metrics() -> record {
   }
   if (auto* program_break = ::sbrk(0);
       program_break && program_break != reinterpret_cast<void*>(-1)) {
-    set_record_field(heap, "program_break_bytes",
-                     static_cast<uint64_t>(
-                       reinterpret_cast<std::uintptr_t>(program_break)));
+    const auto current_break = reinterpret_cast<std::uintptr_t>(program_break);
+    if (program_break_base && current_break >= *program_break_base) {
+      set_record_field(
+        heap, "program_break_bytes",
+        static_cast<uint64_t>(current_break - *program_break_base));
+    } else {
+      set_record_field(heap, "program_break_bytes", caf::none);
+    }
   }
 #endif
   auto result = record{};
