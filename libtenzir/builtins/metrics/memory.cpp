@@ -308,7 +308,7 @@ auto make_procfs_metrics() -> record {
   auto make_heap_record = [] {
     auto heap = record{};
     heap.reserve(1);
-    heap.try_emplace("program_break_bytes", caf::none);
+    heap.try_emplace("break_bytes", caf::none);
     return heap;
   };
   auto status = make_status_record();
@@ -462,10 +462,10 @@ auto make_procfs_metrics() -> record {
     const auto current_break = reinterpret_cast<std::uintptr_t>(program_break);
     if (program_break_base && current_break >= *program_break_base) {
       set_record_field(
-        heap, "program_break_bytes",
+        heap, "break_bytes",
         static_cast<uint64_t>(current_break - *program_break_base));
     } else {
-      set_record_field(heap, "program_break_bytes", caf::none);
+      set_record_field(heap, "break_bytes", caf::none);
     }
   }
 #endif
@@ -500,12 +500,12 @@ auto get_raminfo() -> caf::expected<record> {
   const auto table_slice_stats = table_slice::memory_stats();
   auto table_slice_record = record{};
   table_slice_record.reserve(4);
-  table_slice_record.try_emplace("serialized",
+  table_slice_record.try_emplace("serialized_bytes",
                                  table_slice_stats.serialized_bytes);
-  table_slice_record.try_emplace("non_serialized",
+  table_slice_record.try_emplace("non_serialized_bytes",
                                  table_slice_stats.non_serialized_bytes);
-  table_slice_record.try_emplace("count", table_slice_stats.instances);
-  table_slice_record.try_emplace("rows", table_slice_stats.rows);
+  table_slice_record.try_emplace("batch_count", table_slice_stats.instances);
+  table_slice_record.try_emplace("event_count", table_slice_stats.rows);
   result.try_emplace("table_slices", std::move(table_slice_record));
   result.try_emplace("chunk", make_chunk_info());
   return result;
@@ -544,10 +544,10 @@ public:
       {"allocations", stats},
     };
     const auto table_slice_stats = record_type{
-      {"serialized", int64_type{}},
-      {"non_serialized", int64_type{}},
-      {"count", int64_type{}},
-      {"rows", int64_type{}},
+      {"serialized_bytes", int64_type{}},
+      {"non_serialized_bytes", int64_type{}},
+      {"batch_count", int64_type{}},
+      {"event_count", int64_type{}},
     };
     const auto bytes_and_count = record_type{
       {"bytes", int64_type{}},
@@ -571,7 +571,7 @@ public:
       {"hugetlb_bytes", uint64_type{}},
     };
     const auto procfs_heap = record_type{
-      {"program_break_bytes", uint64_type{}},
+      {"break_bytes", uint64_type{}},
     };
     const auto procfs = record_type{
       {"status", procfs_status},
