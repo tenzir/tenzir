@@ -2,6 +2,6 @@ from f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
   decompress_gzip
   read_zeek_tsv
 }
-head 1
-write_ndjson
-shell "rev"
+head 2
+write_lines
+shell "uniq -c"

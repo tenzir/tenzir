@@ -39,7 +39,6 @@ stdenvNoCC.mkDerivation {
       '';
     in
     ''
-      export PATH=''${PATH:+$PATH:}${lib.getBin pkgsBuildBuild.toybox}/bin
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
       export UV_NO_INDEX=1
       export UV_OFFLINE=1

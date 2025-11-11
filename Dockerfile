@@ -202,9 +202,13 @@ RUN apt-get update && \
       openssl \
       python3 \
       python3-venv \
-      robin-map-dev \
-      wget && \
+      robin-map-dev && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
+    apt-get -y --no-install-recommends --allow-remove-essential purge \
+      libpam0g \
+      libpam-modules-bin \
+      login \
+      util-linux && \
     rm -rf /tmp/custom-packages && \
     rm -rf /var/lib/apt/lists/*
 
