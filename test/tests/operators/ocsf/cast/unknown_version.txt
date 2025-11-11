@@ -1,0 +1,7 @@
+warning: dropping events with unknown OCSF version
+ --> tests/operators/ocsf/cast/unknown_version.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
+  = note: found "0.0.0"

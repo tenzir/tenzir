@@ -1,0 +1,7 @@
+warning: dropping events where `class_uid` is unknown
+ --> tests/operators/ocsf/cast/unknown_class_uid.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
+  = note: could not find class for value `9999`

@@ -1,0 +1,11 @@
+from {
+  metadata: {
+    version: "1.5.0",
+    extensions: [{name: "linux"}],
+  },
+  class_uid: 1007,
+  process: { egid: 0 }
+}
+ocsf::cast null_fill=true
+// This field needs both the Linux extension and the profile.
+assert not process.has("egid")

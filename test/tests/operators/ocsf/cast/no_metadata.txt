@@ -1,0 +1,6 @@
+warning: dropping events where `metadata` does not exist
+ --> tests/operators/ocsf/cast/no_metadata.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

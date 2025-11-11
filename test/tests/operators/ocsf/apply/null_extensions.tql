@@ -1,9 +1,0 @@
-from {
-  metadata: {
-    version: "1.5.0",
-    extensions: null
-  },
-  class_uid: 1007,
-  process: {},
-}
-ocsf::apply

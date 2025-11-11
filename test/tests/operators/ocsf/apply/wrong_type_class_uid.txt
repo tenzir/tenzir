@@ -1,6 +1,0 @@
-warning: dropping events where `class_uid` is not an integer
- --> tests/operators/ocsf/apply/wrong_type_class_uid.tql:2:1
-  |
-2 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |

@@ -1,0 +1,6 @@
+warning: dropping events where `class_uid` does not exist
+ --> tests/operators/ocsf/cast/no_class_uid.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
