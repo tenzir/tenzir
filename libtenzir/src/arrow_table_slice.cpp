@@ -65,9 +65,10 @@ class record_batch_decoder final {
 public:
   record_batch_decoder() noexcept
     : decoder_{make_record_batch_listener(
-        [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
-          record_batch_ = std::move(record_batch);
-        })} {
+                 [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
+                   record_batch_ = std::move(record_batch);
+                 }),
+               arrow_ipc_read_options()} {
     // nop
   }
 

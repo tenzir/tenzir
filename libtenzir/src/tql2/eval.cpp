@@ -238,7 +238,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
     }
     const auto to
       = check(ast::field_path::try_from(ast::root_field{lambda.left, false}));
-    auto b = arrow::Int64Builder{};
+    auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
     check(b.Reserve(input.array->values()->length()));
     for (auto i = int64_t{}; i < input.array->length(); ++i) {
       for (auto j = int64_t{}; j < input.array->value_length(i); ++j) {

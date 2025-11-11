@@ -17,7 +17,9 @@
 #include <atomic>
 #include <concepts>
 #include <cstddef>
-#include <mimalloc.h>
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
+#  include <mimalloc.h>
+#endif
 #include <new>
 #include <string_view>
 
@@ -103,6 +105,7 @@ alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__) inline std::byte
 
 } // namespace detail
 
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
 namespace mimalloc {
 
 class allocator final : public polymorphic_allocator {
@@ -267,34 +270,44 @@ private:
 };
 
 } // namespace mimalloc
+#endif
 
+#if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
+namespace system {
+
+[[gnu::hot]] auto trim() noexcept -> void;
+
+}
+#endif
+
+#if TENZIR_ALLOCATOR_HAS_SYSTEM
 namespace system {
 
 [[gnu::hot]]
 /// Function that will call the systems `free`, regardless of our overrides.
 auto native_free(void* ptr) noexcept -> void;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
-#endif
+#  endif
 /// Function that will call the systems `malloc`, regardless of our overrides.
 auto native_malloc(std::size_t size) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1, 2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2)]]
-#endif
+#  endif
 /// Function that will call the systems `calloc`, regardless of our overrides.
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2)]]
-#endif
+#  endif
 /// Function that will call the systems `realloc`, regardless of our overrides.
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void*;
 
@@ -303,36 +316,34 @@ auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void*;
 /// overrides.
 auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1),
   gnu::alloc_align(2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1), gnu::alloc_align(2)]]
-#endif
+#  endif
 /// Simple helper that switches the arguments for `alloc_aligned` for consistency.
 auto malloc_aligned(std::size_t size, std::size_t alignment) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2),
   gnu::alloc_align(3)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(3)]]
-#endif
+#  endif
 /// We fake our own `realloc_aligned`, as that does not exist in C or POSIX.
 auto realloc_aligned(void* ptr, std::size_t new_size,
                      std::size_t alignment) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1, 2),
   gnu::alloc_align(3)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2), gnu::alloc_align(3)]]
-#endif
+#  endif
 /// We fake our own `calloc_aligned`, as that does not exist in C or POSIX.
 auto calloc_aligned(std::size_t count, std::size_t size,
                     std::size_t alignment) noexcept -> void*;
-
-[[gnu::hot]] auto trim() noexcept -> void;
 
 class allocator final : public polymorphic_allocator {
 public:
@@ -497,6 +508,7 @@ private:
 };
 
 } // namespace system
+#endif
 
 [[gnu::const]]
 /// Checks if stats collection is enabled for the specific component or a in
@@ -557,6 +569,9 @@ auto selected_backend(const char* env) noexcept -> backend;
 struct dummy_allocator {
   static auto stats() noexcept -> const stats& {
     return detail::zero_stats;
+  }
+
+  static auto trim() noexcept {
   }
 };
 

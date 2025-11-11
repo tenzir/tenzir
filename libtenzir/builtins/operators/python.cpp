@@ -503,10 +503,8 @@ public:
         std_in.write(reinterpret_cast<const char*>((*result)->data()),
                      detail::narrow<int>((*result)->size()));
         auto file = arrow_fd_wrapper{std_out.native_source()};
-        auto ipc_read_opts = arrow::ipc::IpcReadOptions::Defaults();
-        ipc_write_opts.memory_pool = tenzir::arrow_memory_pool();
-        auto reader
-          = arrow::ipc::RecordBatchStreamReader::Open(&file, ipc_read_opts);
+        auto reader = arrow::ipc::RecordBatchStreamReader::Open(
+          &file, arrow_ipc_read_options());
         if (not reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)

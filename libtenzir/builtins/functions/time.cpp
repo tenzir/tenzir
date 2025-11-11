@@ -213,7 +213,7 @@ public:
             [&](const arrow::TimestampArray& arg) {
               auto& ty = as<arrow::TimestampType>(*arg.type());
               TENZIR_ASSERT(ty.timezone().empty());
-              auto b = arrow::Int64Builder{};
+              auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
               check(b.Reserve(arg.length()));
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
@@ -290,7 +290,7 @@ public:
             auto& ty = as<arrow::TimestampType>(*arg.type());
             TENZIR_ASSERT(ty.timezone().empty());
             if (hms_subtype_ == hms_subtype::second) {
-              auto b = arrow::DoubleBuilder{};
+              auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
               check(b.Reserve(arg.length()));
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
@@ -313,7 +313,7 @@ public:
               }
               return series{double_type{}, finish(b)};
             }
-            auto b = arrow::Int64Builder{};
+            auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(arg.length()));
             for (auto i = int64_t{0}; i < arg.length(); ++i) {
               if (arg.IsNull(i)) {

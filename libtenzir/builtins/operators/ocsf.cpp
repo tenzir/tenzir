@@ -201,7 +201,7 @@ private:
       TENZIR_ASSERT(is<time_type>(ty));
       if (timestamp_to_ms_) {
         const auto& array = as<arrow::TimestampArray>(*input.array);
-        auto b = arrow::Int64Builder{};
+        auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
         check(b.Reserve(array.length()));
         for (auto val : values(time_type{}, array)) {
           b.UnsafeAppendOrNull(val.transform([](time x) {
@@ -225,7 +225,7 @@ private:
           ty, path);
       },
       [&](const arrow::UInt64Array& array, const int64_type&) -> series {
-        auto int_builder = arrow::Int64Builder{};
+        auto int_builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
         check(int_builder.Reserve(array.length()));
         auto warned = false;
         for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -930,7 +930,7 @@ private:
     -> std::pair<basic_series<int64_type>, basic_series<string_type>> {
     const auto& enum_lookup = check(get_ocsf_int_to_string(enum_id)).get();
     const auto& reverse_lookup = check(get_ocsf_string_to_int(enum_id)).get();
-    auto int_builder = arrow::Int64Builder{};
+    auto int_builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
     auto string_builder = arrow::StringBuilder{};
     check(int_builder.Reserve(int_field.length()));
     check(string_builder.Reserve(string_field.length()));
@@ -1057,7 +1057,7 @@ private:
       return basic_series<int64_type>::null(string_field.length());
     }
     const auto& string_to_int = check(get_ocsf_string_to_int(enum_id)).get();
-    auto int_builder = arrow::Int64Builder{};
+    auto int_builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
     check(int_builder.Reserve(string_field.length()));
     for (auto i = int64_t{0}; i < string_field.length(); ++i) {
       if (auto value = sibling_string_array->at(i)) {

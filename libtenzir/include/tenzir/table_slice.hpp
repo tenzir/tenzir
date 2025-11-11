@@ -168,6 +168,7 @@ public:
     int64_t serialized_bytes = 0;
     int64_t non_serialized_bytes = 0;
     int64_t instances = 0;
+    int64_t rows = 0;
   };
 
   /// @returns Aggregated memory accounting across all table slices.

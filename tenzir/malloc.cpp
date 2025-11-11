@@ -8,7 +8,6 @@
 #  include <cstddef>
 #  include <cstring>
 #  include <limits>
-#  include <mimalloc.h>
 #  include <new>
 
 namespace {

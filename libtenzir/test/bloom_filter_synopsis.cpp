@@ -23,7 +23,7 @@ namespace {
 
 // Helper to create a series from multiple int64_t values
 auto make_int64_series(std::vector<int64_t> values) -> series {
-  auto builder = arrow::Int64Builder{};
+  auto builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
   for (auto value : values) {
     auto status = builder.Append(value);
     TENZIR_ASSERT(status.ok());

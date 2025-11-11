@@ -527,7 +527,12 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     self->state().rebuild_interval
       = caf::get_or(content(self->system().config()), "tenzir.rebuild-interval",
                     defaults::rebuild_interval);
-    self->state().schedule();
+    // We delay the first run such that we do not do it during initialization
+    // where there are many other things going on. For long-running processes,
+    // we on average already waited for half the duration before.
+    detail::weak_run_delayed(self, self->state().rebuild_interval / 2, [self] {
+      self->state().schedule();
+    });
   }
   if (auto importer
       = self->system().registry().get<importer_actor>("tenzir.importer")) {

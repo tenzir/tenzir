@@ -203,7 +203,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::Int64Builder{};
+        auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& value : eval(expr)) {
           auto f = detail::overload{
@@ -256,7 +256,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::BooleanBuilder{};
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& value : eval(expr)) {
           auto f = detail::overload{
@@ -393,7 +393,7 @@ public:
       return function_use::make(
         [needle = located{std::move(*str), needle.get_location()},
          expr = std::move(expr)](evaluator eval, session ctx) -> series {
-          auto b = arrow::BooleanBuilder{};
+          auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
           check(b.Reserve(eval.length()));
           for (auto value : eval(expr)) {
             auto f = detail::overload{
@@ -431,7 +431,7 @@ public:
       TENZIR_UNUSED(ctx);
       const auto expr_location = expr.get_location();
       const auto needle_location = needle.get_location();
-      auto builder = arrow::BooleanBuilder{};
+      auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(builder.Reserve(eval.length()));
       for (auto split : split_multi_series(eval(expr), eval(needle))) {
         const auto& expr = split[0];
@@ -490,7 +490,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session) -> series {
-        auto b = arrow::BooleanBuilder{};
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (const auto& s : eval(expr)) {
           const auto& array = *s.array;
@@ -514,7 +514,7 @@ public:
       return;
     }
     if (const auto* sub = try_as<arrow::ListArray>(array)) {
-      auto b = arrow::BooleanBuilder{};
+      auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(sub->length()));
       for (auto i = int64_t{}; i < sub->length(); ++i) {
         if (sub->IsValid(i)) {

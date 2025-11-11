@@ -122,7 +122,7 @@ class plugin final : public function_plugin {
                                what = std::move(target.inner),
                                exact](evaluator eval, session) -> multi_series {
       const auto what_type = type::infer(what).value();
-      auto b = arrow::BooleanBuilder{};
+      auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(eval.length()));
       auto result = std::vector<bool>{};
       for (const auto& s : eval(in)) {

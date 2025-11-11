@@ -119,7 +119,8 @@ public:
               *rhs_values.array,
               [&]<concepts::one_of<arrow::Int64Array, arrow::UInt64Array> T>(
                 const T& array) {
-                auto validity_builder = arrow::TypedBufferBuilder<bool>{};
+                auto validity_builder = arrow::TypedBufferBuilder<bool>{
+                  tenzir::arrow_memory_pool()};
                 check(validity_builder.Reserve(array.length()));
                 auto warn = false;
                 auto null_count = int64_t{};

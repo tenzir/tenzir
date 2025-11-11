@@ -38,7 +38,7 @@ public:
         return map_series(eval(expr), [&](series value) {
           const auto f = detail::overload{
             [](const arrow::NullArray& arg) {
-              auto b = arrow::DoubleBuilder{};
+              auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
               check(b.AppendNulls(arg.length()));
               return finish(b);
             },
@@ -48,7 +48,7 @@ public:
             [&]<class T>(const T& arg)
               requires integral_type<type_from_arrow_t<T>>
             {
-              auto b = arrow::DoubleBuilder{};
+              auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
               check(b.Reserve(arg.length()));
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
@@ -60,7 +60,7 @@ public:
               return finish(b);
             },
             [&](const arrow::StringArray& arg) {
-              auto b = arrow::DoubleBuilder{};
+              auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
               check(b.Reserve(value.length()));
               for (auto row = int64_t{0}; row < value.length(); ++row) {
                 if (arg.IsNull(row)) {
@@ -87,7 +87,7 @@ public:
                                   name(), value.type.kind())
                 .primary(expr)
                 .emit(ctx);
-              auto b = arrow::DoubleBuilder{};
+              auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
               check(b.AppendNulls(value.length()));
               return finish(b);
             },

@@ -53,12 +53,21 @@ namespace tenzir {
 namespace {
 
 struct table_slice_accounting_state final {
+  struct entry {
+    size_t refcount = 0;
+    uint64_t bytes = 0;
+    uint64_t rows = 0;
+  };
+
   std::atomic<int64_t> serialized_bytes{0};
   std::atomic<int64_t> non_serialized_bytes{0};
+  std::atomic<int64_t> rows{0};
   std::atomic<int64_t> instances{0};
+
+  // Mutex that must be locked while the maps are accessed.
   std::mutex mutex;
-  tsl::robin_map<const std::byte*, std::pair<size_t, uint64_t>> chunks;
-  tsl::robin_map<const void*, std::pair<size_t, uint64_t>> record_batches;
+  tsl::robin_map<const std::byte*, entry> chunks;
+  tsl::robin_map<const arrow::RecordBatch*, entry> record_batches;
 };
 
 auto accounting_state() noexcept -> table_slice_accounting_state& {
@@ -77,30 +86,41 @@ void decrement_instances() noexcept {
 
 void account_table_slice_resources(
   const chunk_ptr& chunk, bool is_serialized,
-  const std::shared_ptr<arrow::RecordBatch>& batch,
-  uint64_t approx_bytes) noexcept {
+  const std::shared_ptr<arrow::RecordBatch>& batch, uint64_t approx_bytes,
+  table_slice::size_type rows) noexcept {
   if (! chunk) {
     return;
   }
   auto& state = accounting_state();
   auto guard = std::scoped_lock{state.mutex};
+  const auto account_rows_with_chunk = is_serialized || ! batch;
   auto& chunk_entry = state.chunks[chunk->data()];
-  if (chunk_entry.first++ == 0) {
+  if (chunk_entry.refcount++ == 0) {
     auto bytes = static_cast<uint64_t>(chunk->size());
-    chunk_entry.second = bytes;
+    chunk_entry.bytes = bytes;
+    chunk_entry.rows = account_rows_with_chunk ? rows : 0;
     state.serialized_bytes.fetch_add(static_cast<int64_t>(bytes),
                                      std::memory_order_relaxed);
+    if (chunk_entry.rows != 0) {
+      state.rows.fetch_add(static_cast<int64_t>(chunk_entry.rows),
+                           std::memory_order_relaxed);
+    }
   }
   if (is_serialized || ! batch) {
     return;
   }
   auto& batch_entry = state.record_batches[batch.get()];
-  if (batch_entry.first++ != 0) {
+  if (batch_entry.refcount++ != 0) {
     return;
   }
-  batch_entry.second = approx_bytes;
+  batch_entry.bytes = approx_bytes;
+  batch_entry.rows = account_rows_with_chunk ? 0 : rows;
   state.non_serialized_bytes.fetch_add(static_cast<int64_t>(approx_bytes),
                                        std::memory_order_relaxed);
+  if (batch_entry.rows != 0) {
+    state.rows.fetch_add(static_cast<int64_t>(batch_entry.rows),
+                         std::memory_order_relaxed);
+  }
 }
 
 void release_table_slice_resources(
@@ -114,12 +134,14 @@ void release_table_slice_resources(
   auto it = state.chunks.find(chunk->data());
   TENZIR_ASSERT(it != state.chunks.end());
   auto& chunk_entry = it.value();
-  auto& chunk_refcount = chunk_entry.first;
-  auto& chunk_bytes = chunk_entry.second;
-  TENZIR_ASSERT(chunk_refcount > 0);
-  if (--chunk_refcount == 0) {
-    state.serialized_bytes.fetch_sub(static_cast<int64_t>(chunk_bytes),
+  TENZIR_ASSERT(chunk_entry.refcount > 0);
+  if (--chunk_entry.refcount == 0) {
+    state.serialized_bytes.fetch_sub(static_cast<int64_t>(chunk_entry.bytes),
                                      std::memory_order_relaxed);
+    if (chunk_entry.rows != 0) {
+      state.rows.fetch_sub(static_cast<int64_t>(chunk_entry.rows),
+                           std::memory_order_relaxed);
+    }
     state.chunks.erase(it);
   }
   if (is_serialized || ! batch) {
@@ -128,10 +150,14 @@ void release_table_slice_resources(
   auto jt = state.record_batches.find(batch.get());
   TENZIR_ASSERT(jt != state.record_batches.end());
   auto& batch_entry = jt.value();
-  TENZIR_ASSERT(batch_entry.first > 0);
-  if (--batch_entry.first == 0) {
+  TENZIR_ASSERT(batch_entry.refcount > 0);
+  if (--batch_entry.refcount == 0) {
     state.non_serialized_bytes.fetch_sub(
-      static_cast<int64_t>(batch_entry.second), std::memory_order_relaxed);
+      static_cast<int64_t>(batch_entry.bytes), std::memory_order_relaxed);
+    if (batch_entry.rows != 0) {
+      state.rows.fetch_sub(static_cast<int64_t>(batch_entry.rows),
+                           std::memory_order_relaxed);
+    }
     state.record_batches.erase(jt);
   }
 }
@@ -761,7 +787,7 @@ void table_slice::retain_accounting() const noexcept {
     approx_bytes = this->approx_bytes();
   }
   account_table_slice_resources(chunk_, is_serialized, record_batch,
-                                approx_bytes);
+                                approx_bytes, rows());
 }
 
 void table_slice::release_accounting() const noexcept {
@@ -1318,7 +1344,7 @@ auto combine_offsets(
   TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
-  auto builder = arrow::Int32Builder{};
+  auto builder = arrow::Int32Builder{tenzir::arrow_memory_pool()};
   for (; it < list_offsets.end(); ++it) {
     for (const auto& index : static_cast<const arrow::Int32Array&>(*result)) {
       TENZIR_ASSERT(index);
@@ -1767,6 +1793,7 @@ auto table_slice::memory_stats() noexcept -> struct memory_stats {
     state.serialized_bytes.load(std::memory_order_relaxed),
     state.non_serialized_bytes.load(std::memory_order_relaxed),
     state.instances.load(std::memory_order_relaxed),
+    state.rows.load(std::memory_order_relaxed),
   };
 }
 
