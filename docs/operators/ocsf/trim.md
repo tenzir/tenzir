@@ -124,5 +124,5 @@ ocsf::trim drop_optional=true, drop_recommended=true
 
 ## See Also
 
-[`ocsf::apply`](/reference/operators/ocsf/apply),
+[`ocsf::cast`](/reference/operators/ocsf/cast),
 [`ocsf::derive`](/reference/operators/ocsf/derive)
