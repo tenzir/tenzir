@@ -16,7 +16,7 @@ let
       caf,
       curl,
       libpcap,
-      arrow-cpp,
+      arrow-cpp-tenzir,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
       azure-sdk-for-cpp,
@@ -251,7 +251,7 @@ let
             ];
           propagatedBuildInputs =
             [
-              arrow-cpp
+              arrow-cpp-tenzir
               boost
               caf
               curl
