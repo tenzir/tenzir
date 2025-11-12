@@ -17,11 +17,10 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <fmt/format.h>
 #include <tsl/robin_hash.h>
 
 #include <chrono>
-
-#include <fmt/format.h>
 
 namespace tenzir::plugins::deduplicate {
 namespace {
@@ -33,7 +32,7 @@ constexpr auto min_cleanup_duration = duration{std::chrono::seconds{10}};
 
 auto make_keys_expression(std::vector<ast::expression> exprs)
   -> ast::expression {
-  TENZIR_ASSERT(!exprs.empty());
+  TENZIR_ASSERT(! exprs.empty());
   if (exprs.size() == 1) {
     return std::move(exprs.front());
   }
@@ -255,8 +254,8 @@ public:
     parser.named("create_timeout", cfg.create_timeout);
     parser.named("write_timeout", cfg.write_timeout);
     parser.named("read_timeout", cfg.read_timeout);
-    auto parser_inv = operator_factory_plugin::invocation{
-      inv.self, std::move(named_args)};
+    auto parser_inv
+      = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
     TRY(parser.parse(parser_inv, ctx));
     if (! selector_exprs.empty()) {
       cfg.keys = selector_exprs.size() == 1
