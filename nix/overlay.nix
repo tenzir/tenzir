@@ -48,7 +48,8 @@ in
   };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
-  mimalloc = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
+  jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
+  mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
