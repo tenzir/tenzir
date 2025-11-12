@@ -45,7 +45,7 @@ public:
       [&, expr = std::move(expr)](evaluator eval, session ctx) -> series {
         using InTy = data_to_type_t<materialize_t<In>>;
         using OutTy = data_to_type_t<materialize_t<Out>>;
-        auto b = type_to_arrow_builder_t<OutTy>{};
+        auto b = type_to_arrow_builder_t<OutTy>{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{

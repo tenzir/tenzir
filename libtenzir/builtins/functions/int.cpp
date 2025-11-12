@@ -49,7 +49,7 @@ public:
       return map_series(eval(expr), [&](series value) {
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
-            auto b = Builder{};
+            auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.AppendNulls(arg.length()));
             return finish(b);
           },
@@ -59,7 +59,7 @@ public:
           [&]<class T>(const T& arg)
             requires integral_type<type_from_arrow_t<T>>
           {
-            auto b = Builder{};
+            auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(arg.length()));
             auto overflow = false;
             for (auto i = int64_t{0}; i < arg.length(); ++i) {
@@ -83,7 +83,7 @@ public:
             return finish(b);
           },
           [&](const arrow::DoubleArray& arg) {
-            auto b = Builder{};
+            auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(arg.length()));
             auto overflow = false;
             for (auto i = int64_t{0}; i < arg.length(); ++i) {
@@ -114,7 +114,7 @@ public:
           },
           [&](const arrow::StringArray& arg) {
             auto report = false;
-            auto b = Builder{};
+            auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(value.length()));
             constexpr auto p = std::invoke([] {
               if constexpr (Signed) {
@@ -175,7 +175,7 @@ public:
                                 name(), value.type.kind())
               .primary(expr)
               .emit(ctx);
-            auto b = Builder{};
+            auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.AppendNulls(value.length()));
             return finish(b);
           },

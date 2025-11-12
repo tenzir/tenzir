@@ -175,7 +175,7 @@ public:
 
   auto finish(int64_t count) -> series override {
     TENZIR_ASSERT(count <= length_);
-    auto builder = arrow::NullBuilder{};
+    auto builder = arrow::NullBuilder{tenzir::arrow_memory_pool()};
     check(builder.AppendNulls(count));
     length_ -= count;
     return {null_type{}, check(builder.Finish())};
@@ -754,7 +754,7 @@ public:
 private:
   /// This only stores beginning indices. Missing ending offsets are added right
   /// before the builder is finished.
-  arrow::Int32Builder offsets_;
+  arrow::Int32Builder offsets_{tenzir::arrow_memory_pool()};
 
   dynamic_builder elements_;
 };
@@ -953,7 +953,7 @@ private:
   detail::stable_map<std::string, std::unique_ptr<dynamic_builder>> fields_;
 
   /// Missing values shall be considered true.
-  arrow::TypedBufferBuilder<bool> valid_;
+  arrow::TypedBufferBuilder<bool> valid_{tenzir::arrow_memory_pool()};
 
   /// Number of records (including nulls) in this builder.
   int64_t length_ = 0;

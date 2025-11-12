@@ -2,12 +2,10 @@
   lib,
   stdenv,
   pkgsBuildBuild,
-  aws-sdk-cpp-tenzir,
-  google-cloud-cpp-tenzir,
   arrow-cpp,
   sqlite,
 }:
-(arrow-cpp.overrideAttrs (orig: {
+arrow-cpp.overrideAttrs (orig: {
   nativeBuildInputs =
     orig.nativeBuildInputs
     ++ [
@@ -34,9 +32,6 @@
     orig.cmakeFlags
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       "-DARROW_BUILD_TESTS=OFF"
-      # Tenzir is using a custom memory pool.
-      "-DARROW_JEMALLOC=OFF"
-      "-DARROW_MIMALLOC=OFF"
       # TODO: Check if this is still needed or now covered by ARROW_DEPENDENCY_SOURCE.
       "-DGLOG_SOURCE=SYSTEM"
     ];
@@ -71,9 +66,4 @@
 
       runHook postInstallCheck
     '';
-})).override
-  {
-    aws-sdk-cpp-arrow = aws-sdk-cpp-tenzir;
-    google-cloud-cpp = google-cloud-cpp-tenzir;
-    enableGcs = true; # Upstream disabled for darwin.
-  }
+})

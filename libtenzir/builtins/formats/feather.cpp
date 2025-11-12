@@ -103,10 +103,8 @@ auto decode_ipc_stream(chunk_ptr chunk)
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
                                              "Arrow IPC file");
   }
-  auto ipc_read_options = arrow::ipc::IpcReadOptions::Defaults();
-  ipc_read_options.memory_pool = arrow_memory_pool();
   auto open_reader_result = arrow::ipc::RecordBatchFileReader::Open(
-    as_arrow_file(std::move(chunk)), ipc_read_options);
+    as_arrow_file(std::move(chunk)), arrow_ipc_read_options());
   if (not open_reader_result.ok()) {
     return caf::make_error(ec::format_error,
                            fmt::format("failed to open reader: {}",
@@ -209,7 +207,7 @@ private:
 
   [[nodiscard]] auto count_rows() const -> uint64_t {
     auto reader_result = arrow::ipc::RecordBatchFileReader::Open(
-      as_arrow_file(make_chunk_view()));
+      as_arrow_file(make_chunk_view()), arrow_ipc_read_options());
     check(reader_result.status());
     auto reader = reader_result.MoveValueUnsafe();
     auto rows = check(reader->CountRows());
@@ -360,9 +358,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
-  auto ipc_read_options = arrow::ipc::IpcReadOptions::Defaults();
-  ipc_read_options.memory_pool = arrow_memory_pool();
-  auto stream_decoder = arrow::ipc::StreamDecoder(listener, ipc_read_options);
+  auto stream_decoder
+    = arrow::ipc::StreamDecoder(listener, arrow_ipc_read_options());
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
   while (true) {

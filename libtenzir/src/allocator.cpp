@@ -26,7 +26,9 @@
 #  include <malloc/malloc.h>
 #endif
 
-#include <mimalloc.h>
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
+#  include <mimalloc.h>
+#endif
 
 #if TENZIR_ENABLE_STATIC_EXECUTABLE
 
@@ -91,6 +93,7 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
   bytes_current.fetch_sub(remove, std::memory_order_relaxed);
 }
 
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
 namespace mimalloc {
 
 namespace {
@@ -105,7 +108,23 @@ struct init {
 } // namespace
 
 } // namespace mimalloc
+#endif
 
+#if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
+namespace system {
+
+auto trim() noexcept -> void {
+#  if (defined(__GLIBC__))
+  using namespace si_literals;
+  constexpr static auto padding = 512_Mi;
+  ::malloc_trim(padding);
+#  endif
+}
+
+} // namespace system
+#endif
+
+#if TENZIR_ALLOCATOR_HAS_SYSTEM
 namespace system {
 
 namespace {
@@ -321,15 +340,8 @@ auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
   return fn(ptr);
 }
 
-auto trim() noexcept -> void {
-#if (defined(__GLIBC__))
-  using namespace si_literals;
-  constexpr static auto padding = 512_Mi;
-  ::malloc_trim(padding);
-#endif
-}
-
 } // namespace system
+#endif
 
 namespace {
 auto write_error(const char* txt) noexcept -> void {
@@ -387,7 +399,7 @@ auto selected_backend(const char* var_name) noexcept -> enum backend {
 auto trim_interval() noexcept -> tenzir::duration {
   using namespace std::chrono_literals;
   constexpr static auto var_name = "TENZIR_ALLOC_TRIM_INTERVAL";
-  constexpr static auto default_interval = duration{10min};
+  constexpr static auto default_interval = duration{1min};
   const auto env = ::getenv(var_name);
   if (not env) {
     return default_interval;

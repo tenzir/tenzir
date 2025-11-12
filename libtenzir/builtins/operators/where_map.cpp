@@ -440,8 +440,8 @@ struct where_result_part {
     }
   };
   std::vector<part_slice_info> slices;
-  arrow::Int32Builder offset_builder;
-  arrow::TypedBufferBuilder<bool> null_builder;
+  arrow::Int32Builder offset_builder{tenzir::arrow_memory_pool()};
+  arrow::TypedBufferBuilder<bool> null_builder{tenzir::arrow_memory_pool()};
   int64_t null_count = 0;
   int64_t event_count = 0;
 

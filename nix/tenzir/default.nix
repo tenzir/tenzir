@@ -16,7 +16,7 @@ let
       caf,
       curl,
       libpcap,
-      arrow-cpp,
+      arrow-cpp-tenzir,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
       libbacktrace,
@@ -247,7 +247,7 @@ let
             ];
           propagatedBuildInputs =
             [
-              arrow-cpp
+              arrow-cpp-tenzir
               boost
               caf
               curl
@@ -312,6 +312,7 @@ let
               "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
               "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
               "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
+              "-DTENZIR_ALLOCATOR=mimalloc"
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             ]

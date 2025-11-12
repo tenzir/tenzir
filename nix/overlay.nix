@@ -27,6 +27,18 @@ in
   # Customized from upstream nixpkgs.
   apache-orc = callFunction ./overrides/apache-orc.nix { inherit (prevPkgs) apache-orc; };
   arrow-cpp = callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; };
+  arrow-cpp-tenzir = (finalPkgs.arrow-cpp.overrideAttrs (base: {
+    cmakeFlags = base.cmakeFlags ++ [
+      # Tenzir is using a custom memory pool.
+      "-DARROW_JEMALLOC=OFF"
+      "-DARROW_MIMALLOC=OFF"
+    ];
+    doInstallCheck = false;
+  })).override {
+    aws-sdk-cpp-arrow = finalPkgs.aws-sdk-cpp-tenzir;
+    google-cloud-cpp = finalPkgs.google-cloud-cpp-tenzir;
+    enableGcs = true; # Upstream disabled for darwin.
+  };
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
     inherit (prevPkgs) aws-sdk-cpp;
   };

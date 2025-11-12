@@ -18,10 +18,18 @@
 
 namespace tenzir {
 
-#if 1
+#if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE
 
 auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
   return arrow::default_memory_pool();
+}
+
+auto arrow_ipc_read_options() -> arrow::ipc::IpcReadOptions {
+  return arrow::ipc::IpcReadOptions::Defaults();
+}
+
+auto arrow_ipc_write_options() -> arrow::ipc::IpcWriteOptions {
+  return arrow::ipc::IpcWriteOptions::Defaults();
 }
 
 #else
@@ -123,6 +131,18 @@ public:
 auto arrow_memory_pool() noexcept -> arrow::MemoryPool* {
   constinit static auto pool = memory_pool{};
   return &pool;
+}
+
+auto arrow_ipc_read_options() -> arrow::ipc::IpcReadOptions {
+  static auto opts = arrow::ipc::IpcReadOptions::Defaults();
+  opts.memory_pool = arrow_memory_pool();
+  return opts;
+}
+
+auto arrow_ipc_write_options() -> arrow::ipc::IpcWriteOptions {
+  static auto opts = arrow::ipc::IpcWriteOptions::Defaults();
+  opts.memory_pool = arrow_memory_pool();
+  return opts;
 }
 
 #endif

@@ -56,7 +56,7 @@ struct EvalUnOp<ast::unary_op::neg, T> {
 
   static auto eval(const type_to_arrow_array_t<T>& x, auto warn)
     -> std::shared_ptr<type_to_arrow_array_t<U>> {
-    auto b = type_to_arrow_builder_t<U>{};
+    auto b = type_to_arrow_builder_t<U>{tenzir::arrow_memory_pool()};
     check(b.Reserve(x.length()));
     auto overflow = false;
     for (auto i = int64_t{0}; i < x.length(); ++i) {

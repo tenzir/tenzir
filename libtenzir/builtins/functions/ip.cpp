@@ -119,7 +119,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
-        auto b = arrow::BooleanBuilder{};
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{
