@@ -36,6 +36,13 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     ./build-arrow-package.sh
 
+# -- jemalloc-package ----------------------------------------------------------
+
+FROM build-base AS jemalloc-package
+
+COPY scripts/debian/build-jemalloc-package.sh .
+RUN ./build-jemalloc-package.sh
+
 # -- fluent-bit-package --------------------------------------------------------
 
 FROM build-base AS fluent-bit-package
@@ -63,6 +70,7 @@ WORKDIR /tmp/tenzir
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 
@@ -164,6 +172,7 @@ COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 

@@ -41,7 +41,8 @@ let
       reproc,
       cppzmq,
       libmaxminddb,
-      mimalloc,
+      jemalloc-tenzir,
+      mimalloc-tenzir,
       re2,
       dpkg,
       lz4,
@@ -255,7 +256,8 @@ let
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb
-              mimalloc
+              jemalloc-tenzir
+              mimalloc-tenzir
               protobuf
               re2
               reproc

@@ -26,6 +26,10 @@
 #  include <malloc/malloc.h>
 #endif
 
+#if TENZIR_ALLOCATOR_HAS_JEMALLOC
+#  include <jemalloc/jemalloc.h>
+#endif
+
 #if TENZIR_ALLOCATOR_HAS_MIMALLOC
 #  include <mimalloc.h>
 #endif
@@ -93,6 +97,133 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
   bytes_current.fetch_sub(remove, std::memory_order_relaxed);
 }
 
+namespace {
+
+constexpr auto align_mask(std::align_val_t alignment) noexcept
+  -> std::uintptr_t {
+  return std::to_underlying(alignment) - 1;
+}
+
+constexpr auto is_aligned(void* ptr, std::align_val_t alignment) noexcept
+  -> bool {
+  return (reinterpret_cast<std::uintptr_t>(ptr) & align_mask(alignment)) == 0;
+}
+
+[[nodiscard]] constexpr auto
+multiply_overflows(std::size_t lhs, std::size_t rhs,
+                   std::size_t& result) noexcept -> bool {
+#if defined(__has_builtin)
+#  if __has_builtin(__builtin_mul_overflow)
+  return __builtin_mul_overflow(lhs, rhs, &result);
+#  endif
+#endif
+  if (lhs == 0 || rhs == 0) {
+    result = 0;
+    return false;
+  }
+  if (lhs > std::numeric_limits<std::size_t>::max() / rhs) {
+    return true;
+  }
+  result = lhs * rhs;
+  return false;
+}
+
+} // namespace
+
+#if TENZIR_ALLOCATOR_HAS_JEMALLOC
+namespace jemalloc {
+
+namespace {
+struct init {
+  init() {
+    // Configure jemalloc.
+    // TODO.
+  }
+} init_;
+} // namespace
+
+#  if TENZIR_GCC
+[[nodiscard, gnu::hot, gnu::malloc(je_tenzir_free), gnu::alloc_size(1),
+  gnu::alloc_align(2)]]
+#  elif TENZIR_CLANG
+[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1), gnu::alloc_align(2)]]
+#  endif
+auto je_tenzir_malloc_aligned(std::size_t size, std::size_t alignment) noexcept
+  -> void* {
+  return je_tenzir_aligned_alloc(alignment, size);
+}
+
+#  if TENZIR_GCC
+[[nodiscard, gnu::hot, gnu::malloc(je_tenzir_free), gnu::alloc_size(2),
+  gnu::alloc_align(3)]]
+#  elif TENZIR_CLANG
+[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(3)]]
+#  endif
+auto je_tenzir_realloc_aligned(void* ptr, std::size_t new_size,
+                               std::size_t alignment) noexcept -> void* {
+  // `realloc` does not give alignment guarantees. Because of this, we need to
+  // do more work. First we try to reallocate normally
+  auto* new_ptr_happy = je_tenzir_realloc(ptr, new_size);
+  // The the allocation satisfies our requirement, we return it
+  if (new_ptr_happy
+      and is_aligned(new_ptr_happy, std::align_val_t{alignment})) {
+    return new_ptr_happy;
+  }
+  // If reallocation did not happen at all, we need to reconsider the old
+  // allocation. Doing this renaming here joins the code paths where realloc
+  // failed entirely.
+  if (not new_ptr_happy) {
+    new_ptr_happy = ptr;
+  }
+  // Compute the size we need to copy.
+  const auto copy_size
+    = std::min(new_size, je_tenzir_malloc_usable_size(new_ptr_happy));
+  // Make an aligned alloaction
+  auto* new_ptr_expensive = je_tenzir_malloc_aligned(new_size, alignment);
+  if (not new_ptr_expensive) {
+    return nullptr;
+  }
+  // Copy over at most as much as the previous allocation contained.
+  std::memcpy(new_ptr_expensive, new_ptr_happy, copy_size);
+  // Free the old allocation.
+  je_tenzir_free(new_ptr_happy);
+  return new_ptr_expensive;
+}
+
+#  if TENZIR_GCC
+[[nodiscard, gnu::hot, gnu::malloc(je_tenzir_free), gnu::alloc_size(1, 2),
+  gnu::alloc_align(3)]]
+#  elif TENZIR_CLANG
+[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2), gnu::alloc_align(3)]]
+#  endif
+auto je_tenzir_calloc_aligned(std::size_t count, std::size_t size,
+                              std::size_t alignment) noexcept -> void* {
+  if (alignment < alignof(std::max_align_t)) {
+    return je_tenzir_calloc(count, size);
+  }
+  std::size_t total = 0;
+  if (multiply_overflows(count, size, total)) {
+    errno = ENOMEM;
+    return nullptr;
+  }
+  /// Try calloc first. There is a good chance it will satisfy our requirement.
+  auto* ptr = je_tenzir_calloc(count, size);
+  if (ptr and is_aligned(ptr, std::align_val_t{alignment})) {
+    return ptr;
+  }
+  je_tenzir_free(ptr);
+  /// Otherwise we have to bite the very bitter bullet: Do an aligned
+  /// allocation and memset it.
+  ptr = je_tenzir_aligned_alloc(alignment, total);
+  if (ptr) {
+    std::memset(ptr, 0, total);
+  }
+  return ptr;
+}
+
+} // namespace jemalloc
+#endif
+
 #if TENZIR_ALLOCATOR_HAS_MIMALLOC
 namespace mimalloc {
 
@@ -129,35 +260,6 @@ namespace system {
 
 namespace {
 
-constexpr auto align_mask(std::align_val_t alignment) noexcept
-  -> std::uintptr_t {
-  return std::to_underlying(alignment) - 1;
-}
-
-constexpr auto is_aligned(void* ptr, std::align_val_t alignment) noexcept
-  -> bool {
-  return (reinterpret_cast<std::uintptr_t>(ptr) & align_mask(alignment)) == 0;
-}
-
-[[nodiscard]] constexpr auto
-multiply_overflows(std::size_t lhs, std::size_t rhs,
-                   std::size_t& result) noexcept -> bool {
-#if defined(__has_builtin)
-#  if __has_builtin(__builtin_mul_overflow)
-  return __builtin_mul_overflow(lhs, rhs, &result);
-#  endif
-#endif
-  if (lhs == 0 || rhs == 0) {
-    result = 0;
-    return false;
-  }
-  if (lhs > std::numeric_limits<std::size_t>::max() / rhs) {
-    return true;
-  }
-  result = lhs * rhs;
-  return false;
-}
-
 auto write_error(const char* txt) noexcept {
   write(STDERR_FILENO, txt, strlen(txt));
 }
@@ -175,7 +277,7 @@ template <typename Function>
 
 } // namespace
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1)]]
 #else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
@@ -364,6 +466,9 @@ auto selected_backend_impl(const char* env_name) noexcept
     return std::nullopt;
   }
   const auto env_str = std::string_view{env_value};
+  if (env_str == "jemalloc") {
+    return backend::jemalloc;
+  }
   if (env_str == "mimalloc") {
     return backend::mimalloc;
   }

@@ -17,6 +17,9 @@
 #include <atomic>
 #include <concepts>
 #include <cstddef>
+#if TENZIR_ALLOCATOR_HAS_JEMALLOC
+#  include <jemalloc/jemalloc.h>
+#endif
 #if TENZIR_ALLOCATOR_HAS_MIMALLOC
 #  include <mimalloc.h>
 #endif
@@ -49,8 +52,9 @@ struct stats {
 };
 
 enum class backend {
-  mimalloc,
   system,
+  jemalloc,
+  mimalloc,
 };
 
 template <typename T>
@@ -104,6 +108,204 @@ alignas(__STDCPP_DEFAULT_NEW_ALIGNMENT__) inline std::byte
   zero_size_area[__STDCPP_DEFAULT_NEW_ALIGNMENT__];
 
 } // namespace detail
+
+#if TENZIR_ALLOCATOR_HAS_JEMALLOC
+
+namespace jemalloc {
+
+#  if TENZIR_GCC
+[[nodiscard, gnu::hot, gnu::malloc(je_tenzir_free), gnu::alloc_size(1),
+  gnu::alloc_align(2)]]
+#  elif TENZIR_CLANG
+[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1), gnu::alloc_align(2)]]
+#  endif
+/// Simple helper that switches the arguments for `alloc_aligned` for consistency.
+auto je_tenzir_malloc_aligned(std::size_t size, std::size_t alignment) noexcept
+  -> void*;
+
+#  if TENZIR_GCC
+[[nodiscard, gnu::hot, gnu::malloc(je_tenzir_free), gnu::alloc_size(2),
+  gnu::alloc_align(3)]]
+#  elif TENZIR_CLANG
+[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(3)]]
+#  endif
+/// We fake our own `realloc_aligned`, as that does not exist in C or POSIX.
+auto je_tenzir_realloc_aligned(void* ptr, std::size_t new_size,
+                               std::size_t alignment) noexcept -> void*;
+
+#  if TENZIR_GCC
+[[nodiscard, gnu::hot, gnu::malloc(je_tenzir_free), gnu::alloc_size(1, 2),
+  gnu::alloc_align(3)]]
+#  elif TENZIR_CLANG
+[[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2), gnu::alloc_align(3)]]
+#  endif
+/// We fake our own `calloc_aligned`, as that does not exist in C or POSIX.
+auto je_tenzir_calloc_aligned(std::size_t count, std::size_t size,
+                              std::size_t alignment) noexcept -> void*;
+
+class allocator final : public polymorphic_allocator {
+public:
+  constexpr explicit allocator(struct stats* stats) : stats_{stats} {
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2)]]
+  auto allocate(std::size_t size) noexcept -> void* final override {
+    if (size == 0) {
+      return &detail::zero_size_area;
+    }
+    auto* const ptr = ::je_tenzir_malloc(size);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::je_tenzir_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2),
+    gnu::alloc_align(3)]]
+  auto allocate(std::size_t size, std::align_val_t alignment) noexcept
+    -> void* final override {
+    if (size == 0) {
+      return &detail::zero_size_area;
+    }
+    auto* const ptr
+      = je_tenzir_malloc_aligned(size, std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::je_tenzir_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc,
+    gnu::alloc_size(2, 3)]]
+  auto calloc(std::size_t count, std::size_t size) noexcept
+    -> void* final override {
+    if (size * count == 0) {
+      return &detail::zero_size_area;
+    }
+    auto* const ptr = ::je_tenzir_calloc(count, size);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::je_tenzir_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(2, 3),
+    gnu::alloc_align(4)]]
+  auto calloc(std::size_t count, std::size_t size,
+              std::align_val_t alignment) noexcept -> void* final override {
+    if (size * count == 0) {
+      return &detail::zero_size_area;
+    }
+    auto* const ptr
+      = je_tenzir_calloc_aligned(count, size, std::to_underlying(alignment));
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    if (stats_) {
+      stats_->note_allocation(::je_tenzir_malloc_usable_size(ptr));
+    }
+    return ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc,
+    gnu::alloc_size(3)]] auto
+  reallocate(void* old_ptr, std::size_t new_size) noexcept
+    -> void* final override {
+    if (new_size == 0) {
+      deallocate(old_ptr);
+      return &detail::zero_size_area;
+    }
+    if (old_ptr == &detail::zero_size_area) {
+      return allocate(new_size);
+    }
+    const auto old_size = ::je_tenzir_malloc_usable_size(old_ptr);
+    void* const new_ptr = ::je_tenzir_realloc(old_ptr, new_size);
+    if (new_ptr == nullptr) {
+      return nullptr;
+    }
+    const auto actual_new_size = ::je_tenzir_malloc_usable_size(new_ptr);
+    if (stats_) {
+      stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
+    }
+    return new_ptr;
+  }
+
+  [[nodiscard, gnu::hot, gnu::always_inline, gnu::malloc, gnu::alloc_size(3),
+    gnu::alloc_align(4)]] auto
+  reallocate(void* old_ptr, std::size_t new_size,
+             std::align_val_t alignment) noexcept -> void* final override {
+    if (new_size == 0) {
+      deallocate(old_ptr);
+      return &detail::zero_size_area;
+    }
+    if (old_ptr == &detail::zero_size_area) {
+      return allocate(new_size, alignment);
+    }
+    const auto old_size = ::je_tenzir_malloc_usable_size(old_ptr);
+    void* const new_ptr = je_tenzir_realloc_aligned(
+      old_ptr, new_size, std::to_underlying(alignment));
+    if (new_ptr == nullptr) {
+      return nullptr;
+    }
+    const auto actual_new_size = ::je_tenzir_malloc_usable_size(new_ptr);
+    if (stats_) {
+      stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
+    }
+    return new_ptr;
+  }
+
+  [[gnu::hot, gnu::always_inline]]
+  auto deallocate(void* ptr) noexcept -> void final override {
+    if (ptr == nullptr) {
+      return;
+    }
+    if (ptr == &detail::zero_size_area) {
+      return;
+    }
+    if (stats_) {
+      stats_->note_deallocation(::je_tenzir_malloc_usable_size(ptr));
+    }
+    ::je_tenzir_free(ptr);
+  }
+
+  [[gnu::hot, gnu::always_inline]]
+  auto size(const void* ptr) const noexcept -> std::size_t final override {
+    return ::je_tenzir_malloc_usable_size(const_cast<void*>(ptr));
+  }
+
+  auto trim() noexcept -> void final override {
+    // jemalloc doesn't have a trim / collect.
+  }
+
+  [[nodiscard]]
+  auto stats() noexcept -> const struct stats& final override {
+    return stats_ ? *stats_ : detail::zero_stats;
+  }
+
+  [[nodiscard]]
+  auto backend() const noexcept -> enum backend final override {
+    return backend::jemalloc;
+  }
+
+  [[nodiscard]]
+  auto backend_name() const noexcept -> std::string_view final override {
+    return "jemalloc";
+  }
+
+private:
+  struct stats* const stats_{nullptr};
+};
+} // namespace jemalloc
+#endif
 
 #if TENZIR_ALLOCATOR_HAS_MIMALLOC
 namespace mimalloc {
@@ -287,27 +489,27 @@ namespace system {
 /// Function that will call the systems `free`, regardless of our overrides.
 auto native_free(void* ptr) noexcept -> void;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
-#endif
+#  endif
 /// Function that will call the systems `malloc`, regardless of our overrides.
 auto native_malloc(std::size_t size) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1, 2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2)]]
-#endif
+#  endif
 /// Function that will call the systems `calloc`, regardless of our overrides.
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2)]]
-#endif
+#  endif
 /// Function that will call the systems `realloc`, regardless of our overrides.
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void*;
 
@@ -316,31 +518,31 @@ auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void*;
 /// overrides.
 auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1),
   gnu::alloc_align(2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1), gnu::alloc_align(2)]]
-#endif
+#  endif
 /// Simple helper that switches the arguments for `alloc_aligned` for consistency.
 auto malloc_aligned(std::size_t size, std::size_t alignment) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2),
   gnu::alloc_align(3)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(3)]]
-#endif
+#  endif
 /// We fake our own `realloc_aligned`, as that does not exist in C or POSIX.
 auto realloc_aligned(void* ptr, std::size_t new_size,
                      std::size_t alignment) noexcept -> void*;
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1, 2),
   gnu::alloc_align(3)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2), gnu::alloc_align(3)]]
-#endif
+#  endif
 /// We fake our own `calloc_aligned`, as that does not exist in C or POSIX.
 auto calloc_aligned(std::size_t count, std::size_t size,
                     std::size_t alignment) noexcept -> void*;
@@ -530,16 +732,36 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> polymorphic_allocator& {                                              \
       constinit static auto stats_ = stats{};                                  \
+      static auto jemalloc_ = jemalloc::allocator{                             \
+        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr};   \
       static auto mimalloc_ = mimalloc::allocator{                             \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr};   \
       static auto system_ = system::allocator{                                 \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr};   \
-      static auto& instance                                                    \
-        = selected_backend("TENZIR_ALLOC_" ENV_SUFFIX) == backend::mimalloc    \
-            ? static_cast<polymorphic_allocator&>(mimalloc_)                   \
-            : static_cast<polymorphic_allocator&>(system_);                    \
+      static auto& instance = [] {                                             \
+        switch (selected_backend("TENZIR_ALLOC_" ENV_SUFFIX)) {                \
+          case backend::jemalloc:                                              \
+            return static_cast<polymorphic_allocator&>(jemalloc_);             \
+          case backend::mimalloc:                                              \
+            return static_cast<polymorphic_allocator&>(mimalloc_);             \
+          case backend::system_:                                               \
+            return static_cast<polymorphic_allocator&>(system_);               \
+        }                                                                      \
+        TENZIR_UNREACHABLE();                                                  \
+      }();                                                                     \
+      return instance;
+
+#elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_JEMALLOC
+
+#  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
+    [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
+      -> jemalloc::allocator& {                                                \
+      constinit static auto stats_ = stats{};                                  \
+      static auto instance = jemalloc::allocator{                              \
+        enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr};   \
       return instance;                                                         \
     }
+
 #elif TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_MIMALLOC
 
 #  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \

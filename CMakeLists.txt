@@ -432,13 +432,14 @@ set(TENZIR_ALLOCATOR
       "Configure the allocator.\
 Possible options:\
   * `none`: Tenzir's custom allocator API is not used. This means using the system allocator for most things and arrow uses its default alloctor\
+  * `jemalloc`: jemalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
   * `mimalloc`: mimalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
   * `system`: the system allocator is ussed for everything (arrow, operator new, malloc). You can enable stats tracking.\
   * `runtime`: The allocator can be selected via an environment variable at startup. You can enable stats tracking.\
 \
 Environment variables:\
 \
-* `TENZIR_ALLOC=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `mimalloc` or `system`\
+* `TENZIR_ALLOC=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `jemalloc`, `mimalloc`, or `system`\
 * `TENZIR_ALLOC_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component \
 \
 There also exist specific per-component variables, which are simply suffixed by _<COMPONENT>:\
@@ -453,6 +454,8 @@ endif ()
 
 if (TENZIR_ALLOCATOR STREQUAL "none")
   set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_NONE")
+elseif (TENZIR_ALLOCATOR STREQUAL "jemalloc")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_JEMALLOC")
 elseif (TENZIR_ALLOCATOR STREQUAL "mimalloc")
   set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_MIMALLOC")
 elseif (TENZIR_ALLOCATOR STREQUAL "system")
