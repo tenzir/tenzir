@@ -11,9 +11,12 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/connect_to_node.hpp"
+#include "tenzir/curl.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/base58.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
+#include "tenzir/detail/hex_encode.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -261,33 +264,46 @@ struct exec_node_control_plane final : public operator_control_plane {
                                      fbs::data::SecretTransformations operation,
                                      diagnostic_handler& dh, location loc)
       -> failure_or<ecc::cleansing_blob> {
+#define X_ENCODE(OPERATION, FUNCTION)                                          \
+  case OPERATION: {                                                            \
+    const auto encoded = FUNCTION(std::string_view{                            \
+      reinterpret_cast<const char*>(blob.data()),                              \
+      reinterpret_cast<const char*>(blob.data() + blob.size()),                \
+    });                                                                        \
+    const auto enc_bytes = as_bytes(encoded);                                  \
+    blob.assign(enc_bytes.begin(), enc_bytes.end());                           \
+    return blob;                                                               \
+  }
+
+#define X_DECODE(OPERATION, FUNCTION)                                          \
+  case OPERATION: {                                                            \
+    const auto decoded = FUNCTION(std::string_view{                            \
+      reinterpret_cast<const char*>(blob.data()),                              \
+      reinterpret_cast<const char*>(blob.data() + blob.size()),                \
+    });                                                                        \
+    if (not decoded) {                                                         \
+      diagnostic::error("failed to `" #OPERATION "` secret value")             \
+        .primary(loc)                                                          \
+        .emit(dh);                                                             \
+      return failure::promise();                                               \
+    }                                                                          \
+    const auto dec_bytes = as_bytes(*decoded);                                 \
+    blob.assign(dec_bytes.begin(), dec_bytes.end());                           \
+    return blob;                                                               \
+  }
       switch (operation) {
         using enum fbs::data::SecretTransformations;
-        case decode_base64: {
-          const auto decoded = detail::base64::try_decode(std::string_view{
-            reinterpret_cast<const char*>(blob.data()),
-            reinterpret_cast<const char*>(blob.data() + blob.size()),
-          });
-          if (not decoded) {
-            diagnostic::error("failed to `decode_base64` secret value")
-              .primary(loc)
-              .emit(dh);
-            return failure::promise();
-          }
-          const auto dec_bytes = as_bytes(*decoded);
-          blob.assign(dec_bytes.begin(), dec_bytes.end());
-          return blob;
-        }
-        case encode_base64: {
-          const auto encoded = detail::base64::encode(std::string_view{
-            reinterpret_cast<const char*>(blob.data()),
-            reinterpret_cast<const char*>(blob.data() + blob.size()),
-          });
-          const auto enc_bytes = as_bytes(encoded);
-          blob.assign(enc_bytes.begin(), enc_bytes.end());
-          return blob;
-        }
+        X_ENCODE(encode_base64, detail::base64::encode)
+        X_DECODE(decode_base64, detail::base64::try_decode)
+        X_ENCODE(encode_url, curl::escape)
+        X_DECODE(decode_url, curl::try_unescape)
+        X_ENCODE(encode_base58, detail::base58::encode)
+        X_DECODE(decode_base58, detail::base58::decode)
+        X_ENCODE(encode_hex, detail::hex::encode)
+        X_DECODE(decode_hex, detail::hex::decode)
       }
+#undef X_ENCODE
+#undef X_DECODE
       TENZIR_UNREACHABLE();
     }
 

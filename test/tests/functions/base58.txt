@@ -1,0 +1,5 @@
+{
+  input: "Hello World",
+  encoded: "JxF12TrwUP45BMd",
+  decoded: "Hello World",
+}

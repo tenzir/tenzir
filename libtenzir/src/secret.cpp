@@ -109,6 +109,18 @@ constexpr auto inverse(fbs::data::SecretTransformations trafo)
       return encode_base64;
     case encode_base64:
       return decode_base64;
+    case decode_url:
+      return encode_url;
+    case encode_url:
+      return decode_url;
+    case decode_base58:
+      return encode_base58;
+    case encode_base58:
+      return decode_base58;
+    case encode_hex:
+      return decode_hex;
+    case decode_hex:
+      return encode_hex;
   }
   TENZIR_UNREACHABLE();
 }

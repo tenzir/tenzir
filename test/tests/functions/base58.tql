@@ -1,0 +1,4 @@
+from { input: "Hello World" }
+encoded = input.encode_base58()
+decoded = encoded.decode_base58().string()
+assert input == decoded
