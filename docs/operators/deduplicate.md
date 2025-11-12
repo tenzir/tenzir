@@ -7,7 +7,7 @@ example: "deduplicate src_ip"
 Removes duplicate events based on a common key.
 
 ```tql
-deduplicate [key:any, limit=int, distance=int, create_timeout=duration,
+deduplicate [keys:any, limit=int, distance=int, create_timeout=duration,
              write_timeout=duration, read_timeout=duration]
 ```
 
@@ -16,10 +16,12 @@ deduplicate [key:any, limit=int, distance=int, create_timeout=duration,
 The `deduplicate` operator removes duplicates from a stream of events, based
 on the value of one or more fields.
 
-### `key: any (optional)`
+### `keys: any (optional)`
 
-The key to deduplicate. To deduplicate multiple fields, use a record expression
-like `{foo: bar, baz: qux}`.
+The expressions that form the deduplication key. Pass one or more positional
+arguments, for example `deduplicate src_ip, dst_ip`, to build a compound key
+from multiple fields. Record expressions, such as `{foo: bar, baz: qux}`,
+to work as well.
 
 Defaults to `this`, i.e., deduplicating entire events.
 
@@ -61,52 +63,101 @@ The read timeout must be smaller than the write and create timeouts.
 
 ## Examples
 
-### Simple deduplication
+### Deduplicate entire events
 
-Consider the following data:
+Deduplicate a stream of events by using `deduplicate` without arguments:
 
 ```tql
-{foo: 1, bar: "a"}
-{foo: 1, bar: "a"}
+from \
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "b"},
+  {foo: null, bar: "b"},
+  {bar: "b"},
+  {foo: null, bar: "b"},
+  {foo: null, bar: "b"}
+deduplicate
+```
+
+```tql
 {foo: 1, bar: "a"}
 {foo: 1, bar: "b"}
 {foo: null, bar: "b"}
 {bar: "b"}
-{foo: null, bar: "b"}
-{foo: null, bar: "b"}
 ```
 
-For `deduplicate`, all duplicate events are removed:
+### Deduplicate events based on single fields
+
+Use `deduplicate bar` to restrict the deduplication to the values of field
+`bar`:
+
+```tql
+from \
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "b"},
+  {foo: null, bar: "b"},
+  {bar: "b"},
+  {foo: null, bar: "b"},
+  {foo: null, bar: "b"}
+deduplicate bar
+```
 
 ```tql
 {foo: 1, bar: "a"}
 {foo: 1, bar: "b"}
-{foo: null, bar: "b"}
-{bar: "b"}
 ```
 
-If `deduplicate bar` is used, only the field `bar` is considered when
-determining whether an event is a duplicate:
+When writing `deduplicate foo`, note how the missing `foo` field is treated as
+if it had the value `null`, i.e., it's not included in the output.
+
+```tql
+from \
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "a"},
+  {foo: 1, bar: "b"},
+  {foo: null, bar: "b"},
+  {bar: "b"},
+  {foo: null, bar: "b"},
+  {foo: null, bar: "b"}
+deduplicate foo?
+```
 
 ```tql
 {foo: 1, bar: "a"}
-{foo: 1, bar: "b"}
+{foo: null, bar: "b"}
 ```
 
-And for `deduplicate foo`, only the field `foo` is considered. Note, how the
-missing `foo` field is treated as if it had the value `null`, i.e., it's not
-included in the output.
+### Deduplicate events based on multiple fields
+
+Multiple positional arguments form a tuple that must match entirely to suppress
+an event. For example, `deduplicate foo, bar` keeps the first event for each
+unique combination of `foo` and `bar`:
 
 ```tql
-{foo: 1, bar: "a"}
-{foo: null, bar: "b"}
+from \
+  {foo: 1, bar: "a", idx: 1},
+  {foo: 1, bar: "a", idx: 2},
+  {foo: 1, bar: "b", idx: 3},
+  {foo: 2, bar: "a", idx: 4},
+  {foo: 1, bar: "b", idx: 5}
+deduplicate foo, bar
+```
+
+```tql
+{foo: 1, bar: "a", idx: 1}
+{foo: 1, bar: "b", idx: 3}
+{foo: 2, bar: "a", idx: 4}
 ```
 
 ### Get up to 10 warnings per hour for each run of a pipeline
 
 ```tql
 diagnostics live=true
-deduplicate {id: pipeline_id, run: run}, limit=10, create_timeout=1h
+deduplicate pipeline_id, run, limit=10, create_timeout=1h
 ```
 
 ### Get an event whenever the node disconnected from the Tenzir Platform
