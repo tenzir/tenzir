@@ -61,8 +61,6 @@ jobs:
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
-      before-sha: ${{ steps.configure.outputs.before-sha }}
-      before-version: ${{ steps.configure.outputs.before-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
       ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
@@ -82,10 +80,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      - name: Fetch to merge-base with origin/main
+      - name: Fetch to merge-base
         run: |
           git fetch origin main
-          git fetch origin $(git merge-base origin/main HEAD)
+          git fetch origin $(git merge-base "origin/$GITHUB_BASE_REF" HEAD)
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
@@ -124,12 +122,9 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             before_sha="${{ github.event.before }}"
           else
-            before_sha="$(git merge-base origin/main HEAD)"
+            before_sha="$(git merge-base "origin/$GITHUB_BASE_REF" HEAD)"
           fi
-          before_version="${version}+g${before_sha:0:10}"
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
-          echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
-          echo "before-version=${before_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
           echo "ref-slug=${GITHUB_REF_SLUG}" >> $GITHUB_OUTPUT
