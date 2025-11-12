@@ -232,8 +232,8 @@ public:
     if (new_ptr == nullptr) {
       return nullptr;
     }
-    const auto actual_new_size = ::je_tenzir_malloc_usable_size(new_ptr);
     if (stats_) {
+      const auto actual_new_size = ::je_tenzir_malloc_usable_size(new_ptr);
       stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
     }
     return new_ptr;
@@ -256,8 +256,8 @@ public:
     if (new_ptr == nullptr) {
       return nullptr;
     }
-    const auto actual_new_size = ::je_tenzir_malloc_usable_size(new_ptr);
     if (stats_) {
+      const auto actual_new_size = ::je_tenzir_malloc_usable_size(new_ptr);
       stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
     }
     return new_ptr;
@@ -398,8 +398,8 @@ public:
     if (new_ptr == nullptr) {
       return nullptr;
     }
-    const auto actual_new_size = ::mi_malloc_usable_size(new_ptr);
     if (stats_) {
+      const auto actual_new_size = ::mi_malloc_usable_size(new_ptr);
       stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
     }
     return new_ptr;
@@ -422,8 +422,8 @@ public:
     if (new_ptr == nullptr) {
       return nullptr;
     }
-    const auto actual_new_size = ::mi_malloc_usable_size(new_ptr);
     if (stats_) {
+      const auto actual_new_size = ::mi_malloc_usable_size(new_ptr);
       stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
     }
     return new_ptr;
@@ -637,8 +637,8 @@ public:
     if (new_ptr == nullptr) {
       return nullptr;
     }
-    const auto actual_new_size = system::native_malloc_usable_size(new_ptr);
     if (stats_) {
+      const auto actual_new_size = system::native_malloc_usable_size(new_ptr);
       stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
     }
     return new_ptr;
@@ -660,8 +660,8 @@ public:
     if (new_ptr == nullptr) {
       return nullptr;
     }
-    const auto actual_new_size = system::native_malloc_usable_size(new_ptr);
     if (stats_) {
+      const auto actual_new_size = system::native_malloc_usable_size(new_ptr);
       stats_->note_reallocation(old_ptr != new_ptr, old_size, actual_new_size);
     }
     return new_ptr;
