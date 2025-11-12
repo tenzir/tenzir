@@ -5,3 +5,5 @@ from f"{env("TENZIR_INPUTS")}/zeek/conn.log.gz" {
 head 2
 write_lines
 shell "uniq -c"
+read_lines
+line = line.trim()

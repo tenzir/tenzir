@@ -1367,6 +1367,10 @@ public:
       .named("preserve_variants", preserve_variants)
       .parse(inv, ctx)
       .ignore();
+    diagnostic::warning("`ocsf::apply` is deprecated")
+      .primary(inv.self.get_location())
+      .hint("consider using `ocsf::cast` instead")
+      .emit(ctx);
     return std::make_unique<cast_operator>(inv.self.get_location(),
                                            preserve_variants, true, false);
   }

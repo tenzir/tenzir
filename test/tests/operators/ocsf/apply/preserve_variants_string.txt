@@ -1,9 +1,0 @@
-{
-  unmapped: null,
-}
-warning: expected type `record` for `unmapped`, but got `string`
- --> tests/operators/ocsf/apply/preserve_variants_string.tql:2:1
-  |
-2 | ocsf::apply preserve_variants=true
-  | ~~~~~~~~~~~ 
-  |

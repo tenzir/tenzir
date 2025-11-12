@@ -111,5 +111,5 @@ warning: found inconsistency between `activity_id` and `activity_name`
 
 ## See Also
 
-[`ocsf::apply`](/reference/operators/ocsf/apply),
+[`ocsf::cast`](/reference/operators/ocsf/cast),
 [`ocsf::trim`](/reference/operators/ocsf/trim)
