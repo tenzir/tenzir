@@ -8,15 +8,25 @@
 
 #include "tenzir/tql2/registry.hpp"
 
+#include "tenzir/concept/parseable/tenzir/yaml.hpp"
+#include "tenzir/detail/similarity.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
+#include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/user_defined_operator.hpp"
 
+#include <algorithm>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <ranges>
 #include <shared_mutex>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace tenzir {
 
@@ -53,13 +63,45 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
   return match(
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
-      if (not inv.args.empty()) {
-        diagnostic::error("user-defined operator does not support arguments")
-          .primary(inv.self)
-          .emit(ctx);
+      auto op_name = make_operator_name(inv.self);
+      auto usage = make_usage_string(op_name, udo);
+      const auto& docs = user_defined_operator_docs();
+      auto parameter_note = make_parameter_note(udo);
+      auto emit_failure = [&](diagnostic_builder d) {
+        auto builder = std::move(d).usage(usage);
+        if (parameter_note) {
+          builder = std::move(builder).note(*parameter_note);
+        }
+        builder = std::move(builder).docs(docs);
+        std::move(builder).emit(ctx);
+      };
+      auto fail = [&](diagnostic_builder d) -> failure_or<operator_ptr> {
+        emit_failure(std::move(d));
+        return failure::promise();
+      };
+      auto fail_ast = udo_failure_handler{
+        [&](diagnostic_builder d) -> failure_or<ast::pipeline> {
+          emit_failure(std::move(d));
+          return failure::promise();
+        }};
+
+      // If there are no parameters defined, check that no arguments were provided
+      if (udo.positional_params.empty() && udo.named_params.empty()) {
+        if (! inv.args.empty()) {
+          return fail(diagnostic::error(
+                        "operator '{}' does not support arguments", op_name)
+                        .primary(inv.self));
+        }
+        TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+        return std::make_unique<pipeline>(std::move(compiled));
+      }
+
+      auto instantiated
+        = instantiate_user_defined_operator(udo, inv, ctx, fail_ast);
+      if (! instantiated) {
         return failure::promise();
       }
-      TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+      TRY(auto compiled, compile(std::move(*instantiated), ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },
     [&](const native_operator& op) -> failure_or<operator_ptr> {

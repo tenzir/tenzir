@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/type.hpp"
 
 #include <memory>
 #include <shared_mutex>
@@ -22,6 +23,24 @@ struct module_def;
 struct user_defined_operator {
   /// Definition with resolved entities, but without resolved `let`s.
   ast::pipeline definition;
+
+  enum class parameter_kind {
+    expression,
+    field_path,
+  };
+
+  /// Parameter definitions for arguments and options
+  struct parameter {
+    std::string name;
+    std::string type_hint;
+    std::optional<std::string> description;
+    parameter_kind kind = parameter_kind::expression;
+    std::optional<ast::expression> default_value;
+    bool required = true;
+    std::optional<type> value_type;
+  };
+  std::vector<parameter> positional_params;
+  std::vector<parameter> named_params;
 };
 
 class operator_compiler_plugin;
