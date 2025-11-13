@@ -83,7 +83,8 @@ jobs:
       - name: Fetch to merge-base
         run: |
           git fetch origin main
-          git fetch origin $(git merge-base "origin/$GITHUB_BASE_REF" HEAD)
+          base_ref="${GITHUB_BASE_REF:-main}"
+          git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
@@ -122,7 +123,8 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             before_sha="${{ github.event.before }}"
           else
-            before_sha="$(git merge-base "origin/$GITHUB_BASE_REF" HEAD)"
+            base_ref="${GITHUB_BASE_REF:-main}"
+            before_sha="$(git merge-base "origin/$base_ref" HEAD)"
           fi
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
