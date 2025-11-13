@@ -99,11 +99,6 @@ public:
   /// Dumps the context's contents.
   virtual auto dump() -> generator<table_slice> = 0;
 
-  /// Updates the context.
-  virtual auto
-  legacy_update(table_slice events, context_parameter_map parameters)
-    -> caf::expected<context_update_result>
-    = 0;
   virtual auto update(const table_slice& events,
                       const context_update_args& args, session ctx)
     -> failure_or<context_update_result>

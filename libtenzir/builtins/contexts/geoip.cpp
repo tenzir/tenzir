@@ -567,13 +567,6 @@ public:
     }
   }
 
-  /// Updates the context.
-  auto legacy_update(table_slice, context_parameter_map)
-    -> caf::expected<context_update_result> override {
-    return caf::make_error(ec::unimplemented,
-                           "geoip context can not be updated with events");
-  }
-
   auto update(const table_slice& events, const context_update_args& args,
               session ctx) -> failure_or<context_update_result> override {
     TENZIR_UNUSED(events, args);
