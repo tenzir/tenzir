@@ -7,6 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/curl.hpp"
+#include "tenzir/detail/base58.hpp"
+#include "tenzir/detail/hex_encode.hpp"
 #include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
@@ -14,26 +17,16 @@
 
 #include <arrow/type_fwd.h>
 
-namespace tenzir::plugins::base64 {
+namespace tenzir::plugins::encode_decode {
 
-TENZIR_ENUM(mode, encode_base64, decode_base64);
 namespace {
 
-consteval auto translate(mode m) -> fbs::data::SecretTransformations {
-  switch (m) {
-    case mode::encode_base64:
-      return fbs::data::SecretTransformations::encode_base64;
-    case mode::decode_base64:
-      return fbs::data::SecretTransformations::decode_base64;
-  }
-}
-
-template <mode Mode>
+template <detail::string_literal Name, bool encode, auto F,
+          fbs::data::SecretTransformations tag>
 class plugin final : public function_plugin {
-  using Type
-    = std::conditional_t<Mode == mode::encode_base64, string_type, blob_type>;
+  using Type = std::conditional_t<encode, string_type, blob_type>;
   auto name() const -> std::string override {
-    return std::string{to_string(Mode)};
+    return (encode ? "encode_" : "decode_") + std::string{Name};
   }
 
   auto is_deterministic() const -> bool override {
@@ -63,12 +56,12 @@ class plugin final : public function_plugin {
                 check(b->AppendNull());
                 continue;
               }
-              if constexpr (Mode == mode::encode_base64) {
-                check(b->Append(detail::base64::encode(array.Value(i))));
+              if constexpr (encode) {
+                check(b->Append(F(array.Value(i))));
               } else {
-                const auto decoded = detail::base64::try_decode(array.Value(i));
+                const auto decoded = F(array.Value(i));
                 if (not decoded) {
-                  diagnostic::warning("invalid base64 encoding")
+                  diagnostic::warning("invalid {} encoding", Name)
                     .primary(expr)
                     .emit(ctx);
                   check(b->AppendNull());
@@ -87,8 +80,7 @@ class plugin final : public function_plugin {
                 check(b.AppendNull());
                 continue;
               }
-              check(append_builder(secret_type{}, b,
-                                   s->with_operation(translate(Mode))));
+              check(append_builder(secret_type{}, b, s->with_operation(tag)));
             }
             return series{secret_type{}, finish(b)};
           },
@@ -106,12 +98,40 @@ class plugin final : public function_plugin {
   }
 };
 
-using encode_base64 = plugin<mode::encode_base64>;
-using decode_base64 = plugin<mode::decode_base64>;
+using encode_base64 = plugin<"base64", true,
+                             static_cast<std::string (*)(std::string_view)>(
+                               detail::base64::encode),
+                             fbs::data::SecretTransformations::encode_base64>;
+using decode_base64
+  = plugin<"base64", false, detail::base64::try_decode<std::string>,
+           fbs::data::SecretTransformations::decode_base64>;
+
+using encode_url
+  = plugin<"url", true,
+           static_cast<std::string (*)(std::string_view)>(curl::escape),
+           fbs::data::SecretTransformations::encode_url>;
+using decode_url = plugin<"url", false, curl::try_unescape,
+                          fbs::data::SecretTransformations::decode_url>;
+
+using encode_base58 = plugin<"base58", true, detail::base58::encode,
+                             fbs::data::SecretTransformations::encode_url>;
+using decode_base68 = plugin<"base58", false, detail::base58::decode,
+                             fbs::data::SecretTransformations::decode_url>;
+
+using encode_hex = plugin<"hex", true, detail::hex::encode,
+                          fbs::data::SecretTransformations::encode_hex>;
+using decode_hex = plugin<"hex", false, detail::hex::decode,
+                          fbs::data::SecretTransformations::decode_hex>;
 
 } // namespace
 
-} // namespace tenzir::plugins::base64
+} // namespace tenzir::plugins::encode_decode
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::base64::encode_base64)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::base64::decode_base64)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::encode_base64)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::decode_base64)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::encode_url)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::decode_url)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::encode_base58)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::decode_base68)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::encode_hex)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::encode_decode::decode_hex)
