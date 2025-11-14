@@ -48,11 +48,12 @@ constexpr char version = '1';
 constexpr auto default_seed = uint16_t{0};
 
 template <incremental_hash HashAlgorithm>
-auto community_id_hash_append(HashAlgorithm& h, const ip& x) -> void{
-  if (x.is_v4())
+auto community_id_hash_append(HashAlgorithm& h, const ip& x) -> void {
+  if (x.is_v4()) {
     hash_append(h, as_bytes(x).subspan<12, 4>());
-  else
+  } else {
     hash_append(h, as_bytes(x).subspan<0, 16>());
+  }
 }
 
 /// Computes a hash of a host pair according to the Community ID specification.
@@ -82,7 +83,7 @@ auto community_id_hash_append(HashAlgorithm& h, const ip& src_addr,
 /// @param x The flow to hash.
 /// @relates flow
 template <incremental_hash HashAlgorithm>
-auto community_id_hash_append(HashAlgorithm& h, const flow& x) -> void{
+auto community_id_hash_append(HashAlgorithm& h, const flow& x) -> void {
   TENZIR_ASSERT(x.src_port.type() == x.dst_port.type());
   auto src_port_num = x.src_port.number();
   auto dst_port_num = x.dst_port.number();
@@ -90,19 +91,21 @@ auto community_id_hash_append(HashAlgorithm& h, const flow& x) -> void{
   // Normalize ICMP and ICMP6. Source and destination port map to ICMP
   // message type and message code.
   if (protocol(x) == port_type::icmp) {
-    if (auto p = dual(detail::narrow_cast<icmp_type>(src_port_num)))
+    if (auto p = dual(detail::narrow_cast<icmp_type>(src_port_num))) {
       dst_port_num = static_cast<uint16_t>(*p);
-    else
+    } else {
       is_one_way = true;
+    }
   } else if (protocol(x) == port_type::icmp6) {
-    if (auto p = dual(detail::narrow_cast<icmp6_type>(src_port_num)))
+    if (auto p = dual(detail::narrow_cast<icmp6_type>(src_port_num))) {
       dst_port_num = static_cast<uint16_t>(*p);
-    else
+    } else {
       is_one_way = true;
+    }
   }
-  auto is_ordered = is_one_way || x.src_addr < x.dst_addr
-                    || (x.src_addr == x.dst_addr
-                        && src_port_num < dst_port_num);
+  auto is_ordered
+    = is_one_way || x.src_addr < x.dst_addr
+      || (x.src_addr == x.dst_addr && src_port_num < dst_port_num);
   // Adjust byte order - if needed.
   src_port_num = detail::to_network_order(src_port_num);
   dst_port_num = detail::to_network_order(dst_port_num);
@@ -139,12 +142,13 @@ template <class Policy>
 constexpr auto max_length() -> size_t {
   constexpr auto hex_size = (160 / 8) * 2; // 160-bit SHA-1 digest as hex.
   auto prefix = version_prefix_length();
-  if constexpr (std::is_same_v<Policy, policy::base64>)
+  if constexpr (std::is_same_v<Policy, policy::base64>) {
     return prefix + detail::base64::encoded_size(hex_size);
-  else if constexpr (std::is_same_v<Policy, policy::ascii>)
+  } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
     return prefix + hex_size;
-  else
+  } else {
     static_assert(detail::always_false_v<Policy>, "unsupported policy");
+  }
 }
 
 /// Calculates the Community ID for a given flow.

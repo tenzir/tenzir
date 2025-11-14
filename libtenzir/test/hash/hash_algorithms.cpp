@@ -167,14 +167,15 @@ TEST("sha512 validity") {
 TEST("sha3-224 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha3_224>(foo));
-  CHECK_EQUAL(digest, "f4f6779e153c391bbd29c95e72b0708e39d9166c7cea51d1f10ef58a");
+  CHECK_EQUAL(digest,
+              "f4f6779e153c391bbd29c95e72b0708e39d9166c7cea51d1f10ef58a");
 }
 
 TEST("sha3-256 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha3_256>(foo));
-  CHECK_EQUAL(digest,
-              "76d3bc41c9f588f7fcd0d5bf4718f8f84b1c41b20882703100b9eb9413807c01");
+  CHECK_EQUAL(digest, "76d3bc41c9f588f7fcd0d5bf4718f8f84b1c41b20882703100b9eb94"
+                      "13807c01");
 }
 
 TEST("sha3-384 validity") {
@@ -188,7 +189,7 @@ TEST("sha3-384 validity") {
 TEST("sha3-512 validity") {
   std::array<char, 3> foo = {'f', 'o', 'o'};
   auto digest = hexify(hash<sha3_512>(foo));
-  CHECK_EQUAL(digest,
-              "4bca2b137edc580fe50a88983ef860ebaca36c857b1f492839d6d7392452a63c"
-              "82cbebc68e3b70a2a1480b4bb5d437a7cba6ecf9d89f9ff3ccd14cd6146ea7e7");
+  CHECK_EQUAL(
+    digest, "4bca2b137edc580fe50a88983ef860ebaca36c857b1f492839d6d7392452a63c"
+            "82cbebc68e3b70a2a1480b4bb5d437a7cba6ecf9d89f9ff3ccd14cd6146ea7e7");
 }

@@ -10,15 +10,16 @@
 
 #include "tenzir/detail/assert.hpp"
 
+#include <openssl/core_names.h>
+#include <openssl/evp.h>
+#include <openssl/params.h>
+
 #include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
-#include <openssl/core_names.h>
-#include <openssl/evp.h>
-#include <openssl/params.h>
 #include <span>
 
 namespace tenzir::openssl {
@@ -132,8 +133,7 @@ public:
 
   static constexpr std::endian endian = std::endian::native;
 
-  hash() noexcept
-    : ctx_{EVP_MD_CTX_new()} {
+  hash() noexcept : ctx_{EVP_MD_CTX_new()} {
     TENZIR_ASSERT_ALWAYS(ctx_ != nullptr);
     const auto* md = detail::algorithm_traits<Algorithm>::evp();
     const auto init_ok = EVP_DigestInit_ex(ctx_.get(), md, nullptr);
@@ -144,14 +144,14 @@ public:
     if (bytes.empty()) {
       return;
     }
-    TENZIR_ASSERT_ALWAYS(!finished_);
+    TENZIR_ASSERT_ALWAYS(! finished_);
     const auto* ptr = reinterpret_cast<const unsigned char*>(bytes.data());
     const auto update_ok = EVP_DigestUpdate(ctx_.get(), ptr, bytes.size());
     TENZIR_ASSERT_ALWAYS(update_ok == 1);
   }
 
   auto finish() noexcept -> result_type {
-    if (!finished_) {
+    if (! finished_) {
       auto* out = reinterpret_cast<unsigned char*>(digest_.data());
       const auto final_ok = EVP_DigestFinal_ex(ctx_.get(), out, nullptr);
       TENZIR_ASSERT_ALWAYS(final_ok == 1);
@@ -200,14 +200,13 @@ public:
     const auto* md_name = EVP_MD_get0_name(md);
     TENZIR_ASSERT_ALWAYS(md_name != nullptr);
     OSSL_PARAM params[2];
-    params[0] = OSSL_PARAM_construct_utf8_string(
-      OSSL_MAC_PARAM_DIGEST, const_cast<char*>(md_name), 0);
+    params[0] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
+                                                 const_cast<char*>(md_name), 0);
     params[1] = OSSL_PARAM_construct_end();
     const auto params_ok = EVP_MAC_CTX_set_params(ctx_.get(), params);
     TENZIR_ASSERT_ALWAYS(params_ok == 1);
     const auto* key_ptr = reinterpret_cast<const unsigned char*>(key.data());
-    const auto init_ok
-      = EVP_MAC_init(ctx_.get(), key_ptr, key.size(), nullptr);
+    const auto init_ok = EVP_MAC_init(ctx_.get(), key_ptr, key.size(), nullptr);
     TENZIR_ASSERT_ALWAYS(init_ok == 1);
   }
 
@@ -215,18 +214,17 @@ public:
     if (bytes.empty()) {
       return;
     }
-    TENZIR_ASSERT_ALWAYS(!finished_);
+    TENZIR_ASSERT_ALWAYS(! finished_);
     const auto* ptr = reinterpret_cast<const unsigned char*>(bytes.data());
     const auto update_ok = EVP_MAC_update(ctx_.get(), ptr, bytes.size());
     TENZIR_ASSERT_ALWAYS(update_ok == 1);
   }
 
   auto finish() noexcept -> result_type {
-    if (!finished_) {
+    if (! finished_) {
       auto* out = reinterpret_cast<unsigned char*>(digest_.data());
       size_t len = 0;
-      const auto final_ok
-        = EVP_MAC_final(ctx_.get(), out, &len, digest_size);
+      const auto final_ok = EVP_MAC_final(ctx_.get(), out, &len, digest_size);
       TENZIR_ASSERT_ALWAYS(final_ok == 1);
       TENZIR_ASSERT_ALWAYS(len == digest_size);
       finished_ = true;
