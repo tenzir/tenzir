@@ -14,6 +14,7 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/coding.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -24,6 +25,7 @@
 #include <tenzir/hash/xxhash.hpp>
 #include <tenzir/optional.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/scalar.h>
@@ -33,7 +35,80 @@
 
 namespace tenzir::plugins::hash {
 
+namespace hash_detail {
+
+auto flatten_secret(const secret_view& secret, session ctx,
+                    const ast::expression& expr, std::string_view function_name)
+  -> std::optional<std::string> {
+  auto& dh = ctx.dh();
+  struct visitor {
+    diagnostic_handler& dh;
+    const ast::expression& expr;
+    std::string_view function_name;
+
+    auto operator()(const fbs::data::SecretLiteral& lit) const
+      -> std::optional<std::string> {
+      const auto value = detail::secrets::deref(lit.value()).string_view();
+      return std::string{value};
+    }
+
+    auto operator()(const fbs::data::SecretName& name) const
+      -> std::optional<std::string> {
+      diagnostic::error("`{}` requires literal secrets; got managed secret "
+                        "`{}`",
+                        function_name, name.value()->string_view())
+        .primary(expr)
+        .emit(dh);
+      return std::nullopt;
+    }
+
+    auto operator()(const fbs::data::SecretConcatenation& concat) const
+      -> std::optional<std::string> {
+      auto result = std::string{};
+      for (const auto* child : detail::secrets::deref(concat.secrets())) {
+        auto flattened = match(detail::secrets::deref(child), *this);
+        if (not flattened) {
+          return std::nullopt;
+        }
+        result += std::move(*flattened);
+      }
+      return result;
+    }
+
+    auto operator()(const fbs::data::SecretTransformed& transformed) const
+      -> std::optional<std::string> {
+      auto inner = match(detail::secrets::deref(transformed.secret()), *this);
+      if (not inner) {
+        return std::nullopt;
+      }
+      using enum fbs::data::SecretTransformations;
+      switch (transformed.transformation()) {
+        case encode_base64:
+          return detail::base64::encode(*inner);
+        case decode_base64: {
+          auto decoded = detail::base64::try_decode(std::string_view{*inner});
+          if (not decoded) {
+            diagnostic::error("`{}` failed to decode base64 secret value",
+                              function_name)
+              .primary(expr)
+              .emit(dh);
+            return std::nullopt;
+          }
+          return std::string{decoded->begin(), decoded->end()};
+        }
+      }
+      TENZIR_UNREACHABLE();
+    }
+  };
+
+  return match(*secret.buffer, visitor{dh, expr, function_name});
+}
+
+} // namespace hash_detail
+
 namespace {
+
+using hash_detail::flatten_secret;
 
 /// The configuration of the hash pipeline operator.
 struct configuration {
@@ -200,6 +275,8 @@ public:
   }
 };
 
+} // namespace
+
 template <class HashAlgorithm, detail::string_literal Name>
 class fun : public virtual function_plugin {
   auto name() const -> std::string override {
@@ -256,9 +333,96 @@ class fun : public virtual function_plugin {
   }
 };
 
-} // namespace
-
 } // namespace tenzir::plugins::hash
+
+namespace tenzir::plugins::hmac {
+
+template <class HmacAlgorithm, detail::string_literal Name>
+class fun : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("hmac_{}", Name);
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto value_expr = ast::expression{};
+    auto key_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("value", value_expr, "any")
+          .positional("key", key_expr, "secret")
+          .parse(inv, ctx));
+    auto fn_name = std::string{name()};
+    return function_use::make(
+      [value_expr = std::move(value_expr), key_expr = std::move(key_expr),
+       fn_name
+       = std::move(fn_name)](evaluator eval, session ctx) -> multi_series {
+        auto compute = [&, fn_name = std::string_view{fn_name}](
+                         series value, series key) -> series {
+          auto secret_array = key.as<secret_type>();
+          if (not secret_array) {
+            diagnostic::warning("`{}` expected `secret`, but got `{}`", fn_name,
+                                key.type.kind())
+              .primary(key_expr)
+              .emit(ctx);
+            return series::null(string_type{}, value.length());
+          }
+          if (value.length() != secret_array->length()) {
+            diagnostic::warning("`{}` requires the key expression to produce "
+                                "the same number of "
+                                "rows as the value expression ({} vs {})",
+                                fn_name, value.length(), secret_array->length())
+              .primary(value_expr)
+              .emit(ctx);
+            return series::null(string_type{}, value.length());
+          }
+          auto key_values = values3(*secret_array->array);
+          auto builder = string_type::make_arrow_builder(arrow_memory_pool());
+          for (auto row = int64_t{0}; row < value.length(); ++row) {
+            auto key_view = key_values.next();
+            TENZIR_ASSERT(key_view);
+            if (not *key_view) {
+              check(builder->AppendNull());
+              continue;
+            }
+            auto key_material = hash::hash_detail::flatten_secret(
+              **key_view, ctx, key_expr, fn_name);
+            if (not key_material) {
+              check(builder->AppendNull());
+              continue;
+            }
+            if (value.array->IsNull(row)) {
+              check(builder->AppendNull());
+              continue;
+            }
+            auto key_bytes = as_bytes(std::string_view{*key_material});
+            auto hasher = HmacAlgorithm{key_bytes};
+            auto append_value = detail::overload{
+              [&](const auto& data) {
+                hash_append(hasher, data);
+              },
+              [&](std::string_view str) {
+                hasher.add(as_bytes(str));
+              },
+            };
+            auto dv = value_at(value.type, *value.array, row);
+            match(dv, append_value);
+            auto digest = std::move(hasher).finish();
+            auto hex = detail::hexify(as_bytes(digest));
+            check(builder->Append(hex));
+          }
+          return series{string_type{}, finish(*builder)};
+        };
+        return map_series(eval(value_expr), eval(key_expr), compute);
+      });
+  }
+};
+
+} // namespace tenzir::plugins::hmac
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::md5, "md5">)
@@ -272,3 +436,21 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_256, "sha3_256">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_384, "sha3_384">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_512, "sha3_512">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::xxh3_64, "xxh3">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_md5, "md5">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha1, "sha1">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha224, "sha22"
+                                                                       "4">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha256, "sha25"
+                                                                       "6">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha384, "sha38"
+                                                                       "4">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha512, "sha51"
+                                                                       "2">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha3_224, "sha3_"
+                                                                         "224">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha3_256, "sha3_"
+                                                                         "256">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha3_384, "sha3_"
+                                                                         "384">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hmac::fun<tenzir::hmac_sha3_512, "sha3_"
+                                                                         "512">)

@@ -39,3 +39,13 @@ from {x: hash_sha3_512("foo")}
 [`hash_sha3_256`](/reference/functions/hash_sha3_256),
 [`hash_sha3_384`](/reference/functions/hash_sha3_384),
 [`hash_xxh3`](/reference/functions/hash_xxh3)
+[`hmac_md5`](/reference/functions/hmac_md5),
+[`hmac_sha1`](/reference/functions/hmac_sha1),
+[`hmac_sha224`](/reference/functions/hmac_sha224),
+[`hmac_sha256`](/reference/functions/hmac_sha256),
+[`hmac_sha384`](/reference/functions/hmac_sha384),
+[`hmac_sha512`](/reference/functions/hmac_sha512),
+[`hmac_sha3_224`](/reference/functions/hmac_sha3_224),
+[`hmac_sha3_256`](/reference/functions/hmac_sha3_256),
+[`hmac_sha3_384`](/reference/functions/hmac_sha3_384),
+[`hmac_sha3_512`](/reference/functions/hmac_sha3_512)
