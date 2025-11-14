@@ -8,7 +8,6 @@
 
 #include "tenzir/tql2/user_defined_operator.hpp"
 
-#include "tenzir/concept/parseable/tenzir/yaml.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -17,7 +16,7 @@ namespace tenzir {
 
 auto parameter_type_label(const user_defined_operator::parameter& param)
   -> std::string {
-  if (! param.type_hint.empty()) {
+  if (not param.type_hint.empty()) {
     return param.type_hint;
   }
   switch (param.kind) {
@@ -30,15 +29,12 @@ auto parameter_type_label(const user_defined_operator::parameter& param)
 }
 
 auto make_operator_name(const ast::entity& entity) -> std::string {
-  auto parts = std::vector<std::string>{};
-  parts.reserve(entity.path.size());
-  for (const auto& segment : entity.path) {
-    parts.push_back(segment.name);
-  }
-  if (parts.empty()) {
+  if (entity.path.empty()) {
     return std::string{"<unknown operator>"};
   }
-  return fmt::format("{}", fmt::join(parts, "::"));
+  auto names_range
+    = entity.path | std::views::transform(&ast::identifier::name);
+  return fmt::format("{}", fmt::join(names_range, "::"));
 }
 
 namespace {
@@ -239,6 +235,8 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
   }
 
+  // TODO: 
+  // FIXME: Add test for args that are not expected and extra positional args.
   auto next_arg = size_t{0};
   for (const auto& positional_param : udo.positional_params) {
     if (next_arg >= inv.args.size()
@@ -261,7 +259,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
           .primary(arg));
     }
     auto* left = try_as<ast::field_path>(assignment->left);
-    if (! left || left->has_this() || left->path().size() != 1
+    if ((left == nullptr) || left->has_this() || left->path().size() != 1
         || left->path()[0].has_question_mark) {
       return fail(
         diagnostic::error("invalid argument name").primary(assignment->left));
@@ -321,10 +319,14 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   auto validate_type = [&](const user_defined_operator::parameter& param,
                            const ast::expression& expr,
                            std::optional<location> explicit_location)
+    // TODO:
+    //-> failure_or<void>
     -> std::optional<failure_or<ast::pipeline>> {
     if (! param.value_type) {
       return std::nullopt;
     }
+    // FIXME: Add a test that checks that `null` will be accepted by the type
+    // check, no matter the type in the operator signature.
     auto diag_loc = explicit_location.value_or(expr.get_location());
     if (auto value = try_const_eval(expr, ctx)) {
       if (type_check(*param.value_type, *value)) {
@@ -338,12 +340,15 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
                     fmt::format("{}", *param.value_type), actual_str)
                     .primary(diag_loc));
     }
+    return {};
     return fail(diagnostic::error("argument `{}` must be a constant expression "
                                   "because it declares type `{}`",
                                   param.name, parameter_type_label(param))
                   .primary(diag_loc));
   };
 
+  // FIXME: Add tests for named before positional, should behave exactly like
+  // builtins
   for (size_t i = 0; i < udo.positional_params.size(); ++i) {
     auto& expr = positional_values[i];
     const auto& param = udo.positional_params[i];
@@ -380,6 +385,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
     substitutions.emplace(param.name, std::move(value));
   }
+  // We intentionally don't support pipelines that are passed to udos yet.
 
   auto modified_pipeline = udo.definition;
   return ast::substitute_named_expressions(std::move(modified_pipeline),

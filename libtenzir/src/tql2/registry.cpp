@@ -63,10 +63,18 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
   return match(
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
+      // FIXME:
+      // - Add a test for an operator that needs a constant (from_file), but 
+      // pass in a field path. -> should fail
+      // - Add a test for an operator that needs a field_path (select), but 
+      // pass in a constant literal string. -> should fail
+      // - Add a test that passes in a secret to a udo that accepts a string
+      // for that value.
       auto op_name = make_operator_name(inv.self);
       auto usage = make_usage_string(op_name, udo);
       const auto& docs = user_defined_operator_docs();
       auto parameter_note = make_parameter_note(udo);
+      // TODO: return failure directly. 
       auto emit_failure = [&](diagnostic_builder d) {
         auto builder = std::move(d).usage(usage);
         if (parameter_note) {
@@ -75,6 +83,7 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
         builder = std::move(builder).docs(docs);
         std::move(builder).emit(ctx);
       };
+      // TODO: return emit_failure...
       auto fail = [&](diagnostic_builder d) -> failure_or<operator_ptr> {
         emit_failure(std::move(d));
         return failure::promise();

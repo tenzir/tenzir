@@ -36,6 +36,7 @@ struct user_defined_operator {
     std::optional<std::string> description;
     parameter_kind kind = parameter_kind::expression;
     std::optional<ast::expression> default_value;
+    // TODO: drop this flag.
     bool required = true;
     std::optional<type> value_type;
   };

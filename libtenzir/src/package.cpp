@@ -446,6 +446,8 @@ auto parse_parameter_value_type(const package_operator_parameter& param,
       .emit(dh);
     return failure::promise();
   }
+  // TODO: check if this is an alias (has a name) or if it is a legacy record.
+  // Reject in both cases.
   return std::optional<type>{type::from_legacy_type(std::move(legacy))};
 }
 

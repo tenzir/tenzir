@@ -36,7 +36,7 @@ public:
 
   void visit(ast::expression& expr) {
     if (expr.kind) {
-      if (auto* var = std::get_if<ast::dollar_var>(&*expr.kind)) {
+      if (auto* var = try_as<ast::dollar_var>(expr)) {
         auto name = std::string{var->name_without_dollar()};
         if (! shadowed_.contains(name)) {
           if (auto it = replacements_.find(name); it != replacements_.end()) {
