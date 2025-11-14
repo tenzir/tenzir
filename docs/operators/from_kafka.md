@@ -1,24 +1,20 @@
 ---
-title: load_kafka
-category: Inputs/Bytes
-example: 'load_kafka topic="example"'
+title: from_kafka
+category: Inputs/Events
+example: 'from_kafka "logs"'
 ---
 
-Loads a byte stream from an Apache Kafka topic.
+Receives events from an Apache Kafka topic.
 
 ```tql
-load_kafka topic:string, [count=int, exit=bool, offset=int|string, options=record,
-           aws_iam=record, commit_batch_size=int, commit_timeout=duration]
+from_kafka topic:string, [count=int, exit=bool, offset=int|string, options=record,
+           aws_iam=record, commit_batch_size=int]
 ```
 
 ## Description
 
-:::caution[Deprecated]
-The `load_kafka` operator does not respect event boundaries. Consider using
-[`from_kafka`](from_kafka.md) instead.
-:::
-
-The `load_kafka` operator reads bytes from a Kafka topic.
+The `from_kafka` operator consumes messages from a Kafka topic and produces
+events containing the message payload as a string field.
 
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
 supports all [configuration options][librdkafka-options]. You can specify them
@@ -36,9 +32,17 @@ include them:
 - `group.id`: `tenzir`
 - `enable.auto.commit`: `false` (This option cannot be changed)
 
+Each consumed message is produced as an event with the following schema:
+
+```tql
+{
+  message: string
+}
+```
+
 ### `topic: string`
 
-The Kafka topic to use.
+The Kafka topic to consume from.
 
 ### `count = int (optional)`
 
@@ -46,7 +50,7 @@ Exit successfully after having consumed `count` messages.
 
 ### `exit = bool (optional)`
 
-Exit successfully after having received the last message.
+Exit successfully after having received the last message from all partitions.
 
 Without this option, the operator waits for new messages after consuming the
 last one.
@@ -63,23 +67,18 @@ The offset to start consuming from. Possible values are:
 
 The default is `"stored"`.
 
-<!--
-- `s@<value>`: timestamp in ms to start at
-- `e@<value>`: timestamp in ms to stop at (not included)
--->
-
 ### `options = record (optional)`
 
 A record of key-value configuration options for
 [librdkafka][librdkafka], e.g., `{"auto.offset.reset" : "earliest",
 "enable.partition.eof": true}`.
 
-The `load_kafka` operator passes the key-value pairs directly to
+The `from_kafka` operator passes the key-value pairs directly to
 [librdkafka][librdkafka]. Consult the list of available [configuration
 options][librdkafka-options] to configure Kafka according to your needs.
 
 We recommend factoring these options into the plugin-specific `kafka.yaml` so
-that they are independent of the `load_kafka` arguments.
+that they are independent of the `from_kafka` arguments.
 
 ### `commit_batch_size = int (optional)`
 
@@ -88,12 +87,6 @@ to improve throughput. If you need to ensure exactly-once semantics for your
 pipeline, set this option to `1` to commit every message individually.
 
 Defaults to `1000`.
-
-### `commit_timeout = duration (optional)`
-
-A timeout after which the operator commits messages, even if it accepted fewer than `commit_batch_size`. This helps with long-running, low-volume pipelines.
-
-Defaults to `10s`.
 
 ### `aws_iam = record (optional)`
 
@@ -124,20 +117,33 @@ The operator tries to get credentials in the following order:
 
 ## Examples
 
-### Read 100 JSON messages from the topic `tenzir`
+### Consume JSON messages and parse them
 
 ```tql
-load_kafka "tenzir", count=100
-read_json
+from_kafka "logs"
+message = message.parse_json()
 ```
 
-### Read Zeek Streaming JSON logs starting at the beginning
+### Consume 100 messages starting from the beginning
 
 ```tql
-load_kafka "zeek", offset="beginning"
-read_zeek_json
+from_kafka "events", count=100, offset="beginning"
+```
+
+### Consume messages and exit when caught up
+
+```tql
+from_kafka "alerts", exit=true
+```
+
+### Consume from MSK using AWS IAM authentication
+
+```tql
+from_kafka "security-logs",
+  options={"bootstrap.servers": "my-cluster.kafka.us-east-1.amazonaws.com:9098"},
+  aws_iam={region: "us-east-1"}
 ```
 
 ## See Also
 
-[`save_kafka`](/reference/operators/save_kafka)
+[`to_kafka`](to_kafka.md)

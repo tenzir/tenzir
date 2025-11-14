@@ -283,6 +283,7 @@ public:
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
       TENZIR_ASSERT(raw_msg);
+      const auto now = time::clock::now();
       switch (raw_msg->err()) {
         case RdKafka::ERR_NO_ERROR: {
           last_good_message = std::move(raw_msg);
@@ -294,10 +295,9 @@ public:
           co_yield std::move(chunk);
           // Manually commit this specific message after processing
           ++num_messages;
-          const auto now = time::clock::now();
           if (last_good_message
               and (num_messages % args_.commit_batch_size == 0
-                   or last_commit_time - now >= args_.commit_timeout)) {
+                   or now - last_commit_time >= args_.commit_timeout)) {
             last_commit_time = now;
             if (not client->commit(last_good_message.get(), dh,
                                    args_.operator_location)) {
@@ -314,9 +314,9 @@ public:
           continue;
         }
         case RdKafka::ERR__TIMED_OUT: {
-          const auto now = time::clock::now();
           if (last_good_message
-              and last_commit_time - now >= args_.commit_timeout) {
+              and now - last_commit_time >= args_.commit_timeout) {
+            last_commit_time = now;
             if (not client->commit(last_good_message.get(), dh,
                                    args_.operator_location)) {
               co_return;
@@ -357,6 +357,7 @@ public:
             }
             if (*pc == *partition_count) {
               if (last_good_message) {
+                last_commit_time = now;
                 std::ignore = client->commit(last_good_message.get(), dh,
                                              args_.operator_location);
               }
@@ -379,6 +380,7 @@ public:
                   .done();
               },
             };
+            last_commit_time = now;
             std::ignore = client->commit(last_good_message.get(), ndh,
                                          args_.operator_location);
           }

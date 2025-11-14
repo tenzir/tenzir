@@ -53,6 +53,11 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    diagnostic::warning(
+      "`load_kafka` is deprecated and will be removed in a future release")
+      .hint("use `from_kafka` instead")
+      .primary(inv.self.get_location())
+      .emit(ctx);
     auto args = loader_args{};
     args.operator_location = inv.self.get_location();
     auto offset = std::optional<ast::expression>{};
@@ -164,6 +169,11 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    diagnostic::warning(
+      "`save_kafka` is deprecated and will be removed in a future release")
+      .hint("use `to_kafka` instead")
+      .primary(inv.self.get_location())
+      .emit(ctx);
     auto args = saver_args{};
     auto ts = std::optional<located<time>>{};
     auto iam_opts = std::optional<located<record>>{};
