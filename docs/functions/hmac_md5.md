@@ -19,7 +19,7 @@ The `hmac_md5` function calculates an HMAC for `x` using the algorithm behind HM
 ### Compute an HMAC-MD5 digest of a string
 
 ```tql
-from {x: hmac_md5("foo", "secret")}
+from {x: hmac_md5("foo", secret("key_id"))}
 ```
 
 ```tql

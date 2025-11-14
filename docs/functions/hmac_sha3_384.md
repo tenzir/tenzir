@@ -19,7 +19,7 @@ The `hmac_sha3_384` function calculates an HMAC for `x` using the algorithm behi
 ### Compute an HMAC-SHA3-384 digest of a string
 
 ```tql
-from {x: hmac_sha3_384("foo", "secret")}
+from {x: hmac_sha3_384("foo", secret("key_id"))}
 ```
 
 ```tql

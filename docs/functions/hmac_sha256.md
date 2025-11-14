@@ -19,7 +19,7 @@ The `hmac_sha256` function calculates an HMAC for `x` using the algorithm behind
 ### Compute an HMAC-SHA-256 digest of a string
 
 ```tql
-from {x: hmac_sha256("foo", "secret")}
+from {x: hmac_sha256("foo", secret("key_id"))}
 ```
 
 ```tql

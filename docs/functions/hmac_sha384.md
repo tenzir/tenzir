@@ -19,7 +19,7 @@ The `hmac_sha384` function calculates an HMAC for `x` using the algorithm behind
 ### Compute an HMAC-SHA-384 digest of a string
 
 ```tql
-from {x: hmac_sha384("foo", "secret")}
+from {x: hmac_sha384("foo", secret("key_id"))}
 ```
 
 ```tql

@@ -19,7 +19,7 @@ The `hmac_sha224` function calculates an HMAC for `x` using the algorithm behind
 ### Compute an HMAC-SHA-224 digest of a string
 
 ```tql
-from {x: hmac_sha224("foo", "secret")}
+from {x: hmac_sha224("foo", secret("key_id"))}
 ```
 
 ```tql

@@ -19,7 +19,7 @@ The `hmac_sha1` function calculates an HMAC for `x` using the algorithm behind H
 ### Compute an HMAC-SHA-1 digest of a string
 
 ```tql
-from {x: hmac_sha1("foo", "secret")}
+from {x: hmac_sha1("foo", secret("key_id"))}
 ```
 
 ```tql
