@@ -16,7 +16,7 @@
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/flow.hpp"
 #include "tenzir/hash/hash_append.hpp"
-#include "tenzir/hash/sha1.hpp"
+#include "tenzir/hash/sha.hpp"
 #include "tenzir/icmp.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/port.hpp"

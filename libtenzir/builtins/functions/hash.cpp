@@ -20,8 +20,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/hash/md5.hpp>
-#include <tenzir/hash/sha1.hpp>
-#include <tenzir/hash/sha2.hpp>
+#include <tenzir/hash/sha.hpp>
 #include <tenzir/hash/xxhash.hpp>
 #include <tenzir/optional.hpp>
 #include <tenzir/plugin.hpp>
@@ -268,4 +267,8 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha224, "sha224">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha256, "sha256">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha384, "sha384">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha512, "sha512">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_224, "sha3_224">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_256, "sha3_256">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_384, "sha3_384">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_512, "sha3_512">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::xxh3_64, "xxh3">)
