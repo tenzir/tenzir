@@ -140,7 +140,7 @@ class hash {
 public:
   static constexpr auto digest_size
     = detail::algorithm_traits<Algorithm>::digest_size;
-  using result_type = std::array<const std::byte, digest_size>;
+  using result_type = std::array<std::byte, digest_size>;
 
   static constexpr std::endian endian = std::endian::native;
 
@@ -189,7 +189,7 @@ class hmac {
 public:
   static constexpr auto digest_size
     = detail::algorithm_traits<Algorithm>::digest_size;
-  using result_type = std::array<const std::byte, digest_size>;
+  using result_type = std::array<std::byte, digest_size>;
 
   static constexpr std::endian endian = std::endian::native;
 
