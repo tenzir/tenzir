@@ -122,6 +122,17 @@ struct algorithm_traits<algorithm::sha3_512> {
   }
 };
 
+template <typename T, auto f>
+  requires requires(T* ptr) { f(ptr); }
+struct deleter {
+  static auto operator()(T* ptr) noexcept -> void {
+    f(ptr);
+  };
+};
+
+template <typename T, auto f>
+using smart_pointer = std::unique_ptr<T, deleter<T, f>>;
+
 } // namespace detail
 
 template <algorithm Algorithm>
@@ -168,17 +179,9 @@ public:
   ~hash() = default;
 
 private:
-  struct ctx_deleter {
-    void operator()(EVP_MD_CTX* ptr) const noexcept {
-      if (ptr != nullptr) {
-        EVP_MD_CTX_free(ptr);
-      }
-    }
-  };
-
   std::array<std::byte, digest_size> digest_{};
   bool finished_ = false;
-  std::unique_ptr<EVP_MD_CTX, ctx_deleter> ctx_{};
+  detail::smart_pointer<EVP_MD_CTX, EVP_MD_CTX_free> ctx_{};
 };
 
 template <algorithm Algorithm>
@@ -192,7 +195,7 @@ public:
 
   template <size_t Extent = std::dynamic_extent>
   explicit hmac(std::span<const std::byte, Extent> key) noexcept
-    : mac_{EVP_MAC_fetch(nullptr, "HMAC", nullptr), &EVP_MAC_free},
+    : mac_{EVP_MAC_fetch(nullptr, "HMAC", nullptr)},
       ctx_{EVP_MAC_CTX_new(mac_.get())} {
     TENZIR_ASSERT_ALWAYS(mac_ != nullptr);
     TENZIR_ASSERT_ALWAYS(ctx_ != nullptr);
@@ -240,20 +243,10 @@ public:
   ~hmac() = default;
 
 private:
-  struct ctx_deleter {
-    void operator()(EVP_MAC_CTX* ptr) const noexcept {
-      if (ptr != nullptr) {
-        EVP_MAC_CTX_free(ptr);
-      }
-    }
-  };
-
-  using mac_ptr = std::unique_ptr<EVP_MAC, decltype(&EVP_MAC_free)>;
-
   std::array<std::byte, digest_size> digest_{};
   bool finished_ = false;
-  mac_ptr mac_{nullptr, &EVP_MAC_free};
-  std::unique_ptr<EVP_MAC_CTX, ctx_deleter> ctx_{};
+  detail::smart_pointer<EVP_MAC, EVP_MAC_free> mac_;
+  detail::smart_pointer<EVP_MAC_CTX, EVP_MAC_CTX_free> ctx_{};
 };
 
 } // namespace tenzir::openssl
