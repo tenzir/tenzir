@@ -174,8 +174,8 @@ public:
 
   hash(const hash&) = delete;
   auto operator=(const hash&) -> hash& = delete;
-  hash(hash&&) noexcept = default;
-  auto operator=(hash&&) noexcept -> hash& = default;
+  hash(hash&&) = delete;
+  auto operator=(hash&&) -> hash& = delete;
   ~hash() = default;
 
 private:
@@ -238,8 +238,8 @@ public:
 
   hmac(const hmac&) = delete;
   auto operator=(const hmac&) -> hmac& = delete;
-  hmac(hmac&&) noexcept = default;
-  auto operator=(hmac&&) noexcept -> hmac& = default;
+  hmac(hmac&&) = delete;
+  auto operator=(hmac&&) -> hmac& = delete;
   ~hmac() = default;
 
 private:
