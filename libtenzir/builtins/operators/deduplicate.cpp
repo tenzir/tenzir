@@ -44,13 +44,11 @@ auto make_keys_expression(std::vector<ast::expression> exprs)
     auto loc = exprs[idx].get_location();
     auto name = fmt::format("_{}", idx);
     items.emplace_back(ast::record::field{
-      ast::identifier{std::move(name), loc ? loc : location::unknown},
+      ast::identifier{std::move(name), loc},
       std::move(exprs[idx]),
     });
   }
-  const auto begin = begin_loc ? begin_loc : location::unknown;
-  const auto end = end_loc ? end_loc : begin;
-  return ast::expression{ast::record{begin, std::move(items), end}};
+  return ast::expression{ast::record{begin_loc, std::move(items), end_loc}};
 }
 
 struct configuration {
@@ -204,11 +202,11 @@ class plugin final : public operator_plugin2<deduplicate_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto selector_exprs = std::vector<ast::expression>{};
-    auto expression_key = std::optional<ast::expression>{};
+    auto expressions = std::vector<ast::expression>{};
     auto named_args = std::vector<ast::expression>{};
     auto seen_named = false;
-    selector_exprs.reserve(inv.args.size());
+    auto seen_general_expression = false;
+    expressions.reserve(inv.args.size());
     named_args.reserve(inv.args.size());
     for (auto& arg : inv.args) {
       if (is<ast::assignment>(arg)) {
@@ -230,25 +228,34 @@ public:
             .emit(ctx);
           return failure::promise();
         }
-        if (expression_key) {
+        if (seen_general_expression) {
           diagnostic::error(
             "cannot mix field selectors with general expressions")
             .primary(arg)
             .emit(ctx);
           return failure::promise();
         }
-        selector_exprs.push_back(std::move(*selector).unwrap());
+        expressions.push_back(std::move(*selector).unwrap());
         continue;
       }
-      if (expression_key) {
+      if (seen_general_expression) {
         diagnostic::error("expected selector").primary(arg).emit(ctx);
         return failure::promise();
       }
-      expression_key = std::move(arg);
+      if (! expressions.empty()) {
+        diagnostic::error("cannot mix field selectors with general expressions")
+          .primary(arg)
+          .emit(ctx);
+        return failure::promise();
+      }
+      seen_general_expression = true;
+      expressions.push_back(std::move(arg));
     }
     auto limit = std::optional<located<int64_t>>{};
     auto cfg = configuration{};
     auto parser = argument_parser2::operator_("deduplicate");
+    [[maybe_unused]] auto unused_key = std::optional<ast::expression>{};
+    parser.positional("key", unused_key, "any");
     parser.named("distance", cfg.distance);
     parser.named("limit", limit);
     parser.named("create_timeout", cfg.create_timeout);
@@ -257,14 +264,10 @@ public:
     auto parser_inv
       = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
     TRY(parser.parse(parser_inv, ctx));
-    if (! selector_exprs.empty()) {
-      cfg.keys = selector_exprs.size() == 1
-                   ? std::move(selector_exprs.front())
-                   : make_keys_expression(std::move(selector_exprs));
-    } else if (expression_key) {
-      cfg.keys = std::move(*expression_key);
-    } else {
+    if (expressions.empty()) {
       cfg.keys = ast::this_{location::unknown};
+    } else {
+      cfg.keys = make_keys_expression(std::move(expressions));
     }
     cfg.limit = limit.value_or(located{1, location::unknown});
     auto failed = false;

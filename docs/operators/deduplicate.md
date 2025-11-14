@@ -7,7 +7,7 @@ example: "deduplicate src_ip"
 Removes duplicate events based on a common key.
 
 ```tql
-deduplicate [keys:any, limit=int, distance=int, create_timeout=duration,
+deduplicate [keys…:any, limit=int, distance=int, create_timeout=duration,
              write_timeout=duration, read_timeout=duration]
 ```
 
@@ -16,12 +16,11 @@ deduplicate [keys:any, limit=int, distance=int, create_timeout=duration,
 The `deduplicate` operator removes duplicates from a stream of events, based
 on the value of one or more fields.
 
-### `keys: any (optional)`
+### `keys…: any (optional)`
 
 The expressions that form the deduplication key. Pass one or more positional
 arguments, for example `deduplicate src_ip, dst_ip`, to build a compound key
-from multiple fields. Record expressions, such as `{foo: bar, baz: qux}`,
-to work as well.
+from multiple fields.
 
 Defaults to `this`, i.e., deduplicating entire events.
 
