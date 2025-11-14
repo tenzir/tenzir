@@ -126,10 +126,9 @@ struct algorithm_traits<algorithm::sha3_512> {
 template <algorithm Algorithm>
 class hash {
 public:
-  static constexpr auto alg = Algorithm;
-  static constexpr auto digest_bytes
+  static constexpr auto digest_size
     = detail::algorithm_traits<Algorithm>::digest_size;
-  using result_type = std::array<const std::byte, digest_bytes>;
+  using result_type = std::array<const std::byte, digest_size>;
 
   static constexpr std::endian endian = std::endian::native;
 
@@ -177,7 +176,7 @@ private:
     }
   };
 
-  std::array<std::byte, digest_bytes> digest_{};
+  std::array<std::byte, digest_size> digest_{};
   bool finished_ = false;
   std::unique_ptr<EVP_MD_CTX, ctx_deleter> ctx_{};
 };
@@ -185,10 +184,9 @@ private:
 template <algorithm Algorithm>
 class hmac {
 public:
-  static constexpr auto alg = Algorithm;
-  static constexpr auto digest_bytes
+  static constexpr auto digest_size
     = detail::algorithm_traits<Algorithm>::digest_size;
-  using result_type = std::array<const std::byte, digest_bytes>;
+  using result_type = std::array<const std::byte, digest_size>;
 
   static constexpr std::endian endian = std::endian::native;
 
@@ -228,9 +226,9 @@ public:
       auto* out = reinterpret_cast<unsigned char*>(digest_.data());
       size_t len = 0;
       const auto final_ok
-        = EVP_MAC_final(ctx_.get(), out, &len, digest_bytes);
+        = EVP_MAC_final(ctx_.get(), out, &len, digest_size);
       TENZIR_ASSERT_ALWAYS(final_ok == 1);
-      TENZIR_ASSERT_ALWAYS(len == digest_bytes);
+      TENZIR_ASSERT_ALWAYS(len == digest_size);
       finished_ = true;
       ctx_.reset();
     }
@@ -254,7 +252,7 @@ private:
 
   using mac_ptr = std::unique_ptr<EVP_MAC, decltype(&EVP_MAC_free)>;
 
-  std::array<std::byte, digest_bytes> digest_{};
+  std::array<std::byte, digest_size> digest_{};
   bool finished_ = false;
   mac_ptr mac_{nullptr, &EVP_MAC_free};
   std::unique_ptr<EVP_MAC_CTX, ctx_deleter> ctx_{};
