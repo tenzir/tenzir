@@ -169,7 +169,7 @@ public:
       finished_ = true;
       ctx_.reset();
     }
-    return std::bit_cast<result_type>(digest_);
+    return digest_;
   }
 
   hash(const hash&) = delete;
@@ -233,7 +233,7 @@ public:
       finished_ = true;
       ctx_.reset();
     }
-    return std::bit_cast<result_type>(digest_);
+    return digest_;
   }
 
   hmac(const hmac&) = delete;
