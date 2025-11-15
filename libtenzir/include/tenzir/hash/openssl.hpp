@@ -176,7 +176,6 @@ public:
   auto operator=(const hash&) -> hash& = delete;
   hash(hash&&) = delete;
   auto operator=(hash&&) -> hash& = delete;
-  ~hash() = default;
 
 private:
   std::array<std::byte, digest_size> digest_{};
@@ -240,7 +239,6 @@ public:
   auto operator=(const hmac&) -> hmac& = delete;
   hmac(hmac&&) = delete;
   auto operator=(hmac&&) -> hmac& = delete;
-  ~hmac() = default;
 
 private:
   std::array<std::byte, digest_size> digest_{};
