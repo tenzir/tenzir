@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/as_bytes.hpp>
@@ -14,6 +15,7 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/cast.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/coding.hpp>
 #include <tenzir/detail/inspection_common.hpp>
@@ -23,9 +25,11 @@
 #include <tenzir/hash/md5.hpp>
 #include <tenzir/hash/sha.hpp>
 #include <tenzir/hash/xxhash.hpp>
+#include <tenzir/location.hpp>
 #include <tenzir/optional.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/secret.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/scalar.h>
@@ -37,13 +41,13 @@ namespace tenzir::plugins::hash {
 
 namespace hash_detail {
 
-auto flatten_secret(const secret_view& secret, session ctx,
-                    const ast::expression& expr, std::string_view function_name)
+auto flatten_secret(const secret_view& secret, session ctx, location where,
+                    std::string_view function_name)
   -> std::optional<std::string> {
   auto& dh = ctx.dh();
   struct visitor {
     diagnostic_handler& dh;
-    const ast::expression& expr;
+    location where;
     std::string_view function_name;
 
     auto operator()(const fbs::data::SecretLiteral& lit) const
@@ -57,7 +61,7 @@ auto flatten_secret(const secret_view& secret, session ctx,
       diagnostic::error("`{}` requires literal secrets; got managed secret "
                         "`{}`",
                         function_name, name.value()->string_view())
-        .primary(expr)
+        .primary(where)
         .emit(dh);
       return std::nullopt;
     }
@@ -90,7 +94,7 @@ auto flatten_secret(const secret_view& secret, session ctx,
           if (not decoded) {
             diagnostic::error("`{}` failed to decode base64 secret value",
                               function_name)
-              .primary(expr)
+              .primary(where)
               .emit(dh);
             return std::nullopt;
           }
@@ -101,7 +105,7 @@ auto flatten_secret(const secret_view& secret, session ctx,
     }
   };
 
-  return match(*secret.buffer, visitor{dh, expr, function_name});
+  return match(*secret.buffer, visitor{dh, where, function_name});
 }
 
 } // namespace hash_detail
@@ -351,72 +355,31 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto value_expr = ast::expression{};
-    auto key_expr = ast::expression{};
+    auto key = located<secret>{};
     TRY(argument_parser2::function(name())
           .positional("value", value_expr, "any")
-          .positional("key", key_expr, "secret")
+          .positional("key", key, "secret")
           .parse(inv, ctx));
-    auto fn_name = std::string{name()};
+    const auto fn_name = std::string{name()};
+    auto key_material = hash::hash_detail::flatten_secret(
+      secret_view{key.inner}, ctx, key.source, fn_name);
+    if (not key_material) {
+      return failure::promise();
+    }
+    auto key_bytes = std::string{*key_material};
     return function_use::make(
-      [value_expr = std::move(value_expr), key_expr = std::move(key_expr),
-       fn_name
-       = std::move(fn_name)](evaluator eval, session ctx) -> multi_series {
-        auto compute = [&, fn_name = std::string_view{fn_name}](
-                         series value, series key) -> series {
-          if (value.length() != key.length()) {
-            diagnostic::warning("`{}` requires the key expression to produce "
-                                "the same number of rows as the value "
-                                "expression ({} vs {})",
-                                fn_name, value.length(), key.length())
-              .primary(value_expr)
-              .emit(ctx);
-            return series::null(string_type{}, value.length());
-          }
+      [value_expr = std::move(value_expr), key_bytes = std::move(key_bytes)](
+        evaluator eval, session ctx) -> multi_series {
+        (void)ctx;
+        auto compute = [&, key_bytes = std::string_view{key_bytes}](
+                         series value) -> series {
           auto builder = string_type::make_arrow_builder(arrow_memory_pool());
-          auto warned_invalid_type = false;
-          auto get_secret = [&](int64_t row) -> std::optional<secret> {
-            auto dv = value_at(key.type, *key.array, row);
-            auto f = detail::overload{
-              [](const caf::none_t&) -> std::optional<secret> {
-                return std::nullopt;
-              },
-              [](const secret_view& view) -> std::optional<secret> {
-                return materialize(view);
-              },
-              [](std::string_view str) -> std::optional<secret> {
-                return secret::make_literal(str);
-              },
-              [&](const auto&) -> std::optional<secret> {
-                if (not warned_invalid_type) {
-                  diagnostic::warning("`{}` expected `secret`, but got `{}`",
-                                      fn_name, key.type.kind())
-                    .primary(key_expr)
-                    .emit(ctx);
-                  warned_invalid_type = true;
-                }
-                return std::nullopt;
-              },
-            };
-            return match(dv, f);
-          };
           for (auto row = int64_t{0}; row < value.length(); ++row) {
             if (value.array->IsNull(row)) {
               check(builder->AppendNull());
               continue;
             }
-            auto key_secret = get_secret(row);
-            if (not key_secret) {
-              check(builder->AppendNull());
-              continue;
-            }
-            auto key_material = hash::hash_detail::flatten_secret(
-              secret_view{*key_secret}, ctx, key_expr, fn_name);
-            if (not key_material) {
-              check(builder->AppendNull());
-              continue;
-            }
-            auto key_bytes = as_bytes(std::string_view{*key_material});
-            auto hasher = HmacAlgorithm{key_bytes};
+            auto hasher = HmacAlgorithm{as_bytes(key_bytes)};
             auto append_value = detail::overload{
               [&](const auto& data) {
                 hash_append(hasher, data);
@@ -425,15 +388,17 @@ public:
                 hasher.add(as_bytes(str));
               },
             };
-            auto dv = value_at(value.type, *value.array, row);
-            match(dv, append_value);
+            match(value_at(value.type, *value.array, row), append_value);
             auto digest = std::move(hasher).finish();
             auto hex = detail::hexify(as_bytes(digest));
             check(builder->Append(hex));
           }
           return series{string_type{}, finish(*builder)};
         };
-        return map_series(eval(value_expr), eval(key_expr), compute);
+        return map_series(eval(value_expr),
+                          [&](series value) -> multi_series {
+                            return multi_series{compute(std::move(value))};
+                          });
       });
   }
 };
