@@ -1,34 +1,36 @@
 ---
-title: hash_sha1
+title: hash_sha3_512
 category: Hashing
-example: 'hash_sha1("foo")'
+example: 'hash_sha3_512("foo")'
 ---
 
-Computes a SHA-1 hash digest.
+Computes a SHA3-512 hash digest.
 
 ```tql
-hash_sha1(x:any, [seed=string]) -> string
+hash_sha3_512(x:any, [seed=string]) -> string
 ```
 
 ## Description
 
-The `hash_sha1` function calculates a SHA-1 hash digest for the given value `x`.
+The `hash_sha3_512` function calculates a SHA3-512 hash digest for the given
+value `x`.
 
 ## Examples
 
-### Compute a SHA-1 digest of a string
+### Compute a SHA3-512 digest of a string
 
 ```tql
-from {x: hash_sha1("foo")}
+from {x: hash_sha3_512("foo")}
 ```
 
 ```tql
-{x: "0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"}
+{x: "4bca2b137edc580fe50a88983ef860ebaca36c857b1f492839d6d7392452a63c82cbebc68e3b70a2a1480b4bb5d437a7cba6ecf9d89f9ff3ccd14cd6146ea7e7"}
 ```
 
 ## See Also
 
 [`hash_md5`](/reference/functions/hash_md5),
+[`hash_sha1`](/reference/functions/hash_sha1),
 [`hash_sha224`](/reference/functions/hash_sha224),
 [`hash_sha256`](/reference/functions/hash_sha256),
 [`hash_sha384`](/reference/functions/hash_sha384),
@@ -36,7 +38,6 @@ from {x: hash_sha1("foo")}
 [`hash_sha3_224`](/reference/functions/hash_sha3_224),
 [`hash_sha3_256`](/reference/functions/hash_sha3_256),
 [`hash_sha3_384`](/reference/functions/hash_sha3_384),
-[`hash_sha3_512`](/reference/functions/hash_sha3_512),
 [`hash_xxh3`](/reference/functions/hash_xxh3)
 [`hmac_md5`](/reference/functions/hmac_md5),
 [`hmac_sha1`](/reference/functions/hmac_sha1),

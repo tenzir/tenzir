@@ -11,6 +11,7 @@
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/fbs/data.hpp"
 #include "tenzir/flatbuffer.hpp"
+#include "tenzir/hash/hash_append.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <fmt/format.h>
@@ -117,6 +118,7 @@ auto as_bytes(const secret_common<FlatbufferType>& s)
 /// recursive `hash_inspector`.
 template <class HashAlgorithm, typename FlatbufferType>
 void hash_append(HashAlgorithm& h, const secret_common<FlatbufferType>& s) {
+  using ::tenzir::hash_append;
   return hash_append(h, as_bytes(s));
 }
 
