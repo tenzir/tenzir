@@ -1,9 +1,12 @@
 {
   x: null,
 }
-warning: failed to apply `parse_time`
- --> tests/functions/time/parse_time_invalid_input.tql:5:7
+warning: failed to parse timestamp
+ --> tests/functions/time/parse_time_invalid_input.tql:5:5
   |
 5 | x = x.parse_time("%Y-%m-%d")
-  |       ~~~~~~~~~~ 
+  |     ~ 
+  ⋮
+5 | x = x.parse_time("%Y-%m-%d")
+  |                  ---------- 
   |
