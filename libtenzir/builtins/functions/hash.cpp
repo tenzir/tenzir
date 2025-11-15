@@ -363,39 +363,55 @@ public:
        = std::move(fn_name)](evaluator eval, session ctx) -> multi_series {
         auto compute = [&, fn_name = std::string_view{fn_name}](
                          series value, series key) -> series {
-          auto secret_array = key.as<secret_type>();
-          if (not secret_array) {
-            diagnostic::warning("`{}` expected `secret`, but got `{}`", fn_name,
-                                key.type.kind())
-              .primary(key_expr)
-              .emit(ctx);
-            return series::null(string_type{}, value.length());
-          }
-          if (value.length() != secret_array->length()) {
+          if (value.length() != key.length()) {
             diagnostic::warning("`{}` requires the key expression to produce "
-                                "the same number of "
-                                "rows as the value expression ({} vs {})",
-                                fn_name, value.length(), secret_array->length())
+                                "the same number of rows as the value "
+                                "expression ({} vs {})",
+                                fn_name, value.length(), key.length())
               .primary(value_expr)
               .emit(ctx);
             return series::null(string_type{}, value.length());
           }
-          auto key_values = values3(*secret_array->array);
           auto builder = string_type::make_arrow_builder(arrow_memory_pool());
+          auto warned_invalid_type = false;
+          auto get_secret = [&](int64_t row) -> std::optional<secret> {
+            auto dv = value_at(key.type, *key.array, row);
+            auto f = detail::overload{
+              [](const caf::none_t&) -> std::optional<secret> {
+                return std::nullopt;
+              },
+              [](const secret_view& view) -> std::optional<secret> {
+                return materialize(view);
+              },
+              [](std::string_view str) -> std::optional<secret> {
+                return secret::make_literal(str);
+              },
+              [&](const auto&) -> std::optional<secret> {
+                if (not warned_invalid_type) {
+                  diagnostic::warning("`{}` expected `secret`, but got `{}`",
+                                      fn_name, key.type.kind())
+                    .primary(key_expr)
+                    .emit(ctx);
+                  warned_invalid_type = true;
+                }
+                return std::nullopt;
+              },
+            };
+            return match(dv, f);
+          };
           for (auto row = int64_t{0}; row < value.length(); ++row) {
-            auto key_view = key_values.next();
-            TENZIR_ASSERT(key_view);
-            if (not *key_view) {
+            if (value.array->IsNull(row)) {
+              check(builder->AppendNull());
+              continue;
+            }
+            auto key_secret = get_secret(row);
+            if (not key_secret) {
               check(builder->AppendNull());
               continue;
             }
             auto key_material = hash::hash_detail::flatten_secret(
-              **key_view, ctx, key_expr, fn_name);
+              secret_view{*key_secret}, ctx, key_expr, fn_name);
             if (not key_material) {
-              check(builder->AppendNull());
-              continue;
-            }
-            if (value.array->IsNull(row)) {
               check(builder->AppendNull());
               continue;
             }
