@@ -1258,6 +1258,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto udo = user_defined_operator{std::move(pipe), {}, {}};
     auto seen_names = std::unordered_set<std::string>{};
     seen_names.reserve(op.args.positional.size() + op.args.named.size());
+    auto seen_optional_positional = false;
     // Convert positional args
     for (const auto& arg : op.args.positional) {
       if (not seen_names.insert(arg.name).second) {
@@ -1266,9 +1267,16 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      if (arg.default_) {
-        diagnostic::error("positional parameter '{}' must not specify a "
-                          "default value",
+      auto default_expr = parse_default_expression(arg);
+      if (default_expr.is_error()) {
+        return failure::promise();
+      }
+      auto required = not default_expr->has_value();
+      if (! required) {
+        seen_optional_positional = true;
+      } else if (seen_optional_positional) {
+        diagnostic::error("positional parameter '{}' must not follow an "
+                          "optional positional parameter",
                           arg.name)
           .emit(dh);
         return failure::promise();
@@ -1282,8 +1290,8 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
         arg.type.value_or(""),
         arg.description,
         to_parameter_kind(arg),
-        std::nullopt,
-        true,
+        std::move(*default_expr),
+        required,
         std::move(*value_type),
       });
     }

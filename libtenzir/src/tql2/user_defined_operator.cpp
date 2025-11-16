@@ -216,7 +216,6 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   -> failure_or<ast::pipeline> {
   auto positional_values = std::vector<ast::expression>{};
   positional_values.reserve(udo.positional_params.size());
-
   auto named_values
     = std::vector<std::optional<ast::expression>>(udo.named_params.size());
   auto named_value_locations
@@ -235,19 +234,31 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
   }
 
-  // TODO: 
-  // FIXME: Add test for args that are not expected and extra positional args.
   auto next_arg = size_t{0};
-  for (const auto& positional_param : udo.positional_params) {
-    if (next_arg >= inv.args.size()
-        || try_as<ast::assignment>(inv.args[next_arg])) {
+  auto append_positional_argument
+    = [&](const user_defined_operator::parameter& param)
+    -> std::optional<failure_or<ast::pipeline>> {
+    const auto missing_argument
+      = next_arg >= inv.args.size()
+        || try_as<ast::assignment>(inv.args[next_arg]);
+    if (! missing_argument) {
+      positional_values.push_back(std::move(inv.args[next_arg]));
+      ++next_arg;
+      return std::nullopt;
+    }
+    if (! param.default_value) {
       return fail(
         diagnostic::error("expected additional positional argument `{}`",
-                          positional_param.name)
+                          param.name)
           .primary(inv.self));
     }
-    positional_values.push_back(std::move(inv.args[next_arg]));
-    ++next_arg;
+    positional_values.push_back(*param.default_value);
+    return std::nullopt;
+  };
+  for (const auto& positional_param : udo.positional_params) {
+    if (auto error = append_positional_argument(positional_param)) {
+      return *error;
+    }
   }
 
   for (; next_arg < inv.args.size(); ++next_arg) {
@@ -341,10 +352,6 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
                     .primary(diag_loc));
     }
     return {};
-    return fail(diagnostic::error("argument `{}` must be a constant expression "
-                                  "because it declares type `{}`",
-                                  param.name, parameter_type_label(param))
-                  .primary(diag_loc));
   };
 
   // FIXME: Add tests for named before positional, should behave exactly like
@@ -393,4 +400,3 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 }
 
 } // namespace tenzir
-
