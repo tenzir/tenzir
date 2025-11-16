@@ -1,0 +1,45 @@
+// Should succeed
+from {value: "dynamic"}
+argspkg::untyped_positional "const"
+
+// Should succeed
+from {value: "dynamic"}
+argspkg::untyped_positional this.value
+
+// Should succeed
+from {value: "dynamic"}
+argspkg::untyped_positional 1.2.3.4
+
+// Should succeed
+from {value: 1.2.3.4}
+argspkg::untyped_positional this.value
+
+// Use the default value defined in the operator
+// Should succeed
+from {value: "dynamic"}
+argspkg::untyped_positional
+
+// Should succeed
+from {value: "dynamic"}
+argspkg::typed_positional "const"
+
+// Should succeed
+from {value: "dynamic"}
+argspkg::typed_positional this.value
+
+// Should generate an error at compile time
+from {value: "dynamic"}
+argspkg::typed_positional 1.2.3.4
+
+// Should generate an error at runtime
+from {value: 1.2.3.4}
+argspkg::typed_positional this.value
+
+// Use the default value defined in the operator
+// Should succeed
+from {value: "dynamic"}
+argspkg::typed_positional
+
+// Should generate an error at compile time
+from {value: "dynamic"}
+argspkg::typed_positional_mismatching_default

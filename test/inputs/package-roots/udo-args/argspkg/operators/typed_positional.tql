@@ -1,0 +1,11 @@
+---
+description: "Echo a positional argument that is declared as string"
+args:
+  positional:
+    - name: value
+      type: string
+      default: str(42)
+      description: "Must be a string literal"
+---
+operator = "typed_positional"
+value = $value

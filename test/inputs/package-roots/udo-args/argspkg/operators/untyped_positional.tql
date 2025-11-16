@@ -1,0 +1,10 @@
+---
+description: "Echo a positional argument without any type hint"
+args:
+  positional:
+    - name: value
+      default: str(43)
+      description: "Any expression is accepted"
+---
+operator = "untyped_positional"
+value = $value

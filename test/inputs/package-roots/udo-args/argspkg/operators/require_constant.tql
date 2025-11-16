@@ -1,0 +1,13 @@
+---
+description: "Require a string suffix"
+args:
+  named:
+    - name: suffix
+      type: string
+      description: "Must be an expression of type string"
+---
+strict {
+  suffix_value = "suffix: " + $suffix
+}
+write_json
+save_stdout

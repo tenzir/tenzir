@@ -1,0 +1,13 @@
+error: expected a selector
+ --> tests/packages/udo-args/udo-args-field-path-invalid.tql:2:20
+  |
+2 | argspkg::set_field "y", "hello"
+  |                    ^^^ 
+  |
+  = usage: argspkg::set_field field:field_path, value:any
+  = note: parameters:
+            positional:
+              name   type        default  description
+              field  field_path  -        The field to set
+              value  any         -        The value to set
+  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator
