@@ -1,0 +1,3 @@
+// Should succeed
+from {value: "dynamic"}
+argspkg::typed_positional "const"

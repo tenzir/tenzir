@@ -1,2 +1,6 @@
+---
+error: true
+---
+
 from {x: 1}
 argspkg::set_field "y", "hello"

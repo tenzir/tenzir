@@ -3,8 +3,8 @@ description: "Echo a positional argument without any type hint"
 args:
   positional:
     - name: value
-      default: str(43)
+      default: "operator default"
       description: "Any expression is accepted"
 ---
-operator = "untyped_positional"
-value = $value
+set operator = "untyped_positional"
+set value = $value

@@ -4,8 +4,8 @@ args:
   positional:
     - name: value
       type: string
-      default: str(42)
+      default: "typed default value"
       description: "Must be a string literal"
 ---
-operator = "typed_positional"
-value = $value
+set operator = "typed_positional"
+set value = $value

@@ -1,11 +1,11 @@
 ---
 description: "Demonstrate mismatching default for typed parameter"
 args:
-  named:
+  positional:
     - name: value
       type: string
       default: 42
       description: "Defaults to a number even though a string is required"
 ---
-operator = "typed_positional_mismatching_default"
-value = $value
+set operator = "typed_positional_mismatching_default"
+set value = $value
