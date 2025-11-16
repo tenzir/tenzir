@@ -1,0 +1,4 @@
+{
+  value: "const",
+  operator: "untyped_named",
+}
