@@ -1,9 +1,0 @@
-{
-  digest: "f9d26d6079d5658ba22ac66ae9f6f0a60c53cdd6",
-}
-{
-  digest: "323c9e14f5da8bc83a79a00f1136460172cc41e6",
-}
-{
-  digest: "ada48e07f74334d1866124a26e0361b7fab886f6",
-}
