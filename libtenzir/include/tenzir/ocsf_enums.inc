@@ -440,6 +440,13 @@
     {400208, "HTTP Activity: Trace"},
     {400299, "HTTP Activity: Other"},
   }},
+  {"134834f9", {
+    {0, "Unknown"},
+    {1, "Load"},
+    {2, "Unload"},
+    {3, "Invoke"},
+    {99, "Other"},
+  }},
   {"15bf35ac", {
     {7, "Remediation"},
   }},
@@ -1679,6 +1686,13 @@
     {401016, "Network File Activity: Unsync"},
     {401099, "Network File Activity: Other"},
   }},
+  {"693141b9", {
+    {100500, "Module Activity: Unknown"},
+    {100501, "Module Activity: Load"},
+    {100502, "Module Activity: Unload"},
+    {100503, "Module Activity: Invoke"},
+    {100599, "Module Activity: Other"},
+  }},
   {"69549665", {
     {0, "Unknown"},
     {1, "File Supersede"},
@@ -1804,6 +1818,20 @@
     {200802, "IAM Analysis Finding: Update"},
     {200803, "IAM Analysis Finding: Close"},
     {200899, "IAM Analysis Finding: Other"},
+  }},
+  {"70ec1806", {
+    {0, "Unknown"},
+    {1, "Valid"},
+    {2, "Expired"},
+    {3, "Revoked"},
+    {4, "Suspended"},
+    {5, "Pending"},
+    {6, "Untrusted"},
+    {7, "Distrusted"},
+    {8, "WrongUsage"},
+    {9, "Bad"},
+    {10, "Broken"},
+    {99, "Other"},
   }},
   {"70f4f0d9", {
     {0, "Unknown"},
@@ -2184,6 +2212,13 @@
     {2, "Set"},
     {3, "Modify"},
     {4, "Delete"},
+    {99, "Other"},
+  }},
+  {"87080cc9", {
+    {0, "Unknown"},
+    {1, "Spawn"},
+    {2, "Fork"},
+    {3, "Exec"},
     {99, "Other"},
   }},
   {"870843bc", {
