@@ -212,12 +212,6 @@ tenzir:
   # Sovereign Edition of the Tenzir Platform.
   platform-ephemeral-node-name: Ephemeral Node
 
-  # Maximum number of events to buffer in the `subscribe` operator. If the
-  # subscribing pipeline can't keep up and more events are pushed to the topic,
-  # then backpressure will start slowing down the publishing pipeline. Hidden
-  # pipelines (e.g., implicitly spawned by the platform) will drop instead.
-  subscribe-buffer: 4Mi
-
   # Control how operator's calculate demand from their upstream operator. Note
   # that this is an expert feature and should only be changed if you know what
   # you are doing. The configured values can also be changed per operator by
@@ -239,7 +233,7 @@ tenzir:
       events: 254Ki
     # Controls how many batches of elements may be buffered until the operator
     # stops issuing demand. Must be greater than zero.
-    max-batches: 20
+    max-batches: 10
     # Controls the minimum backoff duration after an operator is detected to be
     # idle. Must be at least 10ms.
     min-backoff: 10ms

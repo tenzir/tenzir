@@ -41,7 +41,7 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    return optimize_result{filter, order, nullptr};
+    return optimize_result{filter, order, copy()};
   }
 
   friend auto inspect(auto& f, block_operator& x) -> bool {
