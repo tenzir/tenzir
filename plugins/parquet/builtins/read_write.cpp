@@ -16,13 +16,12 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 
-class read_plugin final
-  : public virtual operator_plugin2<parser_adapter<parquet_parser>> {
+class read_plugin final : public virtual operator_plugin2<read_parquet> {
 public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(this->name()).parse(inv, ctx));
-    return std::make_unique<parser_adapter<parquet_parser>>(parquet_parser{});
+    return std::make_unique<read_parquet>();
   }
 
   auto read_properties() const
@@ -34,8 +33,7 @@ public:
   }
 };
 
-class write_plugin final
-  : public virtual operator_plugin2<writer_adapter<parquet_printer>> {
+class write_plugin final : public virtual operator_plugin2<write_parquet> {
 public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -45,8 +43,7 @@ public:
           .named("compression_type", options.compression_type)
           .named("_times_in_milliseconds", options.times_in_milliseconds)
           .parse(inv, ctx));
-    return std::make_unique<writer_adapter<parquet_printer>>(
-      parquet_printer{options});
+    return std::make_unique<write_parquet>(std::move(options));
   }
 
   auto write_properties() const
