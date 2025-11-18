@@ -875,38 +875,38 @@ auto type::to_legacy_definition(std::optional<std::string> field_name,
     });
 }
 
-type type::from_arrow(const arrow::DataType& other) noexcept {
+type type::from_arrow(const arrow::DataType& other) {
   return match(
     other,
-    []<class T>(const T&) noexcept -> type {
+    []<class T>(const T&) -> type {
       using tenzir_type = type_from_arrow_t<T>;
       static_assert(basic_type<tenzir_type>, "unhandled complex type");
       return type{tenzir_type{}};
     },
-    [](const duration_type::arrow_type& dt) noexcept -> type {
+    [](const duration_type::arrow_type& dt) -> type {
       TENZIR_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
       return type{duration_type{}};
     },
-    [](const time_type::arrow_type& dt) noexcept -> type {
+    [](const time_type::arrow_type& dt) -> type {
       TENZIR_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
       return type{time_type{}};
     },
     [](const enumeration_type::arrow_type& et) noexcept -> type {
       return type{et.tenzir_type_};
     },
-    [](const list_type::arrow_type& lt) noexcept -> type {
+    [](const list_type::arrow_type& lt) -> type {
       const auto value_field = lt.value_field();
       TENZIR_ASSERT(value_field);
       return type{list_type{from_arrow(*value_field)}};
     },
-    [](const map_type::arrow_type& mt) noexcept -> type {
+    [](const map_type::arrow_type& mt) -> type {
       const auto key_field = mt.key_field();
       const auto item_field = mt.item_field();
       TENZIR_ASSERT(key_field);
       TENZIR_ASSERT(item_field);
       return type{map_type{from_arrow(*key_field), from_arrow(*item_field)}};
     },
-    [](const record_type::arrow_type& rt) noexcept -> type {
+    [](const record_type::arrow_type& rt) -> type {
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(rt.num_fields());
       for (const auto& field : rt.fields()) {
@@ -917,7 +917,7 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
     });
 }
 
-type type::from_arrow(const arrow::Field& field) noexcept {
+type type::from_arrow(const arrow::Field& field) {
   TENZIR_ASSERT(field.type());
   auto result = from_arrow(*field.type());
   if (const auto& metadata = field.metadata()) {
@@ -926,7 +926,7 @@ type type::from_arrow(const arrow::Field& field) noexcept {
   return result;
 }
 
-type type::from_arrow(const arrow::Schema& schema) noexcept {
+type type::from_arrow(const arrow::Schema& schema) {
   auto fields = std::vector<record_type::field_view>{};
   fields.reserve(schema.num_fields());
   for (const auto& field : schema.fields()) {
@@ -940,7 +940,7 @@ type type::from_arrow(const arrow::Schema& schema) noexcept {
   return result;
 }
 
-std::shared_ptr<arrow::DataType> type::to_arrow_type() const noexcept {
+std::shared_ptr<arrow::DataType> type::to_arrow_type() const {
   return match(*this,
                []<concrete_type T>(
                  const T& x) noexcept -> std::shared_ptr<arrow::DataType> {
@@ -949,12 +949,12 @@ std::shared_ptr<arrow::DataType> type::to_arrow_type() const noexcept {
 }
 
 std::shared_ptr<arrow::Field>
-type::to_arrow_field(std::string_view name, bool nullable) const noexcept {
+type::to_arrow_field(std::string_view name, bool nullable) const {
   return arrow::field(std::string{name}, to_arrow_type(), nullable,
                       make_arrow_metadata());
 }
 
-std::shared_ptr<arrow::Schema> type::to_arrow_schema() const noexcept {
+std::shared_ptr<arrow::Schema> type::to_arrow_schema() const {
   TENZIR_ASSERT(! name().empty());
   TENZIR_ASSERT(is<record_type>(*this));
   return arrow::schema(as<record_type>(*this).to_arrow_type()->fields(),
