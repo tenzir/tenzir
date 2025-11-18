@@ -25,17 +25,20 @@ public:
 
   explicit crc32(seed_type seed = 0) noexcept;
 
+  void reset() noexcept;
+
   void add(std::span<const std::byte> bytes) noexcept;
 
   result_type finish() const noexcept;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, crc32& crc) {
-    return f(crc.digest_);
+    return f(crc.seed_, crc.digest_);
   }
 
 private:
   result_type digest_;
+  seed_type seed_;
 };
 
 } // namespace tenzir

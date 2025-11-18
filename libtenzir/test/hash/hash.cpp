@@ -90,7 +90,7 @@ TEST("prefer fast path when both is available") {
   auto u16 = uint16_t{0};
   auto f64 = double{4.2};
   static_assert(uniquely_hashable<decltype(u16), oneshot_and_incremental>);
-  static_assert(!uniquely_hashable<decltype(f64), oneshot_and_incremental>);
+  static_assert(! uniquely_hashable<decltype(f64), oneshot_and_incremental>);
   CHECK_EQUAL(hash<oneshot_and_incremental>(u16), sizeof(u16)); // oneshot
   CHECK_EQUAL(hash<oneshot_and_incremental>(f64), 0u);          // incremental
 }

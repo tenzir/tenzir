@@ -21,6 +21,7 @@
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/hash/concepts.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/hash/md5.hpp>
 #include <tenzir/hash/sha.hpp>
@@ -208,7 +209,7 @@ public:
 
 } // namespace
 
-template <class HashAlgorithm, detail::string_literal Name>
+template <reusable_hash HashAlgorithm, detail::string_literal Name>
 class fun : public virtual function_plugin {
   auto name() const -> std::string override {
     return fmt::format("hash_{}", Name);
@@ -230,11 +231,12 @@ class fun : public virtual function_plugin {
       [expr_ = std::move(expr), seed_ = std::move(seed)](evaluator eval,
                                                          session) -> series {
         const auto& s = eval(expr_);
+        HashAlgorithm hasher{};
         auto hash = [&](const auto& x) {
           // We only hash the bytes and the length. Users expect that the
           // resulting digest is the same as in other tools, which hash the
           // sequence of bytes. This includes hashing the seed.
-          HashAlgorithm hasher{};
+          hasher.reset();
           if (seed_) {
             hasher.add(as_bytes(*seed_));
           }
@@ -247,7 +249,7 @@ class fun : public virtual function_plugin {
             },
           };
           match(x, f);
-          return std::move(hasher).finish();
+          return hasher.finish();
         };
         auto b = string_type::make_arrow_builder(arrow_memory_pool());
         for (const auto& value : s.values()) {

@@ -21,6 +21,7 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <vector>
 
 namespace tenzir::openssl {
 
@@ -146,9 +147,15 @@ public:
 
   hash() noexcept : ctx_{EVP_MD_CTX_new()} {
     TENZIR_ASSERT_ALWAYS(ctx_ != nullptr);
+    reset();
+  }
+
+  void reset() noexcept {
     const auto* md = detail::algorithm_traits<Algorithm>::evp();
     const auto init_ok = EVP_DigestInit_ex(ctx_.get(), md, nullptr);
     TENZIR_ASSERT_ALWAYS(init_ok == 1);
+    digest_.fill(std::byte{0});
+    finished_ = false;
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
@@ -167,7 +174,6 @@ public:
       const auto final_ok = EVP_DigestFinal_ex(ctx_.get(), out, nullptr);
       TENZIR_ASSERT_ALWAYS(final_ok == 1);
       finished_ = true;
-      ctx_.reset();
     }
     return digest_;
   }
@@ -195,7 +201,8 @@ public:
   template <size_t Extent = std::dynamic_extent>
   explicit hmac(std::span<const std::byte, Extent> key) noexcept
     : mac_{EVP_MAC_fetch(nullptr, "HMAC", nullptr)},
-      ctx_{EVP_MAC_CTX_new(mac_.get())} {
+      ctx_{EVP_MAC_CTX_new(mac_.get())},
+      key_{key.begin(), key.end()} {
     TENZIR_ASSERT_ALWAYS(mac_ != nullptr);
     TENZIR_ASSERT_ALWAYS(ctx_ != nullptr);
     const auto* md = detail::algorithm_traits<Algorithm>::evp();
@@ -207,9 +214,18 @@ public:
     params[1] = OSSL_PARAM_construct_end();
     const auto params_ok = EVP_MAC_CTX_set_params(ctx_.get(), params);
     TENZIR_ASSERT_ALWAYS(params_ok == 1);
-    const auto* key_ptr = reinterpret_cast<const unsigned char*>(key.data());
-    const auto init_ok = EVP_MAC_init(ctx_.get(), key_ptr, key.size(), nullptr);
+    reset();
+  }
+
+  void reset() noexcept {
+    const auto* key_ptr
+      = key_.empty() ? nullptr
+                     : reinterpret_cast<const unsigned char*>(key_.data());
+    const auto init_ok
+      = EVP_MAC_init(ctx_.get(), key_ptr, key_.size(), nullptr);
     TENZIR_ASSERT_ALWAYS(init_ok == 1);
+    digest_.fill(std::byte{0});
+    finished_ = false;
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
@@ -230,7 +246,6 @@ public:
       TENZIR_ASSERT_ALWAYS(final_ok == 1);
       TENZIR_ASSERT_ALWAYS(len == digest_size);
       finished_ = true;
-      ctx_.reset();
     }
     return digest_;
   }
@@ -245,6 +260,7 @@ private:
   bool finished_ = false;
   detail::smart_pointer<EVP_MAC, EVP_MAC_free> mac_;
   detail::smart_pointer<EVP_MAC_CTX, EVP_MAC_CTX_free> ctx_{};
+  std::vector<std::byte> key_{};
 };
 
 } // namespace tenzir::openssl
