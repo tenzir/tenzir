@@ -64,53 +64,26 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
       // FIXME:
-      // - Add a test for an operator that needs a constant (from_file), but 
+      // - Add a test for an operator that needs a constant (from_file), but
       // pass in a field path. -> should fail
-      // - Add a test for an operator that needs a field_path (select), but 
+      // - Add a test for an operator that needs a field_path (select), but
       // pass in a constant literal string. -> should fail
-      // - Add a test that passes in a secret to a udo that accepts a string
-      // for that value.
       auto op_name = make_operator_name(inv.self);
-      auto usage = make_usage_string(op_name, udo);
-      const auto& docs = user_defined_operator_docs();
-      auto parameter_note = make_parameter_note(udo);
-      // TODO: return failure directly. 
-      auto emit_failure = [&](diagnostic_builder d) {
-        auto builder = std::move(d).usage(usage);
-        if (parameter_note) {
-          builder = std::move(builder).note(*parameter_note);
-        }
-        builder = std::move(builder).docs(docs);
-        std::move(builder).emit(ctx);
-      };
-      // TODO: return emit_failure...
-      auto fail = [&](diagnostic_builder d) -> failure_or<operator_ptr> {
-        emit_failure(std::move(d));
-        return failure::promise();
-      };
-      auto fail_ast = udo_failure_handler{
-        [&](diagnostic_builder d) -> failure_or<ast::pipeline> {
-          emit_failure(std::move(d));
-          return failure::promise();
-        }};
-
+      auto dh = udo_diagnostic_handler(&ctx.dh(), op_name, udo);
       // If there are no parameters defined, check that no arguments were provided
       if (udo.positional_params.empty() && udo.named_params.empty()) {
-        if (! inv.args.empty()) {
-          return fail(diagnostic::error(
-                        "operator '{}' does not support arguments", op_name)
-                        .primary(inv.self));
+        if (not inv.args.empty()) {
+          diagnostic::error("operator '{}' does not support arguments", op_name)
+            .primary(inv.self)
+            .emit(dh);
+          return failure::promise();
         }
         TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
         return std::make_unique<pipeline>(std::move(compiled));
       }
-
-      auto instantiated
-        = instantiate_user_defined_operator(udo, inv, ctx, fail_ast);
-      if (! instantiated) {
-        return failure::promise();
-      }
-      TRY(auto compiled, compile(std::move(*instantiated), ctx));
+      TRY(auto instantiated,
+          instantiate_user_defined_operator(udo, inv, ctx, dh));
+      TRY(auto compiled, compile(std::move(instantiated), ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },
     [&](const native_operator& op) -> failure_or<operator_ptr> {

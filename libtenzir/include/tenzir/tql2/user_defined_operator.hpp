@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "tenzir/detail/function.hpp"
-#include "tenzir/diagnostics.hpp"
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/diagnostics.hpp"
@@ -20,25 +18,38 @@
 
 namespace tenzir {
 
-auto parameter_type_label(const user_defined_operator::parameter& param)
-  -> std::string;
+/// A diagnostic handler that may be passed to other threads from an operator.
+class udo_diagnostic_handler final : public diagnostic_handler {
+public:
+  udo_diagnostic_handler() noexcept = default;
+  udo_diagnostic_handler(const udo_diagnostic_handler&) = default;
+  auto operator=(const udo_diagnostic_handler&)
+    -> udo_diagnostic_handler& = default;
+  udo_diagnostic_handler(udo_diagnostic_handler&&) noexcept = default;
+  auto operator=(udo_diagnostic_handler&&) noexcept
+    -> udo_diagnostic_handler& = default;
+
+  udo_diagnostic_handler(diagnostic_handler* inner, std::string op_name,
+                         const user_defined_operator& udo) noexcept;
+
+  ~udo_diagnostic_handler() noexcept override = default;
+
+  auto emit(diagnostic diag) -> void override;
+
+  auto emit(diagnostic diag) const -> void;
+
+private:
+  diagnostic_handler* inner_{};
+  std::string op_name_;
+  std::string usage_string_;
+  std::optional<std::string> parameter_note_;
+};
 
 auto make_operator_name(const ast::entity& entity) -> std::string;
 
-auto make_usage_string(std::string_view op_name,
-                       const user_defined_operator& udo) -> std::string;
-
-auto make_parameter_note(const user_defined_operator& udo)
-  -> std::optional<std::string>;
-
-auto user_defined_operator_docs() -> const std::string&;
-
-using udo_failure_handler
-  = detail::unique_function<failure_or<ast::pipeline>(diagnostic_builder)>;
-
 auto instantiate_user_defined_operator(const user_defined_operator& udo,
                                        operator_factory_plugin::invocation& inv,
-                                       session ctx, udo_failure_handler& fail)
+                                       session ctx, udo_diagnostic_handler& dh)
   -> failure_or<ast::pipeline>;
 
 } // namespace tenzir
