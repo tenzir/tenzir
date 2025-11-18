@@ -16,6 +16,7 @@
 #include <tenzir/substitute_ctx.hpp>
 
 #include <caf/actor_from_state.hpp>
+#include <folly/Expected.h>
 
 namespace tenzir::plugins::group {
 
@@ -108,11 +109,18 @@ private:
 };
 #endif
 
+template <class Value, class Error>
+class [[nodiscard]] Result {
+public:
+};
+
 class OpenPipeline {
 public:
-  auto push(table_slice input) -> Task<void>;
+  auto push(table_slice input) -> Task<Result<void, table_slice>>;
 
-  auto pull() -> Task<table_slice>;
+  auto close_input() -> void;
+
+  auto pull() -> Task<std::optional<table_slice>>;
 };
 
 template <class Output>
@@ -123,11 +131,11 @@ public:
   }
 
   auto await_task() const -> Task<std::any> override {
-    co_return co_await pipe_output_.next();
+    co_return co_await pipe_output_->next();
   }
 
   auto process(table_slice input, Push<Output>& push, AsyncCtx& ctx)
-    -> Task<void> {
+    -> Task<void> override {
     // TODO
     auto key = data{"hi"};
     auto it = pipes_.find(key);
@@ -135,16 +143,23 @@ public:
     TENZIR_ASSERT(it != pipes_.end());
     auto& pipe = it.value();
     // TODO: Earlier, when spawning the pipeline
-    pipe_output_.spawn(pipe.pull());
-    co_await pipe.feed(input);
+    pipe_output_->spawn(pipe.pull());
+    co_await pipe.push(input);
     co_return;
   }
 
 private:
   ast::expression over_;
   ir::pipeline pipe_;
-  mutable QueueScope<table_slice> pipe_output_;
   tsl::robin_map<data, OpenPipeline> pipes_;
+
+  // TODO: Not serializable, plus where is restore logic?
+  // The operator implementation should be in control when to consume data.
+  // However… We do not to be able to consume checkpoint infos etc! If we don't
+  // consume data, then the checkpoint is delayed. Maybe that is to be expected?
+  // TODO: How do we handle errors in subpipelines?
+  // TODO: Activation of scope?
+  mutable Box<QueueScope<table_slice>> pipe_output_;
 };
 
 class group_bp final : public plan::operator_base {
@@ -167,7 +182,10 @@ public:
   }
 
   auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator {
-    return Group<table_slice>{std::move(over_), std::move(pipe_)};
+    Box<Operator<table_slice, table_slice>> test
+      = Group<table_slice>{std::move(over_), std::move(pipe_)};
+    return test;
+    // return Group<table_slice>{std::move(over_), std::move(pipe_)};
   }
 
   friend auto inspect(auto& f, group_bp& x) -> bool {

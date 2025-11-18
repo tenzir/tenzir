@@ -9,8 +9,9 @@
 #pragma once
 
 #include "tenzir/async/scope.hpp"
+#include "tenzir/async/unbounded_queue.hpp"
 
-#include <folly/coro/UnboundedQueue.h>
+#include <folly/coro/AsyncGenerator.h>
 
 namespace tenzir {
 
@@ -27,6 +28,13 @@ namespace tenzir {
 template <class T>
 class QueueScope {
 public:
+  QueueScope() = default;
+  ~QueueScope() noexcept = default;
+  QueueScope(const QueueScope&) = delete;
+  QueueScope& operator=(const QueueScope&) = delete;
+  QueueScope(QueueScope&&) = delete;
+  QueueScope& operator=(QueueScope&&) = delete;
+
   template <class U>
   auto activate(Task<U> task) -> Task<U> {
     co_return co_await async_scope([&](AsyncScope& scope) -> Task<U> {
@@ -51,12 +59,32 @@ public:
   // TODO: Signature?
   // TODO: Thread-safety?
   template <class U>
+    requires std::convertible_to<U, T>
   void spawn(Task<U> task) {
     TENZIR_ASSERT(scope_);
     scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
       queue_.enqueue(co_await folly::coro::co_awaitTry(std::move(task)));
     });
     remaining_ += 1;
+  }
+
+  /// Spawn an asynchronous generator which populates the queue.
+  ///
+  /// The generator will only be advanced once the last item it produced is
+  /// about to returned from `next()`.
+  void spawn(folly::coro::AsyncGenerator<int> generator) {
+    scope_->spawn(
+      [this, generator = std::move(generator)] mutable -> Task<void> {
+        for (auto next : co_await generator.next()) {
+          if (not next) {
+            break;
+          }
+          queue_.enqueue(std::move(*next));
+          // TODO: Wait until the item is returned?
+        }
+        // We still need to enqueue something to give `next` a chance to resume.
+        queue_.enqueue();
+      });
   }
 
   template <class F>
@@ -82,10 +110,11 @@ public:
   /// Retrieve the next task result or return `nullopt` if none remain.
   ///
   /// This function can be called while the scope is active, but also when it
-  /// already got deactivated. If a task failed, we rethrow theexception.
+  /// already got deactivated. If a task failed, we rethrow the exception.
   /// TODO: What if it got cancelled?
   /// TODO: Is this itself cancel-safe?
   auto next() -> Task<std::optional<Next>> {
+    queue_.empty();
     if (remaining_ == 0) {
       co_return {};
     }
@@ -101,7 +130,7 @@ public:
 
 private:
   std::atomic<size_t> remaining_ = 0;
-  folly::coro::UnboundedQueue<AsyncResult<T>> queue_;
+  UnboundedQueue<AsyncResult<T>> queue_;
   AsyncScope* scope_ = nullptr;
 };
 

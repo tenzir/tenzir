@@ -13,7 +13,7 @@
 
 namespace tenzir {
 
-/// A `std::unique_ptr` that is non-null.
+/// A `std::unique_ptr` that is non-null and propagates `const`.
 ///
 /// Whenever this object is passed around, it is assumed that it contains a
 /// value. Moving from a box will still leave it in a "nullptr"-like state.
@@ -25,6 +25,10 @@ public:
   /// Constructs a box from an existing non-null `unique_ptr`.
   static auto from_unique_ptr(std::unique_ptr<T> ptr) -> Box<T> {
     return Box{std::move(ptr)};
+  }
+
+  // TODO: Is this a good idea?
+  Box() : ptr_{std::make_unique<T>()} {
   }
 
   /// Constructs a box from a value that is pointer-compatible with `T`.
