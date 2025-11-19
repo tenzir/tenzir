@@ -306,23 +306,23 @@ public:
                        offset parent_path = {}) const noexcept -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
-  [[nodiscard]] static type from_arrow(const arrow::DataType& other) noexcept;
-  [[nodiscard]] static type from_arrow(const arrow::Field& field) noexcept;
-  [[nodiscard]] static type from_arrow(const arrow::Schema& schema) noexcept;
+  [[nodiscard]] static type from_arrow(const arrow::DataType& other);
+  [[nodiscard]] static type from_arrow(const arrow::Field& field);
+  [[nodiscard]] static type from_arrow(const arrow::Schema& schema);
 
   /// Converts the type into an Arrow DataType.
-  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const;
 
   /// Converts the type into an Arrow DataType.
   /// @param name The name of the field.
   /// @param nullable Whether the field is nullable.
   [[nodiscard]] std::shared_ptr<arrow::Field>
-  to_arrow_field(std::string_view name, bool nullable = true) const noexcept;
+  to_arrow_field(std::string_view name, bool nullable = true) const;
 
   /// Converts the type into an Arrow Schema.
   /// @pre `!name().empty()`
   /// @pre `is<record_type>(*this)`
-  [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const noexcept;
+  [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const;
 
   /// Creates Arrow metadata from the type. Returns `nullptr` if the type has no
   /// metadata.
