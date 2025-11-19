@@ -27,6 +27,8 @@
 #include <tenzir/query_cursor.hpp>
 #include <tenzir/validate.hpp>
 
+#include <caf/actor_cast.hpp>
+#include <caf/actor_registry.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -103,7 +105,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
     [self](atom::request, restinio_response_ptr& response,
            rest_endpoint& endpoint, rest_handler_actor handler) {
       // Skip authentication if its not required.
-      if (!self->state().server_config.require_authentication) {
+      if (not self->state().server_config.require_authentication) {
         self
           ->mail(atom::internal_v, atom::request_v, std::move(response),
                  std::move(endpoint), std::move(handler))
@@ -113,7 +115,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       // Ask the authenticator to validate the passed token.
       auto const* token
         = response->request()->header().try_get_field("X-Tenzir-Token");
-      if (!token) {
+      if (not token) {
         response->abort(401, "missing header X-Tenzir-Token\n", caf::error{});
         return;
       }
@@ -139,7 +141,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
            const rest_endpoint& endpoint, rest_handler_actor handler) {
       auto const& header = response->request()->header();
       auto query_params = parse_query_params(header.query());
-      if (!query_params) {
+      if (not query_params) {
         return response->abort(400, "failed to parse query\n",
                                query_params.error());
       }
@@ -156,15 +158,15 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               .value_or("application/json");
         if (content_type == "application/x-www-form-urlencoded") {
           query_params = parse_query_params(body);
-          if (!query_params) {
+          if (not query_params) {
             return response->abort(
               400, "failed to parse query parameters from request body\n",
               query_params.error());
           }
         } else if (content_type == "application/json") {
-          auto const& json_body = !body.empty() ? body : "{}";
+          auto const& json_body = ! body.empty() ? body : "{}";
           auto json_params = http_parameter_map::from_json(json_body);
-          if (!json_params) {
+          if (not json_params) {
             return response->abort(400, fmt::format("invalid JSON body\n"),
                                    std::move(json_params.error()));
           }
@@ -194,14 +196,14 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           if (auto route_param = route_params.get_param(name)) {
             maybe_param = std::string{*route_param};
           }
-          if (!maybe_param) {
+          if (not maybe_param) {
             continue;
           }
           body_params.emplace(std::string{name}, std::move(*maybe_param));
         }
       }
       auto params = parse_endpoint_parameters(endpoint, body_params);
-      if (!params) {
+      if (not params) {
         return response->abort(
           422, "failed to parse endpoint parameters: ", params.error());
       }
@@ -273,7 +275,7 @@ void setup_cors_preflight_handlers(std::unique_ptr<router_t>& router,
         = req->header().try_get_field("Access-Control-Request-Headers");
       auto allowed_headers
         = requested_headers ? *requested_headers : "Content-Type";
-      if (!requested_headers) {
+      if (not requested_headers) {
         return req->create_response(restinio::status_bad_request()).done();
       }
       return req->create_response(restinio::status_no_content())
@@ -294,13 +296,13 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   auto data = tenzir::data{};
   // TODO: Implement a single `convert_and_validate()` function for going
   // from caf::settings -> record_type
-  if (!inv.arguments.empty()) {
+  if (not inv.arguments.empty()) {
     return caf::make_message(caf::make_error(
       ec::invalid_argument,
       fmt::format("unexpected positional args: {}", inv.arguments)));
   }
   bool success = convert(web_options, data);
-  if (!success) {
+  if (not success) {
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
   }
@@ -318,7 +320,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
   }
   auto server_config = convert_and_validate(config);
-  if (!server_config) {
+  if (not server_config) {
     TENZIR_ERROR("failed to start server: {}", server_config.error());
     return caf::make_message(caf::make_error(
       ec::invalid_configuration,
@@ -332,7 +334,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   const auto node = std::move(*node_opt);
   TENZIR_ASSERT(node != nullptr);
   auto authenticator = get_authenticator(self, node, caf::infinite);
-  if (!authenticator) {
+  if (not authenticator) {
     TENZIR_ERROR("failed to get web component: {}", authenticator.error());
     return caf::make_message(std::move(authenticator.error()));
   }
@@ -400,14 +402,14 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         if (ec) {
           return restinio::request_rejected();
         }
-        if (!normalized_path.string().starts_with(webroot.string())) {
+        if (not normalized_path.string().starts_with(webroot.string())) {
           return restinio::request_rejected();
         }
         // Map e.g. /status -> /status.html on disk.
-        if (!exists(normalized_path) && !normalized_path.has_extension()) {
+        if (not exists(normalized_path) && ! normalized_path.has_extension()) {
           normalized_path.replace_extension("html");
         }
-        if (!exists(normalized_path)) {
+        if (not exists(normalized_path)) {
           return req->create_response(restinio::status_not_found())
             .set_body("404 not found\n")
             .done();
@@ -431,6 +433,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   auto io_context = asio::io_context{};
   auto server = make_server(*server_config, std::move(router),
                             restinio::external_io_context(io_context));
+  auto self_actor = caf::actor_cast<caf::actor>(self);
   // Post initial action to asio event loop. Note that the action
   // must have been posted *before* calling `io_context.run()`.
   asio::post(io_context, [&] {
@@ -444,11 +447,23 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     auto const* scheme = server_config->require_tls ? "https" : "http";
     TENZIR_INFO("server listening on on {}://{}:{}", scheme,
                 server_config->bind_address, server_config->port);
-    io_context.run();
+    try {
+      io_context.run();
+    } catch (const std::exception& ex) {
+      auto err = diagnostic::error("{}", ex.what())
+                   .note("exception occurred in web api")
+                   .done();
+      TENZIR_ERROR("web API exception: {}", ex.what());
+      caf::anon_mail(atom::stop_v, std::move(err)).send(self_actor);
+      return;
+    }
+    auto err = diagnostic::error("Web server unexpectedly shut down").done();
+    caf::anon_mail(atom::stop_v, std::move(err)).send(self_actor);
   }};
   // Run main loop.
   caf::error err;
   auto stop = false;
+  auto stop_from_node = false;
   self->monitor(node);
   self
     ->do_receive(
@@ -456,16 +471,21 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         TENZIR_ASSERT(msg.source == node);
         TENZIR_DEBUG("{} received DOWN from node", *self);
         stop = true;
+        stop_from_node = true;
         if (msg.reason != caf::exit_reason::user_shutdown) {
           err = std::move(msg.reason);
         }
       },
-      // Only called when running this command with `tenzir -N`.
+      // Only called when running this command with `tenzir-node`.
       [&](atom::signal, int signal) {
         TENZIR_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
                      ::strsignal(signal));
         TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
         stop = true;
+      },
+      [&](atom::stop, diagnostic diag) {
+        stop = true;
+        err = std::move(diag).to_error();
       })
     .until([&] {
       return stop;
@@ -482,6 +502,11 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     server);
   for (auto& handler : handlers) {
     self->send_exit(handler, caf::exit_reason::user_shutdown);
+  }
+  // If we're in the same process as the node and an error occurred, we want the
+  // whole process to terminate.
+  if (not stop_from_node and err and self->system().node() == node->node()) {
+    self->send_exit(node, err);
   }
   server_thread.join();
   return caf::make_message(std::move(err));
