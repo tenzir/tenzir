@@ -105,7 +105,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
         auto kit = keys.begin();
         auto vit = values.begin();
         while (kit != keys.end()) {
-          if (not vit->starts_with("TENZIR:")) {
+          if (not kit->starts_with("TENZIR:")) {
             vit = values.erase(vit);
             kit = keys.erase(kit);
             continue;

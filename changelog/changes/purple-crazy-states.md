@@ -1,5 +1,5 @@
 ---
-title: "Schema Names"
+title: "Improved parquet support"
 type: bugfix
 authors: IyeOnline
 pr: 5579

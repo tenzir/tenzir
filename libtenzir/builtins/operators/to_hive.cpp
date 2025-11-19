@@ -458,18 +458,48 @@ public:
       diagnostic::error("timeout must be positive").primary(*timeout).emit(ctx);
       return failure::promise();
     }
-    // TODO: `json` should be `ndjson` (probably not only here).
-    auto writer_definition = fmt::format(
-      "write {}", format.inner == "json" ? "json -c" : format.inner);
+    auto writer_ast = ast::pipeline{};
+    auto append_operator = [&writer_ast](std::string_view name) {
+      writer_ast.body.push_back(ast::invocation{
+        ast::entity{{ast::identifier{
+          name,
+          location::unknown,
+        }}},
+        {},
+      });
+    };
+    const auto write_op_name = fmt::format(
+      "write_{}", format.inner == "json" ? "ndjson" : format.inner);
+    append_operator(write_op_name);
+    auto compress_op_name = std::string{};
     if (compression) {
-      fmt::format_to(std::back_inserter(writer_definition), "| compress \"{}\"",
-                     compression->inner);
+      compress_op_name = fmt::format("compress_{}", compression->inner);
+      append_operator(compress_op_name);
     }
-    auto writer = pipeline::internal_parse(writer_definition);
+    auto cdh = collecting_diagnostic_handler{};
+    auto sp = session_provider::make(cdh);
+    auto writer = compile(std::move(writer_ast), sp.as_session());
     if (not writer) {
-      // TODO: This could also be a different error (e.g., for `xsv`).
-      diagnostic::error("invalid format `{}`", format.inner)
-        .primary(format)
+      for (auto&& diag : std::move(cdh).collect()) {
+        if (diag.severity != severity::error) {
+          continue;
+        }
+        if (diag.message.contains(write_op_name)) {
+          diagnostic::error("invalid format `{}`", format.inner)
+            .primary(format)
+            .emit(ctx);
+          return failure::promise();
+        }
+        if (compression and diag.message.contains(compress_op_name)) {
+          diagnostic::error("invalid compression `{}`", compression->inner)
+            .primary(*compression)
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+      diagnostic::error("invalid format or compression")
+        .secondary(format)
+        .secondary(compression ? compression->source : location::unknown)
         .emit(ctx);
       return failure::promise();
     }
