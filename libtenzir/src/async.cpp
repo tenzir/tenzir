@@ -404,20 +404,16 @@ public:
   }
 
   auto run_to_completion() && -> Task<void> {
-    return queue_.activate([&] {
-      return run();
+    return queue_.activate([&] -> Task<void> {
+      spawn_operators();
+      co_await run_until_shutdown();
+      queue_.cancel();
     });
   }
 
 private:
-  auto run() -> Task<void> {
-    auto from_control = spawn_operators();
-    co_await run_until_shutdown(from_control);
-  }
-
-  auto spawn_operators() -> std::vector<Sender<FromControl>> {
+  auto spawn_operators() -> void {
     TENZIR_WARN("beginning chain setup");
-    auto from_control = std::vector<Sender<FromControl>>{};
     auto next_input
       = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
                 Box<Pull<OperatorMsg<table_slice>>>>{std::move(pull_upstream_)};
@@ -441,7 +437,7 @@ private:
           = make_unbounded_channel<FromControl>();
         auto [to_control_sender, to_control_receiver]
           = make_unbounded_channel<ToControl>();
-        from_control.push_back(std::move(from_control_sender));
+        operator_ctrl_.push_back(std::move(from_control_sender));
         next_input = std::move(output_receiver);
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
@@ -454,18 +450,17 @@ private:
         });
         TENZIR_INFO("inserting control receiver task");
         // FIXME: Need to receive more then once. Async gen?
-        queue_.spawn([this,
-                      to_control_receiver = std::move(to_control_receiver),
-                      index]() -> Task<std::pair<size_t, ToControl>> {
-          auto result = co_await to_control_receiver.receive();
-          // TODO: This might be unsafe, and also just a bad idea.
-          // receiver_queue_.spawn(std::forward<Self>(self));
-          co_return {index, result};
-        });
+        queue_.spawn(
+          [this, to_control_receiver = std::move(to_control_receiver),
+           index] mutable
+            -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
+            while (true) {
+              co_yield {index, co_await to_control_receiver.receive()};
+            }
+          });
         TENZIR_INFO("done with operator");
       });
     }
-    return from_control;
   }
 
   auto run_until_shutdown(std::span<Sender<FromControl>> from_control)
@@ -474,70 +469,53 @@ private:
     // TODO: Or do we want to continue listening for control responses during
     // shutdown? That would require some additional coordination.
     auto remaining = operators_.size();
-    // TODO: Refactor?
-    auto combined_queue =
-      // Message from our control.
-      FromControl >>{};
-    co_await combined_queue.activate([&] -> Task<void> {
-      combined_queue.spawn(from_control_.receive());
-      combined_queue.spawn(receiver_queue_.next());
-      combined_queue.spawn([&] -> Task<std::pair<size_t, Shutdown>> {
-        auto next = co_await operator_queue_.next();
-        TENZIR_ASSERT(next);
-        co_return {*next, Shutdown{}};
-      });
-      while (remaining > 0) {
-        TENZIR_WARN("waiting for next info in chain runner");
-        auto next = co_await combined_queue.next();
-        // We should never be done here...
-        // TODO: Cancellation?
-        TENZIR_ASSERT(next, "unexpected end of combined queue");
-        match(std::move(next), [](FromControl) {});
-        auto [index, kind] = std::move(*next);
-        match(
-          kind,
-          [&](Shutdown) {
-            TENZIR_WARN("got shutdown from operator {}", index);
-            // Operator terminated. But we didn't send shutdown signal?
-            TENZIR_ASSERT(false, "oh no");
-          },
-          [&](ToControl to_control) {
-            TENZIR_WARN("got control message from operator {}: {}", index,
-                        to_control);
-            switch (to_control) {
-              case ToControl::ready_for_shutdown:
-                TENZIR_ASSERT(remaining > 0);
-                remaining -= 1;
-                if (remaining == 0) {
-                  // Once we are here, we got a request to shutdown from all
-                  // operators. However, since we might be running in a
-                  // subpipeline that is not ready to shutdown yet, we first
-                  // have to ask control whether we are allowed to.
-                  to_control_.send(ToControl::ready_for_shutdown);
-                }
-                break;
-              case ToControl::no_more_input:
-                // TODO: Inform the preceding operator that we don't need any
-                // more input.
-                if (index > 0) {
-                  from_control[index - 1].send(StopOutput{});
-                } else {
-                  // TODO: What if we don't host the preceding operator? Then we
-                  // need to notify OUR input!
-                }
-                break;
-            }
-            combined_queue.spawn(receiver_queue_.next());
-          });
-      }
-      TENZIR_WARN("sending shutdown to all operators");
-      for (auto& sender : from_control) {
-        sender.send(Shutdown{});
-      }
-      TENZIR_WARN("cancelling combined and receiver");
-      combined_queue.cancel();
-      receiver_queue_.cancel();
-    });
+    queue_.spawn(from_control_.receive());
+    while (remaining > 0) {
+      TENZIR_WARN("waiting for next info in chain runner");
+      auto next = co_await queue_.next();
+      // We should never be done here...
+      // TODO: Cancellation?
+      TENZIR_ASSERT(next, "unexpected end of queue");
+      auto [index, kind] = std::move(*next);
+      match(
+        kind,
+        [&](Shutdown) {
+          TENZIR_WARN("got shutdown from operator {}", index);
+          // Operator terminated. But we didn't send shutdown signal?
+          TENZIR_ASSERT(false, "oh no");
+        },
+        [&](ToControl to_control) {
+          TENZIR_WARN("got control message from operator {}: {}", index,
+                      to_control);
+          switch (to_control) {
+            case ToControl::ready_for_shutdown:
+              TENZIR_ASSERT(remaining > 0);
+              remaining -= 1;
+              if (remaining == 0) {
+                // Once we are here, we got a request to shutdown from all
+                // operators. However, since we might be running in a
+                // subpipeline that is not ready to shutdown yet, we first
+                // have to ask control whether we are allowed to.
+                to_control_.send(ToControl::ready_for_shutdown);
+              }
+              break;
+            case ToControl::no_more_input:
+              // TODO: Inform the preceding operator that we don't need any
+              // more input.
+              if (index > 0) {
+                from_control[index - 1].send(StopOutput{});
+              } else {
+                // TODO: What if we don't host the preceding operator? Then we
+                // need to notify OUR input!
+              }
+              break;
+          }
+        });
+    }
+    TENZIR_WARN("sending shutdown to all operators");
+    for (auto& sender : from_control) {
+      sender.send(Shutdown{});
+    }
   }
 
   OperatorChain<Input, Output> operators_;
@@ -547,6 +525,8 @@ private:
   Sender<ToControl> to_control_;
   caf::actor_system& sys_;
   diagnostic_handler& dh_;
+
+  std::vector<Sender<FromControl>> operator_ctrl_;
 
   QueueScope<variant<
     // Message from our controller.

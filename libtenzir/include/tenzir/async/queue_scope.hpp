@@ -12,6 +12,7 @@
 #include "tenzir/async/unbounded_queue.hpp"
 
 #include <folly/coro/AsyncGenerator.h>
+#include <folly/coro/BoundedQueue.h>
 
 namespace tenzir {
 
@@ -62,28 +63,33 @@ public:
     requires std::convertible_to<U, T>
   void spawn(Task<U> task) {
     TENZIR_ASSERT(scope_);
-    scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
-      queue_.enqueue(co_await folly::coro::co_awaitTry(std::move(task)));
-    });
     remaining_ += 1;
+    scope_->spawn([this, task = std::move(task)] mutable -> Task<void> {
+      co_await results_.enqueue(
+        co_await folly::coro::co_awaitTry(std::move(task)));
+    });
   }
 
   /// Spawn an asynchronous generator which populates the queue.
   ///
   /// The generator will only be advanced once the last item it produced is
   /// about to returned from `next()`.
+  // TODO: This is not true yet.
   void spawn(folly::coro::AsyncGenerator<int> generator) {
+    TENZIR_ASSERT(scope_);
+    remaining_ += 1;
     scope_->spawn(
       [this, generator = std::move(generator)] mutable -> Task<void> {
         for (auto next : co_await generator.next()) {
           if (not next) {
             break;
           }
-          queue_.enqueue(std::move(*next));
-          // TODO: Wait until the item is returned?
+          remaining_ += 1;
+          co_await results_.enqueue(std::move(*next));
         }
         // We still need to enqueue something to give `next` a chance to resume.
-        queue_.enqueue();
+        results_.enqueue(
+          folly::make_exception_wrapper<folly::OperationCancelled>());
       });
   }
 
@@ -91,11 +97,11 @@ public:
     requires std::invocable<F>
   void spawn(F&& f) {
     TENZIR_ASSERT(scope_);
+    remaining_ += 1;
     scope_->spawn([this, f = std::forward<F>(f)] mutable -> Task<void> {
-      queue_.enqueue(
+      results_.enqueue(
         co_await folly::coro::co_awaitTry(std::invoke(std::move(f))));
     });
-    remaining_ += 1;
   }
 
   /// Cancel all remaining tasks.
@@ -114,11 +120,10 @@ public:
   /// TODO: What if it got cancelled?
   /// TODO: Is this itself cancel-safe?
   auto next() -> Task<std::optional<Next>> {
-    queue_.empty();
     if (remaining_ == 0) {
       co_return {};
     }
-    auto result = co_await queue_.dequeue();
+    auto result = co_await results_.dequeue();
     remaining_ -= 1;
     if constexpr (std::same_as<T, void>) {
       std::move(result).unwrap();
@@ -130,7 +135,7 @@ public:
 
 private:
   std::atomic<size_t> remaining_ = 0;
-  UnboundedQueue<AsyncResult<T>> queue_;
+  folly::coro::BoundedQueue<AsyncResult<T>> results_{1};
   AsyncScope* scope_ = nullptr;
 };
 
