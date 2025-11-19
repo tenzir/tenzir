@@ -21,6 +21,7 @@
 #include <arrow/compute/cast.h>
 #include <arrow/io/file.h>
 #include <arrow/table.h>
+#include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
@@ -82,7 +83,46 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto maybe_slice = table_slice::try_from(maybe_batch.MoveValueUnsafe());
+    auto batch = maybe_batch.MoveValueUnsafe();
+    /// We need to perform some cleanup, in case the parquet files were not
+    /// written by us. Specifically we need to ensure that the slice has a name
+    /// and that only metadata that are tenzir attributes exist.
+    auto needs_name = true;
+    auto needs_stripping = false;
+    for (const auto& k : batch->schema()->metadata()->keys()) {
+      if (k == "TENZIR:name:0") {
+        needs_name = true;
+        continue;
+      }
+      if (not k.starts_with("TENZIR:")) {
+        needs_stripping = true;
+      }
+    }
+    if (needs_name or needs_stripping) {
+      auto keys = batch->schema()->metadata()->keys();
+      auto values = batch->schema()->metadata()->values();
+      if (needs_stripping) {
+        auto kit = keys.begin();
+        auto vit = values.begin();
+        while (kit != keys.end()) {
+          if (not vit->starts_with("TENZIR:")) {
+            vit = values.erase(vit);
+            kit = keys.erase(kit);
+            continue;
+          }
+          ++kit;
+          ++vit;
+        }
+      }
+      if (needs_name) {
+        keys.emplace_back("TENZIR:name:0");
+        values.emplace_back("tenzir.parquet");
+      }
+      TENZIR_ASSERT(keys.size() == values.size());
+      batch = batch->ReplaceSchemaMetadata(
+        arrow::key_value_metadata(std::move(keys), std::move(values)));
+    }
+    auto maybe_slice = table_slice::try_from(batch);
     if (not maybe_slice) {
       diagnostic::error("parquet file contains unsupported types")
         .note("{}", maybe_slice.error().message)
