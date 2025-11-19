@@ -6,6 +6,9 @@
   sqlite,
 }:
 arrow-cpp.overrideAttrs (orig: {
+  patches = [
+    ./arrow-cpp-fields-race.patch
+  ];
   nativeBuildInputs =
     orig.nativeBuildInputs
     ++ [
@@ -30,6 +33,11 @@ arrow-cpp.overrideAttrs (orig: {
 
   cmakeFlags =
     orig.cmakeFlags
+    ++ [
+      # Tenzir is using a custom memory pool.
+      "-DARROW_JEMALLOC=OFF"
+      "-DARROW_MIMALLOC=OFF"
+    ]
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       "-DARROW_BUILD_TESTS=OFF"
       # TODO: Check if this is still needed or now covered by ARROW_DEPENDENCY_SOURCE.

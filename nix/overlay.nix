@@ -4,6 +4,17 @@ let
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
   callFunction = callFunctionWith finalPkgs;
+
+  pytestOverlay = python-finalPkgs: python-prevPkgs: {
+    #dynaconf = python-finalPkgs.callPackage ./dynaconf { };
+    pyarrow = python-prevPkgs.pyarrow.overridePythonAttrs (baseAttrs: {
+      disabledTestPaths = baseAttrs.disabledTestPaths ++ [
+        "pyarrow/tests/test_memory.py::test_env_var"
+        "pyarrow/tests/test_memory.py::test_memory_pool_factories"
+        "pyarrow/tests/test_memory.py::test_supported_memory_backends"
+      ];
+    });
+  };
 in
 {
   protobuf = finalPkgs.protobuf_31;
@@ -18,23 +29,11 @@ in
   uv-bin = prevPkgs.callPackage ./uv-binary { };
   empty-libgcc_eh = prevPkgs.callPackage ./empty-libgcc_eh { };
 
-  pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [
-    (python-finalPkgs: python-prevPkgs: {
-      dynaconf = python-finalPkgs.callPackage ./dynaconf { };
-    })
-  ];
+  pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [ pytestOverlay ];
 
   # Customized from upstream nixpkgs.
   apache-orc = callFunction ./overrides/apache-orc.nix { inherit (prevPkgs) apache-orc; };
-  arrow-cpp = callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; };
-  arrow-cpp-tenzir = (finalPkgs.arrow-cpp.overrideAttrs (base: {
-    cmakeFlags = base.cmakeFlags ++ [
-      # Tenzir is using a custom memory pool.
-      "-DARROW_JEMALLOC=OFF"
-      "-DARROW_MIMALLOC=OFF"
-    ];
-    doInstallCheck = false;
-  })).override {
+  arrow-cpp = (callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; }).override {
     aws-sdk-cpp-arrow = finalPkgs.aws-sdk-cpp-tenzir;
     google-cloud-cpp = finalPkgs.google-cloud-cpp-tenzir;
     enableGcs = true; # Upstream disabled for darwin.

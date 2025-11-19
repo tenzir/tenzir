@@ -16,7 +16,7 @@ let
       caf,
       curl,
       libpcap,
-      arrow-cpp-tenzir,
+      arrow-cpp,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
       libbacktrace,
@@ -248,7 +248,7 @@ let
             ];
           propagatedBuildInputs =
             [
-              arrow-cpp-tenzir
+              arrow-cpp
               boost
               caf
               curl
