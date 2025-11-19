@@ -1,0 +1,11 @@
+title: "Better Backpressure"
+description: "This release improves the stability of pipelines by applying backpressure more effectively, ensuring upstream components slow down before overwhelming subscribers. It also enhances daily operations by improving parquet reliability, adding Base58 support, and extending the built-in OCSF operators and functions to support the newly released OCSF 1.7.0."
+changes:
+  - abuse-hosted-share
+  - alone-count-cities
+  - design-march-anyone
+  - month-upper-place
+  - nurse-vessel-drill
+  - purple-crazy-states
+  - setup-burned-thick
+  - stage-model-parade
