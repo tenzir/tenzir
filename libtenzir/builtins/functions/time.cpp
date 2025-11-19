@@ -6,12 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
+
+#include <chrono>
 
 namespace tenzir::plugins::time_ {
 
@@ -98,40 +101,40 @@ public:
     TRY(argument_parser2::function(name())
           .positional("x", expr, "time")
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr),
-                               this](evaluator eval, session ctx) -> series {
-      auto b = duration_type::make_arrow_builder(arrow_memory_pool());
-      check(b->Reserve(eval.length()));
-      for (auto& arg : eval(expr)) {
-        auto f = detail::overload{
-          [&](const arrow::NullArray& arg) {
-            check(b->AppendNulls(arg.length()));
-          },
-          [&](const arrow::TimestampArray& arg) {
-            auto& ty = as<arrow::TimestampType>(*arg.type());
-            TENZIR_ASSERT(ty.timezone().empty());
-            for (auto i = 0; i < arg.length(); ++i) {
-              if (arg.IsNull(i)) {
-                check(b->AppendNull());
-                continue;
+    return function_use::make(
+      [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
+        auto b = duration_type::make_arrow_builder(arrow_memory_pool());
+        check(b->Reserve(eval.length()));
+        for (auto& arg : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray& arg) {
+              check(b->AppendNulls(arg.length()));
+            },
+            [&](const arrow::TimestampArray& arg) {
+              auto& ty = as<arrow::TimestampType>(*arg.type());
+              TENZIR_ASSERT(ty.timezone().empty());
+              for (auto i = 0; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
+                  check(b->AppendNull());
+                  continue;
+                }
+                check(append_builder(
+                  duration_type{}, *b,
+                  value_at(time_type{}, arg, i).time_since_epoch()));
               }
-              check(append_builder(
-                duration_type{}, *b,
-                value_at(time_type{}, arg, i).time_since_epoch()));
-            }
-          },
-          [&](const auto&) {
-            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
-                                arg.type.kind())
-              .primary(expr)
-              .emit(ctx);
-            check(b->AppendNulls(arg.length()));
-          },
-        };
-        match(*arg.array, f);
-      }
-      return series{duration_type{}, finish(*b)};
-    });
+            },
+            [&](const auto&) {
+              diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                  arg.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              check(b->AppendNulls(arg.length()));
+            },
+          };
+          match(*arg.array, f);
+        }
+        return series{duration_type{}, finish(*b)};
+      });
   }
 };
 
@@ -464,31 +467,48 @@ public:
           return match(
             *subject.array,
             [&](const arrow::StringArray& array) {
-              constexpr auto error_is_null = true;
-              auto options = arrow::compute::StrptimeOptions(
-                format.inner, arrow::TimeUnit::NANO, error_is_null);
-              auto result
-                = arrow::compute::CallFunction("strptime", {array}, &options);
-              if (not result.ok()) {
-                diagnostic::warning("{}", result.status().ToString())
-                  .primary(fn)
-                  .emit(ctx);
-                return series::null(result_type, subject.length());
+              auto error = false;
+              auto b = time_type::make_arrow_builder(arrow_memory_pool());
+              check(b->Reserve(array.length()));
+              auto nul_terminated = std::string{};
+              for (const auto& str : array) {
+                if (not str) {
+                  b->UnsafeAppendNull();
+                  continue;
+                }
+                auto tm = std::tm{};
+                nul_terminated = str.value();
+                // Set the default day and year to match UNIX epoch.
+                tm.tm_mday = 1;
+                tm.tm_year = 70;
+                tm.tm_isdst = -1;
+                auto res
+                  = strptime(nul_terminated.c_str(), format.inner.c_str(), &tm);
+                if (res != nul_terminated.c_str() + nul_terminated.length()) {
+                  error = true;
+                  b->UnsafeAppendNull();
+                  continue;
+                }
+                const auto offset = tm.tm_gmtoff;
+                errno = 0;
+                auto parsed = timegm(&tm);
+                if (parsed == -1 and errno != 0) {
+                  error = true;
+                  b->UnsafeAppendNull();
+                  continue;
+                }
+                parsed -= offset;
+                const auto tp = time_point_cast<std::chrono::nanoseconds>(
+                  time::clock::from_time_t(parsed));
+                b->UnsafeAppend(tp.time_since_epoch().count());
               }
-              auto pre_nulls = array.null_count();
-              auto post_nulls = result->null_count();
-              if (pre_nulls != post_nulls) {
-                TENZIR_ASSERT(pre_nulls < post_nulls);
-                diagnostic::warning("failed to apply `parse_time`")
-                  .primary(fn)
+              if (error) {
+                diagnostic::warning("failed to parse timestamp")
+                  .primary(subject_expr)
+                  .secondary(format)
                   .emit(ctx);
               }
-              const auto& tz
-                = as<arrow::TimestampType>(*result->type()).timezone();
-              TENZIR_ASSERT(tz.empty() or tz == "UTC");
-              result = arrow::compute::Cast(result.MoveValueUnsafe(), cast_to);
-              TENZIR_ASSERT(result.ok(), result.status().ToString());
-              return series{result_type, result.MoveValueUnsafe().make_array()};
+              return series{time_type{}, finish(*b)};
             },
             [&](const arrow::NullArray& array) {
               return series::null(result_type, array.length());
