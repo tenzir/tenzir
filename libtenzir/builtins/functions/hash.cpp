@@ -6,25 +6,31 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/cast.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/coding.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/hash/concepts.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/hash/md5.hpp>
-#include <tenzir/hash/sha1.hpp>
-#include <tenzir/hash/sha2.hpp>
+#include <tenzir/hash/sha.hpp>
 #include <tenzir/hash/xxhash.hpp>
+#include <tenzir/location.hpp>
 #include <tenzir/optional.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/scalar.h>
@@ -201,7 +207,9 @@ public:
   }
 };
 
-template <class HashAlgorithm, detail::string_literal Name>
+} // namespace
+
+template <reusable_hash HashAlgorithm, detail::string_literal Name>
 class fun : public virtual function_plugin {
   auto name() const -> std::string override {
     return fmt::format("hash_{}", Name);
@@ -223,11 +231,12 @@ class fun : public virtual function_plugin {
       [expr_ = std::move(expr), seed_ = std::move(seed)](evaluator eval,
                                                          session) -> series {
         const auto& s = eval(expr_);
+        HashAlgorithm hasher{};
         auto hash = [&](const auto& x) {
           // We only hash the bytes and the length. Users expect that the
           // resulting digest is the same as in other tools, which hash the
           // sequence of bytes. This includes hashing the seed.
-          HashAlgorithm hasher{};
+          hasher.reset();
           if (seed_) {
             hasher.add(as_bytes(*seed_));
           }
@@ -240,7 +249,7 @@ class fun : public virtual function_plugin {
             },
           };
           match(x, f);
-          return std::move(hasher).finish();
+          return hasher.finish();
         };
         auto b = string_type::make_arrow_builder(arrow_memory_pool());
         for (const auto& value : s.values()) {
@@ -257,8 +266,6 @@ class fun : public virtual function_plugin {
   }
 };
 
-} // namespace
-
 } // namespace tenzir::plugins::hash
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin)
@@ -268,4 +275,8 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha224, "sha224">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha256, "sha256">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha384, "sha384">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha512, "sha512">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_224, "sha3_224">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_256, "sha3_256">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_384, "sha3_384">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha3_512, "sha3_512">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::xxh3_64, "xxh3">)
