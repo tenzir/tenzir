@@ -21,6 +21,7 @@
 
 // Include our compatibility header for Boost < 1.86
 #include <boost/version.hpp>
+
 #if BOOST_VERSION < 108600 || defined(TENZIR_FORCE_BOOST_UUID_COMPAT)
 #  include <tenzir/detail/boost_uuid_generators.hpp>
 #endif
@@ -94,7 +95,7 @@ public:
     gen_ = std::move(*cast);
   }
 
-  auto feed(Input input) -> Output {
+  auto feed(Input input) -> generator<Output> {
     // TODO: Concrete example where this can fail: When the schema varies and we
     // feed `parquet` here, the printer can report can error and be done. This
     // still works in tests, but we very likely need some special handling here.
@@ -104,48 +105,30 @@ public:
     TENZIR_ASSERT(not gen_.exhausted());
     *input_ = std::move(input);
     while (true) {
-      TENZIR_TRACE("advancing generator");
-      auto output = gen_.next();
-      TENZIR_ASSERT(output);
-      TENZIR_ASSERT(not gen_.exhausted());
       TENZIR_ASSERT(input_);
       TENZIR_ASSERT(*input_);
-      if (is_empty(**input_)) {
-        // TODO: We do not really know that we immediately get the output. In
-        // general, this model is a bit questionable.
-        return std::move(*output);
+      TENZIR_TRACE("advancing generator");
+      auto output = gen_.next();
+      const bool input_done = is_empty(**input_);
+      TENZIR_ASSERT(output);
+      const bool has_output = not is_empty(*output);
+      if (has_output) {
+        co_yield std::move(*output);
+        continue;
       }
-      TENZIR_TRACE("continue iterating because input was not taken");
-      TENZIR_ASSERT(is_empty(*output));
+      if (input_done) {
+        co_return;
+      }
     }
   }
 
-  // TODO: Deduplicate these functions.
-  [[nodiscard]] auto run_to_completion() -> std::vector<Output>
-    requires(not std::same_as<Output, std::monostate>)
-  {
-    auto output = std::vector<Output>{};
+  [[nodiscard]] auto run_to_completion() -> generator<Output> {
     TENZIR_ASSERT(input_);
     TENZIR_ASSERT(*input_);
     TENZIR_ASSERT(is_empty(**input_));
     input_->reset();
-    while (auto next = gen_.next()) {
-      if (not is_empty(*next)) {
-        output.push_back(std::move(*next));
-      }
-    }
-    TENZIR_ASSERT(gen_.exhausted());
-    return output;
-  }
-
-  void run_to_completion()
-    requires std::same_as<Output, std::monostate>
-  {
-    TENZIR_ASSERT(input_);
-    TENZIR_ASSERT(*input_);
-    TENZIR_ASSERT(is_empty(**input_));
-    input_->reset();
-    while (auto next = gen_.next()) {
+    for (auto&& v : gen_) {
+      co_yield std::move(v);
     }
     TENZIR_ASSERT(gen_.exhausted());
   }
@@ -163,11 +146,15 @@ struct group_t {
     : write{std::move(write), ctrl}, save{std::move(save), ctrl} {
   }
 
-  void run_to_completion() {
+  auto run_to_completion() -> void {
     for (auto chunk : write.run_to_completion()) {
-      save.feed(std::move(chunk));
+      if (chunk and chunk->size() > 0) {
+        for (auto&& _ : save.feed(std::move(chunk)))
+          ;
+      }
     }
-    save.run_to_completion();
+    for (auto&& _ : save.run_to_completion())
+      ;
   }
 
   time created = time::clock::now();
@@ -340,15 +327,17 @@ public:
         // collect all slices for that partition and then write once afterwards.
         // This will probably be significantly more efficient when the partition
         // changes with high frequency.
-        auto chunk
-          = flush_group.write.feed(subslice(slice, current_start, row));
-        current_start = row;
-        if (chunk) {
-          flush_group.bytes_written += chunk->size();
-          TENZIR_TRACE("saving {} bytes", chunk->size());
-          flush_group.save.feed(std::move(chunk));
-          TENZIR_TRACE("saving done");
+        for (auto&& chunk :
+             flush_group.write.feed(subslice(slice, current_start, row))) {
+          if (chunk and chunk->size() > 0) {
+            flush_group.bytes_written += chunk->size();
+            TENZIR_TRACE("saving {} bytes", chunk->size());
+            for (auto&& _ : flush_group.save.feed(std::move(chunk)))
+              ;
+            TENZIR_TRACE("saving done");
+          }
         }
+        current_start = row;
         if (flush_group.bytes_written > args_.max_size) {
           TENZIR_TRACE("ending group because of size limit");
           flush_group.run_to_completion();
