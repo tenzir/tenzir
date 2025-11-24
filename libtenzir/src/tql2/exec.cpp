@@ -529,17 +529,24 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
   TENZIR_WARN("spawning plan");
   auto ops = std::vector<AnyOperator>{};
   for (auto& op : std::move(pipe).unwrap()) {
+    if (op->needs_node()) {
+      // TODO: Send fragment of plan to other process, run multiple chains
+      // connected by some transport layer (e.g., CAF, or maybe even just TCP).
+      TENZIR_TODO();
+    } else {
+    }
     ops.push_back(std::move(*op).spawn(std::nullopt));
   }
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  auto [push_input, pull_input] = make_op_channel<void>(10);
-  auto [push_output, pull_output] = make_op_channel<void>(10);
+  // auto [push_input, pull_input] = make_op_channel<void>(10);
+  // auto [push_output, pull_output] = make_op_channel<void>(10);
   // co_await push_input(Signal::checkpoint);
   TENZIR_WARN("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain), std::move(pull_input),
-                        std::move(push_output), sys, dh);
+  co_await run_pipeline(std::move(*chain),
+                        // std::move(pull_input), std::move(push_output),
+                        sys, dh);
   co_return {};
 }
 
@@ -562,7 +569,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), sys};
-  (void)b_ctx.system();
+  // (void)b_ctx.system();
   auto c_ctx = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(c_ctx));
   if (cfg.dump_ir) {

@@ -48,6 +48,7 @@ public:
       }};
       co_return co_await std::move(task);
       // TODO: What about the queue at this point?
+      // TODO: Should we cancel the outstanding tasks here?
     });
   }
 
@@ -88,19 +89,41 @@ public:
           co_await results_.enqueue(std::move(*next));
         }
         // We still need to enqueue something to give `next` a chance to resume.
-        results_.enqueue(
+        co_await results_.enqueue(
           folly::make_exception_wrapper<folly::OperationCancelled>());
       });
   }
 
   template <class F>
-    requires std::invocable<F>
+    requires folly::coro::is_semi_awaitable_v<std::invoke_result_t<F>>
   void spawn(F&& f) {
     TENZIR_ASSERT(scope_);
     remaining_ += 1;
     scope_->spawn([this, f = std::forward<F>(f)] mutable -> Task<void> {
-      results_.enqueue(
+      co_await results_.enqueue(
         co_await folly::coro::co_awaitTry(std::invoke(std::move(f))));
+    });
+  }
+
+  template <class U>
+  struct IsAyncGenerator : std::false_type {};
+
+  template <class U>
+  struct IsAyncGenerator<folly::coro::AsyncGenerator<U>> : std::true_type {};
+
+  template <class F>
+    requires IsAyncGenerator<std::invoke_result_t<F>>::value
+  void spawn(F&& f) {
+    TENZIR_ASSERT(scope_);
+    remaining_ += 1;
+    scope_->spawn([this, f = std::move(f)] mutable -> Task<void> {
+      auto generator = std::invoke(f);
+      while (auto next = co_await generator.next()) {
+        remaining_ += 1;
+        co_await results_.enqueue(std::move(*next));
+      }
+      // We still need to enqueue something to give `next` a chance to resume.
+      co_await results_.enqueue(folly::exception_wrapper{});
     });
   }
 
@@ -109,6 +132,10 @@ public:
     // TODO: Exact behavior.
     TENZIR_ASSERT(scope_);
     scope_->cancel();
+  }
+
+  auto is_cancelled() const -> bool {
+    return scope_ != nullptr and scope_->is_cancelled();
   }
 
   using Next = std::conditional_t<std::is_same_v<T, void>, std::monostate, T>;
@@ -120,17 +147,22 @@ public:
   /// TODO: What if it got cancelled?
   /// TODO: Is this itself cancel-safe?
   auto next() -> Task<std::optional<Next>> {
-    if (remaining_ == 0) {
-      co_return {};
+    while (remaining_ > 0) {
+      auto result = co_await results_.dequeue();
+      remaining_ -= 1;
+      if (result.is_exception() and not result.exception()) {
+        // An empty exception object is used to signal that a task has completed
+        // that didn't produce a result.
+        continue;
+      }
+      if constexpr (std::same_as<T, void>) {
+        std::move(result).unwrap();
+        co_return std::monostate{};
+      } else {
+        co_return std::move(result).unwrap();
+      }
     }
-    auto result = co_await results_.dequeue();
-    remaining_ -= 1;
-    if constexpr (std::same_as<T, void>) {
-      std::move(result).unwrap();
-      co_return std::monostate{};
-    } else {
-      co_return std::move(result).unwrap();
-    }
+    co_return std::nullopt;
   }
 
 private:

@@ -116,11 +116,17 @@ public:
 
 class OpenPipeline {
 public:
-  auto push(table_slice input) -> Task<Result<void, table_slice>>;
+  auto push(table_slice input) -> Task<Result<void, table_slice>> {
+    TENZIR_TODO();
+  }
 
-  auto close_input() -> void;
+  auto close_input() -> void {
+    TENZIR_TODO();
+  }
 
-  auto pull() -> Task<std::optional<table_slice>>;
+  auto pull() -> Task<std::optional<table_slice>> {
+    TENZIR_TODO();
+  }
 };
 
 template <class Output>
@@ -144,13 +150,14 @@ public:
     auto& pipe = it.value();
     // TODO: Earlier, when spawning the pipeline
     pipe_output_->spawn(pipe.pull());
-    co_await pipe.push(input);
+    (void)co_await pipe.pull();
     co_return;
   }
 
 private:
   ast::expression over_;
   ir::pipeline pipe_;
+
   tsl::robin_map<data, OpenPipeline> pipes_;
 
   // TODO: Not serializable, plus where is restore logic?
@@ -159,7 +166,7 @@ private:
   // consume data, then the checkpoint is delayed. Maybe that is to be expected?
   // TODO: How do we handle errors in subpipelines?
   // TODO: Activation of scope?
-  mutable Box<QueueScope<table_slice>> pipe_output_;
+  mutable Box<QueueScope<std::optional<table_slice>>> pipe_output_;
 };
 
 class group_bp final : public plan::operator_base {

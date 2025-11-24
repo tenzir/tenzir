@@ -64,7 +64,7 @@ public:
   template <class Self>
   auto exception(this Self&& self) -> decltype(auto) {
     TENZIR_ASSERT(not self.is_cancelled());
-    return std::forward<Self>(self).exception_or_cancelled();
+    return std::forward<Self>(self).value_.exception();
   }
 
   template <class Self>

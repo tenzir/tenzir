@@ -88,6 +88,10 @@ public:
     scope_.requestCancellation();
   }
 
+  auto is_cancelled() const -> bool {
+    return scope_.isScopeCancellationRequested();
+  }
+
 private:
   AsyncScope(const AsyncScope&) = delete;
   auto operator=(const AsyncScope&) -> AsyncScope& = delete;
@@ -140,6 +144,7 @@ auto async_scope(F&& f) -> Task<
     co_await folly::coro::co_awaitTry(std::invoke(std::forward<F>(f), spawn))};
   // We only cancel the jobs if the given function failed or was cancelled.
   if (not result.is_value()) {
+    TENZIR_DEBUG("cancelling async scope because of exception/cancellation");
     scope.requestCancellation();
   }
   // Provide a custom cancellation token to ensure that cancellation doesn't

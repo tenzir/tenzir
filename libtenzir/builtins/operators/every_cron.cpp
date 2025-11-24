@@ -297,8 +297,47 @@ private:
 
 class Every final : public Operator<table_slice, table_slice> {
 public:
+  Every(duration interval, ir::pipeline ir)
+    : interval_{interval}, ir_{std::move(ir)} {
+  }
+
   auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
     -> Task<void> override {
+    auto copy = ir_;
+    // FIXME: Don't do ths.
+    auto reg = global_registry();
+    auto b_ctx = base_ctx{ctx, *reg, ctx.actor_system()};
+    if (not copy.substitute(substitute_ctx{b_ctx, nullptr}, true)) {
+      co_return;
+    }
+    auto plan = std::move(copy).finalize(finalize_ctx{b_ctx});
+    if (not plan) {
+      co_return;
+    }
+    // TODO: Don't spawn ourselves... Fragments of the plan might need to be
+    // spawned remote.
+    auto ops = std::vector<AnyOperator>{};
+    for (auto& op : std::move(*plan).unwrap()) {
+      ops.push_back(std::move(*op).spawn(std::nullopt));
+    }
+    auto chain
+      = OperatorChain<table_slice, table_slice>::try_from(std::move(ops));
+    TENZIR_ASSERT(chain);
+    auto input_vec = std::vector<table_slice>{};
+    input_vec.push_back(std::move(input));
+    auto input_gen = folly::coro::co_invoke(
+      [input_vec
+       = std::move(input_vec)] mutable -> AsyncGenerator<table_slice> {
+        for (auto& input : input_vec) {
+          co_yield std::move(input);
+        }
+      });
+    // auto gen = run_pipeline_with_input(std::move(input_gen),
+    // std::move(*chain),
+    //                                    ctx.actor_system(), ctx);
+    // while (auto output = co_await gen.next()) {
+    //   co_await push(std::move(*output));
+    // }
   }
 
   auto checkpoint() -> Task<void> override {
@@ -326,6 +365,10 @@ public:
     -> exec::operator_actor override {
     return args.sys.spawn(caf::actor_from_state<every_exec>, interval_, pipe_,
                           std::move(args.restore), args.ctx);
+  }
+
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    return Every{interval_, std::move(pipe_)};
   }
 
   friend auto inspect(auto& f, every_plan& x) -> bool {

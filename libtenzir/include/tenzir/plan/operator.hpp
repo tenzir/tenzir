@@ -30,6 +30,11 @@ public:
   virtual auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator {
     TENZIR_TODO();
   }
+
+  /// Whether the operator needs to run in the actor system of the Tenzir Node.
+  virtual auto needs_node() const -> bool {
+    return false;
+  }
 };
 
 using operator_ptr = std::unique_ptr<operator_base>;

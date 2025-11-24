@@ -10,6 +10,7 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/exec/checkpoint.hpp"
 #include "tenzir/exec/operator_base.hpp"
 #include "tenzir/execution_node.hpp"
@@ -17,10 +18,12 @@
 #include "tenzir/plan/operator_spawn_args.hpp"
 #include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/rebatch.hpp"
 #include "tenzir/report.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/tql2/set.hpp"
 
 #include <caf/actor_from_state.hpp>
 
@@ -77,10 +80,84 @@ private:
   event_order order_;
 };
 
+class Set final : public Operator<table_slice, table_slice> {
+public:
+  Set(std::vector<ast::assignment> assignments, event_order order)
+    : assignments_{std::move(assignments)}, order_{order} {
+    for (auto& assignment : assignments_) {
+      auto [pruned_assignment, moved_fields]
+        = resolve_move_keyword(std::move(assignment));
+      assignment = std::move(pruned_assignment);
+      std::ranges::move(moved_fields, std::back_inserter(moved_fields_));
+    }
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+    -> Task<void> {
+    auto slice = std::move(input);
+    // The right-hand side is always evaluated with the original input, because
+    // side-effects from preceding assignments shall not be reflected when
+    // calculating the value of the left-hand side.
+    auto values = std::vector<multi_series>{};
+    for (const auto& assignment : assignments_) {
+      values.push_back(eval(assignment.right, slice, ctx));
+    }
+    slice = drop(slice, moved_fields_, ctx, false);
+    // After we know all the multi series values on the right, we can split the
+    // input table slice and perform the actual assignment.
+    auto begin = int64_t{0};
+    auto results = std::vector<table_slice>{};
+    for (auto values_slice : split_multi_series(values)) {
+      TENZIR_ASSERT(not values_slice.empty());
+      auto end = begin + values_slice[0].length();
+      // We could still perform further splits if metadata is assigned.
+      auto state = std::vector<table_slice>{};
+      state.push_back(subslice(slice, begin, end));
+      begin = end;
+      auto new_state = std::vector<table_slice>{};
+      for (auto [assignment, value] :
+           detail::zip_equal(assignments_, values_slice)) {
+        auto begin = int64_t{0};
+        for (auto& entry : state) {
+          auto entry_rows = detail::narrow<int64_t>(entry.rows());
+          auto assigned = assign(assignment.left,
+                                 value.slice(begin, entry_rows), entry, ctx);
+          begin += entry_rows;
+          new_state.insert(new_state.end(),
+                           std::move_iterator{assigned.begin()},
+                           std::move_iterator{assigned.end()});
+        }
+        std::swap(state, new_state);
+        new_state.clear();
+      }
+      std::ranges::move(state, std::back_inserter(results));
+    }
+    // TODO: Consider adding a property to function plugins that let's them
+    // indicate whether they want their outputs to be strictly ordered. If any
+    // of the called functions has this requirement, then we should not be
+    // making this optimization. This will become relevant in the future once we
+    // allow functions to be stateful.
+    if (order_ != event_order::ordered) {
+      std::ranges::stable_sort(results, std::ranges::less{},
+                               &table_slice::schema);
+    }
+    for (auto& result : rebatch(std::move(results))) {
+      co_await push(std::move(result));
+    }
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_ = event_order::ordered;
+  std::vector<ast::field_path> moved_fields_;
+};
+
 class set_plan final : public plan::operator_base {
 public:
-  explicit set_plan(std::vector<ast::assignment> assignments)
-    : assignments_{std::move(assignments)} {
+  set_plan() = default;
+
+  explicit set_plan(std::vector<ast::assignment> assignments, event_order order)
+    : assignments_{std::move(assignments)}, order_{order} {
   }
 
   auto name() const -> std::string override {
@@ -93,8 +170,13 @@ public:
                           order_);
   }
 
+  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+    return Set{std::move(assignments_), order_};
+  }
+
   friend auto inspect(auto& f, set_plan& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_));
+    return f.object(x).fields(f.field("assignments", x.assignments_),
+                              f.field("order", x.order_));
   }
 
 private:
@@ -124,19 +206,21 @@ public:
   }
 
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    return std::make_unique<set_plan>(std::move(assignments_));
+    return std::make_unique<set_plan>(std::move(assignments_), order_);
   }
 
   auto optimize(ir::optimize_filter filter,
                 event_order order) && -> ir::optimize_result override {
     // Remember the order for potential rebatches.
     order_ = order;
-    // TODO: FIXME
-    TENZIR_ASSERT(filter.size() == 1);
-    auto where = make_where_ir(filter[0]);
     auto ops = std::vector<ir::operator_ptr>{};
-    ops.reserve(2);
-    ops.push_back(std::move(where));
+    if (not filter.empty()) {
+      // TODO: FIXME
+      TENZIR_ASSERT(filter.size() == 1);
+      ops.reserve(2);
+      auto where = make_where_ir(filter[0]);
+      ops.push_back(std::move(where));
+    }
     ops.emplace_back(std::make_unique<set_ir>(std::move(*this)));
     auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
     return {{}, order_, std::move(replacement)};
@@ -650,6 +734,7 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
     new inspection_plugin<ir::operator_base, if_ir>{},
     new inspection_plugin<plan::operator_base, if_exec>{},
     new inspection_plugin<ir::operator_base, set_ir>{},
+    new inspection_plugin<plan::operator_base, set_plan>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,

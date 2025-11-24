@@ -24,9 +24,9 @@ namespace tenzir::plugins::head {
 
 namespace {
 
-class head_impl final : public Operator<table_slice, table_slice> {
+class Head final : public Operator<table_slice, table_slice> {
 public:
-  explicit head_impl(size_t count) : remaining_{count} {
+  explicit Head(size_t count) : remaining_{count} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)

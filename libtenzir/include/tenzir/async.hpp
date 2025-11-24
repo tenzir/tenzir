@@ -187,7 +187,6 @@ protected:
   ~OperatorOutputBase() = default;
 };
 
-// TODO: This interface doesn't work with source operators.
 template <class Input, class Output>
 class Operator : public OperatorInputOutputBase<Input, Output>,
                  public OperatorOutputBase<Output> {
@@ -306,7 +305,20 @@ class OperatorChain {
 public:
   static auto try_from(std::vector<AnyOperator> operators)
     -> std::optional<OperatorChain<Input, Output>> {
-    // TODO: Implement properly.
+    auto input = operator_type{tag_v<Input>};
+    for (auto& op : operators) {
+      TRY(input, match(op,
+                       [&]<class In, class Out>(Box<Operator<In, Out>>&)
+                         -> std::optional<operator_type> {
+                         if (not input.is<In>()) {
+                           return std::nullopt;
+                         }
+                         return tag_v<Out>;
+                       }));
+    }
+    if (not input.is<Output>()) {
+      return std::nullopt;
+    }
     return OperatorChain{std::move(operators)};
   }
 
@@ -333,7 +345,7 @@ private:
 TENZIR_ENUM(
   /// A non-data message sent to an operator by its upstream.
   Signal,
-  /// No more data will come after this signal. Will never be sent to sources.
+  /// No more data will come after this signal. Will never be sent over `void`.
   end_of_data,
   /// Request to perform a checkpoint. To be forwarded downstream afterwards.
   checkpoint);
@@ -354,9 +366,62 @@ struct OperatorMsg<void> : variant<Signal> {
 template <class T>
 auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>>;
 
-auto run_pipeline(OperatorChain<void, void> pipeline,
-                  Box<Pull<OperatorMsg<void>>> input,
-                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys,
+struct PostCommit {};
+struct Shutdown {};
+struct StopOutput {};
+
+using FromControl = variant<PostCommit, Shutdown, StopOutput>;
+
+TENZIR_ENUM(
+  /// A message sent from an operator to the controller.
+  ToControl,
+  /// Notify the host that we are ready to shutdown. After emitting
+  /// this, the operator is no longer allowed to send data, so it
+  /// should tell its previous operator to stop and its subsequent
+  /// operator that it will not get any more input.
+  ready_for_shutdown,
+  /// Say that we do not want any more input. This will also notify our
+  /// preceding operator.
+  no_more_input);
+
+// TODO: Where to place this?
+template <class T>
+class Receiver;
+template <class T>
+class Sender;
+
+class Never {
+private:
+  Never() = default;
+};
+
+template <class T>
+using VoidToNever = std::conditional_t<std::same_as<T, void>, Never, T>;
+
+/// Run a closed pipeline without external control.
+auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void>;
+
+/// Run a right-open pipeline without external control.
+template <class Output>
+  requires(not std::same_as<Output, void>)
+auto run_pipeline(OperatorChain<void, Output> pipeline, caf::actor_system& sys,
+                  diagnostic_handler& dh) -> AsyncGenerator<Output>;
+
+/// Run an open pipeline without external control.
+template <class Input, class Output>
+  requires(not std::same_as<Output, void> and not std::same_as<Input, void>)
+auto run_pipeline_with_input(AsyncGenerator<Input> input,
+                             OperatorChain<Input, Output> pipeline,
+                             caf::actor_system& sys, diagnostic_handler& dh)
+  -> AsyncGenerator<Output>;
+
+/// Run a pipeline with external control.
+template <class Input, class Output>
+auto run_chain(OperatorChain<Input, Output> chain,
+               Box<Pull<OperatorMsg<Input>>> pull_upstream,
+               Box<Push<OperatorMsg<Output>>> push_downstream,
+               Receiver<FromControl> from_control, Sender<ToControl> to_control,
+               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void>;
 
 } // namespace tenzir

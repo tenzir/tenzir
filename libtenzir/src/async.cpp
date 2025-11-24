@@ -75,24 +75,6 @@ auto filter2(const table_slice& slice, const ast::expression& expr,
   return results;
 }
 
-struct PostCommit {};
-struct Shutdown {};
-struct StopOutput {};
-
-using FromControl = variant<PostCommit, Shutdown, StopOutput>;
-
-TENZIR_ENUM(
-  /// A message sent from an operator to the controller.
-  ToControl,
-  /// Notify the host that we are ready to shutdown. After emitting
-  /// this, the operator is no longer allowed to send data, so it
-  /// should tell its previous operator to stop and its subsequent
-  /// operator that it will not get any more input.
-  ready_for_shutdown,
-  /// Say that we do not want any more input. This will also notify our
-  /// preceding operator.
-  no_more_input);
-
 template <class T>
 class Receiver {
 public:
@@ -188,8 +170,11 @@ public:
   }
 
   auto run_to_completion() && -> Task<void> {
-    // Immediately check for cancellation and allow rescheduling.
-    return queue_.activate(run());
+    TENZIR_WARN("starting operator runner");
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_WARN("returning from operator runner");
+    }};
+    co_await queue_.activate(run());
   }
 
 private:
@@ -244,8 +229,6 @@ private:
       case OperatorState::unspecified:
         break;
     }
-    // FIXME: This might not be the best approach, because we have to cancel
-    // futures. We could instead keep them running.
     TENZIR_VERBOSE("waiting in {} for message", typeid(*op_).name());
     auto message = check(co_await queue_.next());
     co_await match(std::move(message), [&](auto message) {
@@ -318,13 +301,16 @@ private:
       std::move(message),
       [&](PostCommit) -> Task<void> {
         TENZIR_VERBOSE("got post commit in {}", typeid(*op_).name());
-        co_return;
+        co_await op_->post_commit();
       },
       [&](Shutdown) -> Task<void> {
-        // We won't perform any cleanup. This might be undesirable.
+        // FIXME: Cleanup on shutdown?
         TENZIR_VERBOSE("got shutdown in {}", typeid(*op_).name());
         got_shutdown_request_ = true;
         co_return;
+      },
+      [&](StopOutput) -> Task<void> {
+        co_await handle_done();
       });
     queue_.spawn(from_control_.receive());
   }
@@ -366,6 +352,8 @@ private:
   std::atomic<size_t> ticks_ = 0;
 };
 
+namespace {
+
 template <class Input, class Output>
 auto run_operator(Box<Operator<Input, Output>> op,
                   Box<Pull<OperatorMsg<Input>>> pull_upstream,
@@ -385,6 +373,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
   }
     .run_to_completion();
 }
+
+} // namespace
 
 template <class Input, class Output>
 class ChainRunner {
@@ -407,7 +397,9 @@ public:
     return queue_.activate([&] -> Task<void> {
       spawn_operators();
       co_await run_until_shutdown();
+      TENZIR_WARN("cancelling all queue items in chain");
       queue_.cancel();
+      TENZIR_WARN("waiting for chain queue tasks to finish");
     });
   }
 
@@ -423,7 +415,8 @@ private:
       match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         TENZIR_INFO("got {}", typeid(*op).name());
         auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
-        auto [output_sender, output_receiver] = make_op_channel<Out>(999);
+        // TODO: This should be parameterized from the outside, right?
+        auto [output_sender, output_receiver] = make_op_channel<Out>(1);
         // TODO: This is a horrible hack.
         auto last = index == operators_.size() - 1;
         if (last) {
@@ -444,15 +437,16 @@ private:
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), sys_, dh_);
         TENZIR_INFO("spawning operator task");
-        queue_.spawn([task = std::move(task), index] mutable -> Task<size_t> {
+        queue_.spawn([task = std::move(task),
+                      index] mutable -> Task<std::pair<size_t, Shutdown>> {
           co_await std::move(task);
-          co_return index;
+          TENZIR_INFO("got termination from operator {}", index);
+          co_return {index, Shutdown{}};
         });
         TENZIR_INFO("inserting control receiver task");
         // FIXME: Need to receive more then once. Async gen?
         queue_.spawn(
-          [this, to_control_receiver = std::move(to_control_receiver),
-           index] mutable
+          [to_control_receiver = std::move(to_control_receiver), index] mutable
             -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
             while (true) {
               co_yield {index, co_await to_control_receiver.receive()};
@@ -463,62 +457,84 @@ private:
     }
   }
 
-  auto run_until_shutdown(std::span<Sender<FromControl>> from_control)
-    -> Task<void> {
+  auto run_until_shutdown() -> Task<void> {
     TENZIR_WARN("waiting for all run operators to finish");
     // TODO: Or do we want to continue listening for control responses during
     // shutdown? That would require some additional coordination.
     auto remaining = operators_.size();
     queue_.spawn(from_control_.receive());
-    while (remaining > 0) {
+    auto got_shutdown = false;
+    while (not got_shutdown) {
       TENZIR_WARN("waiting for next info in chain runner");
       auto next = co_await queue_.next();
       // We should never be done here...
       // TODO: Cancellation?
       TENZIR_ASSERT(next, "unexpected end of queue");
-      auto [index, kind] = std::move(*next);
       match(
-        kind,
-        [&](Shutdown) {
-          TENZIR_WARN("got shutdown from operator {}", index);
-          // Operator terminated. But we didn't send shutdown signal?
-          TENZIR_ASSERT(false, "oh no");
+        *next,
+        [&](FromControl from_control) {
+          match(
+            from_control,
+            [&](PostCommit) {
+              for (auto& ctrl : operator_ctrl_) {
+                ctrl.send(PostCommit{});
+              }
+            },
+            [&](Shutdown) {
+              TENZIR_INFO("got shutdown notice in subpipeline");
+              got_shutdown = true;
+            },
+            [&](StopOutput) {
+              for (auto& ctrl : operator_ctrl_) {
+                ctrl.send(Shutdown{});
+              }
+            });
         },
-        [&](ToControl to_control) {
-          TENZIR_WARN("got control message from operator {}: {}", index,
-                      to_control);
-          switch (to_control) {
-            case ToControl::ready_for_shutdown:
-              TENZIR_ASSERT(remaining > 0);
-              remaining -= 1;
-              if (remaining == 0) {
-                // Once we are here, we got a request to shutdown from all
-                // operators. However, since we might be running in a
-                // subpipeline that is not ready to shutdown yet, we first
-                // have to ask control whether we are allowed to.
-                to_control_.send(ToControl::ready_for_shutdown);
+        [&](std::pair<size_t, variant<Shutdown, ToControl>> next) {
+          auto [index, kind] = std::move(next);
+          match(
+            kind,
+            [&](Shutdown) {
+              TENZIR_WARN("got shutdown from operator {}", index);
+              // Operator terminated. But we didn't send shutdown signal?
+              TENZIR_ASSERT(false, "oh no");
+            },
+            [&](ToControl to_control) {
+              TENZIR_WARN("got control message from operator {}: {}", index,
+                          to_control);
+              switch (to_control) {
+                case ToControl::ready_for_shutdown:
+                  TENZIR_ASSERT(remaining > 0);
+                  remaining -= 1;
+                  if (remaining == 0) {
+                    // Once we are here, we got a request to shutdown from all
+                    // operators. However, since we might be running in a
+                    // subpipeline that is not ready to shutdown yet, we first
+                    // have to ask control whether we are allowed to.
+                    to_control_.send(ToControl::ready_for_shutdown);
+                  }
+                  break;
+                case ToControl::no_more_input:
+                  // TODO: Inform the preceding operator that we don't need any
+                  // more input.
+                  if (index > 0) {
+                    operator_ctrl_[index - 1].send(StopOutput{});
+                  } else {
+                    // TODO: What if we don't host the preceding operator? Then
+                    // we need to notify OUR input!
+                  }
+                  break;
               }
-              break;
-            case ToControl::no_more_input:
-              // TODO: Inform the preceding operator that we don't need any
-              // more input.
-              if (index > 0) {
-                from_control[index - 1].send(StopOutput{});
-              } else {
-                // TODO: What if we don't host the preceding operator? Then we
-                // need to notify OUR input!
-              }
-              break;
-          }
+            });
         });
     }
     TENZIR_WARN("sending shutdown to all operators");
-    for (auto& sender : from_control) {
+    for (auto& sender : operator_ctrl_) {
       sender.send(Shutdown{});
     }
   }
 
-  OperatorChain<Input, Output> operators_;
+  std::vector<AnyOperator> operators_;
   Box<Pull<OperatorMsg<Input>>> pull_upstream_;
   Box<Push<OperatorMsg<Output>>> push_downstream_;
   Receiver<FromControl> from_control_;
@@ -546,14 +562,31 @@ private:
 
 template <class Input, class Output>
 auto run_chain(OperatorChain<Input, Output> chain,
-               Box<Pull<OperatorMsg<Input>>> input,
-               Box<Push<OperatorMsg<Output>>> output, caf::actor_system& sys,
-               diagnostic_handler& dh) -> Task<void> {
+               Box<Pull<OperatorMsg<Input>>> pull_upstream,
+               Box<Push<OperatorMsg<Output>>> push_downstream,
+               Receiver<FromControl> from_control, Sender<ToControl> to_control,
+               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
-    std::move(chain), std::move(input), std::move(output), sys, dh,
+    std::move(chain),
+    std::move(pull_upstream),
+    std::move(push_downstream),
+    std::move(from_control),
+    std::move(to_control),
+    sys,
+    dh,
   }
     .run_to_completion();
+  TENZIR_INFO("chain runner finished");
+}
+
+/// Run a potentially-open pipeline without external control.
+template <class Output>
+  requires(not std::same_as<Output, void>)
+auto run_open_pipeline(OperatorChain<void, Output> pipeline,
+                       caf::actor_system& sys, diagnostic_handler& dh)
+  -> AsyncGenerator<Output> {
+  auto [push_input, pull_input] = make_op_channel<Output>(10);
 }
 
 template <class T>
@@ -577,6 +610,9 @@ template <class T>
 struct OpChannel {
 public:
   explicit OpChannel(size_t limit) : mutex_{Locked{limit}}, limit_{limit} {
+    // If we want to allow `limit == 0`, then the logic needs to be adapted to
+    // perform a direct transfer if `send` and `receive` are both active.
+    TENZIR_ASSERT(limit_ > 0);
   }
 
   auto send(OperatorMsg<T> x) -> Task<void> {
@@ -648,8 +684,8 @@ private:
   };
 
   // TODO: This can surely be written better?
-  size_t limit_;
   Mutex<Locked> mutex_;
+  size_t limit_;
   Notify notify_send_;
   Notify notify_receive_;
 };
@@ -716,13 +752,73 @@ auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>> {
 template auto make_op_channel<void>(size_t limit)
   -> PushPull<OperatorMsg<void>>;
 
-auto run_pipeline(OperatorChain<void, void> pipeline,
-                  Box<Pull<OperatorMsg<void>>> input,
-                  Box<Push<OperatorMsg<void>>> output, caf::actor_system& sys,
+class RunPipelineSettings {
+public:
+  virtual ~RunPipelineSettings() = default;
+
+  template <class T>
+  auto make_operator_channel() -> PushPull<OperatorMsg<T>> {
+    if constexpr (std::same_as<T, void>) {
+      return make_operator_channel_void();
+    } else if constexpr (std::same_as<T, table_slice>) {
+      return make_operator_channel_events();
+    } else if constexpr (std::same_as<T, chunk_ptr>) {
+      return make_operator_channel_bytes();
+    } else {
+      static_assert(false, "unknown type");
+    }
+  }
+
+  virtual auto make_operator_channel_void() -> PushPull<OperatorMsg<void>> = 0;
+
+  virtual auto make_operator_channel_events()
+    -> PushPull<OperatorMsg<table_slice>>
+    = 0;
+
+  virtual auto make_operator_channel_bytes() -> PushPull<OperatorMsg<chunk_ptr>>
+    = 0;
+};
+
+auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
+  // FIXME
+  auto input = make_op_channel<void>(10).pull;
+  auto output = make_op_channel<void>(10).push;
   try {
-    co_await run_chain(std::move(pipeline), std::move(input), std::move(output),
-                       sys, dh);
+    auto [from_control_sender, from_control_receiver]
+      = make_unbounded_channel<FromControl>();
+    auto [to_control_sender, to_control_receiver]
+      = make_unbounded_channel<ToControl>();
+    auto queue = QueueScope<variant<std::monostate, ToControl>>{};
+    co_await queue.activate([&] -> Task<void> {
+      queue.spawn([&] -> Task<std::monostate> {
+        co_await run_chain(std::move(pipeline), std::move(input),
+                           std::move(output), std::move(from_control_receiver),
+                           std::move(to_control_sender), sys, dh);
+        co_return std::monostate{};
+      });
+      queue.spawn(to_control_receiver.receive());
+      auto is_running = true;
+      while (is_running) {
+        auto next = co_await queue.next();
+        TENZIR_ASSERT(next);
+        match(
+          *next,
+          [&](std::monostate) {
+            // TODO: The pipeline terminated?
+            TENZIR_INFO("run_pipeline got info that chain terminated");
+            is_running = false;
+          },
+          [&](ToControl to_control) {
+            // TODO
+            TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
+            TENZIR_INFO("got shutdown request from outermost subpipeline");
+            from_control_sender.send(Shutdown{});
+            queue.spawn(to_control_receiver.receive());
+          });
+      }
+      queue.cancel();
+    });
   } catch (folly::OperationCancelled) {
     // TODO: ?
     throw;
