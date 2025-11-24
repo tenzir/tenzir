@@ -343,7 +343,7 @@ public:
     for (auto&& input : events) {
       if (input.rows() == 0) {
         co_yield {};
-        co_return;
+        continue;
       }
       if (not writer) {
         const auto schema
@@ -377,16 +377,17 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
+
       co_yield out_buffer->purge();
-      auto close_status = writer->Close();
-      if (! close_status.ok()) {
-        diagnostic::error("{}", close_status.ToStringWithoutContextLines())
-          .note("failed to write metadata and close")
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      co_yield out_buffer->finish();
     }
+    auto close_status = writer->Close();
+    if (! close_status.ok()) {
+      diagnostic::error("{}", close_status.ToStringWithoutContextLines())
+        .note("failed to write metadata and close")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    co_yield out_buffer->finish();
   }
 
   friend auto inspect(auto& f, write_parquet& x) -> bool {
