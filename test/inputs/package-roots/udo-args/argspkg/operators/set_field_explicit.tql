@@ -3,7 +3,7 @@ description: "Set a field using explicit set operator"
 args:
   positional:
     - name: field
-      type: field_path
+      type: field
       description: "The field to set"
     - name: value
       type: string

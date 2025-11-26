@@ -414,7 +414,7 @@ auto ascii_iequals(std::string_view lhs, std::string_view rhs) -> bool {
 }
 
 auto is_field_path_type(const package_operator_parameter& param) -> bool {
-  return param.type && ascii_iequals(*param.type, "field_path");
+  return param.type && ascii_iequals(*param.type, "field");
 }
 
 auto normalize_basic_type_name(std::string_view name) -> std::string {
