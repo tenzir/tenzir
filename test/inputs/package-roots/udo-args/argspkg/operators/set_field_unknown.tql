@@ -1,0 +1,8 @@
+---
+description: "Use an undefined argument"
+args:
+  positional:
+    - name: value
+      description: "The value to set"
+---
+$undefined = $value

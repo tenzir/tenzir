@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {
+  a: 42,
+  b: {
+    aux: "value",
+  },
+}
+argspkg::set_field_unknown b, "test"
