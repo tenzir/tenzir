@@ -169,6 +169,9 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
     [](ast::meta& x) -> std::optional<selector> {
       return selector{x};
     },
+    [&](ast::dollar_var& x) -> std::optional<selector> {
+      return selector{std::move(x)};
+    },
     [&](auto&) -> std::optional<selector> {
       return field_path::try_from(std::move(expr));
     });

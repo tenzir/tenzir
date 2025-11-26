@@ -303,7 +303,7 @@ private:
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
 /// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
-struct selector : variant<meta, field_path> {
+struct selector : variant<meta, field_path, dollar_var> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
