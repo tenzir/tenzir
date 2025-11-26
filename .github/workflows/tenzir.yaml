@@ -81,6 +81,7 @@ jobs:
         with:
           fetch-depth: 2
       - name: Fetch to merge-base
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin main
           base_ref="${GITHUB_BASE_REF:-main}"
@@ -120,12 +121,6 @@ jobs:
           id_sha="${{ github.sha }}"
           release_version="${version}"
           build_version="${version}+g${id_sha:0:10}"
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            before_sha="${{ github.event.before }}"
-          else
-            base_ref="${GITHUB_BASE_REF:-main}"
-            before_sha="$(git merge-base "origin/$base_ref" HEAD)"
-          fi
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
