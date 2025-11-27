@@ -166,6 +166,22 @@ public:
     }
   }
 
+  void visit(ast::type_stmt& x) {
+    diagnostic::error(
+      "type declarations are not yet supported within pipelines")
+      .primary(x.type_location)
+      .hint("put it into a `.tql` file in the schema directory")
+      .emit(diag_);
+    result_ = failure::promise();
+  }
+
+  void visit(ast::type_expr& x) {
+    diagnostic::error("type expressions are not yet supported")
+      .primary(x.keyword)
+      .emit(diag_);
+    result_ = failure::promise();
+  }
+
   template <class T>
   void visit(T& x) {
     enter(x);
