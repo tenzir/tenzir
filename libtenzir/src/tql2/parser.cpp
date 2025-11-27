@@ -294,7 +294,7 @@ public:
       return ast::invocation{std::move(call->fn), std::move(call->args)};
     }
     if (auto* type_expr = try_as<ast::type_expr>(unary_expr)) {
-      auto* ident = try_as<ast::identifier>(type_expr->def);
+      auto* ident = try_as<ast::type_name>(type_expr->def);
       if (not ident) {
         diagnostic::error("expected identifier").primary(*type_expr).throw_();
       }
@@ -302,7 +302,7 @@ public:
       auto def = parse_type_def();
       return ast::type_stmt{
         type_expr->keyword,
-        std::move(*ident),
+        ast::type_name{std::move(*ident)},
         equal,
         std::move(def),
       };
@@ -332,7 +332,7 @@ public:
 
   auto parse_type_def() -> ast::type_def {
     if (auto id = accept(tk::identifier)) {
-      return {id.as_identifier()};
+      return type_name{id.as_identifier()};
     }
     auto start = expect(tk::lbrace).location;
     auto scope = ignore_newlines(true);

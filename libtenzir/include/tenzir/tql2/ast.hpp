@@ -631,6 +631,10 @@ struct invocation {
   entity op;
   std::vector<expression> args;
 
+  auto get_location() const -> location {
+    return op.get_location();
+  }
+
   friend auto inspect(auto& f, invocation& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("args", x.args));
   }
@@ -756,7 +760,18 @@ struct match_stmt {
 struct type_def;
 struct record_def;
 
-using type_kinds = caf::type_list<record_def, identifier>;
+struct type_name {
+  identifier id;
+
+  template <typename Inspector>
+  auto inspect(Inspector& f, type_name& x) -> bool;
+
+  auto get_location() const -> location {
+    return id.get_location();
+  }
+};
+
+using type_kinds = caf::type_list<record_def, type_name>;
 using type_kind = caf::detail::tl_apply_t<type_kinds, variant>;
 
 struct type_def {
@@ -810,7 +825,7 @@ struct record_def {
 
 struct type_stmt {
   location type_location;
-  identifier name;
+  type_name name;
   location equals;
   type_def type;
 
@@ -819,6 +834,26 @@ struct type_stmt {
                               f.field("name", x.name),
                               f.field("equals", x.equals),
                               f.field("type", x.type));
+  }
+};
+
+struct type_expr {
+  type_expr() = default;
+
+  type_expr(location keyword, type_def def)
+    : keyword{keyword}, def{std::move(def)} {
+  }
+
+  location keyword;
+  type_def def;
+
+  friend auto inspect(auto& f, type_expr& x) -> bool {
+    return f.object(x).fields(f.field("keyword", x.keyword),
+                              f.field("def", x.def));
+  }
+
+  auto get_location() const -> struct location {
+    return keyword.combine(def);
   }
 };
 
@@ -869,26 +904,6 @@ struct format_expr {
 
   auto get_location() const -> struct location {
     return location;
-  }
-};
-
-struct type_expr {
-  type_expr() = default;
-
-  type_expr(location keyword, type_def def)
-    : keyword{keyword}, def{std::move(def)} {
-  }
-
-  location keyword;
-  type_def def;
-
-  friend auto inspect(auto& f, type_expr& x) -> bool {
-    return f.object(x).fields(f.field("keyword", x.keyword),
-                              f.field("def", x.def));
-  }
-
-  auto get_location() const -> struct location {
-    return keyword.combine(def);
   }
 };
 
@@ -1136,8 +1151,8 @@ protected:
   }
 
   void enter(ast::type_stmt& x) {
-    TENZIR_TODO();
-    TENZIR_UNUSED(x);
+    go(x.name);
+    go(x.type);
   }
 
   void enter(ast::format_expr& x) {
@@ -1151,6 +1166,10 @@ protected:
           go(r.expr);
         });
     }
+  }
+
+  void enter(ast::type_name& x) {
+    go(x.id);
   }
 
   void enter(ast::type_expr& x) {
@@ -1198,6 +1217,11 @@ private:
     return static_cast<Self&>(*this);
   }
 };
+
+template <typename Inspector>
+auto inspect(Inspector& f, type_name& x) -> bool {
+  return f.apply(x.id);
+}
 
 template <class Inspector>
 auto inspect(Inspector& f, type_def& x) -> bool {

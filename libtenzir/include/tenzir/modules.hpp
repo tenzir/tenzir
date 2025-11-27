@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/module.hpp"
 #include "tenzir/taxonomies.hpp"
 
 namespace tenzir::modules {
@@ -15,7 +16,7 @@ namespace tenzir::modules {
 /// Initialize the global module and concepts registries.
 ///
 /// Must be called at most once.
-void init(symbol_map mod, concepts_map concepts);
+void init(symbol_map mod, symbol_map2 mod2, concepts_map concepts);
 
 /// Returns the schema with the given name, if it exists.
 ///
