@@ -378,7 +378,11 @@ public:
           }
           auto invocation = std::vector<std::string>{
             uv_executable.string(), "pip", "install", "--python",
-            venv_python.string(),   "-vv",
+            venv_python.string(),
+            // FIXME: Debug logging clogs the error pipe and deadlocks uv.
+            // We should use bp::child instead of bp::system and read from the
+            // pipe while the process is running.
+            //"-vv",
           };
           invocation.insert(invocation.end(), std::make_move_iterator(first),
                             std::make_move_iterator(last));
