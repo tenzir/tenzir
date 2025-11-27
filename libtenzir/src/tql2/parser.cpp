@@ -323,6 +323,11 @@ public:
                   : nullptr;
     if (root) {
       auto entity = parse_entity(std::move(root->id));
+      if (entity.path.size() == 1 and entity.path[0].name == "type") {
+        diagnostic::error("expected identifier after `type` declaration")
+          .primary(entity)
+          .throw_();
+      }
       return parse_invocation(std::move(entity));
     }
     diagnostic::error("{}", "expected `=` after selector")
