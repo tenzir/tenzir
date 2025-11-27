@@ -87,6 +87,10 @@ private:
           fields.emplace_back(field.name.name, (*this)(field.type));
         }
         return type{record_type{fields}};
+      },
+      [&](ast::list_def& list) -> type {
+        auto value = (*this)(list.type);
+        return type{list_type{std::move(value)}};
       });
   }
 
