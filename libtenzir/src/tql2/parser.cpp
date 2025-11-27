@@ -506,6 +506,15 @@ public:
   }
 
   auto parse_unary_expression() -> ast::expression {
+    if (peek_identifier("type")
+        and (silent_peek_n(tk::identifier, 1) or silent_peek_n(tk::lbrace, 1)
+             or silent_peek_n(tk::rbrace, 1))) {
+      auto type_kw = expect(tk::identifier).location;
+      return ast::type_expr{
+        type_kw,
+        parse_type_def(),
+      };
+    }
     if (auto op = peek_unary_op()) {
       auto location = advance();
       auto expr = parse_expression(precedence(*op));
@@ -727,14 +736,6 @@ public:
         .throw_();
     }
     auto id = std::move(entity.path.front());
-    if (id.name == "type") {
-      if (peek(tk::identifier) or peek(tk::lbrace)) {
-        return ast::type_expr{
-          id.location,
-          parse_type_def(),
-        };
-      }
-    }
     auto question_mark = accept(tk::question_mark);
     return ast::root_field{
       std::move(id),
@@ -1297,6 +1298,10 @@ public:
     // TODO: Does this count as trying the token?
     tries_.push_back(kind);
     return silent_peek(kind);
+  }
+
+  auto peek_identifier(std::string_view name) -> bool {
+    return peek(tk::identifier) && token_string(next_) == name;
   }
 
   // TODO: Can we get rid of this?
