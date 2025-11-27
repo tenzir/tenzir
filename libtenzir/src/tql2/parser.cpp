@@ -334,6 +334,16 @@ public:
     if (auto id = accept(tk::identifier)) {
       return type_name{id.as_identifier()};
     }
+    if (auto lbracket = accept(tk::lbracket)) {
+      auto scope = ignore_newlines(true);
+      auto type = parse_type_def();
+      auto rbracket = expect(tk::rbracket);
+      return ast::list_def{
+        lbracket.location,
+        std::move(type),
+        rbracket.location,
+      };
+    }
     auto start = expect(tk::lbrace).location;
     auto scope = ignore_newlines(true);
     auto fields = std::vector<ast::record_def::field>{};

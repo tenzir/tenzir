@@ -334,6 +334,9 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
             TRY(match(field.type));
           }
           return {};
+        },
+        [this](const ast::list_def& def) -> caf::expected<void> {
+          return match(def.type);
         });
     }
     symbol_map2& res;

@@ -759,6 +759,7 @@ struct match_stmt {
 
 struct type_def;
 struct record_def;
+struct list_def;
 
 struct type_name {
   identifier id;
@@ -771,7 +772,7 @@ struct type_name {
   }
 };
 
-using type_kinds = caf::type_list<record_def, type_name>;
+using type_kinds = caf::type_list<record_def, type_name, list_def>;
 using type_kind = caf::detail::tl_apply_t<type_kinds, variant>;
 
 struct type_def {
@@ -816,6 +817,21 @@ struct record_def {
     return f.object(x).fields(f.field("begin", x.begin),
                               f.field("fields", x.fields),
                               f.field("end", x.end));
+  }
+
+  auto get_location() const -> location {
+    return begin.combine(end);
+  }
+};
+
+struct list_def {
+  location begin;
+  type_def type;
+  location end;
+
+  friend auto inspect(auto& f, list_def& x) -> bool {
+    return f.object(x).fields(f.field("begin", x.begin),
+                              f.field("type", x.type), f.field("end", x.end));
   }
 
   auto get_location() const -> location {
@@ -1185,6 +1201,10 @@ protected:
       go(f.name);
       go(f.type);
     }
+  }
+
+  void enter(ast::list_def& x) {
+    go(x.type);
   }
 
 private:

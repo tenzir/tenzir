@@ -446,7 +446,11 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         return failure::promise();
       },
       [&](ast::type_stmt& x) -> failure_or<void> {
-        TENZIR_TODO();
+        diagnostic::error(
+          "type declarations are not yet supported within pipelines")
+          .primary(x.type_location)
+          .emit(ctx);
+        return failure::promise();
       });
     TRY(result);
   }
