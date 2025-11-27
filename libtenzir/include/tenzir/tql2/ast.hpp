@@ -753,6 +753,67 @@ struct match_stmt {
   }
 };
 
+struct type_def;
+struct record_def;
+
+using type_kind = variant<record_def, identifier>;
+
+struct type_def {
+  type_def() = default;
+
+  template <class T>
+    requires(detail::tl_contains<type_kind, std::remove_cvref_t<T>>::value)
+  explicit(false) type_def(T&& x)
+    : kind{std::make_unique<type_kind>(std::forward<T>(x))} {
+  }
+
+  ~type_def();
+  type_def(const type_def&);
+  type_def(type_def&&) noexcept;
+  auto operator=(const type_def&) -> type_def&;
+  auto operator=(type_def&&) noexcept -> type_def&;
+
+  std::unique_ptr<type_kind> kind;
+
+  friend auto inspect(auto& f, type_def& x) -> bool;
+};
+
+struct record_def {
+  struct field {
+    identifier name;
+    type_def type;
+
+    friend auto inspect(auto& f, field& x) -> bool {
+      return f.object(x).fields(f.field("name", x.name),
+                                f.field("type", x.type));
+    }
+  };
+
+  location begin;
+  std::vector<field> fields;
+  location end;
+
+  friend auto inspect(auto& f, record_def& x) -> bool {
+    return f.object(x).fields(f.field("begin", x.begin),
+                              f.field("fields", x.fields),
+                              f.field("end", x.end));
+  }
+};
+
+struct type_stmt {
+  location type_location;
+  identifier name;
+  location equals;
+  type_def type;
+
+  friend auto inspect(auto& f, type_stmt& x) -> bool {
+    return f.object(x).fields(f.field("type_location", x.type_location),
+                              f.field("name", x.name),
+                              f.field("equals", x.equals),
+                              f.field("type", x.type));
+  }
+};
+
 struct pipeline_expr {
   pipeline_expr() = default;
 
@@ -1002,6 +1063,11 @@ protected:
     TENZIR_UNUSED(x);
   }
 
+  void enter(ast::type_stmt& x) {
+    TENZIR_UNIMPLEMENTED();
+    TENZIR_UNUSED(x);
+  }
+
   void enter(ast::format_expr& x) {
     for (auto& s : x.segments) {
       tenzir::match(
@@ -1050,6 +1116,20 @@ template <class Inspector>
 auto inspect(Inspector& f, expression& x) -> bool {
   if constexpr (Inspector::is_loading) {
     x.kind = std::make_unique<expression_kind>();
+  } else {
+    if (auto dbg = as_debug_writer(f);
+        dbg && not detail::make_dependent<Inspector>(x.kind)) {
+      return dbg->fmt_value("<invalid>");
+    }
+    TENZIR_ASSERT(x.kind);
+  }
+  return f.apply(*detail::make_dependent<Inspector>(x.kind));
+}
+
+template <class Inspector>
+auto inspect(Inspector& f, type_def& x) -> bool {
+  if constexpr (Inspector::is_loading) {
+    x.kind = std::make_unique<type_kind>();
   } else {
     if (auto dbg = as_debug_writer(f);
         dbg && not detail::make_dependent<Inspector>(x.kind)) {
