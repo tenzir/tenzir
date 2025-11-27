@@ -424,6 +424,7 @@ struct pipeline_expr;
 struct pipeline;
 struct record;
 struct selector_root;
+struct type_expr;
 struct type_stmt;
 struct unary_expr;
 struct underscore;

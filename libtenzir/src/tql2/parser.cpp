@@ -266,7 +266,7 @@ public:
       return parse_invocation(std::move(entity));
     }
     auto unary_expr = parse_unary_expression();
-    if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
+    if (auto* call = try_as<ast::function_call>(unary_expr)) {
       // TODO: We patch a top-level function call to be an operator invocation
       // instead. This could be done differently by slightly rewriting the
       // parser. Because this is not (yet) reflected in the AST, the optional
@@ -293,6 +293,20 @@ public:
       }
       return ast::invocation{std::move(call->fn), std::move(call->args)};
     }
+    if (auto* type_expr = try_as<ast::type_expr>(unary_expr)) {
+      auto* ident = try_as<ast::identifier>(type_expr->def);
+      if (not ident) {
+        diagnostic::error("expected identifier").primary(*type_expr).throw_();
+      }
+      auto equal = expect(tk::equal).location;
+      auto def = parse_type_def();
+      return ast::type_stmt{
+        type_expr->keyword,
+        std::move(*ident),
+        equal,
+        std::move(def),
+      };
+    }
     auto left = to_selector(std::move(unary_expr));
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
@@ -314,6 +328,30 @@ public:
     diagnostic::error("{}", "expected `=` after selector")
       .primary(next_location())
       .throw_();
+  }
+
+  auto parse_type_def() -> ast::type_def {
+    if (auto id = accept(tk::identifier)) {
+      return {id.as_identifier()};
+    }
+    auto start = expect(tk::lbrace).location;
+    auto scope = ignore_newlines(true);
+    auto fields = std::vector<ast::record_def::field>{};
+    while (not peek(tk::rbrace)) {
+      auto name = expect(tk::identifier).as_identifier();
+      expect(tk::colon);
+      auto def = parse_type_def();
+      fields.emplace_back(std::move(name), std::move(def));
+      if (not peek(tk::rbrace)) {
+        expect(tk::comma);
+      }
+    }
+    auto end = expect(tk::rbrace);
+    return ast::record_def{
+      start,
+      std::move(fields),
+      end.location,
+    };
   }
 
   auto parse_invocation(entity op, std::vector<ast::expression> args)
@@ -436,6 +474,8 @@ public:
   auto parse_expression(int min_prec = 0) -> ast::expression {
     return parse_expression(parse_unary_expression(), min_prec);
   }
+
+  // TODO: Future us/ast problem with type expressions
 
   auto parse_entity() -> ast::entity {
     return parse_entity(expect(tk::identifier).as_identifier());
@@ -671,9 +711,18 @@ public:
         .primary(next_location())
         .throw_();
     }
+    auto id = std::move(entity.path.front());
+    if (id.name == "type") {
+      if (peek(tk::identifier) or peek(tk::lbrace)) {
+        return ast::type_expr{
+          id.location,
+          parse_type_def(),
+        };
+      }
+    }
     auto question_mark = accept(tk::question_mark);
     return ast::root_field{
-      std::move(entity.path[0]),
+      std::move(id),
       static_cast<bool>(question_mark),
     };
   }

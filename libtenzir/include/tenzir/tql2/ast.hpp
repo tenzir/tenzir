@@ -192,7 +192,7 @@ using expression_kinds
   = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
                       constant, field_access, index_expr, binary_expr,
                       unary_expr, function_call, lambda_expr, underscore,
-                      unpack, assignment, dollar_var, format_expr>;
+                      unpack, assignment, dollar_var, format_expr, type_expr>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -756,13 +756,14 @@ struct match_stmt {
 struct type_def;
 struct record_def;
 
-using type_kind = variant<record_def, identifier>;
+using type_kinds = caf::type_list<record_def, identifier>;
+using type_kind = caf::detail::tl_apply_t<type_kinds, variant>;
 
 struct type_def {
   type_def() = default;
 
   template <class T>
-    requires(detail::tl_contains<type_kind, std::remove_cvref_t<T>>::value)
+    requires(detail::tl_contains<type_kinds, std::remove_cvref_t<T>>::value)
   explicit(false) type_def(T&& x)
     : kind{std::make_unique<type_kind>(std::forward<T>(x))} {
   }
@@ -775,7 +776,10 @@ struct type_def {
 
   std::unique_ptr<type_kind> kind;
 
-  friend auto inspect(auto& f, type_def& x) -> bool;
+  template <class Inspector>
+  friend auto inspect(Inspector& f, type_def& x) -> bool;
+
+  auto get_location() const -> location;
 };
 
 struct record_def {
@@ -797,6 +801,10 @@ struct record_def {
     return f.object(x).fields(f.field("begin", x.begin),
                               f.field("fields", x.fields),
                               f.field("end", x.end));
+  }
+
+  auto get_location() const -> location {
+    return begin.combine(end);
   }
 };
 
@@ -864,10 +872,34 @@ struct format_expr {
   }
 };
 
+struct type_expr {
+  type_expr() = default;
+
+  type_expr(location keyword, type_def def)
+    : keyword{keyword}, def{std::move(def)} {
+  }
+
+  location keyword;
+  type_def def;
+
+  friend auto inspect(auto& f, type_expr& x) -> bool {
+    return f.object(x).fields(f.field("keyword", x.keyword),
+                              f.field("def", x.def));
+  }
+
+  auto get_location() const -> struct location {
+    return keyword.combine(def);
+  }
+};
+
 inline expression::~expression() = default;
 inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
   -> expression& = default;
+
+inline type_def::~type_def() = default;
+inline type_def::type_def(type_def&&) noexcept = default;
+inline auto type_def::operator=(type_def&&) noexcept -> type_def& = default;
 
 template <class Result, class... Fs>
 auto expression::match(Fs&&... fs) & -> decltype(auto) {
@@ -898,6 +930,46 @@ inline pipeline::pipeline(std::vector<statement> body) : body{std::move(body)} {
 inline pipeline::~pipeline() = default;
 inline pipeline::pipeline(pipeline&&) noexcept = default;
 inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
+
+} // namespace tenzir::ast
+
+namespace tenzir {
+
+template <>
+class variant_traits<ast::expression> {
+public:
+  static constexpr auto count = detail::tl_size<ast::expression_kinds>::value;
+
+  static auto index(const ast::expression& x) -> size_t {
+    TENZIR_ASSERT(x.kind);
+    return x.kind->index();
+  }
+
+  template <size_t I>
+  static auto get(const ast::expression& x) -> decltype(auto) {
+    return *std::get_if<I>(&*x.kind);
+  }
+};
+
+template <>
+class variant_traits<ast::type_def> {
+public:
+  static constexpr auto count = detail::tl_size<ast::type_kinds>::value;
+
+  static auto index(const ast::type_def& x) -> size_t {
+    TENZIR_ASSERT(x.kind);
+    return x.kind->index();
+  }
+
+  template <size_t I>
+  static auto get(const ast::type_def& x) -> decltype(auto) {
+    return *std::get_if<I>(&*x.kind);
+  }
+};
+
+} // namespace tenzir
+
+namespace tenzir::ast {
 
 /// AST node visitor with mutable access.
 ///
@@ -1064,7 +1136,7 @@ protected:
   }
 
   void enter(ast::type_stmt& x) {
-    TENZIR_UNIMPLEMENTED();
+    TENZIR_TODO();
     TENZIR_UNUSED(x);
   }
 
@@ -1081,10 +1153,25 @@ protected:
     }
   }
 
+  void enter(ast::type_expr& x) {
+    go(x.def);
+  }
+
+  void enter(ast::type_def& x) {
+    match(x);
+  }
+
+  void enter(ast::record_def& x) {
+    for (auto& f : x.fields) {
+      go(f.name);
+      go(f.type);
+    }
+  }
+
 private:
   template <class T>
   void match(T& x) {
-    x.match([&](auto& y) {
+    tenzir::match(x, [&](auto& y) {
       self().visit(y);
     });
   }
@@ -1113,20 +1200,6 @@ private:
 };
 
 template <class Inspector>
-auto inspect(Inspector& f, expression& x) -> bool {
-  if constexpr (Inspector::is_loading) {
-    x.kind = std::make_unique<expression_kind>();
-  } else {
-    if (auto dbg = as_debug_writer(f);
-        dbg && not detail::make_dependent<Inspector>(x.kind)) {
-      return dbg->fmt_value("<invalid>");
-    }
-    TENZIR_ASSERT(x.kind);
-  }
-  return f.apply(*detail::make_dependent<Inspector>(x.kind));
-}
-
-template <class Inspector>
 auto inspect(Inspector& f, type_def& x) -> bool {
   if constexpr (Inspector::is_loading) {
     x.kind = std::make_unique<type_kind>();
@@ -1140,25 +1213,23 @@ auto inspect(Inspector& f, type_def& x) -> bool {
   return f.apply(*detail::make_dependent<Inspector>(x.kind));
 }
 
+template <class Inspector>
+auto inspect(Inspector& f, expression& x) -> bool {
+  if constexpr (Inspector::is_loading) {
+    x.kind = std::make_unique<expression_kind>();
+  } else {
+    if (auto dbg = as_debug_writer(f);
+        dbg && not detail::make_dependent<Inspector>(x.kind)) {
+      return dbg->fmt_value("<invalid>");
+    }
+    TENZIR_ASSERT(x.kind);
+  }
+  return f.apply(*detail::make_dependent<Inspector>(x.kind));
+}
+
 } // namespace tenzir::ast
 
 namespace tenzir {
-
-template <>
-class variant_traits<ast::expression> {
-public:
-  static constexpr auto count = detail::tl_size<ast::expression_kinds>::value;
-
-  static auto index(const ast::expression& x) -> size_t {
-    TENZIR_ASSERT(x.kind);
-    return x.kind->index();
-  }
-
-  template <size_t I>
-  static auto get(const ast::expression& x) -> decltype(auto) {
-    return *std::get_if<I>(&*x.kind);
-  }
-};
 
 auto is_true_literal(const ast::expression& y) -> bool;
 
