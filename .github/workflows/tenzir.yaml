@@ -197,6 +197,12 @@ jobs:
           fi
           echo "::notice Enabling pull request jobs"
           echo "::notice sourcing configure helpers"
+          # Set the comparison point for detecting changes in pull requests
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base_ref="${GITHUB_BASE_REF:-main}"
+            before_sha=$(git merge-base "origin/$base_ref" HEAD)
+            export before_sha
+          fi
           source ./.github/workflows/configure_helpers.bash
           # Run all checks if this file changed.
           if is_changed .github/workflows/tenzir.yaml; then
