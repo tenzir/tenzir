@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "tenzir-common"
-version = "5.21.1"
+version = "5.21.2"
 description = "Shared Python utilities for the Tenzir data pipeline"
 requires-python = ">=3.9"
 license = "BSD-3-Clause"
