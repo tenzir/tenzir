@@ -24,8 +24,8 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-  "numpy>=1.24,<3.0",
-  "python-box>=7.3.2,<8.0.0",
+  "numpy>=1.24",
+  "python-box>=7.3.2",
   "tenzir-common>=5.21.1,<5.22.0",
 ]
 

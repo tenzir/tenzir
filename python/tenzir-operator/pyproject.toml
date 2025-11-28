@@ -21,7 +21,7 @@ classifiers = [
 # dependencies to tenzir-operator. In case a dependency relies on compiled code,
 # add it as a dependency to the `tenzir` siblingproject as well instead.
 dependencies = [
-  "python-box>=7.0,<8.0",
+  "python-box>=7.0",
   "tenzir-common>=5.21.1,<5.22.0",
 ]
 
