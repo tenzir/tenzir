@@ -34,7 +34,7 @@
 #  include <mimalloc.h>
 #endif
 
-#if TENZIR_ENABLE_STATIC_EXECUTABLE
+#if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
 
 extern "C" {
 // NOLINTBEGIN(cert-dcl37-c,cert-dcl51-cpp,bugprone-reserved-identifier)
@@ -283,7 +283,7 @@ template <typename Function>
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
 #endif
 auto native_malloc(std::size_t size) noexcept -> void* {
-#if TENZIR_ENABLE_STATIC_EXECUTABLE
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_malloc(size);
 #else
   using function_type = void* (*)(std::size_t);
@@ -298,7 +298,7 @@ auto native_malloc(std::size_t size) noexcept -> void* {
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2)]]
 #endif
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
-#if TENZIR_ENABLE_STATIC_EXECUTABLE
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_calloc(count, size);
 #else
   using function_type = void* (*)(std::size_t, std::size_t);
@@ -317,7 +317,7 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2)]]
 #endif
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
-#if TENZIR_ENABLE_STATIC_EXECUTABLE
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_realloc(ptr, new_size);
 #else
   using function_type = void* (*)(void*, std::size_t);
@@ -328,7 +328,7 @@ auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 
 [[gnu::hot]]
 auto native_free(void* ptr) noexcept -> void {
-#if TENZIR_ENABLE_STATIC_EXECUTABLE
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   __real_free(ptr);
 #else
   using function_type = void (*)(void*);
@@ -345,7 +345,7 @@ auto native_free(void* ptr) noexcept -> void {
 #endif
 auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
-#if TENZIR_ENABLE_STATIC_EXECUTABLE
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_aligned_alloc(alignment, size);
 #else
   using function_type = void* (*)(std::size_t, std::size_t);

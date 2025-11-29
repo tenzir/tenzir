@@ -3,6 +3,7 @@
   stdenv,
   pkgsBuildBuild,
   arrow-cpp,
+  iconv,
   sqlite,
 }:
 arrow-cpp.overrideAttrs (orig: {
@@ -21,7 +22,7 @@ arrow-cpp.overrideAttrs (orig: {
           echo "Apple Inc. version cctools-1010.6"
           exit 0
         fi
-        exec ${lib.getBin pkgsBuildBuild.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
+        exec ${lib.getBin pkgsBuildBuild.darwin.cctools}/bin/libtool $@
       '')
     ];
 
@@ -29,6 +30,8 @@ arrow-cpp.overrideAttrs (orig: {
     orig.buildInputs
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       sqlite
+    ] ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic ) [
+      iconv
     ];
 
   cmakeFlags =
@@ -48,10 +51,10 @@ arrow-cpp.overrideAttrs (orig: {
   doInstallCheck = !stdenv.hostPlatform.isStatic;
 
   env =
-    (orig.env or { })
-    // lib.optionalAttrs stdenv.hostPlatform.isStatic {
-      NIX_LDFLAGS = lib.optionalString stdenv.hostPlatform.isDarwin "-framework SystemConfiguration";
-    };
+    ((orig.env or { })
+    // {
+      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+    });
 
   installCheckPhase =
     let

@@ -1,5 +1,7 @@
 add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
-if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none")
+# Static binaries are not fully static on macOS, they still need to link to the
+# apple system libraries dynamically.
+if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none" AND NOT APPLE)
   target_link_options(
     tenzir
     BEFORE

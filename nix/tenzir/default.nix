@@ -43,6 +43,7 @@ let
       libmaxminddb,
       jemalloc-tenzir,
       mimalloc-tenzir,
+      iconv,
       re2,
       dpkg,
       lz4,
@@ -278,6 +279,7 @@ let
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
             UV_PYTHON="${lib.getBin py3.python}/bin/python3";
+            NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv";
           };
           cmakeFlags =
             [
