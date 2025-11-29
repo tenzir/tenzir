@@ -38,7 +38,8 @@ def upload_packages [
           for alias in $aliases {
             # TODO: Add a suffix to alias paths in case we have more than one
             # artifact.
-            let alias_path = $"($store)/($label)/($name)-($alias).($x | path parse | get extension)"
+            let alias_basename = $x | path basename | str replace --regex '[0-9]+\.[0-9]+\.[0-9]+' $alias
+            let alias_path = $"($store)/($label)/($alias_basename)"
             print $"::notice copying artifact to ($alias_path)"
             rclone -q copyto $dest $alias_path
           }
@@ -66,23 +67,11 @@ def upload_packages [
   }
   if $copy {
     if $git_tag != null {
-      let os = (uname | get kernel-name)
-      if $os == "Linux" {
-        cp ($rpms | get 0) $"($name)-amd64-linux.rpm"
-        print $"::attaching ($name)-amd64-linux.rpm to ($git_tag)"
-        gh release upload $git_tag $"($name)-amd64-linux.rpm" --clobber
-        cp ($debs | get 0) $"($name)-amd64-linux.deb"
-        print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
-        gh release upload $git_tag $"($name)-amd64-linux.deb" --clobber
-        cp ($tgzs | get 0) $"($name)-x86_64-linux.tar.gz"
-        print $"::attaching ($name)-x86_64-linux.tar.gz to ($git_tag)"
-        gh release upload $git_tag $"($name)-x86_64-linux.tar.gz" --clobber
+      let pkgs = (glob $"($pkg_dir)/*")
+      for pkg in $pkgs {
+        print $"::attaching ($pkg) to ($git_tag)"
+        gh release upload $git_tag $pkg --clobber
       }
-      # if $os == "Darwin" {
-      #   cp ($pkgs | get 0) $"($name)-arm64-darwin.pkg"
-      #   print $"::attaching ($name)-arm64-darwin.pkg to ($git_tag)"
-      #   gh release upload $git_tag $"($name)-arm64-darwin.pkg" --clobber
-      # }
     }
   }
 }

@@ -2,6 +2,15 @@
   "editions": [
     {
       "name": "tenzir",
+      "gha-runner-labels": ["macos-15"],
+      "static": true,
+      "upload-package-to-github": true,
+      "package-stores": [
+        "gcs:tenzir-dist-public/packages/main"
+      ]
+    },
+    {
+      "name": "tenzir",
       "gha-runner-labels": ["ubuntu-latest"],
       "static": true,
       "upload-package-to-github": true,
