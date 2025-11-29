@@ -1,16 +1,3 @@
-diff --git a/cmake_modules/BuildUtils.cmake b/cmake_modules/BuildUtils.cmake
-index 88209ac5e..aefff1d5e 100644
---- a/cmake_modules/BuildUtils.cmake
-+++ b/cmake_modules/BuildUtils.cmake
-@@ -310,7 +310,7 @@ function(ADD_ARROW_LIB LIB_NAME)
-   if(BUILD_STATIC)
-     add_library(${LIB_NAME}_static STATIC ${LIB_DEPS})
-     target_compile_features(${LIB_NAME}_static PRIVATE cxx_std_11)
--    set_property(TARGET ${LIB_NAME}_shared PROPERTY CXX_STANDARD_REQUIRED ON)
-+    set_property(TARGET ${LIB_NAME}_static PROPERTY CXX_STANDARD_REQUIRED ON)
-     adbc_configure_target(${LIB_NAME}_static)
-     if(EXTRA_DEPS)
-       add_dependencies(${LIB_NAME}_static ${EXTRA_DEPS})
 diff --git a/cmake_modules/GoUtils.cmake b/cmake_modules/GoUtils.cmake
 index 085d46fef..5c0a043c5 100644
 --- a/cmake_modules/GoUtils.cmake
