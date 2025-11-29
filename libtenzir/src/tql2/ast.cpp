@@ -105,6 +105,30 @@ auto expression::operator=(expression const& other) -> expression& {
   return *this;
 }
 
+type_def::type_def(type_def const& other) {
+  static_assert(
+    detail::tl_empty<
+      detail::tl_filter_not_t<type_kinds, std::is_copy_constructible>>::value);
+  if (other.kind) {
+    kind = std::make_unique<type_kind>(*other.kind);
+  } else {
+    kind = nullptr;
+  }
+}
+
+auto type_def::operator=(type_def const& other) -> type_def& {
+  if (this != &other) {
+    *this = type_def{other};
+  }
+  return *this;
+}
+
+auto type_def::get_location() const -> location {
+  return match(*kind, [](const auto& x) -> location {
+    return x.get_location();
+  });
+}
+
 } // namespace tenzir::ast
 
 namespace tenzir {
