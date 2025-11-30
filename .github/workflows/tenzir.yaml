@@ -426,7 +426,7 @@ jobs:
           scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
   tenzir-nix:
-    name: Nix (${{ matrix.config.name }})
+    name: ${{ matrix.config.name != 'tenzir' && 'Nix (${{ matrix.config.name }})' || 'Nix' }}
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}

@@ -51,9 +51,9 @@ jobs:
             '."editions" = [
               if ${{ inputs.build-de }} then
                 {
-                  "name": "tenzir",
+                  "name": "tenzir-de",
+                  "attribute": "tenzir-de-static",
                   "gha-runner-labels": ["ubuntu-latest"],
-                  "static": true,
                   "upload-package-to-github": ${{ inputs.upload-de-package-to-github }},
                   "package-stores": [
                     "gcs:tenzir-dist-public/packages/manual"
@@ -68,9 +68,9 @@ jobs:
               end,
               if ${{ inputs.build-ce }} then
                 {
-                  "name": "tenzir-ce",
+                  "name": "tenzir",
+                  "attribute": "tenzir-static",
                   "gha-runner-labels": ["ubuntu-latest"],
-                  "static": true,
                   "upload-package-to-github": false,
                   "package-stores": [
                     "gcs:tenzir-dist-private/packages/manual"

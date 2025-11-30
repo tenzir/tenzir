@@ -4,7 +4,7 @@
 #let config = {
 #  editions: list<{
 #    name: string
-#    static: bool
+#    attribute: string
 #    upload-package-to-github: bool
 #    package-stores: list<string>
 #    image-registries: list<string>
@@ -77,7 +77,8 @@ def upload_packages [
 }
 
 def push_images [
-  name: string
+  repo_name: string
+  attribute: string
   image_registries: list<string>
   container_tags # annotation breaks in nu 0.78 : list<string>
 ] {
@@ -86,26 +87,17 @@ def push_images [
     return
   }
   # We always push two images: `tenzir` and `tenzir-node`.
-  let image_name = ($name | str replace "static" "slim")
-  let node_image_name = ($image_name | str replace "tenzir" "tenzir-node")
-  let repo_name = ($name | str replace "-static" "")
   let node_repo_name = ($repo_name | str replace "tenzir" "tenzir-node")
-  let tag_suffix = if ($name | str contains "-static") {"-slim"} else {""}
+  let tag_suffix = if ($attribute | str contains "-static") {"-slim"} else {""}
   for reg in $image_registries {
     for repo in [$repo_name $node_repo_name] {
       for tag in $container_tags {
         let dest = $"docker://($reg)/tenzir/($repo):($tag)($tag_suffix)"
         print $"::notice pushing ($dest)"
-        nix --accept-flake-config run $".#($name).asImage.($repo).copyTo" ...($env.extra_options | split row " ")  -- $dest
+        nix --accept-flake-config run $".#($attribute).asImage.($repo).copyTo" ...($env.extra_options | split row " ")  -- $dest
       }
     }
   }
-}
-
-def attribute_name [
-  edition: record
-] {
-  $"($edition.name)(if $edition.static {"-static"} else {""})"
 }
 
 export def run [
@@ -114,7 +106,7 @@ export def run [
   #<
   #  editions: list<record<
   #    name: string
-  #    static: bool
+  #    attribute: string
   #    upload-package-to-github: bool
   #    package-stores: list<string>
   #    image-registries: list<string>
@@ -132,7 +124,7 @@ export def run [
   } else {
     $env.extra_options = "--override-input isReleaseBuild github:boolean-option/false"
   }
-  let targets = ($cfg.editions | each {|e| $".#(attribute_name $e)" })
+  let targets = ($cfg.editions | each {|e| $".#($e.attribute)" })
   print $"::notice building ($targets)"
   nix --accept-flake-config --print-build-logs build --no-link ...($env.extra_options | split row " ") ...$targets
   # Run remote effects by uploading packages and images.
@@ -140,10 +132,10 @@ export def run [
     let stores = (if ($e.package-stores? == null) {[]} else {$e.package-stores})
     let aliases = (if ($cfg.aliases? == null) {[]} else $cfg.aliases)
     let copy = (if ($e.upload-package-to-github? == null) {false} else {$e.upload-package-to-github})
-    upload_packages (attribute_name $e) $stores $aliases $copy $cfg.git-tag?
+    upload_packages $e.attribute $stores $aliases $copy $cfg.git-tag?
     let registries = (if ($e.image-registries? == null) {[]} else {$e.image-registries})
     let container_tags = (if ($cfg.container-tags? == null) {[]} else {$cfg.container-tags})
-    push_images (attribute_name $e) $registries $container_tags
+    push_images $e.name $e.attribute $registries $container_tags
   }
 }
 
