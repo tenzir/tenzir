@@ -498,7 +498,7 @@ wheels = [
 
 [[package]]
 name = "tenzir"
-version = "5.19.0"
+version = "5.21.2"
 source = { editable = "tenzir" }
 dependencies = [
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -510,36 +510,31 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=1.24,<3.0" },
-    { name = "python-box", specifier = ">=7.3.2,<8.0.0" },
+    { name = "numpy", specifier = ">=1.24" },
+    { name = "python-box", specifier = ">=7.3.2" },
     { name = "tenzir-common", editable = "tenzir-common" },
 ]
 
 [[package]]
 name = "tenzir-common"
-version = "5.19.0"
+version = "5.21.2"
 source = { editable = "tenzir-common" }
 dependencies = [
     { name = "dynaconf" },
-    { name = "pyarrow" },
-]
-
-[package.optional-dependencies]
-pandas = [
     { name = "pandas" },
+    { name = "pyarrow" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "dynaconf", specifier = ">=3.2,<4.0" },
-    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.1.3,<3.0" },
+    { name = "dynaconf", specifier = ">=3.2" },
+    { name = "pandas", specifier = ">=2.1.3" },
     { name = "pyarrow", specifier = ">=11" },
 ]
-provides-extras = ["pandas"]
 
 [[package]]
 name = "tenzir-operator"
-version = "5.19.0"
+version = "5.21.2"
 source = { editable = "tenzir-operator" }
 dependencies = [
     { name = "python-box" },
@@ -548,7 +543,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "python-box", specifier = ">=7.0,<8.0" },
+    { name = "python-box", specifier = ">=7.0" },
     { name = "tenzir-common", editable = "tenzir-common" },
 ]
 
