@@ -250,9 +250,9 @@ jobs:
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker_config="$(jq -c '(.editions[] | .registries) |= [] |
+            docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
-              .registries) |= ["ghcr.io"]' \
+              ."image-registries") |= ["ghcr.io"]' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
