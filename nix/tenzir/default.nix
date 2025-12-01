@@ -15,6 +15,7 @@ let
       boost,
       caf,
       curl,
+      cacert,
       libpcap,
       arrow-cpp,
       arrow-adbc-cpp,
@@ -319,6 +320,9 @@ let
               "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
+            ]
+            ++ lib.optionals (isStatic && stdenv.hostPlatform.isDarwin) [
+              "-DTENZIR_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt"
             ]
             ++ lib.optionals stdenv.cc.isClang [
               "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"

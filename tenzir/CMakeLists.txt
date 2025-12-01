@@ -176,6 +176,17 @@ if (TENZIR_PLUGINS)
   endforeach ()
 endif ()
 
+# -- ca-certificates -----------------------------------------------------------
+
+# On macOS there is no system install ca-certificate bundle by default, so we
+# make it possbile to bundle one (usually curl's).
+if (TENZIR_CACERT)
+  install(
+    FILES "${TENZIR_CACERT}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/ca-bundle.crt"
+    COMPONENT Runtime)
+endif ()
+
 # -- integration tests ---------------------------------------------------------
 
 # Helper function to build tenzir-test command invocations
