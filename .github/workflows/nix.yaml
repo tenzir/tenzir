@@ -63,9 +63,6 @@ jobs:
                    | @text' \
                    <<< '${{ inputs.config }}' >> "${GITHUB_OUTPUT}"
           fi
-          echo "::notice checking tenzir-plugins..."
-          jq -r '@text "upload-to-github=\(.editions | any(."upload-package-to-github"))"' \
-                   <<< '${{ inputs.config }}' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
       - name: Check outputs
         run: |
@@ -120,42 +117,6 @@ jobs:
             nixpkgs#rclone \
             nixpkgs#skopeo \
             -c .github/workflows/nix.nu '${{ inputs.config }}'
-      - name: Upload Tarball to Github
-        if: >-
-          runner.os == 'Linux' &&
-          steps.cfg.outputs.upload-to-github == 'true'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
-        with:
-          name: tarball
-          path: "./packages/tarball/*.tar.gz"
-          if-no-files-found: error
-      - name: Upload RPM Package to Github
-        if: >-
-          runner.os == 'Linux' &&
-          steps.cfg.outputs.upload-to-github == 'true'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
-        with:
-          name: rpm
-          path: "./packages/rpm/*.rpm"
-          if-no-files-found: error
-      - name: Upload Debian Package to Github
-        if: >-
-          runner.os == 'Linux' &&
-          steps.cfg.outputs.upload-to-github == 'true'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
-        with:
-          name: debian
-          path: "./packages/debian/*.deb"
-          if-no-files-found: error
-      - name: Upload macOS Package to Github
-        if: >-
-          runner.os == 'macOS' &&
-          steps.cfg.outputs.upload-to-github == 'true'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
-        with:
-          name: macOS
-          path: "./packages/macOS/*.pkg"
-          if-no-files-found: error
       - name: Test Installation (Ubuntu)
         if: runner.os == 'Linux'
         run: |
