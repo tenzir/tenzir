@@ -39,24 +39,26 @@ public:
     std::optional<located<std::string>> primary = std::nullopt;
     location operator_location;
 
-    auto make_options() const -> ::clickhouse::ClientOptions {
+    auto make_options(operator_control_plane& ctrl) const
+      -> ::clickhouse::ClientOptions {
       auto opts = ::clickhouse::ClientOptions()
                     .SetEndpoints({{std::string{host}, port.inner}})
                     .SetUser(std::string{user})
                     .SetPassword(std::string{password});
-      if (ssl.get_tls().inner) {
+      if (ssl.get_tls(&ctrl).inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
-        tls_opts.SetSkipVerification(ssl.skip_peer_verification.has_value());
+        tls_opts.SetSkipVerification(
+          ssl.get_skip_peer_verification(&ctrl).inner);
         auto commands = std::vector<
           ::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
-        if (ssl.cacert) {
-          commands.emplace_back("ChainCAFile", ssl.cacert->inner);
+        if (auto x = ssl.get_cacert(&ctrl)) {
+          commands.emplace_back("ChainCAFile", x->inner);
         }
-        if (ssl.certfile) {
-          commands.emplace_back("Certificate", ssl.certfile->inner);
+        if (auto x = ssl.get_certfile(&ctrl)) {
+          commands.emplace_back("Certificate", x->inner);
         }
-        if (ssl.keyfile) {
-          commands.emplace_back("PrivateKey", ssl.keyfile->inner);
+        if (auto x = ssl.get_keyfile(&ctrl)) {
+          commands.emplace_back("PrivateKey", x->inner);
         }
         tls_opts.SetConfiguration(commands);
         opts.SetSSLOptions(std::move(tls_opts));
@@ -69,10 +71,11 @@ private:
   struct ctor_token {};
 
 public:
-  explicit easy_client(arguments args, diagnostic_handler& dh, ctor_token)
-    : client_{args.make_options()},
+  explicit easy_client(arguments args, operator_control_plane& ctrl, ctor_token)
+    : client_{args.make_options(ctrl)},
       args_{std::move(args)},
-      dh_{dh, [loc = args.operator_location](diagnostic diag) -> diagnostic {
+      dh_{ctrl.diagnostics(),
+          [loc = args.operator_location](diagnostic diag) -> diagnostic {
             if (not has_location(diag)) {
               diag.annotations.emplace_back(true, std::string{}, loc);
             }
@@ -80,7 +83,7 @@ public:
           }} {
   }
 
-  static auto make(arguments args, diagnostic_handler& dh)
+  static auto make(arguments args, operator_control_plane& ctrl)
     -> std::unique_ptr<easy_client>;
 
   void ping();

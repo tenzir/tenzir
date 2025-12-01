@@ -30,8 +30,7 @@ enum class tls_version {
   v1_3,
 };
 
-auto parse_tls_version_string(std::string_view version)
-  -> caf::expected<tls_version> {
+auto parse_tls_version(std::string_view version) -> caf::expected<tls_version> {
   if (version == "1.0") {
     return tls_version::v1_0;
   }
@@ -50,10 +49,29 @@ auto parse_tls_version_string(std::string_view version)
                                      version));
 }
 
+template <typename T>
+auto query_config(std::string_view name, operator_control_plane* ctrl)
+  -> const T* {
+  if (not ctrl) {
+    return nullptr;
+  }
+  auto& config = ctrl->self().system().config();
+  return caf::get_if<T>(&config.content, name);
+}
+
+template <typename T>
+auto query_config_or_null(std::string_view name, operator_control_plane* ctrl)
+  -> std::optional<located<T>> {
+  if (auto* x = query_config<T>(name, ctrl)) {
+    return located{*x, location::unknown};
+  }
+  return std::nullopt;
+}
+
 } // namespace
 
 auto parse_curl_tls_version(std::string_view version) -> caf::expected<long> {
-  TRY(auto parsed, parse_tls_version_string(version));
+  TRY(auto parsed, parse_tls_version(version));
   switch (parsed) {
     case tls_version::v1_0:
       return CURL_SSLVERSION_TLSv1_0;
@@ -64,11 +82,11 @@ auto parse_curl_tls_version(std::string_view version) -> caf::expected<long> {
     case tls_version::v1_3:
       return CURL_SSLVERSION_TLSv1_3;
   }
-  __builtin_unreachable();
+  TENZIR_UNREACHABLE();
 }
 
 auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int> {
-  TRY(auto parsed, parse_tls_version_string(version));
+  TRY(auto parsed, parse_tls_version(version));
   switch (parsed) {
     case tls_version::v1_0:
       return TLS1_VERSION;
@@ -79,12 +97,12 @@ auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int> {
     case tls_version::v1_3:
       return TLS1_3_VERSION;
   }
-  __builtin_unreachable();
+  TENZIR_UNREACHABLE();
 }
 
 auto parse_caf_tls_version(std::string_view version)
   -> caf::expected<caf::net::ssl::tls> {
-  TRY(auto parsed, parse_tls_version_string(version));
+  TRY(auto parsed, parse_tls_version(version));
   switch (parsed) {
     case tls_version::v1_0:
       return caf::net::ssl::tls::v1_0;
@@ -95,65 +113,68 @@ auto parse_caf_tls_version(std::string_view version)
     case tls_version::v1_3:
       return caf::net::ssl::tls::v1_3;
   }
-  __builtin_unreachable();
+  TENZIR_UNREACHABLE();
 }
 
-ssl_options::ssl_options() = default;
-
 auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
-  parser.named("tls", tls)
-    .named("skip_peer_verification", skip_peer_verification)
-    .named("cacert", cacert)
-    .named("certfile", certfile)
-    .named("keyfile", keyfile)
-    .named("tls_client_ca", tls_client_ca)
-    .named("tls_require_client_cert", tls_require_client_cert);
+  parser.named("tls", tls_)
+    .named("skip_peer_verification", skip_peer_verification_)
+    .named("cacert", cacert_)
+    .named("certfile", certfile_)
+    .named("keyfile", keyfile_)
+    .named("tls_minium_version", tls_min_version_)
+    .named("tls_ciphers", tls_ciphers_);
+  if (is_server_) {
+    parser.named("tls_client_ca", tls_client_ca_)
+      .named("tls_require_client_cert", tls_require_client_cert_);
+  }
 }
 
 auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   const auto check_option
     = [&](auto& thing, std::string_view name) -> failure_or<void> {
-    if (tls and not tls->inner and thing) {
+    if (tls_ and not tls_->inner and thing) {
       diagnostic::error("`{}` requires TLS", name)
-        .primary(tls->source, "TLS is disabled")
+        .primary(tls_->source, "TLS is disabled")
         .primary(*thing)
         .emit(dh);
       return failure::promise();
     }
     return {};
   };
-  TRY(check_option(skip_peer_verification, "skip_peer_verification"));
-  TRY(check_option(cacert, "cacert"));
-  TRY(check_option(certfile, "certfile"));
-  TRY(check_option(keyfile, "keyfile"));
-  TRY(check_option(tls_client_ca, "tls_client_ca"));
-  TRY(check_option(tls_require_client_cert, "tls_require_client_cert"));
-  if (tls and tls->inner and not skip_peer_verification) {
-    if (cacert and not std::filesystem::exists(cacert->inner)) {
+  TRY(check_option(skip_peer_verification_, "skip_peer_verification"));
+  TRY(check_option(cacert_, "cacert"));
+  TRY(check_option(certfile_, "certfile"));
+  TRY(check_option(keyfile_, "keyfile"));
+  TRY(check_option(tls_client_ca_, "tls_client_ca"));
+  TRY(check_option(tls_require_client_cert_, "tls_require_client_cert"));
+  if (get_tls(nullptr).inner
+      and not get_skip_peer_verification(nullptr).inner) {
+    if (cacert_ and not std::filesystem::exists(cacert_->inner)) {
       diagnostic::error("the configured CA certificate bundle does not exist")
-        .note("configured location: `{}`", cacert->inner)
-        .primary(*cacert)
+        .note("configured location: `{}`", cacert_->inner)
+        .primary(*cacert_)
         .emit(dh);
       return failure::promise();
     }
   }
   // Validate mTLS options
-  if (tls_require_client_cert and tls_require_client_cert->inner
-      and not tls_client_ca) {
+  if (tls_require_client_cert_ and tls_require_client_cert_->inner
+      and not tls_client_ca_) {
     diagnostic::error(
       "`tls_require_client_cert` requires `tls_client_ca` to be set")
-      .primary(*tls_require_client_cert)
+      .primary(*tls_require_client_cert_)
       .emit(dh);
     return failure::promise();
   }
-  if (tls_client_ca and not std::filesystem::exists(tls_client_ca->inner)) {
+  if (tls_client_ca_ and not std::filesystem::exists(tls_client_ca_->inner)) {
     diagnostic::error("the configured client CA certificate does not exist")
-      .note("configured location: `{}`", tls_client_ca->inner)
-      .primary(*tls_client_ca)
+      .note("configured location: `{}`", tls_client_ca_->inner)
+      .primary(*tls_client_ca_)
       .emit(dh);
     return failure::promise();
   }
-  if (skip_peer_verification) {
+  if (skip_peer_verification_) {
     diagnostic::warning(
       "skipping peer verification allows man in the middle attacks")
       .hint("consider using a private CA")
@@ -175,24 +196,128 @@ auto ssl_options::validate(std::string_view url, location url_loc,
   const auto url_says_unsafe = url.starts_with("http://")
                                or url.starts_with("ftp://")
                                or url.starts_with("smtp://");
-  if ((url_says_safe and tls and not tls->inner)
-      or (url_says_unsafe and tls and tls->inner)) {
+  if ((url_says_safe and tls_ and not tls_->inner)
+      or (url_says_unsafe and tls_ and tls_->inner)) {
     diagnostic::error("conflicting TLS settings")
       .primary(url_loc, "url {} TLS", url_says_safe ? "enables" : "disables")
-      .primary(tls->source, "option {} TLS",
-               tls->inner ? "enables" : "disables")
+      .primary(tls_->source, "option {} TLS",
+               tls_->inner ? "enables" : "disables")
       .emit(dh);
     return failure::promise();
   }
   return validate(dh);
 }
 
-auto ssl_options::update_url(std::string_view url) const -> std::string {
+auto ssl_options::update_from_config(operator_control_plane& ctrl) -> void {
+  tls_ = get_tls(&ctrl);
+  skip_peer_verification_ = get_skip_peer_verification(&ctrl);
+  cacert_ = get_cacert(&ctrl);
+  certfile_ = get_certfile(&ctrl);
+  keyfile_ = get_keyfile(&ctrl);
+  tls_min_version_ = get_tls_min_version(&ctrl);
+  tls_ciphers_ = get_tls_ciphers(&ctrl);
+  tls_client_ca_ = get_tls_client_ca(&ctrl);
+  tls_require_client_cert_ = get_tls_require_client_cert(&ctrl);
+}
+
+auto ssl_options::get_tls(operator_control_plane* ctrl) const -> located<bool> {
+  if (tls_) {
+    return *tls_;
+  }
+  if (auto* x = query_config<bool>("tenzir.operator-ssl.enable", ctrl)) {
+    return {*x, location::unknown};
+  }
+  return {true, location::unknown};
+}
+
+auto ssl_options::get_skip_peer_verification(operator_control_plane* ctrl) const
+  -> located<bool> {
+  if (skip_peer_verification_) {
+    return *skip_peer_verification_;
+  }
+  if (auto* x = query_config<bool>("tenzir.operator-ssl.skip-peer-verification",
+                                   ctrl)) {
+    return {*x, location::unknown};
+  }
+  return {false, location::unknown};
+}
+
+auto ssl_options::get_cacert(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  if (cacert_) {
+    return cacert_;
+  }
+  if (auto x = query_config<std::string>("tenzir.operator-ssl.cacert", ctrl);
+      x and not x->empty()) {
+    return located{*x, location::unknown};
+  }
+  return query_config_or_null<std::string>("tenzir.cacert", ctrl);
+}
+
+auto ssl_options::get_certfile(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  if (certfile_) {
+    return certfile_;
+  }
+  return query_config_or_null<std::string>("tenzir.operator-ssl.certfile",
+                                           ctrl);
+}
+
+auto ssl_options::get_keyfile(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  if (keyfile_) {
+    return *keyfile_;
+  }
+  return query_config_or_null<std::string>("tenzir.operator-ssl.keyfile", ctrl);
+}
+
+auto ssl_options::get_tls_min_version(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  if (tls_min_version_) {
+    return *keyfile_;
+  }
+  return query_config_or_null<std::string>(
+    "tenzir.operator-ssl.tls-min-version", ctrl);
+}
+
+auto ssl_options::get_tls_ciphers(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  if (tls_ciphers_) {
+    return *keyfile_;
+  }
+  return query_config_or_null<std::string>("tenzir.operator-ssl.tls-ciphers",
+                                           ctrl);
+}
+
+auto ssl_options::get_tls_client_ca(operator_control_plane* ctrl) const
+  -> std::optional<located<std::string>> {
+  if (tls_client_ca_) {
+    return *keyfile_;
+  }
+  return query_config_or_null<std::string>("tenzir.operator-ssl.tls-client-ca",
+                                           ctrl);
+}
+
+auto ssl_options::get_tls_require_client_cert(operator_control_plane* ctrl) const
+  -> located<bool> {
+  if (tls_require_client_cert_) {
+    return *tls_require_client_cert_;
+  }
+  if (auto* x
+      = query_config<bool>("tenzir.operator-ssl.require-client-ca", ctrl)) {
+    return {*x, location::unknown};
+  }
+  return {false, location::unknown};
+}
+
+auto ssl_options::update_url(std::string_view url,
+                             operator_control_plane* ctrl) const
+  -> std::string {
   auto url_copy = std::string{url};
-  if (not uses_curl_http) {
+  if (not uses_curl_http_) {
     return url_copy;
   }
-  auto tls_opt = get_tls();
+  auto tls_opt = get_tls(ctrl);
   if (not tls_opt.inner) {
     return url_copy;
   }
@@ -204,114 +329,55 @@ auto ssl_options::update_url(std::string_view url) const -> std::string {
 }
 
 auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
-                           std::string_view cacert_fallback) const
-  -> caf::error {
-  /// Update URL. This is crucial for CURL based connectors, as curl does not
-  /// respect `CURLOPT_USE_SSL` for HTTP.
-  auto used_url = update_url(url);
+                           operator_control_plane* ctrl) const -> caf::error {
+  auto used_url = update_url(url, ctrl);
   check(easy.set(CURLOPT_URL, used_url));
-  const auto tls_opt = get_tls();
+  const auto tls_opt = get_tls(ctrl);
   if (tls_opt.inner) {
     check(easy.set(CURLOPT_DEFAULT_PROTOCOL, "https"));
   }
-  if (cacert) {
-    if (auto ec = easy.set(CURLOPT_CAINFO, cacert->inner);
+  if (auto x = get_cacert(ctrl)) {
+    if (auto ec = easy.set(CURLOPT_CAINFO, x->inner);
         ec != curl::easy::code::ok) {
       return diagnostic::error("failed to set `cacert`: {}", to_string(ec))
-        .to_error();
-    }
-  } else if (not cacert_fallback.empty()) {
-    if (auto ec = easy.set(CURLOPT_CAINFO, cacert_fallback);
-        ec != curl::easy::code::ok) {
-      return diagnostic::error("failed to set `cacert`: {}", to_string(ec))
+        .primary(*x)
         .to_error();
     }
   }
-  if (certfile) {
-    if (auto ec = easy.set(CURLOPT_SSLCERT, certfile->inner);
+  if (auto x = get_certfile(ctrl)) {
+    if (auto ec = easy.set(CURLOPT_SSLCERT, x->inner);
         ec != curl::easy::code::ok) {
       return diagnostic::error("failed to set `certfile`: {}", to_string(ec))
+        .primary(*x)
         .to_error();
     }
   }
-  if (keyfile) {
-    if (auto ec = easy.set(CURLOPT_SSLKEY, keyfile->inner);
+  if (auto x = get_keyfile(ctrl)) {
+    if (auto ec = easy.set(CURLOPT_SSLKEY, x->inner);
         ec != curl::easy::code::ok) {
       return diagnostic::error("failed to set `keyfile`: {}", to_string(ec))
+        .primary(*x)
         .to_error();
     }
   }
   check(easy.set(CURLOPT_USE_SSL,
                  tls_opt.inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
+  const auto skip_peer_verification = get_skip_peer_verification(ctrl).inner;
   check(easy.set(CURLOPT_SSL_VERIFYPEER, skip_peer_verification ? 0 : 1));
   check(easy.set(CURLOPT_SSL_VERIFYHOST, skip_peer_verification ? 0 : 1));
-  return {};
-}
 
-auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
-                           operator_control_plane& ctrl) const -> caf::error {
-  // Apply base options (including cacert fallback)
-  if (not cacert.has_value()) {
-    TRY(apply_to(easy, url, query_cacert_fallback(ctrl)));
-  } else {
-    TRY(apply_to(easy, url));
-  }
-
-  // Apply TLS min version from config
-  auto min_version_str = query_tls_min_version(ctrl);
-  if (not min_version_str.empty()) {
-    auto curl_version = parse_curl_tls_version(min_version_str);
+  if (auto x = get_tls_min_version(ctrl)) {
+    auto curl_version = parse_curl_tls_version(x->inner);
     if (curl_version) {
       check(easy.set(CURLOPT_SSLVERSION, *curl_version));
     } else {
-      diagnostic::warning(curl_version.error())
-        .note("while applying TLS configuration")
-        .emit(ctrl.diagnostics());
+      return diagnostic::error(curl_version.error()).primary(*x).to_error();
     }
   }
-
-  // Apply cipher list from config
-  auto ciphers = query_tls_ciphers(ctrl);
-  if (not ciphers.empty()) {
-    check(easy.set(CURLOPT_SSL_CIPHER_LIST, ciphers));
-  }
-
-  return {};
-}
-
-auto ssl_options::query_cacert_fallback(operator_control_plane& ctrl)
-  -> std::string {
-  auto& config = ctrl.self().system().config();
-  if (auto* v = caf::get_if<std::string>(&config.content, "tenzir.cacert")) {
-    return *v;
+  if (auto x = get_tls_ciphers(ctrl)) {
+    check(easy.set(CURLOPT_SSL_CIPHER_LIST, x->inner));
   }
   return {};
-}
-
-auto ssl_options::query_tls_min_version(operator_control_plane& ctrl)
-  -> std::string {
-  auto& config = ctrl.self().system().config();
-  if (auto* v
-      = caf::get_if<std::string>(&config.content, "tenzir.tls.min-version")) {
-    return *v;
-  }
-  return {};
-}
-
-auto ssl_options::query_tls_ciphers(operator_control_plane& ctrl)
-  -> std::string {
-  auto& config = ctrl.self().system().config();
-  if (auto* v
-      = caf::get_if<std::string>(&config.content, "tenzir.tls.ciphers")) {
-    return *v;
-  }
-  return {};
-}
-
-auto ssl_options::update_cacert(operator_control_plane& ctrl) -> void {
-  if (not cacert.has_value()) {
-    cacert = located{query_cacert_fallback(ctrl), location::unknown};
-  }
 }
 
 } // namespace tenzir
