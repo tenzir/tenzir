@@ -27,6 +27,14 @@ jobs:
             arch: linux/arm64
             tag: arm64
     steps:
+      - name: Ensure XDG_RUNTIME_DIR
+        if: runner.os == 'Linux'
+        run: |
+          if [[ -z "$XDG_RUNTIME_DIR" ]]; then
+            XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            mkdir -p "$XDG_RUNTIME_DIR"
+            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          fi
       - name: Prevent pushing protected editions to public repos
         run: |
           # Create 'name registry' pairs
@@ -149,6 +157,14 @@ jobs:
     needs:
       - build
     steps:
+      - name: Ensure XDG_RUNTIME_DIR
+        if: runner.os == 'Linux'
+        run: |
+          if [[ -z "$XDG_RUNTIME_DIR" ]]; then
+            XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            mkdir -p "$XDG_RUNTIME_DIR"
+            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          fi
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Nix

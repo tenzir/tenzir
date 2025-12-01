@@ -16,6 +16,14 @@ jobs:
     name: ${{ fromJSON(inputs.config).editions[0].attribute }}-${{ fromJSON(inputs.config).editions[0].platform }}
     runs-on: ${{ fromJSON(inputs.config).editions[0].gha-runner-labels }}
     steps:
+      - name: Ensure XDG_RUNTIME_DIR
+        if: runner.os == 'Linux'
+        run: |
+          if [[ -z "$XDG_RUNTIME_DIR" ]]; then
+            XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            mkdir -p "$XDG_RUNTIME_DIR"
+            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          fi
       - name: Prevent pushing protected editions to public repos
         run: |
           # Create 'name registry' pairs
