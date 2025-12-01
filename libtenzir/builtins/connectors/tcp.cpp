@@ -65,25 +65,22 @@ struct tcp_bridge_actor_traits {
 
 using tcp_bridge_actor = caf::typed_actor<tcp_bridge_actor_traits>;
 
-struct saver_args : ssl_options {
+struct saver_args {
+  ssl_options ssl;
   std::string hostname;
   std::string service;
   bool listen = false;
   located<int64_t> max_retry_count = located{int64_t{10}, location::unknown};
   located<duration> retry_delay
     = located{std::chrono::seconds{30}, location::unknown};
-  std::string tls_min_version;
-  std::string tls_ciphers;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
-    return f.object(x).fields(
-      f.field("ssl_options", static_cast<ssl_options&>(x)),
-      f.field("hostname", x.hostname), f.field("service", x.service),
-      f.field("listen", x.listen),
-      f.field("max_retry_delay", x.max_retry_count),
-      f.field("retry_timeout", x.retry_delay),
-      f.field("tls_min_version", x.tls_min_version),
-      f.field("tls_ciphers", x.tls_ciphers));
+    return f.object(x).fields(f.field("ssl", x.ssl),
+                              f.field("hostname", x.hostname),
+                              f.field("service", x.service),
+                              f.field("listen", x.listen),
+                              f.field("max_retry_delay", x.max_retry_count),
+                              f.field("retry_timeout", x.retry_delay));
   }
 };
 
@@ -164,22 +161,34 @@ private:
     }
 
     // Store connection parameters for retry attempts
-    auto cacert
-      = args_.cacert.has_value() ? args_.cacert->inner : std::string{};
-    auto certfile
-      = args_.certfile.has_value() ? args_.certfile->inner : std::string{};
-    auto keyfile
-      = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
-    connect_params_
-      = {.tls = args_.get_tls().inner,
-         .cacert = cacert,
-         .certfile = certfile,
-         .keyfile = keyfile,
-         .skip_peer_verification = args_.skip_peer_verification.has_value(),
-         .hostname = args_.hostname,
-         .service = args_.service,
-         .tls_min_version = args_.tls_min_version,
-         .tls_ciphers = args_.tls_ciphers};
+    auto cacert = args_.ssl.get_cacert(nullptr)
+                    .value_or(located{std::string{}, location::unknown})
+                    .inner;
+    auto certfile = args_.ssl.get_certfile(nullptr)
+                      .value_or(located{std::string{}, location::unknown})
+                      .inner;
+    auto keyfile = args_.ssl.get_keyfile(nullptr)
+                     .value_or(located{std::string{}, location::unknown})
+                     .inner;
+    auto tls_min_version
+      = args_.ssl.get_tls_min_version(nullptr)
+          .value_or(located{std::string{}, location::unknown})
+          .inner;
+    auto tls_ciphers = args_.ssl.get_tls_ciphers(nullptr)
+                         .value_or(located{std::string{}, location::unknown})
+                         .inner;
+    connect_params_ = {
+      .tls = args_.ssl.get_tls(nullptr).inner,
+      .cacert = std::move(cacert),
+      .certfile = std::move(certfile),
+      .keyfile = std::move(keyfile),
+      .skip_peer_verification
+      = args_.ssl.get_skip_peer_verification(nullptr).inner,
+      .hostname = args_.hostname,
+      .service = args_.service,
+      .tls_min_version = std::move(tls_min_version),
+      .tls_ciphers = std::move(tls_ciphers),
+    };
     current_retry_attempt_ = 0;
     is_connected_ = false;
     connection_rp_ = self_->make_response_promise<void>();
@@ -508,17 +517,29 @@ public:
             return;
           }
           socket_.emplace(std::move(peer));
-          auto certfile = args_.certfile.has_value() ? args_.certfile->inner
-                                                     : std::string{};
-          auto keyfile
-            = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
+          auto cacert = args_.ssl.get_cacert(nullptr)
+                          .value_or(located{std::string{}, location::unknown})
+                          .inner;
+          auto certfile = args_.ssl.get_certfile(nullptr)
+                            .value_or(located{std::string{}, location::unknown})
+                            .inner;
+          auto keyfile = args_.ssl.get_keyfile(nullptr)
+                           .value_or(located{std::string{}, location::unknown})
+                           .inner;
+          auto tls_min_version
+            = args_.ssl.get_tls_min_version(nullptr)
+                .value_or(located{std::string{}, location::unknown})
+                .inner;
+          auto tls_ciphers
+            = args_.ssl.get_tls_ciphers(nullptr)
+                .value_or(located{std::string{}, location::unknown})
+                .inner;
           if (not certfile.empty()) {
             ssl_ctx_.emplace(boost::asio::ssl::context::tls_server);
 
             // Apply TLS min version from config
-            if (not args_.tls_min_version.empty()) {
-              auto min_version
-                = parse_openssl_tls_version(args_.tls_min_version);
+            if (not tls_min_version.empty()) {
+              auto min_version = parse_openssl_tls_version(tls_min_version);
               if (min_version) {
                 auto* native_ctx = ssl_ctx_->native_handle();
                 SSL_CTX_set_min_proto_version(native_ctx, *min_version);
@@ -528,12 +549,11 @@ public:
             }
 
             // Apply cipher list from config
-            if (not args_.tls_ciphers.empty()) {
+            if (not tls_ciphers.empty()) {
               auto* native_ctx = ssl_ctx_->native_handle();
-              if (SSL_CTX_set_cipher_list(native_ctx, args_.tls_ciphers.c_str())
+              if (SSL_CTX_set_cipher_list(native_ctx, tls_ciphers.c_str())
                   == 0) {
-                TENZIR_WARN("failed to set TLS cipher list: '{}'",
-                            args_.tls_ciphers);
+                TENZIR_WARN("failed to set TLS cipher list: '{}'", tls_ciphers);
               }
             }
 
@@ -662,14 +682,20 @@ public:
   auto
   operator()(generator<chunk_ptr> bytes,
              operator_control_plane& ctrl) const -> generator<std::monostate> {
-    if (args_.get_tls().inner and args_.listen) {
+    auto args = args_;
+    args.ssl.update_from_config(ctrl);
+    if (args.ssl.get_tls(nullptr).inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in
       // OpenSSL.
-      TENZIR_ASSERT(args_.keyfile);
-      TENZIR_ASSERT(args_.certfile);
-      auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "er");
+      auto keyfile_name = args.ssl.get_keyfile(nullptr);
+      if (not keyfile_name) {
+        diagnostic::error("no keyfile configured, but TLS enabled")
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      auto* keyfile = std::fopen(keyfile_name->inner.c_str(), "er");
       if (not keyfile) {
         diagnostic::error("failed to open TLS keyfile")
           .hint("{}", detail::describe_errno())
@@ -677,7 +703,13 @@ public:
         co_return;
       }
       std::fclose(keyfile);
-      auto* certfile = std::fopen(args_.certfile->inner.c_str(), "er");
+      auto certfile_name = args.ssl.get_keyfile(nullptr);
+      if (not certfile_name) {
+        diagnostic::error("no certfile configured, but TLS enabled")
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      auto* certfile = std::fopen(certfile_name->inner.c_str(), "er");
       if (not certfile) {
         diagnostic::error("failed to open TLS certfile")
           .hint("{}", detail::describe_errno())
@@ -697,19 +729,10 @@ public:
       },
     });
     // Query TLS config from node configuration
-    auto args_with_config = args_;
-    auto& config = ctrl.self().system().config();
-    if (auto* v
-        = caf::get_if<std::string>(&config.content, "tenzir.tls.min-version")) {
-      args_with_config.tls_min_version = *v;
-    }
-    if (auto* v
-        = caf::get_if<std::string>(&config.content, "tenzir.tls.ciphers")) {
-      args_with_config.tls_ciphers = *v;
-    }
-    auto tcp_bridge = ctrl.self().spawn<caf::linked>(
-      caf::actor_from_state<class tcp_bridge>, std::move(tcp_metrics),
-      ctrl.shared_diagnostics(), args_with_config);
+    auto tcp_bridge
+      = ctrl.self().spawn<caf::linked>(caf::actor_from_state<class tcp_bridge>,
+                                       std::move(tcp_metrics),
+                                       ctrl.shared_diagnostics(), args);
     if (not args_.listen) {
       ctrl.self()
         .mail(atom::connect_v)
@@ -805,18 +828,18 @@ class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};
-    args.tls = located{false, inv.self.get_location()};
+    args.ssl = ssl_options{{.tls_default = false}};
     auto parser = argument_parser2::operator_(name());
     auto uri = located<std::string>{};
     parser.positional("endpoint", uri, "string");
     parser.named_optional("max_retry_count", args.max_retry_count);
     parser.named_optional("retry_delay", args.retry_delay);
-    args.add_tls_options(parser);
+    args.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     if (uri.inner.starts_with("tcp://")) {
       uri.inner.erase(0, 6);
     }
-    TRY(args.validate(uri, ctx));
+    TRY(args.ssl.validate(uri, ctx));
     auto split = detail::split(uri.inner, ":", 1);
     if (split.size() != 2) {
       diagnostic::error("malformed endpoint")

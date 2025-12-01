@@ -142,7 +142,7 @@ struct operator_arguments {
       }
     }
     if (not port) {
-      if (res.ssl.get_tls().inner) {
+      if (res.ssl.get_tls(nullptr).inner) {
         port = located{9440, res.operator_location};
       } else {
         port = located{9000, res.operator_location};
