@@ -216,7 +216,6 @@ jobs:
         env:
           BUILDX_GIT_LABELS: full
         run: |
-          cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
           jq -r '.editions[] | .name as $name | .target as $target | .registries[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
