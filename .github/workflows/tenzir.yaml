@@ -748,7 +748,7 @@ jobs:
           python -m pip install dist/*.whl
           tenzir version
       - name: Remove platform independent duplicate packages
-        if: runner.os == 'macOS'
+        if: ! ( runner.os == 'Linux' && runner.arch == 'X64')
         working-directory: python
         run: |
           rm dist/*.tar.gz
