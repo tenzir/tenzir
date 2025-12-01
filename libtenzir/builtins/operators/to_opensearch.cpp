@@ -397,7 +397,7 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (auto e = args_.ssl.apply_to(req, final_url, ctrl)) {
+    if (auto e = args_.ssl.apply_to(req, final_url, &ctrl)) {
       diagnostic::error(e).emit(dh);
       co_return;
     }
