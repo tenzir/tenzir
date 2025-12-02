@@ -15,6 +15,7 @@ let
       boost,
       caf,
       curl,
+      cacert,
       libpcap,
       arrow-cpp,
       arrow-adbc-cpp,
@@ -43,6 +44,7 @@ let
       libmaxminddb,
       jemalloc-tenzir,
       mimalloc-tenzir,
+      iconv,
       re2,
       dpkg,
       lz4,
@@ -278,6 +280,7 @@ let
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
             UV_PYTHON="${lib.getBin py3.python}/bin/python3";
+            NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv";
           };
           cmakeFlags =
             [
@@ -317,6 +320,9 @@ let
               "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
+            ]
+            ++ lib.optionals (isStatic && stdenv.hostPlatform.isDarwin) [
+              "-DTENZIR_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt"
             ]
             ++ lib.optionals stdenv.cc.isClang [
               "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"

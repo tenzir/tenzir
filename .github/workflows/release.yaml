@@ -133,6 +133,7 @@ jobs:
 
           uv --directory python add --package tenzir --frozen "tenzir-common>=${VERSION_NUMBER},<${UPPER_BOUND}"
           uv --directory python add --package tenzir-operator --frozen "tenzir-common>=${VERSION_NUMBER},<${UPPER_BOUND}"
+          uv --directory python lock
 
           echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
           echo "Updated Python package versions to: ${VERSION_NUMBER}"

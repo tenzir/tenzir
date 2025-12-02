@@ -1,5 +1,7 @@
 add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
-if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none")
+# Static binaries are not fully static on macOS, they still need to link to the
+# apple system libraries dynamically.
+if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none" AND NOT APPLE)
   target_link_options(
     tenzir
     BEFORE
@@ -172,6 +174,17 @@ if (TENZIR_PLUGINS)
     string(PREPEND plugin_binary_dir "${PROJECT_BINARY_DIR}/plugins/")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
   endforeach ()
+endif ()
+
+# -- ca-certificates -----------------------------------------------------------
+
+# On macOS there is no system install ca-certificate bundle by default, so we
+# make it possbile to bundle one (usually curl's).
+if (TENZIR_CACERT)
+  install(
+    FILES "${TENZIR_CACERT}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/ca-bundle.crt"
+    COMPONENT Runtime)
 endif ()
 
 # -- integration tests ---------------------------------------------------------

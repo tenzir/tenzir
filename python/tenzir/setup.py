@@ -63,7 +63,8 @@ def _run_nix() -> list[Path]:
     else:
         args = [
             "nix",
-            "-L",
+            "--accept-flake-config",
+            "--print-build-logs",
             "build",
             "--no-link",
             "--print-out-paths",

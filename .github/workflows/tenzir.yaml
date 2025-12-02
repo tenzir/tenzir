@@ -426,7 +426,7 @@ jobs:
           scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
   tenzir-nix:
-    name: Nix (${{ matrix.config.name }})
+    name: ${{ matrix.config.name != 'tenzir' && 'Nix (${{ matrix.config.name }})' || 'Nix' }}
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
@@ -704,7 +704,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        os: ["ubuntu-latest"]
+        os: ["ubuntu-latest", "macos-15"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -747,6 +747,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install dist/*.whl
           tenzir version
+      - name: Remove platform independent duplicate packages
+        if: runner.os == 'macOS'
+        working-directory: python
+        run: |
+          rm dist/*.tar.gz
+          rm dist/tenzir-common*.whl
       - name: Publish to PyPI
         if: github.event_name == 'release'
         working-directory: python

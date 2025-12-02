@@ -2,8 +2,19 @@
   "editions": [
     {
       "name": "tenzir",
+      "attribute": "tenzir-static",
+      "platform": "arm64-darwin",
+      "gha-runner-labels": ["macos-15"],
+      "upload-package-to-github": true,
+      "package-stores": [
+        "gcs:tenzir-dist-public/packages/main"
+      ]
+    },
+    {
+      "name": "tenzir",
+      "attribute": "tenzir-static",
+      "platform": "x86_64-linux",
       "gha-runner-labels": ["ubuntu-latest"],
-      "static": true,
       "upload-package-to-github": true,
       "package-stores": [
         "gcs:tenzir-dist-public/packages/main"

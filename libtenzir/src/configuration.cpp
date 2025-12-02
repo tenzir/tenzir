@@ -543,10 +543,13 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       // file exists.
       (*config)["tenzir.cacert"] = cacert_path_env;
     } else {
+      const auto bundled_bundle
+        = (detail::install_datadir() / "ca-bundle.crt").string();
       for (const auto& f : {
              X509_get_default_cert_file(),
              "/etc/ssl/certs/ca-certificates.crt",
              "/etc/ssl/certs/ca-bundle.crt",
+             bundled_bundle.c_str(),
            }) {
         std::error_code ec;
         if (std::filesystem::exists(f, ec)) {
