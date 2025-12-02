@@ -14,6 +14,7 @@
 #include <caf/expected.hpp>
 #include <caf/net/fwd.hpp>
 
+#include <mutex>
 #include <optional>
 #include <string_view>
 
@@ -96,15 +97,16 @@ public:
 private:
   bool uses_curl_http_ = false;
   bool is_server_ = false;
-  std::optional<located<bool>> tls_;
-  std::optional<located<bool>> skip_peer_verification_;
-  std::optional<located<std::string>> cacert_;
-  std::optional<located<std::string>> certfile_;
-  std::optional<located<std::string>> keyfile_;
-  std::optional<located<std::string>> tls_min_version_;
-  std::optional<located<std::string>> tls_ciphers_;
-  std::optional<located<std::string>> tls_client_ca_;
-  std::optional<located<bool>> tls_require_client_cert_;
+  mutable std::optional<located<bool>> tls_;
+  mutable std::optional<located<bool>> skip_peer_verification_;
+  mutable std::optional<located<std::string>> cacert_;
+  mutable std::optional<located<std::string>> certfile_;
+  mutable std::optional<located<std::string>> keyfile_;
+  mutable std::optional<located<std::string>> tls_min_version_;
+  mutable std::optional<located<std::string>> tls_ciphers_;
+  mutable std::optional<located<std::string>> tls_client_ca_;
+  mutable std::optional<located<bool>> tls_require_client_cert_;
+  // std::mutex mut_; /// TODO: use this?
 
   friend auto inspect(auto& f, ssl_options& x) -> bool {
     return f.object(x).fields(

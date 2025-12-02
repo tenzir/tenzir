@@ -77,7 +77,7 @@ struct endpoint {
 };
 
 struct load_tcp_args {
-  ssl_options ssl{{.tls_default = false}};
+  ssl_options ssl{{.tls_default = false, .is_server = true}};
   located<struct endpoint> endpoint = {};
   located<uint64_t> parallel = {};
   std::optional<location> connect = {};
@@ -586,28 +586,26 @@ struct connection_manager_state {
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
 
-      // Apply TLS min version from config
-      auto& config = self->system().config();
-      if (auto* v = caf::get_if<std::string>(&config.content,
-                                             "tenzir.tls.min-version")) {
-        auto min_version = parse_openssl_tls_version(*v);
+      if (auto x = args.ssl.get_tls_min_version(nullptr)) {
+        auto min_version = parse_openssl_tls_version(x->inner);
         if (min_version) {
           auto* native_ctx = connection->ssl_ctx->native_handle();
           SSL_CTX_set_min_proto_version(native_ctx, *min_version);
         } else {
           diagnostic::warning(min_version.error())
             .note("while configuring TLS for load_tcp")
+            .primary(*x)
             .emit(diagnostics);
         }
       }
-
       // Apply cipher list from config
-      if (auto* v
-          = caf::get_if<std::string>(&config.content, "tenzir.tls.ciphers")) {
-        if (not v->empty()) {
+      if (auto x = args.ssl.get_tls_min_version(nullptr)) {
+        if (not x->inner.empty()) {
           auto* native_ctx = connection->ssl_ctx->native_handle();
-          if (SSL_CTX_set_cipher_list(native_ctx, v->c_str()) == 0) {
-            diagnostic::warning("failed to set TLS cipher list: '{}'", *v)
+          if (SSL_CTX_set_cipher_list(native_ctx, x->inner.c_str()) == 0) {
+            diagnostic::warning("failed to set TLS cipher list")
+              .primary(*x)
+              .note("list: {}", x->inner)
               .emit(diagnostics);
           }
         }
