@@ -22,6 +22,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
+#include "tenzir/ssl_options.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -620,9 +621,7 @@ struct from_http_args {
   std::optional<location> server;
   std::optional<located<record>> responses;
   std::optional<located<uint64_t>> max_request_size;
-  located<bool> tls{false, location::unknown};
-  std::optional<located<std::string>> keyfile;
-  std::optional<located<std::string>> certfile;
+  ssl_options ssl{{.is_server = true}};
   std::optional<located<std::string>> password;
   std::optional<located<pipeline>> parse;
 
@@ -642,9 +641,7 @@ struct from_http_args {
     p.named("server", server);
     p.named("responses", responses);
     p.named("max_request_size", max_request_size);
-    p.named_optional("tls", tls);
-    p.named("certfile", certfile);
-    p.named("keyfile", keyfile);
+    ssl.add_tls_options(p);
     p.named("password", password);
     p.positional("{ … }", parse);
   }
@@ -663,36 +660,7 @@ struct from_http_args {
         return failure::promise();
       }
     }
-    const auto tls_logic
-      = [&](const std::optional<located<std::string>>& opt,
-            std::string_view name, bool required = false) -> failure_or<void> {
-      if (opt) {
-        if (not tls.inner and tls.source) {
-          diagnostic::warning("`{}` is unused when `tls` is disabled", name)
-            .primary(*opt)
-            .emit(dh);
-          return {};
-        }
-        tls.inner = true;
-        if (opt->inner.empty()) {
-          diagnostic::error("`{}` must not be empty", name)
-            .primary(*opt)
-            .emit(dh);
-          return failure::promise();
-        }
-        return {};
-      }
-      if (tls.inner and required) {
-        diagnostic::error("`{}` must be set when enabling `tls`", name)
-          .primary(tls.source ? tls.source : op)
-          .emit(dh);
-        return failure::promise();
-      }
-      return {};
-    };
-    TRY(tls_logic(certfile, "certfile", server.has_value()));
-    TRY(tls_logic(keyfile, "keyfile", server.has_value()));
-    TRY(tls_logic(password, "password"));
+    TRY(ssl.validate(dh));
     const auto check_option
       = [&](bool is_server, const auto& x) -> failure_or<void> {
       if (x) {
@@ -936,21 +904,28 @@ struct from_http_args {
     return std::pair{hdrs, secrets};
   }
 
-  auto make_ssl_context() const -> caf::expected<ssl::context> {
-    return ssl::context::enable(tls.inner)
+  auto make_ssl_context(operator_control_plane& ctrl) const
+    -> caf::expected<ssl::context> {
+    return ssl::context::enable(ssl.get_tls(&ctrl).inner)
       .and_then(ssl::emplace_context(ssl::tls::any))
       .and_then(ssl::enable_default_verify_paths())
-      .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
-      .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
+      .and_then(ssl::use_private_key_file_if(inner(ssl.get_keyfile(&ctrl)),
+                                             ssl::format::pem))
+      .and_then(ssl::use_certificate_file_if(inner(ssl.get_certfile(&ctrl)),
+                                             ssl::format::pem))
       .and_then(ssl::use_password_if(inner(password)));
   }
 
-  auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
-    return ssl::context::enable(tls.inner or uri.scheme() == "https")
+  auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
+    -> caf::expected<ssl::context> {
+    return ssl::context::enable(ssl.get_tls(&ctrl).inner
+                                or uri.scheme() == "https")
       .and_then(ssl::emplace_context(ssl::tls::any))
       .and_then(ssl::enable_default_verify_paths())
-      .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
-      .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
+      .and_then(ssl::use_private_key_file_if(inner(ssl.get_keyfile(&ctrl)),
+                                             ssl::format::pem))
+      .and_then(ssl::use_certificate_file_if(inner(ssl.get_certfile(&ctrl)),
+                                             ssl::format::pem))
       .and_then(ssl::use_password_if(inner(password)))
       .and_then(ssl::use_sni_hostname(std::move(uri)));
   }
@@ -967,8 +942,7 @@ struct from_http_args {
       f.field("max_retry_count", x.max_retry_count),
       f.field("retry_delay", x.retry_delay), f.field("parse", x.parse),
       f.field("server", x.server), f.field("responses", x.responses),
-      f.field("tls", x.tls), f.field("keyfile", x.keyfile),
-      f.field("certfile", x.certfile), f.field("password", x.password),
+      f.field("ssl", x.ssl), f.field("password", x.password),
       f.field("max_request_size", x.max_request_size));
   }
 };
@@ -1021,7 +995,7 @@ public:
     url.resize(col);
     auto server
       = http::with(ctrl.self().system())
-          .context(args_.make_ssl_context())
+          .context(args_.make_ssl_context(ctrl))
           .accept(port, url)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
           .max_request_size(
@@ -1152,6 +1126,7 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     co_yield {};
+    const auto tls_enabled = args_.ssl.get_tls(&ctrl).inner;
     auto& dh = ctrl.diagnostics();
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
@@ -1181,8 +1156,8 @@ public:
       co_return;
     }
     if (not url.starts_with("http://") and not url.starts_with("https://")) {
-      url.insert(0, args_.tls.inner ? "https://" : "http://");
-    } else if (args_.tls.inner and url.starts_with("http://")) {
+      url.insert(0, tls_enabled ? "https://" : "http://");
+    } else if (tls_enabled and url.starts_with("http://")) {
       url.insert(4, "s");
     }
     const auto handle_response = [&](caf::uri uri) {
@@ -1268,9 +1243,8 @@ public:
                   if (auto url = next_url(args_.paginate, slice, dh)) {
                     if (not url->starts_with("http://")
                         and not url->starts_with("https://")) {
-                      url->insert(0, args_.tls.inner ? "https://" : "http://");
-                    }
-                    if (args_.tls.inner and url->starts_with("http://")) {
+                      url->insert(0, tls_enabled ? "https://" : "http://");
+                    } else if (tls_enabled and url->starts_with("http://")) {
                       url->insert(4, "s");
                     }
                     auto uri = caf::make_uri(*url);
@@ -1325,7 +1299,7 @@ public:
         });
     }
     http::with(ctrl.self().system())
-      .context(args_.make_ssl_context(*uri))
+      .context(args_.make_ssl_context(*uri, ctrl))
       .connect(*uri)
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
@@ -1367,7 +1341,7 @@ public:
           [&, preq = std::move(paginate_queue[i])] mutable {
             auto& [uri, hdrs] = preq;
             http::with(ctrl.self().system())
-              .context(args_.make_ssl_context(uri))
+              .context(args_.make_ssl_context(uri, ctrl))
               .connect(uri)
               .max_response_size(max_response_size)
               .connection_timeout(args_.connection_timeout->inner)
@@ -1516,9 +1490,7 @@ struct http_args {
   std::optional<ast::lambda_expr> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
-  std::optional<tenzir::location> tls;
-  std::optional<located<std::string>> keyfile;
-  std::optional<located<std::string>> certfile;
+  ssl_options ssl{};
   std::optional<located<std::string>> password;
   located<duration> connection_timeout{5s, location::unknown};
   uint64_t max_retry_count{};
@@ -1538,10 +1510,7 @@ struct http_args {
     p.named("paginate", paginate, "record->string");
     p.named_optional("paginate_delay", paginate_delay);
     p.named_optional("parallel", parallel);
-    p.named("tls", tls);
-    p.named("certfile", certfile);
-    p.named("keyfile", keyfile);
-    p.named("password", password);
+    ssl.add_tls_options(p);
     p.named_optional("connection_timeout", connection_timeout);
     p.named_optional("max_retry_count", max_retry_count);
     p.named_optional("retry_delay", retry_delay);
@@ -1654,12 +1623,16 @@ struct http_args {
     return std::nullopt;
   }
 
-  auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
-    return ssl::context::enable(tls.has_value() or uri.scheme() == "https")
+  auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
+    -> caf::expected<ssl::context> {
+    return ssl::context::enable(ssl.get_tls(&ctrl).inner
+                                or uri.scheme() == "https")
       .and_then(ssl::emplace_context(ssl::tls::any))
       .and_then(ssl::enable_default_verify_paths())
-      .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
-      .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
+      .and_then(ssl::use_private_key_file_if(inner(ssl.get_keyfile(&ctrl)),
+                                             ssl::format::pem))
+      .and_then(ssl::use_certificate_file_if(inner(ssl.get_certfile(&ctrl)),
+                                             ssl::format::pem))
       .and_then(ssl::use_password_if(inner(password)))
       .and_then(ssl::use_sni_hostname(std::move(uri)));
   }
@@ -1673,8 +1646,7 @@ struct http_args {
       f.field("metadata_field", x.metadata_field),
       f.field("error_field", x.error_field), f.field("paginate", x.paginate),
       f.field("paginate_delay", x.paginate_delay),
-      f.field("parallel", x.parallel), f.field("tls", x.tls),
-      f.field("keyfile", x.keyfile), f.field("certfile", x.certfile),
+      f.field("parallel", x.parallel), f.field("ssl", x.ssl),
       f.field("password", x.password),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
@@ -1694,6 +1666,7 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     co_yield {};
+    const auto tls_enabled = args_.ssl.get_tls(&ctrl).inner;
     auto& dh = ctrl.diagnostics();
     auto tdh = transforming_diagnostic_handler{
       dh,
@@ -1805,9 +1778,8 @@ public:
                     if (auto url = next_url(args_.paginate, slice, tdh)) {
                       if (not url->starts_with("http://")
                           and not url->starts_with("https://")) {
-                        url->insert(0, args_.tls ? "https://" : "http://");
-                      }
-                      if (args_.tls and url->starts_with("http://")) {
+                        url->insert(0, tls_enabled ? "https://" : "http://");
+                      } else if (tls_enabled and url->starts_with("http://")) {
                         url->insert(4, "s");
                       }
                       auto caf_uri = caf::make_uri(*url);
@@ -1966,9 +1938,9 @@ public:
         }
         if (not url.starts_with("http://")
             and not url.starts_with("https://")) {
-          url.insert(0, args_.tls ? "https://" : "http://");
+          url.insert(0, tls_enabled ? "https://" : "http://");
         }
-        if (args_.tls and url.starts_with("http://")) {
+        if (tls_enabled and url.starts_with("http://")) {
           url.insert(4, "s");
         }
         const auto m = args_.make_method(method);
@@ -1995,7 +1967,7 @@ public:
           headers.emplace("Accept", "application/json, */*;q=0.5");
         }
         http::with(ctrl.self().system())
-          .context(args_.make_ssl_context(*caf_uri))
+          .context(args_.make_ssl_context(*caf_uri, ctrl))
           .connect(*caf_uri)
           .max_response_size(max_response_size)
           .connection_timeout(args_.connection_timeout.inner)
@@ -2045,7 +2017,7 @@ public:
             [&, preq = std::move(pagination_queue[i])] mutable {
               auto& [uri, hdrs] = preq;
               http::with(ctrl.self().system())
-                .context(args_.make_ssl_context(uri))
+                .context(args_.make_ssl_context(uri, ctrl))
                 .connect(uri)
                 .max_response_size(max_response_size)
                 .connection_timeout(args_.connection_timeout.inner)
