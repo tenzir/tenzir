@@ -1,10 +1,6 @@
 name: Nix
 on:
   workflow_call:
-    inputs:
-      config:
-        type: string
-        required: true
 
 permissions:
   contents: write
@@ -13,8 +9,18 @@ permissions:
 
 jobs:
   build:
-    name: ${{ fromJSON(inputs.config).editions[0].attribute }}-${{ fromJSON(inputs.config).editions[0].platform }}
-    runs-on: ${{ fromJSON(inputs.config).editions[0].gha-runner-labels }}
+    name: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - runner: macos-15
+            os: darwin
+            arch: arm64
+          - runner: ubuntu-latest
+            os: linux
+            arch: x86_64
     steps:
       - name: Ensure XDG_RUNTIME_DIR
         if: runner.os == 'Linux'
@@ -24,18 +30,6 @@ jobs:
             mkdir -p "$XDG_RUNTIME_DIR"
             echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
           fi
-      - name: Prevent pushing protected editions to public repos
-        run: |
-          # Create 'name registry' pairs
-          jq -r '.editions[] | select(."image-registries" | length > 0) | .name as $name | ."image-registries"[]? // ."image-registries" | [ $name, . ] | join(" ")' \
-            <<< '${{ inputs.config }}' | while read -r name registry; do
-            # Explicitly allow blessed images.
-            [[ "${name}" =~ ^tenzir$ ]] && continue
-            # Explicitly allow private registries.
-            [[ "${registry}" == "622024652768.dkr.ecr.eu-west-1.amazonaws.com" ]] && continue
-            echo "::error Pushing ${name} to ${registry} is forbidden"
-            exit 1
-          done
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Tailscale
@@ -56,34 +50,54 @@ jobs:
         with:
           nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/0d70460758949966e91d9ecb823b821f963cefbb.tar.gz
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Login to registries
-        if: runner.os == 'Linux'
-        uses: ./.github/actions/registry-login
-        with:
-          config: ${{ inputs.config }}
-          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
-          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Setup Cachix
         uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          # Avoid pushing the full enterprise edition.
           pushFilter: "tenzir-ee"
-      - name: Build Nix Packages
+      - name: Build and Publish
         env:
-          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          DOCKERHUB_USER: ${{ vars.DOCKERHUB_USER }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
         run: |
+          # Determine arguments based on event type
+          args=(--attribute tenzir-static)
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR: push to ghcr.io only with branch slug tag
+            branch_slug=$(echo "${{ github.head_ref }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
+            args+=(--container-tag "$branch_slug" --image-registry ghcr.io)
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            # Push to main: push to all registries
+            args+=(
+              --container-tag main --container-tag "${{ github.sha }}"
+              --image-registry ghcr.io --image-registry docker.io
+              --package-store gcs:tenzir-dist-public/packages/main
+              --package-alias main
+            )
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            # Release: push to all registries with version tags
+            version="${GITHUB_REF#refs/tags/}"
+            args+=(
+              --container-tag latest --container-tag "${{ github.sha }}" --container-tag "$version"
+              --image-registry ghcr.io --image-registry docker.io
+              --package-store gcs:tenzir-dist-public/packages/main
+              --package-alias latest
+              --release-tag "$version"
+            )
+          fi
           nix shell --inputs-from ./. \
             nixpkgs#git \
-            nixpkgs#nushell \
+            nixpkgs#python3 \
+            nixpkgs#python3Packages.boto3 \
             nixpkgs#rclone \
             nixpkgs#skopeo \
-            -c .github/workflows/nix.nu '${{ inputs.config }}'
+            -c python3 .github/workflows/nix-build.py "${args[@]}"
       - name: Test Installation (Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -96,12 +110,9 @@ jobs:
                  --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
                  --cgroupns=host \
                  installer-test-ubuntu
-          # TODO: Ideally we would have some way to block until systemd is fully
-          # booted, but sleeping a bit works almost every time.
           sleep 5
           docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${deb_file}" installer-test-ubuntu bash -c \
                  "/src/tenzir/scripts/install.sh"
-          # Verify that we can access privileged ports.
           args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
           docker exec -e TENZIR_LEGACY=true installer-test-ubuntu \
             /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
@@ -118,8 +129,6 @@ jobs:
                  --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
                  --cgroupns=host \
                  eniocarboni/docker-rockylinux-systemd:9
-          # TODO: Ideally we would have some way to block until systemd is fully
-          # booted, but sleeping a bit works almost every time.
           sleep 5
           docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${rpm_file}" installer-test-rocky bash -c \
                  "/src/tenzir/scripts/install.sh"

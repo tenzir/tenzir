@@ -1,12 +1,6 @@
 name: Tenzir
 on:
   workflow_dispatch:
-    inputs:
-      upload-static-binary-to-github:
-        description: "Build the static binary packages and attach to the Workflow Run"
-        type: boolean
-        required: false
-        default: false
   push:
     branches:
       - main
@@ -70,8 +64,6 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
-      run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
-      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -159,7 +151,6 @@ jobs:
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
-          echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
@@ -167,7 +158,6 @@ jobs:
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir=true" >> $GITHUB_OUTPUT;'
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
@@ -185,9 +175,6 @@ jobs:
           # Run only what is requested for a workflow dispatch.
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "::notice Enabling workflow dispatch jobs"
-            if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
-              echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
-            fi
             exit 0
           fi
           # From here on we should be in a pull request.
@@ -220,11 +207,6 @@ jobs:
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
-          run_if_changed tenzir-nix \
-            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
-            ".github/workflows/nix.nu" \
-            ".github/workflows/nix.yaml" \
-            ".github/workflows/nix-config-base.json"
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-tenzir == 'true'
@@ -257,58 +239,6 @@ jobs:
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
-      - name: Configure Nix
-        id: nix
-        if: steps.configure.outputs.run-tenzir-nix == 'true'
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
-          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            container_tags=('main' "${{ github.sha }}")
-            aliases=('main')
-          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            container_tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
-            aliases=('latest')
-          else
-            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
-            exit 1
-          fi
-          nix_config="$(jq -c \
-            '."container-tags" = $ARGS.positional' \
-            .github/workflows/nix-config-base.json \
-            --args -- "${container_tags[@]}")"
-          nix_config="$(jq -c \
-            '."aliases" = $ARGS.positional' \
-            --args -- "${aliases[@]}" \
-            <<< "${nix_config}")"
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            nix_config="$(jq -c --arg git_tag "${GITHUB_REF#refs/tags/}" \
-              '."git-tag" = $git_tag' \
-              <<< "${nix_config}")"
-          fi
-          # Clear push repos in case we're in a PR, but push the developer
-          # edition to ghcr.
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            nix_config="$(jq -c '(.editions[] | ."package-stores") |= [] |
-              (.editions[] | ."image-registries") |= [] |
-              (.editions[] | select(.name == "tenzir") | ."image-registries") |= ["ghcr.io"]' \
-              <<< "${nix_config}")"
-          fi
-          # Reshape the config so that each edition is in a dedicated config.
-          # This will be supplied as a matrix to the nix job.
-          # We do this because the static editions that we build here are
-          # independent derivations, meaning there is no sharing of build
-          # products.
-          nix_matrix="$(jq -c '.aliases as $aliases | ."container-tags" as $tags | ."git-tag" as $git_tag |
-            .targets = (.editions | map(. as $e |{}|
-              .editions = [$e] |
-              .aliases = $aliases |
-              ."container-tags" = $tags |
-              ."git-tag" = $git_tag)
-            ) | .targets | map({"name": .editions[0].name, "config": .})' \
-            <<< "${nix_config}")"
-          echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
-          echo "::notice nix-matrix = ${nix_matrix}"
 
   policy-enforcement:
     name: Policy Enforcement
@@ -426,17 +356,11 @@ jobs:
           scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
   tenzir-nix:
-    name: ${{ matrix.config.name != 'tenzir' && 'Nix (${{ matrix.config.name }})' || 'Nix' }}
+    name: Nix
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
+    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
     uses: ./.github/workflows/nix.yaml
-    strategy:
-      fail-fast: false
-      matrix:
-        config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
-    with:
-      config: ${{ toJSON(matrix.config.config) }}
     secrets: inherit
 
   tenzir:
