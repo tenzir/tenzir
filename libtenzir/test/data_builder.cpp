@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace tenzir {
 namespace {
@@ -750,6 +751,54 @@ TEST("signature record seeding numeric mismatch") {
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
   CHECK(compare_signatures(expected, sig));
+}
+
+TEST("pruning removes lookup entries at limit") {
+  // Keep in sync with `structured_element_limit` in data_builder.cpp.
+  constexpr auto structured_element_limit = size_t{20'000};
+
+  auto b = data_builder{};
+  auto* r = b.record();
+  std::string tail_key;
+  for (size_t i = 0; i <= structured_element_limit + 3; ++i) {
+    auto key = std::string{"field"} + std::to_string(i);
+    if (i == structured_element_limit) {
+      tail_key = key;
+    }
+    r->field(key)->data(uint64_t{i});
+  }
+
+  CHECK(b.has_elements());
+  // This materialization prunes the builder, shrinking data_ and lookup_.
+  (void)b.materialize();
+  CHECK(not b.has_elements());
+
+  // Reuse the builder; the boundary field must be recreated cleanly.
+  auto* r2 = b.record();
+  r2->field(tail_key)->data(uint64_t{42});
+
+  // Computing the signature must not access stale lookup indices.
+  detail::data_builder::signature_type sig;
+  b.append_signature_to(sig, nullptr);
+
+  detail::data_builder::signature_type expected_sig;
+  expected_sig.insert(expected_sig.end(),
+                      detail::data_builder::record_start_marker);
+  const auto tail_key_bytes = as_bytes(std::string_view{tail_key});
+  expected_sig.insert(expected_sig.end(), tail_key_bytes.begin(),
+                      tail_key_bytes.end());
+  expected_sig.insert(expected_sig.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
+  expected_sig.insert(expected_sig.end(),
+                      detail::data_builder::record_end_marker);
+  CHECK(compare_signatures(expected_sig, sig));
+
+  auto rec = safe_as_record(b.materialize());
+  auto it = rec.find(tail_key);
+  REQUIRE(it != rec.end());
+  CHECK_EQUAL(it->second, uint64_t{42});
+  CHECK(not b.has_elements());
 }
 } // namespace
 } // namespace tenzir
