@@ -445,7 +445,7 @@ multi_series_builder::multi_series_builder(
           .duplicate_keys = settings_.duplicate_keys,
         },
         .schema_only = settings_.schema_only,
-        .parse_schema_fields_only = settings.schema_only,
+        .parse_schema_fields_only = settings_.raw,
       },std::move(parser), &dh,} {
   TENZIR_ASSERT(schema_fn_);
   if (get_policy<policy_default>()) {
@@ -494,13 +494,13 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
   if (uses_merging_builder()) {
     flush_merging_builder();
   } else {
-    make_events_available_where([now, timeout = settings_.timeout,
-                                 target_size = settings_.desired_batch_size](
-                                  const entry_data& e) {
-      return e.builder.length()
-               >= static_cast<int64_t>(target_size) // batch size hit
-             or now - e.flushed >= timeout;         // timeout hit
-    });
+    make_events_available_where(
+      [now, timeout = settings_.timeout,
+       target_size = settings_.desired_batch_size](const entry_data& e) {
+        return e.builder.length()
+                 >= static_cast<int64_t>(target_size) // batch size hit
+               or now - e.flushed >= timeout;         // timeout hit
+      });
     garbage_collect_where(
       [now, timeout = settings_.timeout](const entry_data& e) {
         return now - e.flushed >= 10 * timeout;

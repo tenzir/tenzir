@@ -615,6 +615,7 @@ auto node_object::null(bool overwrite) -> void {
     mark_this_alive();
     value_state_ = value_state_type::has_value;
     data_ = caf::none;
+    return;
   }
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);

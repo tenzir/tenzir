@@ -413,7 +413,7 @@ private:
   /// a new one if necessary
   auto push_back_node() -> node_object*;
 
-  /// @brief writes the list into a series buildersettings
+  /// @brief writes the list into a series builder
   /// @param r The builder_ref to write to.
   /// @param rb The data_builder that is doing the writing.
   /// @param seed The seed to use. This is used both for parsing and
@@ -561,6 +561,9 @@ private:
   };
   /// This is the state of the contained value. See `value_state_type`
   value_state_type value_state_ = value_state_type::null;
+  /// Whether this node was upgraded into a list by the parent record containing
+  /// a repeated field. This is necessary so we dont nest lists in lists for
+  /// keys that show up three or more times.
   bool is_repeat_key_list = false;
 };
 
