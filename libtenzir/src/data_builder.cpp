@@ -573,15 +573,16 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
 }
 
 auto node_record::prune() -> void {
+  constexpr static auto pruned_size = structured_element_limit / 2;
   if (data_.size() > structured_element_limit) {
-    data_.resize(structured_element_limit);
+    data_.resize(pruned_size);
     data_.shrink_to_fit();
-    for (auto it = lookup_.begin(); it != lookup_.end(); ++it) {
-      const auto& [k, idx] = *it;
-      if (idx > structured_element_limit) {
-        it = lookup_.erase(it);
-      }
-    }
+    const auto it
+      = std::remove_if(lookup_.begin(), lookup_.end(), [](const auto& kvp) {
+          return kvp.second > pruned_size;
+        });
+    lookup_.erase(it, lookup_.end());
+    TENZIR_ASSERT(data_.size() == lookup_.size());
   }
 }
 
