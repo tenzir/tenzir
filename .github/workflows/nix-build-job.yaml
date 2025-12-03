@@ -11,6 +11,13 @@ on:
       arch:
         type: string
         required: true
+      attribute:
+        type: string
+        required: true
+    outputs:
+      images:
+        description: 'Space-separated list of pushed image URLs'
+        value: ${{ jobs.build.outputs.images }}
 
 permissions:
   contents: write
@@ -21,6 +28,8 @@ jobs:
   build:
     name: ${{ inputs.attribute }}-${{ inputs.arch }}-${{ inputs.os }}
     runs-on: ${{ inputs.runner }}
+    outputs:
+      images: ${{ steps.build.outputs.images }}
     steps:
       - name: Ensure XDG_RUNTIME_DIR
         # This env variable is used by skopeo / buildah / podman, but isn't
@@ -59,6 +68,7 @@ jobs:
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           pushFilter: "tenzir-ee"
       - name: Build and Publish
+        id: build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
@@ -69,7 +79,7 @@ jobs:
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
         run: |
           # Determine arguments based on event type
-          args=(--attribute tenzir-static)
+          args=(--attribute ${{ inputs.attribute }} --arch ${{ inputs.arch }})
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # PR: push to ghcr.io only with branch slug tag
             branch_slug=$(echo "${{ github.head_ref }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')

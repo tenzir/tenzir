@@ -355,12 +355,43 @@ jobs:
         run: |
           scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
-  tenzir-nix:
+  tenzir-static-aarch64-linux:
     name: Nix
-    needs:
-      - configure
-    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
-    uses: ./.github/workflows/nix.yaml
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: ubicloud-standard-4-arm
+      os: linux
+      arch: aarch64
+      attribute: tenzir-static
+    secrets: inherit
+
+  tenzir-static-x86_64-linux:
+    name: Nix
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: ubuntu-latest
+      os: linux
+      arch: x86_64
+      attribute: tenzir-static
+    secrets: inherit
+
+  tenzir-static-arm64-darwin:
+    name: Nix
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: macos-15
+      os: darwin
+      arch: arm64
+      attribute: tenzir-static
+    secrets: inherit
+
+  push-manifest-slim:
+    name: Push tenzir-slim docker manifest
+    needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
+    uses: ./.github/workflows/push-manifest.yaml
+    with:
+      source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
+      arch-suffixes: "aarch64 x86_64"
     secrets: inherit
 
   tenzir:
@@ -565,7 +596,7 @@ jobs:
     needs:
       - configure
       - docker-tenzir
-      - tenzir-nix
+      - tenzir-static-x86_64-linux
     if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
@@ -619,16 +650,17 @@ jobs:
 
   python-package:
     needs:
-      - python
       - configure
-      - tenzir-nix
+      - tenzir-static-arm64-darwin
+      - tenzir-static-aarch64-linux
+      - tenzir-static-x86_64-linux
     if: ${{ needs.configure.outputs.run-python-package == 'true' }}
     name: Python Package
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         python-version: ["3.12"]
-        os: ["ubuntu-latest", "macos-15"]
+        os: ["macos-15", "ubuntu-latest", "ubicloud-standard-4-arm"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -699,7 +731,9 @@ jobs:
       # TODO: Re-enable this after v4.26 was released.
       # - regression-tests
       - tenzir
-      - tenzir-nix
+      - tenzir-static-arm64-darwin
+      - tenzir-static-aarch64-linux
+      - tenzir-static-x86_64-linux
     if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Pass Branch Protections

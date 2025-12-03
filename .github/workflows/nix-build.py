@@ -175,28 +175,32 @@ def push_images(
     attribute: str,
     image_registries: list[str],
     container_tags: list[str],
+    arch: str | None,
     is_release: bool,
-) -> None:
-    """Push container images to registries."""
+) -> list[str]:
+    """Push container images to registries. Returns list of pushed image URLs."""
+    pushed_images: list[str] = []
 
     if platform.system() != "Linux":
         notice("Skipping image push on non-Linux platform")
-        return
+        return pushed_images
 
     if not image_registries or not container_tags:
         notice("No registries or tags specified, skipping image push")
-        return
+        return pushed_images
 
     release_input = "github:boolean-option/true" if is_release else "github:boolean-option/false"
     tag_suffix = "-slim" if "-static" in attribute else ""
+    arch_suffix = f"-{arch}" if arch else ""
 
     # We always push two images: tenzir and tenzir-node
-    for repo in ["tenzir", "tenzir-node"]:
-        for registry in image_registries:
-            if not registry_login(registry):
-                continue
+    for registry in image_registries:
+        if not registry_login(registry):
+            continue
+        for repo in ["tenzir", "tenzir-node"]:
             for tag in container_tags:
-                dest = f"docker://{registry}/tenzir/{repo}:{tag}{tag_suffix}"
+                full_tag = f"{tag}{tag_suffix}{arch_suffix}"
+                dest = f"docker://{registry}/tenzir/{repo}:{full_tag}"
                 notice(f"Pushing {dest}")
                 _ = run([
                     "nix",
@@ -207,6 +211,9 @@ def push_images(
                     "--",
                     dest,
                 ])
+                pushed_images.append(f"{registry}/tenzir/{repo}:{full_tag}")
+
+    return pushed_images
 
 
 def main() -> int:
@@ -249,9 +256,13 @@ def main() -> int:
     )
     _ = parser.add_argument(
         "--release-tag",
-
         default=None,
         help="Git tag for release (enables release mode and GitHub release upload)",
+    )
+    _ = parser.add_argument(
+        "--arch",
+        required=True,
+        help="Architecture suffix for container tags (e.g., aarch64, x86_64)",
     )
 
     args = parser.parse_args()
@@ -271,13 +282,24 @@ def main() -> int:
         )
 
     # Push images
+    pushed_images: list[str] = []
     if args.image_registries and args.container_tags:
-        push_images(
+        pushed_images = push_images(
             args.attribute,
             args.image_registries,
             args.container_tags,
+            args.arch,
             is_release,
         )
+
+    # Output pushed images for GitHub Actions
+    if pushed_images:
+        images_str = " ".join(pushed_images)
+        notice(f"Pushed images: {images_str}")
+        github_output = os.environ.get("GITHUB_OUTPUT")
+        if github_output:
+            with open(github_output, "a") as f:
+                f.write(f"images={images_str}\n")
 
     return 0
 
