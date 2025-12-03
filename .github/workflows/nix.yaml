@@ -2,137 +2,25 @@ name: Nix
 on:
   workflow_call:
 
-permissions:
-  contents: write
-  id-token: write
-  packages: write
-
 jobs:
-  build:
-    name: ${{ matrix.platform.os }}-${{ matrix.platform.arch }}
-    runs-on: ${{ matrix.platform.runner }}
+  build-linux:
     strategy:
       fail-fast: false
       matrix:
         platform:
-          - runner: macos-15
-            os: darwin
-            arch: arm64
           - runner: ubuntu-latest
-            os: linux
             arch: x86_64
-    steps:
-      - name: Ensure XDG_RUNTIME_DIR
-        if: runner.os == 'Linux'
-        run: |
-          if [[ -z "$XDG_RUNTIME_DIR" ]]; then
-            XDG_RUNTIME_DIR="/run/user/$(id -u)"
-            mkdir -p "$XDG_RUNTIME_DIR"
-            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
-          fi
-      - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-      - name: Tailscale
-        if: false
-        uses: tailscale/github-action@a392da0a182bba0e9613b6243ebd69529b1878aa  # v4.1.0
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          version: 1.66.4
-          args: --ssh
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd  # v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Install Nix
-        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
-        with:
-          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/0d70460758949966e91d9ecb823b821f963cefbb.tar.gz
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Setup Cachix
-        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
-        with:
-          name: tenzir
-          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "tenzir-ee"
-      - name: Build and Publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          GHCR_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          DOCKERHUB_USER: ${{ vars.DOCKERHUB_USER }}
-          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
-          RCLONE_GCS_BUCKET_POLICY_ONLY: True
-        run: |
-          # Determine arguments based on event type
-          args=(--attribute tenzir-static)
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR: push to ghcr.io only with branch slug tag
-            branch_slug=$(echo "${{ github.head_ref }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
-            args+=(--container-tag "$branch_slug" --image-registry ghcr.io)
-          elif [[ "${{ github.event_name }}" == "push" ]]; then
-            # Push to main: push to all registries
-            args+=(
-              --container-tag main --container-tag "${{ github.sha }}"
-              --image-registry ghcr.io --image-registry docker.io
-              --package-store gcs:tenzir-dist-public/packages/main
-              --package-alias main
-            )
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            # Release: push to all registries with version tags
-            version="${GITHUB_REF#refs/tags/}"
-            args+=(
-              --container-tag latest --container-tag "${{ github.sha }}" --container-tag "$version"
-              --image-registry ghcr.io --image-registry docker.io
-              --package-store gcs:tenzir-dist-public/packages/main
-              --package-alias latest
-              --release-tag "$version"
-            )
-          fi
-          nix shell --inputs-from ./. \
-            nixpkgs#git \
-            nixpkgs#python3 \
-            nixpkgs#python3Packages.boto3 \
-            nixpkgs#rclone \
-            nixpkgs#skopeo \
-            -c python3 .github/workflows/nix-build.py "${args[@]}"
-      - name: Test Installation (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          deb_file="$(basename ./packages/debian/tenzir*.deb)"
-          docker build tenzir/services/systemd/test -t installer-test-ubuntu
-          docker run -d --name installer-test-ubuntu \
-                 --privileged \
-                 --volume=.:/src/tenzir:ro \
-                 --volume="./packages/debian":/tmp/packages:ro \
-                 --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
-                 --cgroupns=host \
-                 installer-test-ubuntu
-          sleep 5
-          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${deb_file}" installer-test-ubuntu bash -c \
-                 "/src/tenzir/scripts/install.sh"
-          args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
-          docker exec -e TENZIR_LEGACY=true installer-test-ubuntu \
-            /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
-          docker exec installer-test-ubuntu halt
-      - name: Test Installation (Rocky Linux)
-        if: runner.os == 'Linux'
-        run: |
-          rpm_file="$(basename ./packages/rpm/tenzir*.rpm)"
-          docker build tenzir/services/systemd/test -t installer-test-rocky
-          docker run -d --name installer-test-rocky \
-                 --privileged \
-                 --volume=.:/src/tenzir:ro \
-                 --volume="./packages/rpm":/tmp/packages:ro \
-                 --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
-                 --cgroupns=host \
-                 eniocarboni/docker-rockylinux-systemd:9
-          sleep 5
-          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${rpm_file}" installer-test-rocky bash -c \
-                 "/src/tenzir/scripts/install.sh"
-          args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
-          docker exec -e TENZIR_LEGACY=true installer-test-rocky \
-            /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
-          docker exec installer-test-rocky halt
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: ${{ matrix.platform.runner }}
+      os: linux
+      arch: ${{ matrix.platform.arch }}
+    secrets: inherit
+
+  build-macos:
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: macos-15
+      os: darwin
+      arch: arm64
+    secrets: inherit
