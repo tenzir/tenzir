@@ -13,6 +13,7 @@
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/time.hpp"
 
 namespace tenzir {
 
@@ -66,10 +67,13 @@ struct retention_policy {
       return true;
     }
     if (schema.name() == "tenzir.diagnostic") {
-      return not diagnostics_period or * diagnostics_period > duration::zero();
+      return not diagnostics_period or *diagnostics_period > duration::zero();
+    }
+    if (schema.name() == "tenzir.metrics.operator") {
+      return false;
     }
     if (schema.name().starts_with("tenzir.metrics.")) {
-      return not metrics_period or * metrics_period > duration::zero();
+      return not metrics_period or *metrics_period > duration::zero();
     }
     return true;
   }
@@ -81,8 +85,8 @@ struct retention_policy {
               f.field("diagnostics_period", x.diagnostics_period));
   }
 
-  std::optional<duration> metrics_period = {};
-  std::optional<duration> diagnostics_period = {};
+  std::optional<duration> metrics_period = days{16};
+  std::optional<duration> diagnostics_period = days{30};
 };
 
 } // namespace tenzir
