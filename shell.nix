@@ -29,6 +29,8 @@ pkgs.mkShell (
         (pkgs.python3.withPackages (
           ps: with ps; [
             aiohttp
+            boto3
+            boto3-stubs
             dynaconf
             numpy
             pandas
