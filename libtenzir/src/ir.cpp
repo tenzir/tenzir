@@ -396,8 +396,14 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
+            // TODO: What about diagnostics that end up being emitted here?
+            // We need to provide a context that does not feature any outer
+            // variables.
             auto udo_ctx = ctx.without_env();
             auto definition = op.definition;
+            // By compiling the operator every time from AST to IR, we assign
+            // new let IDs. This is important because if an operator is used
+            // twice, it could have different values for its bindings.
             TRY(auto pipe, std::move(definition).compile(udo_ctx));
             // If it would have arguments, we need to create appropriate
             // bindings now. For constant arguments, we could bind the

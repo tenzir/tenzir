@@ -12,18 +12,12 @@ substitution should occur in the compilation pipeline.
 
 ## Decision
 
-1. **Inline argument parsing in `operator_def::make`.**  
-   Instead of delegating to `argument_parser2`, we parse positional and named
-   arguments directly when instantiating a UDO. This logic enforces required
-   parameters, applies defaults, validates selectors, and builds a substitution
-   map based on the pre-parsed metadata, while keeping diagnostics tied to the
-   invocation site.
-
-2. **Use `ast::substitute_named_expressions` for parameter substitution.**  
-   We added a reusable helper in `ast.cpp` that substitutes `$param` references
-   while respecting `let` shadowing and selectors. UDO compilation now invokes
-   this helper to rewrite the pipeline prior to compilation, removing the need
-   for the bespoke `parameter_substituter`.
+**Inline argument parsing in `operator_def::make`.**  
+Instead of delegating to `argument_parser2`, we parse positional and named
+arguments directly when instantiating a UDO. This logic enforces required
+parameters, applies defaults, validates selectors, and builds a substitution
+map based on the pre-parsed metadata, while keeping diagnostics tied to the
+invocation site.
 
 ## Consequences
 

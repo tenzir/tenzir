@@ -714,10 +714,8 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
   return input_.match(
     [&](const table_slice* input) -> const table_slice& {
       if (not input) {
-        auto st = boost::stacktrace::stacktrace{};
         diagnostic::error("expected a constant expression")
           .primary(location)
-          .note("stacktrace:\n{}", boost::stacktrace::to_string(st))
           .emit(ctx_);
         throw failure::promise();
       }
