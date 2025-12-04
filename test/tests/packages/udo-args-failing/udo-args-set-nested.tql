@@ -8,4 +8,4 @@ from {
     aux: "value",
   },
 }
-argspkg_unsupported::set_field_nested b, "test"
+argspkg_failing::set_field_nested b, "test"

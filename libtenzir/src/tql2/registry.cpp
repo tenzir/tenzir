@@ -63,11 +63,6 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
   return match(
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
-      // FIXME:
-      // - Add a test for an operator that needs a constant (from_file), but
-      // pass in a field path. -> should fail
-      // - Add a test for an operator that needs a field_path (select), but
-      // pass in a constant literal string. -> should fail
       auto op_name = make_operator_name(inv.self);
       auto dh = udo_diagnostic_handler(&ctx.dh(), op_name, udo);
       // If there are no parameters defined, check that no arguments were provided
@@ -299,9 +294,9 @@ void registry::add(const entity_pkg& package, std::string_view name,
 
 void registry::add_module(const entity_pkg& package, std::string_view name,
                           std::unique_ptr<module_def> mod) {
-  TENZIR_ASSERT(! name.empty());
+  TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
-  TENZIR_ASSERT(! path.empty());
+  TENZIR_ASSERT(not path.empty());
   // Find or create parent module.
   auto* parent = &root(package);
   for (auto& segment : path) {
@@ -315,15 +310,15 @@ void registry::add_module(const entity_pkg& package, std::string_view name,
     parent = set.mod.get();
   }
   auto& set = parent->defs[std::string{path.back()}];
-  TENZIR_ASSERT(! set.mod && "module already exists at path");
+  TENZIR_ASSERT(not set.mod && "module already exists at path");
   set.mod = std::move(mod);
 }
 
 void registry::replace_module(const entity_pkg& package, std::string_view name,
                               std::unique_ptr<module_def> mod) {
-  TENZIR_ASSERT(! name.empty());
+  TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
-  TENZIR_ASSERT(! path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto* parent = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
@@ -340,9 +335,9 @@ void registry::replace_module(const entity_pkg& package, std::string_view name,
 }
 
 void registry::remove_module(const entity_pkg& package, std::string_view name) {
-  TENZIR_ASSERT(! name.empty());
+  TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
-  TENZIR_ASSERT(! path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto* parent = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
@@ -360,7 +355,7 @@ void registry::remove_module(const entity_pkg& package, std::string_view name) {
     return;
   }
   it->second.mod.reset();
-  if (! it->second.fn && ! it->second.op && ! it->second.mod) {
+  if (not it->second.fn && ! it->second.op && ! it->second.mod) {
     parent->defs.erase(it);
   }
 }

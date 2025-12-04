@@ -4,4 +4,3 @@ error: argument `value` must be of type `string` (got `uint64`)
             positional:
               name   type    default  description
               value  string  42       Defaults to a number even though a string is required
-  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator

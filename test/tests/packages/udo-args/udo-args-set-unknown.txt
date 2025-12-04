@@ -1,3 +1,11 @@
-error: expected selector
-
-error: failed to parse operator 'set_field_nested' in package 'argspkg_unsupported'
+error: did not expect more positional arguments
+  --> tests/packages/udo-args/udo-args-set-unknown.tql:11:31
+   |
+11 | argspkg::set_field_unknown b, "test"
+   |                               ^^^^^^ 
+   |
+   = usage: argspkg::set_field_unknown value:any
+   = note: parameters:
+             positional:
+               name   type  default  description
+               value  any   -        The value to set

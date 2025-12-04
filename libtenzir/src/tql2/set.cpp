@@ -303,12 +303,8 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
       result.push_back(assign(left, std::move(right), input, dh, position));
       return result;
     },
-    [&](const ast::dollar_var& left) {
-      // TODO: I hope throwing is okay.
-      diagnostic::error("cannot assign to `{}` constant2", left.id.name)
-        .primary(left)
-        .throw_();
-      return std::vector<table_slice>{};
+    [&](const ast::dollar_var&) -> std::vector<table_slice> {
+      TENZIR_UNREACHABLE();
     });
 }
 

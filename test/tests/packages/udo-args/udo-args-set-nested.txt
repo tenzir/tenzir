@@ -1,3 +1,0 @@
-error: expected selector
-
-error: failed to parse operator 'set_field_nested' in package 'argspkg_unsupported'

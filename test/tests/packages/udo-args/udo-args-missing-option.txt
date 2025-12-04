@@ -12,4 +12,3 @@ error: required argument `required_opt` was not provided
             named:
               name          type    default  description
               required_opt  string  -        -
-  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator

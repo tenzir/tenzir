@@ -5,21 +5,19 @@
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 
+#include "tenzir/package.hpp"
+
+#include "tenzir/concept/parseable/core.hpp"
+#include "tenzir/concept/parseable/string/char_class.hpp"
+#include "tenzir/concept/parseable/tenzir/legacy_type.hpp"
+#include "tenzir/data.hpp"
+#include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/string.hpp"
+#include "tenzir/legacy_type.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
-
-#include <tenzir/concept/parseable/core.hpp>
-#include <tenzir/concept/parseable/numeric/bool.hpp>
-#include <tenzir/concept/parseable/string/char_class.hpp>
-#include <tenzir/concept/parseable/tenzir/legacy_type.hpp>
-#include <tenzir/data.hpp>
-#include <tenzir/detail/env.hpp>
-#include <tenzir/detail/load_contents.hpp>
-#include <tenzir/detail/string.hpp>
-#include <tenzir/legacy_type.hpp>
-#include <tenzir/package.hpp>
-#include <tenzir/type.hpp>
+#include "tenzir/type.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -418,13 +416,13 @@ auto is_field_path_type(const package_operator_parameter& param) -> bool {
 }
 
 auto normalize_basic_type_name(std::string_view name) -> std::string {
-  if (ascii_iequals(name, "int") || ascii_iequals(name, "integer")) {
+  if (name == "int") {
     return "int64";
   }
-  if (ascii_iequals(name, "count")) {
+  if (name == "uint") {
     return "uint64";
   }
-  if (ascii_iequals(name, "float") || ascii_iequals(name, "real")) {
+  if (name == "float") {
     return "double";
   }
   return std::string{name};
@@ -433,22 +431,38 @@ auto normalize_basic_type_name(std::string_view name) -> std::string {
 auto parse_parameter_value_type(const package_operator_parameter& param,
                                 std::string_view op_id, diagnostic_handler& dh)
   -> failure_or<std::optional<type>> {
-  if (! param.type || is_field_path_type(param)) {
+  if (not param.type || is_field_path_type(param)) {
     return std::optional<type>{};
   }
+  // Using the legacy parser here because it is convenient.
+  // We will eventually add support for user defined operators in TQL itself and
+  // deprecate this approach, so it does not make sense to refactor the tql2
+  // parser at this time.
   auto normalized = normalize_basic_type_name(*param.type);
   auto legacy = legacy_type{};
   auto f = normalized.begin();
   auto l = normalized.end();
-  if (! parsers::legacy_type(f, l, legacy) || f != l) {
-    diagnostic::error("invalid type '{}' for parameter '{}' in operator '{}'",
+  if (not parsers::legacy_type(f, l, legacy) || f != l) {
+    diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
                       *param.type, param.name, op_id)
       .emit(dh);
     return failure::promise();
   }
-  // TODO: check if this is an alias (has a name) or if it is a legacy record.
-  // Reject in both cases.
-  return std::optional<type>{type::from_legacy_type(std::move(legacy))};
+  if (not legacy.name().empty()) {
+    diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
+                      *param.type, param.name, op_id)
+      .note("type aliases are not allowed")
+      .emit(dh);
+    return failure::promise();
+  }
+  if (is<legacy_record_type>(legacy)) {
+    diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
+                      *param.type, param.name, op_id)
+      .note("record types are not supported")
+      .emit(dh);
+    return failure::promise();
+  }
+  return std::optional<type>{type::from_legacy_type(legacy)};
 }
 
 auto load_tql_with_frontmatter(std::string_view input)
@@ -553,17 +567,6 @@ auto package_operator::parse(const view<record>& data)
       return diagnostic::error("`args` must be a record or list")
         .note("invalid package definition")
         .to_error();
-    }
-    if (key == "options") {
-      if (is<caf::none_t>(value)) {
-        continue;
-      }
-      if (auto assigned = assign_parameters("options", value, result.args.named,
-                                            named_source);
-          ! assigned) {
-        return assigned.error();
-      }
-      continue;
     }
     TENZIR_WARN("ignoring unknown key `{}` in `operator` entry in package "
                 "definition",
@@ -701,7 +704,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
   if (not is_valid_package_identifier(result.id)) {
-    return diagnostic::error("invalid package id '{}' (must match "
+    return diagnostic::error("invalid package id `{}` (must match "
                              "[A-Za-z_][A-Za-z0-9_-]*)",
                              result.id)
       .to_error();
@@ -823,7 +826,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       return failure::promise();
     }
     if (not is_valid_package_identifier(dir_name)) {
-      diagnostic::error("invalid package id '{}' derived from directory name",
+      diagnostic::error("invalid package id `{}` derived from directory name",
                         dir_name)
         .note("directory {}", dir)
         .note("package ids must match [A-Za-z_][A-Za-z0-9_-]*")
@@ -845,8 +848,8 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
     return failure::promise();
   }
   if (parsed_package->id.find('-') != std::string::npos) {
-    diagnostic::warning("package id '{}' contains '-' characters; normalized "
-                        "module name will be '{}'",
+    diagnostic::warning("package id `{}` contains '-' characters; normalized "
+                        "module name will be `{}`",
                         parsed_package->id,
                         package_module_name(parsed_package->id))
       .emit(dh);
@@ -946,7 +949,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
           bool valid = true;
           for (const auto& seg : path) {
             if (not token::parsers::identifier(seg)) {
-              diagnostic::error("invalid operator path segment '{}' (must "
+              diagnostic::error("invalid operator path segment `{}` (must "
                                 "match [A-Za-z_][A-Za-z0-9_]*)",
                                 seg)
                 .note("in operator file {}", operator_file.path())
@@ -955,7 +958,7 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
               break;
             }
           }
-          if (! valid) {
+          if (not valid) {
             had_errors = true;
             continue;
           }
@@ -1170,7 +1173,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
   auto module = std::make_unique<module_def>();
   auto module_name = package_module_name(pkg.id);
   auto& pkg_entry = module->defs[module_name];
-  TENZIR_ASSERT(! pkg_entry.mod);
+  TENZIR_ASSERT(not pkg_entry.mod);
   pkg_entry.mod = std::make_unique<module_def>();
   auto* pkg_mod = pkg_entry.mod.get();
   auto provider = session_provider::make(dh);
@@ -1180,18 +1183,12 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     module_def* current = &root_mod;
     for (const auto& path_segment : path) {
       auto& set = current->defs[std::string{path_segment}];
-      if (! set.mod) {
+      if (not set.mod) {
         set.mod = std::make_unique<module_def>();
       }
       current = set.mod.get();
     }
     return current;
-  };
-  auto to_parameter_kind = [](const package_operator_parameter& param) {
-    if (is_field_path_type(param)) {
-      return user_defined_operator::parameter_kind::field_path;
-    }
-    return user_defined_operator::parameter_kind::expression;
   };
   auto make_constant_expression = [](data value) -> ast::expression {
     auto constant_value = match(
@@ -1224,8 +1221,8 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto expr = make_constant_expression(std::move(*yaml_data));
     if (is_field_path_type(param)) {
       auto copy = ast::expression{expr};
-      if (! ast::field_path::try_from(std::move(copy))) {
-        diagnostic::error("default value for parameter '{}' must be a selector",
+      if (not ast::field_path::try_from(std::move(copy))) {
+        diagnostic::error("default value for parameter `{}` must be a selector",
                           param.name)
           .emit(dh);
         return failure::promise();
@@ -1235,8 +1232,8 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
   };
   for (const auto& [op_name, op] : pkg.operators) {
     auto parsed = parse_pipeline_with_bad_diagnostics(op.definition, ctx);
-    if (! parsed) {
-      diagnostic::error("failed to parse operator '{}' in package '{}'",
+    if (not parsed) {
+      diagnostic::error("failed to parse operator `{}` in package `{}`",
                         fmt::join(op_name, "::"), pkg.id)
         .emit(dh);
       return failure::promise();
@@ -1245,7 +1242,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto op_id = fmt::format("{}", fmt::join(op_name, "::"));
     auto start_idx = size_t{0};
     if (op_name.size() - start_idx < 1) {
-      diagnostic::error("invalid operator path in package '{}': {}", pkg.id,
+      diagnostic::error("invalid operator path in package `{}`: {}", pkg.id,
                         fmt::join(op_name, "::"))
         .emit(dh);
       return failure::promise();
@@ -1262,7 +1259,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     // Convert positional args
     for (const auto& arg : op.args.positional) {
       if (not seen_names.insert(arg.name).second) {
-        diagnostic::error("duplicate parameter '{}' in operator '{}'", arg.name,
+        diagnostic::error("duplicate parameter `{}` in operator `{}`", arg.name,
                           fmt::join(op_name, "::"))
           .emit(dh);
         return failure::promise();
@@ -1271,11 +1268,10 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       if (default_expr.is_error()) {
         return failure::promise();
       }
-      auto required = not default_expr->has_value();
-      if (! required) {
+      if (default_expr->has_value()) {
         seen_optional_positional = true;
       } else if (seen_optional_positional) {
-        diagnostic::error("positional parameter '{}' must not follow an "
+        diagnostic::error("positional parameter `{}` must not follow an "
                           "optional positional parameter",
                           arg.name)
           .emit(dh);
@@ -1289,16 +1285,14 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
         arg.name,
         arg.type.value_or(""),
         arg.description,
-        to_parameter_kind(arg),
         std::move(*default_expr),
-        required,
         std::move(*value_type),
       });
     }
     // Convert named options
     for (const auto& opt : op.args.named) {
       if (not seen_names.insert(opt.name).second) {
-        diagnostic::error("duplicate parameter '{}' in operator '{}'", opt.name,
+        diagnostic::error("duplicate parameter `{}` in operator `{}`", opt.name,
                           fmt::join(op_name, "::"))
           .emit(dh);
         return failure::promise();
@@ -1311,14 +1305,11 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       if (value_type.is_error()) {
         return failure::promise();
       }
-      auto required = not default_expr->has_value();
       udo.named_params.push_back({
         opt.name,
         opt.type.value_or(""),
         opt.description,
-        to_parameter_kind(opt),
         std::move(*default_expr),
-        required,
         std::move(*value_type),
       });
     }

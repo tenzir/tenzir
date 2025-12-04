@@ -1,8 +1,0 @@
----
-error: true
----
-
-from {
-  a: 42,
-}
-argspkg::unknown_arg "test"

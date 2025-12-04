@@ -9,4 +9,3 @@ error: argument `value` must be of type `string` (got `ip`)
             named:
               name   type    default              description
               value  string  typed default value  Must be a string literal
-  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator

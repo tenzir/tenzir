@@ -30,19 +30,18 @@ class named_expression_substituter
   : public ast::visitor<named_expression_substituter> {
 public:
   named_expression_substituter(
-    const std::unordered_map<std::string, ast::expression>& replacements, diagnostic_handler& dh)
+    const std::unordered_map<std::string, ast::expression>& replacements,
+    diagnostic_handler& dh)
     : replacements_{replacements}, dh_{dh} {
   }
 
   void visit(ast::expression& expr) {
-    if (expr.kind) {
-      if (auto* var = try_as<ast::dollar_var>(expr)) {
-        auto name = std::string{var->name_without_dollar()};
-        if (! shadowed_.contains(name)) {
-          if (auto it = replacements_.find(name); it != replacements_.end()) {
-            expr = it->second;
-            return;
-          }
+    if (auto* var = try_as<ast::dollar_var>(expr)) {
+      auto name = std::string{var->name_without_dollar()};
+      if (not shadowed_.contains(name)) {
+        if (auto it = replacements_.find(name); it != replacements_.end()) {
+          expr = it->second;
+          return;
         }
       }
     }
@@ -78,7 +77,7 @@ public:
           selector = std::move(*new_selector);
           return;
         }
-        diagnostic::error("cannot assign to `{}` constant ast", var.id.name)
+        diagnostic::error("cannot assign to `{}` constant value", var.id.name)
           .primary(var)
           .emit(dh_);
         failure_ = failure::promise();
@@ -93,6 +92,10 @@ public:
     enter(x);
   }
 
+  auto has_failed() const -> bool {
+    return failure_.is_error();
+  }
+
 private:
   const std::unordered_map<std::string, ast::expression>& replacements_;
   std::unordered_set<std::string> shadowed_;
@@ -102,7 +105,6 @@ private:
 
 } // namespace
 
-// TODO: return failure_or<pipeline>
 auto substitute_named_expressions(
   pipeline pipe,
   const std::unordered_map<std::string, ast::expression>& replacements,
@@ -112,6 +114,9 @@ auto substitute_named_expressions(
   }
   auto substituter = named_expression_substituter{replacements, dh};
   substituter.visit(pipe);
+  if (substituter.has_failed()) {
+    return failure::promise();
+  }
   return pipe;
 }
 

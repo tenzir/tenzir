@@ -14,4 +14,3 @@ error: expected additional positional argument `age`
               name     type    default  description
               prefix   string  Hello    Greeting prefix
               excited  bool    false    Use exclamation mark
-  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator

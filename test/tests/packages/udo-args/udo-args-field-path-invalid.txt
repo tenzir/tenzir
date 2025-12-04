@@ -10,4 +10,3 @@ error: expected a selector
               name   type   default  description
               field  field  -        The field to set
               value  any    -        The value to set
-  = docs: https://docs.tenzir.com/reference/operators/user_defined_operator

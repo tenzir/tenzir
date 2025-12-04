@@ -1,16 +1,16 @@
 ---
-title: "User-defined operators support arguments and options"
+title: "Argument support for User-defined operators"
 type: feature
 authors: tobim
 ---
 
-User-defined operators in packages can now declare arguments and options in
-their YAML frontmatter, enabling parameterized operator definitions with the
-same calling convention as built-in operators.
+User-defined operators in packages can now declare arguments in their YAML
+frontmatter, enabling parameterized operator definitions with the same calling
+convention as built-in operators.
 
-Arguments are positional parameters, while options are named parameters with
-optional default values. Both support constant values and runtime expressions
-like field paths.
+Arguments can be positional or named. Both support optional default values and
+can be called with literals, constant expressions, or dynamically evaluated
+runtime expressions such as fields.
 
 For example, create a reusable operator to set fields dynamically:
 
@@ -20,7 +20,7 @@ description: "Set a field to a value"
 args:
   positional:
     - name: field
-      type: field_path
+      type: field
     - name: value
       type: string
   named:
@@ -45,14 +45,10 @@ mypkg::set_field this.name, "Alice", prefix="User: "
 }
 ```
 
-Typed parameters now behave like lightweight contracts: the `type` key is
-optional, but whenever it is provided the argument must be a constant expression
-that can be evaluated at definition time. If the constant does not match the
-declared type, the invocation fails with a diagnostic that points to the
-mismatched argument. Field-path arguments (declared via `type: field_path`)
-continue to accept selectors and cannot declare defaults.
-
-Lastly, both the classic execution path and the `exec_with_ir` path share the
-same argument parsing and type checking. User-defined operators therefore
-produce identical results and diagnostics regardless of how the pipeline is
-executed.
+Parameters can be typed with a type name passed in the namesake field. In case
+the passed in expression can be evaluated at instantiation time it is checked
+against the type and a diagnostic is returned if it does not match. In case a
+type check is not possible because the expression contains references to
+run-time data, the type check is omitted, and potential errors will be flagged at
+runtime. Field-path arguments (declared via `type: field`) accept selectors and
+cannot declare defaults.

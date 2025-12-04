@@ -79,12 +79,12 @@ public:
                         "::"));
       const auto& ident = path.at(idx);
       auto module_entities = std::vector<std::string>{};
-      if (! prefix.empty()) {
+      if (not prefix.empty()) {
         auto prefix_with_sep = fmt::format("{}::", prefix);
         for (const auto& candidate : available) {
           if (candidate.starts_with(prefix_with_sep)) {
             auto remainder = candidate.substr(prefix_with_sep.size());
-            if (! remainder.empty()) {
+            if (not remainder.empty()) {
               module_entities.push_back(std::string{remainder});
             }
           }
@@ -98,7 +98,7 @@ public:
         builder = std::move(builder).note("no {} found", type_plural);
       }
       auto suggestion = std::optional<std::string>{};
-      if (! module_entities.empty()) {
+      if (not module_entities.empty()) {
         auto target = path.at(idx).name;
         auto best
           = std::ranges::max(module_entities, {}, [&](const auto& cand) {
@@ -111,7 +111,7 @@ public:
         builder
           = std::move(builder).note("available {} in `{}`: {}", type_plural,
                                     prefix, fmt::join(module_entities, ", "));
-      } else if (! available.empty()) {
+      } else if (not available.empty()) {
         auto best = std::ranges::max(available, {}, [&](const auto& cand) {
           return detail::calculate_similarity(full, cand);
         });

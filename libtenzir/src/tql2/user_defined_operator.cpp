@@ -21,13 +21,7 @@ auto parameter_type_label(const user_defined_operator::parameter& param)
   if (not param.type_hint.empty()) {
     return param.type_hint;
   }
-  switch (param.kind) {
-    case user_defined_operator::parameter_kind::expression:
-      return "any";
-    case user_defined_operator::parameter_kind::field_path:
-      return "field";
-  }
-  TENZIR_UNREACHABLE();
+  return "any";
 }
 
 auto parameter_default_string(const ast::expression& expr)
@@ -46,7 +40,7 @@ auto make_usage_string(std::string_view op_name,
   auto usage = std::string{op_name};
   auto has_parameters
     = ! udo.positional_params.empty() || ! udo.named_params.empty();
-  if (! has_parameters) {
+  if (not has_parameters) {
     return usage;
   }
   usage += ' ';
@@ -65,26 +59,26 @@ auto make_usage_string(std::string_view op_name,
     if (param.name.starts_with('_')) {
       return;
     }
-    if (param.required && in_brackets) {
+    if (not param.default_value.has_value() && in_brackets) {
       usage += ']';
       in_brackets = false;
     }
     if (std::exchange(has_previous, true)) {
       usage += ", ";
     }
-    if (! param.required && ! in_brackets) {
+    if (param.default_value.has_value() && ! in_brackets) {
       usage += '[';
       in_brackets = true;
     }
     usage += fmt::format("{}={}", param.name, parameter_type_label(param));
   };
   for (const auto& param : udo.named_params) {
-    if (param.required) {
+    if (not param.default_value.has_value()) {
       append_named(param);
     }
   }
   for (const auto& param : udo.named_params) {
-    if (! param.required) {
+    if (param.default_value.has_value()) {
       append_named(param);
     }
   }
@@ -186,17 +180,10 @@ auto make_parameter_note(const user_defined_operator& udo)
                          default_width);
   note += format_section("named", named_rows, name_width, type_width,
                          default_width);
-  if (! note.empty() && note.back() == '\n') {
+  if (not note.empty() && note.back() == '\n') {
     note.pop_back();
   }
   return note;
-}
-
-auto user_defined_operator_docs() -> const std::string& {
-  static const auto docs
-    = std::string{"https://docs.tenzir.com/reference/operators/"
-                  "user_defined_operator"};
-  return docs;
 }
 
 } // namespace
@@ -228,7 +215,7 @@ inline auto udo_diagnostic_handler::emit(diagnostic diag) const -> void {
   if (parameter_note_) {
     builder = std::move(builder).note(*parameter_note_);
   }
-  std::move(builder).docs(user_defined_operator_docs()).emit(*inner_);
+  std::move(builder).emit(*inner_);
 }
 
 auto instantiate_user_defined_operator(const user_defined_operator& udo,
@@ -250,7 +237,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   suggestion_names.reserve(udo.named_params.size());
   for (size_t i = 0; i < udo.named_params.size(); ++i) {
     name_to_index.emplace(udo.named_params[i].name, i);
-    if (! udo.named_params[i].name.starts_with('_')) {
+    if (not udo.named_params[i].name.starts_with('_')) {
       suggestion_names.push_back(udo.named_params[i].name);
     }
   }
@@ -262,7 +249,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     const auto missing_argument
       = next_arg >= inv.args.size()
         || try_as<ast::assignment>(inv.args[next_arg]);
-    if (! missing_argument) {
+    if (not missing_argument) {
       positional_values.push_back(std::move(inv.args[next_arg]));
       ++next_arg;
       return std::nullopt;
@@ -286,7 +273,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   for (; next_arg < inv.args.size(); ++next_arg) {
     auto& arg = inv.args[next_arg];
     auto* assignment = try_as<ast::assignment>(arg);
-    if (! assignment) {
+    if (not assignment) {
       diagnostic::error("did not expect more positional arguments")
         .primary(arg)
         .emit(dh);
@@ -306,7 +293,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       auto builder
         = diagnostic::error("named argument `{}` does not exist", name)
             .primary(assignment->left);
-      if (! suggestion_names.empty()) {
+      if (not suggestion_names.empty()) {
         auto best = std::string_view{};
         auto best_score = std::numeric_limits<int64_t>::min();
         for (const auto& candidate : suggestion_names) {
@@ -339,8 +326,8 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 
   for (size_t i = 0; i < udo.named_params.size(); ++i) {
     const auto& param = udo.named_params[i];
-    if (! named_values[i]) {
-      if (param.required) {
+    if (not named_values[i]) {
+      if (not param.default_value.has_value()) {
         diagnostic::error("required argument `{}` was not provided", param.name)
           .primary(inv.self)
           .emit(dh);
@@ -359,11 +346,9 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     = [&](const user_defined_operator::parameter& param,
           const ast::expression& expr,
           std::optional<location> explicit_location) -> failure_or<void> {
-    if (! param.value_type) {
+    if (not param.value_type) {
       return {};
     }
-    // FIXME: Add a test that checks that `null` will be accepted by the type
-    // check, no matter the type in the operator signature.
     auto diag_loc = explicit_location.value_or(expr.get_location());
     if (auto value = try_const_eval(expr, ctx)) {
       if (type_check(*param.value_type, *value)) {
@@ -385,9 +370,9 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   for (size_t i = 0; i < udo.positional_params.size(); ++i) {
     auto& expr = positional_values[i];
     const auto& param = udo.positional_params[i];
-    if (param.kind == user_defined_operator::parameter_kind::field_path) {
+    if (param.type_hint == "field") {
       auto copy = ast::expression{expr};
-      if (! ast::selector::try_from(std::move(copy))) {
+      if (not ast::selector::try_from(std::move(copy))) {
         diagnostic::error("expected a selector").primary(expr).emit(dh);
         return failure::promise();
       }
@@ -400,13 +385,13 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 
   for (size_t i = 0; i < udo.named_params.size(); ++i) {
     const auto& param = udo.named_params[i];
-    if (! named_values[i]) {
+    if (not named_values[i]) {
       continue;
     }
     auto value = std::move(*named_values[i]);
-    if (param.kind == user_defined_operator::parameter_kind::field_path) {
+    if (param.type_hint == "field") {
       auto copy = ast::expression{value};
-      if (! ast::selector::try_from(std::move(copy))) {
+      if (not ast::selector::try_from(std::move(copy))) {
         if (named_value_locations[i]) {
           diagnostic::error("expected a selector")
             .primary(*named_value_locations[i])
