@@ -20,8 +20,8 @@ namespace tenzir {
 struct retention_policy {
   retention_policy() = default;
 
-  static auto make(const record& cfg, session ctx)
-    -> failure_or<retention_policy> {
+  static auto
+  make(const record& cfg, session ctx) -> failure_or<retention_policy> {
     auto result = retention_policy{};
     auto failed = false;
     const auto try_parse = [&](auto& out, const auto key) -> void {
@@ -45,6 +45,8 @@ struct retention_policy {
     };
     try_parse(result.metrics_period, "tenzir.retention.metrics");
     try_parse(result.diagnostics_period, "tenzir.retention.diagnostics");
+    try_parse(result.operator_metrics_period,
+              "tenzir.retention.operator_metrics");
     if (failed) {
       return failure::promise();
     }
@@ -70,7 +72,8 @@ struct retention_policy {
       return not diagnostics_period or *diagnostics_period > duration::zero();
     }
     if (schema.name() == "tenzir.metrics.operator") {
-      return false;
+      return not operator_metrics_period
+             or *operator_metrics_period > duration::zero();
     }
     if (schema.name().starts_with("tenzir.metrics.")) {
       return not metrics_period or *metrics_period > duration::zero();
@@ -82,11 +85,13 @@ struct retention_policy {
     return f.object(x)
       .pretty_name("tenzir.retention_policy")
       .fields(f.field("metrics_period", x.metrics_period),
-              f.field("diagnostics_period", x.diagnostics_period));
+              f.field("diagnostics_period", x.diagnostics_period),
+              f.field("operator_metrics_period", x.operator_metrics_period));
   }
 
   std::optional<duration> metrics_period = days{16};
   std::optional<duration> diagnostics_period = days{30};
+  std::optional<duration> operator_metrics_period = duration::zero();
 };
 
 } // namespace tenzir
