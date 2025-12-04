@@ -20,8 +20,8 @@ namespace tenzir {
 struct retention_policy {
   retention_policy() = default;
 
-  static auto
-  make(const record& cfg, session ctx) -> failure_or<retention_policy> {
+  static auto make(const record& cfg, session ctx)
+    -> failure_or<retention_policy> {
     auto result = retention_policy{};
     auto failed = false;
     const auto try_parse = [&](auto& out, const auto key) -> void {
