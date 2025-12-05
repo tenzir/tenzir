@@ -792,6 +792,9 @@ struct dummy_allocator {
   static auto stats() noexcept -> const stats& {
     return detail::zero_stats;
   }
+
+  static auto trim() noexcept {
+  }
 };
 
 #  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
