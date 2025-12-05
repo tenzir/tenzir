@@ -17,6 +17,12 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 ## Description
 
+:::caution[Deprecated]
+`save_google_cloud_pubsub` is deprecated. Use
+[`to_google_cloud_pubsub`](/reference/operators/to_google_cloud_pubsub) to send
+one message per event.
+:::
+
 The operator publishes bytes to a Google Cloud Pub/Sub topic.
 
 ### `project_id = string`
@@ -54,4 +60,5 @@ save_google_cloud_pubsub project_id="amazing-project-123456", topic_id="alerts-t
 
 ## See Also
 
-[`load_google_cloud_pubsub`](/reference/operators/load_google_cloud_pubsub)
+[`load_google_cloud_pubsub`](/reference/operators/load_google_cloud_pubsub),
+[`to_google_cloud_pubsub`](/reference/operators/to_google_cloud_pubsub)
