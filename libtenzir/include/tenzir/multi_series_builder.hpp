@@ -517,7 +517,16 @@ auto object_generator::data(T d) -> void {
       if (not writable()) {
         return;
       }
-      b.data(d);
+      if (not b.try_data(d)) {
+        b.null();
+        TENZIR_ASSERT(b.is_protected());
+        auto dt = type::infer(d);
+        TENZIR_ASSERT(dt);
+        diagnostic::warning("input type does not match given schema")
+          .note("input is `{}`, but the schema expects `{}`", dt->kind(),
+                b.type().kind())
+          .emit(msb_->dh_);
+      }
     },
     [&](raw_pointer raw) {
       raw->data(d);
