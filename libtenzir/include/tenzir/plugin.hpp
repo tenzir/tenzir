@@ -978,6 +978,14 @@ extern const char* TENZIR_PLUGIN_VERSION;
       inline static auto flag = init();                                        \
     };
 
+#  ifdef TENZIR_PLUGIN_FORCE_LINK_SYMBOL
+#    ifndef TENZIR_PLUGIN_FORCE_LINK_SYMBOL_DEFINED
+#      define TENZIR_PLUGIN_FORCE_LINK_SYMBOL_DEFINED 1
+extern "C" auto TENZIR_PLUGIN_FORCE_LINK_SYMBOL() -> void {
+}
+#    endif
+#  endif
+
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                         \
     struct auto_register_type_id_##name {                                      \
       auto_register_type_id_##name() {                                         \
