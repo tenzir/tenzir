@@ -89,7 +89,6 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `file` | [`save_file`](/reference/operators/save_file) | `to "file://path/to/file.json"` |
 | `fluent-bit` | [`to_fluent_bit`](/reference/operators/to_fluent_bit) | `to "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`save_ftp`](/reference/operators/save_ftp) | `to "ftp://example.com/file.json"` |
-| `gcps` | [`save_google_cloud_pubsub`](/reference/operators/save_google_cloud_pubsub) | `to "gcps://project_id/topic_id" { … }` |
 | `gs` | [`save_gcs`](/reference/operators/save_gcs) | `to "gs://bucket/object.json"` |
 | `http`, `https` | [`save_http`](/reference/operators/save_http) | `to "http://example.com/file.json"` |
 | `inproc` | [`save_zmq`](/reference/operators/save_zmq) | `to "inproc://127.0.0.1:56789" { write_json }` |
