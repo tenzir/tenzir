@@ -173,7 +173,7 @@ public:
     return std::nullopt;
   }
 
-  auto create_doc(std::string_view action, view<record> doc) {
+  auto create_doc(std::string_view action, view3<record> doc) {
     if (action == "delete") {
       return;
     }
@@ -438,8 +438,8 @@ public:
       auto id = ids ? values(ty, as<arrow::StringArray>(*ids->array)) : ng();
       auto idx = idxs ? values(ty, as<arrow::StringArray>(*idxs->array)) : ng();
       auto act = acts ? values(ty, as<arrow::StringArray>(*acts->array)) : ng();
-      for (auto&& doc : docs.values()) {
-        const auto ptr = try_as<view<record>>(doc);
+      for (auto&& doc : docs.values3()) {
+        const auto ptr = try_as<view3<record>>(doc);
         const auto action = act.next();
         const auto actual_id = id.next();
         const auto actual_idx = idx.next();
