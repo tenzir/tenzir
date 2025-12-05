@@ -140,7 +140,6 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `file` | [`load_file`](/reference/operators/load_file) | `from "file://path/to/file.json"` |
 | `fluent-bit` | [`from_fluent_bit`](/reference/operators/from_fluent_bit) | `from "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](/reference/operators/load_ftp) | `from "ftp://example.com/file.json"` |
-| `gcps` | [`load_google_cloud_pubsub`](/reference/operators/load_google_cloud_pubsub) | `from "gcps://project_id/subscription_id" { … }` |
 | `gs` | [`load_gcs`](/reference/operators/load_gcs) | `from "gs://bucket/object.json"` |
 | `http`, `https` | [`load_http`](/reference/operators/load_http) | `from "http://example.com/file.json"` |
 | `inproc` | [`load_zmq`](/reference/operators/load_zmq) | `from "inproc://127.0.0.1:56789" { read_json }` |
