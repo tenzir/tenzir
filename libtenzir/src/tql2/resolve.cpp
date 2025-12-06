@@ -17,6 +17,7 @@
 
 #include <tsl/robin_map.h>
 
+#include <algorithm>
 #include <ranges>
 
 namespace tenzir {
@@ -77,39 +78,54 @@ public:
                           | std::views::take(idx + 1),
                         "::"));
       const auto& ident = path.at(idx);
+      auto module_entities = std::vector<std::string>{};
+      if (not prefix.empty()) {
+        auto prefix_with_sep = fmt::format("{}::", prefix);
+        for (const auto& candidate : available) {
+          if (candidate.starts_with(prefix_with_sep)) {
+            auto remainder = candidate.substr(prefix_with_sep.size());
+            if (not remainder.empty()) {
+              module_entities.push_back(std::string{remainder});
+            }
+          }
+        }
+        std::ranges::sort(module_entities);
+      }
+      auto type_plural = fmt::format("{}s", type);
+      auto builder = diagnostic::error("{} `{}` not found", type, ident.name)
+                       .primary(ident);
       if (available.empty()) {
-        diagnostic::error("{} `{}` not found", type, ident.name)
-          .primary(ident)
-          .note("no {}s found", type)
-          .emit(diag_);
-        return;
+        builder = std::move(builder).note("no {} found", type_plural);
       }
-      auto filtered = std::views::filter(available, [&](auto&& x) {
-        return x.starts_with(prefix);
-      });
-      if (not filtered.empty()) {
-        auto best = std::ranges::max(filtered, {}, [&](auto&& x) {
-          return detail::calculate_similarity(full, x);
+      auto suggestion = std::optional<std::string>{};
+      if (not module_entities.empty()) {
+        auto target = path.at(idx).name;
+        auto best
+          = std::ranges::max(module_entities, {}, [&](const auto& cand) {
+              return detail::calculate_similarity(target, cand);
+            });
+        if (detail::calculate_similarity(target, best) > -5) {
+          suggestion
+            = prefix.empty() ? best : fmt::format("{}::{}", prefix, best);
+        }
+        builder
+          = std::move(builder).note("available {} in `{}`: {}", type_plural,
+                                    prefix, fmt::join(module_entities, ", "));
+      } else if (not available.empty()) {
+        auto best = std::ranges::max(available, {}, [&](const auto& cand) {
+          return detail::calculate_similarity(full, cand);
         });
-        if (const auto pos = best.find(prefix);
-            not prefix.empty() and pos == 0) {
-          best.erase(0, prefix.size() + 2);
-        }
         if (detail::calculate_similarity(full, best) > -5) {
-          diagnostic::error("{} `{}` not found", type, ident.name)
-            .primary(ident)
-            .hint("did you mean `{}`?", best)
-            .docs("https://docs.tenzir.com/reference/{}",
-                  target_ns == entity_ns::op ? "operators" : "functions")
-            .emit(diag_);
-          return;
+          suggestion = best;
         }
       }
-      diagnostic::error("{} `{}` not found", type, ident.name)
-        .primary(ident)
-        .docs("https://docs.tenzir.com/reference/{}",
-              target_ns == entity_ns::op ? "operators" : "functions")
-        .emit(diag_);
+      if (suggestion) {
+        builder = std::move(builder).hint("did you mean `{}`?", *suggestion);
+      }
+      builder = std::move(builder).docs(
+        "https://docs.tenzir.com/reference/{}",
+        target_ns == entity_ns::op ? "operators" : "functions");
+      std::move(builder).emit(diag_);
     };
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.

@@ -1,0 +1,4 @@
+// Use the default value defined in the operator
+// Should succeed
+from {value: "dynamic"}
+argspkg::typed_named

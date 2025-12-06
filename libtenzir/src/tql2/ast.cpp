@@ -20,8 +20,105 @@
 #include <caf/detail/type_list.hpp>
 
 #include <type_traits>
+#include <unordered_set>
 
 namespace tenzir::ast {
+
+namespace {
+
+class named_expression_substituter
+  : public ast::visitor<named_expression_substituter> {
+public:
+  named_expression_substituter(
+    const std::unordered_map<std::string, ast::expression>& replacements,
+    diagnostic_handler& dh)
+    : replacements_{replacements}, dh_{dh} {
+  }
+
+  void visit(ast::expression& expr) {
+    if (auto* var = try_as<ast::dollar_var>(expr)) {
+      auto name = std::string{var->name_without_dollar()};
+      if (not shadowed_.contains(name)) {
+        if (auto it = replacements_.find(name); it != replacements_.end()) {
+          expr = it->second;
+          return;
+        }
+      }
+    }
+    enter(expr);
+  }
+
+  void visit(ast::let_stmt& stmt) {
+    visit(stmt.expr);
+    auto name = std::string{stmt.name_without_dollar()};
+    if (replacements_.contains(name)) {
+      shadowed_.insert(name);
+    }
+  }
+
+  void visit(ast::pipeline& pipe) {
+    for (auto& stmt : pipe.body) {
+      visit(stmt);
+    }
+  }
+
+  void visit(ast::selector& selector) {
+    selector.match(
+      [&](ast::dollar_var& var) {
+        auto name = std::string{var.name_without_dollar()};
+        if (shadowed_.contains(name)) {
+          return;
+        }
+        auto it = replacements_.find(name);
+        if (it == replacements_.end()) {
+          return;
+        }
+        if (auto new_selector = ast::selector::try_from(it->second)) {
+          selector = std::move(*new_selector);
+          return;
+        }
+        diagnostic::error("cannot assign to `{}` constant value", var.id.name)
+          .primary(var)
+          .emit(dh_);
+        failure_ = failure::promise();
+      },
+      [](auto&) {
+        // Nothing to do
+      });
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  auto has_failed() const -> bool {
+    return failure_.is_error();
+  }
+
+private:
+  const std::unordered_map<std::string, ast::expression>& replacements_;
+  std::unordered_set<std::string> shadowed_;
+  failure_or<void> failure_;
+  diagnostic_handler& dh_;
+};
+
+} // namespace
+
+auto substitute_named_expressions(
+  pipeline pipe,
+  const std::unordered_map<std::string, ast::expression>& replacements,
+  diagnostic_handler& dh) -> failure_or<ast::pipeline> {
+  if (replacements.empty()) {
+    return pipe;
+  }
+  auto substituter = named_expression_substituter{replacements, dh};
+  substituter.visit(pipe);
+  if (substituter.has_failed()) {
+    return failure::promise();
+  }
+  return pipe;
+}
 
 auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
@@ -76,6 +173,9 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
   return expr.match(
     [](ast::meta& x) -> std::optional<selector> {
       return selector{x};
+    },
+    [&](ast::dollar_var& x) -> std::optional<selector> {
+      return selector{std::move(x)};
     },
     [&](auto&) -> std::optional<selector> {
       return field_path::try_from(std::move(expr));

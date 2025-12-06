@@ -1,0 +1,5 @@
+{
+  value: "outer",
+  original: "outer",
+  result: "local?",
+}

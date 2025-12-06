@@ -1,0 +1,8 @@
+from {
+  name: "Alice",
+  comment: "test",
+}, {
+  name: "Bob",
+  comment: null,
+}
+argspkg::set_field_explicit input, comment

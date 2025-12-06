@@ -1,0 +1,4 @@
+{
+  value: "typed default value",
+  operator: "typed_named",
+}

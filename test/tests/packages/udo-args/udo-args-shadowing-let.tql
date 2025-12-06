@@ -1,0 +1,3 @@
+let $suffix = "!"
+from {value: "outer"}
+argspkg::shadow_value this.value, suffix=$suffix

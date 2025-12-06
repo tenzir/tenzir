@@ -262,6 +262,9 @@ bool type_check(const type& x, const data_view& y) {
       }
       return true;
     },
+    [](const string_type&, const secret&) {
+      return true;
+    },
     [&]<basic_type T, class U>(const T&, const U&) {
       // For basic types we can solely rely on the result of
       // construct.

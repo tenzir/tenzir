@@ -1,0 +1,3 @@
+// Should succeed
+from {value: "dynamic"}
+argspkg::untyped_named value=this.value

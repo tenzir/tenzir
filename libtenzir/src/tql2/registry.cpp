@@ -8,15 +8,25 @@
 
 #include "tenzir/tql2/registry.hpp"
 
+#include "tenzir/concept/parseable/tenzir/yaml.hpp"
+#include "tenzir/detail/similarity.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
+#include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/user_defined_operator.hpp"
 
+#include <algorithm>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <ranges>
 #include <shared_mutex>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace tenzir {
 
@@ -53,13 +63,22 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
   return match(
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
-      if (not inv.args.empty()) {
-        diagnostic::error("user-defined operator does not support arguments")
-          .primary(inv.self)
-          .emit(ctx);
-        return failure::promise();
+      auto op_name = make_operator_name(inv.self);
+      auto dh = udo_diagnostic_handler(&ctx.dh(), op_name, udo);
+      // If there are no parameters defined, check that no arguments were provided
+      if (udo.positional_params.empty() && udo.named_params.empty()) {
+        if (not inv.args.empty()) {
+          diagnostic::error("operator '{}' does not support arguments", op_name)
+            .primary(inv.self)
+            .emit(dh);
+          return failure::promise();
+        }
+        TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+        return std::make_unique<pipeline>(std::move(compiled));
       }
-      TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+      TRY(auto instantiated,
+          instantiate_user_defined_operator(udo, inv, ctx, dh));
+      TRY(auto compiled, compile(std::move(instantiated), ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },
     [&](const native_operator& op) -> failure_or<operator_ptr> {
@@ -275,9 +294,9 @@ void registry::add(const entity_pkg& package, std::string_view name,
 
 void registry::add_module(const entity_pkg& package, std::string_view name,
                           std::unique_ptr<module_def> mod) {
-  TENZIR_ASSERT(! name.empty());
+  TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
-  TENZIR_ASSERT(! path.empty());
+  TENZIR_ASSERT(not path.empty());
   // Find or create parent module.
   auto* parent = &root(package);
   for (auto& segment : path) {
@@ -291,15 +310,15 @@ void registry::add_module(const entity_pkg& package, std::string_view name,
     parent = set.mod.get();
   }
   auto& set = parent->defs[std::string{path.back()}];
-  TENZIR_ASSERT(! set.mod && "module already exists at path");
+  TENZIR_ASSERT(not set.mod && "module already exists at path");
   set.mod = std::move(mod);
 }
 
 void registry::replace_module(const entity_pkg& package, std::string_view name,
                               std::unique_ptr<module_def> mod) {
-  TENZIR_ASSERT(! name.empty());
+  TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
-  TENZIR_ASSERT(! path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto* parent = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
@@ -316,9 +335,9 @@ void registry::replace_module(const entity_pkg& package, std::string_view name,
 }
 
 void registry::remove_module(const entity_pkg& package, std::string_view name) {
-  TENZIR_ASSERT(! name.empty());
+  TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
-  TENZIR_ASSERT(! path.empty());
+  TENZIR_ASSERT(not path.empty());
   auto* parent = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
@@ -336,7 +355,7 @@ void registry::remove_module(const entity_pkg& package, std::string_view name) {
     return;
   }
   it->second.mod.reset();
-  if (! it->second.fn && ! it->second.op && ! it->second.mod) {
+  if (not it->second.fn && ! it->second.op && ! it->second.mod) {
     parent->defs.erase(it);
   }
 }

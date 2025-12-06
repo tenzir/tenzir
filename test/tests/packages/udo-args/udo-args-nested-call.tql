@@ -1,0 +1,3 @@
+// User defined operator invoking another UDO
+from {value: "outer"}
+argspkg::call_typed_positional "forwarded"

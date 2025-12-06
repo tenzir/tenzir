@@ -1,0 +1,4 @@
+{
+  value: "dynamic",
+  operator: "untyped_named",
+}

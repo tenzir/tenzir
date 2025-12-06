@@ -12,9 +12,11 @@
 #include "tenzir/exec.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
 
