@@ -8,8 +8,9 @@ Saves bytes to a TCP or TLS connection.
 
 ```tql
 save_tcp endpoint:string, [retry_delay=duration, max_retry_count=int,
-                           tls=bool, cacert=string, certifle=string,
-                           keyfile=string, skip_peer_verification=bool]
+                           tls=bool, skip_peer_verification=bool,
+                           cacert=string, certfile=string, keyfile=string,
+                           tls_minium_version=string, tls_ciphers=string]
 ```
 
 ## Description
