@@ -274,7 +274,7 @@ auto tls_options::get_keyfile(operator_control_plane* ctrl) const
 auto tls_options::get_tls_min_version(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (tls_min_version_) {
-    return *keyfile_;
+    return *tls_min_version_;
   }
   return query_config_or_null<std::string>(
     "tenzir.operator-tls.tls-min-version", ctrl);
@@ -283,7 +283,7 @@ auto tls_options::get_tls_min_version(operator_control_plane* ctrl) const
 auto tls_options::get_tls_ciphers(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (tls_ciphers_) {
-    return *keyfile_;
+    return *tls_ciphers_;
   }
   return query_config_or_null<std::string>("tenzir.operator-tls.tls-ciphers",
                                            ctrl);
@@ -292,7 +292,7 @@ auto tls_options::get_tls_ciphers(operator_control_plane* ctrl) const
 auto tls_options::get_tls_client_ca(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (tls_client_ca_) {
-    return *keyfile_;
+    return *tls_client_ca_;
   }
   return query_config_or_null<std::string>("tenzir.operator-tls.tls-client-ca",
                                            ctrl);

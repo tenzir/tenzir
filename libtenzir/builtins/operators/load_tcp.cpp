@@ -599,7 +599,7 @@ struct connection_manager_state {
         }
       }
       // Apply cipher list from config
-      if (auto x = args.ssl.get_tls_min_version(nullptr)) {
+      if (auto x = args.ssl.get_tls_ciphers(nullptr)) {
         if (not x->inner.empty()) {
           auto* native_ctx = connection->ssl_ctx->native_handle();
           if (SSL_CTX_set_cipher_list(native_ctx, x->inner.c_str()) == 0) {
