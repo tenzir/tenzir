@@ -22,7 +22,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -623,7 +623,7 @@ struct from_http_args {
   std::optional<located<record>> responses;
   std::optional<located<uint64_t>> max_request_size;
   std::optional<located<uint64_t>> max_connections;
-  ssl_options ssl{{.is_server = true}};
+  tls_options ssl{{.is_server = true}};
   std::optional<located<std::string>> password;
   std::optional<located<pipeline>> parse;
 
@@ -1512,7 +1512,7 @@ struct http_args {
   std::optional<ast::lambda_expr> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
-  ssl_options ssl{};
+  tls_options ssl{};
   std::optional<located<std::string>> password;
   located<duration> connection_timeout{5s, location::unknown};
   uint64_t max_retry_count{};

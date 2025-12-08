@@ -18,7 +18,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
-#include <tenzir/ssl_options.hpp>
+#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -77,7 +77,7 @@ struct endpoint {
 };
 
 struct load_tcp_args {
-  ssl_options ssl{{.tls_default = false, .is_server = true}};
+  tls_options ssl{{.tls_default = false, .is_server = true}};
   located<struct endpoint> endpoint = {};
   located<uint64_t> parallel = {};
   std::optional<location> connect = {};

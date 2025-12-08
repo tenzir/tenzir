@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include "fluent-bit/fluent-bit_operator.hpp"
 
