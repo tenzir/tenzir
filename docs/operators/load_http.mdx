@@ -9,8 +9,9 @@ Loads a byte stream via HTTP.
 ```tql
 load_http url:string, [data=record, params=record, headers=record,
           method=string, form=bool, chunked=bool, multipart=bool,
-          parallel=int, tls=bool, cacert=string, certifle=string,
-          keyfile=string, skip_peer_verification=bool]
+          parallel=int, tls=bool, skip_peer_verification=bool,
+          cacert=string, certfile=string, keyfile=string,
+          tls_minium_version=string, tls_ciphers=string]
 ```
 
 ## Description
