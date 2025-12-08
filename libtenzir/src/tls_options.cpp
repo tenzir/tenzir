@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include "tenzir/diagnostics.hpp"
 
@@ -116,7 +116,7 @@ auto parse_caf_tls_version(std::string_view version)
   TENZIR_UNREACHABLE();
 }
 
-auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
+auto tls_options::add_tls_options(argument_parser2& parser) -> void {
   parser.named("tls", tls_)
     .named("skip_peer_verification", skip_peer_verification_)
     .named("cacert", cacert_)
@@ -130,7 +130,7 @@ auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
   }
 }
 
-auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
+auto tls_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   const auto check_option
     = [&](auto& thing, std::string_view name) -> failure_or<void> {
     if (tls_ and not tls_->inner and thing) {
@@ -183,12 +183,12 @@ auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   return {};
 }
 
-auto ssl_options::validate(const located<std::string>& url,
+auto tls_options::validate(const located<std::string>& url,
                            diagnostic_handler& dh) const -> failure_or<void> {
   return validate(url.inner, url.source, dh);
 }
 
-auto ssl_options::validate(std::string_view url, location url_loc,
+auto tls_options::validate(std::string_view url, location url_loc,
                            diagnostic_handler& dh) const -> failure_or<void> {
   const auto url_says_safe = url.starts_with("https://")
                              or url.starts_with("ftps://")
@@ -208,7 +208,7 @@ auto ssl_options::validate(std::string_view url, location url_loc,
   return validate(dh);
 }
 
-auto ssl_options::update_from_config(operator_control_plane& ctrl) -> void {
+auto tls_options::update_from_config(operator_control_plane& ctrl) -> void {
   tls_ = get_tls(&ctrl);
   skip_peer_verification_ = get_skip_peer_verification(&ctrl);
   cacert_ = get_cacert(&ctrl);
@@ -220,97 +220,97 @@ auto ssl_options::update_from_config(operator_control_plane& ctrl) -> void {
   tls_require_client_cert_ = get_tls_require_client_cert(&ctrl);
 }
 
-auto ssl_options::get_tls(operator_control_plane* ctrl) const -> located<bool> {
+auto tls_options::get_tls(operator_control_plane* ctrl) const -> located<bool> {
   if (tls_) {
     return *tls_;
   }
-  if (auto* x = query_config<bool>("tenzir.operator-ssl.enable", ctrl)) {
+  if (auto* x = query_config<bool>("tenzir.operator-tls.enable", ctrl)) {
     return {*x, location::unknown};
   }
   return {true, location::unknown};
 }
 
-auto ssl_options::get_skip_peer_verification(operator_control_plane* ctrl) const
+auto tls_options::get_skip_peer_verification(operator_control_plane* ctrl) const
   -> located<bool> {
   if (skip_peer_verification_) {
     return *skip_peer_verification_;
   }
-  if (auto* x = query_config<bool>("tenzir.operator-ssl.skip-peer-verification",
+  if (auto* x = query_config<bool>("tenzir.operator-tls.skip-peer-verification",
                                    ctrl)) {
     return {*x, location::unknown};
   }
   return {false, location::unknown};
 }
 
-auto ssl_options::get_cacert(operator_control_plane* ctrl) const
+auto tls_options::get_cacert(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (cacert_) {
     return cacert_;
   }
-  if (auto x = query_config<std::string>("tenzir.operator-ssl.cacert", ctrl);
+  if (auto x = query_config<std::string>("tenzir.operator-tls.cacert", ctrl);
       x and not x->empty()) {
     return located{*x, location::unknown};
   }
   return query_config_or_null<std::string>("tenzir.cacert", ctrl);
 }
 
-auto ssl_options::get_certfile(operator_control_plane* ctrl) const
+auto tls_options::get_certfile(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (certfile_) {
     return certfile_;
   }
-  return query_config_or_null<std::string>("tenzir.operator-ssl.certfile",
+  return query_config_or_null<std::string>("tenzir.operator-tls.certfile",
                                            ctrl);
 }
 
-auto ssl_options::get_keyfile(operator_control_plane* ctrl) const
+auto tls_options::get_keyfile(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (keyfile_) {
     return *keyfile_;
   }
-  return query_config_or_null<std::string>("tenzir.operator-ssl.keyfile", ctrl);
+  return query_config_or_null<std::string>("tenzir.operator-tls.keyfile", ctrl);
 }
 
-auto ssl_options::get_tls_min_version(operator_control_plane* ctrl) const
+auto tls_options::get_tls_min_version(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (tls_min_version_) {
     return *keyfile_;
   }
   return query_config_or_null<std::string>(
-    "tenzir.operator-ssl.tls-min-version", ctrl);
+    "tenzir.operator-tls.tls-min-version", ctrl);
 }
 
-auto ssl_options::get_tls_ciphers(operator_control_plane* ctrl) const
+auto tls_options::get_tls_ciphers(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (tls_ciphers_) {
     return *keyfile_;
   }
-  return query_config_or_null<std::string>("tenzir.operator-ssl.tls-ciphers",
+  return query_config_or_null<std::string>("tenzir.operator-tls.tls-ciphers",
                                            ctrl);
 }
 
-auto ssl_options::get_tls_client_ca(operator_control_plane* ctrl) const
+auto tls_options::get_tls_client_ca(operator_control_plane* ctrl) const
   -> std::optional<located<std::string>> {
   if (tls_client_ca_) {
     return *keyfile_;
   }
-  return query_config_or_null<std::string>("tenzir.operator-ssl.tls-client-ca",
+  return query_config_or_null<std::string>("tenzir.operator-tls.tls-client-ca",
                                            ctrl);
 }
 
-auto ssl_options::get_tls_require_client_cert(operator_control_plane* ctrl) const
+auto tls_options::get_tls_require_client_cert(operator_control_plane* ctrl) const
   -> located<bool> {
   if (tls_require_client_cert_) {
     return *tls_require_client_cert_;
   }
   if (auto* x
-      = query_config<bool>("tenzir.operator-ssl.require-client-ca", ctrl)) {
+      = query_config<bool>("tenzir.operator-tls.require-client-ca", ctrl)) {
     return {*x, location::unknown};
   }
   return {false, location::unknown};
 }
 
-auto ssl_options::update_url(std::string_view url,
+auto tls_options::update_url(std::string_view url,
                              operator_control_plane* ctrl) const
   -> std::string {
   auto url_copy = std::string{url};
@@ -328,7 +328,7 @@ auto ssl_options::update_url(std::string_view url,
   return url_copy;
 }
 
-auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
+auto tls_options::apply_to(curl::easy& easy, std::string_view url,
                            operator_control_plane* ctrl) const -> caf::error {
   auto used_url = update_url(url, ctrl);
   check(easy.set(CURLOPT_URL, used_url));

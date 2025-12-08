@@ -26,7 +26,7 @@ auto parse_openssl_tls_version(std::string_view version) -> caf::expected<int>;
 auto parse_caf_tls_version(std::string_view version)
   -> caf::expected<caf::net::ssl::tls>;
 
-class ssl_options {
+class tls_options {
 public:
   struct options {
     bool tls_default = true;
@@ -34,12 +34,12 @@ public:
     bool is_server = false;
   };
 
-  explicit ssl_options(options opts)
+  explicit tls_options(options opts)
     : uses_curl_http_{opts.uses_curl_http},
       is_server_{opts.is_server},
       tls_{located{opts.tls_default, location::unknown}} {
   }
-  ssl_options() = default;
+  tls_options() = default;
 
   auto add_tls_options(argument_parser2&) -> void;
 
@@ -108,7 +108,7 @@ private:
   mutable std::optional<located<bool>> tls_require_client_cert_;
   // std::mutex mut_; /// TODO: use this?
 
-  friend auto inspect(auto& f, ssl_options& x) -> bool {
+  friend auto inspect(auto& f, tls_options& x) -> bool {
     return f.object(x).fields(
       f.field("uses_curl_http", x.uses_curl_http_),
       f.field("is_server", x.is_server_), f.field("tls", x.tls_),

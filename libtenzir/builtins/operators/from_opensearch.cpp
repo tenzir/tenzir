@@ -13,7 +13,7 @@
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/util/compression.h>

@@ -53,7 +53,7 @@ tenzir:
   # SSL configuration options globally applies to all operators that support SSL/TSL.
   # Arguments passed to the operator itself will always take precedence over these
   # configuration values.
-  operator-ssl:
+  operator-tls:
     # Enable TLS on all operators that support it.
     #enable: true
 

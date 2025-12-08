@@ -33,7 +33,7 @@ public:
     located<uint16_t> port = {9000, operator_location};
     std::string user;
     std::string password;
-    ssl_options ssl;
+    tls_options ssl;
     located<std::string> table = {"REQUIRED", location::unknown};
     located<enum mode> mode = located{mode::create_append, operator_location};
     std::optional<located<std::string>> primary = std::nullopt;

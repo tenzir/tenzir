@@ -15,7 +15,7 @@
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/shared_diagnostic_handler.hpp>
-#include <tenzir/ssl_options.hpp>
+#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
@@ -66,7 +66,7 @@ struct tcp_bridge_actor_traits {
 using tcp_bridge_actor = caf::typed_actor<tcp_bridge_actor_traits>;
 
 struct saver_args {
-  ssl_options ssl;
+  tls_options ssl;
   std::string hostname;
   std::string service;
   bool listen = false;
@@ -828,7 +828,7 @@ class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};
-    args.ssl = ssl_options{{.tls_default = false}};
+    args.ssl = tls_options{{.tls_default = false}};
     auto parser = argument_parser2::operator_(name());
     auto uri = located<std::string>{};
     parser.positional("endpoint", uri, "string");

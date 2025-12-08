@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -221,7 +221,7 @@ inline auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
 
 namespace {
 
-auto tls_to_fluentbit(const ssl_options& ssl, record& properties,
+auto tls_to_fluentbit(const tls_options& ssl, record& properties,
                       operator_control_plane& ctrl) -> failure_or<void> {
   const auto set = [&](std::string key, std::string tenzir_option_name,
                        std::string value, location loc) -> failure_or<void> {
@@ -291,7 +291,7 @@ struct operator_args {
   located<std::string> plugin;                  ///< Fluent Bit plugin name.
   std::chrono::milliseconds poll_interval{250}; ///< Engine poll interval.
   located<record> service_properties;           ///< The global service options.
-  ssl_options ssl{ssl_options::options{.tls_default = false}};
+  tls_options ssl{tls_options::options{.tls_default = false}};
   located<record> args;                         ///< The plugin arguments.
 
   template <class Inspector>
