@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Should generate an error at compile time
+from {value: "dynamic"}
+argspkg::typed_positional 1.2.3.4

@@ -3,4 +3,4 @@
   "normalized": "hyphen_package",
   "message": "hello from hyphenated package"
 }
-warning: package id 'hyphen-package' contains '-' characters; normalized module name will be 'hyphen_package'
+warning: package id `hyphen-package` contains '-' characters; normalized module name will be `hyphen_package`

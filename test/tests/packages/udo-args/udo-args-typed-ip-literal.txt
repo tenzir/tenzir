@@ -1,0 +1,11 @@
+error: argument `value` must be of type `string` (got `ip`)
+ --> tests/packages/udo-args/udo-args-typed-ip-literal.tql:7:27
+  |
+7 | argspkg::typed_positional 1.2.3.4
+  |                           ^^^^^^^ 
+  |
+  = usage: argspkg::typed_positional value:string
+  = note: parameters:
+            positional:
+              name   type    default              description
+              value  string  typed default value  Must be a string literal

@@ -1,0 +1,11 @@
+---
+description: "Set a field to a specific value"
+args:
+  positional:
+    - name: field
+      type: field
+      description: "The field to set"
+    - name: value
+      description: "The value to set"
+---
+$field.subfield = $value

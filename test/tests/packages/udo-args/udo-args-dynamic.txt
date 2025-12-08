@@ -1,0 +1,6 @@
+{
+  name: "Alice",
+  age: 30,
+  original: "Alice",
+  prefixed: "Hello, Alice",
+}

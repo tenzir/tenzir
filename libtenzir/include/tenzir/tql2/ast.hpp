@@ -20,8 +20,8 @@
 
 #include <caf/detail/is_one_of.hpp>
 
-#include <compare>
 #include <type_traits>
+#include <unordered_map>
 
 namespace tenzir::detail {
 
@@ -303,7 +303,7 @@ private:
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
 /// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
-struct selector : variant<meta, field_path> {
+struct selector : variant<meta, field_path, dollar_var> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
@@ -654,6 +654,13 @@ struct pipeline {
 
   auto compile(compile_ctx ctx) && -> failure_or<ir::pipeline>;
 };
+
+/// Substitute occurrences of named dollar variables with the given
+/// expressions.
+auto substitute_named_expressions(
+  pipeline pipe,
+  const std::unordered_map<std::string, ast::expression>& replacements,
+  diagnostic_handler& dh) -> failure_or<ast::pipeline>;
 
 struct let_stmt {
   let_stmt() = default;

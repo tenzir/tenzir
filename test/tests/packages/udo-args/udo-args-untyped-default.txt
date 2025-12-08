@@ -1,0 +1,4 @@
+{
+  value: "operator default",
+  operator: "untyped_positional",
+}

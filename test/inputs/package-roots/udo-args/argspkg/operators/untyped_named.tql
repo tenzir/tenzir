@@ -1,0 +1,10 @@
+---
+description: "Echo a named argument without any type hint"
+args:
+  named:
+    - name: value
+      default: "operator default"
+      description: "Any expression is accepted"
+---
+set operator = "untyped_named"
+set value = $value
