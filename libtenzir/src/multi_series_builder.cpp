@@ -439,7 +439,14 @@ multi_series_builder::multi_series_builder(
     settings_{std::move(settings)},
     dh_{dh},
     schema_fn_{std::move(schema_fn)},
-    builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
+    builder_raw_{
+      data_builder::settings{
+        .building_settings = {
+          .duplicate_keys = settings_.duplicate_keys,
+        },
+        .schema_only = settings_.schema_only,
+        .parse_schema_fields_only = settings_.raw,
+      },std::move(parser), &dh,} {
   TENZIR_ASSERT(schema_fn_);
   if (get_policy<policy_default>()) {
     // if we merge all events, they are necessarily ordered
@@ -487,13 +494,13 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
   if (uses_merging_builder()) {
     flush_merging_builder();
   } else {
-    make_events_available_where([now, timeout = settings_.timeout,
-                                 target_size = settings_.desired_batch_size](
-                                  const entry_data& e) {
-      return e.builder.length()
-               >= static_cast<int64_t>(target_size) // batch size hit
-             or now - e.flushed >= timeout;         // timeout hit
-    });
+    make_events_available_where(
+      [now, timeout = settings_.timeout,
+       target_size = settings_.desired_batch_size](const entry_data& e) {
+        return e.builder.length()
+                 >= static_cast<int64_t>(target_size) // batch size hit
+               or now - e.flushed >= timeout;         // timeout hit
+      });
     garbage_collect_where(
       [now, timeout = settings_.timeout](const entry_data& e) {
         return now - e.flushed >= 10 * timeout;

@@ -106,6 +106,7 @@ using field_type_list = detail::type_list<
   /*16 */ blob,
   /*17 */ secret
 >;
+using object_variant_type = detail::tl_apply_t<field_type_list, std::variant>;
 // clang-format on
 
 template <typename T>
@@ -205,14 +206,15 @@ static inline auto update_type_index(size_t& old_index, size_t new_index)
     old_index = new_index;
     return;
   }
-  if (is_numeric(old_index) and is_numeric(new_index)) {
+  if ((is_numeric(old_index) or old_index == type_index_numeric_mismatch)
+      and is_numeric(new_index)) {
     old_index = type_index_numeric_mismatch;
     return;
   }
   old_index = type_index_generic_mismatch;
 }
 
-enum class state {
+enum class state : char {
   /// The node contains an active value
   /// It should be considered for the signature and actually
   /// written in `commit_to`
@@ -235,8 +237,32 @@ enum class state {
   dead,
 };
 
+/// Determines how a two successive calls `factory.field("key").A` with
+/// `factory.field("key").B` are handled.
+enum class duplicate_keys : char {
+  /// Overwrite the value with `B`, the later value, but merge records.
+  overwrite,
+  /// Promote the `field` into a list, producing `[A,B]`
+  to_list,
+  /// Promote the `field` into a list, but merge repeated calls to the same
+  /// structural type instead.
+  merge_structural,
+};
+
+struct settings {
+  /// @relates enum duplicate_keys
+  enum duplicate_keys duplicate_keys = duplicate_keys::overwrite;
+  /// @relates The name to use when `merge_structural` is enabled and we
+  /// conflict with `key: v1` and `key.nested: v2`. We use an empty string here,
+  /// because that has the least possible conflict potential. The downside is
+  /// that using this field is not as nice in tenzir.
+  constexpr static std::string_view top_key_name_for_records = "";
+};
+
 class node_base {
 protected:
+  node_base(settings settings) : settings_{settings} {
+  }
   /// Updates the nodes state to reflect that it affects the signature
   /// * If the node is already alive or a sentinel, this has no effect.
   /// * If the node is dead, it makes it a sentinel instead.
@@ -255,9 +281,10 @@ protected:
   auto is_alive() const -> bool;
   auto affects_signature() const -> bool;
   state state_ = state::alive;
+  settings settings_;
 };
 
-class node_record : public node_base {
+class node_record : private node_base {
   friend class node_list;
   friend class node_object;
   friend class ::tenzir::data_builder;
@@ -272,6 +299,8 @@ public:
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
   [[nodiscard]] auto field(std::string_view name) -> node_object*;
+
+  node_record(settings settings);
 
 private:
   // tries to get a field with the given name. Does not affect any field state
@@ -371,7 +400,7 @@ public:
   /// @ref reserve can be used to ensure stability for a given number of elements
   auto list() -> node_list*;
 
-  node_list() = default;
+  node_list(settings settings);
   node_list(const node_list&) = default;
   node_list(node_list&&) = default;
   node_list& operator=(const node_list&) = default;
@@ -379,6 +408,7 @@ public:
   ~node_list();
 
 private:
+  auto data(object_variant_type&& obj) -> void;
   /// Appends a node by first trying to resurrect a dead node and only creating
   /// a new one if necessary
   auto push_back_node() -> node_object*;
@@ -448,23 +478,25 @@ public:
   /// If its type mismatches with the seed during the later parsing/signature
   /// computation, a warning is emitted.
   template <non_structured_data_type T>
-  auto data(T data) -> void;
+  auto data(T data, bool overwrite = false) -> void;
   /// @brief Unpacks The tenzir::data into this field
-  auto data(tenzir::data) -> void;
+  auto data(tenzir::data, bool overwrite = false) -> void;
   /// @brief Sets this field to some unparsed data.
   /// It is later parsed when a seed is potentially available.
   auto data_unparsed(std::string raw_text) -> void;
-  auto null() -> void;
-  auto record() -> node_record*;
-  auto list() -> node_list*;
+  auto null(bool overwrite = false) -> void;
+  auto record(bool overwrite = false) -> node_record*;
+  auto list(bool overwrite = false) -> node_list*;
 
-  node_object();
+  node_object(settings);
 
   template <non_structured_data_type T>
-  node_object(T data) : data_{std::in_place_type<T>, data} {
+  node_object(T data, settings settings)
+    : node_base{settings}, data_{std::in_place_type<T>, data} {
   }
 
 private:
+  auto data(object_variant_type&& data) -> void;
   auto current_index() const -> size_t {
     return data_.index();
   }
@@ -513,8 +545,6 @@ private:
   /// @brief marks the node and its contents as dead
   auto clear() -> void;
 
-  using object_variant_type = detail::tl_apply_t<field_type_list, std::variant>;
-
   object_variant_type data_;
 
   enum class value_state_type {
@@ -531,11 +561,15 @@ private:
   };
   /// This is the state of the contained value. See `value_state_type`
   value_state_type value_state_ = value_state_type::null;
+  /// Whether this node was upgraded into a list by the parent record containing
+  /// a repeated field. This is necessary so we dont nest lists in lists for
+  /// keys that show up three or more times.
+  bool is_repeat_key_list = false;
 };
 
 struct node_record::entry_type {
   std::string key;
-  node_object value;
+  node_object value{{duplicate_keys::overwrite}};
 
   /// This must exist for the `data_.resize()` call, but is guaranteed by the
   /// surrounding logic to never be called.
@@ -543,11 +577,16 @@ struct node_record::entry_type {
     TENZIR_UNREACHABLE();
   }
 
-  entry_type(std::string_view name) : key{name} {
+  entry_type(std::string_view name, settings settings)
+    : key{name}, value{settings} {
   }
 };
 
-inline node_object::node_object() : data_{std::in_place_type<caf::none_t>} {
+inline node_record::node_record(settings settings) : node_base{settings} {
+}
+
+inline node_object::node_object(settings settings)
+  : node_base{settings}, data_{std::in_place_type<caf::none_t>} {
 }
 
 constexpr static std::byte record_start_marker{0xfa};
@@ -573,13 +612,28 @@ class data_builder {
   friend class detail::data_builder::node_object;
 
 public:
+  struct settings {
+    detail::data_builder::settings building_settings{
+      .duplicate_keys = detail::data_builder::duplicate_keys::overwrite,
+    };
+    /// whether to discard fields that are not present in the used schema.
+    bool schema_only = false;
+    /// Whether to only parse fields that are present in the used schema.
+    /// If this is enabled, fields created as `data_unparsed` will only be
+    /// parsed as typed data, if the are present in the used schema (seed)
+    bool parse_schema_fields_only = false;
+  };
   using data_parsing_function
     = std::function<detail::data_builder::data_parsing_result(
       std::string_view str, const tenzir::type* seed, const value_path& path)>;
+
   data_builder(data_parsing_function parser
                = detail::data_builder::basic_parser,
-               diagnostic_handler* dh = nullptr, bool schema_only = false,
-               bool parse_schema_fields_only = false);
+               diagnostic_handler* dh = nullptr);
+  data_builder(settings s,
+               data_parsing_function parser
+               = detail::data_builder::basic_parser,
+               diagnostic_handler* dh = nullptr);
 
   /// @brief Start building a record
   [[nodiscard]] auto record() -> detail::data_builder::node_record*;
@@ -661,17 +715,12 @@ private:
   detail::data_builder::schema_type_lookup_map schema_type_lookup_;
   diagnostic_handler* dh_;
 
+  settings settings_;
+
 public:
   data_parsing_function parser_;
 
 private:
-  /// whether to discard fields that are not present in the used schema.
-  bool schema_only_;
-  /// Whether to only parse fields that are present in the used schema.
-  /// If this is enabled, fields created as `data_unparsed` will only be parsed
-  /// as typed data, if the are present in the used schema (seed)
-  bool parse_schema_fields_only_;
-
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
   auto emit_or_throw(tenzir::diagnostic_builder&& builder) -> void;
   auto emit_mismatch_warning(const type_kind& value_type, const type& seed_type,
@@ -679,11 +728,44 @@ private:
 };
 
 namespace detail::data_builder {
+inline node_list::node_list(settings settings) : node_base{settings} {
+}
+
 template <non_structured_data_type T>
-auto node_object::data(T data) -> void {
-  mark_this_alive();
-  value_state_ = value_state_type::has_value;
-  data_.emplace<T>(std::move(data));
+auto node_object::data(T data, bool overwrite) -> void {
+  /// If we are not a repeat key list, we can write data directly. This is OK,
+  /// because either the node is new, or its dead, or the mode is overwrite
+  /// (and hence ìs_repeat_key_list is set).
+  const auto direct = overwrite
+                      or settings_.duplicate_keys == duplicate_keys::overwrite
+                      or not is_repeat_key_list;
+  if (direct) {
+    mark_this_alive();
+    value_state_ = value_state_type::has_value;
+    data_.emplace<T>(std::move(data));
+    return;
+  }
+  /// ... Otherwise we should already be alive and marked as a repeat_key list
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  if (settings_.duplicate_keys == duplicate_keys::merge_structural) {
+    if (auto* r = try_as<node_record>(data_)) {
+      r->field(settings_.top_key_name_for_records)
+        ->data(std::move(data), overwrite);
+      return;
+    }
+  }
+  /// The node could already have been upgraded to a list.If it is, we can just
+  /// append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    l->data(std::move(data));
+    return;
+  }
+  /// If the node isnt already upgraded ot a list, we need to do it
+  auto* l = list();
+  l->data(std::move(data));
 }
 
 template <non_structured_data_type T>
