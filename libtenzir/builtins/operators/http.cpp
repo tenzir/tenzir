@@ -620,6 +620,7 @@ struct from_http_args {
   std::optional<location> server;
   std::optional<located<record>> responses;
   std::optional<located<uint64_t>> max_request_size;
+  std::optional<located<uint64_t>> max_connections;
   located<bool> tls{false, location::unknown};
   std::optional<located<std::string>> keyfile;
   std::optional<located<std::string>> certfile;
@@ -642,6 +643,7 @@ struct from_http_args {
     p.named("server", server);
     p.named("responses", responses);
     p.named("max_request_size", max_request_size);
+    p.named("max_connections", max_connections);
     p.named_optional("tls", tls);
     p.named("certfile", certfile);
     p.named("keyfile", keyfile);
@@ -716,7 +718,7 @@ struct from_http_args {
     if (server) {
       check_options(true, method, body, encode, headers, error_field, paginate,
                     paginate_delay, connection_timeout, max_retry_count,
-                    retry_delay);
+                    retry_delay, max_connections);
       TRY(validate_server_opts(dh));
     } else {
       check_options(false, responses, max_request_size);
@@ -827,8 +829,14 @@ struct from_http_args {
 
   auto validate_server_opts(diagnostic_handler& dh) -> failure_or<void> {
     if (max_request_size and max_request_size->inner == 0) {
-      diagnostic::error("request size must not be zero")
+      diagnostic::error("`max_request_size` must not be zero")
         .primary(max_request_size->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (max_connections and max_connections->inner == 0) {
+      diagnostic::error("`max_connections` must not be zero")
+        .primary(max_connections->source)
         .emit(dh);
       return failure::promise();
     }
@@ -969,8 +977,15 @@ struct from_http_args {
       f.field("server", x.server), f.field("responses", x.responses),
       f.field("tls", x.tls), f.field("keyfile", x.keyfile),
       f.field("certfile", x.certfile), f.field("password", x.password),
-      f.field("max_request_size", x.max_request_size));
+      f.field("max_request_size", x.max_request_size),
+      f.field("max_connections", x.max_connections));
   }
+};
+
+struct inreq_queue_item {
+  http_actor actor;
+  http::request req;
+  table_slice slice;
 };
 
 class from_http_server_operator final
@@ -1024,6 +1039,7 @@ public:
           .context(args_.make_ssl_context())
           .accept(port, url)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
+          .max_connections(inner(args_.max_connections).value_or(1000))
           .max_request_size(
             inner(args_.max_request_size).value_or(10 * 1024 * 1024))
           .start([&](caf::async::consumer_resource<http::request> cr) {
@@ -1037,26 +1053,54 @@ public:
       co_return;
     }
     TENZIR_ASSERT(pull);
-    auto slices = std::vector<table_slice>{};
+    auto active = std::deque<inreq_queue_item>{};
+    const auto respond = [&](const http::request& r) {
+      if (args_.responses) {
+        const auto it = args_.responses->inner.find(r.header().path());
+        if (it != args_.responses->inner.end()) {
+          auto rec = as<record>(it->second);
+          auto code = as<uint64_t>(rec["code"]);
+          auto ty = as<std::string>(rec["content_type"]);
+          auto body = as<std::string>(rec["body"]);
+          r.respond(static_cast<http::status>(code), ty, body);
+        }
+      } else {
+        r.respond(http::status::ok, "", "");
+      }
+    };
+    const auto request_slice
+      = [&](const http_actor& actor, const http::request& r) {
+          ctrl.self()
+            .mail(atom::pull_v)
+            .request(actor, caf::infinite)
+            .then(
+              [&, r, actor](table_slice slice) {
+                TENZIR_TRACE("[http] pulled slice");
+                if (slice.rows() == 0) {
+                  respond(r);
+                  return;
+                }
+                if (args_.metadata_field) {
+                  slice = assign(*args_.metadata_field,
+                                 make_metadata(r, slice.rows()), slice, dh);
+                }
+                ctrl.set_waiting(false);
+                active.emplace_back(actor, r, std::move(slice));
+              },
+              [&, r](const caf::error& e) {
+                TENZIR_TRACE("[http] failed to get slice: {}", e);
+                ctrl.set_waiting(false);
+                respond(r);
+              });
+        };
     ctrl.self()
       .make_observable()
       .from_resource(std::move(*pull))
       .for_each([&](const http::request& r) mutable {
         TENZIR_TRACE("[http] handling request with size: {}B",
                      r.body().size_bytes());
-        if (args_.responses) {
-          const auto it = args_.responses->inner.find(r.header().path());
-          if (it != args_.responses->inner.end()) {
-            auto rec = as<record>(it->second);
-            auto code = as<uint64_t>(rec["code"]);
-            auto ty = as<std::string>(rec["content_type"]);
-            auto body = as<std::string>(rec["body"]);
-            r.respond(static_cast<http::status>(code), ty, body);
-          }
-        } else {
-          r.respond(http::status::ok, "", "");
-        }
         if (r.body().empty()) {
+          respond(r);
           return;
         }
         const auto make_chunk = [&] {
@@ -1075,43 +1119,21 @@ public:
         if (not actor) {
           return;
         }
-        std::invoke(
-          [&, &args_ = args_, r, actor](this const auto& pull) -> void {
-            TENZIR_TRACE("[http] requesting slice");
-            ctrl.self()
-              .mail(atom::pull_v)
-              .request(actor, caf::infinite)
-              .then(
-                [&, r, pull, actor](table_slice slice) {
-                  TENZIR_TRACE("[http] pulled slice");
-                  if (slice.rows() == 0) {
-                    TENZIR_TRACE("[http] finishing subpipeline");
-                    ctrl.set_waiting(false);
-                    return;
-                  }
-                  pull();
-                  if (args_.metadata_field) {
-                    slice = assign(*args_.metadata_field,
-                                   make_metadata(r, slice.rows()), slice, dh);
-                  }
-                  slices.push_back(std::move(slice));
-                },
-                [&](const caf::error& e) {
-                  TENZIR_TRACE("[http] failed to get slice: {}", e);
-                });
-          });
-        TENZIR_TRACE("[http] handled request");
+        request_slice(actor, r);
       });
     while (true) {
       ctrl.set_waiting(true);
       co_yield {};
-      // NOTE: Must be an index-based loop. The thread can go back to the
-      // observe loop after yielding here, causing the vector's iterator to be
-      // invalidated.
-      for (auto i = size_t{}; i < slices.size(); ++i) {
-        co_yield slices[i];
+      // NOTE: We need to handle all, else we might hold onto requests which
+      // have already yielded and will not signal `set_waiting(false)` again
+      // unless we poll them again.
+      while (not active.empty()) {
+        auto& front = active.front();
+        TENZIR_ASSERT(front.slice.rows() != 0);
+        request_slice(front.actor, front.req);
+        co_yield std::move(front.slice);
+        active.pop_front();
       }
-      slices.clear();
     }
   }
 
