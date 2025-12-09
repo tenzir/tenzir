@@ -281,15 +281,16 @@ struct http_state {
       [&](atom::pull) -> caf::result<table_slice> {
         TENZIR_ASSERT(not slice_rp_.pending());
         if (slices_.empty()) {
-          if (exited) {
-            self_->quit();
-            return {};
-          }
           slice_rp_ = self_->make_response_promise<table_slice>();
           return slice_rp_;
         }
         auto x = std::move(slices_.front());
         slices_.pop_front();
+        if (slices_.empty() and exited) {
+          self_->schedule_fn([this] {
+            self_->quit();
+          });
+        }
         return x;
       },
       [this](diagnostic diag) {
@@ -515,7 +516,7 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
                         std::string{ctrl.definition()}, ha, ha, ctrl.node(),
                         ctrl.has_terminal(), ctrl.is_hidden());
   handle->link_to(ha);
-  ctrl.self().attach_functor([handle] {});
+  ha->attach_functor([handle] {});
   TENZIR_TRACE("[http] requesting subpipeline start");
   ctrl.self()
     .mail(atom::start_v)
@@ -718,10 +719,10 @@ struct from_http_args {
     if (server) {
       check_options(true, method, body, encode, headers, error_field, paginate,
                     paginate_delay, connection_timeout, max_retry_count,
-                    retry_delay, max_connections);
+                    retry_delay);
       TRY(validate_server_opts(dh));
     } else {
-      check_options(false, responses, max_request_size);
+      check_options(false, responses, max_request_size, max_connections);
       TRY(validate_client_opts(dh));
     }
     return {};
@@ -1039,7 +1040,7 @@ public:
           .context(args_.make_ssl_context())
           .accept(port, url)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
-          .max_connections(inner(args_.max_connections).value_or(1000))
+          .max_connections(inner(args_.max_connections).value_or(10))
           .max_request_size(
             inner(args_.max_request_size).value_or(10 * 1024 * 1024))
           .start([&](caf::async::consumer_resource<http::request> cr) {

@@ -164,7 +164,7 @@ Defaults to `10MiB`.
 
 The maximum number of simultaneous incoming connections to accept.
 
-Defaults to `1000`.
+Defaults to `10`.
 
 ### `tls = bool (optional)`
 
