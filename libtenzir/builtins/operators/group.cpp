@@ -140,7 +140,7 @@ public:
     co_return co_await pipe_output_->next();
   }
 
-  auto process(table_slice input, Push<Output>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
     // TODO
     auto key = data{"hi"};
@@ -188,7 +188,7 @@ public:
     //                       args.ctx);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator {
+  auto spawn() && -> AnyOperator {
     Box<Operator<table_slice, table_slice>> test
       = Group<table_slice>{std::move(over_), std::move(pipe_)};
     return test;

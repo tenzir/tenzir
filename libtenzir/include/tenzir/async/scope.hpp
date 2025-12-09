@@ -24,7 +24,7 @@ public:
   /// Wait for the associated task to complete and return its result.
   ///
   /// If a call to this function is cancelled, then the underlying task will not
-  /// be joined. May be called at most once.
+  /// be joined and nothing happens. May be successfully awaited at most once.
   auto join() -> Task<AsyncResult<T>> {
     TENZIR_ASSERT(state_);
     TENZIR_ASSERT(not state_->notified);

@@ -705,7 +705,7 @@ public:
 
 class SaveStdoutImpl final : public Operator<chunk_ptr, void> {
 public:
-  auto process(chunk_ptr input, AsyncCtx& ctx) -> Task<void> override {
+  auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override {
     std::cout << std::string_view{reinterpret_cast<char const*>(input->data()),
                                   input->size()};
     co_return;
@@ -718,7 +718,7 @@ public:
     return "SaveStdoutPlan";
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     return SaveStdoutImpl{};
   }
 };

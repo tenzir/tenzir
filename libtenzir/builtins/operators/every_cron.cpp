@@ -301,7 +301,7 @@ public:
     : interval_{interval}, ir_{std::move(ir)} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     auto copy = ir_;
     // FIXME: Don't do ths.
@@ -318,7 +318,7 @@ public:
     // spawned remote.
     auto ops = std::vector<AnyOperator>{};
     for (auto& op : std::move(*plan).unwrap()) {
-      ops.push_back(std::move(*op).spawn(std::nullopt));
+      ops.push_back(std::move(*op).spawn());
     }
     auto chain
       = OperatorChain<table_slice, table_slice>::try_from(std::move(ops));
@@ -338,10 +338,6 @@ public:
     // while (auto output = co_await gen.next()) {
     //   co_await push(std::move(*output));
     // }
-  }
-
-  auto checkpoint() -> Task<void> override {
-    co_return;
   }
 
 private:
@@ -367,7 +363,7 @@ public:
                           std::move(args.restore), args.ctx);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     return Every{interval_, std::move(pipe_)};
   }
 

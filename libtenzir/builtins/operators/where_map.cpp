@@ -856,7 +856,7 @@ public:
   explicit Where(ast::expression expr) : expr_{std::move(expr)} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     for (auto output : filter2(input, expr_, ctx, false)) {
       co_await push(std::move(output));
@@ -890,7 +890,7 @@ public:
     // return exec::spawn_operator<where_exec>(std::move(args), predicate_);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     return Where{std::move(predicate_)};
   }
 

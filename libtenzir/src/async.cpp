@@ -28,7 +28,7 @@ namespace tenzir {
 
 class Pass final : public Operator<table_slice, table_slice> {
 public:
-  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     co_await push(std::move(input));
   }
@@ -136,6 +136,7 @@ auto make_unbounded_channel() -> std::pair<Sender<T>, Receiver<T>> {
   return {Sender<T>{shared}, Receiver<T>{shared}};
 }
 
+/// Transforms a `Push<OperatorMsg<T>>` into a `Push<T>`.
 template <class T>
 class OpPushWrapper final : public Push<T> {
 public:
@@ -194,8 +195,7 @@ private:
       if constexpr (std::same_as<Output, void>) {
         co_await op_->start(ctx_);
       } else {
-        auto push = OpPushWrapper{push_downstream_};
-        co_await op_->start(push, ctx_);
+        co_await op_->start(ctx_);
       }
       TENZIR_INFO("-> post start");
       queue_.spawn(op_->await_task());
@@ -287,7 +287,11 @@ private:
             co_return;
           case Signal::checkpoint:
             TENZIR_VERBOSE("got checkpoint in {}", typeid(*op_).name());
-            co_await op_->checkpoint();
+            to_control_.send(ToControl::checkpoint_begin);
+            co_await op_->checkpoint(ctx_);
+            to_control_.send(ToControl::checkpoint_ready);
+            co_await ctx_.flush();
+            to_control_.send(ToControl::checkpoint_done);
             co_await push_downstream_(Signal::checkpoint);
             co_return;
         }
@@ -343,7 +347,7 @@ private:
   Box<Push<OperatorMsg<Output>>> push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
-  AsyncCtx ctx_;
+  OpCtx ctx_;
 
   QueueScope<variant<std::any, OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
@@ -444,7 +448,6 @@ private:
           co_return {index, Shutdown{}};
         });
         TENZIR_INFO("inserting control receiver task");
-        // FIXME: Need to receive more then once. Async gen?
         queue_.spawn(
           [to_control_receiver = std::move(to_control_receiver), index] mutable
             -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
@@ -523,6 +526,10 @@ private:
                     // TODO: What if we don't host the preceding operator? Then
                     // we need to notify OUR input!
                   }
+                  break;
+                case ToControl::checkpoint_begin:
+                case ToControl::checkpoint_ready:
+                case ToControl::checkpoint_done:
                   break;
               }
             });

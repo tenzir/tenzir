@@ -338,65 +338,65 @@ private:
 
 class Version final : public Operator<void, table_slice> {
 public:
-  auto start(Push<table_slice>& push, AsyncCtx& ctx) -> Task<void> override {
-    // TODO: If we would restore, we should not emit the version again...
+  auto start(OpCtx& ctx) -> Task<void> override {
     diagnostic::warning("HELLO from version").emit(ctx);
-    auto slice = make_version(caf::content(ctx.actor_system().config()));
-    co_await push(slice);
+    // auto slice = make_version(caf::content(ctx.actor_system().config()));
+    // co_await push(slice);
     TENZIR_INFO("leaving Version::start");
+    co_return;
   }
 
   auto await_task() const -> Task<std::any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
-    if (remaining_ == 0) {
+    if (count_ == total) {
       co_await folly::coro::sleep(std::chrono::years{1});
     }
-    co_await folly::coro::sleep(std::chrono::milliseconds{200});
-    // Just return the count here as a test.
-    co_return remaining_;
+    if (count_ != 0) {
+      co_await folly::coro::sleep(std::chrono::milliseconds{200});
+    }
+    co_return {};
   }
 
-  auto process_task(std::any result, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     // throw std::runtime_error{"oh no"};
-    auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
-    auto license
-      = co_await ctx
-          .mail(atom::read_v,
-                std::filesystem::path{"/Users/jannis/tenzir/LICENSE"})
-          .request(fs);
-    if (license) {
-      auto& chunk = *license;
-      TENZIR_ERROR(
-        "{}", std::string_view{reinterpret_cast<const char*>(chunk->data()),
-                               chunk->size()});
-    } else {
-      TENZIR_ERROR("got error");
-    }
-    TENZIR_WARN("got result: {}", std::any_cast<size_t>(result));
+    // auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
+    // auto license
+    //   = co_await ctx
+    //       .mail(atom::read_v,
+    //             std::filesystem::path{"/Users/jannis/tenzir/LICENSE"})
+    //       .request(fs);
+    // if (license) {
+    //   auto& chunk = *license;
+    //   TENZIR_ERROR(
+    //     "{}", std::string_view{reinterpret_cast<const char*>(chunk->data()),
+    //                            chunk->size()});
+    // } else {
+    //   TENZIR_ERROR("got error");
+    // }
+    TENZIR_WARN("processing task with count == {}", count_);
+    TENZIR_ASSERT(count_ < total);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
     co_await push(slice);
-    TENZIR_ASSERT(remaining_ > 0);
-    remaining_ -= 1;
+    count_ += 1;
   }
 
-  auto checkpoint() -> Task<void> override {
-    // TODO: Checkpoint the count.
-    (void)remaining_;
-    co_return;
+  auto snapshot(Serde& serde) -> void override {
+    serde("count", count_);
   }
 
   auto state() -> OperatorState override {
-    TENZIR_ERROR("querying state of version with {}", remaining_);
-    if (remaining_ == 0) {
+    TENZIR_ERROR("querying state of version with {}", count_);
+    if (count_ == total) {
       return OperatorState::done;
     }
     return OperatorState::unspecified;
   }
 
 private:
-  size_t remaining_ = 0;
+  static constexpr size_t total = 5;
+  size_t count_ = 0;
 };
 
 class version_plan final : public plan::operator_base {
@@ -415,7 +415,7 @@ public:
     return args.sys.spawn(caf::actor_from_state<version_exec>);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     TENZIR_WARN("spawning version plan");
     return Version{};
   }

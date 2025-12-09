@@ -29,7 +29,7 @@ public:
   explicit Head(size_t count) : remaining_{count} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     // TODO: Do we want to guarantee this?
     TENZIR_ASSERT(remaining_ > 0);
@@ -48,9 +48,8 @@ public:
     return OperatorState::unspecified;
   }
 
-  auto checkpoint() -> Task<void> override {
-    // TODO: Save `remaining_`.
-    co_return;
+  auto snapshot(Serde& serde) -> void override {
+    serde("remaining", remaining_);
   }
 
 private:

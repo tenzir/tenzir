@@ -1329,7 +1329,7 @@ public:
 
 class JsonImpl final : public Operator<table_slice, chunk_ptr> {
 public:
-  auto process(table_slice input, Push<chunk_ptr>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> {
     TENZIR_WARN("got table slice in JsonImpl");
     auto opts = json_printer_options{};
@@ -1366,7 +1366,7 @@ public:
     return "json_plan";
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     return JsonImpl{};
   }
 };

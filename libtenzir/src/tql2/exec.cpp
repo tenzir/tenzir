@@ -524,6 +524,23 @@ auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
   return {};
 }
 
+class RestoreId {
+public:
+  static auto make(uint32_t id) -> RestoreId {
+    return RestoreId{id};
+  }
+
+  auto unwrap() const -> uint32_t {
+    return id_;
+  }
+
+private:
+  RestoreId(uint32_t id) : id_{id} {
+  }
+
+  uint32_t id_;
+};
+
 auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
               diagnostic_handler& dh) -> Task<failure_or<void>> {
   TENZIR_WARN("spawning plan");
@@ -535,7 +552,7 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
       TENZIR_TODO();
     } else {
     }
-    ops.push_back(std::move(*op).spawn(std::nullopt));
+    ops.push_back(std::move(*op).spawn());
   }
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
@@ -654,6 +671,12 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     std::move(finalized), exec::pipeline_settings{}, std::nullopt, b_ctx);
   return run_pipeline(std::move(exec), b_ctx).is_success();
 #endif
+}
+
+auto exec_restore2(std::string_view job_id, RestoreId restore_id,
+                   caf::actor_system& sys, diagnostic_handler& dh) {
+  // 1. Get `plan::pipeline` to spawn operators again.
+  // TODO: How do the operators with subpipelines get restored?
 }
 
 // TODO: Source for diagnostic handler?

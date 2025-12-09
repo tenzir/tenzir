@@ -18,6 +18,8 @@
 #include "tenzir/tql2/eval.hpp"
 
 #include <caf/actor_cast.hpp>
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
 #include <caf/mailbox_element.hpp>
 #include <caf/response_type.hpp>
 #include <folly/coro/Collect.h>
@@ -83,13 +85,12 @@ private:
   caf::message msg_;
 };
 
-class AsyncCtx {
+class OpCtx {
 public:
-  AsyncCtx(caf::actor_system& sys, diagnostic_handler& dh)
-    : sys_{sys}, dh_{dh} {
+  OpCtx(caf::actor_system& sys, diagnostic_handler& dh) : sys_{sys}, dh_{dh} {
   }
 
-  virtual ~AsyncCtx() = default;
+  virtual ~OpCtx() = default;
 
   explicit(false) operator diagnostic_handler&() {
     return dh_;
@@ -103,6 +104,18 @@ public:
   auto mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
     return AsyncMail<std::decay_t<Ts>...>{
       caf::make_message(std::forward<Ts>(xs)...)};
+  }
+
+  auto save(chunk_ptr chunk) -> Task<void> {
+    co_return;
+  }
+
+  auto load() -> Task<chunk_ptr> {
+    co_return {};
+  }
+
+  auto flush() -> Task<void> {
+    co_return;
   }
 
 private:
@@ -122,7 +135,7 @@ class CheckpointId {};
 template <class Input, class Output>
 class OperatorInputOutputBase {
 public:
-  virtual auto process(Input input, Push<Output>& push, AsyncCtx& ctx)
+  virtual auto process(Input input, Push<Output>& push, OpCtx& ctx)
     -> Task<void>
     = 0;
 
@@ -136,7 +149,7 @@ class OperatorInputOutputBase<void, Output> {};
 template <class Input>
 class OperatorInputOutputBase<Input, void> {
 public:
-  virtual auto process(Input input, AsyncCtx& ctx) -> Task<void> = 0;
+  virtual auto process(Input input, OpCtx& ctx) -> Task<void> = 0;
 
 protected:
   ~OperatorInputOutputBase() = default;
@@ -145,20 +158,25 @@ protected:
 template <class Output>
 class OperatorOutputBase {
 public:
-  virtual auto start(Push<Output>& push, AsyncCtx& ctx) -> Task<void> {
-    TENZIR_UNUSED(push, ctx);
-    co_return;
-  }
-
-  virtual auto process_task(std::any result, Push<Output>& push, AsyncCtx& ctx)
+  virtual auto process_task(std::any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
     TENZIR_UNUSED(result, push, ctx);
     TENZIR_ERROR("ignoring task result in {}", typeid(*this).name());
     co_return;
   }
 
-  virtual auto finalize(Push<Output>& push, AsyncCtx& ctx) -> Task<void> {
+  virtual auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<void> {
     co_return;
+  }
+
+  /// Process the result of a spawned subpipeline in a *thread-safe* way.
+  ///
+  /// Note that, unlike all other functions in the operator interface, this one
+  /// may be called in parallel while another call is active.
+  virtual auto on_subpipeline(table_slice slice, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(slice, push, ctx);
+    TENZIR_UNREACHABLE();
   }
 
 protected:
@@ -168,18 +186,13 @@ protected:
 template <>
 class OperatorOutputBase<void> {
 public:
-  virtual auto start(AsyncCtx& ctx) -> Task<void> {
-    TENZIR_UNUSED(ctx);
-    co_return;
-  }
-
-  virtual auto process_task(std::any result, AsyncCtx& ctx) -> Task<void> {
+  virtual auto process_task(std::any result, OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(result, ctx);
     TENZIR_ERROR("ignoring task result in {}", typeid(*this).name());
     co_return;
   }
 
-  virtual auto finalize(AsyncCtx& ctx) -> Task<void> {
+  virtual auto finalize(OpCtx& ctx) -> Task<void> {
     co_return;
   }
 
@@ -187,11 +200,55 @@ protected:
   ~OperatorOutputBase() = default;
 };
 
-template <class Input, class Output>
-class Operator : public OperatorInputOutputBase<Input, Output>,
-                 public OperatorOutputBase<Output> {
+// TODO: CAF binary format might not be the best choice. What properties and
+// guarantees do we need?
+class Serde {
 public:
-  virtual ~Operator() = default;
+  /// Construct an instance for deserializing.
+  explicit Serde(caf::binary_deserializer& f) : f_{f} {
+  }
+
+  // Construct an instance for serializing.
+  explicit Serde(caf::binary_serializer& f) : f_{f} {
+  }
+
+  template <class T>
+  auto operator()(std::string_view name, T& value) {
+    auto success = match(f_, [&](auto& f) {
+      return f.get().field(name, value)(f.get());
+    });
+    TENZIR_ASSERT(success);
+  }
+
+private:
+  variant<std::reference_wrapper<caf::binary_serializer>,
+          std::reference_wrapper<caf::binary_deserializer>>
+    f_;
+  chunk_ptr chunk_;
+};
+
+class OperatorBase {
+public:
+  virtual auto start(OpCtx& ctx) -> Task<void> {
+    // TODO: What if we don't restore? No data? Flag?
+    auto data = co_await ctx.load();
+    if (not data) {
+      co_return;
+    }
+    auto f = caf::binary_deserializer{
+      caf::const_byte_span{data->data(), data->size()}};
+    auto ok = f.begin_object(caf::invalid_type_id, "");
+    TENZIR_ASSERT(ok);
+    auto serde = Serde{f};
+    snapshot(serde);
+    ok = f.end_object();
+    TENZIR_ASSERT(ok);
+    // TODO: Assert we read everything?
+  }
+
+  virtual auto snapshot(Serde& serde) -> void {
+    TENZIR_UNUSED(serde);
+  }
 
   // TODO: Do we rather want to expose an interface to wait for multiple
   // futures? The problem is that if we restore after a failure, we need to
@@ -204,9 +261,16 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  virtual auto checkpoint() -> Task<void> {
-    // TODO: This should be implemented through `inspect`, right?
-    co_return;
+  virtual auto checkpoint(OpCtx& ctx) -> Task<void> {
+    auto buffer = caf::byte_buffer{};
+    auto f = caf::binary_serializer{buffer};
+    auto ok = f.begin_object(caf::invalid_type_id, "");
+    TENZIR_ASSERT(ok);
+    auto serde = Serde{f};
+    snapshot(serde);
+    ok = f.end_object();
+    TENZIR_ASSERT(ok);
+    co_await ctx.save(chunk::make(std::move(buffer)));
   }
 
   virtual auto post_commit() -> Task<void> {
@@ -216,62 +280,17 @@ public:
   virtual auto state() -> OperatorState {
     return OperatorState::unspecified;
   }
+
+protected:
+  ~OperatorBase() = default;
 };
 
-/// An easier interface for `Operator<void, Output>`.
-template <class Output, class Step>
-class SourceOperator {
+template <class Input, class Output>
+class Operator : public OperatorBase,
+                 public OperatorOutputBase<Output>,
+                 public OperatorInputOutputBase<Input, Output> {
 public:
-  virtual ~SourceOperator() = default;
-
-  virtual auto next() const -> Task<std::optional<Step>> = 0;
-
-  virtual auto process(Step result, Push<Output>& push, AsyncCtx& ctx)
-    -> Task<void>
-    = 0;
-
-  virtual auto checkpoint() -> Task<void> {
-    // TODO: This should be implemented through `inspect`, right?
-    co_return;
-  }
-
-  virtual auto post_commit() -> Task<void> {
-    co_return;
-  }
-};
-
-template <class Output, class Step>
-class SourceOperatorWrapper : public Operator<void, Output> {
-public:
-  explicit SourceOperatorWrapper(Box<SourceOperator<Output, Step>> op)
-    : op_{std::move(op)} {
-  }
-
-  auto await_task() const -> Task<std::any> override {
-    auto result = co_await op_->next();
-    if (result.has_value()) {
-      co_return std::make_any<Step>(std::move(*result));
-    }
-    co_return {};
-  }
-
-  auto process_task(std::any result, Push<Output>& push, AsyncCtx& ctx)
-    -> Task<void> override {
-    auto cast = std::any_cast<Step>(&result);
-    TENZIR_ASSERT(cast);
-    return op_->process(std::move(*cast), push, ctx);
-  }
-
-  auto checkpoint() -> Task<void> override {
-    return op_->checkpoint();
-  }
-
-  auto post_commit() -> Task<void> override {
-    return op_->post_commit();
-  }
-
-private:
-  Box<SourceOperator<Output, Step>> op_;
+  virtual ~Operator() = default;
 };
 
 using AnyOperator = variant<
@@ -382,7 +401,10 @@ TENZIR_ENUM(
   ready_for_shutdown,
   /// Say that we do not want any more input. This will also notify our
   /// preceding operator.
-  no_more_input);
+  no_more_input,
+  // TODO: Checkpoint messages need data, move into variant.
+  /// Inform the controller what checkpoint state we are in.
+  checkpoint_begin, checkpoint_ready, checkpoint_done);
 
 // TODO: Where to place this?
 template <class T>

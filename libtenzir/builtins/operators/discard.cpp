@@ -257,12 +257,12 @@ private:
 
 class DiscardImpl final : public Operator<table_slice, void> {
 public:
-  auto start(AsyncCtx& ctx) -> Task<void> override {
+  auto start(OpCtx& ctx) -> Task<void> override {
     // TENZIR_ASSERT(false, "oops");
     co_return;
   }
 
-  auto process(table_slice input, AsyncCtx& ctx) -> Task<void> override {
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(input, ctx);
     co_return;
   }
@@ -281,7 +281,7 @@ public:
     return args.sys.spawn(caf::actor_from_state<discard_exec>);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     TENZIR_WARN("spawning discard plan");
     return DiscardImpl{};
   }

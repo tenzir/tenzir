@@ -92,7 +92,7 @@ public:
     }
   }
 
-  auto process(table_slice input, Push<table_slice>& push, AsyncCtx& ctx)
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> {
     auto slice = std::move(input);
     // The right-hand side is always evaluated with the original input, because
@@ -170,7 +170,7 @@ public:
                           order_);
   }
 
-  auto spawn(std::optional<chunk_ptr> restore) && -> AnyOperator override {
+  auto spawn() && -> AnyOperator override {
     return Set{std::move(assignments_), order_};
   }
 
