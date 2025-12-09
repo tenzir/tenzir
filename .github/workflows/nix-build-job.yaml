@@ -113,12 +113,12 @@ jobs:
       - name: Test Installation (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          deb_file="$(basename ./packages/debian/tenzir*.deb)"
+          deb_file="$(basename ${{ steps.build.outputs.package-dir }}/tenzir*.deb)"
           docker build tenzir/services/systemd/test -t installer-test-ubuntu
           docker run -d --name installer-test-ubuntu \
                  --privileged \
                  --volume=.:/src/tenzir:ro \
-                 --volume="./packages/debian":/tmp/packages:ro \
+                 --volume="${{ steps.build.outputs.package-dir }}":/tmp/packages:ro \
                  --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
                  --cgroupns=host \
                  installer-test-ubuntu
@@ -132,12 +132,12 @@ jobs:
       - name: Test Installation (Rocky Linux)
         if: runner.os == 'Linux'
         run: |
-          rpm_file="$(basename ./packages/rpm/tenzir*.rpm)"
+          rpm_file="$(basename ${{ steps.build.outputs.package-dir }}/tenzir*.rpm)"
           docker build tenzir/services/systemd/test -t installer-test-rocky
           docker run -d --name installer-test-rocky \
                  --privileged \
                  --volume=.:/src/tenzir:ro \
-                 --volume="./packages/rpm":/tmp/packages:ro \
+                 --volume="${{ steps.build.outputs.package-dir }}":/tmp/packages:ro \
                  --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
                  --cgroupns=host \
                  eniocarboni/docker-rockylinux-systemd:9

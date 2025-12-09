@@ -29,12 +29,6 @@ import sys
 from pathlib import Path
 
 
-def run(cmd: list[str], check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    """Run a command, optionally capturing output."""
-    print(f"::notice Running: {' '.join(cmd)}")
-    return subprocess.run(cmd, check=check, stdout=subprocess.PIPE, text=True)
-
-
 def notice(msg: str) -> None:
     print(f"::notice {msg}")
 
@@ -45,6 +39,12 @@ def warning(msg: str) -> None:
 
 def error(msg: str) -> None:
     print(f"::error {msg}")
+
+
+def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
+    """Run a command, optionally capturing output."""
+    notice(f"Running: {' '.join(cmd)}")
+    return subprocess.run(cmd, check=check, stdout=subprocess.PIPE, text=True)
 
 
 def registry_login(registry: str) -> bool:
@@ -118,7 +118,7 @@ def build(attribute: str, is_release: bool) -> Path:
         "--print-out-paths",
     ]
     notice(f"Building {attribute}")
-    result = run(cmd, capture=True)
+    result = run(cmd)
     return Path(result.stdout.strip())
 
 
@@ -271,6 +271,10 @@ def main() -> int:
 
     # Build
     pkg_dir = build(args.attribute, is_release)
+    if "GITHUB_OUTPUT" in os.environ:
+        with open(os.environ["GITHUB_OUTPUT"], "a") as github_output:
+            _ = github_output.write(f"package-dir={pkg_dir}\n")
+
 
     # Upload packages
     if args.package_stores or args.release_tag:
