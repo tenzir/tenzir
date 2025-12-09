@@ -52,10 +52,6 @@ jobs:
           tags: tag:ci
           version: 1.66.4
           args: --ssh
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd  # v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Install Nix
         uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
         with:
