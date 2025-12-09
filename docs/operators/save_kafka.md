@@ -16,7 +16,7 @@ save_kafka topic:string, [key=string, timestamp=time, options=record,
 :::caution[Deprecated]
 The `save_kafka` operator does not respect event boundaries and can combine
 multiple events into a single message, causing issues for consumers. Consider
-using [`to_kafka`](to_kafka.md) instead.
+using [`to_kafka`](/reference/operators/to_kafka) instead.
 :::
 
 The `save_kafka` operator saves bytes to a Kafka topic.
@@ -107,4 +107,5 @@ save_kafka "data"
 
 ## See Also
 
-[`load_kafka`](/reference/operators/load_kafka)
+[`from_kafka`](/reference/operators/from_kafka),
+[`to_kafka`](/reference/operators/to_kafka)

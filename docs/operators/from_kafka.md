@@ -146,4 +146,4 @@ from_kafka "security-logs",
 
 ## See Also
 
-[`to_kafka`](to_kafka.md)
+[`to_kafka`](/reference/operators/to_kafka)
