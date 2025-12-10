@@ -126,12 +126,13 @@ def build(attribute: str, is_release: bool) -> Path:
     return Path(result.stdout.strip())
 
 
-def sign_macos_packages(pkg_dir: Path, signing_identity: str) -> Path:
+def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity: str | None = None) -> Path:
     """Sign the tenzir binary inside macOS packages (.tar.gz and .pkg).
 
     This function:
     1. Extracts the tarball, signs the binary, and repacks it
     2. Extracts the .pkg, replaces the binary with the signed one, and repacks it
+    3. Signs the .pkg itself with productsign (if installer_identity is provided)
 
     The signing uses hardened runtime (--options runtime) which is required
     for notarization.
@@ -295,17 +296,51 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str) -> Path:
                 with gzip.open(payload_path, "wb") as gz:
                     gz.write(cpio_result.stdout)
 
-                # Flatten the package to signed-packages directory
-                signed_pkg = signed_pkg_dir / pkg.name
+                # Flatten the package to a temporary location first
+                unsigned_pkg = tmp_path / f"unsigned-{pkg.name}"
                 result = subprocess.run(
-                    ["pkgutil", "--flatten", str(pkg_extract_dir), str(signed_pkg)],
+                    ["pkgutil", "--flatten", str(pkg_extract_dir), str(unsigned_pkg)],
                     capture_output=True,
                     text=True,
                 )
                 if result.returncode != 0:
                     error(f"pkgutil --flatten failed: {result.stderr}")
                     raise RuntimeError(f"Failed to flatten .pkg: {result.stderr}")
-                notice(f"Created signed .pkg: {signed_pkg}")
+
+                # Sign the .pkg with productsign if installer identity is available
+                signed_pkg = signed_pkg_dir / pkg.name
+                if installer_identity:
+                    notice(f"Signing .pkg with installer identity: {installer_identity}")
+                    result = subprocess.run(
+                        [
+                            "productsign",
+                            "--sign", installer_identity,
+                            "--timestamp",
+                            str(unsigned_pkg),
+                            str(signed_pkg),
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        error(f"productsign failed: {result.stderr}")
+                        raise RuntimeError(f"Failed to sign .pkg: {result.stderr}")
+
+                    # Verify the .pkg signature
+                    result = subprocess.run(
+                        ["pkgutil", "--check-signature", str(signed_pkg)],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        error(f".pkg signature verification failed: {result.stderr}")
+                        raise RuntimeError(f".pkg signature verification failed: {result.stderr}")
+                    notice(f"Created and signed .pkg: {signed_pkg}")
+                else:
+                    # No installer identity, just copy the unsigned pkg
+                    shutil.copy2(unsigned_pkg, signed_pkg)
+                    warning("No installer identity provided, .pkg is unsigned")
+                    notice(f"Created .pkg (unsigned): {signed_pkg}")
 
     return signed_pkg_dir
 
@@ -460,12 +495,16 @@ def main() -> int:
     # Build
     pkg_dir = build(args.attribute, is_release)
 
-    # Sign macOS packages if signing identity is available
-    signing_identity = os.environ.get("APPLE_SIGNING_IDENTITY")
-    if signing_identity:
-        pkg_dir = sign_macos_packages(pkg_dir, signing_identity)
-    elif platform.system() == "Darwin":
-        warning("APPLE_SIGNING_IDENTITY not set, skipping code signing")
+    if platform.system() == "Darwin":
+        # Sign macOS packages if signing identity is available
+        signing_identity = os.environ.get("APPLE_SIGNING_IDENTITY")
+        installer_identity = os.environ.get("APPLE_INSTALLER_IDENTITY")
+        if not signing_identity:
+            warning("APPLE_SIGNING_IDENTITY not set, skipping code signing")
+        if not installer_identity:
+            warning("APPLE_INSTALLER_IDENTITY not set, skipping code signing")
+        if signing_identity and installer_identity:
+            pkg_dir = sign_macos_packages(pkg_dir, signing_identity, installer_identity)
 
     # Output package directory for GitHub Actions
     if "GITHUB_OUTPUT" in os.environ:

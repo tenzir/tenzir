@@ -63,7 +63,8 @@ jobs:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           pushFilter: "tenzir-ee"
-      - name: Import Apple signing certificate
+      - name: Import Apple signing certificates
+        id: import_apple_signing_certificates
         if: runner.os == 'macOS'
         run: |
           # Create a temporary keychain
@@ -74,7 +75,7 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Import certificate
+          # Import Developer ID Application certificate (for signing binaries)
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
           echo "${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}" | base64 --decode > "$CERT_PATH"
           security import "$CERT_PATH" \
@@ -85,17 +86,34 @@ jobs:
             -k "$KEYCHAIN_PATH"
           rm "$CERT_PATH"
 
+          # Import Developer ID Installer certificate (for signing .pkg)
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/installer_certificate.p12"
+          echo "${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12_BASE64 }}" | base64 --decode > "$INSTALLER_CERT_PATH"
+          security import "$INSTALLER_CERT_PATH" \
+            -P "${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          rm "$INSTALLER_CERT_PATH"
+
           # Add keychain to search list and set as default
           security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security list-keychains -d user | tr -d '"')"
           security default-keychain -s "$KEYCHAIN_PATH"
 
-          # Allow codesign to access the keychain without UI prompt
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          # Allow codesign and productsign to access the keychain without UI prompt
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Extract signing identity name from certificate
-          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -o '"[^"]*"' | head -1 | tr -d '"')
-          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          echo "::notice::Signing identity: $IDENTITY"
+          # Extract signing identity names from certificates
+          # Application identity (for codesign)
+          APP_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "APPLE_SIGNING_IDENTITY=$APP_IDENTITY" >> "$GITHUB_OUTPUT"
+          echo "::notice::Application signing identity: $APP_IDENTITY"
+
+          # Installer identity (for productsign)
+          INSTALLER_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "APPLE_INSTALLER_IDENTITY=$INSTALLER_IDENTITY" >> "$GITHUB_ENV"
+          echo "::notice::Installer signing identity: $INSTALLER_IDENTITY"
       - name: Build and Publish
         id: build
         env:
