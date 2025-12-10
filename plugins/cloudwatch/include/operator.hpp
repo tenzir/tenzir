@@ -17,9 +17,14 @@
 #include <aws/logs/CloudWatchLogsClient.h>
 #include <aws/logs/model/FilterLogEventsRequest.h>
 #include <aws/logs/model/FilterLogEventsResult.h>
+#include <aws/logs/model/StartLiveTailHandler.h>
 #include <aws/logs/model/StartLiveTailRequest.h>
 
+#include <atomic>
+#include <mutex>
+#include <queue>
 #include <string_view>
+#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -29,6 +34,16 @@ namespace {
 
 /// Default poll interval for tailing logs (non-live mode).
 static constexpr auto default_poll_interval = 1s;
+
+/// Structure to hold a log event from Live Tail.
+struct live_tail_event {
+  int64_t timestamp;
+  int64_t ingestion_time;
+  std::string log_group;
+  std::string log_stream;
+  std::string message;
+  std::string event_id;
+};
 
 struct connector_args {
   located<std::string> log_group;
@@ -100,6 +115,13 @@ private:
                      const type& output_type) const -> generator<table_slice> {
     auto builder = series_builder{output_type};
 
+    // Thread-safe event queue for receiving events from the handler
+    auto event_queue = std::queue<live_tail_event>{};
+    auto queue_mutex = std::mutex{};
+    auto running = std::atomic<bool>{true};
+    auto error_message = std::string{};
+    auto has_error = std::atomic<bool>{false};
+
     // Build the request
     auto request = Aws::CloudWatchLogs::Model::StartLiveTailRequest{};
 
@@ -114,51 +136,87 @@ private:
         Aws::String{args_.filter_pattern->inner.c_str()});
     }
 
+    // Set up the event stream handler
+    Aws::CloudWatchLogs::Model::StartLiveTailHandler handler;
+
+    handler.SetLiveTailSessionStartCallback(
+      [](const Aws::CloudWatchLogs::Model::LiveTailSessionStart&) {
+        TENZIR_DEBUG("CloudWatch Live Tail session started");
+      });
+
+    handler.SetLiveTailSessionUpdateCallback(
+      [&event_queue, &queue_mutex, &running](
+        const Aws::CloudWatchLogs::Model::LiveTailSessionUpdate& session_update) {
+        if (! running.load()) {
+          return;
+        }
+        const auto& results = session_update.GetSessionResults();
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        for (const auto& event : results) {
+          live_tail_event evt;
+          evt.timestamp = event.GetTimestamp();
+          evt.ingestion_time = event.GetIngestionTime();
+          evt.log_group = std::string(event.GetLogGroupIdentifier().c_str());
+          evt.log_stream = std::string(event.GetLogStreamName().c_str());
+          evt.message = std::string(event.GetMessage().c_str());
+          evt.event_id = std::string(event.GetEventId().c_str());
+          event_queue.push(std::move(evt));
+        }
+      });
+
+    handler.SetOnErrorCallback(
+      [&has_error, &error_message, &running](
+        const Aws::Client::AWSError<Aws::CloudWatchLogs::CloudWatchLogsErrors>&
+          error) {
+        error_message = std::string(error.GetMessage().c_str());
+        has_error.store(true);
+        running.store(false);
+        TENZIR_ERROR("CloudWatch Live Tail error: {}", error_message);
+      });
+
     co_yield {};
 
     TENZIR_DEBUG("starting CloudWatch Live Tail session");
 
-    // Call the synchronous StartLiveTail which returns a streaming response
-    auto outcome = client.StartLiveTail(request);
-
-    if (! outcome.IsSuccess()) {
-      diagnostic::error("failed to start CloudWatch Live Tail")
-        .primary(args_.log_group.source)
-        .note("{}", outcome.GetError().GetMessage())
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-
-    auto& result = outcome.GetResult();
-    auto& event_stream = result.GetEventStream();
+    // Start the live tail in a separate thread since it blocks
+    auto stream_thread = std::thread([&client, &request, &handler, &running]() {
+      // Call StartLiveTail - this blocks until the stream ends
+      client.StartLiveTail(request, handler);
+      running.store(false);
+    });
 
     auto last_yield_time = std::chrono::steady_clock::now();
 
-    // Process the event stream
-    // The stream sends LiveTailSessionUpdate objects every second
-    while (true) {
-      // Check if there are events available
-      if (event_stream.IsReady()) {
-        // Process any session updates
-        auto update = event_stream.GetResult();
-        if (update.GetSessionUpdate().SessionResultsHasBeenSet()) {
-          const auto& results = update.GetSessionUpdate().GetSessionResults();
-          for (const auto& event : results) {
-            auto row = builder.record();
+    // Process events from the queue
+    while (running.load() || ! event_queue.empty()) {
+      if (has_error.load()) {
+        diagnostic::error("CloudWatch Live Tail error")
+          .primary(args_.log_group.source)
+          .note("{}", error_message)
+          .emit(ctrl.diagnostics());
+        break;
+      }
 
-            auto ts = time{std::chrono::duration_cast<duration>(
-              std::chrono::milliseconds{event.GetTimestamp()})};
-            auto ing_ts = time{std::chrono::duration_cast<duration>(
-              std::chrono::milliseconds{event.GetIngestionTime()})};
+      // Drain events from the queue
+      {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        while (! event_queue.empty()) {
+          const auto& event = event_queue.front();
+          auto row = builder.record();
 
-            row.field("timestamp").data(ts);
-            row.field("ingestion_time").data(ing_ts);
-            row.field("log_group")
-              .data(std::string{event.GetLogGroupIdentifier()});
-            row.field("log_stream").data(std::string{event.GetLogStreamName()});
-            row.field("message").data(std::string{event.GetMessage()});
-            row.field("event_id").data(std::string{event.GetEventId()});
-          }
+          auto ts = time{std::chrono::duration_cast<duration>(
+            std::chrono::milliseconds{event.timestamp})};
+          auto ing_ts = time{std::chrono::duration_cast<duration>(
+            std::chrono::milliseconds{event.ingestion_time})};
+
+          row.field("timestamp").data(ts);
+          row.field("ingestion_time").data(ing_ts);
+          row.field("log_group").data(event.log_group);
+          row.field("log_stream").data(event.log_stream);
+          row.field("message").data(event.message);
+          row.field("event_id").data(event.event_id);
+
+          event_queue.pop();
         }
       }
 
@@ -170,6 +228,20 @@ private:
       } else {
         co_yield {};
       }
+
+      // Small sleep to avoid busy-waiting
+      std::this_thread::sleep_for(100ms);
+    }
+
+    // Clean up
+    running.store(false);
+    if (stream_thread.joinable()) {
+      stream_thread.join();
+    }
+
+    // Yield any remaining data
+    if (builder.length() > 0) {
+      co_yield builder.finish_assert_one_slice();
     }
   }
 
@@ -232,9 +304,10 @@ private:
           row.field("timestamp").data(ts);
           row.field("ingestion_time").data(ing_ts);
           row.field("log_group").data(args_.log_group.inner);
-          row.field("log_stream").data(std::string{event.GetLogStreamName()});
-          row.field("message").data(std::string{event.GetMessage()});
-          row.field("event_id").data(std::string{event.GetEventId()});
+          row.field("log_stream")
+            .data(std::string(event.GetLogStreamName().c_str()));
+          row.field("message").data(std::string(event.GetMessage().c_str()));
+          row.field("event_id").data(std::string(event.GetEventId().c_str()));
 
           // Track the latest timestamp for next poll
           if (event.GetTimestamp() >= start_time) {
