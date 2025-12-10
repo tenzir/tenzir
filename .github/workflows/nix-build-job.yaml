@@ -63,6 +63,39 @@ jobs:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           pushFilter: "tenzir-ee"
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS'
+        run: |
+          # Create a temporary keychain
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          rm "$CERT_PATH"
+
+          # Add keychain to search list and set as default
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security list-keychains -d user | tr -d '"')"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          # Allow codesign to access the keychain without UI prompt
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Extract signing identity name from certificate
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "::notice::Signing identity: $IDENTITY"
       - name: Build and Publish
         id: build
         env:
@@ -73,6 +106,7 @@ jobs:
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
+          APPLE_SIGNING_IDENTITY: ${{ steps.import_apple_signing_certificates.outputs.APPLE_INSTALLER_IDENTITY }}
         run: |
           # Determine arguments based on event type
           args=(--attribute ${{ inputs.attribute }} --arch ${{ inputs.arch }})
@@ -106,6 +140,13 @@ jobs:
             nixpkgs#rclone \
             nixpkgs#skopeo \
             -c python3 .github/workflows/nix-build.py "${args[@]}"
+      - name: Upload signed tarball artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: tenzir-signed-tarball-${{ inputs.arch }}-${{ inputs.os }}
+          path: ${{ steps.build.outputs.package-dir }}/*.tar.gz
+          retention-days: 1
       - name: Test Installation (Ubuntu)
         if: runner.os == 'Linux'
         run: |

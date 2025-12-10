@@ -20,11 +20,15 @@ Examples:
 
 import argparse
 import base64
+import gzip
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 
 from pathlib import Path
 
@@ -120,6 +124,190 @@ def build(attribute: str, is_release: bool) -> Path:
     notice(f"Building {attribute}")
     result = run(cmd)
     return Path(result.stdout.strip())
+
+
+def sign_macos_packages(pkg_dir: Path, signing_identity: str) -> Path:
+    """Sign the tenzir binary inside macOS packages (.tar.gz and .pkg).
+
+    This function:
+    1. Extracts the tarball, signs the binary, and repacks it
+    2. Extracts the .pkg, replaces the binary with the signed one, and repacks it
+
+    The signing uses hardened runtime (--options runtime) which is required
+    for notarization.
+
+    Returns the path to a new directory containing the signed packages.
+    """
+    if platform.system() != "Darwin":
+        notice("Skipping macOS signing on non-Darwin platform")
+        return pkg_dir
+
+    tarballs = list(pkg_dir.glob("*.tar.gz"))
+    pkgs = list(pkg_dir.glob("*.pkg"))
+
+    if not tarballs:
+        warning("No tarball found for signing")
+        return pkg_dir
+
+    if len(tarballs) != 1:
+        warning(f"Expected exactly one tarball, found {len(tarballs)}")
+        return pkg_dir
+
+    # Create output directory for signed packages
+    signed_pkg_dir = Path("./signed-packages")
+    signed_pkg_dir.mkdir(exist_ok=True)
+
+    tarball = tarballs[0]
+    notice(f"Signing binary in {tarball.name}")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        extract_dir = tmp_path / "extracted"
+        extract_dir.mkdir()
+
+        # Extract tarball
+        with tarfile.open(tarball, "r:gz") as tf:
+            tf.extractall(extract_dir, filter="data")
+
+        # Find and sign the binary
+        binary_path = extract_dir / "opt" / "tenzir" / "bin" / "tenzir"
+        if not binary_path.exists():
+            error(f"Binary not found at {binary_path}")
+            return pkg_dir
+
+        notice(f"Signing {binary_path}")
+        result = subprocess.run(
+            [
+                "codesign",
+                "--force",
+                "--sign", signing_identity,
+                "--timestamp",
+                "--options", "runtime",
+                str(binary_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            error(f"codesign failed: {result.stderr}")
+            raise RuntimeError(f"Code signing failed: {result.stderr}")
+
+        # Verify signature
+        result = subprocess.run(
+            ["codesign", "--verify", "--verbose", str(binary_path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            error(f"Signature verification failed: {result.stderr}")
+            raise RuntimeError(f"Signature verification failed: {result.stderr}")
+        notice("Signature verified successfully")
+
+        # Repack tarball to signed-packages directory
+        signed_tarball = signed_pkg_dir / tarball.name
+        with tarfile.open(signed_tarball, "w:gz") as tf:
+            # Add contents with the correct archive name (opt/tenzir/...)
+            for item in extract_dir.iterdir():
+                tf.add(item, arcname=item.name)
+        notice(f"Created signed tarball: {signed_tarball}")
+
+        # Now handle the .pkg if present
+        if pkgs:
+            if len(pkgs) != 1:
+                warning(f"Expected exactly one .pkg, found {len(pkgs)}")
+            else:
+                pkg = pkgs[0]
+                notice(f"Updating binary in {pkg.name}")
+
+                # pkgutil --expand creates the destination directory itself
+                pkg_extract_dir = tmp_path / "pkg_extracted"
+
+                # Expand the .pkg (it's a xar archive with component packages)
+                result = subprocess.run(
+                    ["pkgutil", "--expand", str(pkg), str(pkg_extract_dir)],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    error(f"pkgutil --expand failed: {result.stderr}")
+                    raise RuntimeError(f"Failed to expand .pkg: {result.stderr}")
+
+                # Find the Payload in the component package
+                # The structure is: pkg_extracted/<component>.pkg/Payload
+                component_dirs = [d for d in pkg_extract_dir.iterdir() if d.is_dir() and d.suffix == ".pkg"]
+                if not component_dirs:
+                    error("No component package found in .pkg")
+                    raise RuntimeError("No component package found in .pkg")
+
+                component_dir = component_dirs[0]
+                payload_path = component_dir / "Payload"
+
+                if not payload_path.exists():
+                    error(f"Payload not found at {payload_path}")
+                    raise RuntimeError(f"Payload not found at {payload_path}")
+
+                # Extract Payload (gzipped cpio archive)
+                payload_extract_dir = tmp_path / "payload_extracted"
+                payload_extract_dir.mkdir()
+
+                # Use gzip to decompress and cpio to extract
+                with gzip.open(payload_path, "rb") as gz:
+                    result = subprocess.run(
+                        ["cpio", "-id", "--quiet"],
+                        input=gz.read(),
+                        cwd=payload_extract_dir,
+                        capture_output=True,
+                    )
+                    if result.returncode != 0:
+                        error(f"cpio extraction failed: {result.stderr.decode()}")
+                        raise RuntimeError(f"Failed to extract Payload: {result.stderr.decode()}")
+
+                # Replace the binary with the signed one
+                pkg_binary_path = payload_extract_dir / "opt" / "tenzir" / "bin" / "tenzir"
+                if pkg_binary_path.exists():
+                    shutil.copy2(binary_path, pkg_binary_path)
+                    notice("Replaced binary in .pkg payload with signed version")
+                else:
+                    warning(f"Binary not found in .pkg at expected path: {pkg_binary_path}")
+
+                # Recreate Payload (cpio | gzip)
+                # Get list of files relative to payload_extract_dir
+                result = subprocess.run(
+                    ["find", ".", "-print"],
+                    cwd=payload_extract_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                file_list = result.stdout
+
+                # Create cpio archive
+                cpio_result = subprocess.run(
+                    ["cpio", "-o", "--format=odc", "--quiet"],
+                    input=file_list.encode(),
+                    cwd=payload_extract_dir,
+                    capture_output=True,
+                )
+                if cpio_result.returncode != 0:
+                    error(f"cpio creation failed: {cpio_result.stderr.decode()}")
+                    raise RuntimeError(f"Failed to create Payload: {cpio_result.stderr.decode()}")
+
+                # Gzip and write back
+                with gzip.open(payload_path, "wb") as gz:
+                    gz.write(cpio_result.stdout)
+
+                # Flatten the package to signed-packages directory
+                signed_pkg = signed_pkg_dir / pkg.name
+                result = subprocess.run(
+                    ["pkgutil", "--flatten", str(pkg_extract_dir), str(signed_pkg)],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    error(f"pkgutil --flatten failed: {result.stderr}")
+                    raise RuntimeError(f"Failed to flatten .pkg: {result.stderr}")
+                notice(f"Created signed .pkg: {signed_pkg}")
+
+    return signed_pkg_dir
 
 
 def upload_packages(
@@ -271,10 +459,18 @@ def main() -> int:
 
     # Build
     pkg_dir = build(args.attribute, is_release)
+
+    # Sign macOS packages if signing identity is available
+    signing_identity = os.environ.get("APPLE_SIGNING_IDENTITY")
+    if signing_identity:
+        pkg_dir = sign_macos_packages(pkg_dir, signing_identity)
+    elif platform.system() == "Darwin":
+        warning("APPLE_SIGNING_IDENTITY not set, skipping code signing")
+
+    # Output package directory for GitHub Actions
     if "GITHUB_OUTPUT" in os.environ:
         with open(os.environ["GITHUB_OUTPUT"], "a") as github_output:
             _ = github_output.write(f"package-dir={pkg_dir}\n")
-
 
     # Upload packages
     if args.package_stores or args.release_tag:
