@@ -17,6 +17,7 @@
 #include <aws/logs/CloudWatchLogsClient.h>
 #include <aws/logs/model/FilterLogEventsRequest.h>
 #include <aws/logs/model/FilterLogEventsResult.h>
+#include <aws/logs/model/StartLiveTailRequest.h>
 
 #include <string_view>
 
@@ -26,19 +27,21 @@ namespace tenzir::plugins::cloudwatch {
 
 namespace {
 
-/// Default poll interval for tailing logs.
+/// Default poll interval for tailing logs (non-live mode).
 static constexpr auto default_poll_interval = 1s;
 
 struct connector_args {
   located<std::string> log_group;
   std::optional<located<std::string>> filter_pattern;
+  bool live = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, connector_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.cloudwatch.connector_args")
       .fields(f.field("log_group", x.log_group),
-              f.field("filter_pattern", x.filter_pattern));
+              f.field("filter_pattern", x.filter_pattern),
+              f.field("live", x.live));
   }
 };
 
@@ -77,11 +80,108 @@ public:
         {"event_id", string_type{}},
       },
     };
+
+    if (args_.live) {
+      // Use StartLiveTail for real-time streaming
+      for (auto&& slice : run_live_tail(ctrl, client, output_type)) {
+        co_yield std::move(slice);
+      }
+    } else {
+      // Use FilterLogEvents with polling
+      for (auto&& slice : run_filter_log_events(ctrl, client, output_type)) {
+        co_yield std::move(slice);
+      }
+    }
+  }
+
+private:
+  auto run_live_tail(operator_control_plane& ctrl,
+                     Aws::CloudWatchLogs::CloudWatchLogsClient& client,
+                     const type& output_type) const -> generator<table_slice> {
+    auto builder = series_builder{output_type};
+
+    // Build the request
+    auto request = Aws::CloudWatchLogs::Model::StartLiveTailRequest{};
+
+    // Set log group identifiers - needs to be ARN or log group name
+    Aws::Vector<Aws::String> log_groups;
+    log_groups.push_back(Aws::String{args_.log_group.inner.c_str()});
+    request.SetLogGroupIdentifiers(std::move(log_groups));
+
+    // Set optional filter pattern
+    if (args_.filter_pattern) {
+      request.SetLogEventFilterPattern(
+        Aws::String{args_.filter_pattern->inner.c_str()});
+    }
+
+    co_yield {};
+
+    TENZIR_DEBUG("starting CloudWatch Live Tail session");
+
+    // Call the synchronous StartLiveTail which returns a streaming response
+    auto outcome = client.StartLiveTail(request);
+
+    if (! outcome.IsSuccess()) {
+      diagnostic::error("failed to start CloudWatch Live Tail")
+        .primary(args_.log_group.source)
+        .note("{}", outcome.GetError().GetMessage())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+
+    auto& result = outcome.GetResult();
+    auto& event_stream = result.GetEventStream();
+
+    auto last_yield_time = std::chrono::steady_clock::now();
+
+    // Process the event stream
+    // The stream sends LiveTailSessionUpdate objects every second
+    while (true) {
+      // Check if there are events available
+      if (event_stream.IsReady()) {
+        // Process any session updates
+        auto update = event_stream.GetResult();
+        if (update.GetSessionUpdate().SessionResultsHasBeenSet()) {
+          const auto& results = update.GetSessionUpdate().GetSessionResults();
+          for (const auto& event : results) {
+            auto row = builder.record();
+
+            auto ts = time{std::chrono::duration_cast<duration>(
+              std::chrono::milliseconds{event.GetTimestamp()})};
+            auto ing_ts = time{std::chrono::duration_cast<duration>(
+              std::chrono::milliseconds{event.GetIngestionTime()})};
+
+            row.field("timestamp").data(ts);
+            row.field("ingestion_time").data(ing_ts);
+            row.field("log_group")
+              .data(std::string{event.GetLogGroupIdentifier()});
+            row.field("log_stream").data(std::string{event.GetLogStreamName()});
+            row.field("message").data(std::string{event.GetMessage()});
+            row.field("event_id").data(std::string{event.GetEventId()});
+          }
+        }
+      }
+
+      // Yield if we have data and timeout expired
+      const auto now = std::chrono::steady_clock::now();
+      if (builder.length() > 0 && now - last_yield_time >= 1s) {
+        co_yield builder.finish_assert_one_slice();
+        last_yield_time = now;
+      } else {
+        co_yield {};
+      }
+    }
+  }
+
+  auto run_filter_log_events(operator_control_plane& ctrl,
+                             Aws::CloudWatchLogs::CloudWatchLogsClient& client,
+                             const type& output_type) const
+    -> generator<table_slice> {
     auto builder = series_builder{output_type};
 
     co_yield {};
 
-    // Start from now - poll_interval to catch recent events
+    // Start from now - 60s to catch recent events
     auto start_time
       = std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch() - 60s)
@@ -159,6 +259,7 @@ public:
     }
   }
 
+public:
   auto detached() const -> bool override {
     return true;
   }

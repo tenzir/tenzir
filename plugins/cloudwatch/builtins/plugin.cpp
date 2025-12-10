@@ -31,6 +31,7 @@ public:
     TRY(argument_parser2::operator_(this->name())
           .positional("log_group", args.log_group)
           .named("filter", args.filter_pattern)
+          .named("live", args.live)
           .parse(inv, ctx));
 
     if (args.log_group.inner.empty()) {
