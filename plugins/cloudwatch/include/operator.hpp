@@ -13,11 +13,13 @@
 #include <tenzir/series_builder.hpp>
 
 #include <aws/core/Aws.h>
+#include <aws/core/http/HttpTypes.h>
 #include <aws/core/utils/Outcome.h>
 #include <aws/logs/CloudWatchLogsClient.h>
 #include <aws/logs/model/FilterLogEventsRequest.h>
 #include <aws/logs/model/FilterLogEventsResult.h>
 #include <aws/logs/model/StartLiveTailHandler.h>
+#include <aws/logs/model/StartLiveTailInitialResponse.h>
 #include <aws/logs/model/StartLiveTailRequest.h>
 
 #include <atomic>
@@ -79,6 +81,8 @@ public:
       config.endpointOverride = *endpoint_url;
     }
     config.allowSystemProxy = true;
+    // Use HTTP/1.1 to avoid potential HTTP/2 issues with event streaming
+    config.version = Aws::Http::Version::HTTP_VERSION_NONE;
 
     auto client = Aws::CloudWatchLogs::CloudWatchLogsClient{config};
 
@@ -136,6 +140,11 @@ private:
 
     // Set up the event stream handler
     Aws::CloudWatchLogs::Model::StartLiveTailHandler handler;
+
+    handler.SetInitialResponseCallback(
+      [](const Aws::CloudWatchLogs::Model::StartLiveTailInitialResponse&) {
+        TENZIR_DEBUG("CloudWatch Live Tail initial response received");
+      });
 
     handler.SetLiveTailSessionStartCallback(
       [](const Aws::CloudWatchLogs::Model::LiveTailSessionStart&) {
