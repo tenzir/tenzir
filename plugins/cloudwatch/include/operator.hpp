@@ -42,7 +42,6 @@ struct live_tail_event {
   std::string log_group;
   std::string log_stream;
   std::string message;
-  std::string event_id;
 };
 
 struct connector_args {
@@ -92,7 +91,6 @@ public:
         {"log_group", string_type{}},
         {"log_stream", string_type{}},
         {"message", string_type{}},
-        {"event_id", string_type{}},
       },
     };
 
@@ -159,7 +157,6 @@ private:
           evt.log_group = std::string(event.GetLogGroupIdentifier().c_str());
           evt.log_stream = std::string(event.GetLogStreamName().c_str());
           evt.message = std::string(event.GetMessage().c_str());
-          evt.event_id = std::string(event.GetEventId().c_str());
           event_queue.push(std::move(evt));
         }
       });
@@ -174,14 +171,17 @@ private:
         TENZIR_ERROR("CloudWatch Live Tail error: {}", error_message);
       });
 
+    // Set the handler on the request
+    request.SetEventStreamHandler(handler);
+
     co_yield {};
 
     TENZIR_DEBUG("starting CloudWatch Live Tail session");
 
     // Start the live tail in a separate thread since it blocks
-    auto stream_thread = std::thread([&client, &request, &handler, &running]() {
+    auto stream_thread = std::thread([&client, &request, &running]() {
       // Call StartLiveTail - this blocks until the stream ends
-      client.StartLiveTail(request, handler);
+      client.StartLiveTail(request);
       running.store(false);
     });
 
@@ -214,7 +214,6 @@ private:
           row.field("log_group").data(event.log_group);
           row.field("log_stream").data(event.log_stream);
           row.field("message").data(event.message);
-          row.field("event_id").data(event.event_id);
 
           event_queue.pop();
         }
@@ -307,7 +306,6 @@ private:
           row.field("log_stream")
             .data(std::string(event.GetLogStreamName().c_str()));
           row.field("message").data(std::string(event.GetMessage().c_str()));
-          row.field("event_id").data(std::string(event.GetEventId().c_str()));
 
           // Track the latest timestamp for next poll
           if (event.GetTimestamp() >= start_time) {
