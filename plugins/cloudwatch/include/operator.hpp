@@ -21,6 +21,7 @@
 #include <aws/logs/model/StartLiveTailHandler.h>
 #include <aws/logs/model/StartLiveTailInitialResponse.h>
 #include <aws/logs/model/StartLiveTailRequest.h>
+#include <caf/abstract_actor.hpp>
 
 #include <atomic>
 #include <mutex>
@@ -81,8 +82,8 @@ public:
       config.endpointOverride = *endpoint_url;
     }
     config.allowSystemProxy = true;
-    // Use HTTP/1.1 to avoid potential HTTP/2 issues with event streaming
-    config.version = Aws::Http::Version::HTTP_VERSION_NONE;
+    // Force CURL client for event streaming compatibility
+    config.httpLibOverride = Aws::Http::TransferLibType::CURL_CLIENT;
 
     auto client = Aws::CloudWatchLogs::CloudWatchLogsClient{config};
 
@@ -198,6 +199,12 @@ private:
 
     // Process events from the queue
     while (running.load() || ! event_queue.empty()) {
+      // Check if we should stop (e.g., Ctrl+C)
+      if (ctrl.self().getf(caf::abstract_actor::is_shutting_down_flag)) {
+        running.store(false);
+        break;
+      }
+
       if (has_error.load()) {
         diagnostic::error("CloudWatch Live Tail error")
           .primary(args_.log_group.source)
