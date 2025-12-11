@@ -12,7 +12,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/http.hpp"
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 
 #include <chrono>
 #include <string>
@@ -30,7 +30,7 @@ struct transfer_options {
   std::optional<std::string> password = {};
   std::optional<std::string> authzid = {};
   std::optional<std::string> authorization = {};
-  ssl_options ssl = {};
+  tls_options ssl = {};
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {
     return f.object(x)

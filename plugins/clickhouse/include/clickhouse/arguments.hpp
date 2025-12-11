@@ -11,7 +11,7 @@
 #include "clickhouse/client.h"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/detail/enum.hpp"
-#include "tenzir/ssl_options.hpp"
+#include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/regex.hpp>
@@ -52,7 +52,7 @@ struct operator_arguments {
   located<std::string> table = {"REQUIRED", location::unknown};
   located<enum mode> mode = located{mode::create_append, operator_location};
   std::optional<located<std::string>> primary = std::nullopt;
-  ssl_options ssl = {};
+  tls_options ssl = {};
 
   static auto try_parse(std::string operator_name,
                         operator_factory_plugin::invocation inv, session ctx)
@@ -142,7 +142,7 @@ struct operator_arguments {
       }
     }
     if (not port) {
-      if (res.ssl.get_tls().inner) {
+      if (res.ssl.get_tls(nullptr).inner) {
         port = located{9440, res.operator_location};
       } else {
         port = located{9000, res.operator_location};

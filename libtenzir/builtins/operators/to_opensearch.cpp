@@ -13,7 +13,7 @@
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/ssl_options.hpp>
+#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 
 #include <arrow/util/compression.h>
@@ -31,7 +31,7 @@ struct opensearch_args {
   std::optional<ast::expression> id;
   std::optional<located<secret>> user;
   std::optional<located<secret>> passwd;
-  ssl_options ssl;
+  tls_options ssl;
   std::optional<location> include_nulls;
   std::optional<located<uint64_t>> max_content_length
     = located{5'000'000, location::unknown};
@@ -397,7 +397,7 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (auto e = args_.ssl.apply_to(req, final_url, ctrl)) {
+    if (auto e = args_.ssl.apply_to(req, final_url, &ctrl)) {
       diagnostic::error(e).emit(dh);
       co_return;
     }

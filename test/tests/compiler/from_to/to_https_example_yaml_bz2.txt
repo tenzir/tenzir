@@ -19,7 +19,8 @@
       default_protocol: "https",
       poll_timeout: "100ms",
       ssl: {
-        uses_curl_http: false
+        uses_curl_http: false,
+        is_server: false
       }
     },
     http_opts: {
