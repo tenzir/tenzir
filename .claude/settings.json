@@ -13,7 +13,6 @@
     "formatter@tenzir": true,
     "git@tenzir": true,
     "python@tenzir": true,
-    "tql@tenzir": true,
     "writing@tenzir": true
   }
 }
