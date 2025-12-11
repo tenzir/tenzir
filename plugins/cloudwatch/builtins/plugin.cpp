@@ -32,12 +32,21 @@ public:
           .positional("log_group", args.log_group)
           .named("filter", args.filter_pattern)
           .named("live", args.live)
+          .named("role", args.role)
+          .named("web_identity", args.web_identity)
           .parse(inv, ctx));
 
     if (args.log_group.inner.empty()) {
       diagnostic::error("log_group must not be empty")
         .primary(args.log_group.source)
         .hint("provide a CloudWatch log group name or ARN")
+        .emit(ctx);
+      return failure::promise();
+    }
+
+    if (args.web_identity && not args.role) {
+      diagnostic::error("`web_identity` requires `role` to be specified")
+        .primary(args.web_identity->source)
         .emit(ctx);
       return failure::promise();
     }

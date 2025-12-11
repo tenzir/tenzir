@@ -10,10 +10,14 @@
 
 #include <tenzir/detail/env.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/series_builder.hpp>
 
 #include <aws/core/Aws.h>
+#include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/http/HttpTypes.h>
+#include <aws/core/internal/AWSHttpResourceClient.h>
 #include <aws/core/utils/Outcome.h>
 #include <aws/logs/CloudWatchLogsClient.h>
 #include <aws/logs/model/FilterLogEventsRequest.h>
@@ -51,6 +55,8 @@ struct connector_args {
   located<std::string> log_group;
   std::optional<located<std::string>> filter_pattern;
   bool live = false;
+  std::optional<located<std::string>> role;
+  std::optional<located<secret>> web_identity;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, connector_args& x) -> bool {
@@ -58,7 +64,8 @@ struct connector_args {
       .pretty_name("tenzir.plugins.cloudwatch.connector_args")
       .fields(f.field("log_group", x.log_group),
               f.field("filter_pattern", x.filter_pattern),
-              f.field("live", x.live));
+              f.field("live", x.live), f.field("role", x.role),
+              f.field("web_identity", x.web_identity));
   }
 };
 
@@ -73,6 +80,17 @@ public:
 
   auto
   operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+    auto& dh = ctrl.diagnostics();
+
+    // Resolve web_identity secret if provided
+    auto web_identity_token = std::string{};
+    if (args_.web_identity) {
+      co_yield ctrl.resolve_secrets_must_yield({make_secret_request(
+        "web_identity", *args_.web_identity, web_identity_token, dh)});
+      // DEBUG: Print resolved secret value for debugging
+      TENZIR_INFO("resolved web_identity token: {}", web_identity_token);
+    }
+
     // Configure AWS client
     auto config = Aws::Client::ClientConfiguration{};
     if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
@@ -85,7 +103,32 @@ public:
     // Force CURL client for event streaming compatibility
     config.httpLibOverride = Aws::Http::TransferLibType::CURL_CLIENT;
 
-    auto client = Aws::CloudWatchLogs::CloudWatchLogsClient{config};
+    // Get credentials via AssumeRoleWithWebIdentity if web_identity is provided
+    auto credentials = std::optional<Aws::Auth::AWSCredentials>{};
+    if (args_.web_identity && args_.role) {
+      auto sts_client = Aws::Internal::STSCredentialsClient{config};
+      auto request
+        = Aws::Internal::STSCredentialsClient::STSAssumeRoleWithWebIdentityRequest{
+          .roleSessionName = "tenzir-cloudwatch-session",
+          .roleArn = Aws::String{args_.role->inner.c_str()},
+          .webIdentityToken = Aws::String{web_identity_token.c_str()},
+        };
+      auto result = sts_client.GetAssumeRoleWithWebIdentityCredentials(request);
+      if (result.creds.IsEmpty()) {
+        diagnostic::error("failed to assume role with web identity")
+          .primary(args_.role->source)
+          .emit(dh);
+        co_return;
+      }
+      credentials = result.creds;
+    }
+
+    auto client = [&]() {
+      if (credentials) {
+        return Aws::CloudWatchLogs::CloudWatchLogsClient{*credentials, config};
+      }
+      return Aws::CloudWatchLogs::CloudWatchLogsClient{config};
+    }();
 
     // Define output schema
     const auto output_type = type{
