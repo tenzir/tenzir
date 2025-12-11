@@ -475,6 +475,9 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
       },
       [&](ast::let_stmt&) -> failure_or<void> {
         TENZIR_UNREACHABLE();
+      },
+      [&](ast::type_stmt&) -> failure_or<void> {
+        TENZIR_UNREACHABLE();
       });
     if (result.is_error()) {
       fail = result.error();
