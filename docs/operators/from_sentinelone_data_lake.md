@@ -62,6 +62,12 @@ The end time for the query time range.
 
 When specified, only events with timestamps before this time will be returned.
 
+### `raw = bool (optional)`
+
+Whether to skip parsing strings as typed data.
+
+Defaults to `false`.
+
 ## Examples
 
 ### Query threat events from the last 24 hours
@@ -69,7 +75,7 @@ When specified, only events with timestamps before this time will be returned.
 ```tql
 from_sentinelone_data_lake "https://xdr.eu1.sentinelone.net",
   token=secret("sentinelone-token"),
-  query="severity > 3"
+  query="severity > 3 | columns id"
 ```
 
 ### Query specific fields with time range filters
