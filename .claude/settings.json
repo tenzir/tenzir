@@ -8,7 +8,7 @@
     }
   },
   "enabledPlugins": {
-    "changelog@tenzir": true,
+    "changelog@tenzir": false,
     "docs@tenzir": true,
     "formatter@tenzir": true,
     "git@tenzir": true,
