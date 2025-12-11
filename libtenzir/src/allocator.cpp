@@ -43,6 +43,7 @@ auto __real_calloc(size_t, size_t) -> void*;
 auto __real_realloc(void*, size_t) -> void*;
 void __real_free(void*);
 auto __real_aligned_alloc(size_t, size_t) -> void*;
+auto __real_malloc_usable_size(const void*) -> size_t;
 // NOLINTEND(cert-dcl37-c,cert-dcl51-cpp,bugprone-reserved-identifier)
 }
 
@@ -434,11 +435,14 @@ auto calloc_aligned(std::size_t count, std::size_t size,
 
 auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
   using function_type = std::size_t (*)(const void*);
-#if TENZIR_LINUX
+#  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
+  return __real_malloc_usable_size(ptr);
+#  endif
+#  if TENZIR_LINUX
   const static auto fn = lookup_symbol<function_type>("malloc_usable_size");
-#elif TENZIR_MACOS
+#  elif TENZIR_MACOS
   const static auto fn = lookup_symbol<function_type>("malloc_size");
-#endif
+#  endif
   return fn(ptr);
 }
 
