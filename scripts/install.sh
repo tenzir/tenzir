@@ -240,6 +240,56 @@ elif [ "${package_format}" = "macOS" ]; then
   eval "${cmd1}"
 fi
 
+# Configure token if TENZIR_TOKEN is set.
+if [ -n "${TENZIR_TOKEN:-}" ]; then
+  action "Configuring node token"
+  config_file="${prefix}/etc/tenzir/tenzir.yaml"
+  config_dir="$(dirname "${config_file}")"
+
+  # Create config directory if needed.
+  if [ ! -d "${config_dir}" ]; then
+    $sudo mkdir -p "${config_dir}"
+  fi
+
+  # Back up existing config with ISO timestamp.
+  if [ -f "${config_file}" ]; then
+    timestamp="$(date -u +%Y%m%dT%H%M%S)"
+    backup_file="${config_file}.${timestamp}"
+    action "Backing up existing config to ${backup_file}"
+    $sudo cp "${config_file}" "${backup_file}"
+  fi
+
+  # Use tenzir to create or update the config with the token.
+  # The merge function combines the existing tenzir config (or empty record)
+  # with the new token, preserving any other settings.
+  if [ -f "${config_file}" ]; then
+    # Read existing config, merge in token, write back.
+    tql_pipeline="load_file \"${config_file}\"
+      read_yaml
+      if this.has("tenzir") and tenzir.type_id() == type_id({}) {
+        tenzir = { token: \"${TENZIR_TOKEN}\"}, ...tenzir }
+      } else {
+        tenzir = { token: \"${TENZIR_TOKEN}\"} }
+      }
+      write_yaml
+      "
+  else
+    # Create new config with token.
+    tql_pipeline="from {tenzir: {token: \"${TENZIR_TOKEN}\"}}
+      write_yaml"
+  fi
+
+  # Write config using tenzir and sudo tee.
+  ${prefix}/bin/tenzir -qq "${tql_pipeline}" | $sudo tee "${config_file}" >/dev/null
+  echo "Token configured in ${config_file}"
+
+  # Restart the service if it's already running (RPM/DEB packages auto-start it).
+  if [ -d /run/systemd/system ] && $sudo systemctl is-active --quiet tenzir-node 2>/dev/null; then
+    action "Restarting tenzir-node to apply token configuration"
+    $sudo systemctl restart tenzir-node
+  fi
+fi
+
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"

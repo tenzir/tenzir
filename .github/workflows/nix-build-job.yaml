@@ -1,0 +1,205 @@
+name: Nix Build Job
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        required: true
+      os:
+        type: string
+        required: true
+      arch:
+        type: string
+        required: true
+      attribute:
+        type: string
+        required: true
+    outputs:
+      images:
+        description: 'Space-separated list of pushed image URLs'
+        value: ${{ jobs.build.outputs.images }}
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  build:
+    name: ${{ inputs.attribute }}-${{ inputs.arch }}-${{ inputs.os }}
+    runs-on: ${{ inputs.runner }}
+    outputs:
+      images: ${{ steps.build.outputs.images }}
+    steps:
+      - name: Ensure XDG_RUNTIME_DIR
+        # This env variable is used by skopeo / buildah / podman, but isn't
+        # set on ubicloud runners.
+        if: runner.os == 'Linux'
+        run: |
+          if [[ -z "$XDG_RUNTIME_DIR" ]]; then
+            XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            mkdir -p "$XDG_RUNTIME_DIR"
+            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          fi
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Tailscale
+        if: false
+        uses: tailscale/github-action@a392da0a182bba0e9613b6243ebd69529b1878aa  # v4.1.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          version: 1.66.4
+          args: --ssh
+      - name: Install Nix
+        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
+        with:
+          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/0d70460758949966e91d9ecb823b821f963cefbb.tar.gz
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
+        with:
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          pushFilter: "tenzir-ee"
+      - name: Import Apple signing certificates
+        id: import_apple_signing_certificates
+        if: runner.os == 'macOS'
+        run: |
+          # Create a temporary keychain
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import Developer ID Application certificate (for signing binaries)
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          rm "$CERT_PATH"
+
+          # Import Developer ID Installer certificate (for signing .pkg)
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/installer_certificate.p12"
+          echo "${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12_BASE64 }}" | base64 --decode > "$INSTALLER_CERT_PATH"
+          security import "$INSTALLER_CERT_PATH" \
+            -P "${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          rm "$INSTALLER_CERT_PATH"
+
+          # Add keychain to search list and set as default
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security list-keychains -d user | tr -d '"')"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          # Allow codesign and productsign to access the keychain without UI prompt
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Extract signing identity names from certificates
+          # Application identity (for codesign)
+          APP_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "APPLE_SIGNING_IDENTITY=$APP_IDENTITY" >> "$GITHUB_OUTPUT"
+          echo "::notice::Application signing identity: $APP_IDENTITY"
+
+          # Installer identity (for productsign)
+          INSTALLER_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "APPLE_INSTALLER_IDENTITY=$INSTALLER_IDENTITY" >> "$GITHUB_ENV"
+          echo "::notice::Installer signing identity: $INSTALLER_IDENTITY"
+      - name: Build and Publish
+        id: build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          DOCKERHUB_USER: ${{ vars.DOCKERHUB_USER }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
+          RCLONE_GCS_BUCKET_POLICY_ONLY: True
+          APPLE_SIGNING_IDENTITY: ${{ steps.import_apple_signing_certificates.outputs.APPLE_INSTALLER_IDENTITY }}
+        run: |
+          # Determine arguments based on event type
+          args=(--attribute ${{ inputs.attribute }} --arch ${{ inputs.arch }})
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR: push to ghcr.io only with branch slug tag
+            branch_slug=$(echo "${{ github.head_ref }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
+            args+=(--container-tag "$branch_slug" --image-registry ghcr.io)
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "main" ]]; then
+            # Push to main: push to all registries
+            args+=(
+              --container-tag main --container-tag "${{ github.sha }}"
+              --image-registry ghcr.io --image-registry docker.io --image-registry 622024652768.dkr.ecr.eu-west-1.amazonaws.com
+              --package-store gcs:tenzir-dist-public/packages/main
+              --package-alias main
+            )
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            # Release: push to all registries with version tags
+            version="${GITHUB_REF#refs/tags/}"
+            args+=(
+              --container-tag latest --container-tag "${{ github.sha }}" --container-tag "$version"
+              --image-registry ghcr.io --image-registry docker.io --image-registry 622024652768.dkr.ecr.eu-west-1.amazonaws.com
+              --package-store gcs:tenzir-dist-public/packages/main
+              --package-alias latest
+              --release-tag "$version"
+            )
+          fi
+          nix shell --inputs-from ./. \
+            nixpkgs#git \
+            nixpkgs#python3 \
+            nixpkgs#python3Packages.boto3 \
+            nixpkgs#rclone \
+            nixpkgs#skopeo \
+            -c python3 .github/workflows/nix-build.py "${args[@]}"
+      - name: Upload signed tarball artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: tenzir-signed-tarball-${{ inputs.arch }}-${{ inputs.os }}
+          path: ${{ steps.build.outputs.package-dir }}/*.tar.gz
+          retention-days: 1
+      - name: Test Installation (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          deb_file="$(basename ${{ steps.build.outputs.package-dir }}/tenzir*.deb)"
+          docker build tenzir/services/systemd/test -t installer-test-ubuntu
+          docker run -d --name installer-test-ubuntu \
+                 --privileged \
+                 --volume=.:/src/tenzir:ro \
+                 --volume="${{ steps.build.outputs.package-dir }}":/tmp/packages:ro \
+                 --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
+                 --cgroupns=host \
+                 installer-test-ubuntu
+          sleep 5
+          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${deb_file}" installer-test-ubuntu bash -c \
+                 "/src/tenzir/scripts/install.sh"
+          args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
+          docker exec -e TENZIR_LEGACY=true installer-test-ubuntu \
+            /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
+          docker exec installer-test-ubuntu halt
+      - name: Test Installation (Rocky Linux)
+        if: runner.os == 'Linux'
+        run: |
+          rpm_file="$(basename ${{ steps.build.outputs.package-dir }}/tenzir*.rpm)"
+          docker build tenzir/services/systemd/test -t installer-test-rocky
+          docker run -d --name installer-test-rocky \
+                 --privileged \
+                 --volume=.:/src/tenzir:ro \
+                 --volume="${{ steps.build.outputs.package-dir }}":/tmp/packages:ro \
+                 --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
+                 --cgroupns=host \
+                 eniocarboni/docker-rockylinux-systemd:9
+          sleep 5
+          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${rpm_file}" installer-test-rocky bash -c \
+                 "/src/tenzir/scripts/install.sh"
+          args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
+          docker exec -e TENZIR_LEGACY=true installer-test-rocky \
+            /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
+          docker exec installer-test-rocky halt

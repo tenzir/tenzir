@@ -1,0 +1,80 @@
+name: Push Manifest
+on:
+  workflow_call:
+    inputs:
+      source-images:
+        description: 'Space-separated list of source image URLs from build jobs (e.g., "ghcr.io/tenzir/tenzir:main-slim-aarch64 ghcr.io/tenzir/tenzir:main-slim-x86_64")'
+        type: string
+        required: true
+      arch-suffixes:
+        description: 'Space-separated list of architecture suffixes to strip for manifest tags (e.g., "aarch64 x86_64")'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  push-manifest:
+    name: Push Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure XDG_RUNTIME_DIR
+        run: |
+          if [[ -z "$XDG_RUNTIME_DIR" ]]; then
+            XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            mkdir -p "$XDG_RUNTIME_DIR"
+            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          fi
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Extract registries and login
+        id: registries
+        run: |
+          # Extract unique registries from source images
+          registries=$(echo '${{ inputs.source-images }}' | tr ' ' '\n' | sed 's|/.*||' | sort -u | tr '\n' ' ')
+          echo "list=$registries" >> "$GITHUB_OUTPUT"
+          # Build config for registry-login action
+          registries_json=$(echo "$registries" | tr ' ' '\n' | grep -v '^$' | jq -R . | jq -s .)
+          config=$(jq -cn --argjson regs "$registries_json" '{"editions": [{"image-registries": $regs}]}')
+          echo "config=$config" >> "$GITHUB_OUTPUT"
+      - name: Login to registries
+        uses: ./.github/actions/registry-login
+        with:
+          config: ${{ steps.registries.outputs.config }}
+          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+      - name: Create and push manifests
+        run: |
+          # Build a regex pattern to strip arch suffixes from tags
+          arch_pattern=$(echo '${{ inputs.arch-suffixes }}' | tr ' ' '|')
+
+          # Group source images by their manifest target (image URL without arch suffix)
+          declare -A manifest_sources
+
+          for src_image in ${{ inputs.source-images }}; do
+            # Strip the arch suffix to get the manifest target
+            # e.g., ghcr.io/tenzir/tenzir:main-slim-aarch64 -> ghcr.io/tenzir/tenzir:main-slim
+            manifest_target=$(echo "$src_image" | sed -E "s/-($arch_pattern)$//")
+
+            # Add to the list of sources for this manifest
+            if [[ -n "${manifest_sources[$manifest_target]}" ]]; then
+              manifest_sources[$manifest_target]="${manifest_sources[$manifest_target]} $src_image"
+            else
+              manifest_sources[$manifest_target]="$src_image"
+            fi
+          done
+
+          # Create each manifest
+          for manifest_target in "${!manifest_sources[@]}"; do
+            sources="${manifest_sources[$manifest_target]}"
+            echo "::notice Creating manifest $manifest_target from: $sources"
+            docker buildx imagetools create \
+              --tag "$manifest_target" \
+              $sources
+          done
