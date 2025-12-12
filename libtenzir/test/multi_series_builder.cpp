@@ -9,7 +9,9 @@
 #include "tenzir/multi_series_builder.hpp"
 
 #include "tenzir/aliases.hpp"
+#include "tenzir/location.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/detail/type_list.hpp>
@@ -65,8 +67,8 @@ using vvr = std::vector<vr>;
   print_separator('=');
 }
 
-auto check_outcome(const std::vector<series>& res,
-                   const vvr& expected) -> void {
+auto check_outcome(const std::vector<series>& res, const vvr& expected)
+  -> void {
   auto res_it = res.begin();
   auto exp_it = expected.begin();
   if (res.size() != expected.size()) {
@@ -112,6 +114,23 @@ auto check_outcome(const std::vector<series>& res,
   }
   CHECK_EQUAL(res_it, res.end());
   CHECK_EQUAL(exp_it, expected.end());
+}
+
+auto make_field_path(std::vector<std::string> names) -> ast::field_path {
+  REQUIRE(not names.empty());
+  auto expr = ast::expression{ast::root_field{
+    ast::identifier{std::move(names.front()), location::unknown}}};
+  for (auto it = std::next(names.begin()); it != names.end(); ++it) {
+    expr = ast::expression{ast::field_access{
+      std::move(expr),
+      location::unknown,
+      false,
+      ast::identifier{*it, location::unknown},
+    }};
+  }
+  auto path = ast::field_path::try_from(std::move(expr));
+  REQUIRE(path.has_value());
+  return std::move(*path);
 }
 
 struct failing_diagnostic_handler : public diagnostic_handler {
@@ -200,6 +219,41 @@ TEST("merging records") {
     },
   };
   check_outcome(res2, expected_result2);
+}
+
+TEST("field path in data builder mode") {
+  multi_series_builder b{
+    multi_series_builder::policy_default{},
+    multi_series_builder::settings_type{},
+    dh,
+  };
+  auto path = make_field_path({"meta", "nested"});
+  auto nested = b.record().field(path).record();
+  nested.field("value").data(int64_t{1});
+  const auto res = b.finalize();
+  vvr expected{{{record{
+    {"meta", record{{"nested", record{{"value", int64_t{1}}}}}},
+  }}}};
+  check_outcome(res, expected);
+}
+
+TEST("field path in merging mode") {
+  multi_series_builder b{
+    multi_series_builder::policy_default{},
+    multi_series_builder::settings_type{.merge = true},
+    dh,
+  };
+  auto path = make_field_path({"meta", "nested"});
+  auto rec1 = b.record().field(path).record();
+  rec1.field("value").data(int64_t{1});
+  auto rec2 = b.record().field(path).record();
+  rec2.field("value").data(int64_t{2});
+  const auto res = b.finalize();
+  vvr expected{{std::vector{
+    record{{"meta", record{{"nested", record{{"value", int64_t{1}}}}}}},
+    record{{"meta", record{{"nested", record{{"value", int64_t{2}}}}}}},
+  }}};
+  check_outcome(res, expected);
 }
 
 TEST("merging records with seed") {
@@ -512,7 +566,9 @@ TEST("precise unordered with seed") {
     uint64_t{1}); // this should land in the same batch as it
                   // has the seed for both seed fields
   // outside of schema only
-  { b.record().exact_field("3").data(duration{}); }
+  {
+    b.record().exact_field("3").data(duration{});
+  }
   // schema only again
   (void)b.record();
 
