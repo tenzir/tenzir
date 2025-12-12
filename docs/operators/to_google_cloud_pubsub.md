@@ -1,7 +1,7 @@
 ---
 title: to_google_cloud_pubsub
 category: Outputs/Events
-example: 'to_google_cloud_pubsub project_id="my-project", topic_id="alerts", message=.text'
+example: 'to_google_cloud_pubsub project_id="my-project", topic_id="alerts", message=text'
 ---
 
 Publishes events to a Google Cloud Pub/Sub topic.
@@ -41,9 +41,9 @@ Publish the `alert_text` field of every event to `alerts-topic`:
 ```tql
 export
 where @name == "suricata.alert"
-to_google_cloud_pubsub project_id="amazing-project-123456", topic_id="alerts-topic", message=this.print_ndjson()
+to_google_cloud_pubsub project_id="amazing-project-123456", topic_id="alerts-topic", message=alert_text
 ```
 
 ## See Also
 
-[`from_google_cloud_pubsub`](/reference/operators/from_google_clould_pubsub),
+[`from_google_cloud_pubsub`](/reference/operators/from_google_cloud_pubsub),
