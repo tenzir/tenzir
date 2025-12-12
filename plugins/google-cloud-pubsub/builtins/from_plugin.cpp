@@ -88,7 +88,7 @@ public:
           auto event = msb.record();
           event.field("message").data(m.data());
           if (args_.metadata_field) {
-            auto meta = event.field("meta").record();
+            auto meta = event.field(*args_.metadata_field).record();
             meta.field("message_id").data(m.message_id());
             meta.field("publish_time").data(m.publish_time());
             auto attrs = meta.field("attributes").record();

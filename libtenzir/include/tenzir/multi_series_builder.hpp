@@ -14,6 +14,7 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/type_fwd.h>
@@ -65,11 +66,13 @@ public:
   /// field. Iff the backing `multi_series_builder` has an unnest-separator,
   /// this function will also unflatten.
   auto field(std::string_view name) -> object_generator;
+  /// @brief Adds a nested field from a field path.
+  auto field(const ast::field_path& path) -> object_generator;
 
   /// @brief Creates an explicitly unflattend field. This function does
   /// not respect the builders unflatten setting.
-  auto unflattened_field(std::string_view key,
-                         std::string_view unflatten) -> object_generator;
+  auto unflattened_field(std::string_view key, std::string_view unflatten)
+    -> object_generator;
   /// @brief Creates an explicitly unflattend field according to the
   /// `multi_series_builder`s unflatten setting.
   auto unflattened_field(std::string_view key) -> object_generator;
@@ -209,8 +212,8 @@ static_assert(has_data_unparsed<object_generator>);
 auto series_to_table_slice(series array, std::string_view fallback_name
                                          = "tenzir.unknown") -> table_slice;
 auto series_to_table_slice(std::vector<series> data,
-                           std::string_view fallback_name
-                           = "tenzir.unknown") -> std::vector<table_slice>;
+                           std::string_view fallback_name = "tenzir.unknown")
+  -> std::vector<table_slice>;
 } // namespace detail::multi_series_builder
 
 /// @brief This class provides an incremental builder API to build multiple

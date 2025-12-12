@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <tenzir/multi_series_builder.hpp>
@@ -68,6 +69,28 @@ auto record_generator::field(std::string_view name) -> object_generator {
     return object_generator{};
   }
   return exact_field(name);
+}
+
+auto record_generator::field(const ast::field_path& path) -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
+  const auto segments = path.path();
+  if (segments.empty()) {
+    return object_generator{};
+  }
+  auto result = exact_field(segments.front().id.name);
+  for (auto it = std::next(segments.begin()); it != segments.end(); ++it) {
+    auto rec = result.record();
+    if (not rec.writable()) {
+      return object_generator{};
+    }
+    if (std::next(it) == segments.end()) {
+      return rec.exact_field(it->id.name);
+    }
+    result = rec.exact_field(it->id.name);
+  }
+  return result;
 }
 
 auto record_generator::unflattened_field(std::string_view key,
