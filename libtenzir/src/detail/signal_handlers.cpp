@@ -6,13 +6,26 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <backtrace.h>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cxxabi.h>
-#include <ucontext.h>
 #include <unistd.h>
+#include <utility>
+
+#if __has_include(<backtrace.h>)
+#  include <backtrace.h>
+#  define TENZIR_HAS_LIBBACKTRACE 1
+#else
+#  define TENZIR_HAS_LIBBACKTRACE 0
+#endif
+
+#if defined(__linux__)
+#  include <ucontext.h>
+#elif defined(__APPLE__)
+#  include <sys/ucontext.h>
+#endif
 
 namespace {
 
@@ -28,15 +41,6 @@ void safe_write(const char* str, size_t len) {
   (void)write(STDERR_FILENO, str, len);
 }
 
-// Global backtrace state, initialized once at startup.
-backtrace_state* bt_state = nullptr;
-
-void bt_error_callback(void* /*data*/, const char* msg, int /*errnum*/) {
-  safe_write("  backtrace error: ");
-  safe_write(msg);
-  safe_write("\n");
-}
-
 // Try to demangle a C++ symbol. Returns the demangled name on success,
 // or nullptr if demangling fails or the symbol is not mangled.
 // The caller must free() the returned pointer.
@@ -48,6 +52,17 @@ char* try_demangle(const char* mangled) {
   int status = 0;
   char* demangled = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
   return (status == 0) ? demangled : nullptr;
+}
+
+#if TENZIR_HAS_LIBBACKTRACE
+
+// Global backtrace state, initialized once at startup.
+backtrace_state* bt_state = nullptr;
+
+void bt_error_callback(void* /*data*/, const char* msg, int /*errnum*/) {
+  safe_write("  backtrace error: ");
+  safe_write(msg);
+  safe_write("\n");
 }
 
 // Helper to format and print a single frame.
@@ -97,22 +112,85 @@ int bt_full_callback(void* /*data*/, uintptr_t pc, const char* filename,
   return 0;
 }
 
+void resolve_and_print_pc(uintptr_t pc, bool only_first_frame) {
+  if (bt_state && pc != 0) {
+    if (only_first_frame) {
+      bool printed = false;
+      backtrace_pcinfo(bt_state, pc, bt_crash_callback, bt_error_callback,
+                       &printed);
+    } else {
+      backtrace_pcinfo(bt_state, pc, bt_full_callback, bt_error_callback,
+                       nullptr);
+    }
+  } else {
+    // Fallback: just print the address.
+    char buf[64];
+    int n
+      = snprintf(buf, sizeof(buf), "  0x%lx\n", static_cast<unsigned long>(pc));
+    if (n > 0) {
+      safe_write(buf, static_cast<size_t>(n));
+    }
+  }
+}
+
+void init_backtrace_state() {
+  bt_state = backtrace_create_state(nullptr, 0, bt_error_callback, nullptr);
+}
+
+#else // !TENZIR_HAS_LIBBACKTRACE
+
+// Fallback implementation without libbacktrace - just prints addresses.
+void resolve_and_print_pc(uintptr_t pc, bool /*only_first_frame*/) {
+  char buf[64];
+  int n
+    = snprintf(buf, sizeof(buf), "  0x%lx\n", static_cast<unsigned long>(pc));
+  if (n > 0) {
+    safe_write(buf, static_cast<size_t>(n));
+  }
+}
+
+void init_backtrace_state() {
+  // No-op without libbacktrace.
+}
+
+#endif // TENZIR_HAS_LIBBACKTRACE
+
+// Extract instruction pointer and frame pointer from signal context.
+// Returns {pc, bp} where bp may be nullptr if not available.
+auto get_context_registers([[maybe_unused]] void* vctx)
+  -> std::pair<uintptr_t, uintptr_t*> {
+#if defined(__linux__) && defined(__x86_64__)
+  auto* ctx = static_cast<ucontext_t*>(vctx);
+  auto pc = static_cast<uintptr_t>(ctx->uc_mcontext.gregs[REG_RIP]);
+  auto* bp = reinterpret_cast<uintptr_t*>(ctx->uc_mcontext.gregs[REG_RBP]);
+  return {pc, bp};
+#elif defined(__linux__) && defined(__aarch64__)
+  auto* ctx = static_cast<ucontext_t*>(vctx);
+  auto pc = static_cast<uintptr_t>(ctx->uc_mcontext.pc);
+  auto* bp
+    = reinterpret_cast<uintptr_t*>(ctx->uc_mcontext.regs[29]); // x29 = FP
+  return {pc, bp};
+#elif defined(__APPLE__) && defined(__x86_64__)
+  auto* ctx = static_cast<ucontext_t*>(vctx);
+  auto pc = static_cast<uintptr_t>(ctx->uc_mcontext->__ss.__rip);
+  auto* bp = reinterpret_cast<uintptr_t*>(ctx->uc_mcontext->__ss.__rbp);
+  return {pc, bp};
+#elif defined(__APPLE__) && defined(__aarch64__)
+  auto* ctx = static_cast<ucontext_t*>(vctx);
+  auto pc = static_cast<uintptr_t>(ctx->uc_mcontext->__ss.__pc);
+  auto* bp = reinterpret_cast<uintptr_t*>(ctx->uc_mcontext->__ss.__fp);
+  return {pc, bp};
+#else
+  return {0, nullptr};
+#endif
+}
+
 // Signal handler for fatal signals (SIGSEGV, SIGABRT).
 // Uses SA_SIGINFO to get detailed signal information and extracts the
 // instruction pointer and frame pointer from the signal context to produce
 // an accurate backtrace of where the crash occurred.
 extern "C" void fatal_signal_handler(int sig, siginfo_t* si, void* vctx) {
-  auto* ctx = static_cast<ucontext_t*>(vctx);
-#if defined(__x86_64__)
-  auto pc = static_cast<uintptr_t>(ctx->uc_mcontext.gregs[REG_RIP]);
-  auto bp = reinterpret_cast<uintptr_t*>(ctx->uc_mcontext.gregs[REG_RBP]);
-#elif defined(__aarch64__)
-  auto pc = static_cast<uintptr_t>(ctx->uc_mcontext.pc);
-  auto bp = reinterpret_cast<uintptr_t*>(ctx->uc_mcontext.regs[29]); // x29 = FP
-#else
-  uintptr_t pc = 0;
-  uintptr_t* bp = nullptr;
-#endif
+  auto [pc, bp] = get_context_registers(vctx);
 
   // Print signal info header.
   char buf[256];
@@ -131,30 +209,26 @@ extern "C" void fatal_signal_handler(int sig, siginfo_t* si, void* vctx) {
   }
 
   // Try to resolve the faulting PC to a source location.
-  // Use bt_crash_callback to only print the innermost frame (not all inlined).
-  if (bt_state && pc != 0) {
+  if (pc != 0) {
     safe_write("Crash location:\n");
-    bool printed = false;
-    backtrace_pcinfo(bt_state, pc, bt_crash_callback, bt_error_callback,
-                     &printed);
+    resolve_and_print_pc(pc, /*only_first_frame=*/true);
   }
 
   // Walk the stack manually using the frame pointer from the signal context.
   // This gives us the actual call stack at the time of the crash, not the
   // signal handler's stack.
-  if (bt_state && bp != nullptr) {
+  if (bp != nullptr) {
     safe_write("\nBacktrace:\n");
     constexpr int max_frames = 64;
     for (int i = 0; i < max_frames && bp != nullptr; ++i) {
-      // On x86_64 with frame pointers:
+      // Frame layout (x86_64 and aarch64 with frame pointers):
       // bp[0] = previous frame pointer
       // bp[1] = return address
       auto return_addr = bp[1];
       if (return_addr == 0) {
         break;
       }
-      backtrace_pcinfo(bt_state, return_addr, bt_full_callback,
-                       bt_error_callback, nullptr);
+      resolve_and_print_pc(return_addr, /*only_first_frame=*/false);
       // Move to previous frame
       auto* next_bp = reinterpret_cast<uintptr_t*>(bp[0]);
       // Sanity check: frame pointer should increase (stack grows down)
@@ -172,8 +246,8 @@ extern "C" void fatal_signal_handler(int sig, siginfo_t* si, void* vctx) {
 // to install signal handlers before any other static initializers run.
 // Priority 101 is the earliest user-available priority (1-100 are reserved).
 __attribute__((constructor(101))) void early_install_signal_handlers() {
-  // Initialize libbacktrace state for stacktrace generation.
-  bt_state = backtrace_create_state(nullptr, 0, bt_error_callback, nullptr);
+  // Initialize backtrace state for stacktrace generation.
+  init_backtrace_state();
 
   // Set up alternate signal stack to handle stack overflow scenarios.
   stack_t ss{};
