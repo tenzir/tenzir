@@ -31,6 +31,9 @@
 namespace tenzir {
 class multi_series_builder;
 class data_builder;
+namespace ast {
+class field_path;
+}
 namespace detail::data_builder {
 
 /// Contains the result of a parser used in the `data_builder`.
@@ -299,6 +302,9 @@ public:
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
   [[nodiscard]] auto field(std::string_view name) -> node_object*;
+  /// @brief Adds a nested field based on a field path.
+  /// Creates intermediate records as needed.
+  [[nodiscard]] auto field(const ast::field_path& path) -> node_object*;
 
   node_record(settings settings);
 
