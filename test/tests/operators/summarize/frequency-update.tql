@@ -1,0 +1,6 @@
+// Update mode: emit only when values change between emissions.
+// A timer tick without new data should not produce an output.
+from {ts: 0ms.from_epoch(), x: 1},
+     {ts: 250ms.from_epoch(), x: 1}
+delay ts
+summarize {frequency: 100ms, mode: "update"}, sum=sum(x)
