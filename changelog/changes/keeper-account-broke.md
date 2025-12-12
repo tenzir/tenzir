@@ -8,7 +8,7 @@ pr: 5593
 We have improved our Google Cloud PubSub integration with the addition of the new
 `from_google_cloud_pubsub` and `to_google_cloud_pubsub` operators.
 
-These operator are direct *void -> event* and *event -> void* operators, which
+These operators are direct *void -> event* and *event -> void* operators, which
 means that they ensure a 1:1 relation between events and messages.
 
 The `from_google_cloud_pubsub` operator can also attach metadata such

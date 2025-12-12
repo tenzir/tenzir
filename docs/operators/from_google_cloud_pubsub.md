@@ -1,7 +1,7 @@
 ---
 title: from_google_cloud_pubsub
 category: Inputs/Events
-example: 'from_google_cloud_pubsub project_id="my-project", subscription_id="my-sub", metadata_field=.metadata'
+example: 'from_google_cloud_pubsub project_id="my-project", subscription_id="my-sub"'
 ---
 
 Subscribes to a Google Cloud Pub/Sub subscription and yields events.
@@ -31,11 +31,17 @@ The subscription to subscribe to.
 ### `metadata_field = field (optional)`
 
 When set, delivery metadata is attached at the given field path. Each event then
-also contains a record with:
+also contains a record with this schema:
 
-- `message_id`: Pub/Sub message ID
-- `publish_time`: message publish time
-- `attributes`: a record of string attributes
+```tql
+{
+  message_id: string, // Pub/Sub message ID
+  publish_time: time, // Message publish time
+  attributes: { // Record containing all attributes of the message
+    key: string ...
+  }
+}
+```
 
 ## Examples
 
@@ -43,13 +49,23 @@ also contains a record with:
 
 ```tql
 from_google_cloud_pubsub project_id="amazing-project-123456", subscription_id="my-subscription"
-read_json
+this = message.parse_json()
 ```
 
 ### Collect metadata alongside the message
 
 ```tql
-from_google_cloud_pubsub project_id="amazing-project-123456", subscription_id="my-subscription", metadata_field=.metadata
+from_google_cloud_pubsub project_id="amazing-project-123456", subscription_id="my-subscription", metadata_field=metadata
+```
+```
+{
+  message: "some text",
+  metadata: {
+    message_id: "0",
+    publish_time: 2025-12-12T17:05:07.324958101Z,
+    attributes: {},
+  }
+}
 ```
 
 ## See Also

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/weak_run_delayed.hpp"
@@ -75,6 +75,7 @@ public:
           pubsub::MessageBuilder{}.SetData(std::string{view}).Build()),
         batch_start);
     };
+    auto timeout_warned = false;
     const auto flush_pending =
       [&](const std::chrono::steady_clock::time_point& now) {
         still_pending.clear();
@@ -89,24 +90,23 @@ public:
             }
             continue;
           }
-          if (now - entry.started_at >= timeout) {
-            entry.future.cancel();
-            diagnostic::error("reached a {} timeout while trying to publish",
-                              timeout)
+          if (not timeout_warned and now - entry.started_at >= timeout) {
+            diagnostic::warning("reached a {} timeout while trying to publish",
+                                timeout)
               .primary(args_.op)
               .emit(dh);
-            continue;
+            timeout_warned = true;
           }
           still_pending.push_back(std::move(entry));
         }
         pending.swap(still_pending);
       };
     for (const auto& slice : input) {
-      batch_start = std::chrono::steady_clock::now();
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      batch_start = std::chrono::steady_clock::now();
       for (const auto& messages : eval(args_.message, slice, dh)) {
         match(
           *messages.array,
@@ -136,15 +136,12 @@ public:
     detail::weak_run_delayed(&ctrl.self(), timeout, [&ctrl]() {
       ctrl.set_waiting(false);
     });
+    co_yield {};
     flush_pending(std::chrono::steady_clock::time_point{});
   }
 
   auto name() const -> std::string override {
     return "to_google_cloud_pubsub";
-  }
-
-  auto detached() const -> bool override {
-    return true;
   }
 
   auto location() const -> operator_location override {
@@ -178,7 +175,6 @@ public:
           .named("message", args.message, "string")
           .parse(inv, ctx));
     args.op = inv.self.get_location();
-    TRY(resolve_entities(args.message, ctx));
     return std::make_unique<to_google_cloud_pubsub_operator>(std::move(args));
   }
 };

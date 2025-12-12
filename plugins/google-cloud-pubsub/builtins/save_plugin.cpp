@@ -117,14 +117,14 @@ public:
     return std::make_unique<save_operator>(std::move(args));
   }
 
-  virtual auto save_properties() const -> save_properties_t override {
-    return {
-      .schemes = {"gcps"},
-      .accepts_pipeline = false,
-      .strip_scheme = true,
-      .transform_uri = make_uri_transform("topic_id"),
-    };
-  }
+  // virtual auto save_properties() const -> save_properties_t override {
+  //   return {
+  //     .schemes = {"gcps"},
+  //     .accepts_pipeline = false,
+  //     .strip_scheme = true,
+  //     .transform_uri = make_uri_transform("topic_id"),
+  //   };
+  // }
 };
 
 } // namespace tenzir::plugins::google_cloud_pubsub
