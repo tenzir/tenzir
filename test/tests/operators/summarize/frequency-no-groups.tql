@@ -1,0 +1,5 @@
+// Test frequency with no groups (aggregate only)
+from {x: 1},
+     {x: 2},
+     {x: 3}
+summarize {frequency: 1s}, count=count()
