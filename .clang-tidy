@@ -27,6 +27,7 @@ Checks: >
   -llvmlibc-*,
   -misc-no-recursion,
   -modernize-use-designated-initializers,
+  -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,
   -modernize-use-ranges,
   -performance-enum-size,
