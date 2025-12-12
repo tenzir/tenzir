@@ -14,6 +14,7 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/operator_control_plane.hpp>
@@ -34,7 +35,6 @@
 
 #include <algorithm>
 #include <ranges>
-#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -145,10 +145,19 @@ struct config {
   /// corresponds to `aggregates`, otherwise `groups[-index - 1]`.
   std::vector<int64_t> indices;
 
+  /// Optional frequency for periodic emission of aggregation results.
+  std::optional<duration> frequency;
+
+  /// Whether to accumulate aggregations across emissions (true) or reset them
+  /// after each emission (false).
+  bool cumulative = false;
+
   friend auto inspect(auto& f, config& x) -> bool {
     return f.object(x).fields(f.field("aggregates", x.aggregates),
                               f.field("groups", x.groups),
-                              f.field("indices", x.indices));
+                              f.field("indices", x.indices),
+                              f.field("frequency", x.frequency),
+                              f.field("cumulative", x.cumulative));
   }
 };
 
@@ -217,7 +226,36 @@ public:
     update_group(*current_group, current_begin, total_rows);
   }
 
+  auto flush(bool cumulative) -> std::vector<table_slice> {
+    auto result = finish_impl();
+    if (!cumulative) {
+      // Reset all buckets by recreating them
+      for (auto& [key, bucket] : groups_) {
+        bucket->aggregations.clear();
+        for (const auto& aggr : cfg_.aggregates) {
+          const auto* fn = dynamic_cast<const aggregation_plugin*>(
+            &ctx_.reg().get(aggr.call));
+          TENZIR_ASSERT(fn);
+          bucket->aggregations.push_back(
+            fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
+                                 ctx_)
+              .unwrap());
+        }
+      }
+    }
+    return result;
+  }
+
   auto finish() -> std::vector<table_slice> {
+    if (cfg_.mode == "update") {
+      // Reuse flush to honor change detection for the final emission.
+      return flush(true);
+    }
+    return finish_impl();
+  }
+
+private:
+  auto finish_impl() -> std::vector<table_slice> {
     auto emplace = [](record& root, const ast::field_path& sel, data value) {
       if (sel.path().empty()) {
         // TODO
@@ -305,7 +343,6 @@ public:
     return b.finish_as_table_slice();
   }
 
-private:
   const config& cfg_;
   session ctx_;
   group_map<std::unique_ptr<bucket2>> groups_;
@@ -328,15 +365,63 @@ public:
     // TODO: Do not create a new session here.
     auto provider = session_provider::make(ctrl.diagnostics());
     auto impl = implementation2{cfg_, provider.as_session()};
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
+
+    if (cfg_.frequency) {
+      // Periodic emission mode
+      auto pending_flush = std::atomic<bool>{false};
+
+      detail::weak_run_delayed_loop(
+        &ctrl.self(), *cfg_.frequency,
+        [&] {
+          pending_flush.store(true, std::memory_order_release);
+          ctrl.set_waiting(false);
+        },
+        false);
+
+      auto maybe_slice = input.next();
+      while (true) {
+        // Drain pending flushes that were scheduled while idle.
+        if (pending_flush.load(std::memory_order_acquire)) {
+          pending_flush.store(false, std::memory_order_release);
+          for (auto result : impl.flush(cfg_.cumulative)) {
+            co_yield std::move(result);
+          }
+        }
+        if (not maybe_slice) {
+          break;
+        }
+        auto& slice = *maybe_slice;
+        if (slice.rows() == 0) {
+          co_yield {};
+        } else {
+          impl.add(slice);
+        }
+        maybe_slice = input.next();
       }
-      impl.add(slice);
-    }
-    for (auto slice : impl.finish()) {
-      co_yield std::move(slice);
+      // Flush anything that may have been scheduled while consuming the last
+      // slices before producing the final result.
+      if (pending_flush.load(std::memory_order_acquire)) {
+        pending_flush.store(false, std::memory_order_release);
+        for (auto result : impl.flush()) {
+          co_yield std::move(result);
+        }
+      }
+      // Final emission when input ends
+      for (auto slice : impl.finish()) {
+        co_yield std::move(slice);
+      }
+    } else {
+      // Original behavior: emit only at end
+      for (auto&& slice : input) {
+        if (slice.rows() == 0) {
+          co_yield {};
+          continue;
+        }
+        impl.add(slice);
+      }
+      for (auto slice : impl.finish()) {
+        co_yield std::move(slice);
+      }
     }
   }
 
@@ -359,6 +444,61 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto cfg = config{};
+
+    // Check for options record as first argument
+    if (! inv.args.empty()) {
+      if (auto* rec = try_as<ast::record>(inv.args[0])) {
+        for (auto& item : rec->items) {
+          auto* field = try_as<ast::record::field>(item);
+          if (! field) {
+            diagnostic::error("spread not allowed in options record")
+              .primary(rec->get_location())
+              .emit(ctx);
+            return failure::promise();
+          }
+          const auto& name = field->name.name;
+          if (name == "frequency") {
+            TRY(auto value, const_eval(field->expr, ctx));
+            auto* dur = try_as<duration>(value);
+            if (! dur) {
+              diagnostic::error("expected duration for `frequency`")
+                .primary(field->expr)
+                .emit(ctx);
+              return failure::promise();
+            }
+            cfg.frequency = *dur;
+          } else if (name == "mode") {
+            TRY(auto value, const_eval(field->expr, ctx));
+            auto* str = try_as<std::string>(value);
+            if (! str) {
+              diagnostic::error("expected string for `mode`")
+                .primary(field->expr)
+                .emit(ctx);
+              return failure::promise();
+            }
+            if (*str == "cumulative") {
+              cfg.cumulative = true;
+            } else if (*str == "reset") {
+              cfg.cumulative = false;
+            } else {
+              diagnostic::error("invalid mode `{}`", *str)
+                .primary(field->expr)
+                .hint("expected `reset` or `cumulative`")
+                .emit(ctx);
+              return failure::promise();
+            }
+          } else {
+            diagnostic::error("unknown option `{}`", name)
+              .primary(field->name)
+              .emit(ctx);
+            return failure::promise();
+          }
+        }
+        // Remove the options record from arguments
+        inv.args.erase(inv.args.begin());
+      }
+    }
+
     auto add_aggregate = [&](std::optional<ast::field_path> dest,
                              ast::function_call call) {
       // TODO: Improve this and try to forward function handle directly.
