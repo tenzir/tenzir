@@ -13,9 +13,9 @@ summarize (group|aggregation)...
 ## Description
 
 The `summarize` operator groups events according to certain fields and applies
-[aggregation functions](/reference/functions#aggregation) to each group. The operator
-consumes the entire input before producing any output, and may reorder the event
-stream.
+[aggregation functions](/reference/functions#aggregation) to each group. By default,
+the operator consumes the entire input before producing any output, and may reorder
+the event stream.
 
 The order of the output fields follows the sequence of the provided arguments.
 Unspecified fields are dropped.
@@ -24,6 +24,20 @@ Unspecified fields are dropped.
 Use caution when applying this operator to large inputs. It currently buffers
 all data in memory. Out-of-core processing is on our roadmap.
 :::
+
+### Options
+
+An optional options record can be passed as the first argument to control
+the emission behavior:
+
+- `frequency: duration` - Emit aggregation results at this interval instead
+  of only at the end of the input stream.
+- `mode: string` - Controls how aggregations are handled between emissions:
+  - `"reset"` (default): Reset aggregations after each emission
+  - `"cumulative"`: Keep accumulating values across emissions
+
+When `frequency` is specified, the operator will emit intermediate results
+at the specified interval and always emit final results when the input ends.
 
 ### `group`
 
@@ -116,6 +130,34 @@ pairs:
 ```tql
 ts = round(ts, 1h)
 summarize ts, src_ip, dest_ip, sum(bytes_in), sum(bytes_out)
+```
+
+### Emit aggregations every 5 seconds
+
+Emit the current count and groups every 5 seconds, resetting the
+count after each emission:
+
+```tql
+summarize {frequency: 5s}, count(), src_ip
+```
+
+This is useful for streaming use cases where you want periodic updates
+rather than waiting for all input to arrive.
+
+### Cumulative aggregations
+
+Emit running totals every minute, with values accumulating over time:
+
+```tql
+summarize {frequency: 1min, mode: "cumulative"}, sum(bytes), dst_ip
+```
+
+In cumulative mode, the aggregations continue to grow across emissions:
+
+```tql
+{dst_ip: "1.2.3.4", "sum(bytes)": 1000}    // After 1 minute
+{dst_ip: "1.2.3.4", "sum(bytes)": 2500}    // After 2 minutes
+{dst_ip: "1.2.3.4", "sum(bytes)": 4200}    // After 3 minutes
 ```
 
 ## See Also
