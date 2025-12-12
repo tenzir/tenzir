@@ -4,4 +4,4 @@ error: invalid mode `invalid`
 6 | summarize {frequency: 1s, mode: "invalid"}, count=count()
   |                                 ^^^^^^^^^ 
   |
-  = hint: expected `reset` or `cumulative`
+  = hint: expected `reset`, `cumulative`, or `update`

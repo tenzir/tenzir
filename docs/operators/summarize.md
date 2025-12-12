@@ -35,6 +35,7 @@ the emission behavior:
 - `mode: string` - Controls how aggregations are handled between emissions:
   - `"reset"` (default): Reset aggregations after each emission
   - `"cumulative"`: Keep accumulating values across emissions
+  - `"update"`: Keep accumulating but only emit when values change
 
 When `frequency` is specified, the operator will emit intermediate results
 at the specified interval and always emit final results when the input ends.
@@ -159,6 +160,23 @@ In cumulative mode, the aggregations continue to grow across emissions:
 {dst_ip: "1.2.3.4", "sum(bytes)": 2500}    // After 2 minutes
 {dst_ip: "1.2.3.4", "sum(bytes)": 4200}    // After 3 minutes
 ```
+
+### Update mode for change detection
+
+Emit running totals, but only when values change from the previous emission:
+
+```tql
+summarize {frequency: 10s, mode: "update"}, count(), src_ip
+```
+
+This mode is useful for monitoring scenarios where you only want to be
+notified when metrics actually change, reducing noise from unchanged values.
+The first emission for each group is always sent, and subsequent emissions
+only occur when aggregation values differ from the previous emission.
+
+For example, if `src_ip` "10.0.0.1" has a count of 5 at t=0s, t=10s, and t=20s,
+then increases to 8 at t=30s, only emissions at t=0s (first) and t=30s (changed)
+will be produced for that group.
 
 ## See Also
 
