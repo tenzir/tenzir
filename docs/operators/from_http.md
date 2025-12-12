@@ -14,8 +14,8 @@ from_http url:string, [method=string, body=record|string|blob, encode=string,
           retry_delay=duration, tls=bool, certfile=string, keyfile=string,
           password=string { … }]
 from_http url:string, server=true, [metadata_field=field, responses=record,
-          max_request_size=int, tls=bool, certfile=string, keyfile=string,
-          password=string { … }]
+          max_request_size=int, max_connections=int, tls=bool, certfile=string,
+          keyfile=string, password=string { … }]
 ```
 
 ## Description
@@ -159,6 +159,12 @@ Requests to an unspecified endpoint are responded with HTTP Status `200 OK`.
 The maximum size of an incoming request to accept.
 
 Defaults to `10MiB`.
+
+### `max_connections = int (optional)`
+
+The maximum number of simultaneous incoming connections to accept.
+
+Defaults to `10`.
 
 ### `tls = bool (optional)`
 
