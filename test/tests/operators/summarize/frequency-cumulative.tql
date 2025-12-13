@@ -1,0 +1,7 @@
+// Cumulative mode: values keep growing across emissions.
+from {ts: 0ms.from_epoch(), x: 1},
+     {ts: 5ms.from_epoch(), x: 1},
+     {ts: 12ms.from_epoch(), x: 1},
+     {ts: 22ms.from_epoch(), x: 1}
+delay ts
+summarize {frequency: 10ms, mode: "cumulative"}, count=count()
