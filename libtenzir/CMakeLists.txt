@@ -133,24 +133,21 @@ provide_find_module(c-ares)
 # -- jemalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC OFF)
-if (TENZIR_ALLOCATOR STREQUAL "jemalloc"
-    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+if (TENZIR_ALLOCATOR STREQUAL "jemalloc" OR TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC ON)
 endif ()
 
 if (TENZIR_ALLOCATOR_NEEDS_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-         "\nfind_package(jemalloc REQUIRED)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
 # -- mimalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC OFF)
-if (TENZIR_ALLOCATOR STREQUAL "mimalloc"
-    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+if (TENZIR_ALLOCATOR STREQUAL "mimalloc" OR TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC ON)
 endif ()
 
@@ -501,6 +498,11 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   target_link_libraries(libtenzir PRIVATE pfs)
 endif ()
 
+find_package(libbacktrace)
+if (TARGET libbacktrace::libbacktrace)
+  target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace)
+endif ()
+
 if (LINUX)
   find_package(Boost COMPONENTS stacktrace_backtrace)
   # Use a compiled stacktrace_backtrace if available, otherwise use header only
@@ -509,10 +511,8 @@ if (LINUX)
     target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
     target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
   else ()
-    find_path(libbacktrace_INCLUDE_DIR NAMES backtrace.h)
-    find_library(libbacktrace_LIBRARY NAMES backtrace)
-    target_include_directories(libtenzir PRIVATE "${libbacktrace_INCLUDE_DIR}")
-    target_link_libraries(libtenzir PRIVATE "${libbacktrace_LIBRARY}" dl)
+    find_package(libbacktrace REQUIRED)
+    target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace dl)
     target_compile_definitions(libtenzir
                                PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
   endif ()
