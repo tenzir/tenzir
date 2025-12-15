@@ -76,19 +76,13 @@ auto record_generator::field(const ast::field_path& path) -> object_generator {
     return object_generator{};
   }
   const auto segments = path.path();
-  if (segments.empty()) {
-    return object_generator{};
-  }
-  auto result = exact_field(segments.front().id.name);
-  for (auto it = std::next(segments.begin()); it != segments.end(); ++it) {
-    auto rec = result.record();
-    if (not rec.writable()) {
-      return object_generator{};
-    }
-    if (std::next(it) == segments.end()) {
-      return rec.exact_field(it->id.name);
-    }
-    result = rec.exact_field(it->id.name);
+  TENZIR_ASSERT(not segments.empty());
+  auto result = object_generator{};
+  for (auto& s : segments) {
+    // We "abuse" the fact that the initial, default constructed `result` is not
+    // writable, but all subsequently added fields will be writable here.
+    result = result.writable() ? result.record().exact_field(s.id.name)
+                               : this->exact_field(s.id.name);
   }
   return result;
 }

@@ -90,7 +90,7 @@ public:
           if (args_.metadata_field) {
             auto meta = event.field(*args_.metadata_field).record();
             meta.field("message_id").data(m.message_id());
-            meta.field("publish_time").data(m.publish_time());
+            meta.field("publish_time").data(time{m.publish_time()});
             auto attrs = meta.field("attributes").record();
             for (const auto& [key, value] : m.attributes()) {
               attrs.field(key).data(value);

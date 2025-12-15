@@ -444,18 +444,12 @@ auto node_record::field(std::string_view name) -> node_object* {
 auto node_record::field(const ast::field_path& path) -> node_object* {
   const auto segments = path.path();
   TENZIR_ASSERT(not segments.empty());
-  auto* current = this;
-  for (auto it = segments.begin(); it != segments.end(); ++it) {
-    auto* field = current->field(it->id.name);
-    if (std::next(it) == segments.end()) {
-      return field;
-    }
-    current = field->record();
-    if (not current) {
-      return nullptr;
-    }
+  node_object* result = nullptr;
+  for (auto& s : segments) {
+    result
+      = result ? result->record()->field(s.id.name) : this->field(s.id.name);
   }
-  TENZIR_UNREACHABLE();
+  return result;
 }
 
 auto node_record::at(std::string_view key) -> node_object* {
