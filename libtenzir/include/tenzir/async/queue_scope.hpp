@@ -96,6 +96,8 @@ public:
 
   template <class F>
     requires folly::coro::is_semi_awaitable_v<std::invoke_result_t<F>>
+             and std::convertible_to<
+               folly::coro::semi_await_result_t<std::invoke_result_t<F>>, T>
   void spawn(F&& f) {
     TENZIR_ASSERT(scope_);
     remaining_ += 1;
@@ -163,6 +165,11 @@ public:
       }
     }
     co_return std::nullopt;
+  }
+
+  auto scope() -> AsyncScope& {
+    TENZIR_ASSERT(scope_);
+    return *scope_;
   }
 
 private:

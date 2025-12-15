@@ -26,7 +26,7 @@ namespace {
 
 class Head final : public Operator<table_slice, table_slice> {
 public:
-  explicit Head(size_t count) : remaining_{count} {
+  explicit Head(int64_t count) : remaining_{count} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -53,7 +53,7 @@ public:
   }
 
 private:
-  size_t remaining_;
+  int64_t remaining_;
 };
 
 #if 0
@@ -240,6 +240,10 @@ public:
       // TODO: Assert that we are at the end?
     }
     return args.sys.spawn(caf::actor_from_state<head_exec>, remaining);
+  }
+
+  auto spawn() && -> AnyOperator override {
+    return Head{count_};
   }
 
   friend auto inspect(auto& f, head_plan& x) -> bool {

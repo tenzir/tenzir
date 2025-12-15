@@ -24,6 +24,7 @@ public:
   virtual auto name() const -> std::string = 0;
 
   virtual auto spawn(operator_spawn_args args) const -> exec::operator_actor {
+    TENZIR_UNUSED(args);
     TENZIR_TODO();
   }
 

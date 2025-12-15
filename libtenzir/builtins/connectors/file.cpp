@@ -766,6 +766,8 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::operator_ptr> override {
+    // FIXME
+    TENZIR_UNUSED(inv, ctx);
     return std::make_unique<SaveStdoutIr>();
   }
 };

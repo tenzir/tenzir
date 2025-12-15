@@ -51,35 +51,6 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
 
 class stateless_transform_operator {};
 
-class set_exec : public exec::operator_base {
-public:
-  set_exec(exec::operator_actor::pointer self,
-           std::vector<ast::assignment> assignments, event_order order)
-    : exec::operator_base{self},
-      assignments_{std::move(assignments)},
-      order_{order} {
-  }
-
-  void on_push(table_slice slice) override {
-    // TODO: Perform the actual assignment.
-    push(std::move(slice));
-  }
-  void on_push(chunk_ptr chunk) override {
-    TENZIR_TODO();
-  }
-  auto serialize() -> chunk_ptr override {
-  }
-  void on_done() override {
-    finish();
-  }
-  void on_pull(uint64_t items) {
-  }
-
-private:
-  std::vector<ast::assignment> assignments_;
-  event_order order_;
-};
-
 class Set final : public Operator<table_slice, table_slice> {
 public:
   Set(std::vector<ast::assignment> assignments, event_order order)
@@ -162,12 +133,6 @@ public:
 
   auto name() const -> std::string override {
     return "set_plan";
-  }
-
-  auto spawn(plan::operator_spawn_args args) const
-    -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<set_exec>, assignments_,
-                          order_);
   }
 
   auto spawn() && -> AnyOperator override {
@@ -814,6 +779,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           });
       },
       [&](ast::assignment x) -> failure_or<void> {
+        // TODO: What about left?
+        TRY(x.right.bind(ctx));
         operators.push_back(make_set_ir(std::move(x)));
         return {};
       },

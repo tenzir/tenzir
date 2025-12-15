@@ -320,6 +320,7 @@ public:
     for (auto& op : std::move(*plan).unwrap()) {
       ops.push_back(std::move(*op).spawn());
     }
+    auto sub = co_await ctx.spawn_sub({}, std::move(*plan));
     auto chain
       = OperatorChain<table_slice, table_slice>::try_from(std::move(ops));
     TENZIR_ASSERT(chain);
@@ -338,6 +339,11 @@ public:
     // while (auto output = co_await gen.next()) {
     //   co_await push(std::move(*output));
     // }
+  }
+
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    co_await push(std::move(slice));
   }
 
 private:

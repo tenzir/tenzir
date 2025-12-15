@@ -10,7 +10,11 @@
 
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/finalize_ctx.hpp"
+#include "tenzir/ir.hpp"
+#include "tenzir/plan/pipeline.hpp"
 
+#include <boost/unordered/unordered_flat_map.hpp>
 #include <folly/Executor.h>
 #include <folly/coro/AwaitResult.h>
 #include <folly/coro/BlockingWait.h>
@@ -154,8 +158,32 @@ private:
 template <class T>
 OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
+// Wrapper type to prevent implicit conversions.
+struct AnyWrapper {
+  explicit AnyWrapper(std::any value) : value{std::move(value)} {
+  }
+
+  std::any value;
+};
+
+struct SubPipeline {
+  SubPipeline(Box<Push<OperatorMsg<table_slice>>> push,
+              Box<Pull<OperatorMsg<table_slice>>> pull,
+              Sender<FromControl> from_control, Receiver<ToControl> to_control)
+    : push{std::move(push)},
+      pull{std::move(pull)},
+      from_control{std::move(from_control)},
+      to_control{std::move(to_control)} {
+  }
+
+  Box<Push<OperatorMsg<table_slice>>> push;
+  Box<Pull<OperatorMsg<table_slice>>> pull;
+  Sender<FromControl> from_control;
+  Receiver<ToControl> to_control;
+};
+
 template <class Input, class Output>
-class Runner {
+class Runner final : private SubManager {
 public:
   Runner(Box<Operator<Input, Output>> op,
          Box<Pull<OperatorMsg<Input>>> pull_upstream,
@@ -167,8 +195,13 @@ public:
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
-      ctx_{sys, dh} {
+      ctx_{sys, dh, *this} {
   }
+
+  Runner(Runner&&) = delete;
+  Runner& operator=(Runner&&) = delete;
+  Runner(const Runner&) = delete;
+  Runner& operator=(const Runner&) = delete;
 
   auto run_to_completion() && -> Task<void> {
     TENZIR_WARN("starting operator runner");
@@ -179,6 +212,80 @@ public:
   }
 
 private:
+  auto spawn_sub(SubKey key, plan::pipeline pipe)
+    -> Task<OpenPipeline> override {
+    TENZIR_INFO("spawning subpipeline: {:#?}", use_default_formatter{pipe});
+    // TODO: Run chain in async scope?
+    auto ops = std::move(pipe).unwrap();
+    auto spawned = std::vector<AnyOperator>{};
+    spawned.reserve(ops.size());
+    for (auto& op : ops) {
+      spawned.push_back(std::move(*op).spawn());
+    }
+    auto chain
+      = OperatorChain<table_slice, table_slice>::try_from(std::move(spawned));
+    // FIXME
+    TENZIR_ASSERT(chain);
+    auto [push_upstream, pull_upstream] = make_op_channel<table_slice>(1000);
+    auto [push_downstream, pull_downstream]
+      = make_op_channel<table_slice>(1000);
+    auto [from_control_sender, from_control_receiver]
+      = make_unbounded_channel<FromControl>();
+    auto [to_control_sender, to_control_receiver]
+      = make_unbounded_channel<ToControl>();
+    auto runner
+      = run_chain(std::move(*chain), std::move(pull_upstream),
+                  std::move(push_downstream), std::move(from_control_receiver),
+                  std::move(to_control_sender), ctx_.actor_system(), ctx_.dh());
+    // TODO: What do we do here?
+    auto handle = queue_.scope().spawn(std::move(runner));
+    // co_await handle.join();
+    queue_.scope().spawn([this, pull_downstream = std::move(
+                                  pull_downstream)] mutable -> Task<void> {
+      while (true) {
+        auto output = co_await pull_downstream();
+        co_await match(
+          output,
+          [&](table_slice output) -> Task<void> {
+            if constexpr (std::same_as<Output, void>) {
+              co_await op_->process_sub(SubKeyView{}, std::move(output), ctx_);
+            } else {
+              auto push = OpPushWrapper{push_downstream_};
+              co_await op_->process_sub(SubKeyView{}, std::move(output), push,
+                                        ctx_);
+            }
+          },
+          [&](Signal output) -> Task<void> {
+            // TODO
+            co_return;
+          });
+      }
+    });
+    // TODO: Cleanup.
+    auto& push = *push_upstream;
+    auto [_, inserted] = subpipelines_.try_emplace(
+      std::move(key), SubPipeline{
+                        std::move(push_upstream),
+                        std::move(pull_downstream),
+                        std::move(from_control_sender),
+                        std::move(to_control_receiver),
+                      });
+    if (not inserted) {
+      panic("already have a subpipeline for that key");
+    }
+    co_return OpenPipeline{push};
+  }
+
+  auto get_sub(SubKeyView key) -> std::optional<OpenPipeline> override {
+    // TODO: This is bad.
+    auto it = subpipelines_.find(materialize(key));
+    if (it == subpipelines_.end()) {
+      return std::nullopt;
+    }
+    auto& subpipeline = it->second;
+    return OpenPipeline{*subpipeline.push};
+  }
+
   auto run() -> Task<void> {
     TENZIR_INFO("entering run loop of {}", typeid(*op_).name());
     // co_await folly::coro::co_scope_exit(
@@ -198,7 +305,9 @@ private:
         co_await op_->start(ctx_);
       }
       TENZIR_INFO("-> post start");
-      queue_.spawn(op_->await_task());
+      queue_.spawn([this] -> Task<AnyWrapper> {
+        co_return AnyWrapper{co_await op_->await_task()};
+      });
       queue_.spawn(pull_upstream_());
       queue_.spawn(from_control_.receive());
       while (not got_shutdown_request_) {
@@ -236,19 +345,21 @@ private:
     });
   }
 
-  auto process(std::any message) -> Task<void> {
+  auto process(AnyWrapper message) -> Task<void> {
     // The task provided by the inner implementation completed.
     TENZIR_VERBOSE("got future result in {}", typeid(*op_).name());
     if constexpr (std::same_as<Output, void>) {
-      co_await op_->process_task(std::move(message), ctx_);
+      co_await op_->process_task(std::move(message.value), ctx_);
     } else {
       auto push = OpPushWrapper{push_downstream_};
-      co_await op_->process_task(std::move(message), push, ctx_);
+      co_await op_->process_task(std::move(message.value), push, ctx_);
     }
     if (op_->state() == OperatorState::done) {
       co_await handle_done();
     } else {
-      queue_.spawn(op_->await_task());
+      queue_.spawn([this] -> Task<AnyWrapper> {
+        co_return AnyWrapper{co_await op_->await_task()};
+      });
     }
     TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
   }
@@ -349,7 +460,10 @@ private:
   Sender<ToControl> to_control_;
   OpCtx ctx_;
 
-  QueueScope<variant<std::any, OperatorMsg<Input>, FromControl>> queue_;
+  // TODO: Better map type.
+  std::unordered_map<data, SubPipeline> subpipelines_;
+
+  QueueScope<variant<AnyWrapper, OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
   bool is_done_ = false;
   // TODO: Expose this?
@@ -596,6 +710,14 @@ auto run_open_pipeline(OperatorChain<void, Output> pipeline,
   auto [push_input, pull_input] = make_op_channel<Output>(10);
 }
 
+auto OpCtx::spawn_sub(SubKey key, plan::pipeline pipe) -> Task<OpenPipeline> {
+  return sub_manager_.spawn_sub(std::move(key), std::move(pipe));
+}
+
+auto OpCtx::get_sub(SubKeyView key) -> std::optional<OpenPipeline> {
+  return sub_manager_.get_sub(key);
+}
+
 template <class T>
 static auto cost(const OperatorMsg<T>& item, size_t limit) -> size_t {
   return std::min(match(
@@ -829,6 +951,10 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
   } catch (folly::OperationCancelled) {
     // TODO: ?
     throw;
+  } catch (panic_exception& e) {
+    dh.emit(to_diagnostic(e));
+    // TODO: Return failure?
+    co_return;
   } catch (std::exception& e) {
     diagnostic::error("uncaught exception in pipeline: {}", e.what()).emit(dh);
     // TODO: Return failure?

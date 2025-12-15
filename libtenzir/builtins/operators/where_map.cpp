@@ -886,6 +886,7 @@ public:
 
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
+    TENZIR_UNUSED(args);
     TENZIR_TODO();
     // return exec::spawn_operator<where_exec>(std::move(args), predicate_);
   }

@@ -30,7 +30,12 @@ public:
     TENZIR_ASSERT(not state_->notified);
     co_await state_->notify.wait();
     state_->notified = true;
-    co_return std::move(state_->value).unwrap();
+    if constexpr (std::same_as<T, void>) {
+      std::move(state_->value).unwrap();
+      co_return {};
+    } else {
+      co_return std::move(state_->value).unwrap();
+    }
   }
 
 private:
@@ -158,7 +163,7 @@ auto async_scope(F&& f) -> Task<
   } else {
     guard.trigger();
   }
-  /// Now return the result of the user-provided function.
+  // Now return the result of the user-provided function.
   co_return std::move(result).unwrap();
 }
 

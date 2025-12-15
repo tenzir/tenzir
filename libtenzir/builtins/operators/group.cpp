@@ -109,56 +109,54 @@ private:
 };
 #endif
 
-template <class Value, class Error>
-class [[nodiscard]] Result {
-public:
-};
-
-class OpenPipeline {
-public:
-  auto push(table_slice input) -> Task<Result<void, table_slice>> {
-    TENZIR_TODO();
-  }
-
-  auto close_input() -> void {
-    TENZIR_TODO();
-  }
-
-  auto pull() -> Task<std::optional<table_slice>> {
-    TENZIR_TODO();
-  }
-};
-
 template <class Output>
 class Group final : public Operator<table_slice, Output> {
 public:
-  Group(ast::expression over, ir::pipeline pipe)
-    : over_{std::move(over)}, pipe_{std::move(pipe)} {
-  }
-
-  auto await_task() const -> Task<std::any> override {
-    co_return co_await pipe_output_->next();
+  Group(ast::expression over, ir::pipeline pipe, let_id let_id)
+    : over_{std::move(over)}, pipe_{std::move(pipe)}, let_id_{let_id} {
   }
 
   auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override {
+    TENZIR_UNUSED(push);
     // TODO
-    auto key = data{"hi"};
-    auto it = pipes_.find(key);
-    // TODO
-    TENZIR_ASSERT(it != pipes_.end());
-    auto& pipe = it.value();
-    // TODO: Earlier, when spawning the pipeline
-    pipe_output_->spawn(pipe.pull());
-    (void)co_await pipe.pull();
-    co_return;
+    auto key_value = ast::constant::kind{"hi"};
+    auto key_data = match(key_value, [&](auto& x) {
+      return data{x};
+    });
+    auto sub = ctx.get_sub(make_view(key_data));
+    if (not sub) {
+      auto env = substitute_ctx::env_t{};
+      env[let_id_] = std::move(key_value);
+      auto sub_ctx = substitute_ctx{ctx, &env};
+      auto copy = pipe_;
+      if (not copy.substitute(sub_ctx, true)) {
+        co_return;
+      }
+      auto fin_ctx = finalize_ctx{ctx};
+      auto plan = std::move(copy).finalize(fin_ctx);
+      if (not plan) {
+        co_return;
+      }
+      sub = co_await ctx.spawn_sub(std::move(key_data), std::move(*plan));
+    }
+    auto closed = (co_await sub->push(std::move(input))).is_err();
+    if (closed) {
+      // TODO: Ignore?
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    TENZIR_UNUSED(serde);
+    // serde("pipes", pipes_);
   }
 
 private:
   ast::expression over_;
   ir::pipeline pipe_;
+  let_id let_id_;
 
-  tsl::robin_map<data, OpenPipeline> pipes_;
+  // tsl::robin_map<data, OpenPipeline> pipes_;
 
   // TODO: Not serializable, plus where is restore logic?
   // The operator implementation should be in control when to consume data.
@@ -166,7 +164,7 @@ private:
   // consume data, then the checkpoint is delayed. Maybe that is to be expected?
   // TODO: How do we handle errors in subpipelines?
   // TODO: Activation of scope?
-  mutable Box<QueueScope<std::optional<table_slice>>> pipe_output_;
+  // mutable Box<QueueScope<std::optional<table_slice>>> pipe_output_;
 };
 
 class group_bp final : public plan::operator_base {
@@ -188,11 +186,8 @@ public:
     //                       args.ctx);
   }
 
-  auto spawn() && -> AnyOperator {
-    Box<Operator<table_slice, table_slice>> test
-      = Group<table_slice>{std::move(over_), std::move(pipe_)};
-    return test;
-    // return Group<table_slice>{std::move(over_), std::move(pipe_)};
+  auto spawn() && -> AnyOperator override {
+    return Group<table_slice>{std::move(over_), std::move(pipe_), id_};
   }
 
   friend auto inspect(auto& f, group_bp& x) -> bool {

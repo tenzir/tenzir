@@ -75,6 +75,12 @@ public:
                        std::forward<Args>(args)...);
   }
 
+  /// Comparing boxes compares their value.
+  auto operator==(const Box& other) const -> bool {
+    // TODO: Constraints.
+    return *ptr_ == *other.ptr_;
+  }
+
 private:
   template <class Self>
   auto deref(this Self&& self) -> decltype(auto) {

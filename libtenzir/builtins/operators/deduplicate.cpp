@@ -174,6 +174,7 @@ public:
   auto spawn(plan::operator_spawn_args args) const
     -> exec::operator_actor override {
     // TODO: Initial state.
+    TENZIR_UNUSED(args);
     TENZIR_TODO();
     // return exec::spawn_operator<deduplicate3>(std::move(args), {}, cfg_);
   }

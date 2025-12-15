@@ -12,6 +12,7 @@
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/task.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -85,9 +86,177 @@ private:
   caf::message msg_;
 };
 
+#if 1
+// TODO: User proper types for this?
+using SubKey = data;
+using SubKeyView = data_view;
+#else
+/// A type-erased subpipeline identifier that is serializable and hashable.
+class SubKey {
+public:
+  // FIXME
+  SubKey() : impl_{Impl{42}} {
+  }
+
+  template <class T>
+  explicit(false) SubKey(T value) : impl_{Impl<T>{std::move(value)}} {
+  }
+
+  template <class T>
+  auto get() -> T& {
+    return impl_->as<T>();
+  }
+
+  auto operator==(const SubKey& other) const -> bool {
+    return impl_->equals(other.impl_);
+  }
+
+private:
+  template <class T>
+  class Impl;
+
+  class ImplBase {
+  public:
+    virtual ~ImplBase() = default;
+
+    virtual auto equals(const ImplBase& other) const -> bool = 0;
+
+    template <class T>
+    auto try_as() -> Impl<T>* {
+      return dynamic_cast<Impl<T>*>(this);
+    }
+
+    template <class T>
+    auto try_as() const -> const Impl<T>* {
+      return dynamic_cast<const Impl<T>*>(this);
+    }
+
+    template <class T>
+    auto as() -> Impl<T>& {
+      auto ptr = try_as<T>();
+      TENZIR_ASSERT(ptr);
+      return *ptr;
+    }
+  };
+
+  template <class T>
+  class Impl final : public ImplBase {
+  public:
+    explicit Impl(T value) : value_{std::move(value)} {
+    }
+
+    auto equals(const ImplBase& other) const -> bool override {
+      auto ptr = other.try_as<T>();
+      if (not ptr) {
+        return false;
+      }
+      return value_ == ptr->value_;
+    }
+
+  private:
+    T value_;
+  };
+
+  Box<ImplBase> impl_;
+};
+
+class SubKeyView {
+public:
+  SubKeyView() = default;
+
+  template <class T>
+  explicit(false) SubKeyView(T x) {
+    TENZIR_UNUSED(x);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::SubKey> {
+  auto operator()(const tenzir::SubKey& x) const {
+    TENZIR_UNUSED(x);
+    // FIXME
+    return tenzir::hash(42);
+  }
+};
+
+template <>
+struct std::hash<tenzir::SubKeyView> {
+  auto operator()(const tenzir::SubKey& x) const {
+    TENZIR_UNUSED(x);
+    // FIXME
+    return tenzir::hash(42);
+  }
+};
+
+namespace tenzir {
+#endif
+
+template <class Value, class Error>
+class [[nodiscard]] Result {
+public:
+  using ValueRef = std::add_lvalue_reference_t<Value>;
+
+  auto expect(std::string_view msg) -> ValueRef {
+    TENZIR_UNUSED(msg);
+    TENZIR_TODO();
+  };
+
+  auto is_err() const -> bool {
+    return false;
+  }
+};
+
+TENZIR_ENUM(
+  /// A non-data message sent to an operator by its upstream.
+  Signal,
+  /// No more data will come after this signal. Will never be sent over `void`.
+  end_of_data,
+  /// Request to perform a checkpoint. To be forwarded downstream afterwards.
+  checkpoint);
+
+template <class T>
+struct OperatorMsg : variant<T, Signal> {
+  using variant<T, Signal>::variant;
+};
+
+class OpenPipeline {
+public:
+  explicit OpenPipeline(Push<OperatorMsg<table_slice>>& push) : push_{push} {
+  }
+
+  auto push(table_slice input) -> Task<Result<void, table_slice>> {
+    // FIXME: What to do when closed?
+    TENZIR_WARN("pushing {} rows to subpipeline", input.rows());
+    co_await push_(std::move(input));
+    TENZIR_WARN("pushing to subpipeline done");
+    co_return {};
+  }
+
+  auto close() -> void {
+    TENZIR_TODO();
+  }
+
+private:
+  std::reference_wrapper<Push<OperatorMsg<table_slice>>> push_;
+};
+
+class SubManager {
+public:
+  virtual auto spawn_sub(SubKey key, plan::pipeline pipe) -> Task<OpenPipeline>
+    = 0;
+
+  virtual auto get_sub(SubKeyView key) -> std::optional<OpenPipeline> = 0;
+
+protected:
+  ~SubManager() = default;
+};
+
 class OpCtx {
 public:
-  OpCtx(caf::actor_system& sys, diagnostic_handler& dh) : sys_{sys}, dh_{dh} {
+  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, SubManager& sub_manager)
+    : sys_{sys}, dh_{dh}, reg_{global_registry()}, sub_manager_{sub_manager} {
   }
 
   virtual ~OpCtx() = default;
@@ -96,8 +265,16 @@ public:
     return dh_;
   }
 
+  explicit(false) operator base_ctx() {
+    return base_ctx{dh_, *reg_, sys_};
+  }
+
   auto actor_system() -> caf::actor_system& {
     return sys_;
+  }
+
+  auto dh() -> diagnostic_handler& {
+    return dh_;
   }
 
   template <class... Ts>
@@ -118,9 +295,15 @@ public:
     co_return;
   }
 
+  auto spawn_sub(SubKey key, plan::pipeline pipe) -> Task<OpenPipeline>;
+
+  auto get_sub(SubKeyView key) -> std::optional<OpenPipeline>;
+
 private:
   caf::actor_system& sys_;
   diagnostic_handler& dh_;
+  std::shared_ptr<const registry> reg_;
+  SubManager& sub_manager_;
 };
 
 enum class OperatorState {
@@ -166,6 +349,7 @@ public:
   }
 
   virtual auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(push, ctx);
     co_return;
   }
 
@@ -173,10 +357,22 @@ public:
   ///
   /// Note that, unlike all other functions in the operator interface, this one
   /// may be called in parallel while another call is active.
-  virtual auto on_subpipeline(table_slice slice, Push<Output>& push, OpCtx& ctx)
+  virtual auto process_sub(SubKeyView key, table_slice slice,
+                           Push<Output>& push, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, ctx);
+    if constexpr (std::same_as<Output, table_slice>) {
+      co_await push(std::move(slice));
+    } else {
+      panic("subpipeline result handling is not implemented for this operator");
+    }
+  }
+
+  /// This is *not* required to be thread-safe.
+  virtual auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
-    TENZIR_UNUSED(slice, push, ctx);
-    TENZIR_UNREACHABLE();
+    TENZIR_UNUSED(key, push, ctx);
+    // We don't panic here since this is a reasonable default implementation.
+    co_return;
   }
 
 protected:
@@ -193,6 +389,17 @@ public:
   }
 
   virtual auto finalize(OpCtx& ctx) -> Task<void> {
+    co_return;
+  }
+
+  virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(key, slice, ctx);
+    TENZIR_UNREACHABLE();
+  }
+
+  virtual auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, ctx);
     co_return;
   }
 
@@ -359,19 +566,6 @@ private:
   }
 
   std::vector<AnyOperator> operators_;
-};
-
-TENZIR_ENUM(
-  /// A non-data message sent to an operator by its upstream.
-  Signal,
-  /// No more data will come after this signal. Will never be sent over `void`.
-  end_of_data,
-  /// Request to perform a checkpoint. To be forwarded downstream afterwards.
-  checkpoint);
-
-template <class T>
-struct OperatorMsg : variant<T, Signal> {
-  using variant<T, Signal>::variant;
 };
 
 template <class T>
