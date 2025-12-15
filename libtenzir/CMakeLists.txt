@@ -133,24 +133,21 @@ provide_find_module(c-ares)
 # -- jemalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC OFF)
-if (TENZIR_ALLOCATOR STREQUAL "jemalloc"
-    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+if (TENZIR_ALLOCATOR STREQUAL "jemalloc" OR TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC ON)
 endif ()
 
 if (TENZIR_ALLOCATOR_NEEDS_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-         "\nfind_package(jemalloc REQUIRED)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
 # -- mimalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC OFF)
-if (TENZIR_ALLOCATOR STREQUAL "mimalloc"
-    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+if (TENZIR_ALLOCATOR STREQUAL "mimalloc" OR TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC ON)
 endif ()
 
