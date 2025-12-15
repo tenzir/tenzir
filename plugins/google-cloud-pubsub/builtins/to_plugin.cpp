@@ -132,12 +132,25 @@ public:
       flush_pending(std::chrono::steady_clock::now());
       co_yield {};
     }
-    ctrl.set_waiting(true);
-    detail::weak_run_delayed(&ctrl.self(), timeout, [&ctrl]() {
-      ctrl.set_waiting(false);
-    });
-    co_yield {};
-    flush_pending(std::chrono::steady_clock::time_point{});
+    for (auto& [future, _] : pending) {
+      auto s = future.wait_for(timeout);
+      if (s != std::future_status::ready) {
+        if (not timeout_warned) {
+          diagnostic::warning("reached a {} timeout while trying to publish",
+                              timeout)
+            .primary(args_.op)
+            .emit(dh);
+          timeout_warned = true;
+        }
+        continue;
+      }
+      auto id = future.get();
+      if (not id) {
+        diagnostic::error("failed to publish: {}", id.status().message())
+          .primary(args_.op)
+          .emit(dh);
+      }
+    }
   }
 
   auto name() const -> std::string override {

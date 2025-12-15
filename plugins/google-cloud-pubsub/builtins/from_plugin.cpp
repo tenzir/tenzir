@@ -14,6 +14,7 @@
 #include <tenzir/tql2/set.hpp>
 
 #include <google/cloud/pubsub/subscriber.h>
+#include <google/cloud/pubsub/subscription_admin_client.h>
 
 #include "uri_transform.hpp"
 
@@ -29,6 +30,7 @@ struct from_args {
   located<duration> yield_timeout
     = located{defaults::import::batch_timeout, location::unknown};
   std::optional<ast::field_path> metadata_field;
+  bool ordered = true;
   location operator_location;
 
   auto add_to(argument_parser2& parser) -> void {
@@ -53,6 +55,7 @@ struct from_args {
                               f.field("subscription_id", x.subscription_id),
                               f.field("_yield_timeout", x.yield_timeout),
                               f.field("metadata_field", x.metadata_field),
+                              f.field("ordered", x.ordered),
                               f.field("operator_location",
                                       x.operator_location));
   }
@@ -73,6 +76,16 @@ public:
     // Setup subscription
     auto subscription = pubsub::Subscription(args_.project_id.inner,
                                              args_.subscription_id.inner);
+    const auto ordering_enabled = args_.ordered and [&]() {
+      auto admin_client = pubsub::SubscriptionAdminClient(
+        pubsub::MakeSubscriptionAdminConnection());
+      auto subscription_info = admin_client.GetSubscription(subscription);
+      if (not subscription_info.ok()) {
+        return false;
+      }
+      return subscription_info->enable_message_ordering();
+    }
+    ();
     auto connection = pubsub::MakeSubscriberConnection(
       std::move(subscription),
       google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1));
@@ -80,7 +93,13 @@ public:
     // The pubsub library does not conclusively specify that only one callback
     // will be *executed* at a time. Hence we still have a mutex here to be safe.
     auto builder_mut = std::mutex{};
-    auto msb = multi_series_builder{{.settings={.ordered=false,.raw=true,}},ctrl.diagnostics(),};
+    auto msb = multi_series_builder{
+      {.settings={
+         .ordered = ordering_enabled,
+         .raw = true,
+       }},
+      ctrl.diagnostics(),
+    };
     auto session = subscriber.Subscribe(
       [&](pubsub::Message const& m, pubsub::AckHandler h) {
         {
@@ -135,10 +154,14 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const&, event_order order) const
     -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    auto args = args_;
+    args.ordered = order == event_order::ordered;
+
+    return {
+      std::nullopt, order,
+      std::make_unique<from_google_cloud_pubsub_operator>(std::move(args_))};
   }
 
   friend auto inspect(auto& f, from_google_cloud_pubsub_operator& x) -> bool {
