@@ -132,7 +132,7 @@ jobs:
             # PR: push to ghcr.io only with branch slug tag
             branch_slug=$(echo "${{ github.head_ref }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
             args+=(--container-tag "$branch_slug" --image-registry ghcr.io)
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "main" ]]; then
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
             # Push to main: push to all registries
             args+=(
               --container-tag main --container-tag "${{ github.sha }}"
