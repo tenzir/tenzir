@@ -463,6 +463,24 @@ per schema.
 }
 ```
 
+### `tenzir.metrics.subscribe_buffer`
+
+Contains information about the `subscribe` operator's internal buffer, emitted
+once every second.
+
+```tql
+{
+  pipeline_id: string, // The ID of the pipeline where the associated operator is from.
+  run: uint64, // The number of the run, starting at 1 for the first run.
+  hidden: bool, // Indicates whether the corresponding pipeline is hidden from the list of managed pipelines.
+  timestamp: time, // The time at which this metric was recorded.
+  operator_id: uint64, // The ID of the `subscribe` operator in the pipeline.
+  bytes: uint64, // Approximate size of buffered data in bytes.
+  batches: uint64, // The number of batches currently in the buffer.
+  events: uint64, // The number of events currently in the buffer.
+}
+```
+
 ### `tenzir.metrics.tcp`
 
 Contains measurements about the number of read calls and the received bytes per
