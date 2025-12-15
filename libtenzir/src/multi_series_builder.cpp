@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <tenzir/multi_series_builder.hpp>
@@ -68,6 +69,22 @@ auto record_generator::field(std::string_view name) -> object_generator {
     return object_generator{};
   }
   return exact_field(name);
+}
+
+auto record_generator::field(const ast::field_path& path) -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
+  const auto segments = path.path();
+  TENZIR_ASSERT(not segments.empty());
+  auto result = object_generator{};
+  for (auto& s : segments) {
+    // We "abuse" the fact that the initial, default constructed `result` is not
+    // writable, but all subsequently added fields will be writable here.
+    result = result.writable() ? result.record().exact_field(s.id.name)
+                               : this->exact_field(s.id.name);
+  }
+  return result;
 }
 
 auto record_generator::unflattened_field(std::string_view key,

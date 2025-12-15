@@ -23,6 +23,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/subnet.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/compute/expression.h>
@@ -440,6 +441,17 @@ auto node_record::field(std::string_view name) -> node_object* {
   return f;
 }
 
+auto node_record::field(const ast::field_path& path) -> node_object* {
+  const auto segments = path.path();
+  TENZIR_ASSERT(not segments.empty());
+  node_object* result = nullptr;
+  for (auto& s : segments) {
+    result
+      = result ? result->record()->field(s.id.name) : this->field(s.id.name);
+  }
+  return result;
+}
+
 auto node_record::at(std::string_view key) -> node_object* {
   for (const auto& [field_name, index] : lookup_) {
     if (not data_[index].value.is_alive()) {
@@ -590,13 +602,16 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
 }
 
 auto node_record::prune() -> void {
-  constexpr static auto pruned_size = structured_element_limit / 2;
   if (data_.size() > structured_element_limit) {
+    /// We prune to half the limit fields, in order to not stay in a prune loop.
+    constexpr static auto pruned_size = structured_element_limit / 2;
+    /// First, resize the actual entries.
     data_.resize(pruned_size);
     data_.shrink_to_fit();
+    /// Next, drop all elements from the lookup that refer to dropped entries.
     const auto it
       = std::remove_if(lookup_.begin(), lookup_.end(), [](const auto& kvp) {
-          return kvp.second > pruned_size;
+          return kvp.second >= pruned_size;
         });
     lookup_.erase(it, lookup_.end());
     TENZIR_ASSERT(data_.size() == lookup_.size());
