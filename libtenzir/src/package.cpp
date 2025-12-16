@@ -307,7 +307,8 @@ auto is_valid_package_identifier(std::string_view value) -> bool {
     continue;                                                                  \
   }
 
-auto package_input::parse(const view<record>& data, std::string_view package_path)
+auto package_input::parse(const view<record>& data,
+                          std::string_view package_path)
   -> caf::expected<package_input> {
   auto result = package_input{};
   for (const auto& [key, value] : data) {
@@ -340,7 +341,8 @@ auto package_operator_parameter::parse(const view<record>& data,
   return result;
 }
 
-auto package_source::parse(const view<record>& data, std::string_view package_path)
+auto package_source::parse(const view<record>& data,
+                           std::string_view package_path)
   -> caf::expected<package_source> {
   auto result = package_source{};
   for (const auto& [key, value] : data) {
@@ -357,7 +359,8 @@ auto package_source::parse(const view<record>& data, std::string_view package_pa
   return result;
 }
 
-auto package_config::parse(const view<record>& data, std::string_view package_path)
+auto package_config::parse(const view<record>& data,
+                           std::string_view package_path)
   -> caf::expected<package_config> {
   auto result = package_config{};
   for (const auto& [key, value] : data) {
