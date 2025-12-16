@@ -395,27 +395,19 @@ TEST("signature list numeric unification") {
 TEST("signature list mismatch") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
-    data_builder::settings{
-      .schema_only = true,
-    },
     detail::data_builder::basic_parser,
     &dh,
   };
   auto* l = b.list();
-  l->data(0.0);
+  l->data(std::int64_t{0});
+  l->data(1.1);
   (void)l->record();
 
   detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
-    {
-      expected.insert(expected.end(),
-                      static_cast<std::byte>(
-                        detail::tl_index_of<field_type_list, double>::value));
-      expected.insert(expected.end(),
-                      detail::data_builder::record_start_marker);
-      expected.insert(expected.end(), detail::data_builder::record_end_marker);
-    }
+    expected.insert(expected.end(), static_cast<std::byte>(
+                                      detail::data_builder::type_index_string));
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
   }
 
@@ -424,6 +416,14 @@ TEST("signature list mismatch") {
   CHECK(compare_signatures(expected, sig));
 
   CHECK_EQUAL(dh.warnings, size_t{1});
+
+  const auto d = b.materialize();
+  const auto expected_d = tenzir::data{tenzir::list{
+    "0"s,
+    "1.1"s,
+    "{}"s,
+  }};
+  CHECK_EQUAL(d, expected_d);
 }
 
 TEST("signature record seeding matching") {
