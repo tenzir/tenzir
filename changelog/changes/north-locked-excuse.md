@@ -6,4 +6,4 @@ pr: 5597
 ---
 
 We made an under-the-hood change to the `publish` and `subscribe` implementation
-that should reduce the the operators are blocked after publishing.
+that reduces the overhead when publishing to high-throughput topics.
