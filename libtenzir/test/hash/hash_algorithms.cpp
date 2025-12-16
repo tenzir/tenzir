@@ -12,8 +12,7 @@
 #include "tenzir/hash/fnv.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/hash/md5.hpp"
-#include "tenzir/hash/sha1.hpp"
-#include "tenzir/hash/sha2.hpp"
+#include "tenzir/hash/sha.hpp"
 #include "tenzir/hash/uhash.hpp"
 #include "tenzir/hash/xxhash.hpp"
 #include "tenzir/test/test.hpp"
@@ -163,4 +162,34 @@ TEST("sha512 validity") {
   CHECK_EQUAL(digest, "f7fbba6e0636f890e56fbbf3283e524c6fa3204ae298382d624741d0"
                       "dc6638326e282c41be5e4254d8820772c5518a2c5a8c0c7f7eda1959"
                       "4a7eb539453e1ed7");
+}
+
+TEST("sha3-224 validity") {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha3_224>(foo));
+  CHECK_EQUAL(digest,
+              "f4f6779e153c391bbd29c95e72b0708e39d9166c7cea51d1f10ef58a");
+}
+
+TEST("sha3-256 validity") {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha3_256>(foo));
+  CHECK_EQUAL(digest, "76d3bc41c9f588f7fcd0d5bf4718f8f84b1c41b20882703100b9eb94"
+                      "13807c01");
+}
+
+TEST("sha3-384 validity") {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha3_384>(foo));
+  CHECK_EQUAL(digest,
+              "665551928d13b7d84ee02734502b018d896a0fb87eed5adb4c87ba91bbd64894"
+              "10e11b0fbcc06ed7d0ebad559e5d3bb5");
+}
+
+TEST("sha3-512 validity") {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha3_512>(foo));
+  CHECK_EQUAL(
+    digest, "4bca2b137edc580fe50a88983ef860ebaca36c857b1f492839d6d7392452a63c"
+            "82cbebc68e3b70a2a1480b4bb5d437a7cba6ecf9d89f9ff3ccd14cd6146ea7e7");
 }

@@ -233,7 +233,7 @@ tenzir:
       events: 254Ki
     # Controls how many batches of elements may be buffered until the operator
     # stops issuing demand. Must be greater than zero.
-    max-batches: 20
+    max-batches: 10
     # Controls the minimum backoff duration after an operator is detected to be
     # idle. Must be at least 10ms.
     min-backoff: 10ms

@@ -1,15 +1,18 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/format-hook.sh"
-          }
-        ]
+  "extraKnownMarketplaces": {
+    "tenzir": {
+      "source": {
+        "source": "github",
+        "repo": "tenzir/claude-plugins"
       }
-    ]
+    }
+  },
+  "enabledPlugins": {
+    "changelog@tenzir": false,
+    "docs@tenzir": true,
+    "formatter@tenzir": true,
+    "git@tenzir": true,
+    "python@tenzir": true,
+    "writing@tenzir": true
   }
 }

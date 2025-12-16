@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <tenzir/multi_series_builder.hpp>
@@ -70,6 +71,22 @@ auto record_generator::field(std::string_view name) -> object_generator {
   return exact_field(name);
 }
 
+auto record_generator::field(const ast::field_path& path) -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
+  const auto segments = path.path();
+  TENZIR_ASSERT(not segments.empty());
+  auto result = object_generator{};
+  for (auto& s : segments) {
+    // We "abuse" the fact that the initial, default constructed `result` is not
+    // writable, but all subsequently added fields will be writable here.
+    result = result.writable() ? result.record().exact_field(s.id.name)
+                               : this->exact_field(s.id.name);
+  }
+  return result;
+}
+
 auto record_generator::unflattened_field(std::string_view key,
                                          std::string_view unflatten)
   -> object_generator {
@@ -110,7 +127,22 @@ auto object_generator::data(const tenzir::data& d) -> void {
       if (not writable()) {
         return;
       }
-      b.data(d);
+      if (not b.try_data(d)) {
+        b.null();
+        TENZIR_ASSERT(b.is_protected());
+        auto dt = type::infer(d);
+        if (dt) {
+          diagnostic::warning("input type does not match given schema")
+            .note("input is `{}`, but the schema expects `{}`", dt->kind(),
+                  b.type().kind())
+            .emit(msb_->dh_);
+        } else {
+          diagnostic::warning("input type does not match given schema")
+            .note("input is `<unsupported-type>`, but the schema expects `{}`",
+                  b.type().kind())
+            .emit(msb_->dh_);
+        }
+      }
     },
     [&](raw_pointer raw) {
       raw->data(d);
@@ -439,7 +471,14 @@ multi_series_builder::multi_series_builder(
     settings_{std::move(settings)},
     dh_{dh},
     schema_fn_{std::move(schema_fn)},
-    builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
+    builder_raw_{
+      data_builder::settings{
+        .building_settings = {
+          .duplicate_keys = settings_.duplicate_keys,
+        },
+        .schema_only = settings_.schema_only,
+        .parse_schema_fields_only = settings_.raw,
+      },std::move(parser), &dh,} {
   TENZIR_ASSERT(schema_fn_);
   if (get_policy<policy_default>()) {
     // if we merge all events, they are necessarily ordered
@@ -487,13 +526,13 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
   if (uses_merging_builder()) {
     flush_merging_builder();
   } else {
-    make_events_available_where([now, timeout = settings_.timeout,
-                                 target_size = settings_.desired_batch_size](
-                                  const entry_data& e) {
-      return e.builder.length()
-               >= static_cast<int64_t>(target_size) // batch size hit
-             or now - e.flushed >= timeout;         // timeout hit
-    });
+    make_events_available_where(
+      [now, timeout = settings_.timeout,
+       target_size = settings_.desired_batch_size](const entry_data& e) {
+        return e.builder.length()
+                 >= static_cast<int64_t>(target_size) // batch size hit
+               or now - e.flushed >= timeout;         // timeout hit
+      });
     garbage_collect_where(
       [now, timeout = settings_.timeout](const entry_data& e) {
         return now - e.flushed >= 10 * timeout;

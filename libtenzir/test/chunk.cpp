@@ -56,9 +56,8 @@ TEST("chunk access") {
   auto xs = std::vector<char>{'f', 'o', 'o'};
   auto chk = chunk::make(std::move(xs));
   REQUIRE_NOT_EQUAL(chk, nullptr);
-  auto& x = *chk;
-  CHECK_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(*x.begin(), static_cast<std::byte>('f'));
+  CHECK_EQUAL(chk->size(), 3u);
+  CHECK_EQUAL(*chk->begin(), static_cast<std::byte>('f'));
 }
 
 TEST("slicing") {
@@ -80,16 +79,16 @@ TEST("compression") {
     str += piece;
   }
   const auto original = chunk::make(std::move(str));
-  const auto compressed = unbox(chunk::compress(as_bytes(*original)));
+  const auto compressed = unbox(chunk::compress(as_bytes(original)));
   CHECK_LESS(compressed->size(), original->size());
   const auto decompressed
-    = unbox(chunk::decompress(as_bytes(*compressed), original->size()));
-  CHECK_EQUAL(as_bytes(*original), as_bytes(*decompressed));
+    = unbox(chunk::decompress(as_bytes(compressed), original->size()));
+  CHECK_EQUAL(as_bytes(original), as_bytes(decompressed));
   const auto decompressed_oversized
-    = chunk::decompress(as_bytes(*compressed), original->size() + 1);
+    = chunk::decompress(as_bytes(compressed), original->size() + 1);
   CHECK_ERROR(decompressed_oversized);
   const auto decompressed_undersized
-    = chunk::decompress(as_bytes(*compressed), original->size() - 1);
+    = chunk::decompress(as_bytes(compressed), original->size() - 1);
   CHECK_ERROR(decompressed_undersized);
 }
 

@@ -7,19 +7,19 @@ let
       stdenv,
       callPackage,
       tenzir-source,
+      tenzirPythonPkgs,
       cmake,
       ninja,
       pkg-config,
-      poetry,
       llvmPackages,
       boost,
       caf,
       curl,
+      cacert,
       libpcap,
       arrow-cpp,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
-      azure-sdk-for-cpp,
       libbacktrace,
       clickhouse-cpp,
       empty-libgcc_eh,
@@ -32,16 +32,19 @@ let
       spdlog,
       simdjson,
       robin-map,
-      jemalloc,
       libunwind,
       xxHash,
       rabbitmq-c,
       yaml-cpp,
       yara,
       rdkafka,
+      cyrus_sasl,
       reproc,
       cppzmq,
       libmaxminddb,
+      jemalloc-tenzir,
+      mimalloc-tenzir,
+      iconv,
       re2,
       dpkg,
       lz4,
@@ -101,6 +104,7 @@ let
         p.withPackages (
           ps: with ps; [
             aiohttp
+            setuptools
             dynaconf
             pandas
             pyarrow
@@ -114,6 +118,7 @@ let
       ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
 
       withTenzirPluginsStatic =
+        { prevLayer }:
         selection:
         let
           layerPlugins = selection allPluginSrcs;
@@ -127,6 +132,7 @@ let
                     pkg = final;
                     plugins = [ ];
                   };
+                  plugins = prevLayer.plugins ++ [ layerPlugins ];
                 };
               });
         in
@@ -203,8 +209,8 @@ let
               ninja
               protobuf
               grpc
-              poetry
               makeBinaryWrapper
+              uv
             ]
             ++ lib.optionals stdenv.isLinux [
               dpkg
@@ -225,6 +231,7 @@ let
               libunwind
               rabbitmq-c
               rdkafka
+              cyrus_sasl
               cppzmq
               restinio
               (restinio.override {
@@ -232,9 +239,6 @@ let
               })
               llhttp
               c-ares
-            ]
-            ++ lib.optionals isStatic [
-              azure-sdk-for-cpp
             ]
             ++ lib.optionals stdenv.isLinux [
               pfs
@@ -256,6 +260,8 @@ let
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb
+              jemalloc-tenzir
+              mimalloc-tenzir
               protobuf
               re2
               reproc
@@ -267,9 +273,6 @@ let
             ]
             ++ lib.optionals (!isStatic) [
               arrow-adbc-cpp
-            ]
-            ++ lib.optionals isMusl [
-              jemalloc
             ];
 
           env = {
@@ -278,15 +281,18 @@ let
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
+            UV_PYTHON="${lib.getBin py3.python}/bin/python3";
+            NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv";
           };
           cmakeFlags =
             [
               "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
               "-DCAF_ROOT_DIR=${caf}"
+              "-DTENZIR_ALLOCATOR=jemalloc"
               "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
-              "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+              "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
               "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
               "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
@@ -316,6 +322,9 @@ let
               "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
+            ]
+            ++ lib.optionals (isStatic && stdenv.hostPlatform.isDarwin) [
+              "-DTENZIR_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt"
             ]
             ++ lib.optionals stdenv.cc.isClang [
               "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
@@ -419,7 +428,9 @@ let
             plugins = [ ];
             withPlugins =
               if isStatic then
-                withTenzirPluginsStatic
+                withTenzirPluginsStatic {
+                  prevLayer = self;
+                }
               else
                 withTenzirPlugins {
                   prevLayer = self;

@@ -1,0 +1,25 @@
+{
+  timestamp: null,
+  flow_id: null,
+  pcap_cnt: null,
+  vlan: null,
+  in_iface: null,
+  src_ip: null,
+  src_port: null,
+  dest_ip: null,
+  dest_port: null,
+  proto: null,
+  event_type: null,
+  app_proto: null,
+  app_proto_orig: null,
+  app_proto_tc: null,
+  app_proto_ts: null,
+  icmp_type: null,
+  icmp_code: null,
+  response_icmp_type: null,
+  response_icmp_code: null,
+  traffic: null,
+  community_id: null,
+}
+warning: ndjson parser: input type does not match given schema
+ = note: input is `int64`, but the schema expects `time`

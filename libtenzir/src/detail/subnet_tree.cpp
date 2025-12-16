@@ -242,33 +242,17 @@ auto New_Prefix2(int family, void* dest, int bitlen, prefix_t* prefix)
   int dynamic_allocated = 0;
   int default_bitlen = sizeof(struct in_addr) * 8;
   prefix4_t* p4 = nullptr;
+  if (prefix == nullptr) {
+    prefix = static_cast<prefix_t*>(calloc(1, sizeof(prefix_t)));
+    if (prefix == nullptr) {
+      out_of_memory("patricia/new_prefix2: unable to allocate memory");
+    }
+    dynamic_allocated++;
+  }
   if (family == AF_INET6) {
     default_bitlen = sizeof(struct in6_addr) * 8;
-    if (prefix == nullptr) {
-      prefix = static_cast<prefix_t*>(calloc(1, sizeof(prefix_t)));
-      if (prefix == nullptr) {
-        out_of_memory("patricia/new_prefix2: unable to allocate memory");
-      }
-      dynamic_allocated++;
-    }
     memcpy(&prefix->add.sin6, dest, sizeof(struct in6_addr));
   } else if (family == AF_INET) {
-    if (prefix == nullptr) {
-#ifndef NT
-      prefix = static_cast<prefix_t*>(calloc(1, sizeof(prefix4_t)));
-      if (prefix == nullptr) {
-        out_of_memory("patricia/new_prefix2: unable to allocate memory");
-      }
-#else
-      // for some reason, compiler is getting
-      // prefix4_t size incorrect on NT
-      prefix = calloc(1, sizeof(prefix_t));
-      if (prefix == nullptr) {
-        out_of_memory("patricia/new_prefix2: unable to allocate memory");
-      }
-#endif /* NT */
-      dynamic_allocated++;
-    }
     memcpy(&prefix->add.sin, dest, sizeof(struct in_addr));
   } else {
     return (nullptr);

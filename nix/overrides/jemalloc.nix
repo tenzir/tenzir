@@ -7,9 +7,15 @@
 jemalloc.overrideAttrs (orig: {
   configureFlags =
     orig.configureFlags
-    ++ lib.optionals stdenv.hostPlatform.isStatic [
+    ++ [
+      "--with-jemalloc-prefix=je_tenzir_"
+      "--with-private-namespace=je_tenzir_private_"
+      "--disable-cxx"
+      "--disable-libdl"
       "--enable-prof"
       "--enable-stats"
+    ] ++ lib.optionals stdenv.hostPlatform.isStatic [
+      "--without-export"
     ];
 
   patches =
@@ -35,9 +41,9 @@ jemalloc.overrideAttrs (orig: {
 
   env =
     (orig.env or { })
-    // lib.optionalAttrs stdenv.hostPlatform.isStatic {
+    // {
       EXTRA_CFLAGS = " -fno-omit-frame-pointer";
     };
 
-  doCheck = orig.doCheck || (!stdenv.hostPlatform.isStatic);
+  doCheck = orig.doCheck && (!stdenv.hostPlatform.isDarwin);
 })

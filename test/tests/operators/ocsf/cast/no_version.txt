@@ -1,0 +1,6 @@
+warning: dropping events where `metadata.version` does not exist
+ --> tests/operators/ocsf/cast/no_version.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

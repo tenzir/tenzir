@@ -83,7 +83,6 @@ include(CMakePrintHelpers)
 include(CTest)
 include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
-include(FeatureSummary)
 include(GNUInstallDirs)
 include(TenzirCheckCompilerVersion)
 include(TenzirMacDependencyPaths)
@@ -121,8 +120,6 @@ unset(_TENZIR_PARENT_DIRECTORY)
 cmake_dependent_option(
   TENZIR_ENABLE_UNIT_TESTS "Build unit tests for libtenzir" ON
   "NOT CMAKE_CROSS_COMPILING" OFF)
-add_feature_info("TENZIR_ENABLE_UNIT_TESTS" TENZIR_ENABLE_UNIT_TESTS
-                 "build unit tests for libtenzir.")
 set(TENZIR_UNIT_TEST_TIMEOUT
     "60"
     CACHE STRING "The per-test timeout in unit tests" FORCE)
@@ -130,8 +127,6 @@ set(TENZIR_UNIT_TEST_TIMEOUT
 # -- library flavor ------------------------------------------------------------
 
 option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
-add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
-                 "build shared instead of static libraries.\n")
 
 # -- relocatable installations -------------------------------------------------
 
@@ -141,9 +136,6 @@ add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
 # relocatable installations as it's very uncommon not to do so.
 cmake_dependent_option(TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
                        "Enable relocatable installations" ON "NOT APPLE" ON)
-add_feature_info(
-  "TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS"
-  TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS "enable relocatable installations.")
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   # For relocatable builds we need the configured install directories to be
@@ -223,46 +215,24 @@ option(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Release
        "Enable link time optimizations for the Release build" ON)
 
 option(TENZIR_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions" ON)
-add_feature_info(
-  "TENZIR_ENABLE_AUTO_VECTORIZATION" TENZIR_ENABLE_AUTO_VECTORIZATION
-  "enable auto-vectorization via supported SSE/AVX instructions.")
 if (TENZIR_ENABLE_AUTO_VECTORIZATION)
   find_package(SSE QUIET)
   option(TENZIR_ENABLE_SSE_INSTRUCTIONS "Enable SSE instructions"
          "${SSE_FOUND}")
-  add_feature_info("TENZIR_ENABLE_SSE_INSTRUCTIONS"
-                   TENZIR_ENABLE_SSE_INSTRUCTIONS "enable SSE instructions.")
   option(TENZIR_ENABLE_SSE2_INSTRUCTIONS "Enable SSE2 instructions"
          "${SSE2_FOUND}")
-  add_feature_info("TENZIR_ENABLE_SSE2_INSTRUCTIONS"
-                   TENZIR_ENABLE_SSE2_INSTRUCTIONS "enable SSE2 instructions.")
   option(TENZIR_ENABLE_SSE3_INSTRUCTIONS "Enable SSE3 instructions"
          "${SSE3_FOUND}")
-  add_feature_info("TENZIR_ENABLE_SSE3_INSTRUCTIONS"
-                   TENZIR_ENABLE_SSE3_INSTRUCTIONS "enable SSE3 instructions.")
   option(TENZIR_ENABLE_SSSE3_INSTRUCTIONS "Enable SSSE3 instructions"
          "${SSSE3_FOUND}")
-  add_feature_info(
-    "TENZIR_ENABLE_SSSE3_INSTRUCTIONS" TENZIR_ENABLE_SSSE3_INSTRUCTIONS
-    "enable SSSE3 instructions.")
   option(TENZIR_ENABLE_SSE4_1_INSTRUCTIONS "Enable SSE4.1 instructions"
          "${SSE4_1_FOUND}")
-  add_feature_info(
-    "TENZIR_ENABLE_SSE4_1_INSTRUCTIONS" TENZIR_ENABLE_SSE4_1_INSTRUCTIONS
-    "enable SSE4.1 instructions.")
   option(TENZIR_ENABLE_SSE4_2_INSTRUCTIONS "Enable SSE4.2 instructions"
          "${SSE4_2_FOUND}")
-  add_feature_info(
-    "TENZIR_ENABLE_SSE4_2_INSTRUCTIONS" TENZIR_ENABLE_SSE4_2_INSTRUCTIONS
-    "enable SSE4.2 instructions.")
   option(TENZIR_ENABLE_AVX_INSTRUCTIONS "Enable AVX instructions"
          "${AVX_FOUND}")
-  add_feature_info("TENZIR_ENABLE_AVX_INSTRUCTIONS"
-                   TENZIR_ENABLE_AVX_INSTRUCTIONS "enable AVX instructions.")
   option(TENZIR_ENABLE_AVX2_INSTRUCTIONS "Enable AVX2 instructions"
          "${AVX2_FOUND}")
-  add_feature_info("TENZIR_ENABLE_AVX2_INSTRUCTIONS"
-                   TENZIR_ENABLE_AVX2_INSTRUCTIONS "enable AVX2 instructions.")
 endif ()
 
 target_compile_options(
@@ -311,6 +281,7 @@ target_compile_options(
             # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
+            $<$<CXX_COMPILER_ID:GNU>:-Wno-interference-size>
             $<$<CXX_COMPILER_ID:GNU>:-Wno-error=bool-compare>)
 
 # -- build id ------------------------------------------------------------------
@@ -318,8 +289,6 @@ target_compile_options(
 cmake_dependent_option(
   TENZIR_ENABLE_BUILDID "Include a unique identifier in the elf notes section"
   ON "CMAKE_EXECUTABLE_FORMAT STREQUAL ELF" OFF)
-add_feature_info("TENZIR_ENABLE_BUILDID" TENZIR_ENABLE_BUILDID
-                 "a unique identifier in the ELF notes section.")
 if (TENZIR_ENABLE_BUILDID)
   target_link_options(libtenzir_internal INTERFACE "-Wl,--build-id")
 endif ()
@@ -327,23 +296,17 @@ endif ()
 # -- USDT tracepoints ----------------------------------------------------------
 
 option(TENZIR_ENABLE_SDT "Generate USDT tracepoint instrumentation" ON)
-add_feature_info("TENZIR_ENABLE_SDT" TENZIR_ENABLE_SDT
-                 "generate USDT tracepoint instrumentation.")
 
 # -- build profiling -----------------------------------------------------------
 
 option(TENZIR_ENABLE_TIME_REPORT
        "Print information where time was spent during compilation" OFF)
-add_feature_info("TENZIR_ENABLE_TIME_REPORT" TENZIR_ENABLE_TIME_REPORT
-                 "print information where time was spent during compilation.")
 if (TENZIR_ENABLE_TIME_REPORT)
   target_compile_options(libtenzir_internal INTERFACE "-ftime-report")
 endif ()
 
 option(TENZIR_ENABLE_TIME_TRACE
        "Generate tracing JSON for compilation time profiling" OFF)
-add_feature_info("TENZIR_ENABLE_TIME_TRACE" TENZIR_ENABLE_TIME_TRACE
-                 "generate tracing JSON for compilation time profiling.")
 if (TENZIR_ENABLE_TIME_TRACE)
   include(CheckCXXCompilerFlag)
   check_cxx_compiler_flag("-ftime-trace" _time_trace_supported)
@@ -366,23 +329,16 @@ endif ()
 
 option(TENZIR_ENABLE_ASSERTIONS "Enable assertions"
        "${_TENZIR_ENABLE_ASSERTIONS_DEFAULT}")
-add_feature_info("TENZIR_ENABLE_ASSERTIONS" TENZIR_ENABLE_ASSERTIONS
-                 "enable assertions.")
 
 unset(_TENZIR_ENABLE_ASSERTIONS_DEFAULT)
 
 option(TENZIR_ENABLE_ASSERTIONS_CHEAP "Enable cheap assertions" ON)
-add_feature_info(
-  "TENZIR_ENABLE_ASSERTIONS_CHEAP" TENZIR_ENABLE_ASSERTIONS_CHEAP
-  "enable assertions that are cheap to check.")
 
 # -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
   TENZIR_ENABLE_STATIC_EXECUTABLE "Link Tenzir statically."
   "$ENV{TENZIR_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
-add_feature_info("TENZIR_ENABLE_STATIC_EXECUTABLE"
-                 TENZIR_ENABLE_STATIC_EXECUTABLE "link Tenzir statically.")
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   # Not desired on darwin.
   if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
@@ -437,9 +393,6 @@ endif ()
 option(TENZIR_ENABLE_ASAN
        "Insert pointer and reference checks into the generated binaries"
        "${_TENZIR_ENABLE_ASAN_DEFAULT}")
-add_feature_info(
-  "TENZIR_ENABLE_ASAN" TENZIR_ENABLE_ASAN
-  "inserts pointer and reference checks into the generated binaries.")
 
 unset(_TENZIR_ENABLE_ASAN_DEFAULT)
 
@@ -458,9 +411,6 @@ endif ()
 option(TENZIR_ENABLE_UBSAN
        "Add run-time checks for undefined behavior into the generated binaries"
        OFF)
-add_feature_info(
-  "TENZIR_ENABLE_UBSAN" TENZIR_ENABLE_UBSAN
-  "adds run-time checks for undefined behavior into the generated binaries.")
 if (TENZIR_ENABLE_UBSAN)
   add_compile_options(-fsanitize=undefined)
   add_link_options(-fsanitize=undefined)
@@ -468,28 +418,63 @@ if (TENZIR_ENABLE_UBSAN)
   target_link_libraries(libtenzir_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- jemalloc ------------------------------------------------------------------
+# -- allocator -----------------------------------------------------------------
 
-option(TENZIR_ENABLE_JEMALLOC "Use jemalloc instead of libc malloc"
-       "${TENZIR_ENABLE_STATIC_EXECUTABLE}")
-add_feature_info("TENZIR_ENABLE_JEMALLOC" TENZIR_ENABLE_JEMALLOC
-                 "use jemalloc instead of libc malloc.")
-if (TENZIR_ENABLE_JEMALLOC)
-  find_package(jemalloc REQUIRED)
-  dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
+set(TENZIR_ALLOCATOR_DEFAULT "system")
+if (TENZIR_ENABLE_ASAN)
+  set(TENZIR_ALLOCATOR_DEFAULT "none")
 endif ()
+
+set(TENZIR_ALLOCATOR
+    ${TENZIR_ALLOCATOR_DEFAULT}
+    CACHE
+      STRING
+      "Configure the allocator.\
+Possible options:\
+  * `none`: Tenzir's custom allocator API is not used. This means using the system allocator for most things and arrow uses its default alloctor\
+  * `jemalloc`: jemalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `mimalloc`: mimalloc is used as an allocator for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `system`: the system allocator is ussed for everything (arrow, operator new, malloc). You can enable stats tracking.\
+  * `runtime`: The allocator can be selected via an environment variable at startup. You can enable stats tracking.\
+\
+Environment variables:\
+\
+* `TENZIR_ALLOC=string`: (requires runtime allocator) Selects the allocator for the component. Value must be one of `jemalloc`, `mimalloc`, or `system`\
+* `TENZIR_ALLOC_STATS=true`: (requires allocator not being disabled). Turns on stats counting for the component \
+\
+There also exist specific per-component variables, which are simply suffixed by _<COMPONENT>:\
+* `ARROW`: All allocations made for arrow buffers only. Does not include things like the structure or arrow types.
+* `CPP`: All allocations made through any `operator new` (does include std::allocator by definition)
+* `C`: All allocations made through C or POSIX allocation functions.")
+
+if (TENZIR_ENABLE_ASAN AND NOT TENZIR_ALLOCATOR STREQUAL "none")
+  message(
+    FATAL_ERROR "Allocator selection is not supported with address sanitizer.")
+endif ()
+
+if (TENZIR_ALLOCATOR STREQUAL "none")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_NONE")
+elseif (TENZIR_ALLOCATOR STREQUAL "jemalloc")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_JEMALLOC")
+elseif (TENZIR_ALLOCATOR STREQUAL "mimalloc")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_MIMALLOC")
+elseif (TENZIR_ALLOCATOR STREQUAL "system")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_SYSTEM")
+elseif (TENZIR_ALLOCATOR STREQUAL "runtime")
+  set(TENZIR_SELECT_ALLOCATOR "TENZIR_SELECT_ALLOCATOR_RUNTIME")
+else ()
+  message(FATAL_ERROR "unknown TENZIR_ALLOCATOR")
+endif ()
+
+add_variable_to_summary("TENZIR_ALLOCATOR")
 
 # -- developer mode ------------------------------------------------------------
 
 option(TENZIR_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
-add_feature_info("TENZIR_ENABLE_CLANG_TIDY" TENZIR_ENABLE_CLANG_TIDY
-                 "run clang-tidy during build.")
 set(TENZIR_CLANG_TIDY_ARGS
     "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
 
 option(TENZIR_ENABLE_CODE_COVERAGE "Add code coverage targets" OFF)
-add_feature_info("TENZIR_ENABLE_CODE_COVERAGE" TENZIR_ENABLE_CODE_COVERAGE
-                 "add code coverage targets.")
 if (TENZIR_ENABLE_CODE_COVERAGE)
   if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(
@@ -521,8 +506,6 @@ endif ()
 option(TENZIR_ENABLE_DEVELOPER_MODE
        "Enables build settings for a nicer development environment"
        "${TENZIR_IS_NOT_SUBPROJECT}")
-add_feature_info("TENZIR_ENABLE_DEVELOPER_MODE" TENZIR_ENABLE_DEVELOPER_MODE
-                 "enables build settings for a nicer development environment.")
 
 if (TENZIR_ENABLE_DEVELOPER_MODE)
   # Support tools like clang-tidy by creating a compilation database and
@@ -562,8 +545,6 @@ endif ()
 # -- additional warnings -------------------------------------------------------
 
 option(TENZIR_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
-add_feature_info("TENZIR_ENABLE_MORE_WARNINGS" TENZIR_ENABLE_MORE_WARNINGS
-                 "enable additional warnings.")
 if (TENZIR_ENABLE_MORE_WARNINGS)
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(
@@ -671,8 +652,6 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 # -- schemas -------------------------------------------------------------------
 
 option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
-add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
-                 "install bundled schemas with Tenzir.")
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   add_custom_target(
     tenzir-schema
@@ -694,8 +673,6 @@ endif ()
 # -- manpages ------------------------------------------------------------------
 
 option(TENZIR_ENABLE_MANPAGES "Generate manpages for binaries" ON)
-add_feature_info("TENZIR_ENABLE_MANPAGES" TENZIR_ENABLE_MANPAGES
-                 "generate manpages for binaries.")
 if (TENZIR_ENABLE_MANPAGES)
   find_package(Pandoc REQUIRED)
 endif ()
@@ -715,14 +692,12 @@ set(TENZIR_CAF_LOG_LEVEL
 if (TENZIR_ENABLE_DEVELOPER_MODE
     AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt"
     AND NOT CAF_ROOT_DIR)
-  set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT ON)
+  set(_tenzir_enable_bundled_caf_default ON)
 else ()
-  set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT OFF)
+  set(_tenzir_enable_bundled_caf_default OFF)
 endif ()
 option(TENZIR_ENABLE_BUNDLED_CAF "Use the CAF submodule"
-       "${TENZIR_ENABLE_BUNDLED_CAF_DEFAULT}")
-add_feature_info("TENZIR_ENABLE_BUNDLED_CAF" TENZIR_ENABLE_BUNDLED_CAF
-                 "use the CAF submodule.")
+       "${_tenzir_enable_bundled_caf_default}")
 if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
@@ -844,64 +819,78 @@ endif ()
 
 # -- python bindings ----------------------------------------------------------
 
-option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires poetry)"
-       ON)
-add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
-                 "build Python bindings (requires poetry).")
+option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires uv)" ON)
 
-set(TENZIR_ENABLE_BUNDLED_UV_default "ON")
+set(_tenzir_enable_bundled_uv_default "ON")
 if (DEFINED ENV{TENZIR_ENABLE_BUNDLED_UV})
-  set(TENZIR_ENABLE_BUNDLED_UV_default $ENV{TENZIR_ENABLE_BUNDLED_UV})
+  set(_tenzir_enable_bundled_uv_default $ENV{TENZIR_ENABLE_BUNDLED_UV})
 endif ()
 
 cmake_dependent_option(
   TENZIR_ENABLE_BUNDLED_UV "Install a statically linked copy of uv"
-  "${TENZIR_ENABLE_BUNDLED_UV_default}" "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
-add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
-                 "install a statically linked copy of uv.")
+  "${_tenzir_enable_bundled_uv_default}" "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
 
 if (TENZIR_ENABLE_PYTHON_BINDINGS)
-  find_program(POETRY_PATH poetry)
-  if (NOT POETRY_PATH)
-    message(
-      FATAL_ERROR
-        "Cannot find 'poetry' in PATH, which is required for building Tenzir Python bindings"
-    )
-  endif ()
-  # Poetry has no support for specifying a working directory for the build
-  # command, so in order to make the installation not modify the source directory
-  # we need to copy the Python bindings in their entirety into the build directory
-  # first.
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
-  set(TENZIR_PYTHON_WHEEL
-      "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION}-py3-none-any.whl")
-  file(
-    WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
-    "\
-    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
-    file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
-    file(
-      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
-      DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/python\"
-      REGEX \"/dist/\" EXCLUDE)
-    # Poetry evaluates the top-level gitignore, which leads it to ignore
-    # everything in case the install prefix is in an ignored path. Setting the
-    # git directory explicitly works around the issue.
-    set(ENV{GIT_DIR} \"/dev/null\")
-    execute_process(
-      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
-      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\"
-      COMMAND_ERROR_IS_FATAL ANY)
-    file(
-      GLOB _wheel
-      \"${CMAKE_CURRENT_BINARY_DIR}/python/dist/*.whl\")
-    file(MAKE_DIRECTORY \"${CMAKE_BINARY_DIR}/share/tenzir/python\")
-    file(COPY_FILE \"\${_wheel}\" \"${TENZIR_PYTHON_WHEEL}\")")
-  add_custom_command(
-    OUTPUT "${TENZIR_PYTHON_WHEEL}"
-    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/python)
-  add_custom_target(tenzir-python-wheel DEPENDS "${TENZIR_PYTHON_WHEEL}")
+  if (TENZIR_PYTHON_DEPENDENCY_WHEELS)
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMAND ${CMAKE_COMMAND} -E remove_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${TENZIR_PYTHON_DEPENDENCY_WHEELS}" "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E touch "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMENT "Copying python operator wheels"
+      VERBATIM)
+  else ()
+    find_program(UV_PATH uv)
+    if (NOT UV_PATH)
+      message(
+        FATAL_ERROR
+          "Cannot find 'uv' in PATH, which is required for building Tenzir Python bindings"
+      )
+    endif ()
+    find_package(
+      Python3
+      COMPONENTS Interpreter
+      REQUIRED)
+    set(TENZIR_PYTHON_WORKSPACE "${CMAKE_CURRENT_SOURCE_DIR}/python")
+    file(GLOB_RECURSE TENZIR_PYTHON_COMMON_DEPENDENCIES CONFIGURE_DEPENDS
+         "${TENZIR_PYTHON_WORKSPACE}/tenzir-common/*")
+    file(GLOB_RECURSE TENZIR_PYTHON_OPERATOR_DEPENDENCIES CONFIGURE_DEPENDS
+         "${TENZIR_PYTHON_WORKSPACE}/tenzir-operator/*")
+    set(TENZIR_PYTHON_WORKSPACE_DENPENDENCIES
+        "${TENZIR_PYTHON_WORKSPACE}/pyproject.toml"
+        "${TENZIR_PYTHON_WORKSPACE}/uv.lock"
+        "${TENZIR_PYTHON_WORKSPACE}/README.md"
+        "${TENZIR_PYTHON_WORKSPACE}/uv-source-info.json")
+    list(FILTER TENZIR_PYTHON_WORKSPACE_DENPENDENCIES INCLUDE REGEX ".*")
+    add_custom_command(
+      OUTPUT "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      COMMAND ${CMAKE_COMMAND} -E remove_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache"
+        "TENZIR_SKIP_NIX_BUILD=1" "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}"
+        "UV_PYTHON=${Python3_EXECUTABLE}" -- "${UV_PATH}" build -q --wheel
+        --package tenzir-common --out-dir "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env "UV_CACHE_DIR=${CMAKE_BINARY_DIR}/uv-cache"
+        "TENZIR_SKIP_NIX_BUILD=1" "TENZIR_REPO_ROOT=${CMAKE_SOURCE_DIR}"
+        "UV_PYTHON=${Python3_EXECUTABLE}" -- "${UV_PATH}" build -q --wheel
+        --package tenzir-operator --out-dir "${TENZIR_PYTHON_BINARY_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E touch "${TENZIR_PYTHON_BINARY_DIR}/.stamp"
+      WORKING_DIRECTORY "${TENZIR_PYTHON_WORKSPACE}"
+      DEPENDS "${TENZIR_PYTHON_REQUIREMENTS_FILE}"
+              ${TENZIR_PYTHON_COMMON_DEPENDENCIES}
+              ${TENZIR_PYTHON_CORE_DEPENDENCIES}
+              ${TENZIR_PYTHON_OPERATOR_DEPENDENCIES}
+      COMMENT "Building python operator wheelhouse"
+      VERBATIM)
+  endif ()
+  add_custom_target(tenzir-python-wheels
+                    DEPENDS "${TENZIR_PYTHON_BINARY_DIR}/.stamp")
+  add_custom_target(tenzir-python-wheel DEPENDS tenzir-python-wheels)
   install(
     DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
@@ -995,9 +984,6 @@ install(
 
 option(TENZIR_ENABLE_TENZIR_DF_PERCENT
        "Install tenzir-df-percent.sh with Tenzir" ON)
-add_feature_info(
-  "TENZIR_ENABLE_TENZIR_DF_PERCENT" TENZIR_ENABLE_TENZIR_DF_PERCENT
-  "install tenzir-df-percent.sh with Tenzir.")
 if (TENZIR_ENABLE_TENZIR_DF_PERCENT)
   install(
     PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/tenzir-df-percent.sh"
@@ -1011,7 +997,6 @@ endif ()
 # be disabled.
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.spdx.json"
         "${CMAKE_CURRENT_SOURCE_DIR}/VERSIONING.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DOCDIR}"
@@ -1020,11 +1005,3 @@ install(
 # -- packaging -----------------------------------------------------------------
 
 include(TenzirPackage)
-
-# -- feature summary -----------------------------------------------------------
-
-# Append the feature summary to summary.log.
-feature_summary(
-  WHAT ALL
-  FILENAME "${CMAKE_CURRENT_BINARY_DIR}/summary.log"
-  APPEND)

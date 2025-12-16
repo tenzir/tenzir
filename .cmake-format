@@ -65,6 +65,9 @@ with section("parse"):
                 "nargs": 3,
             },
         },
+        "tenzirprintsummary": {
+            "spelling": "TenzirPrintSummary",
+        },
         "protobuf_generate": {
             "spelling": "protobuf_generate",
             "kwargs": {

@@ -62,7 +62,7 @@ public:
             },
             [&](const arrow::DoubleArray& arg) {
               // overflow logic from int.cpp
-              auto b = arrow::Int64Builder{};
+              auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
               check(b.Reserve(length));
               constexpr auto min
                 = static_cast<double>(std::numeric_limits<int64_t>::lowest())
@@ -125,8 +125,7 @@ public:
         // fn(x, 1h) -> time is multiples of 1h (for UTC timezone?)
         const auto f = detail::overload{
           [&](const arrow::DurationArray& array) -> series {
-            auto b
-              = duration_type::make_arrow_builder(arrow::default_memory_pool());
+            auto b = duration_type::make_arrow_builder(arrow_memory_pool());
             check(b->Reserve(array.length()));
             for (auto i = int64_t{0}; i < array.length(); i++) {
               if (array.IsNull(i)) {

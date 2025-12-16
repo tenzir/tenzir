@@ -58,9 +58,8 @@ For the selected build type, verify that the prerequisites are met.
 - `-DTENZIR_ENABLE_ASAN=ON/OFF` - Enable AddressSanitizer (default: ON for Debug/CI)
 - `-DTENZIR_ENABLE_CLANG_TIDY=ON/OFF` - Run clang-tidy during build
 
-#### Performance Options  
+#### Performance Options
 - `-DTENZIR_ENABLE_AUTO_VECTORIZATION=ON/OFF` - Enable SSE/AVX optimizations
-- `-DTENZIR_ENABLE_JEMALLOC=ON/OFF` - Use jemalloc allocator
 - `-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON/OFF` - Enable LTO for Release builds
 
 #### Feature Options
@@ -115,7 +114,7 @@ Tenzir provides several Nix build options:
 
 1. **Build specific packages:**
    - `nix build .#tenzir-de` - Development edition (open source only)
-   - `nix build .#tenzir` - Full edition (includes closed source plugins)  
+   - `nix build .#tenzir` - Full edition (includes closed source plugins)
    - `nix build .#tenzir-static` - Statically linked version (default)
    - `nix build .#tenzir-de-static` - Statically linked development edition
 

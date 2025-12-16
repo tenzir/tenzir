@@ -1,5 +1,6 @@
-import json
 import ipaddress
+import json
+
 import pyarrow as pa
 
 import tenzir.utils.arrow as vua
@@ -44,7 +45,9 @@ def test_enum_extension_type():
     ty = vua.EnumType(fields)
     assert ty.__arrow_ext_serialize__().decode() == json.dumps(fields)
     dictionary_type = pa.dictionary(
-        vua.EnumType.DICTIONARY_INDEX_TYPE, pa.string(), ordered=False
+        vua.EnumType.DICTIONARY_INDEX_TYPE,
+        pa.string(),
+        ordered=False,
     )
     assert vua.EnumType.ext_type == dictionary_type
     arr = vua.extension_array(enum_py, ty)
@@ -140,7 +143,8 @@ def test_ipc():
 def test_schema_name_extraction():
     # Since Arrow cannot attach names to schemas, we do this via metadata.
     schema = pa.schema(
-        [("a", "string"), ("b", "string")], metadata={"TENZIR:name:0": "foo"}
+        [("a", "string"), ("b", "string")],
+        metadata={"TENZIR:name:0": "foo"},
     )
     assert vua.name(schema) == "foo"
 

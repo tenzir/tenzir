@@ -1,12 +1,29 @@
 finalPkgs: prevPkgs:
 let
   inherit (prevPkgs) lib;
+  inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
   callFunction = callFunctionWith finalPkgs;
+
+  pytestOverlay = python-finalPkgs: python-prevPkgs: {
+    pyarrow = python-prevPkgs.pyarrow.overridePythonAttrs (baseAttrs: {
+      disabledTestPaths = baseAttrs.disabledTestPaths ++ [
+        "pyarrow/tests/test_memory.py::test_env_var"
+        "pyarrow/tests/test_memory.py::test_memory_pool_factories"
+        "pyarrow/tests/test_memory.py::test_supported_memory_backends"
+      ];
+    });
+  };
 in
 {
   protobuf = finalPkgs.protobuf_31;
+
+  curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
+    # Brings in a conflicting libiconv via libunistring.
+    idnSupport = false;
+    pslSupport = false;
+  });
 
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
@@ -18,29 +35,31 @@ in
   uv-bin = prevPkgs.callPackage ./uv-binary { };
   empty-libgcc_eh = prevPkgs.callPackage ./empty-libgcc_eh { };
 
-  pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [
-    (python-finalPkgs: python-prevPkgs: {
-      dynaconf = python-finalPkgs.callPackage ./dynaconf { };
-    })
-  ];
+  pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [ pytestOverlay ];
 
   # Customized from upstream nixpkgs.
   apache-orc = callFunction ./overrides/apache-orc.nix { inherit (prevPkgs) apache-orc; };
-  arrow-cpp = callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; };
+  arrow-cpp = (callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; }).override {
+    aws-sdk-cpp-arrow = finalPkgs.aws-sdk-cpp-tenzir;
+    google-cloud-cpp = finalPkgs.google-cloud-cpp-tenzir;
+    enableGcs = true; # Upstream disabled for darwin.
+  };
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
     inherit (prevPkgs) aws-sdk-cpp;
   };
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
+  cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
+  jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
+  mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
   yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
   zeromq = callFunction ./overrides/zeromq.nix { inherit (prevPkgs) zeromq; };
-  jemalloc = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
 }

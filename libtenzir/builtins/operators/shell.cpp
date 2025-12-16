@@ -288,7 +288,7 @@ public:
           // Pass operator input to the child's stdin.
           // TODO: If the reading end of the pipe to the child's stdin is
           // already closed, this will generate a SIGPIPE.
-          if (auto err = child->write(as_bytes(*chunk))) {
+          if (auto err = child->write(as_bytes(chunk))) {
             diagnostic::error(err)
               .note("failed to write to child process")
               .emit(ctrl.diagnostics());

@@ -139,7 +139,8 @@ public:
           return {
             string_type{},
             check(arrow::MakeArrayFromScalar(arrow::StringScalar{*value},
-                                             eval.length())),
+                                             eval.length(),
+                                             tenzir::arrow_memory_pool())),
           };
         });
     }
@@ -202,7 +203,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::Int64Builder{};
+        auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& value : eval(expr)) {
           auto f = detail::overload{
@@ -255,7 +256,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::BooleanBuilder{};
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& value : eval(expr)) {
           auto f = detail::overload{
@@ -330,18 +331,20 @@ public:
           if (auto subnets = value.part(0).as<subnet_type>()) {
             return series{
               ip_type{},
-              check(subnets->array->storage()->GetFlattenedField(0)),
+              check(subnets->array->storage()->GetFlattenedField(
+                0, tenzir::arrow_memory_pool())),
             };
           }
         }
-        auto b = ip_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = ip_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(eval.length()));
         for (auto& value : value) {
           auto f = detail::overload{
             [&](const subnet_type::array_type& array) {
               check(append_array(*b, ip_type{},
-                                 as<ip_type::array_type>(*check(
-                                   array.storage()->GetFlattenedField(0)))));
+                                 as<ip_type::array_type>(
+                                   *check(array.storage()->GetFlattenedField(
+                                     0, tenzir::arrow_memory_pool())))));
             },
             [&](const arrow::NullArray& array) {
               check(b->AppendNulls(array.length()));
@@ -390,7 +393,7 @@ public:
       return function_use::make(
         [needle = located{std::move(*str), needle.get_location()},
          expr = std::move(expr)](evaluator eval, session ctx) -> series {
-          auto b = arrow::BooleanBuilder{};
+          auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
           check(b.Reserve(eval.length()));
           for (auto value : eval(expr)) {
             auto f = detail::overload{
@@ -428,7 +431,7 @@ public:
       TENZIR_UNUSED(ctx);
       const auto expr_location = expr.get_location();
       const auto needle_location = needle.get_location();
-      auto builder = arrow::BooleanBuilder{};
+      auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(builder.Reserve(eval.length()));
       for (auto split : split_multi_series(eval(expr), eval(needle))) {
         const auto& expr = split[0];
@@ -487,7 +490,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session) -> series {
-        auto b = arrow::BooleanBuilder{};
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (const auto& s : eval(expr)) {
           const auto& array = *s.array;
@@ -511,7 +514,7 @@ public:
       return;
     }
     if (const auto* sub = try_as<arrow::ListArray>(array)) {
-      auto b = arrow::BooleanBuilder{};
+      auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(sub->length()));
       for (auto i = int64_t{}; i < sub->length(); ++i) {
         if (sub->IsValid(i)) {
@@ -588,7 +591,7 @@ public:
                     finish(keys_builder),
                     result_type.to_arrow_type(),
                   },
-                  eval.length())),
+                  eval.length(), tenzir::arrow_memory_pool())),
               };
             },
             [&](const auto&) {

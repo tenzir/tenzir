@@ -73,7 +73,7 @@ struct transceiver_state {
       dh_{std::move(dh)},
       metrics_receiver_{std::move(metrics)} {
     self_->monitor(std::move(spawner), [&](caf::error e) {
-      TENZIR_DEBUG("[transceiver_actor] spawner shut down, exiting");
+      TENZIR_TRACE("[transceiver_actor] spawner shut down, exiting");
       self_->quit(std::move(e));
     });
   }
@@ -173,7 +173,7 @@ struct transceiver_state {
       },
       [](const operator_metric&) {},
       [this](const caf::exit_msg& msg) {
-        TENZIR_DEBUG("[transceiver_actor] received exit: {}", msg.reason);
+        TENZIR_TRACE("[transceiver_actor] received exit: {}", msg.reason);
         if (msg.reason) {
           self_->quit(msg.reason);
         }
@@ -208,14 +208,14 @@ struct internal_source final : public crtp_operator<internal_source> {
     -> generator<table_slice> {
     auto slice = table_slice{};
     while (true) {
-      TENZIR_DEBUG("[internal-transceiver-source] requesting slice");
+      TENZIR_TRACE("[internal-transceiver-source] requesting slice");
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::internal_v, atom::pull_v)
         .request(actor_, caf::infinite)
         .then(
           [&](table_slice input) {
-            TENZIR_DEBUG("[internal-transceiver-source] received slice");
+            TENZIR_TRACE("[internal-transceiver-source] received slice");
             ctrl.set_waiting(false);
             slice = std::move(input);
           },
@@ -224,7 +224,7 @@ struct internal_source final : public crtp_operator<internal_source> {
           });
       co_yield {};
       if (slice.rows() == 0) {
-        TENZIR_DEBUG("[internal-transceiver-source] exiting");
+        TENZIR_TRACE("[internal-transceiver-source] exiting");
         co_return;
       }
       co_yield std::move(slice);
@@ -264,14 +264,14 @@ struct internal_sink final : public crtp_operator<internal_sink> {
         co_yield {};
         continue;
       }
-      TENZIR_DEBUG("[internal-transceiver-sink] pushing slice");
+      TENZIR_TRACE("[internal-transceiver-sink] pushing slice");
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::internal_v, atom::push_v, std::move(slice))
         .request(hdl_, caf::infinite)
         .then(
           [&] {
-            TENZIR_DEBUG("[internal-transceiver-sink] pushed slice");
+            TENZIR_TRACE("[internal-transceiver-sink] pushed slice");
             ctrl.set_waiting(false);
           },
           [&](const caf::error& e) {
@@ -403,14 +403,14 @@ struct every_cron_operator final : public operator_base {
     auto slice = table_slice{};
     spawn_pipeline(ctrl, handle, start, finish, cron);
     while (true) {
-      TENZIR_DEBUG("[every_cron source] requesting slice");
+      TENZIR_TRACE("[every_cron source] requesting slice");
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::pull_v)
         .request(handle, caf::infinite)
         .then(
           [&](table_slice x) {
-            TENZIR_DEBUG("[every_cron source] received slice");
+            TENZIR_TRACE("[every_cron source] received slice");
             ctrl.set_waiting(false);
             slice = std::move(x);
           },
@@ -436,14 +436,14 @@ struct every_cron_operator final : public operator_base {
         co_yield {};
         continue;
       }
-      TENZIR_DEBUG("[every_cron sink] pushing slice");
+      TENZIR_TRACE("[every_cron sink] pushing slice");
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::push_v, std::move(slice))
         .request(handle, caf::infinite)
         .then(
           [&] {
-            TENZIR_DEBUG("[every_cron sink] pushed slice");
+            TENZIR_TRACE("[every_cron sink] pushed slice");
             ctrl.set_waiting(false);
           },
           [&](const caf::error& e) {
@@ -451,7 +451,7 @@ struct every_cron_operator final : public operator_base {
           });
       co_yield {};
     }
-    TENZIR_DEBUG("[every_cron sink] finishing input");
+    TENZIR_TRACE("[every_cron sink] finishing input");
     state.input_done = true;
     ctrl.set_waiting(true);
     ctrl.self()
@@ -459,7 +459,7 @@ struct every_cron_operator final : public operator_base {
       .request(handle, caf::infinite)
       .then(
         [&] {
-          TENZIR_DEBUG("[every_cron sink] finished input");
+          TENZIR_TRACE("[every_cron sink] finished input");
           state.input_consumed = true;
         },
         [&](const caf::error& e) {
@@ -482,14 +482,14 @@ struct every_cron_operator final : public operator_base {
     spawn_pipeline(ctrl, handle, start, finish, cron, state);
     for (auto&& slice : input) {
       if (slice.rows() != 0) {
-        TENZIR_DEBUG("[every_cron] pushing slice");
+        TENZIR_TRACE("[every_cron] pushing slice");
         ctrl.set_waiting(true);
         ctrl.self()
           .mail(atom::push_v, std::move(slice))
           .request(handle, caf::infinite)
           .then(
             [&] {
-              TENZIR_DEBUG("[every_cron] pushed slice");
+              TENZIR_TRACE("[every_cron] pushed slice");
               ctrl.set_waiting(false);
             },
             [&](const caf::error& e) {
@@ -498,7 +498,7 @@ struct every_cron_operator final : public operator_base {
       }
       co_yield {};
     }
-    TENZIR_DEBUG("[every_cron] finishing input");
+    TENZIR_TRACE("[every_cron] finishing input");
     state.input_done = true;
     ctrl.set_waiting(true);
     ctrl.self()
@@ -506,7 +506,7 @@ struct every_cron_operator final : public operator_base {
       .request(handle, caf::infinite)
       .then(
         [&] {
-          TENZIR_DEBUG("[every_cron] finished input");
+          TENZIR_TRACE("[every_cron] finished input");
           state.input_consumed = true;
         },
         [&](const caf::error& e) {
@@ -567,13 +567,13 @@ struct every_cron_operator final : public operator_base {
       ctrl.self().monitor(exec, [&, exec](const caf::error&) {
         spawn_pipeline(ctrl, hdl, start, finish, cron);
       });
-      TENZIR_DEBUG("[every_cron] requesting subpipeline start");
+      TENZIR_TRACE("[every_cron] requesting subpipeline start");
       ctrl.self()
         .mail(atom::start_v)
         .request(exec, caf::infinite)
         .then(
           [] {
-            TENZIR_DEBUG("[every_cron] subpipeline started");
+            TENZIR_TRACE("[every_cron] subpipeline started");
           },
           [&ctrl, this](const caf::error& e) {
             diagnostic::error(e)
@@ -598,7 +598,7 @@ struct every_cron_operator final : public operator_base {
                             std::string{ctrl.definition()}, hdl, hdl,
                             ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden());
       ctrl.self().monitor(exec, [&, exec](const caf::error&) {
-        TENZIR_DEBUG("[every_cron] subpipeline shut down");
+        TENZIR_TRACE("[every_cron] subpipeline shut down");
         ++state.count;
         if (state.input_consumed) {
           if (state.quit_when_done) {
@@ -612,24 +612,24 @@ struct every_cron_operator final : public operator_base {
         }
         spawn_pipeline(ctrl, hdl, start, finish, cron, state);
       });
-      TENZIR_DEBUG("[every_cron] requesting subpipeline start");
+      TENZIR_TRACE("[every_cron] requesting subpipeline start");
       ctrl.self()
         .mail(atom::start_v)
         .request(exec, caf::infinite)
         .then(
           [&] {
-            TENZIR_DEBUG("[every_cron] subpipeline started");
+            TENZIR_TRACE("[every_cron] subpipeline started");
             ctrl.self().delay_for_fn(finish - start, [&, curr = state.count] {
               if (state.input_done or state.count != curr) {
                 return;
               }
-              TENZIR_DEBUG("[every_cron] closing input source");
+              TENZIR_TRACE("[every_cron] closing input source");
               ctrl.self()
                 .mail(atom::stop_v)
                 .request(hdl, caf::infinite)
                 .then(
                   [] {
-                    TENZIR_DEBUG("[every_cron] closed input source");
+                    TENZIR_TRACE("[every_cron] closed input source");
                   },
                   [&](const caf::error& e) {
                     diagnostic::error(e).primary(args_.op).emit(
@@ -825,7 +825,7 @@ struct every_plugin final : public operator_plugin2<every_operator> {
       auto pipe = std::make_unique<pipeline>();
       pipe->append(std::make_unique<every_operator>(std::move(args)));
       pipe->append(std::make_unique<every_cron_sink_operator>(id, loc));
-      return std::move(pipe);
+      return failure_or<operator_ptr>{std::move(pipe)};
     }
     return std::make_unique<every_operator>(std::move(args));
   }
@@ -851,7 +851,7 @@ struct cron_plugin final : public operator_plugin2<cron_operator> {
       auto pipe = std::make_unique<pipeline>();
       pipe->append(std::make_unique<cron_operator>(std::move(args)));
       pipe->append(std::make_unique<every_cron_sink_operator>(id, loc));
-      return std::move(pipe);
+      return failure_or<operator_ptr>{std::move(pipe)};
     }
     return std::make_unique<cron_operator>(std::move(args));
   }

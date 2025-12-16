@@ -5,7 +5,6 @@ project(
   DESCRIPTION "Web plugin for Tenzir"
   LANGUAGES CXX)
 
-include(FeatureSummary)
 include(CTest)
 
 find_package(Tenzir REQUIRED)
@@ -23,10 +22,6 @@ find_package(OpenSSL REQUIRED)
 
 option(TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
        "Always use the bundled and patched restinio" ON)
-add_feature_info(
-  "TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO"
-  TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
-  "always use the bundled and patched restinio.")
 if (NOT TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
   find_package(fmt REQUIRED)
   find_package(restinio REQUIRED)

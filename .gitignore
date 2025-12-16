@@ -33,6 +33,8 @@ venv/
 
 # Python build artifacts
 /python/dist
+/python/*/build
+/python/tenzir/src/tenzir/bundled
 
 # VScode built artifacts
 /.vscode/
@@ -43,3 +45,6 @@ venv/
 # Claude
 CLAUDE.local.md
 CLAUDE-TODOS.md
+
+# SBOM artifacts
+/tenzir.spdx.json

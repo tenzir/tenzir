@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${ARROW_ADBC_VERSION=17}"
+: "${ARROW_ADBC_VERSION=21}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
 export CMAKE_INSTALL_PREFIX

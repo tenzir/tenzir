@@ -403,7 +403,7 @@ def fetch_versions() -> list[str]:
     return sorted(
         version
         for version in re.findall("<option value=[^>]*>v([^<]*)</option>", body)
-        if version not in EXCLUDE_VERSIONS
+        if version not in EXCLUDE_VERSIONS and not version.endswith("-server-beta")
     )
 
 

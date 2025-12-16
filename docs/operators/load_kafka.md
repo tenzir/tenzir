@@ -13,6 +13,11 @@ load_kafka topic:string, [count=int, exit=bool, offset=int|string, options=recor
 
 ## Description
 
+:::caution[Deprecated]
+The `load_kafka` operator does not respect event boundaries. Consider using
+[`from_kafka`](/reference/operators/from_kafka) instead.
+:::
+
 The `load_kafka` operator reads bytes from a Kafka topic.
 
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
@@ -135,4 +140,5 @@ read_zeek_json
 
 ## See Also
 
-[`save_kafka`](/reference/operators/save_kafka)
+[`from_kafka`](/reference/operators/from_kafka),
+[`to_kafka`](/reference/operators/to_kafka)

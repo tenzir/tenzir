@@ -28,7 +28,8 @@ if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
   string(TOLOWER "${TENZIR_EDITION_NAME}" _edition_name_lower)
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_name_lower)
   set(CPACK_PACKAGE_FILE_NAME
-      "${_edition_name_lower}-${TENZIR_VERSION}-${_system_name_lower}")
+      "${_edition_name_lower}-${TENZIR_VERSION}-${CMAKE_SYSTEM_PROCESSOR}-${_system_name_lower}"
+  )
   unset(_system_name_lower)
   if (TENZIR_PACKAGE_FILE_NAME_SUFFIX)
     string(APPEND CPACK_PACKAGE_FILE_NAME "-${TENZIR_PACKAGE_FILE_NAME_SUFFIX}")

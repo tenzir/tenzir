@@ -22,13 +22,22 @@ namespace tenzir {
 template <class HashAlgorithm>
 concept incremental_hash
   = requires(HashAlgorithm& h, std::span<const std::byte> bytes) {
-  // clang-format off
+      // clang-format off
   typename HashAlgorithm::result_type;
   { h.add(bytes) } noexcept -> std::same_as<void>;
   { h.finish() } noexcept
     -> std::same_as<typename HashAlgorithm::result_type>;
-  // clang-format on
-};
+      // clang-format on
+    };
+
+/// An incremental hash algorithm that can be reset to its initial state.
+template <class HashAlgorithm>
+concept reusable_hash
+  = incremental_hash<HashAlgorithm> && requires(HashAlgorithm& h) {
+      // clang-format off
+      { h.reset() } noexcept -> std::same_as<void>;
+      // clang-format on
+    };
 
 /// A hash algorithm that exposes a one-shot computation of a hash digest over
 /// a byte sequence.

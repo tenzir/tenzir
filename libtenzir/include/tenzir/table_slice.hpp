@@ -164,6 +164,16 @@ public:
   /// Return an approximation of the memory covered by this slice.
   auto approx_bytes() const -> uint64_t;
 
+  struct memory_stats {
+    int64_t serialized_bytes = 0;
+    int64_t non_serialized_bytes = 0;
+    int64_t instances = 0;
+    int64_t rows = 0;
+  };
+
+  /// @returns Aggregated memory accounting across all table slices.
+  [[nodiscard]] static auto memory_stats() noexcept -> struct memory_stats;
+
   // -- data access ------------------------------------------------------------
 
   /// Get all values in the slice, iterating row-wise.
@@ -266,6 +276,9 @@ private:
   /// inner state is shared, a unique copy is created first.
   template <class F>
   void modify_state(F&& f);
+
+  void retain_accounting() const noexcept;
+  void release_accounting() const noexcept;
 
   /// A pointer to the underlying chunk, which contains a
   /// `tenzir.fbs.TableSlice` FlatBuffers table.

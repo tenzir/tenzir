@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/try.hpp"
 
@@ -61,7 +62,7 @@ auto make_record_series(std::span<const series_field> fields,
   auto null_bitmap = origin.null_bitmap();
   if (origin.offset() != 0 and origin.null_bitmap_data()) {
     null_bitmap
-      = check(arrow::internal::CopyBitmap(arrow::default_memory_pool(),
+      = check(arrow::internal::CopyBitmap(arrow_memory_pool(),
                                           origin.null_bitmap_data(),
                                           origin.offset(), origin.length()));
   }

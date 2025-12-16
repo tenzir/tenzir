@@ -8,6 +8,10 @@
 
 #pragma once
 
-/// A printing signal handler meant for SIGSEGV and SIGABRT. Prints a backtrace
-/// if support for that is enabled at compile time.
-extern "C" void fatal_handler(int sig);
+// Signal handlers for SIGSEGV and SIGABRT are installed automatically at
+// program startup via a constructor attribute.
+
+// This function exists solely to ensure the object file is not discarded
+// during static linking. It should be referenced from main() or another
+// file that is guaranteed to be linked.
+void signal_handlers_anchor();

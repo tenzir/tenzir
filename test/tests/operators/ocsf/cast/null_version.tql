@@ -1,0 +1,2 @@
+from {class_uid: 4001, metadata: {version: null.string()}}
+ocsf::cast null_fill=true

@@ -187,11 +187,11 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     = ignore(lit{"\""} >> function_repeat_parser{ch<'#'>, string_hashes})
       ->* [] { return tk::closing_quote; };
   auto string_content
-    = ignore(+(common_content | any - closing_quote))
+    = ignore(+(common_content | (any - closing_quote)))
       ->* [] { return tk::char_seq; }
     | closing_quote;
   auto format_string_content
-    = ignore(+(common_content | "{{" | "}}" | any - closing_quote - '{' - '}'))
+    = ignore(+(common_content | "{{" | "}}" | (any - closing_quote - '{' - '}')))
       ->* [] { return tk::char_seq; }
     | ignore(lit{"{"})
       ->* [] { return tk::fmt_begin; }
@@ -202,12 +202,12 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     = string_content.when(is_non_format_string)
     | format_string_content.when(is_format_string);
   // clang-format on
-  auto current = content.begin();
+  const auto* current = content.begin();
   while (current != content.end()) {
     auto kind = tk{};
     auto success = false;
     if (stack.empty() or is<in_replacement>(stack.top())) {
-      const auto start = current;
+      const auto* const start = current;
       success = normal_parser.parse(current, content.end(), kind);
       if (success) {
         auto normal_begin = kind == tk::string_begin or kind == tk::blob_begin;
@@ -272,7 +272,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
 auto verify_tokens(std::span<const token> tokens, session ctx)
   -> failure_or<void> {
   auto result = failure_or<void>{};
-  for (auto& token : tokens) {
+  for (const auto& token : tokens) {
     if (token.kind == token_kind::error) {
       auto begin = size_t{0};
       if (&token != tokens.data()) {

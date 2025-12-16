@@ -8,6 +8,7 @@
 
 #include "tenzir/table_slice.hpp"
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/bitmap_algorithms.hpp"
@@ -33,17 +34,133 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
+#include <tsl/robin_map.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
+#include <mutex>
 #include <ranges>
 #include <span>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace tenzir {
 
 // -- utility functions --------------------------------------------------------
 
 namespace {
+
+struct table_slice_accounting_state final {
+  struct entry {
+    size_t refcount = 0;
+    uint64_t bytes = 0;
+    uint64_t rows = 0;
+  };
+
+  std::atomic<int64_t> serialized_bytes{0};
+  std::atomic<int64_t> non_serialized_bytes{0};
+  std::atomic<int64_t> rows{0};
+  std::atomic<int64_t> instances{0};
+
+  // Mutex that must be locked while the maps are accessed.
+  std::mutex mutex;
+  tsl::robin_map<const std::byte*, entry> chunks;
+  tsl::robin_map<const arrow::RecordBatch*, entry> record_batches;
+};
+
+auto accounting_state() noexcept -> table_slice_accounting_state& {
+  static auto state = table_slice_accounting_state{};
+  return state;
+}
+
+void increment_instances() noexcept {
+  accounting_state().instances.fetch_add(1, std::memory_order_relaxed);
+}
+
+void decrement_instances() noexcept {
+  auto& instances = accounting_state().instances;
+  instances.fetch_sub(1, std::memory_order_relaxed);
+}
+
+void account_table_slice_resources(
+  const chunk_ptr& chunk, bool is_serialized,
+  const std::shared_ptr<arrow::RecordBatch>& batch, uint64_t approx_bytes,
+  table_slice::size_type rows) noexcept {
+  if (! chunk) {
+    return;
+  }
+  auto& state = accounting_state();
+  auto guard = std::scoped_lock{state.mutex};
+  const auto account_rows_with_chunk = is_serialized || ! batch;
+  auto& chunk_entry = state.chunks[chunk->data()];
+  if (chunk_entry.refcount++ == 0) {
+    auto bytes = static_cast<uint64_t>(chunk->size());
+    chunk_entry.bytes = bytes;
+    chunk_entry.rows = account_rows_with_chunk ? rows : 0;
+    state.serialized_bytes.fetch_add(static_cast<int64_t>(bytes),
+                                     std::memory_order_relaxed);
+    if (chunk_entry.rows != 0) {
+      state.rows.fetch_add(static_cast<int64_t>(chunk_entry.rows),
+                           std::memory_order_relaxed);
+    }
+  }
+  if (is_serialized || ! batch) {
+    return;
+  }
+  auto& batch_entry = state.record_batches[batch.get()];
+  if (batch_entry.refcount++ != 0) {
+    return;
+  }
+  batch_entry.bytes = approx_bytes;
+  batch_entry.rows = account_rows_with_chunk ? 0 : rows;
+  state.non_serialized_bytes.fetch_add(static_cast<int64_t>(approx_bytes),
+                                       std::memory_order_relaxed);
+  if (batch_entry.rows != 0) {
+    state.rows.fetch_add(static_cast<int64_t>(batch_entry.rows),
+                         std::memory_order_relaxed);
+  }
+}
+
+void release_table_slice_resources(
+  const chunk_ptr& chunk, bool is_serialized,
+  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept {
+  if (! chunk) {
+    return;
+  }
+  auto& state = accounting_state();
+  auto guard = std::scoped_lock{state.mutex};
+  auto it = state.chunks.find(chunk->data());
+  TENZIR_ASSERT(it != state.chunks.end());
+  auto& chunk_entry = it.value();
+  TENZIR_ASSERT(chunk_entry.refcount > 0);
+  if (--chunk_entry.refcount == 0) {
+    state.serialized_bytes.fetch_sub(static_cast<int64_t>(chunk_entry.bytes),
+                                     std::memory_order_relaxed);
+    if (chunk_entry.rows != 0) {
+      state.rows.fetch_sub(static_cast<int64_t>(chunk_entry.rows),
+                           std::memory_order_relaxed);
+    }
+    state.chunks.erase(it);
+  }
+  if (is_serialized || ! batch) {
+    return;
+  }
+  auto jt = state.record_batches.find(batch.get());
+  TENZIR_ASSERT(jt != state.record_batches.end());
+  auto& batch_entry = jt.value();
+  TENZIR_ASSERT(batch_entry.refcount > 0);
+  if (--batch_entry.refcount == 0) {
+    state.non_serialized_bytes.fetch_sub(
+      static_cast<int64_t>(batch_entry.bytes), std::memory_order_relaxed);
+    if (batch_entry.rows != 0) {
+      state.rows.fetch_sub(static_cast<int64_t>(batch_entry.rows),
+                           std::memory_order_relaxed);
+    }
+    state.record_batches.erase(jt);
+  }
+}
 
 /// Create a table slice from a record batch.
 /// @param record_batch The record batch to encode.
@@ -63,9 +180,12 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
 #endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
-    auto ipc_ostream = check(arrow::io::BufferOutputStream::Create());
-    auto stream_writer = check(
-      arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema()));
+    auto ipc_ostream = check(
+      arrow::io::BufferOutputStream::Create(4096, tenzir::arrow_memory_pool()));
+    auto ipc_opts = arrow::ipc::IpcWriteOptions::Defaults();
+    ipc_opts.memory_pool = tenzir::arrow_memory_pool();
+    auto stream_writer = check(arrow::ipc::MakeStreamWriter(
+      ipc_ostream, record_batch->schema(), ipc_opts));
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (not status.ok()) {
       TENZIR_ERROR("failed to write record batch: {}", status.ToString());
@@ -208,7 +328,7 @@ auto upgrade_arrays(const std::shared_ptr<arrow::Array>& array)
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
       auto values = upgrade_arrays(list_array->values());
       return check(arrow::ListArray::FromArrays(
-        *list_array->offsets(), *values, arrow::default_memory_pool(),
+        *list_array->offsets(), *values, arrow_memory_pool(),
         list_array->null_bitmap(), list_array->data()->null_count));
     }
     default: {
@@ -418,12 +538,15 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice::table_slice() noexcept = default;
+table_slice::table_slice() noexcept {
+  increment_instances();
+}
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          const std::shared_ptr<arrow::RecordBatch>& batch,
                          type schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
+  increment_instances();
   TENZIR_ASSERT(not chunk_ || chunk_->unique());
   if (chunk_) {
     auto f = detail::overload{
@@ -455,6 +578,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
     };
     visit(f, as_flatbuffer(chunk_));
   }
+  retain_accounting();
 }
 
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
@@ -466,6 +590,7 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                          type schema, enum serialize serialize) {
+  increment_instances();
   TENZIR_ASSERT_EXPENSIVE(verify_record_batch(*record_batch));
   auto builder = flatbuffers::FlatBufferBuilder{};
   *this
@@ -485,15 +610,21 @@ auto table_slice::try_from(
                             serialize);
 }
 
-table_slice::table_slice(const table_slice& other) noexcept = default;
+table_slice::table_slice(const table_slice& other) noexcept
+  : chunk_{other.chunk_}, offset_{other.offset_}, state_{other.state_} {
+  increment_instances();
+  retain_accounting();
+}
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   if (this == &rhs) {
     return *this;
   }
+  release_accounting();
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
   state_ = rhs.state_;
+  retain_accounting();
   return *this;
 }
 
@@ -501,17 +632,24 @@ table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})},
     offset_{std::exchange(other.offset_, invalid_id)},
     state_{std::exchange(other.state_, {})} {
-  // nop
+  increment_instances();
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
+  if (this == &rhs) {
+    return *this;
+  }
+  release_accounting();
   chunk_ = std::exchange(rhs.chunk_, {});
   offset_ = std::exchange(rhs.offset_, invalid_id);
   state_ = std::exchange(rhs.state_, {});
   return *this;
 }
 
-table_slice::~table_slice() noexcept = default;
+table_slice::~table_slice() noexcept {
+  release_accounting();
+  decrement_instances();
+}
 
 table_slice table_slice::unshare() const noexcept {
   auto result = table_slice{chunk::copy(chunk_), verify::no};
@@ -627,6 +765,55 @@ void table_slice::modify_state(F&& f) {
   visit(g, as_flatbuffer(chunk_));
 }
 
+void table_slice::retain_accounting() const noexcept {
+  if (! chunk_) {
+    return;
+  }
+  auto is_serialized = true;
+  auto record_batch = std::shared_ptr<arrow::RecordBatch>{};
+  auto f = detail::overload{
+    []() noexcept {
+      // Invalid table slices do not contribute to accounting.
+    },
+    [&](const auto& encoded) noexcept {
+      const auto* ptr = state(encoded, state_);
+      is_serialized = ptr->is_serialized();
+      if (! is_serialized) {
+        record_batch = ptr->record_batch();
+      }
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
+  auto approx_bytes = uint64_t{0};
+  if (! is_serialized && record_batch) {
+    approx_bytes = this->approx_bytes();
+  }
+  account_table_slice_resources(chunk_, is_serialized, record_batch,
+                                approx_bytes, rows());
+}
+
+void table_slice::release_accounting() const noexcept {
+  if (! chunk_) {
+    return;
+  }
+  auto is_serialized = true;
+  auto record_batch = std::shared_ptr<arrow::RecordBatch>{};
+  auto f = detail::overload{
+    []() noexcept {
+      // Invalid table slices do not contribute to accounting.
+    },
+    [&](const auto& encoded) noexcept {
+      const auto* ptr = state(encoded, state_);
+      is_serialized = ptr->is_serialized();
+      if (! is_serialized) {
+        record_batch = ptr->record_batch();
+      }
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
+  release_table_slice_resources(chunk_, is_serialized, record_batch);
+}
+
 bool table_slice::is_serialized() const noexcept {
   auto f = detail::overload{
     []() noexcept {
@@ -736,7 +923,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
                                       }),
                           "concatenate requires slices to be homogeneous");
   auto builder
-    = as<record_type>(schema).make_arrow_builder(arrow::default_memory_pool());
+    = as<record_type>(schema).make_arrow_builder(arrow_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
   const auto resize_result
     = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
@@ -960,7 +1147,7 @@ constexpr static auto enumeration_to_string
   }
   auto new_type = tenzir::type{string_type{}};
   new_type.assign_metadata(s.type);
-  auto builder = string_type::make_arrow_builder(arrow::default_memory_pool());
+  auto builder = string_type::make_arrow_builder(arrow_memory_pool());
   for (const auto& value : es->values()) {
     if (not value) {
       check(builder->AppendNull());
@@ -1031,7 +1218,7 @@ auto resolve_enumerations(
   tenzir::enumeration_type type,
   const std::shared_ptr<enumeration_type::array_type>& array)
   -> std::pair<string_type, std::shared_ptr<arrow::StringArray>> {
-  auto builder = arrow::StringBuilder(arrow::default_memory_pool());
+  auto builder = arrow::StringBuilder(arrow_memory_pool());
   for (const auto& v : values3(*array)) {
     if (not v) {
       check(builder.AppendNull());
@@ -1093,16 +1280,14 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     inferred_type = *tmp_inferred_type;
     if (not inferred_type) {
       inferred_type = type{null_type{}};
-      auto builder
-        = null_type::make_arrow_builder(arrow::default_memory_pool());
+      auto builder = null_type::make_arrow_builder(arrow_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());
       TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       array = finish(*builder);
       return;
     }
     match(inferred_type, [&]<concrete_type Type>(const Type& inferred_type) {
-      auto builder
-        = inferred_type.make_arrow_builder(arrow::default_memory_pool());
+      auto builder = inferred_type.make_arrow_builder(arrow_memory_pool());
       for (int i = 0; i < batch->num_rows(); ++i) {
         const auto append_result = append_builder(
           inferred_type, *builder, make_view(as<type_to_data_t<Type>>(value)));
@@ -1161,7 +1346,7 @@ auto combine_offsets(
   TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
-  auto builder = arrow::Int32Builder{};
+  auto builder = arrow::Int32Builder{tenzir::arrow_memory_pool()};
   for (; it < list_offsets.end(); ++it) {
     for (const auto& index : static_cast<const arrow::Int32Array&>(*result)) {
       TENZIR_ASSERT(index);
@@ -1215,8 +1400,8 @@ auto flatten_list(std::string_view separator, std::string_view name_prefix,
             fmt::format("{}{}", name_prefix, field.name),
             field.type,
           },
-          check(arrow::ListArray::FromArrays(*combined_offsets,
-                                             *list_array->values())),
+          check(arrow::ListArray::FromArrays(
+            *combined_offsets, *list_array->values(), arrow_memory_pool())),
         });
       }
       return result;
@@ -1298,7 +1483,8 @@ auto make_flatten_transformation(
                 fmt::format("{}{}", name_prefix, field.name),
                 type{list_type{field.type}},
               },
-              check(arrow::ListArray::FromArrays(*combined_offsets, *array)),
+              check(arrow::ListArray::FromArrays(*combined_offsets, *array,
+                                                 arrow_memory_pool())),
             },
           };
         },
@@ -1497,7 +1683,7 @@ void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
                | std::views::transform(&arrow::Field::name);
   // We need to flatten the null bitmap here because it can happen that the
   // fields are saved to a record that is made non-null by another entry.
-  auto fields = check(array.Flatten());
+  auto fields = check(array.Flatten(tenzir::arrow_memory_pool()));
   for (auto [name, data] : detail::zip_equal(names, fields)) {
     auto segments
       = name | std::views::split(sep)
@@ -1558,8 +1744,8 @@ auto unflatten(const arrow::ListArray& array, std::string_view sep)
   // Unflattening a list simply means unflattening its values.
   auto values = unflatten(array.values(), sep);
   return check(arrow::ListArray::FromArrays(
-    *array.offsets(), *values, arrow::default_memory_pool(),
-    array.null_bitmap(), array.data()->null_count));
+    *array.offsets(), *values, arrow_memory_pool(), array.null_bitmap(),
+    array.data()->null_count));
 }
 
 auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
@@ -1601,6 +1787,16 @@ auto table_slice::approx_bytes() const -> uint64_t {
     },
   };
   return visit(f, as_flatbuffer(chunk_));
+}
+
+auto table_slice::memory_stats() noexcept -> struct memory_stats {
+  auto& state = accounting_state();
+  return {
+    state.serialized_bytes.load(std::memory_order_relaxed),
+    state.non_serialized_bytes.load(std::memory_order_relaxed),
+    state.instances.load(std::memory_order_relaxed),
+    state.rows.load(std::memory_order_relaxed),
+  };
 }
 
 auto columns_of(const table_slice& slice) -> generator<column_view> {

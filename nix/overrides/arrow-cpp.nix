@@ -2,12 +2,14 @@
   lib,
   stdenv,
   pkgsBuildBuild,
-  aws-sdk-cpp-tenzir,
-  google-cloud-cpp-tenzir,
   arrow-cpp,
+  iconv,
   sqlite,
 }:
-(arrow-cpp.overrideAttrs (orig: {
+arrow-cpp.overrideAttrs (orig: {
+  patches = [
+    ./arrow-cpp-fields-race.patch
+  ];
   nativeBuildInputs =
     orig.nativeBuildInputs
     ++ [
@@ -20,7 +22,7 @@
           echo "Apple Inc. version cctools-1010.6"
           exit 0
         fi
-        exec ${lib.getBin pkgsBuildBuild.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
+        exec ${lib.getBin pkgsBuildBuild.darwin.cctools}/bin/libtool $@
       '')
     ];
 
@@ -28,10 +30,17 @@
     orig.buildInputs
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       sqlite
+    ] ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic ) [
+      iconv
     ];
 
   cmakeFlags =
     orig.cmakeFlags
+    ++ [
+      # Tenzir is using a custom memory pool.
+      "-DARROW_JEMALLOC=OFF"
+      "-DARROW_MIMALLOC=OFF"
+    ]
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       "-DARROW_BUILD_TESTS=OFF"
       # TODO: Check if this is still needed or now covered by ARROW_DEPENDENCY_SOURCE.
@@ -42,10 +51,10 @@
   doInstallCheck = !stdenv.hostPlatform.isStatic;
 
   env =
-    (orig.env or { })
-    // lib.optionalAttrs stdenv.hostPlatform.isStatic {
-      NIX_LDFLAGS = lib.optionalString stdenv.hostPlatform.isDarwin "-framework SystemConfiguration";
-    };
+    ((orig.env or { })
+    // {
+      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+    });
 
   installCheckPhase =
     let
@@ -68,9 +77,4 @@
 
       runHook postInstallCheck
     '';
-})).override
-  {
-    aws-sdk-cpp-arrow = aws-sdk-cpp-tenzir;
-    google-cloud-cpp = google-cloud-cpp-tenzir;
-    enableGcs = true; # Upstream disabled for darwin.
-  }
+})

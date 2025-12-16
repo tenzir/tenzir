@@ -20,12 +20,14 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/report.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
 
 #include <caf/actor_from_state.hpp>
+#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
 

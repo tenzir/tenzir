@@ -1,0 +1,9 @@
+---
+description: "Call another user defined operator"
+args:
+  positional:
+    - name: value
+      type: string
+      description: "Forwarded to `typed_positional`"
+---
+argspkg::typed_positional $value

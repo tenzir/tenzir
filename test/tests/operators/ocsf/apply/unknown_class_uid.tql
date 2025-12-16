@@ -1,2 +1,0 @@
-from {class_uid: 9999, metadata: {version: "1.5.0"}}
-ocsf::apply

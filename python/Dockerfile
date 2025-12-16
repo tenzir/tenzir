@@ -1,8 +1,8 @@
 # Provides an environment where the python binary and the python bindings
-# are installed and can be run using poetry.
+# are installed and can be run using uv.
 
-ARG TENZIR_VERSION
-ARG TENZIR_CONTAINER_REGISTRY
+ARG TENZIR_VERSION=main
+ARG TENZIR_CONTAINER_REGISTRY=ghcr.io
 
 FROM $TENZIR_CONTAINER_REGISTRY/tenzir/tenzir:$TENZIR_VERSION
 USER root
@@ -15,18 +15,18 @@ RUN apt-get update && \
 
 RUN mkdir -p /home/tenzir && chown tenzir:tenzir /home/tenzir
 USER tenzir:tenzir
-ENV POETRY_HOME=$PREFIX
-RUN curl -sSL https://install.python-poetry.org | python3 - --version 2.1.2
+ENV PATH="/home/tenzir/.local/bin:${PATH}"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 WORKDIR /tenzir/python/
-# Layer the Poetry install to optimize the dev experience.
+# Layer the uv install to optimize the dev experience.
 COPY --chown=tenzir:tenzir \
-    ./python/pyproject.toml \
-    ./python/poetry.lock \
+    ./pyproject.toml \
+    ./uv.lock \
     ./
-RUN poetry install --no-root --all-extras
+RUN uv sync --all-packages --all-extras --group dev --no-install-project
 COPY --chown=tenzir:tenzir \
-    ./python/ \
+    ./ \
     ./
-RUN poetry install --all-extras
-ENTRYPOINT [ "poetry", "run" ]
+RUN uv sync --all-packages --all-extras --group dev
+ENTRYPOINT [ "uv", "run" ]

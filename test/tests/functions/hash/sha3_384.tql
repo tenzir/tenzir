@@ -1,0 +1,4 @@
+from {x: "foo"},
+     {x: b"foo"},
+     {x: {a: 1.2.3.4, b: 10.0.0.0/8, c: 2024-12-24}}
+select digest = hash_sha3_384(x)

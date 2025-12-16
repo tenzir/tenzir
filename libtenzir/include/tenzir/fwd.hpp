@@ -136,6 +136,7 @@ class blob_type;
 class blob;
 class bool_type;
 class chunk;
+class chunk_ptr;
 class command;
 class configuration;
 class data;
@@ -319,7 +320,6 @@ class legacy_deserializer;
 
 } // namespace detail
 
-using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;

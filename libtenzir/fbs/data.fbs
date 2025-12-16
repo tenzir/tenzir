@@ -89,7 +89,7 @@ table SecretConcatenation {
 }
 
 enum SecretTransformations : uint8 {
-  encode_base64, decode_base64,
+  encode_base64, decode_base64, encode_url, decode_url, encode_base58, decode_base58, encode_hex, decode_hex
 }
 table SecretTransformed {
   secret: Secret (required);

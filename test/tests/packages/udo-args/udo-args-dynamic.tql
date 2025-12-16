@@ -1,0 +1,2 @@
+from {name: "Alice", age: 30}
+argspkg::add_prefix this.name, prefix="Hello, "

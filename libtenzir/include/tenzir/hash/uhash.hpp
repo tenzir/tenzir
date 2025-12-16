@@ -8,12 +8,13 @@
 
 #pragma once
 
+#include "tenzir/hash/concepts.hpp"
 #include "tenzir/hash/hash_append.hpp"
 
 namespace tenzir {
 
 /// The universal hash function.
-template <class HashAlgorithm>
+template <reusable_hash HashAlgorithm>
 class uhash {
 public:
   using result_type = typename HashAlgorithm::result_type;
@@ -24,6 +25,7 @@ public:
 
   template <class T>
   result_type operator()(const T& x) noexcept {
+    h_.reset();
     hash_append(h_, x);
     return h_.finish();
   }

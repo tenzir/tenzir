@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/aliases.hpp"
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
@@ -203,7 +204,7 @@ public:
     // like an antipattern. It is safe for this particular case because the
     // memory for basic types is guaranteed to have static lifetime that
     // exceeds the lifetime of all types.
-    table_ = chunk::make(as_bytes(other), []() noexcept {});
+    table_ = chunk_ptr{nullptr, as_bytes(other)};
   }
 
   /// Explicitly construct a type from a complex concrete type.
@@ -305,23 +306,23 @@ public:
                        offset parent_path = {}) const noexcept -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
-  [[nodiscard]] static type from_arrow(const arrow::DataType& other) noexcept;
-  [[nodiscard]] static type from_arrow(const arrow::Field& field) noexcept;
-  [[nodiscard]] static type from_arrow(const arrow::Schema& schema) noexcept;
+  [[nodiscard]] static type from_arrow(const arrow::DataType& other);
+  [[nodiscard]] static type from_arrow(const arrow::Field& field);
+  [[nodiscard]] static type from_arrow(const arrow::Schema& schema);
 
   /// Converts the type into an Arrow DataType.
-  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
+  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const;
 
   /// Converts the type into an Arrow DataType.
   /// @param name The name of the field.
   /// @param nullable Whether the field is nullable.
   [[nodiscard]] std::shared_ptr<arrow::Field>
-  to_arrow_field(std::string_view name, bool nullable = true) const noexcept;
+  to_arrow_field(std::string_view name, bool nullable = true) const;
 
   /// Converts the type into an Arrow Schema.
   /// @pre `!name().empty()`
   /// @pre `is<record_type>(*this)`
-  [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const noexcept;
+  [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const;
 
   /// Creates Arrow metadata from the type. Returns `nullptr` if the type has no
   /// metadata.
@@ -358,7 +359,7 @@ public:
   template <class Hasher>
   friend auto inspect(detail::hash_inspector<Hasher>& f, type& x) ->
     typename detail::hash_inspector<Hasher>::result_type {
-    static_assert(!detail::hash_inspector<Hasher>::is_loading,
+    static_assert(! detail::hash_inspector<Hasher>::is_loading,
                   "this inspect overload is read-only");
     // Because the underlying table is a chunk_ptr, which cannot be hashed
     // directly, we instead forward the unique representation of it to the hash
@@ -721,8 +722,7 @@ public:
   /// The corresponding Arrow ArrayBuilder.
   struct builder_type final : arrow::FixedSizeBinaryBuilder {
     using TypeClass = arrow_type;
-    explicit builder_type(arrow::MemoryPool* pool
-                          = arrow::default_memory_pool());
+    explicit builder_type(arrow::MemoryPool* pool = arrow_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
     [[nodiscard]] arrow::Status
     FinishInternal(std::shared_ptr<arrow::ArrayData>* out) override;
@@ -813,8 +813,7 @@ public:
   /// The corresponding Arrow ArrayBuilder.
   struct builder_type final : arrow::StructBuilder {
     using TypeClass = arrow_type;
-    explicit builder_type(arrow::MemoryPool* pool
-                          = arrow::default_memory_pool());
+    explicit builder_type(arrow::MemoryPool* pool = arrow_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
     [[nodiscard]] ip_type::builder_type& ip_builder() noexcept;
     [[nodiscard]] arrow::UInt8Builder& length_builder() noexcept;
@@ -957,8 +956,7 @@ public:
   struct builder_type final : arrow::StringDictionaryBuilder {
     using TypeClass = arrow_type;
     explicit builder_type(std::shared_ptr<arrow_type> type,
-                          arrow::MemoryPool* pool
-                          = arrow::default_memory_pool());
+                          arrow::MemoryPool* pool = arrow_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
     [[nodiscard]] arrow::Status Append(enumeration index);
 
@@ -1077,7 +1075,7 @@ public:
   explicit list_type(const type& value_type) noexcept;
 
   template <concrete_type T>
-    requires(!std::is_same_v<T, list_type>) // avoid calling copy constructor
+    requires(! std::is_same_v<T, list_type>) // avoid calling copy constructor
   explicit list_type(const T& value_type) noexcept
     : list_type{type{value_type}} {
     // nop
@@ -1144,8 +1142,8 @@ public:
   explicit map_type(const type& key_type, const type& value_type) noexcept;
 
   template <type_or_concrete_type T, type_or_concrete_type U>
-    requires(!std::is_same_v<T, tenzir::type>
-             || !std::is_same_v<U, tenzir::type>)
+    requires(! std::is_same_v<T, tenzir::type>
+             || ! std::is_same_v<U, tenzir::type>)
   explicit map_type(const T& key_type, const U& value_type) noexcept
     : map_type{type{key_type}, type{value_type}} {
     // nop
@@ -1459,8 +1457,7 @@ public:
   /// The corresponding Arrow ArrayBuilder.
   struct builder_type final : arrow::StructBuilder {
     using TypeClass = arrow_type;
-    explicit builder_type(arrow::MemoryPool* pool
-                          = arrow::default_memory_pool());
+    explicit builder_type(arrow::MemoryPool* pool = arrow_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
     [[nodiscard]] arrow::BinaryBuilder& buffer_builder() noexcept;
 
@@ -1645,7 +1642,7 @@ struct type_to_arrow_array_storage<T> {
 };
 
 template <type_or_concrete_type T>
-  requires(!arrow::is_extension_type<type_to_arrow_type_t<T>>::value)
+  requires(! arrow::is_extension_type<type_to_arrow_type_t<T>>::value)
 struct type_to_arrow_array_storage<T> {
   using type = type_to_arrow_array_t<T>;
 };
@@ -1856,7 +1853,7 @@ struct formatter<tenzir::type> {
   auto format(const tenzir::type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
-    if (const auto& name = value.name(); !name.empty()) {
+    if (const auto& name = value.name(); ! name.empty()) {
       out = fmt::format_to(out, "{}", name);
     } else {
       match(value, [&](const auto& x) {
@@ -1866,7 +1863,7 @@ struct formatter<tenzir::type> {
     if (print_attributes) {
       for (bool first = false; const auto& attribute :
                                value.attributes(tenzir::type::recurse::no)) {
-        if (!first) {
+        if (! first) {
           out = fmt::format_to(out, " ");
           first = false;
         }

@@ -61,27 +61,31 @@ echo "${normal}"
 echo "                            INSTALLER"
 echo
 
-# Detect OS.
 action "Identifying platform"
-platform=
+# Detect ARCH.
+arch=$(uname -m)
+# Detect OS.
+package_format=
 os=$(uname -s)
 if [ "${os}" = "Linux" ]; then
   if check rpm && [ -n "$(rpm -qa 2>/dev/null)" ]; then
-    platform=RPM
+    package_format=RPM
   elif [ -f "/etc/debian_version" ]; then
-    platform=Debian
+    package_format=DEB
   elif [ -f "/etc/NIXOS" ]; then
-    platform=NixOS
+    package_format=NixOS
   else
-    platform=Linux
+    package_format=tarball
   fi
 elif [ "${os}" = "Darwin" ]; then
-  platform=macOS
+  package_format=macOS
 elif [ -z "${os}" ]; then
-  echo "Could not identify platform."
+  echo "Could not identify package_format."
   exit 1
 fi
-echo "Found ${platform}."
+platform="${arch}-${os}"
+
+echo "Found ${platform} (${package_format})."
 
 # Figure out if we can run privileged.
 can_root=
@@ -112,13 +116,13 @@ else
   # Select appropriate package.
   action "Identifying package"
   package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
-  if [ "${platform}" = "RPM" ]; then
-    package_url="${package_url_base}/rpm/tenzir-static-${TENZIR_PACKAGE_TAG}.rpm"
-  elif [ "${platform}" = "Debian" ]; then
-    package_url="${package_url_base}/debian/tenzir-static-${TENZIR_PACKAGE_TAG}.deb"
-  elif [ "${platform}" = "Linux" ]; then
-    package_url="${package_url_base}/tarball/tenzir-static-${TENZIR_PACKAGE_TAG}.gz"
-  elif [ "${platform}" = "NixOS" ]; then
+  if [ "${package_format}" = "RPM" ]; then
+    package_url="${package_url_base}/rpm/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.rpm"
+  elif [ "${package_format}" = "DEB" ]; then
+    package_url="${package_url_base}/debian/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.deb"
+  elif [ "${package_format}" = "tarball" ]; then
+    package_url="${package_url_base}/tarball/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.tar.gz"
+  elif [ "${package_format}" = "NixOS" ]; then
     echo "Try Tenzir with our ${bold}flake.nix${normal}:"
     echo
     echo "    ${bold}nix shell github:tenzir/tenzir/${TENZIR_PACKAGE_TAG} -c tenzir-node${normal}"
@@ -128,10 +132,10 @@ else
     echo "flake inputs, or use your preferred method to include third-party"
     echo "modules on classic NixOS."
     exit 0
-  elif [ "${platform}" = "macOS" ]; then
-    package_url="${package_url_base}/macOS/tenzir-static-${TENZIR_PACKAGE_TAG}.pkg"
+  elif [ "${package_format}" = "macOS" ]; then
+    package_url="${package_url_base}/macOS/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.pkg"
   else
-    echo "We do not offer pre-built packages for ${platform}." \
+    echo "We do not offer pre-built packages for ${package_format}." \
       "Your options:"
     echo
     echo "  1. Use Docker"
@@ -190,7 +194,7 @@ fi
 
 # Trigger installation.
 action "Installing package into ${prefix}"
-if [ "${platform}" = "RPM" ]; then
+if [ "${package_format}" = "RPM" ]; then
   cmd1="$sudo yum -y --nogpgcheck localinstall \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -202,7 +206,7 @@ if [ "${platform}" = "RPM" ]; then
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-elif [ "${platform}" = "Debian" ]; then
+elif [ "${package_format}" = "DEB" ]; then
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -214,7 +218,7 @@ elif [ "${platform}" = "Debian" ]; then
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-elif [ "${platform}" = "Linux" ]; then
+elif [ "${package_format}" = "tarball" ]; then
   cmd1="$sudo tar xzf \"${tmpdir}/${package}\" -C /"
   cmd2="$sudo echo 'export PATH=\$PATH:/opt/tenzir/bin' > /etc/profile.d/tenzir.sh"
   echo "This script is about to run the following command:"
@@ -226,7 +230,7 @@ elif [ "${platform}" = "Linux" ]; then
   eval "${cmd1}"
   action "Adding /opt/tenzir/bin to the system path"
   eval "${cmd2}"
-elif [ "${platform}" = "macOS" ]; then
+elif [ "${package_format}" = "macOS" ]; then
   cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"
   echo "This script is about to run the following command:"
   echo
@@ -234,6 +238,56 @@ elif [ "${platform}" = "macOS" ]; then
   confirm
   action "Installing Tenzir"
   eval "${cmd1}"
+fi
+
+# Configure token if TENZIR_TOKEN is set.
+if [ -n "${TENZIR_TOKEN:-}" ]; then
+  action "Configuring node token"
+  config_file="${prefix}/etc/tenzir/tenzir.yaml"
+  config_dir="$(dirname "${config_file}")"
+
+  # Create config directory if needed.
+  if [ ! -d "${config_dir}" ]; then
+    $sudo mkdir -p "${config_dir}"
+  fi
+
+  # Back up existing config with ISO timestamp.
+  if [ -f "${config_file}" ]; then
+    timestamp="$(date -u +%Y%m%dT%H%M%S)"
+    backup_file="${config_file}.${timestamp}"
+    action "Backing up existing config to ${backup_file}"
+    $sudo cp "${config_file}" "${backup_file}"
+  fi
+
+  # Use tenzir to create or update the config with the token.
+  # The merge function combines the existing tenzir config (or empty record)
+  # with the new token, preserving any other settings.
+  if [ -f "${config_file}" ]; then
+    # Read existing config, merge in token, write back.
+    tql_pipeline="load_file \"${config_file}\"
+      read_yaml
+      if this.has("tenzir") and tenzir.type_id() == type_id({}) {
+        tenzir = { token: \"${TENZIR_TOKEN}\"}, ...tenzir }
+      } else {
+        tenzir = { token: \"${TENZIR_TOKEN}\"} }
+      }
+      write_yaml
+      "
+  else
+    # Create new config with token.
+    tql_pipeline="from {tenzir: {token: \"${TENZIR_TOKEN}\"}}
+      write_yaml"
+  fi
+
+  # Write config using tenzir and sudo tee.
+  ${prefix}/bin/tenzir -qq "${tql_pipeline}" | $sudo tee "${config_file}" >/dev/null
+  echo "Token configured in ${config_file}"
+
+  # Restart the service if it's already running (RPM/DEB packages auto-start it).
+  if [ -d /run/systemd/system ] && $sudo systemctl is-active --quiet tenzir-node 2>/dev/null; then
+    action "Restarting tenzir-node to apply token configuration"
+    $sudo systemctl restart tenzir-node
+  fi
 fi
 
 # Test the installation.
@@ -247,7 +301,7 @@ echo "You're all set! Next steps:"
 echo
 echo "  - Ensure that ${bold}${prefix}/bin${normal} is in your \$PATH"
 echo "  - Run a pipeline via ${green}tenzir <pipeline>${normal}"
-if [ "${platform}" = "Linux" ] || [ "${platform}" = "macOS" ]; then
+if [ "${package_format}" = "tarball" ] || [ "${package_format}" = "macOS" ]; then
   echo "  - Spawn a node via ${green}tenzir-node${normal}"
 fi
 if [ -z "${open_source}" ]; then

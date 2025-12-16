@@ -483,8 +483,8 @@ struct where_result_part {
     }
   };
   std::vector<part_slice_info> slices;
-  arrow::Int32Builder offset_builder;
-  arrow::TypedBufferBuilder<bool> null_builder;
+  arrow::Int32Builder offset_builder{tenzir::arrow_memory_pool()};
+  arrow::TypedBufferBuilder<bool> null_builder{tenzir::arrow_memory_pool()};
   int64_t null_count = 0;
   int64_t event_count = 0;
 
@@ -736,7 +736,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
         result.emplace_back(list_type{merged_series.type},
                             check(arrow::ListArray::FromArrays(
                               *offsets, *merged_series.array,
-                              arrow::default_memory_pool(), std::move(validity),
+                              arrow_memory_pool(), std::move(validity),
                               p.null_count)));
         if (merge_status != multi_series::to_series_result::status::ok) {
           /// This produces prettier error messages for the common case

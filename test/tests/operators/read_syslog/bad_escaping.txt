@@ -1,0 +1,18 @@
+{
+  facility: 4,
+  severity: 2,
+  version: 8,
+  timestamp: 2003-10-11T22:14:15.003Z,
+  hostname: "host",
+  app_name: "su",
+  process_id: "asd",
+  message_id: "ID47",
+  structured_data: {
+    "example@12345": {
+      a: 3,
+      b: "{\"c\": \"d\"}",
+      d: "[\"C:\\test\"]",
+    },
+  },
+  message: "Test",
+}

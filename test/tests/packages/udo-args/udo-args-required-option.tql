@@ -1,0 +1,1 @@
+argspkg::require_option "A", required_opt="B"

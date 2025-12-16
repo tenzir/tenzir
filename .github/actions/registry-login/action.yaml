@@ -1,0 +1,123 @@
+name: 'Login to Container Registries'
+description: 'Logs in to container registries (GHCR, Docker Hub, AWS ECR) based on config'
+
+inputs:
+  config:
+    description: 'JSON config containing editions with image-registries arrays'
+    required: true
+  ghcr-token:
+    description: 'GitHub token for GHCR authentication'
+    required: false
+  dockerhub-user:
+    description: 'Docker Hub username'
+    required: false
+  dockerhub-password:
+    description: 'Docker Hub password'
+    required: false
+  aws-role-arn:
+    description: 'AWS IAM role ARN for ECR access'
+    required: false
+    default: 'arn:aws:iam::622024652768:role/ecr-tenzir-ce-github-access'
+  aws-region:
+    description: 'AWS region for ECR'
+    required: false
+    default: 'eu-west-1'
+  ecr-registry:
+    description: 'AWS ECR registry URL to detect'
+    required: false
+    default: '622024652768.dkr.ecr.eu-west-1.amazonaws.com'
+
+outputs:
+  needs-ghcr:
+    description: 'Whether GHCR login was performed'
+    value: ${{ steps.detect.outputs.needs-ghcr }}
+  needs-docker-hub:
+    description: 'Whether Docker Hub login was performed'
+    value: ${{ steps.detect.outputs.needs-docker-hub }}
+  needs-ecr:
+    description: 'Whether ECR login was performed'
+    value: ${{ steps.detect.outputs.needs-ecr }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Detect required registries
+      id: detect
+      shell: bash
+      env:
+        CONFIG: ${{ inputs.config }}
+        ECR_REGISTRY: ${{ inputs.ecr-registry }}
+      run: |
+        # Detect required registries from config
+        # Extract all unique registries from editions[].image-registries
+        registries=$(jq -r '
+          .editions
+          | map(."image-registries" // [])
+          | flatten
+          | unique
+          | .[]' <<< "$CONFIG")
+
+        needs_ghcr=false
+        needs_docker_hub=false
+        needs_ecr=false
+
+        for registry in $registries; do
+          case "$registry" in
+            ghcr.io)
+              needs_ghcr=true
+              ;;
+            docker.io)
+              needs_docker_hub=true
+              ;;
+            "$ECR_REGISTRY")
+              needs_ecr=true
+              ;;
+          esac
+        done
+
+        echo "needs-ghcr=${needs_ghcr}" >> "$GITHUB_OUTPUT"
+        echo "needs-docker-hub=${needs_docker_hub}" >> "$GITHUB_OUTPUT"
+        echo "needs-ecr=${needs_ecr}" >> "$GITHUB_OUTPUT"
+
+        echo "::notice Detected registries - GHCR: ${needs_ghcr}, Docker Hub: ${needs_docker_hub}, ECR: ${needs_ecr}"
+
+    - name: Login to GHCR
+      if: steps.detect.outputs.needs-ghcr == 'true'
+      shell: bash
+      env:
+        GHCR_TOKEN: ${{ inputs.ghcr-token }}
+      run: |
+        if [[ -z "$GHCR_TOKEN" ]]; then
+          echo "::error GHCR token required but not provided"
+          exit 1
+        fi
+        docker login ghcr.io -u tenzir-bot -p "$GHCR_TOKEN"
+
+    - name: Login to Docker Hub
+      if: steps.detect.outputs.needs-docker-hub == 'true'
+      shell: bash
+      env:
+        DOCKERHUB_USER: ${{ inputs.dockerhub-user }}
+        DOCKERHUB_PASSWORD: ${{ inputs.dockerhub-password }}
+      run: |
+        if [[ -z "$DOCKERHUB_USER" || -z "$DOCKERHUB_PASSWORD" ]]; then
+          echo "::error Docker Hub credentials required but not provided"
+          exit 1
+        fi
+        docker login docker.io -u "$DOCKERHUB_USER" -p "$DOCKERHUB_PASSWORD"
+
+    - name: Configure AWS Credentials
+      if: steps.detect.outputs.needs-ecr == 'true'
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708  # v5.1.1
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Login to AWS ECR
+      if: steps.detect.outputs.needs-ecr == 'true'
+      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076  # v2.0.1
+
+# Ref: https://haya14busa.github.io/github-action-brandings/
+branding:
+  icon: 'log-in'
+  color: 'green'

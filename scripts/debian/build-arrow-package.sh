@@ -42,6 +42,9 @@ mkdir -p "${SOURCE_TREE}"
 pushd "${SOURCE_TREE}"
 curl -L "https://github.com/apache/arrow/archive/refs/tags/${ARROW_TAG}.tar.gz" | tar -xz --strip-components=1
 cd cpp
+
+patch -p1 </patches/arrow-cpp-fields-race.patch
+
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
@@ -54,6 +57,8 @@ cmake -B build -S . \
   -DARROW_COMPUTE=ON \
   -DARROW_S3=ON \
   -DARROW_PARQUET=ON \
+  -DARROW_JEMALLOC=OFF \
+  -DARROW_MIMALLOC=OFF \
   -DARROW_WITH_BROTLI=ON \
   -DARROW_WITH_BZ2=ON \
   -DARROW_WITH_LZ4=ON \

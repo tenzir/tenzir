@@ -150,8 +150,9 @@ struct json_printer : printer_base<json_printer> {
       if (options_.tql) {
         out_ = fmt::format_to(
           out_, options_.style.blob, "b{}",
-          detail::json_escape(
-            {reinterpret_cast<const char*>(x.data()), x.size()}));
+          json_string_fmt_wrapper{
+            {reinterpret_cast<const char*>(x.data()), x.size()},
+          });
         return true;
       } else {
         return (*this)(detail::base64::encode(x));
@@ -199,7 +200,7 @@ struct json_printer : printer_base<json_printer> {
         if (should_skip(element, true)) {
           continue;
         }
-        if (!printed_once) {
+        if (not printed_once) {
           indent();
           newline();
           printed_once = true;
@@ -207,7 +208,7 @@ struct json_printer : printer_base<json_printer> {
           list_separator();
           newline();
         }
-        if (!match(element, *this)) {
+        if (not match(element, *this)) {
           return false;
         }
       }
@@ -227,7 +228,7 @@ struct json_printer : printer_base<json_printer> {
         if (should_skip(value, false)) {
           continue;
         }
-        if (!printed_once) {
+        if (not printed_once) {
           indent();
           newline();
           printed_once = true;
@@ -241,18 +242,18 @@ struct json_printer : printer_base<json_printer> {
             out_ = fmt::format_to(out_, options_.style.field, "{}", key);
           } else {
             out_ = fmt::format_to(out_, options_.style.string, "{}",
-                                  detail::json_escape(key));
+                                  json_string_fmt_wrapper{key});
           }
         } else {
           out_ = fmt::format_to(out_, options_.style.field, "{}",
-                                detail::json_escape(key));
+                                json_string_fmt_wrapper{key});
         }
         if (options_.oneline) {
           out_ = fmt::format_to(out_, options_.style.colon, ":");
         } else {
           out_ = fmt::format_to(out_, options_.style.colon, ": ");
         }
-        if (!match(value, *this)) {
+        if (not match(value, *this)) {
           return false;
         }
       }
@@ -315,7 +316,7 @@ struct json_printer : printer_base<json_printer> {
     }
 
     void newline() {
-      if (!options_.oneline) {
+      if (not options_.oneline) {
         out_ = fmt::format_to(out_, "\n{: >{}}", "", indentation_);
       }
     }

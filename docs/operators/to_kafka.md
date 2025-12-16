@@ -135,5 +135,4 @@ to_kafka "metrics", message=this.print_json(), key="server-01"
 
 ## See Also
 
-[`load_kafka`](/reference/operators/load_kafka),
-[`save_kafka`](/reference/operators/save_kafka)
+[`from_kafka`](/reference/operators/from_kafka)

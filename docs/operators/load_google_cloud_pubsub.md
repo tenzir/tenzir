@@ -17,6 +17,12 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 ## Description
 
+:::caution[Deprecated]
+`load_google_cloud_pubsub` is deprecated. Use
+[`from_google_cloud_pubsub`](/reference/operators/from_google_cloud_pubsub),
+which preserves event boundaries and supports attaching metadata.
+:::
+
 The operator acquires raw bytes from a Google Cloud Pub/Sub subscription.
 
 ### `project_id = string`
@@ -60,4 +66,5 @@ read_json
 
 ## See Also
 
+[`from_google_cloud_pubsub`](/reference/operators/from_google_cloud_pubsub),
 [`save_google_cloud_pubsub`](/reference/operators/save_google_cloud_pubsub)

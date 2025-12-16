@@ -41,10 +41,6 @@
 
 #include <yaml-cpp/yaml.h>
 
-#if TENZIR_ENABLE_JEMALLOC
-#  include <jemalloc/jemalloc.h>
-#endif
-
 namespace tenzir::plugins::version {
 
 namespace {
@@ -111,21 +107,18 @@ auto make_version(const caf::settings& settings) -> table_slice {
       entry.field("version").data(version_string);                             \
     }                                                                          \
   } while (false)
-  X(arrow, fmt::format("{}.{}.{}", ARROW_VERSION_MAJOR, ARROW_VERSION_MINOR,
-                       ARROW_VERSION_PATCH));
-  X(boost, fmt::format("{}.{}.{}", BOOST_VERSION / 100000,
-                       BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100));
-  X(caf, fmt::format("{}.{}.{}", CAF_MAJOR_VERSION, CAF_MINOR_VERSION,
-                     CAF_PATCH_VERSION));
-  X(fast_float, "");
-  X(flatbuffers,
-    fmt::format("{}.{}.{}", FLATBUFFERS_VERSION_MAJOR,
-                FLATBUFFERS_VERSION_MINOR, FLATBUFFERS_VERSION_REVISION));
-  X(fmt, fmt::format("{}.{}.{}", FMT_VERSION / 10000, FMT_VERSION % 10000 / 100,
-                     FMT_VERSION % 100));
-#if TENZIR_ENABLE_JEMALLOC
-  X(jemalloc, JEMALLOC_VERSION);
-#endif
+    X(arrow, fmt::format("{}.{}.{}", ARROW_VERSION_MAJOR, ARROW_VERSION_MINOR,
+                         ARROW_VERSION_PATCH));
+    X(boost, fmt::format("{}.{}.{}", BOOST_VERSION / 100000,
+                         BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100));
+    X(caf, fmt::format("{}.{}.{}", CAF_MAJOR_VERSION, CAF_MINOR_VERSION,
+                       CAF_PATCH_VERSION));
+    X(fast_float, "");
+    X(flatbuffers,
+      fmt::format("{}.{}.{}", FLATBUFFERS_VERSION_MAJOR,
+                  FLATBUFFERS_VERSION_MINOR, FLATBUFFERS_VERSION_REVISION));
+    X(fmt, fmt::format("{}.{}.{}", FMT_VERSION / 10000,
+                       FMT_VERSION % 10000 / 100, FMT_VERSION % 100));
 #if TENZIR_ENABLE_LIBUNWIND
   X(libunwind, "");
 #endif

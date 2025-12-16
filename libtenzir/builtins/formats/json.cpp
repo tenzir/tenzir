@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/chunk.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/json_parser.hpp"
@@ -155,7 +156,11 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
       co_yield {};
       continue;
     }
-    parser_impl.parse(*chunk);
+    if constexpr (std::same_as<chunk_ptr, GeneratorValue>) {
+      parser_impl.parse(as_bytes(chunk));
+    } else {
+      parser_impl.parse(*chunk);
+    }
     if (parser_impl.abort_requested) {
       co_return;
     }

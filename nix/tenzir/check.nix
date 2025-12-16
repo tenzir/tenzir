@@ -2,6 +2,7 @@
   lib,
   stdenvNoCC,
   src,
+  tenzirPythonPkgs,
   tenzir-integration-test-deps,
   pkgsBuildBuild,
 }:
@@ -22,28 +23,35 @@ stdenvNoCC.mkDerivation {
       py3 = pkgsBuildBuild.python3.withPackages (ps: [
         ps.datetime
         ps.pyarrow
+        ps.python-box
         ps.trustme
       ]);
       template = path: ''
         if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
-          uvx tenzir-test --python=>=3.12 \\
-            --tenzir-binary "$(command -v tenzir)" \\
-            --tenzir-node-binary "$(dirname "$(command -v tenzir)")/tenzir-node" \\
-            --root "${path}/test" \\
-            -j $NIX_BUILD_CORES
+          tenzir-test \
+            --tenzir-binary ${lib.getBin unchecked}/bin/tenzir \
+            --tenzir-node-binary ${lib.getBin unchecked}/bin/tenzir-node \
+            --root "${src}/test" \
+            -j $NIX_BUILD_CORES \
+            ${path}/test
         fi
       '';
     in
     ''
-      export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
-      # To run the integration tests fully offline, pre-populate uv's cache and
-      # set `UV_NO_INDEX=1` and `UV_OFFLINE=1` before invoking `nix build`.
-      mkdir -p cache
+      export UV_NO_INDEX=1
+      export UV_OFFLINE=1
+      export UV_PYTHON=${lib.getExe py3}
+      mkdir -p cache data state tmp
       export XDG_CACHE_HOME=$PWD/cache
-      ${template "tenzir"}
-      ${lib.concatMapStrings template (builtins.map (x: x.src) (builtins.concatLists unchecked.plugins))}
+      export XDG_DATA_HOME=$PWD/data
+      export XDG_STATE_HOME=$PWD/state
+      export TMPDIR=$PWD/tmp
+      reqs=(--no-deps ${tenzirPythonPkgs.tenzir-wheels}/*.whl)
+      export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="''${reqs[*]}"
+      ${template "."}
+      ${lib.concatMapStrings template (builtins.map (x: x.src or x) (builtins.concatLists unchecked.plugins))}
     '';
 
   # We just symlink all outputs of the unchecked derivation.

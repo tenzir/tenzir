@@ -42,7 +42,7 @@ public:
             return series::null(ip_type{}, arg.length());
           },
           [](const arrow::StringArray& arg) {
-            auto b = ip_type::make_arrow_builder(arrow::default_memory_pool());
+            auto b = ip_type::make_arrow_builder(arrow_memory_pool());
             check(b->Reserve(arg.length()));
             for (auto i = 0; i < arg.length(); ++i) {
               if (arg.IsNull(i)) {
@@ -119,7 +119,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
-        auto b = arrow::BooleanBuilder{};
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
         check(b.Reserve(eval.length()));
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{
@@ -184,7 +184,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
+        auto b = string_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(eval.length()));
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{

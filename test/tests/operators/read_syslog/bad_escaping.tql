@@ -1,0 +1,3 @@
+from {x: r#"<34>8 2003-10-11T22:14:15.003Z host su asd ID47 [example@12345 a="3" b="{"c": "d"}" d="["C:\test"]"] Test"#}
+write_lines
+read_syslog

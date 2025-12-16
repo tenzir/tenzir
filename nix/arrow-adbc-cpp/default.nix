@@ -8,13 +8,13 @@
 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "arrow-adbc-cpp";
-  version = "1.3.0";
+  version = "1.9.0";
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "arrow-adbc";
-    rev = "apache-arrow-adbc-15";
-    hash = "sha256-QRWVmUYNdMxQqe9dIBxcY8pY8aAbKIh3dhX3rzCGYI4=";
+    rev = "apache-arrow-adbc-21";
+    hash = "sha256-yC4Mn0K/bwUwu765cc6waq+xPbPdOoaKL9z9RtOm+9E=";
   };
 
   patches = [

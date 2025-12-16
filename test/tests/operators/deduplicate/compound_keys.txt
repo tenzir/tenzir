@@ -1,0 +1,15 @@
+{
+  foo: 1,
+  bar: "a",
+  idx: 1,
+}
+{
+  foo: 1,
+  bar: "b",
+  idx: 3,
+}
+{
+  foo: 2,
+  bar: "a",
+  idx: 4,
+}

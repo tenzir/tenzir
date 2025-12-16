@@ -100,17 +100,6 @@ LicenseComments: Modified from Folly with downstream changes documented in the f
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-detail-tracepoint-hpp
 
-FileName: ./libtenzir/src/hash/sha1.cpp
-SPDXID: SPDXRef-file-libtenzir-src-hash-sha1-cpp
-FileChecksum: SHA1: 35e404935da882d8b65e15f7999952e27d4d1fce
-FileChecksum: SHA256: d89d57a0e4329b3704770e7728c562022c1e29b5b4bdff45f0a60ee46caad509
-FileCopyrightText: This code is written by kerukuro and released into public domain.
-LicenseConcluded: Unlicense
-LicenseInfoInFile: Unlicense
-LicenseComments: https://github.com/kerukuro/digestpp
-
-Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-src-hash-sha1-cpp
-
 FileName: ./libtenzir/include/tenzir/detail/zip_iterator.hpp
 SPDXID: SPDXRef-file-libtenzir-include-tenzir-detail-zip-iterator-hpp
 FileChecksum: SHA1: 6373e1380dabb95b400f1c41b01d6c96fddfb40d

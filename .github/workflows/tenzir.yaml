@@ -1,12 +1,6 @@
 name: Tenzir
 on:
   workflow_dispatch:
-    inputs:
-      upload-static-binary-to-github:
-        description: "Build the static binary packages and attach to the Workflow Run"
-        type: boolean
-        required: false
-        default: false
   push:
     branches:
       - main
@@ -61,8 +55,6 @@ jobs:
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
-      before-sha: ${{ steps.configure.outputs.before-sha }}
-      before-version: ${{ steps.configure.outputs.before-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
       ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
@@ -72,8 +64,6 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
-      run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
-      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -82,10 +72,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      - name: Fetch to merge-base with origin/main
+      - name: Fetch to merge-base
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin main
-          git fetch origin $(git merge-base origin/main HEAD)
+          base_ref="${GITHUB_BASE_REF:-main}"
+          git fetch origin $(git merge-base "origin/$base_ref" HEAD)
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
@@ -104,13 +96,12 @@ jobs:
           # limit_version. If the version does not exist yet (e.g., because of
           # an intentional break), only check latest. We usually set this to the
           # minimum supported version.
-          limit_version=v4.26.0
+          limit_version=v5.16.0
           if git rev-parse "${limit_version}" --; then
             dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
             dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
-            # We filter out versions older than limit_version, v4.28.0 and
-            # v4.31.0 because they were broken and failed to upload.
-            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v4.28.0' | grep -v 'v4.31.0' | grep -v 'v5.3.0' | grep -v 'v5.3.1')
+            # We filter out versions older than limit_version.
+            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v5.20.2')
             version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
           else
             version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
@@ -122,15 +113,7 @@ jobs:
           id_sha="${{ github.sha }}"
           release_version="${version}"
           build_version="${version}+g${id_sha:0:10}"
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            before_sha="${{ github.event.before }}"
-          else
-            before_sha="$(git merge-base origin/main HEAD)"
-          fi
-          before_version="${version}+g${before_sha:0:10}"
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
-          echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
-          echo "before-version=${before_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
           echo "ref-slug=${GITHUB_REF_SLUG}" >> $GITHUB_OUTPUT
@@ -168,7 +151,6 @@ jobs:
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
-          echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
@@ -176,13 +158,11 @@ jobs:
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir=true" >> $GITHUB_OUTPUT;'
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
-            # Publish tenzir to Pypi.
             echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -195,9 +175,6 @@ jobs:
           # Run only what is requested for a workflow dispatch.
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "::notice Enabling workflow dispatch jobs"
-            if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
-              echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
-            fi
             exit 0
           fi
           # From here on we should be in a pull request.
@@ -207,6 +184,12 @@ jobs:
           fi
           echo "::notice Enabling pull request jobs"
           echo "::notice sourcing configure helpers"
+          # Set the comparison point for detecting changes in pull requests
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base_ref="${GITHUB_BASE_REF:-main}"
+            before_sha=$(git merge-base "origin/$base_ref" HEAD)
+            export before_sha
+          fi
           source ./.github/workflows/configure_helpers.bash
           # Run all checks if this file changed.
           if is_changed .github/workflows/tenzir.yaml; then
@@ -219,14 +202,11 @@ jobs:
           run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
           run_if_changed_default docker-tenzir $run_docker_tenzir \
             "Dockerfile" ".dockerignore" \
+            "scripts/debian/build-*.sh" \
+            "scripts/debian/install-dev-dependencies.sh" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
-          run_if_changed tenzir-nix \
-            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
-            ".github/workflows/nix.nu" \
-            ".github/workflows/nix.yaml" \
-            ".github/workflows/nix-config-base.json"
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-tenzir == 'true'
@@ -252,65 +232,13 @@ jobs:
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker_config="$(jq -c '(.editions[] | .registries) |= [] |
+            docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
               (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
-              .registries) |= ["ghcr.io"]' \
+              ."image-registries") |= ["ghcr.io"]' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
-      - name: Configure Nix
-        id: nix
-        if: steps.configure.outputs.run-tenzir-nix == 'true'
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
-          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            container_tags=('main' "${{ github.sha }}")
-            aliases=('main')
-          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            container_tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
-            aliases=('latest')
-          else
-            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
-            exit 1
-          fi
-          nix_config="$(jq -c \
-            '."container-tags" = $ARGS.positional' \
-            .github/workflows/nix-config-base.json \
-            --args -- "${container_tags[@]}")"
-          nix_config="$(jq -c \
-            '."aliases" = $ARGS.positional' \
-            --args -- "${aliases[@]}" \
-            <<< "${nix_config}")"
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            nix_config="$(jq -c --arg git_tag "${GITHUB_REF#refs/tags/}" \
-              '."git-tag" = $git_tag' \
-              <<< "${nix_config}")"
-          fi
-          # Clear push repos in case we're in a PR, but push the developer
-          # edition to ghcr.
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            nix_config="$(jq -c '(.editions[] | ."package-stores") |= [] |
-              (.editions[] | ."image-registries") |= [] |
-              (.editions[] | select(.name == "tenzir") | ."image-registries") |= ["ghcr.io"]' \
-              <<< "${nix_config}")"
-          fi
-          # Reshape the config so that each edition is in a dedicated config.
-          # This will be supplied as a matrix to the nix job.
-          # We do this because the static editions that we build here are
-          # independent derivations, meaning there is no sharing of build
-          # products.
-          nix_matrix="$(jq -c '.aliases as $aliases | ."container-tags" as $tags | ."git-tag" as $git_tag |
-            .targets = (.editions | map(. as $e |{}|
-              .editions = [$e] |
-              .aliases = $aliases |
-              ."container-tags" = $tags |
-              ."git-tag" = $git_tag)
-            ) | .targets | map({"name": .editions[0].name, "config": .})' \
-            <<< "${nix_config}")"
-          echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
-          echo "::notice nix-matrix = ${nix_matrix}"
 
   policy-enforcement:
     name: Policy Enforcement
@@ -427,18 +355,43 @@ jobs:
         run: |
           scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
-  tenzir-nix:
-    name: Nix (${{ matrix.config.name }})
-    needs:
-      - configure
-    if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
-    uses: ./.github/workflows/nix.yaml
-    strategy:
-      fail-fast: false
-      matrix:
-        config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
+  tenzir-static-aarch64-linux:
+    name: Nix
+    uses: ./.github/workflows/nix-build-job.yaml
     with:
-      config: ${{ toJSON(matrix.config.config) }}
+      runner: ubicloud-standard-4-arm
+      os: linux
+      arch: aarch64
+      attribute: tenzir-static
+    secrets: inherit
+
+  tenzir-static-x86_64-linux:
+    name: Nix
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: ubuntu-latest
+      os: linux
+      arch: x86_64
+      attribute: tenzir-static
+    secrets: inherit
+
+  tenzir-static-arm64-darwin:
+    name: Nix
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: macos-15
+      os: darwin
+      arch: arm64
+      attribute: tenzir-static
+    secrets: inherit
+
+  push-manifest-slim:
+    name: Push tenzir-slim docker manifest
+    needs: [tenzir-static-aarch64-linux, tenzir-static-x86_64-linux]
+    uses: ./.github/workflows/push-manifest.yaml
+    with:
+      source-images: "${{ needs.tenzir-static-aarch64-linux.outputs.images }} ${{ needs.tenzir-static-x86_64-linux.outputs.images }}"
+      arch-suffixes: "aarch64 x86_64"
     secrets: inherit
 
   tenzir:
@@ -511,16 +464,6 @@ jobs:
           #    is only needed inside of containerized jobs.
           #    -> https://github.com/tailscale/tailscale/issues/11039
           tailscaled-args: --tun=userspace-networking --state=$HOME/tailscaled.state --statedir=$HOME/var/lib/tailscale
-      - name: Publish tenzir.spdx.json to GitHub Release
-        if: ${{ github.event_name == 'release' && matrix.tenzir.name == 'macOS' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "tenzir.spdx.json"
-          asset_name: "tenzir.spdx.json"
-          asset_content_type: text/plain
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -653,78 +596,140 @@ jobs:
     needs:
       - configure
       - docker-tenzir
+      - tenzir-static-x86_64-linux
     if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.12"]
         os: [ubuntu-latest]
-        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d  # v7.1.0
         with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Run poetry install
+          version: "0.9.2"
+          python-version: ${{ matrix.python-version }}
+      - name: Install Nix (for static binaries)
+        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
+        with:
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          # Avoid pushing the full enterprise edition.
+          pushFilter: "tenzir-ee"
+      - name: Install workspace dependencies
         working-directory: python
         run: |
-          poetry install -E module
+          uv sync --all-packages --group dev
       - name: Run unit tests
         working-directory: python
         run: |
-          poetry run pytest
+          uv run --all-packages --group dev pytest
       - name: Run tests in Docker
         working-directory: python
         if: matrix.os == 'ubuntu-latest'
         run: |
           export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          ./docker-poetry-run.sh pytest
+          ./docker-uv-run.sh --all-packages --group dev pytest
       - name: Build package
         working-directory: python
         run: |
-          poetry build
+          uv build --wheel --all-packages
 
   python-package:
     needs:
-      - python
       - configure
+      - tenzir-static-arm64-darwin
+      - tenzir-static-aarch64-linux
+      - tenzir-static-x86_64-linux
     if: ${{ needs.configure.outputs.run-python-package == 'true' }}
     name: Python Package
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.10"]
-        os: ["ubuntu-latest"]
-        poetry-version: ["2.1.2"]
+        python-version: ["3.12"]
+        os: ["macos-15", "ubuntu-latest", "ubicloud-standard-4-arm"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d  # v7.1.0
         with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Configure PyPI
+          version: "0.9.2"
+          python-version: ${{ matrix.python-version }}
+      - name: Install Nix (for static binaries)
+        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad  # v16
+        with:
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          # Avoid pushing the full enterprise edition.
+          pushFilter: "tenzir-ee"
+      - name: Download signed tarball (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: tenzir-signed-tarball-arm64-darwin
+          path: ${{ runner.temp }}/signed-tarball
+      - name: Set signed tarball path (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          TARBALL_PATH="$(ls ${{ runner.temp }}/signed-tarball/*.tar.gz)"
+          echo "TENZIR_SIGNED_TARBALL_PATH=$TARBALL_PATH" >> "$GITHUB_ENV"
+      - name: Build sdist
         working-directory: python
         run: |
-          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
+          uv build --sdist --package tenzir-common
+          uv build --sdist --package tenzir
+      - name: Build wheel for validation
+        working-directory: python
+        run: |
+          uv build --wheel --package tenzir-common
+          uv build --wheel --package tenzir
+      - name: Validate installed wheel exposes working tenzir binary
+        working-directory: python
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          tenzir version
+      - name: Remove platform independent duplicate packages
+        if: ! ( runner.os == 'Linux' && runner.arch == 'X64')
+        working-directory: python
+        run: |
+          rm dist/*.tar.gz
+          rm dist/tenzir-common*.whl
       - name: Publish to PyPI
+        if: github.event_name == 'release'
         working-directory: python
         run: |
-          poetry publish --build --no-interaction
+          uv publish --token "${{ secrets.PYPI_TOKEN }}" dist/*
+      - name: Publish to Test PyPI
+        if: github.event_name != 'release'
+        working-directory: python
+        run: |
+          uv publish --publish-url https://test.pypi.org/legacy/ --token "${{ secrets.TEST_PYPI_TOKEN }}" dist/*
 
   pass-branch-protections:
     needs:
@@ -737,7 +742,9 @@ jobs:
       # TODO: Re-enable this after v4.26 was released.
       # - regression-tests
       - tenzir
-      - tenzir-nix
+      - tenzir-static-arm64-darwin
+      - tenzir-static-aarch64-linux
+      - tenzir-static-x86_64-linux
     if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Pass Branch Protections

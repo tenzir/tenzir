@@ -44,8 +44,12 @@ public:
     return XXH64(bytes.data(), bytes.size(), seed);
   }
 
-  explicit xxh64(seed_type seed = 0) noexcept {
-    XXH64_reset(&state_, seed);
+  explicit xxh64(seed_type seed = 0) noexcept : seed_{seed} {
+    reset();
+  }
+
+  void reset() noexcept {
+    XXH64_reset(&state_, seed_);
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
@@ -68,6 +72,7 @@ public:
 
 private:
   XXH64_state_t state_;
+  seed_type seed_ = 0;
 };
 
 class xxh3_64 {
@@ -88,14 +93,18 @@ public:
     return XXH3_64bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
-  xxh3_64() noexcept {
+  xxh3_64() noexcept : seed_{0} {
     XXH3_INITSTATE(&state_);
-    XXH3_64bits_reset(&state_);
+    reset();
   }
 
-  explicit xxh3_64(seed_type seed) noexcept {
+  explicit xxh3_64(seed_type seed) noexcept : seed_{seed} {
     std::memset(&state_, 0, sizeof(state_));
-    XXH3_64bits_reset_withSeed(&state_, seed);
+    reset();
+  }
+
+  void reset() noexcept {
+    XXH3_64bits_reset_withSeed(&state_, seed_);
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
@@ -114,6 +123,7 @@ public:
 
 private:
   XXH3_state_t state_;
+  seed_type seed_ = 0;
 };
 
 class xxh3_128 {
@@ -134,14 +144,18 @@ public:
     return XXH3_128bits_withSeed(bytes.data(), bytes.size(), seed);
   }
 
-  xxh3_128() noexcept {
+  xxh3_128() noexcept : seed_{0} {
     XXH3_INITSTATE(&state_);
-    XXH3_128bits_reset(&state_);
+    reset();
   }
 
-  explicit xxh3_128(seed_type seed) noexcept {
+  explicit xxh3_128(seed_type seed) noexcept : seed_{seed} {
     std::memset(&state_, 0, sizeof(state_));
-    XXH3_128bits_reset_withSeed(&state_, seed);
+    reset();
+  }
+
+  void reset() noexcept {
+    XXH3_128bits_reset_withSeed(&state_, seed_);
   }
 
   void add(std::span<const std::byte> bytes) noexcept {
@@ -160,6 +174,7 @@ public:
 
 private:
   XXH3_state_t state_;
+  seed_type seed_ = 0;
 };
 
 } // namespace tenzir

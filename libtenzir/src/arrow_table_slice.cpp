@@ -65,9 +65,10 @@ class record_batch_decoder final {
 public:
   record_batch_decoder() noexcept
     : decoder_{make_record_batch_listener(
-        [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
-          record_batch_ = std::move(record_batch);
-        })} {
+                 [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
+                   record_batch_ = std::move(record_batch);
+                 }),
+               arrow_ipc_read_options()} {
     // nop
   }
 
@@ -353,7 +354,7 @@ transform_columns(type schema,
           = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = check(nested_array.Flatten()),
+          .arrays = check(nested_array.Flatten(tenzir::arrow_memory_pool())),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
@@ -391,7 +392,7 @@ transform_columns(type schema,
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = check(struct_array->Flatten()),
+    .arrays = check(struct_array->Flatten(tenzir::arrow_memory_pool())),
   };
   const auto num_columns
     = detail::narrow_cast<size_t>(struct_array->num_fields());
@@ -522,7 +523,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
           = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = check(nested_array.Flatten()),
+          .arrays = check(nested_array.Flatten(tenzir::arrow_memory_pool())),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :

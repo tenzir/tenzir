@@ -77,7 +77,7 @@ auto assign(std::span<const ast::field_path::segment> left, series right,
     if (array.null_count() == 0) {
       return array.fields();
     }
-    return check(array.Flatten());
+    return check(array.Flatten(tenzir::arrow_memory_pool()));
   });
   auto index = std::optional<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {
@@ -302,6 +302,9 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
       auto result = std::vector<table_slice>{};
       result.push_back(assign(left, std::move(right), input, dh, position));
       return result;
+    },
+    [&](const ast::dollar_var&) -> std::vector<table_slice> {
+      TENZIR_UNREACHABLE();
     });
 }
 

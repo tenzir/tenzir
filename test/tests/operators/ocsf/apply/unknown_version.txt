@@ -1,7 +1,0 @@
-warning: dropping events with unknown OCSF version
- --> tests/operators/ocsf/apply/unknown_version.tql:2:1
-  |
-2 | ocsf::apply
-  | ~~~~~~~~~~~ 
-  |
-  = note: found "0.0.0"

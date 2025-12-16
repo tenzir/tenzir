@@ -11,6 +11,7 @@ CMakeUserPresets.json
 build/
 compile_commands.json
 nix/
+!/nix/overrides/arrow-cpp-fields-race.patch
 !README.md
 !VERSIONING.md
 cmake-build-*/

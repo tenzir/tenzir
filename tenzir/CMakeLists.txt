@@ -1,9 +1,24 @@
-add_executable(tenzir tenzir.cpp)
+add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
+# Static binaries are not fully static on macOS, they still need to link to the
+# apple system libraries dynamically.
+if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none" AND NOT APPLE)
+  target_link_options(
+    tenzir
+    BEFORE
+    PRIVATE
+    LINKER:--wrap=malloc
+    LINKER:--wrap=calloc
+    LINKER:--wrap=realloc
+    LINKER:--wrap=reallocarray
+    LINKER:--wrap=aligned_alloc
+    LINKER:--wrap=malloc_usable_size
+    LINKER:--wrap=memalign
+    LINKER:--wrap=posix_memalign
+    LINKER:--wrap=free)
+endif ()
+
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
-if (TENZIR_ENABLE_JEMALLOC)
-  target_link_libraries(tenzir PRIVATE jemalloc::jemalloc_)
-endif ()
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
 add_executable(tenzir::tenzir ALIAS tenzir)
 
@@ -66,9 +81,6 @@ TenzirInstallExampleConfiguration(
 
 option(TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
        "Integrate with init systems when installing" ON)
-add_feature_info(
-  "TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION" TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
-  "integrate with init systems when installing.")
 
 if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
@@ -124,19 +136,17 @@ endif ()
 
 set(TENZIR_PLUGINS
     ${plugins_default}
-    CACHE STRING "Specify a list of plugins to build with Tenzir (supports
+    CACHE STRING "Specify a list of plugin paths to build with Tenzir (supports
     globbing)")
 set(TENZIR_PLUGINS_BLACKLIST
-    ${plugins_default}
+    ""
     CACHE
       STRING
-      "Specify a list of plugins to remove after the globs in TENZIR_PLUGINS are expanded."
-)
+      "Specify a list of plugin names to remove after the globs in TENZIR_PLUGINS
+      are expanded. (does NOT support globbing)")
 cmake_dependent_option(
   TENZIR_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
   "NOT TENZIR_ENABLE_STATIC_EXECUTABLE" ON)
-add_feature_info("TENZIR_ENABLE_STATIC_PLUGINS" TENZIR_ENABLE_STATIC_PLUGINS
-                 "force plugins to be linked statically.")
 if (TENZIR_PLUGINS)
   foreach (plugin_source_glob IN LISTS TENZIR_PLUGINS)
     if (IS_ABSOLUTE "${plugin_source_glob}")
@@ -166,58 +176,87 @@ if (TENZIR_PLUGINS)
   endforeach ()
 endif ()
 
+# -- ca-certificates -----------------------------------------------------------
+
+# On macOS there is no system install ca-certificate bundle by default, so we
+# make it possbile to bundle one (usually curl's).
+if (TENZIR_CACERT)
+  install(
+    FILES "${TENZIR_CACERT}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/ca-bundle.crt"
+    COMPONENT Runtime)
+endif ()
+
 # -- integration tests ---------------------------------------------------------
 
 # Helper function to build tenzir-test command invocations
-function(tenzir_build_test_command out_var)
-  cmake_parse_arguments(ARG "" "TEST_ROOT" "EXTRA_ENV;EXTRA_ARGS;SELECTION" ${ARGN})
+function (tenzir_build_test_command out_var)
+  cmake_parse_arguments(ARG "" "TEST_ROOT" "EXTRA_ENV;EXTRA_ARGS;SELECTION"
+                        ${ARGN})
 
   set(cmd
-      "${CMAKE_COMMAND}" "-E" "chdir" "${CMAKE_SOURCE_DIR}/test"
-      "${CMAKE_COMMAND}" "-E" "env" "--modify"
+      "${CMAKE_COMMAND}"
+      "-E"
+      "chdir"
+      "${CMAKE_SOURCE_DIR}/test"
+      "${CMAKE_COMMAND}"
+      "-E"
+      "env"
+      "--modify"
       "PATH=path_list_prepend:$<TARGET_FILE_DIR:tenzir::tenzir>")
 
   # Add extra environment variables if provided
-  foreach(env_var IN LISTS ARG_EXTRA_ENV)
+  foreach (env_var IN LISTS ARG_EXTRA_ENV)
     list(APPEND cmd "${env_var}")
-  endforeach()
+  endforeach ()
 
-  list(APPEND cmd
-      "--"
-      "${TENZIR_UV_PATH}" "tool" "run" "--python" ">=3.12" "tenzir-test"
-      "--tenzir-binary" "$<TARGET_FILE:tenzir::tenzir>"
-      "--tenzir-node-binary" "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node")
+  list(
+    APPEND
+    cmd
+    "--"
+    "${TENZIR_UV_PATH}"
+    "tool"
+    "run"
+    "--python"
+    ">=3.12"
+    "tenzir-test"
+    "--tenzir-binary"
+    "$<TARGET_FILE:tenzir::tenzir>"
+    "--tenzir-node-binary"
+    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node")
 
   # Add extra arguments if provided
-  if(ARG_EXTRA_ARGS)
+  if (ARG_EXTRA_ARGS)
     list(APPEND cmd ${ARG_EXTRA_ARGS})
-  endif()
+  endif ()
 
   # Build test selection (positional arguments to tenzir-test)
   set(selection)
 
-  if(ARG_TEST_ROOT)
+  if (ARG_TEST_ROOT)
     list(APPEND selection "${ARG_TEST_ROOT}")
-  elseif(ARG_SELECTION)
+  elseif (ARG_SELECTION)
     list(APPEND selection ${ARG_SELECTION})
-  else()
+  else ()
     # Default: all projects (test root + contrib plugins)
     list(APPEND cmd "--all-projects")
     list(APPEND selection "--root" "${CMAKE_SOURCE_DIR}/test")
 
     # Add contrib/tenzir-plugins/*/test directories if they exist
-    if(EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
+    if (EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
       file(GLOB plugin_test_dirs
            "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
-      if(plugin_test_dirs)
+      if (plugin_test_dirs)
         list(APPEND selection ${plugin_test_dirs})
-      endif()
-    endif()
-  endif()
+      endif ()
+    endif ()
+  endif ()
 
   list(APPEND cmd ${selection})
-  set(${out_var} "${cmd}" PARENT_SCOPE)
-endfunction()
+  set(${out_var}
+      "${cmd}"
+      PARENT_SCOPE)
+endfunction ()
 
 add_test(NAME build-tenzir
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
@@ -241,21 +280,24 @@ foreach (dir IN LISTS _integration_test_dirs)
   if ("${dir}" MATCHES "^inputs/?$")
     continue()
   endif ()
-  tenzir_build_test_command(_test_cmd
-    TEST_ROOT "${_integration_tests_root}/${dir}/")
-  add_test(
-    NAME "tenzir/${dir}"
-    COMMAND ${_test_cmd})
+  tenzir_build_test_command(_test_cmd TEST_ROOT
+                            "${_integration_tests_root}/${dir}/")
+  add_test(NAME "tenzir/${dir}" COMMAND ${_test_cmd})
   set_tests_properties(
     "tenzir/${dir}"
-    PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/test" FIXTURES_REQUIRED
-               "tenzir_integration_test_fixture" LABELS integration
-               RUN_SERIAL TRUE)
+    PROPERTIES WORKING_DIRECTORY
+               "${CMAKE_SOURCE_DIR}/test"
+               FIXTURES_REQUIRED
+               "tenzir_integration_test_fixture"
+               LABELS
+               integration
+               RUN_SERIAL
+               TRUE)
 endforeach ()
 
 add_custom_target(integration-tests DEPENDS tenzir)
-tenzir_build_test_command(_integration_tests_cmd
-  EXTRA_ARGS "--jobs" "4")
+tenzir_build_test_command(_integration_tests_cmd EXTRA_ARGS "--jobs" "4"
+                          "--summary")
 add_custom_command(
   TARGET integration-tests
   POST_BUILD
@@ -266,8 +308,7 @@ add_custom_target(integration)
 add_dependencies(integration integration-tests)
 
 add_custom_target(update-integration DEPENDS tenzir)
-tenzir_build_test_command(_update_integration_cmd
-  EXTRA_ARGS "--update")
+tenzir_build_test_command(_update_integration_cmd EXTRA_ARGS "--update")
 add_custom_command(
   TARGET update-integration
   POST_BUILD
@@ -280,13 +321,14 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
   endif ()
 
   add_custom_target(integration-coverage DEPENDS tenzir)
-  tenzir_build_test_command(_integration_coverage_cmd
+  tenzir_build_test_command(
+    _integration_coverage_cmd
     EXTRA_ENV
-      "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
-      "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+    "CMAKE_COVERAGE_OUTPUT_DIRECTORY=${CMAKE_COVERAGE_OUTPUT_DIRECTORY}"
+    "COVERAGE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
     EXTRA_ARGS
-      "--coverage"
-      "--coverage-source-dir=${CMAKE_SOURCE_DIR}")
+    "--coverage"
+    "--coverage-source-dir=${CMAKE_SOURCE_DIR}")
   add_custom_command(
     TARGET integration-coverage
     POST_BUILD
@@ -306,9 +348,15 @@ endif ()
 if (BUILD_TESTING)
   # Get all tests using CTest's own test enumeration
   # This approach is simpler and avoids directory traversal issues
-  get_property(_all_tests_prop DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY TESTS)
+  get_property(
+    _all_tests_prop
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    PROPERTY TESTS)
   foreach (_test IN LISTS _all_tests_prop)
-    get_property(_labels TEST "${_test}" PROPERTY LABELS)
+    get_property(
+      _labels
+      TEST "${_test}"
+      PROPERTY LABELS)
     if (_labels AND "integration" IN_LIST _labels)
       list(APPEND _integration_tests "${_test}")
     else ()
@@ -318,8 +366,8 @@ if (BUILD_TESTING)
   if (_integration_tests AND _non_integration_tests)
     list(REMOVE_DUPLICATES _non_integration_tests)
     foreach (_integration_test IN LISTS _integration_tests)
-      set_property(TEST "${_integration_test}" PROPERTY DEPENDS
-                   "${_non_integration_tests}")
+      set_property(TEST "${_integration_test}"
+                   PROPERTY DEPENDS "${_non_integration_tests}")
     endforeach ()
   endif ()
   unset(_integration_tests)

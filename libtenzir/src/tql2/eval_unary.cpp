@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 #include "tenzir/type.hpp"
@@ -55,7 +56,7 @@ struct EvalUnOp<ast::unary_op::neg, T> {
 
   static auto eval(const type_to_arrow_array_t<T>& x, auto warn)
     -> std::shared_ptr<type_to_arrow_array_t<U>> {
-    auto b = type_to_arrow_builder_t<U>{};
+    auto b = type_to_arrow_builder_t<U>{tenzir::arrow_memory_pool()};
     check(b.Reserve(x.length()));
     auto overflow = false;
     for (auto i = int64_t{0}; i < x.length(); ++i) {
@@ -95,7 +96,7 @@ template <>
 struct EvalUnOp<ast::unary_op::neg, duration_type> {
   static auto eval(const arrow::DurationArray& x, auto warn)
     -> std::shared_ptr<arrow::DurationArray> {
-    auto b = duration_type::make_arrow_builder(arrow::default_memory_pool());
+    auto b = duration_type::make_arrow_builder(arrow_memory_pool());
     check(b->Reserve(x.length()));
     auto overflow = false;
     for (auto i = int64_t{0}; i < x.length(); ++i) {

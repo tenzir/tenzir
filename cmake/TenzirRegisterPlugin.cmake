@@ -676,8 +676,8 @@ function (TenzirRegisterPlugin)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
-    # plugins, as building external plugins should work without needing to enable
-    # this explicitly.
+    # plugins, as building external plugins should work without needing to
+    # enable this explicitly.
     set(BUILD_SHARED_LIBS
         ON
         PARENT_SCOPE)
@@ -718,7 +718,8 @@ function (TenzirRegisterPlugin)
     target_link_libraries(${PLUGIN_TARGET} PUBLIC ${PLUGIN_TARGET}-fbs)
   endif ()
 
-  # Install an example configuration file, if it exists at the plugin project root.
+  # Install an example configuration file, if it exists at the plugin project
+  # root.
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example")
     TenzirInstallExampleConfiguration(
       ${PLUGIN_TARGET}
@@ -734,7 +735,8 @@ function (TenzirRegisterPlugin)
       COMPONENT Runtime)
     if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
       # Copy schemas from bundled plugins to the build directory so they can be
-      # used from a Tenzir in a build directory (instead if just an installed Tenzir).
+      # used from a Tenzir in a build directory (instead if just an installed
+      # Tenzir).
       file(
         GLOB_RECURSE
         plugin_schema_files
@@ -814,6 +816,26 @@ function (TenzirRegisterPlugin)
   endif ()
 endfunction ()
 
+function (add_variable_to_summary name)
+  set_property(GLOBAL APPEND PROPERTY "TENZIR_SUMMARY_VARS" "${name}")
+endfunction ()
+
+function (print_variables_aligned _variableNames)
+  list(SORT _variableNames)
+  unset(_variables_summary)
+  foreach (_variableName ${_variableNames})
+    set(_msg " * ${_variableName}")
+    string(APPEND _msg
+           "                                                                ")
+    string(LENGTH ${${_variableName}} _vallen)
+    math(EXPR _offset "65 - ${_vallen}")
+    string(SUBSTRING ${_msg} 0 ${_offset} _msg2)
+    string(APPEND _msg2 "${${_variableName}}")
+    string(APPEND _variables_summary "${_msg2}\n")
+  endforeach ()
+  message("${_variables_summary}")
+endfunction ()
+
 # Helper utility for printing the status of dependencies.
 function (dependency_summary name what category)
   get_property(TENZIR_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
@@ -858,8 +880,14 @@ endfunction ()
 function (TenzirPrintSummary)
   get_directory_property(_is_subproject PARENT_DIRECTORY)
   if (NOT _is_subproject)
-    feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
-                    INCLUDE_QUIET_PACKAGES)
+    message("")
+    message(STATUS "Configuration options:\n")
+    get_cmake_property(_enable_options VARIABLES)
+    list(FILTER _enable_options INCLUDE REGEX "^TENZIR_ENABLE_.*")
+    list(FILTER _enable_options EXCLUDE REGEX ".*_AVAILABLE$")
+    print_variables_aligned("${_enable_options}")
+    get_property(_summary_vars GLOBAL PROPERTY "TENZIR_SUMMARY_VARS")
+    print_variables_aligned("${_summary_vars}")
     unset(build_summary)
     # In case we're building a plugin.
     if (TENZIR_PREFIX_DIR)
@@ -882,7 +910,9 @@ function (TenzirPrintSummary)
       list(APPEND build_summary " * Build Type: ${CMAKE_BUILD_TYPE}")
     endif ()
     list(APPEND build_summary " * Source Directory: ${CMAKE_SOURCE_DIR}")
-    list(APPEND build_summary " * Binary Directory: ${CMAKE_BINARY_DIR}\n")
+    list(APPEND build_summary " * Binary Directory: ${CMAKE_BINARY_DIR}")
+    list(APPEND build_summary
+         " * Install Prefix Directory: ${CMAKE_INSTALL_PREFIX}\n")
     list(APPEND build_summary " * System Name: ${CMAKE_SYSTEM_NAME}")
     list(APPEND build_summary " * CPU: ${CMAKE_SYSTEM_PROCESSOR}")
     foreach (lang IN ITEMS C CXX)
@@ -932,7 +962,7 @@ endfunction ()
 function (TenzirOnFileChange variable access value current stack)
   # Print the feature and build summary if we're not a subproject.
   if ("${current}" STREQUAL "")
-    tenzirprintsummary()
+    TenzirPrintSummary()
   endif ()
 endfunction ()
 variable_watch(CMAKE_CURRENT_LIST_DIR TenzirOnFileChange)

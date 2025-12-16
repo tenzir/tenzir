@@ -177,6 +177,8 @@ private:
 
 auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
+  // Ensure the signal handler object file is linked (needed for static builds).
+  signal_handlers_anchor();
   arrow::util::InitializeUTF8();
 #if ARROW_VERSION_MAJOR >= 21
   if (auto status = arrow::compute::Initialize(); not status.ok()) {
@@ -185,16 +187,6 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
 #endif
-  // Set a signal handler for fatal conditions. Prints a backtrace if support
-  // for that is enabled.
-  if (SIG_ERR == std::signal(SIGSEGV, fatal_handler)) [[unlikely]] {
-    fmt::print(stderr, "failed to set signal handler for SIGSEGV\n");
-    return EXIT_FAILURE;
-  }
-  if (SIG_ERR == std::signal(SIGABRT, fatal_handler)) [[unlikely]] {
-    fmt::print(stderr, "failed to set signal handler for SIGABRT\n");
-    return EXIT_FAILURE;
-  }
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
@@ -433,7 +425,7 @@ auto main(int argc, char** argv) -> int try {
         auto next = base->clone();
         for (auto& [name, def] : to_add) {
           next->add(std::string{entity_pkg_cfg}, name,
-                    user_defined_operator{std::move(def)});
+                    user_defined_operator{std::move(def), {}, {}});
         }
         guard.publish(std::shared_ptr<const registry>{std::move(next)});
       }
@@ -465,7 +457,7 @@ auto main(int argc, char** argv) -> int try {
         {
           int signum = 0;
           sigwait(&sigset, &signum);
-          TENZIR_DEBUG("received signal {}", signum);
+          TENZIR_WARN("received signal {}", signum);
           if (!stop) {
             caf::anon_mail(atom::internal_v, atom::signal_v, signum)
               .urgent().send(reflector.get());

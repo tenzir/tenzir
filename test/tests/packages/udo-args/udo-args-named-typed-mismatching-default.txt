@@ -1,0 +1,6 @@
+error: argument `value` must be of type `string` (got `uint64`)
+  = usage: argspkg::typed_named_mismatching_default [value=string]
+  = note: parameters:
+            named:
+              name   type    default  description
+              value  string  42       Defaults to a number even though a string is required

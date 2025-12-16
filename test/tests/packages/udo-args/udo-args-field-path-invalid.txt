@@ -1,0 +1,12 @@
+error: expected a selector
+ --> tests/packages/udo-args/udo-args-field-path-invalid.tql:6:20
+  |
+6 | argspkg::set_field "y", "hello"
+  |                    ^^^ 
+  |
+  = usage: argspkg::set_field field:field, value:any
+  = note: parameters:
+            positional:
+              name   type   default  description
+              field  field  -        The field to set
+              value  any    -        The value to set

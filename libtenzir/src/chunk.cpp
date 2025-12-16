@@ -27,6 +27,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <fcntl.h>
@@ -192,6 +193,9 @@ private:
 // -- constructors, destructors, and assignment operators ----------------------
 
 chunk::~chunk() noexcept {
+  chunk::count.fetch_sub(1, std::memory_order_relaxed);
+  chunk::bytes.fetch_sub(detail::narrow<int64_t>(view_.size()),
+                         std::memory_order_relaxed);
   const auto* data = view_.data();
   const auto sz = view_.size();
   TENZIR_TRACEPOINT(chunk_delete, data, sz);
@@ -210,13 +214,13 @@ chunk_ptr chunk::make(const void* data, size_type size, deleter_type&& deleter,
 
 chunk_ptr chunk::make(view_type view, deleter_type&& deleter,
                       chunk_metadata metadata) noexcept {
-  return chunk_ptr{new chunk{view, std::move(deleter), std::move(metadata)},
-                   false};
+  auto* ptr = new chunk{view, std::move(deleter), std::move(metadata)};
+  return chunk_ptr{{ptr, false}, view};
 }
 
 chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
                       chunk_metadata metadata) noexcept {
-  if (!buffer) {
+  if (! buffer) {
     return nullptr;
   }
   const auto* data = buffer->data();
@@ -230,8 +234,8 @@ chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
 }
 
 chunk_ptr chunk::make_empty() noexcept {
-  return chunk_ptr{new chunk{view_type{}, deleter_type{}, chunk_metadata{}},
-                   false};
+  constexpr static auto buf = std::byte{};
+  return chunk_ptr{nullptr, {&buf, 0}};
 }
 
 auto chunk::copy(const void* data, size_t size, chunk_metadata metadata)
@@ -252,7 +256,7 @@ chunk::mmap(const std::filesystem::path& filename, size_type size,
   }
   // Figure out the file size if not provided.
   if (size == 0) {
-    struct stat filestat {};
+    struct stat filestat{};
     if (::fstat(fd, &filestat) != 0) {
       ::close(fd);
       return caf::make_error(ec::filesystem_error,
@@ -292,7 +296,7 @@ caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
   buffer.resize(max_length);
   auto length
     = codec->Compress(bytes_size, bytes_data, max_length, buffer.data());
-  if (!length.ok()) {
+  if (! length.ok()) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to compress chunk: {}",
                                        length.status().ToString()));
@@ -315,7 +319,7 @@ chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
   auto length = codec->Decompress(bytes_size, bytes_data,
                                   detail::narrow_cast<int64_t>(buffer.size()),
                                   buffer.data());
-  if (!length.ok()) {
+  if (! length.ok()) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to decompress chunk: {}",
                                        length.status().ToString()));
@@ -342,7 +346,7 @@ chunk::size_type chunk::size() const noexcept {
 caf::expected<chunk::size_type> chunk::incore() const noexcept {
 #if TENZIR_LINUX || TENZIR_BSD || TENZIR_MACOS
   auto sz = sysconf(_SC_PAGESIZE);
-  auto pages = (size() / sz) + !!(size() % sz);
+  auto pages = (size() / sz) + ! ! (size() % sz);
 #  if TENZIR_LINUX
   auto buf = std::vector(pages, static_cast<unsigned char>(0));
 #  else
@@ -397,7 +401,7 @@ chunk_ptr chunk::slice(view_type view) const {
 
 auto as_arrow_buffer(chunk_ptr chunk) noexcept
   -> std::shared_ptr<arrow::Buffer> {
-  if (!chunk) {
+  if (! chunk) {
     return nullptr;
   }
   const auto* data = reinterpret_cast<const uint8_t*>(chunk->data());
@@ -419,13 +423,6 @@ as_arrow_file(chunk_ptr chunk) noexcept {
 }
 
 // -- concepts -----------------------------------------------------------------
-
-std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
-  if (!x) {
-    return {};
-  }
-  return as_bytes(*x);
-}
 
 caf::error write(const std::filesystem::path& filename, const chunk_ptr& x) {
   return io::save(filename, as_bytes(x));
@@ -464,6 +461,9 @@ chunk::chunk(view_type view, deleter_type&& deleter,
   : view_{view}, deleter_{std::move(deleter)}, metadata_{std::move(metadata)} {
   auto data = view.data();
   auto sz = view.size();
+  chunk::count.fetch_add(1, std::memory_order_relaxed);
+  chunk::bytes.fetch_add(detail::narrow<int64_t>(view.size()),
+                         std::memory_order_relaxed);
   TENZIR_TRACEPOINT(chunk_make, data, sz);
 }
 
@@ -518,6 +518,18 @@ auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
 
 auto size(const chunk_ptr& chunk) -> uint64_t {
   return chunk ? chunk->size() : 0;
+}
+
+auto chunk_ptr::proxy::metadata() const noexcept -> const chunk_metadata& {
+  if (ptr_) {
+    return ptr_->metadata();
+  }
+  constexpr static auto no_metadata = chunk_metadata{};
+  return no_metadata;
+}
+
+auto chunk_ptr::proxy::unique() const noexcept -> bool {
+  return ptr_ and ptr_->unique();
 }
 
 } // namespace tenzir

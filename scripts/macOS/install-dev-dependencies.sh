@@ -22,6 +22,7 @@ brew install --overwrite \
   librdkafka \
   libunwind-headers \
   llvm@20 \
+  mimalloc \
   ninja \
   nmap \
   pandoc \

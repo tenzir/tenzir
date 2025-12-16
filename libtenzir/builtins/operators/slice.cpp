@@ -200,7 +200,7 @@ public:
     TENZIR_ASSERT(stride > 0);
     constexpr auto make_stride_index
       = [](const int64_t offset, const int64_t rows, const int64_t stride) {
-          auto b = int64_type::make_arrow_builder(arrow::default_memory_pool());
+          auto b = int64_type::make_arrow_builder(arrow_memory_pool());
           check(b->Reserve((rows + 1) / stride));
           for (auto i = offset % stride; i < rows; i += stride) {
             check(b->Append(i));
@@ -244,7 +244,7 @@ public:
     }
     const auto make_stride_index = [&](const int64_t offset,
                                        const int64_t rows) {
-      auto stride_builder = arrow::Int64Builder{};
+      auto stride_builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
       const auto reserve_result = stride_builder.Reserve((rows + 1) / -stride);
       TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
       for (auto i = offset % -stride; i < rows; i += -stride) {

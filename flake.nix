@@ -8,15 +8,35 @@
     ];
   };
 
-  inputs.isReleaseBuild.url = "github:boolean-option/false";
-  inputs.nixpkgs.url = "github:tobim/nixpkgs/11ffa81bffbcb0e71e77acacc7be74273aa131f4";
-  inputs.flake-compat.url = "github:edolstra/flake-compat";
-  inputs.flake-compat.flake = false;
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nix2container.url = "github:nlewo/nix2container";
-  inputs.nix2container.inputs.nixpkgs.follows = "nixpkgs";
-  inputs.sbomnix.url = "github:tiiuae/sbomnix";
-  inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";
+  inputs = {
+    isReleaseBuild.url = "github:boolean-option/false";
+    nixpkgs.url = "github:tobim/nixpkgs/ba4f04ba90aa2283c6aefa88de23cb141d2137c9";
+    flake-compat.url = "github:edolstra/flake-compat";
+    flake-compat.flake = false;
+    flake-utils.url = "github:numtide/flake-utils";
+    nix2container.url = "github:nlewo/nix2container";
+    nix2container.inputs.nixpkgs.follows = "nixpkgs";
+    sbomnix.url = "github:tiiuae/sbomnix";
+    sbomnix.inputs.nixpkgs.follows = "nixpkgs";
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
     {
@@ -35,18 +55,23 @@
         };
       };
     }
-    // flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ] (
+    // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ] (
       system:
       let
         overlay = import ./nix/overlay.nix;
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+        tenzirPythonPkgs = pkgs.callPackage ./python {
+          inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
+        };
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
+          inherit tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
+          inherit tenzirPythonPkgs;
           forceClang = true;
         };
       in
@@ -68,6 +93,7 @@
           // {
             default = self.packages.${system}.tenzir-static;
           };
+        legacyPackages = pkgs;
         apps.tenzir-de = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de; };
         apps.tenzir-de-static = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir-de-static; };
         apps.tenzir = flake-utils.lib.mkApp { drv = self.packages.${system}.tenzir; };
@@ -75,7 +101,7 @@
           drv = self.packages.${system}.tenzir-static;
         };
         apps.default = self.apps.${system}.tenzir-static;
-        # Run with `nix run .#generate-sbom`, output is created in sbom/.
+        # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
         apps.generate-sbom =
           let
             nix = nixpkgs.legacyPackages."${system}".nix;
@@ -87,6 +113,11 @@
             drv = pkgs.writeScriptBin "generate" ''
               #!${pkgs.runtimeShell}
               TMP="$(mktemp -d)"
+              OUTPUT="$1"
+              if [ -z "$OUTPUT" ]; then
+                OUTPUT="tenzir.spdx.json"
+              fi
+              mkdir -p "$(dirname "$OUTPUT")"
               echo "Writing intermediate files to $TMP"
               staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-de-static)"
               echo "Converting vendored spdx info from KV to JSON"
@@ -100,7 +131,7 @@
               name=''$(${pkgs.jq}/bin/jq -r '.name' $TMP/nix.spdx.json)
               sed -i "s|$name|SPDXRef-Tenzir|g" $TMP/nix.spdx.json
               echo "Removing the generated Tenzir package entry"
-              jq 'del(.packages[] | select(.SPDXID == "SPDXRef-Tenzir"))' $TMP/nix.spdx.json > $TMP/nix2.spdx.json
+              ${pkgs.jq}/bin/jq 'del(.packages[] | select(.SPDXID == "SPDXRef-Tenzir"))' $TMP/nix.spdx.json > $TMP/nix2.spdx.json
               echo "Merging the SPDX JSON files"
               ${pkgs.jq}/bin/jq -s 'def deepmerge(a;b):
                 reduce b[] as $item (a;
@@ -115,8 +146,8 @@
                   );
                 deepmerge({}; .)' $TMP/nix2.spdx.json $TMP/vendored.spdx.json > $TMP/nix3.spdx.json
               echo "Sorting the output"
-              jq '.packages|=sort_by(.name)|.relationships|=sort_by(.spdxElementId,.relatedSpdxElement)' $TMP/nix3.spdx.json > tenzir.spdx.json
-              echo "Wrote tenzir.spdx.json"
+              ${pkgs.jq}/bin/jq '.packages|=sort_by(.name)|.relationships|=sort_by(.spdxElementId,.relatedSpdxElement)' $TMP/nix3.spdx.json > "$OUTPUT"
+              echo "Wrote $OUTPUT"
             '';
           };
         # Legacy aliases for backwards compatibility.

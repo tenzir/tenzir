@@ -1,0 +1,28 @@
+#pragma once
+
+/// CONSTANTS.
+#define TENZIR_SELECT_ALLOCATOR_NONE 0
+#define TENZIR_SELECT_ALLOCATOR_SYSTEM 1
+#define TENZIR_SELECT_ALLOCATOR_JEMALLOC 2
+#define TENZIR_SELECT_ALLOCATOR_MIMALLOC 3
+#define TENZIR_SELECT_ALLOCATOR_RUNTIME 0XFF
+/// The allocator selected by CMake
+#cmakedefine TENZIR_SELECT_ALLOCATOR @TENZIR_SELECT_ALLOCATOR@
+
+/// Whether the allocator may be "jemalloc"
+#define TENZIR_ALLOCATOR_HAS_JEMALLOC                                          \
+  (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_JEMALLOC                 \
+   || TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_RUNTIME)
+/// Whether the allocator may be "mimalloc"
+#define TENZIR_ALLOCATOR_HAS_MIMALLOC                                          \
+  (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_MIMALLOC                 \
+   || TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_RUNTIME)
+/// Whether the allocator may be "system"
+#define TENZIR_ALLOCATOR_HAS_SYSTEM                                            \
+  (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_SYSTEM                   \
+   || TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_RUNTIME)
+/// Whether we might use the system allocator (wrapped or not).
+#define TENZIR_ALLOCATOR_MAY_USE_SYSTEM                                        \
+  (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE)                    \
+    || (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_RUNTIME)            \
+    || (TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_SYSTEM)
