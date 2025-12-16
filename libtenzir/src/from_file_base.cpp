@@ -125,6 +125,7 @@ auto from_file_args::add_to(argument_parser2& p) -> void {
   p.named_optional("remove", remove);
   p.named("rename", rename, "string -> string");
   p.named("path_field", path_field);
+  p.named("max_age", max_age);
   p.positional("{ … }", pipe);
 }
 
@@ -154,6 +155,12 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
     diagnostic::error("cannot use both `remove` and `rename`")
       .primary(remove.source)
       .primary(*rename)
+      .emit(ctx);
+    return failure::promise();
+  }
+  if (max_age and max_age->inner <= duration::zero()) {
+    diagnostic::error("`max_age` must be a positive duration")
+      .primary(max_age->source)
       .emit(ctx);
     return failure::promise();
   }
@@ -342,6 +349,17 @@ auto from_file_state::query_files() -> void {
 
 auto from_file_state::process_file(arrow::fs::FileInfo file) -> void {
   if (file.IsFile() and matches(file.path(), glob_)) {
+    if (args_.max_age) {
+      if (file.mtime() == arrow::fs::kNoTime) {
+        diagnostic::warning("could not get last modification time for "
+                            "file `{}`",
+                            root_path_)
+          .note("assuming file was recently modified")
+          .emit(*dh_);
+      } else if (time::clock::now() - file.mtime() >= args_.max_age->inner) {
+        return;
+      }
+    }
     add_job(std::move(file));
   }
 }
