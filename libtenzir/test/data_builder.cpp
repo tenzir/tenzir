@@ -506,6 +506,7 @@ TEST("signature record seeding field not in data") {
 TEST("signature record seeding nested record") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
+    {.schema_only = true},
     detail::data_builder::basic_parser,
     &dh,
   };
@@ -607,6 +608,7 @@ TEST("signature record seeding nested record") {
 TEST("signature record seeding nested list") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
+    {.schema_only = true},
     detail::data_builder::basic_parser,
     &dh,
   };
