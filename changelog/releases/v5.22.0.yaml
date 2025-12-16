@@ -1,0 +1,19 @@
+title: "UDO Arguments"
+description: "This release introduces support for arguments in user-defined operators, letting operators declare positional and named parameters with optional default values and use them just like built-in operators. It also enhances parser behavior for duplicate keys and includes several important stability, parsing, and retention improvements to make pipelines more flexible and reliable."
+changes:
+  - driven-alone-solver
+  - escape-couple-teens
+  - going-beauty-field
+  - golden-wedged-vessel
+  - keeper-account-broke
+  - north-locked-excuse
+  - parent-truth-cotton
+  - placed-annual-supply
+  - regime-output-relate
+  - router-killed-urban
+  - shoot-listen-start
+  - split-screen-human
+  - spoke-intake-repair
+  - stayed-carry-thanks
+  - thread-visit-govern
+  - user-defined-operator-arguments
