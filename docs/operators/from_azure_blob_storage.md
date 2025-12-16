@@ -8,7 +8,7 @@ Reads one or multiple files from Azure Blob Storage.
 
 ```tql
 from_azure_blob_storage url:string, [account_key=string, watch=bool,
-  remove=bool, rename=string->string, path_field=field] { … }
+  remove=bool, rename=string->string, path_field=field, max_age=duration] { … }
 ```
 
 ## Description
@@ -85,6 +85,11 @@ This makes the operator insert the path to the file where an event originated
 from before emitting it.
 
 By default, paths will not be inserted into the outgoing events.
+
+### `max_age = duration (optional)`
+
+Only process files that were modified within the specified duration from the
+current time. Files older than this duration will be skipped.
 
 ### `{ … } (optional)`
 

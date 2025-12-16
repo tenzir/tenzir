@@ -9,7 +9,7 @@ Reads one or multiple files from Amazon S3.
 ```tql
 from_s3 url:string, [anonymous=bool, access_key=string, secret_key=string,
   session_token=string, role=string, external_id=string, watch=bool,
-  remove=bool, rename=string->string, path_field=field] { … }
+  remove=bool, rename=string->string, path_field=field, max_age=duration] { … }
 ```
 
 ## Description
@@ -101,6 +101,11 @@ This makes the operator insert the path to the file where an event originated
 from before emitting it.
 
 By default, paths will not be inserted into the outgoing events.
+
+### `max_age = duration (optional)`
+
+Only process files that were modified within the specified duration from the
+current time. Files older than this duration will be skipped.
 
 ### `{ … } (optional)`
 

@@ -7,7 +7,8 @@ example: 'from_file "s3://data/**.json"'
 Reads one or multiple files from a filesystem.
 
 ```tql
-from_file url:string, [watch=bool, remove=bool, rename=string->string, path_field=field] { … }
+from_file url:string, [watch=bool, remove=bool, rename=string->string,
+          path_field=field, max_age=duration] { … }
 ```
 
 ## Description
@@ -62,6 +63,11 @@ from before emitting it.
 
 By default, paths will not be inserted into the outgoing events.
 
+### `max_age = duration (optional)`
+
+Only process files that were modified within the specified duration from the
+current time. Files older than this duration will be skipped.
+
 ### `{ … } (optional)`
 
 Pipeline to use for parsing the file. By default, this pipeline is derived from
@@ -95,6 +101,13 @@ from_file "s3://my-bucket/**", watch=true, remove=true
 ```tql
 // The trailing slash automatically appends the original filename
 from_file "/input/*.json", rename=path => "/output/"
+```
+
+### Process only recently modified files
+
+```tql
+// Only process files modified in the last hour
+from_file "/logs/*.json", max_age=1h
 ```
 
 ## See Also
