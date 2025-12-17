@@ -1,0 +1,4 @@
+created: 2025-10-21
+title: "OCSF Casting & Recursion"
+intro: |
+  This release introduces the `ocsf::cast` operator to streamline schema transformations for OCSF events and adds support for one-level recursion in OCSF objects, enabling recursive relations such as `process.parent_process` and `analytic.related_analytics`.

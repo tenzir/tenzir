@@ -1,0 +1,4 @@
+created: 2025-07-23
+title: "Better Performance"
+intro: |
+  This release delivers significant performance improvements for situations with many concurrent pipelines, making Tenzir more robust under high-load scenarios. New features include AWS role assumption support, enhanced string trimming functionality, and improved HTTP error handling capabilities. Additionally, this release adds several new operators and comes with various bug fixes.

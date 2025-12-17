@@ -1,0 +1,4 @@
+created: 2025-06-03
+title: "Fix Python Operator"
+intro: |
+  Tenzir Node v5.3.1 updated the pyproject version but did not actually commit it, causing the Python operator to fail to start. This release fixes the issue.

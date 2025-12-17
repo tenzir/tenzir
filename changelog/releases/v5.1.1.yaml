@@ -1,7 +1,0 @@
-title: Fix Move Edge Cases
-description: |
-  Fix edge cases for moving fields when using the `move` keyword in the `where`
-  and `map` functions.
-changes:
-  - FaoRyF7jB2xo3hNbZO6jRdSOaD
-  - vD883RPI3RtTRrTrPsYYv9Sxix
