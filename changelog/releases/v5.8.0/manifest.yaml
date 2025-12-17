@@ -1,0 +1,3 @@
+created: 2025-07-02
+intro: |
+  This release introduces format and compression inference from URLs for HTTP data sources, streamlining data loading workflows. It also includes bug fixes for secret resolution and HTTP server mode.

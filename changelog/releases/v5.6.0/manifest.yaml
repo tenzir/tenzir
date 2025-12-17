@@ -1,0 +1,3 @@
+created: 2025-06-20
+intro: |
+  The  operator now supports event-dependent topics, making routing between pipelines more flexible. Additionally, new  and  operators make taking apart custom logs easier than before.

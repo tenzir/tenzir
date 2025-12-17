@@ -1,4 +1,0 @@
-title: "UUID Functions"
-description: "This release brings a family of UUID functions to TQL, making it easier to generate random numbers for a variety of use cases."
-changes:
-  - tempo-trunk-series

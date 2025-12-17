@@ -1,7 +1,0 @@
-title: Fixed AMQP Integration
-description: |
-  This release fixes a bug that sometimes prevented the `save_amqp` operator
-  from sending messages.
-changes:
-  - K7W6d8PibCGbfFmiBu3rMFfjTd
-  - sprdXVwu9BV9XfJ7WdtbPAwR9F

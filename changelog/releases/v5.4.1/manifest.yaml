@@ -1,0 +1,3 @@
+created: 2025-06-13
+intro: |
+  This release fixes a bug within the JSON printer that could lead to invalid JSON being produced, and also led to response timeouts when using the Tenzir Platform.

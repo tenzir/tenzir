@@ -1,0 +1,3 @@
+created: 2025-07-07
+intro: |
+  This release introduces two new powerful OCSF operators that automate enum derivation and provide intelligent field trimming. The update also includes string padding functions, better HTTP requests, IP categorization and much more!

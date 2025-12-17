@@ -1,0 +1,3 @@
+created: 2025-05-23
+intro: |
+  This release brings forth improvements to HTTP support in Tenzir, supporting requests as transformations and paginating APIs.

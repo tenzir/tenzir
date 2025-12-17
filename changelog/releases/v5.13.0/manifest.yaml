@@ -1,0 +1,3 @@
+created: 2025-08-08
+intro: |
+  This release enhances UDP ingestion with the new `from_udp` operator that produces structured events with sender metadata. We also improved the execution model for `every` and `cron` subpipelines, added DNS lookup capabilities, and made the Syslog parser more flexible.

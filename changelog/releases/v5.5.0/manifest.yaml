@@ -1,0 +1,3 @@
+created: 2025-06-17
+intro: |
+  Built-in support for normalizing OCSF events to their upstream schema makes normalizations easier than ever with Tenzir Node v5.5.

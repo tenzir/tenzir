@@ -1,0 +1,3 @@
+created: 2025-08-01
+intro: |
+  This release introduces payload compression for Azure Log Analytics to reduce bandwidth usage, as well as an important fix for a `from_http` bug that was introduced with the previous release.

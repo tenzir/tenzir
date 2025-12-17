@@ -1,0 +1,3 @@
+created: 2025-08-02
+intro: |
+  This release adds support for OCSF 1.6.0 and introduces the `replace` operator.

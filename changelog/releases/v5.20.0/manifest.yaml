@@ -1,0 +1,3 @@
+created: 2025-10-29
+intro: |
+  We continue our quest for better memory usage by switching out the memory allocator to the battle-tested `mimalloc`, as well as adding metrics collecting for memory usage.
