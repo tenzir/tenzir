@@ -263,6 +263,14 @@ __attribute__((constructor(101))) void early_install_signal_handlers() {
   sigaction(SIGABRT, &sa, nullptr);
 }
 
+// Use a destructor attribute with low priority to uninstall our custom signal
+// handler late.
+__attribute__((destructor(65535))) void uninstall_signal_handlers() {
+  stack_t ss{};
+  sigaltstack(nullptr, &ss);
+  std::free(ss.ss_sp);
+}
+
 } // namespace
 
 // This function exists solely to ensure the object file is not discarded
