@@ -177,8 +177,8 @@ public:
     return "internal-load-tcp-source-bytes";
   }
 
-  auto optimize(const expression& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -223,9 +223,8 @@ public:
     }
   }
 
-  auto
-  operator()(generator<Elements> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
+  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
     const auto peer = ast::constant{
@@ -274,8 +273,8 @@ public:
                        operator_type_name<Elements>());
   }
 
-  auto optimize(const expression& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -366,8 +365,8 @@ struct connection_manager_state {
     uint64_t bytes_read = {};
     caf::disposable next_emit_metrics = {};
 
-    auto
-    emit_metrics(connection_manager_actor<Elements>::pointer self) -> void {
+    auto emit_metrics(connection_manager_actor<Elements>::pointer self)
+      -> void {
       auto metric = record{
         {"timestamp", time{time::clock::now()}},
         {"handle", fmt::to_string(socket->native_handle())},
@@ -473,8 +472,8 @@ struct connection_manager_state {
   connection_manager_state(connection_manager_state&&) = delete;
   auto operator=(const connection_manager_state&)
     -> connection_manager_state& = delete;
-  auto
-  operator=(connection_manager_state&&) -> connection_manager_state& = delete;
+  auto operator=(connection_manager_state&&)
+    -> connection_manager_state& = delete;
 
   ~connection_manager_state() noexcept {
     io_ctx->stop();
@@ -895,8 +894,8 @@ auto make_connection_manager(
   std::string definition, const load_tcp_args& args,
   const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
-  bool is_hidden,
-  const node_actor& node) -> connection_manager_actor<Elements>::behavior_type {
+  bool is_hidden, const node_actor& node)
+  -> connection_manager_actor<Elements>::behavior_type {
   self->state().self = self;
   self->state().definition = std::move(definition);
   self->state().args = args;
@@ -966,8 +965,8 @@ public:
     args.ssl.update_from_config(ctrl);
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
-        make_connection_manager<Elements>, std::string{ctrl.definition()},
-        args, ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
+        make_connection_manager<Elements>, std::string{ctrl.definition()}, args,
+        ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
         ctrl.operator_index(), ctrl.is_hidden(), ctrl.node())};
     while (true) {
       auto result = Elements{};
@@ -997,8 +996,8 @@ public:
     return fmt::format("internal-load-tcp-{}", operator_type_name<Elements>());
   }
 
-  auto optimize(const expression& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
     if (not args_.pipeline) {
       return {filter, order, this->copy()};
     }
@@ -1030,8 +1029,8 @@ public:
     return "load_tcp";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
     auto args = load_tcp_args{};

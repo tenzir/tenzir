@@ -1026,7 +1026,8 @@ struct from_http_args {
       f.field("retry_delay", x.retry_delay), f.field("parse", x.parse),
       f.field("server", x.server), f.field("responses", x.responses),
       f.field("ssl", x.ssl), f.field("password", x.password),
-      f.field("max_request_size", x.max_request_size),f.field("max_connections", x.max_connections));
+      f.field("max_request_size", x.max_request_size),
+      f.field("max_connections", x.max_connections));
   }
 };
 

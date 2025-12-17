@@ -155,8 +155,8 @@ struct opensearch_args {
   }
 };
 
-auto decompress_payload(const http::request& r,
-                        diagnostic_handler& dh) -> std::optional<chunk_ptr> {
+auto decompress_payload(const http::request& r, diagnostic_handler& dh)
+  -> std::optional<chunk_ptr> {
   if (not r.header().has_field("Content-Encoding")) {
     // TODO: Can we take ownership?
     return chunk::copy(r.payload());
@@ -281,8 +281,8 @@ public:
   from_opensearch_operator(opensearch_args args) : args_{std::move(args)} {
   }
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     co_yield {};
     auto slices = std::vector<table_slice>{};
     auto stream = std::optional<caf::typed_stream<std::vector<table_slice>>>{};
@@ -333,7 +333,7 @@ public:
                   .flat_map([keep_actions = args_.keep_actions,
                              dh = ctrl.shared_diagnostics()](
                               const http::request& r) mutable
-                            -> std::optional<std::vector<table_slice>> {
+                              -> std::optional<std::vector<table_slice>> {
                     if (r.header().path() != "/_bulk") {
                       TENZIR_VERBOSE("unhandled {} {}",
                                      to_string(r.header().method()),
@@ -414,8 +414,8 @@ public:
     }
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -441,8 +441,8 @@ struct plugin final
     return "from_opensearch";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = opensearch_args{};
     args.op = inv.self.get_location();
     auto url_op = std::optional<located<std::string>>{};

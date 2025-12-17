@@ -680,8 +680,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> bytes,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> bytes, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto args = args_;
     args.ssl.update_from_config(ctrl);
     if (args.ssl.get_tls(nullptr).inner and args_.listen) {
@@ -806,8 +806,8 @@ public:
     return "save_tcp";
   }
 
-  auto optimize(const expression& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -825,8 +825,8 @@ private:
 };
 
 class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     args.ssl = tls_options{{.tls_default = false}};
     auto parser = argument_parser2::operator_(name());
