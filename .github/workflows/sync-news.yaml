@@ -1,0 +1,27 @@
+name: Sync to News
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "changelog/**"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Trigger news sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: news
+
+      - name: Trigger sync workflow
+        uses: tenzir/news/.github/actions/sync@main
+        with:
+          token: ${{ steps.app-token.outputs.token }}
