@@ -25,4 +25,3 @@ jobs:
         uses: tenzir/news/.github/actions/sync@main
         with:
           token: ${{ steps.app-token.outputs.token }}
-          skip_notifications: true # remove after initial sync
