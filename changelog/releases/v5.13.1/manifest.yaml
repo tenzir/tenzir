@@ -1,3 +1,4 @@
 created: 2025-08-21
+title: "Azure Blob Storage & Stability Improvements"
 intro: |
   This release adds a new Azure Blob Storage operator with account key authentication and improves Google Security Operations retry handling. It also contains various small fixes and improvements.

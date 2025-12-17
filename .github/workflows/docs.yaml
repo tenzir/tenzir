@@ -5,8 +5,8 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  add-comment-and-build-docs:
-    name: Add Comment and Build Docs Preview
+  build-docs:
+    name: Build Docs Preview
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -15,117 +15,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Fetch base branch
-        run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
-
-      - name: Check for existing changelog entries and generate URLs
-        id: check-and-generate
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
-
-          # Check if any changelog entries were added in this PR
-          CHANGELOG_FILES=$(git diff --name-only origin/$BASE_REF...HEAD | grep "^changelog/changes/" | wc -l)
-
-          echo "changelog_entries_count=$CHANGELOG_FILES" >> $GITHUB_OUTPUT
-
-          if [ "$CHANGELOG_FILES" -gt 0 ]; then
-            echo "has_changelog_entries=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changelog_entries=false" >> $GITHUB_OUTPUT
-          fi
-
-          # Use the changelog/add.py script with --web option to generate URLs
-          # Pass the PR number and branch explicitly to ensure it works correctly in CI
-          CHANGE_URL=$(python3 changelog/add.py change --web --pr "$PR_NUMBER" --branch "$BRANCH")
-          BUGFIX_URL=$(python3 changelog/add.py bugfix --web --pr "$PR_NUMBER" --branch "$BRANCH")
-          FEATURE_URL=$(python3 changelog/add.py feature --web --pr "$PR_NUMBER" --branch "$BRANCH")
-
-          echo "change_url=$CHANGE_URL" >> $GITHUB_OUTPUT
-          echo "bugfix_url=$BUGFIX_URL" >> $GITHUB_OUTPUT
-          echo "feature_url=$FEATURE_URL" >> $GITHUB_OUTPUT
-
-      - name: Create or update changelog comment
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          HAS_CHANGELOG="${{ steps.check-and-generate.outputs.has_changelog_entries }}"
-          CHANGELOG_COUNT="${{ steps.check-and-generate.outputs.changelog_entries_count }}"
-
-          if [ "$HAS_CHANGELOG" = "true" ]; then
-            COMMENT_BODY="<!-- add-changelog-entry -->
-          > [!NOTE]
-          > 🎉 **Great work!** This PR already includes $CHANGELOG_COUNT changelog $([ $CHANGELOG_COUNT -eq 1 ] && echo "entry" || echo "entries").
-          >
-          > If you need to add additional changelog entries, you can use the links below or run \`./changelog/add.py change|bugfix|feature\` on the command-line.
-
-          ## 📝 Changelog Entries
-
-          | Type | Description | Link |
-          |------|-------------|------|
-          | 🔄 **Change** | Modifications to existing functionality | [Add Change](${{ steps.check-and-generate.outputs.change_url }}) |
-          | 🐛 **Bugfix** | Fixes for bugs or issues | [Add Bugfix](${{ steps.check-and-generate.outputs.bugfix_url }}) |
-          | ✨ **Feature** | New functionality or enhancements | [Add Feature](${{ steps.check-and-generate.outputs.feature_url }}) |
-
-          ## 📚 Documentation Preview
-
-          🔄 **Building docs preview...** This may take a few minutes.
-
-          *This section will be updated when the build completes.*"
-          else
-            COMMENT_BODY="<!-- add-changelog-entry -->
-          > [!TIP]
-          > Please add a changelog entry for this PR by clicking one of the links below.
-          >
-          > The changelog entry will be pre-filled with information from this PR. You can edit the title and description as needed before committing.
-          >
-          > You can also add a changelog entry manually by running \`./changelog/add.py change|bugfix|feature\` on the command-line.
-
-          ## 📝 Changelog Entries
-
-          | Type | Description | Link |
-          |------|-------------|------|
-          | 🔄 **Change** | Modifications to existing functionality | [Add Change](${{ steps.check-and-generate.outputs.change_url }}) |
-          | 🐛 **Bugfix** | Fixes for bugs or issues | [Add Bugfix](${{ steps.check-and-generate.outputs.bugfix_url }}) |
-          | ✨ **Feature** | New functionality or enhancements | [Add Feature](${{ steps.check-and-generate.outputs.feature_url }}) |
-
-          ## 📚 Documentation Preview
-
-          🔄 **Building docs preview...** This may take a few minutes.
-
-
-          *This section will be updated when the build completes.*"
-          fi
-
-          # Check if a comment already exists
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
-            --jq '.[] | select(.body | startswith("<!-- add-changelog-entry -->")) | .id')
-
-          if [ -n "$COMMENT_ID" ]; then
-            # Update existing comment
-            echo "Updating existing comment $COMMENT_ID"
-            gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
-              -X PATCH \
-              -f body="$COMMENT_BODY"
-          else
-            # Create new comment
-            echo "Creating new comment"
-            gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
-              -f body="$COMMENT_BODY"
-          fi
 
       - name: Checkout docs repository
         uses: actions/checkout@v4
@@ -152,14 +41,12 @@ jobs:
           cd docs-repo
           pnpm install --frozen-lockfile
 
-      - name: Update changelog and reference
+      - name: Update reference docs
         run: |
-          uv run ./docs-repo/changelog/changelog.py --product=node ./changelog
           rsync -av --delete ./docs/functions/ ./docs-repo/src/content/docs/reference/functions
           rsync -av --delete ./docs/operators/ ./docs-repo/src/content/docs/reference/operators
           cp ./docs/openapi.node.yaml ./docs-repo/src/content/apis/openapi.node.yaml
           cp ./tenzir.yaml.example ./docs-repo/tenzir.yaml.example
-          # Generate complete reference documentation (overviews and sidebar)
           cd docs-repo
           pnpm run generate:reference
 
@@ -179,56 +66,40 @@ jobs:
           surge ./dist https://tenzir-tenzir-preview-${{ github.event.pull_request.number }}.surge.sh --token ${{ secrets.SURGE_TOKEN }}
         continue-on-error: true
 
-      - name: Update comment with docs preview
+      - name: Post docs preview comment
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          HAS_CHANGELOG="${{ steps.check-and-generate.outputs.has_changelog_entries }}"
-          CHANGELOG_COUNT="${{ steps.check-and-generate.outputs.changelog_entries_count }}"
+          PREVIEW_URL="https://tenzir-tenzir-preview-$PR_NUMBER.surge.sh"
 
-          # Function to update docs preview section
-          update_docs_section() {
-            local existing_comment="$1"
-            local docs_content="$2"
-
-            # Replace the docs preview section
-            local updated_comment=$(echo "$existing_comment" | sed '/## 📚 Documentation Preview/,$d')
-            echo "$updated_comment
-
+          if [ "${{ steps.build.outcome }}" = "success" ] && [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            COMMENT_BODY="<!-- docs-preview -->
           ## 📚 Documentation Preview
 
-          $docs_content"
-          }
+          ✅ **Docs preview is ready!**
 
-          # Get existing comment
+          🔗 **Preview**: [$PREVIEW_URL]($PREVIEW_URL)
+
+          *Updated automatically when you push new commits.*"
+          else
+            COMMENT_BODY="<!-- docs-preview -->
+          ## 📚 Documentation Preview
+
+          ❌ **Docs preview build failed**
+
+          Check the workflow logs for details."
+          fi
+
+          # Check if a comment already exists
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
-            --jq '.[] | select(.body | startswith("<!-- add-changelog-entry -->")) | .id' | head -1)
+            --jq '.[] | select(.body | startswith("<!-- docs-preview -->")) | .id' | head -1)
 
           if [ -n "$COMMENT_ID" ]; then
-            EXISTING_COMMENT=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
-              --jq '.body')
-
-            if [ "${{ steps.build.outcome }}" = "success" ] && [ "${{ steps.deploy.outcome }}" = "success" ]; then
-              # Success case
-              PREVIEW_URL="https://tenzir-tenzir-preview-$PR_NUMBER.surge.sh"
-              DOCS_CONTENT="✅ **Docs preview is ready!**
-
-          🔗 **Preview Docs**: [$PREVIEW_URL]($PREVIEW_URL)
-
-          *The preview will be updated automatically when you push new commits to this PR.*"
-            else
-              # Failure case
-              DOCS_CONTENT="❌ **Docs preview build failed**
-
-          The documentation preview could not be built or deployed. This might be a temporary issue.
-
-          You can trigger a rebuild by pushing a new commit or closing and reopening this PR."
-            fi
-
-            UPDATED_COMMENT=$(update_docs_section "$EXISTING_COMMENT" "$DOCS_CONTENT")
-
             gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
               -X PATCH \
-              -f body="$UPDATED_COMMENT"
+              -f body="$COMMENT_BODY"
+          else
+            gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+              -f body="$COMMENT_BODY"
           fi

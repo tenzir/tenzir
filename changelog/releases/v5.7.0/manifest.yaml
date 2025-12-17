@@ -1,3 +1,4 @@
 created: 2025-06-25
+title: "Secret Secrets"
 intro: |
   Tenzir Node v5.7.0 introduces a new secret type that keeps its sensitive content hidden while enabling flexible secret retrieval. This release also adds support for OCSF extensions and brings several improvements to the  operator.

@@ -96,8 +96,8 @@ jobs:
 
       - name: Check if release already exists
         run: |
-          if [ -f "changelog/releases/${{ github.event.inputs.version }}.yaml" ]; then
-            echo "Error: Release file for ${{ github.event.inputs.version }} already exists"
+          if [ -d "changelog/releases/${{ github.event.inputs.version }}" ]; then
+            echo "Error: Release directory for ${{ github.event.inputs.version }} already exists"
             exit 1
           fi
           if git tag -l | grep -q "^${{ github.event.inputs.version }}$"; then
@@ -105,14 +105,24 @@ jobs:
             exit 1
           fi
 
-      - name: Run release script
+      - name: Check for unreleased entries
+        run: |
+          if [ ! -d "changelog/unreleased" ] || [ -z "$(ls -A changelog/unreleased 2>/dev/null)" ]; then
+            echo "Error: No unreleased changelog entries found in changelog/unreleased/"
+            echo "Add changelog entries before creating a release."
+            exit 1
+          fi
+          echo "Found $(ls changelog/unreleased | wc -l | tr -d ' ') unreleased entries"
+
+      - name: Create release with tenzir-changelog
         env:
           RELEASE_TITLE: ${{ github.event.inputs.title }}
           RELEASE_DESCRIPTION: ${{ github.event.inputs.description }}
         run: |
-          ./changelog/release.py "${{ github.event.inputs.version }}" \
+          uvx tenzir-changelog release create "${{ github.event.inputs.version }}" \
             --title "$RELEASE_TITLE" \
-            --description "$RELEASE_DESCRIPTION"
+            --intro "$RELEASE_DESCRIPTION" \
+            --yes
 
       - name: Update version.json and Python package versions
         run: |
@@ -138,15 +148,19 @@ jobs:
           echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
           echo "Updated Python package versions to: ${VERSION_NUMBER}"
 
-      - name: Verify release file was created
+      - name: Verify release was created
         run: |
-          if [ ! -f "changelog/releases/${{ github.event.inputs.version }}.yaml" ]; then
-            echo "Error: Release file was not created"
+          if [ ! -d "changelog/releases/${{ github.event.inputs.version }}" ]; then
+            echo "Error: Release directory was not created"
             exit 1
           fi
-          echo "Release file created successfully:"
-          cat "changelog/releases/${{ github.event.inputs.version }}.yaml"
+          echo "Release created successfully:"
+          cat "changelog/releases/${{ github.event.inputs.version }}/manifest.yaml"
+          echo ""
+          echo "Entries:"
+          ls -la "changelog/releases/${{ github.event.inputs.version }}/entries/"
 
+          echo ""
           echo "Updated version.json:"
           cat "version.json"
 
@@ -180,42 +194,24 @@ jobs:
       - name: Generate SBOM artifact
         run: nix run .#generate-sbom -- /tmp/tenzir.spdx.json
 
-      - name: Copy release file to main branch (non-latest release)
+      - name: Copy release to main branch (non-latest release)
         if: steps.release_type.outputs.is_latest == 'false'
         env:
           GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          # Store the release file content
-          cp "changelog/releases/${{ github.event.inputs.version }}.yaml" "/tmp/release.yaml"
-
-          # Extract changelog entry IDs from the release file
-          CHANGE_IDS=$(yq eval '.changes[]' "changelog/releases/${{ github.event.inputs.version }}.yaml")
-
-          # Copy referenced changelog entries to temp directory
-          mkdir -p "/tmp/changes"
-          for CHANGE_ID in $CHANGE_IDS; do
-            if [ -f "changelog/changes/${CHANGE_ID}.md" ]; then
-              cp "changelog/changes/${CHANGE_ID}.md" "/tmp/changes/"
-            fi
-          done
+          # Copy the entire release directory to temp
+          cp -r "changelog/releases/${{ github.event.inputs.version }}" "/tmp/release-dir"
 
           # Switch to main branch
           git fetch origin main
           git checkout main
 
-          # Copy the release file
-          cp "/tmp/release.yaml" "changelog/releases/${{ github.event.inputs.version }}.yaml"
-
-          # Copy the referenced changelog entries
-          for CHANGE_ID in $CHANGE_IDS; do
-            if [ -f "/tmp/changes/${CHANGE_ID}.md" ]; then
-              cp "/tmp/changes/${CHANGE_ID}.md" "changelog/changes/"
-            fi
-          done
+          # Copy the release directory
+          cp -r "/tmp/release-dir" "changelog/releases/${{ github.event.inputs.version }}"
 
           # Commit to main
-          git add "changelog/releases/${{ github.event.inputs.version }}.yaml" changelog/changes/
+          git add "changelog/releases/${{ github.event.inputs.version }}"
           git commit -s -m "Add backport release Tenzir Node ${{ github.event.inputs.version }}"
           git push origin main
 
@@ -260,7 +256,7 @@ jobs:
         if: steps.release_type.outputs.is_latest == 'true'
         run: |
           echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
-          echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
+          echo "📁 Release directory: changelog/releases/${{ github.event.inputs.version }}/"
           echo "🏷️ Tag: ${{ github.event.inputs.version }}"
           echo "🌿 Latest branch updated"
           echo "📋 GitHub release: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.version }}"
@@ -269,5 +265,5 @@ jobs:
         if: steps.release_type.outputs.is_latest == 'false'
         run: |
           echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
-          echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
-          echo "📋 Release file copied to main branch"
+          echo "📁 Release directory: changelog/releases/${{ github.event.inputs.version }}/"
+          echo "📋 Release copied to main branch"

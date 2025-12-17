@@ -1,3 +1,4 @@
 created: 2025-09-16
+title: "Lambda Captures"
 intro: |
   This release enhances TQL's data transformation capabilities with lambda expressions that can capture surrounding fields in `map` and `where` functions, plus grouped enumeration for separate event counting. We've also improved operator composability with enhanced `to_splunk` parameters, added octet counting support for syslog messages, and fixed critical issues in Kafka message handling and HTTP request processing.
