@@ -71,15 +71,15 @@ public:
 
     auto client = Aws::CloudWatchLogs::CloudWatchLogsClient{config};
 
-    // Define output schema
+    // Define output schema (matches AWS CloudWatch log event format)
     const auto output_type = type{
       "tenzir.cloudwatch",
       record_type{
-        {"timestamp", time_type{}},
-        {"ingestion_time", time_type{}},
-        {"log_group", string_type{}},
-        {"log_stream", string_type{}},
+        {"logStreamName", string_type{}},
+        {"timestamp", int64_type{}},
         {"message", string_type{}},
+        {"ingestionTime", int64_type{}},
+        {"eventId", string_type{}},
       },
     };
 
@@ -146,18 +146,12 @@ private:
         for (const auto& event : events) {
           auto row = builder.record();
 
-          // Convert milliseconds to time type
-          auto ts = time{std::chrono::duration_cast<duration>(
-            std::chrono::milliseconds{event.GetTimestamp()})};
-          auto ing_ts = time{std::chrono::duration_cast<duration>(
-            std::chrono::milliseconds{event.GetIngestionTime()})};
-
-          row.field("timestamp").data(ts);
-          row.field("ingestion_time").data(ing_ts);
-          row.field("log_group").data(args_.log_group.inner);
-          row.field("log_stream")
+          row.field("logStreamName")
             .data(std::string(event.GetLogStreamName().c_str()));
+          row.field("timestamp").data(event.GetTimestamp());
           row.field("message").data(std::string(event.GetMessage().c_str()));
+          row.field("ingestionTime").data(event.GetIngestionTime());
+          row.field("eventId").data(std::string(event.GetEventId().c_str()));
 
           // Track the latest timestamp for next poll
           if (event.GetTimestamp() >= start_time) {
@@ -233,16 +227,8 @@ public:
   }
 };
 
-class registrar final : public virtual tenzir::plugin {
-public:
-  auto name() const -> std::string override {
-    return "cloudwatch";
-  }
-};
-
 } // namespace
 
 } // namespace tenzir::plugins::cloudwatch
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::cloudwatch::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::cloudwatch::registrar)
