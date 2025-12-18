@@ -142,7 +142,7 @@ jobs:
                           ],
                           "CompatibleServices": ["ECS"],
                           "Description": "Deploy this container to efficiently collect, shape, and route security data at scale within your AWS environment. Tenzir Node is the core building block for creating powerful and cost-effective security data pipelines.",
-                          "UsageInstructions": "Follow our detailed AWS instructions at https://docs.tenzir.com/guides/node-setup/deploy-a-node/#aws to deploy your Tenzir Node.\n\n**CloudFormation Deployment**: Deploy a single Tenzir Node into ECS: https://console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/new?templateURL=https://tenzir-marketplace-resources.s3.eu-west-1.amazonaws.com/single-node-container-${RELEASE_TAG}.yaml"
+                          "UsageInstructions": "Follow our detailed AWS instructions at https://docs.tenzir.com/guides/node-setup/deploy-a-node/#aws to deploy your Tenzir Node.\n\n**CloudFormation Deployment**: Deploy a single Tenzir Node into ECS: https://console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/new?templateURL=https://tenzir-marketplace-resources.s3.eu-west-1.amazonaws.com/tenzir-node-single-${RELEASE_TAG}.yaml"
                         }
                       }
                     }
