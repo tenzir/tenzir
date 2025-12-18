@@ -374,15 +374,6 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
     DESTDIR=/plugin/vast cmake --install build-vast --component Runtime && \
     rm -rf build-vast
 
-FROM plugins-source AS cloudwatch-plugin
-
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S plugins/cloudwatch -B build-cloudwatch -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-cloudwatch --parallel && \
-    DESTDIR=/plugin/cloudwatch cmake --install build-cloudwatch --component Runtime && \
-    rm -rf build-cloudwatch
-
 # -- tenzir-ce-untested --------------------------------------------------------
 
 FROM tenzir-de AS tenzir-ce-untested

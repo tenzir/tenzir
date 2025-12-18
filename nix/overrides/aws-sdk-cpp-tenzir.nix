@@ -20,6 +20,8 @@
       "sts"
       "transfer"
       # Additional apis used by tenzir.
+      "logs"
+      "securitylake"
       "sqs"
     ];
   }
