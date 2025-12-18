@@ -49,6 +49,7 @@ jobs:
           cp ./tenzir.yaml.example ./docs-repo/tenzir.yaml.example
           cd docs-repo
           pnpm run generate:reference
+          pnpm sync:changelog
 
       - name: Build docs with Astro
         id: build
