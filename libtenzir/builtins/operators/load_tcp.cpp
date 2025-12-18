@@ -407,9 +407,11 @@ struct connection_manager_state {
           // source to let that shut down cleanly.
           TENZIR_ASSERT(length == 0);
           if (ec != boost::asio::error::eof) {
+            TENZIR_DEBUG("failed to read from TCP connection on handle `{}`: "
+                         "{}",
+                         connection->socket->native_handle(), ec.message());
             diagnostic::warning("{}", ec.message())
               .note("failed to read from TCP connection")
-              .note("handle `{}`", connection->socket->native_handle())
               .emit(diagnostics);
           }
         } else {
@@ -568,9 +570,9 @@ struct connection_manager_state {
     connection->socket.emplace(std::move(peer));
     if (auto ok = set_close_on_exec(connection->socket->native_handle());
         not ok) {
-      diagnostic::warning(ok.error())
-        .note("handle `{}`", connection->socket->native_handle())
-        .emit(diagnostics);
+      TENZIR_DEBUG("failed to set close on exec on handle `{}`: {}",
+                   connection->socket->native_handle(), ok.error());
+      diagnostic::warning(ok.error()).emit(diagnostics);
       return;
     }
     connection->metrics_receiver = metrics_receiver;
@@ -583,9 +585,11 @@ struct connection_manager_state {
       if (args.certfile) {
         if (connection->ssl_ctx->use_certificate_chain_file(
               args.certfile->inner, ec)) {
+          TENZIR_DEBUG("failed to load certificate chain file on handle `{}`: "
+                       "{}",
+                       connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to load certificate chain file")
-            .note("handle `{}`", connection->socket->native_handle())
             .primary(args.certfile->source)
             .emit(diagnostics);
           return;
@@ -594,9 +598,10 @@ struct connection_manager_state {
       if (args.keyfile) {
         if (connection->ssl_ctx->use_private_key_file(
               args.keyfile->inner, boost::asio::ssl::context::pem, ec)) {
+          TENZIR_DEBUG("failed to load private key file on handle `{}`: {}",
+                       connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to load private key file")
-            .note("handle `{}`", connection->socket->native_handle())
             .primary(args.certfile->source)
             .emit(diagnostics);
           return;
@@ -607,9 +612,11 @@ struct connection_manager_state {
         // to request client certificates yet.
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
+          TENZIR_DEBUG("failed to set verify mode verification on handle `{}`: "
+                       "{}",
+                       connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to set verify mode verification")
-            .note("handle `{}`", connection->socket->native_handle())
             .primary(*args.skip_peer_verification)
             .emit(diagnostics);
           return;
@@ -617,9 +624,11 @@ struct connection_manager_state {
       } else if (args.connect && args.skip_peer_verification) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
+          TENZIR_DEBUG("failed to disable peer certificate verification on "
+                       "handle `{}`: {}",
+                       connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to disable peer certificate verification")
-            .note("handle `{}`", connection->socket->native_handle())
             .primary(*args.skip_peer_verification)
             .emit(diagnostics);
           return;
@@ -629,19 +638,23 @@ struct connection_manager_state {
               boost::asio::ssl::verify_peer
                 | boost::asio::ssl::verify_fail_if_no_peer_cert,
               ec)) {
+          TENZIR_DEBUG("failed to enable peer certificate verification on "
+                       "handle `{}`: {}",
+                       connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to enable peer certificate verification")
-            .note("handle `{}`", connection->socket->native_handle())
             .primary(args.get_tls())
             .emit(diagnostics);
           return;
         }
         if (args.cacert) {
           if (connection->ssl_ctx->load_verify_file(args.cacert->inner, ec)) {
+            TENZIR_DEBUG("failed to load cacert file `{}` on handle `{}`: {}",
+                         args.cacert->inner,
+                         connection->socket->native_handle(), ec.message());
             diagnostic::warning("{}", ec.message())
               .note("failed to load cacert file `{}`: {}", args.cacert->inner,
                     ec.message())
-              .note("handle `{}`", connection->socket->native_handle())
               .primary(args.cacert->source)
               .emit(diagnostics);
             return;
@@ -653,9 +666,10 @@ struct connection_manager_state {
       if (connection->tls_socket->handshake(
             boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server,
             ec)) {
+        TENZIR_DEBUG("failed to perform TLS handshake on handle `{}`: {}",
+                     connection->socket->native_handle(), ec.message());
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
-          .note("handle `{}`", connection->socket->native_handle())
           .primary(args.get_tls())
           .emit(diagnostics);
         return;
@@ -691,9 +705,11 @@ struct connection_manager_state {
             });
         TENZIR_ASSERT(connection != connections.end());
         if (err) {
+          TENZIR_DEBUG("nested pipeline terminated unexpectedly on handle "
+                       "`{}`: {}",
+                       connection->first, err);
           diagnostic::warning(err)
             .note("nested pipeline terminated unexpectedly")
-            .note("handle `{}`", connection->first)
             .primary(args.pipeline->source)
             .emit(diagnostics);
         }
@@ -720,9 +736,10 @@ struct connection_manager_state {
         },
         [this, handle
                = connection->socket->native_handle()](const caf::error& err) {
+          TENZIR_DEBUG("failed to start nested pipeline on handle `{}`: {}",
+                       handle, err);
           diagnostic::warning(err)
             .note("failed to start nested pipeline")
-            .note("handle `{}`", handle)
             .primary(args.pipeline->source)
             .emit(diagnostics);
         });
