@@ -19,6 +19,16 @@ on:
           the release to the user. Use full sentences and avoid abbreviations.
         required: true
         type: string
+  workflow_call:
+    inputs:
+      bump:
+        description: Version bump type (minor, patch, or major)
+        required: true
+        type: string
+      description:
+        description: Description of the release
+        required: true
+        type: string
 
 jobs:
   create:
@@ -95,10 +105,10 @@ jobs:
       - name: Create release
         id: release
         env:
-          RELEASE_DESCRIPTION: ${{ github.event.inputs.description }}
+          RELEASE_DESCRIPTION: ${{ inputs.description }}
         run: |
           VERSION=$(uvx tenzir-changelog release create \
-            --${{ github.event.inputs.bump }} \
+            --${{ inputs.bump }} \
             --intro "$RELEASE_DESCRIPTION" \
             --yes)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
