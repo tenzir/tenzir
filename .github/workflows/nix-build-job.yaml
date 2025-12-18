@@ -151,12 +151,8 @@ jobs:
               --release-tag "$version"
             )
           fi
-          nix shell --inputs-from ./. \
-            nixpkgs#git \
-            nixpkgs#python3 \
-            nixpkgs#python3Packages.boto3 \
-            nixpkgs#rclone \
-            nixpkgs#skopeo \
+          nix shell --impure --inputs-from ./. \
+            --expr 'with import (builtins.getFlake "nixpkgs") {}; [git rclone skopeo (python3.withPackages (p: [p.boto3]))]' \
             -c python3 .github/workflows/nix-build.py "${args[@]}"
       - name: Upload signed tarball artifact
         if: runner.os == 'macOS'
