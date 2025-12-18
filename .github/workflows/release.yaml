@@ -69,6 +69,7 @@ jobs:
         run: |
           git config --global user.name "tenzir-bot"
           git config --global user.email "engineering@tenzir.com"
+          # Embed token in remote URL for push authentication (checkout uses persist-credentials: false)
           git remote set-url origin https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/${{ github.repository }}.git
 
       - name: Determine release type based on branch
