@@ -78,8 +78,10 @@ jobs:
           CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
           if [[ "$CURRENT_BRANCH" == "main" ]]; then
             echo "is_latest=true" >> $GITHUB_OUTPUT
+            echo "Running on main branch - this will be a latest release"
           else
             echo "is_latest=false" >> $GITHUB_OUTPUT
+            echo "Running on $CURRENT_BRANCH branch - this will be a non-latest release"
           fi
 
       - name: Check for unreleased entries
@@ -168,7 +170,18 @@ jobs:
           git checkout -B latest
           git push origin latest --force
 
-      - name: Output success message
+      - name: Output success message (latest release)
+        if: steps.release_type.outputs.is_latest == 'true'
         run: |
           echo "🎉 Release ${{ steps.release.outputs.version }} created successfully!"
+          echo "📁 Release directory: changelog/releases/${{ steps.release.outputs.version }}/"
+          echo "🏷️ Tag: ${{ steps.release.outputs.version }}"
+          echo "🌿 Latest branch updated"
           echo "📋 GitHub release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.version }}"
+
+      - name: Output success message (non-latest release)
+        if: steps.release_type.outputs.is_latest == 'false'
+        run: |
+          echo "🎉 Release ${{ steps.release.outputs.version }} created successfully!"
+          echo "📁 Release directory: changelog/releases/${{ steps.release.outputs.version }}/"
+          echo "📋 Release copied to main branch"
