@@ -10,7 +10,6 @@ on:
         options:
           - minor
           - patch
-          - major
       description:
         description: |
           Description of the release
