@@ -16,7 +16,6 @@
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <folly/Executor.h>
-#include <folly/coro/AwaitResult.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/UnboundedQueue.h>

@@ -6,16 +6,20 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
+#include <tenzir/finalize_ctx.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/glob.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -89,7 +93,117 @@ private:
 
 using from_events_plugin = operator_inspection_plugin<from_events>;
 
-class from_plugin2 final : public virtual operator_factory_plugin {
+class From final : public Operator<void, table_slice> {
+public:
+  explicit From(std::vector<ast::expression> events)
+    : events_{std::move(events)} {
+  }
+
+  auto await_task() const -> Task<std::any> override {
+    co_return {};
+  }
+
+  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(next_ < events_.size());
+    auto sp = session_provider::make(ctx);
+    auto value = evaluator{nullptr, sp.as_session()}.eval(events_[next_]);
+    TENZIR_ASSERT(value.length() == 1);
+    TENZIR_ASSERT(value.parts().size() == 1);
+    auto part = std::move(value.part(0));
+    auto cast = part.as<record_type>();
+    TENZIR_ASSERT(cast);
+    auto schema = tenzir::type{"tenzir.from", cast->type};
+    auto slice = table_slice{arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                                      cast->length(),
+                                                      cast->array->fields()),
+                             schema};
+    co_await push(std::move(slice));
+    next_ += 1;
+  }
+
+  auto state() -> OperatorState override {
+    if (next_ == events_.size()) {
+      return OperatorState::done;
+    }
+    return OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("next", next_);
+  }
+
+private:
+  size_t next_ = 0;
+  std::vector<ast::expression> events_;
+};
+
+class from_plan final : public plan::operator_base {
+public:
+  from_plan() = default;
+
+  explicit from_plan(std::vector<ast::expression> events)
+    : events_{std::move(events)} {
+  }
+
+  auto spawn() && -> AnyOperator override {
+    return From{std::move(events_)};
+  }
+
+  auto name() const -> std::string override {
+    return "from_plan";
+  }
+
+  friend auto inspect(auto& f, from_plan& x) -> bool {
+    return f.apply(x.events_);
+  }
+
+private:
+  std::vector<ast::expression> events_;
+};
+
+class from_ir final : public ir::operator_base {
+public:
+  from_ir() = default;
+
+  explicit from_ir(std::vector<ast::expression> events)
+    : events_{std::move(events)} {
+  }
+
+  auto name() const -> std::string {
+    return "from_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(instantiate);
+    for (auto& event : events_) {
+      TRY(event.substitute(ctx));
+    }
+    return {};
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    return std::make_unique<from_plan>(std::move(events_));
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    // FIXME
+    TENZIR_ASSERT(input.is<void>());
+    return tag_v<table_slice>;
+  }
+
+  friend auto inspect(auto& f, from_ir& x) -> bool {
+    return f.apply(x.events_);
+  }
+
+private:
+  std::vector<ast::expression> events_;
+};
+
+class from_plugin2 final : public virtual operator_factory_plugin,
+                           public virtual operator_compiler_plugin {
 public:
   constexpr static auto docs
     = "https://docs.tenzir.com/reference/operators/from";
@@ -154,6 +268,14 @@ public:
       }
     }
     return std::make_unique<from_events>(std::move(events));
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::operator_ptr> override {
+    for (auto& arg : inv.args) {
+      TRY(arg.bind(ctx));
+    }
+    return std::make_unique<from_ir>(std::move(inv.args));
   }
 };
 
@@ -284,3 +406,9 @@ TENZIR_REGISTER_PLUGIN(
   tenzir::operator_inspection_plugin<tenzir::from_file_source>);
 TENZIR_REGISTER_PLUGIN(
   tenzir::operator_inspection_plugin<tenzir::from_file_sink>);
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::ir::operator_base,
+                            tenzir::plugins::from::from_ir>);
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::plan::operator_base,
+                            tenzir::plugins::from::from_plan>);
