@@ -1,10 +1,5 @@
 {
-  y: [
-    "1",
-    "2.3.4.5",
-    "example.org",
-    "{\"z\": []}",
-  ],
+  events: 2,
 }
 warning: json parser: type mismatch between list elements
  = note: field `y`

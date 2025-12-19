@@ -684,10 +684,29 @@ auto node_object::data(object_variant_type&& v) -> void {
   value_state_ = value_state_type::has_value;
 }
 
-auto node_object::data_unparsed(std::string text) -> void {
-  mark_this_alive();
-  value_state_ = value_state_type::unparsed;
-  data_.emplace<std::string>(std::move(text));
+auto node_object::data_unparsed(std::string text, bool overwrite) -> void {
+  const auto direct = overwrite
+                      or settings_.duplicate_keys == duplicate_keys::overwrite
+                      or not is_repeat_key_list;
+  if (direct) {
+    mark_this_alive();
+    value_state_ = value_state_type::unparsed;
+    data_.emplace<std::string>(std::move(text));
+    return;
+  }
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  /// The node could already have been upgraded to a list. If it is, we can
+  /// just append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    l->data_unparsed(std::move(text));
+    return;
+  }
+  /// If the node isn't already upgraded to a list, we need to do it
+  auto* l = list();
+  l->data_unparsed(std::move(text));
 }
 
 auto node_object::record(bool overwrite) -> node_record* {
@@ -1160,6 +1179,43 @@ auto node_object::clear() -> void {
   std::visit(visitor, data_);
 }
 
+auto node_object::stringify_or_null(class data_builder& rb,
+                                    const tenzir::type* seed) -> void {
+  const auto visitor = detail::overload{
+    [&](const caf::none_t&) {
+      /* noop */
+    },
+    [&]<typename T>(const T& v) {
+      if (seed and not seed->kind().is<data_to_type_t<T>>()) {
+        this->null(true);
+        return;
+      }
+      this->data(fmt::format("{}", v));
+    },
+    [&](node_record& r) {
+      auto v = tenzir::record{};
+      if (seed and not seed->kind().is<record_type>()) {
+        this->null(true);
+        return;
+      }
+      r.commit_to(v, rb, nullptr, value_path{}, false);
+      this->data(fmt::format("{}", v));
+    },
+    [&](node_list& l) {
+      auto v = tenzir::list{};
+      if (seed and not seed->kind().is<list_type>()) {
+        this->null(true);
+        return;
+      }
+      l.commit_to(v, rb, nullptr, value_path{}, false);
+      this->data(fmt::format("{}", v));
+    },
+    [](concepts::one_of<enriched_dummy, pattern_dummy, map_dummy> auto&) {
+      TENZIR_UNREACHABLE();
+    }};
+  match(data_, visitor);
+}
+
 auto node_list::push_back_node() -> node_object* {
   TENZIR_ASSERT(first_dead_idx_ <= data_.size());
   if (first_dead_idx_ < data_.size()) {
@@ -1343,7 +1399,8 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     /// will have the same signature, causing events that dont formally have the
     /// same schema to be merged. However, that seems acceptable for now.
     ///////////
-    auto initial_sig_size = sig.size();
+    type_index_ = type_index_empty;
+    const auto initial_sig_size = sig.size();
     auto last_sig_start_index = std::size_t{0};
     auto non_matching_signatures = false;
     auto has_list = false;
@@ -1351,15 +1408,18 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     for (auto [i, v] : detail::enumerate(alive_elements())) {
       auto curr_sig_start_index = sig.size();
       if (v.current_index() == type_index_list) {
+        update_type_index(type_index_, type_index_list);
         sig.push_back(list_start_marker);
         sig.push_back(list_end_marker);
       } else if (v.current_index() == type_index_record) {
+        update_type_index(type_index_, type_index_record);
         sig.push_back(record_start_marker);
         sig.push_back(record_end_marker);
       } else if (v.current_index() == type_index_null) {
         continue;
       } else {
         v.append_to_signature(sig, rb, seed_type_ptr, path.index(i));
+        update_type_index(type_index_, v.current_index());
       }
       if (last_sig_start_index == 0) {
         last_sig_start_index = curr_sig_start_index;
@@ -1392,6 +1452,11 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
         diagnostic::warning("type mismatch between list elements")
           .note("field `{}`", path));
     }
+    if (type_index_ == type_index_generic_mismatch) {
+      sig.resize(initial_sig_size);
+      sig.push_back(static_cast<std::byte>(type_index_string));
+      type_index_ = type_index_must_stringify;
+    }
   }
   sig.push_back(list_end_marker);
 }
@@ -1400,8 +1465,27 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
                           const tenzir::list_type* seed, value_path path,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto [i, v] : detail::enumerate(alive_elements())) {
-    v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i), mark_dead);
+  if (type_index_ == type_index_generic_mismatch) {
+    type_index_ = type_index_empty;
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.parse(rb, seed ? &field_seed : nullptr, path.index(i));
+      update_type_index(type_index_, v.current_index());
+    }
+    if (type_index_ == type_index_generic_mismatch) {
+      type_index_ = type_index_must_stringify;
+    }
+  }
+  if (type_index_ == type_index_must_stringify) {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.stringify_or_null(rb, seed ? &field_seed : nullptr);
+      v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
+  } else {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
   }
   TENZIR_ASSERT_EXPENSIVE(
     not mark_dead
@@ -1421,9 +1505,29 @@ auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
                           const tenzir::list_type* seed, value_path path,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto [i, v] : detail::enumerate(alive_elements())) {
-    auto& d = l.emplace_back();
-    v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i), mark_dead);
+  if (type_index_ == type_index_generic_mismatch) {
+    type_index_ = type_index_empty;
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.parse(rb, seed ? &field_seed : nullptr, path.index(i));
+      update_type_index(type_index_, v.current_index());
+    }
+    if (type_index_ == type_index_generic_mismatch) {
+      type_index_ = type_index_must_stringify;
+    }
+  }
+  if (type_index_ == type_index_must_stringify) {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.stringify_or_null(rb, seed ? &field_seed : nullptr);
+      auto& d = l.emplace_back();
+      v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
+  } else {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      auto& d = l.emplace_back();
+      v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
   }
   TENZIR_ASSERT_EXPENSIVE(
     not mark_dead

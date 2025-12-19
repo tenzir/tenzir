@@ -226,6 +226,27 @@ TEST("duplicate record fields to_list") {
   // fmt::println("{}", d);
 }
 
+TEST("duplicate record fields to_list with unparsed value") {
+  auto b = data_builder{
+    data_builder::settings{
+      .building_settings={
+        .duplicate_keys = duplicate_keys::to_list,
+      },
+    },
+  };
+  auto* r = b.record();
+  r->field("k")->data(int64_t{1});
+  r->field("k")->data_unparsed("2");
+  r->field("k")->data(int64_t{3});
+
+  const auto rec = safe_as_record(b.materialize());
+  const auto expected = tenzir::record{
+    {"k", tenzir::list{int64_t{1}, int64_t{2}, int64_t{3}}},
+  };
+  CHECK_EQUAL(rec, expected);
+  CHECK(not b.has_elements());
+}
+
 TEST("signature record empty") {
   auto b = data_builder{};
   (void)b.record();
@@ -395,27 +416,19 @@ TEST("signature list numeric unification") {
 TEST("signature list mismatch") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
-    data_builder::settings{
-      .schema_only = true,
-    },
     detail::data_builder::basic_parser,
     &dh,
   };
   auto* l = b.list();
-  l->data(0.0);
+  l->data(std::int64_t{0});
+  l->data(1.1);
   (void)l->record();
 
   detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
-    {
-      expected.insert(expected.end(),
-                      static_cast<std::byte>(
-                        detail::tl_index_of<field_type_list, double>::value));
-      expected.insert(expected.end(),
-                      detail::data_builder::record_start_marker);
-      expected.insert(expected.end(), detail::data_builder::record_end_marker);
-    }
+    expected.insert(expected.end(), static_cast<std::byte>(
+                                      detail::data_builder::type_index_string));
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
   }
 
@@ -424,6 +437,14 @@ TEST("signature list mismatch") {
   CHECK(compare_signatures(expected, sig));
 
   CHECK_EQUAL(dh.warnings, size_t{1});
+
+  const auto d = b.materialize();
+  const auto expected_d = tenzir::data{tenzir::list{
+    "0"s,
+    "1.1"s,
+    "{}"s,
+  }};
+  CHECK_EQUAL(d, expected_d);
 }
 
 TEST("signature record seeding matching") {
@@ -506,6 +527,7 @@ TEST("signature record seeding field not in data") {
 TEST("signature record seeding nested record") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
+    {.schema_only = true},
     detail::data_builder::basic_parser,
     &dh,
   };
@@ -607,6 +629,7 @@ TEST("signature record seeding nested record") {
 TEST("signature record seeding nested list") {
   auto dh = test_diagnostic_handler{};
   auto b = data_builder{
+    {.schema_only = true},
     detail::data_builder::basic_parser,
     &dh,
   };
