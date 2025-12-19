@@ -10,13 +10,13 @@ on:
         options:
           - minor
           - patch
-      description:
+      intro:
         description: |
-          Description of the release
+          Intro of the release
 
-          The description of the release should be 1-2 sentences long, must be
-          written in active voice, and should clearly communicate the theme of
-          the release to the user. Use full sentences and avoid abbreviations.
+          The intro should be 1-2 sentences long, must be written in active
+          voice, and should clearly communicate the theme of the release to the
+          user. Use full sentences and avoid abbreviations.
         required: true
         type: string
   workflow_call:
@@ -25,8 +25,8 @@ on:
         description: Version bump type (minor, patch, or major)
         required: true
         type: string
-      description:
-        description: Description of the release
+      intro:
+        description: Intro of the release
         required: true
         type: string
 
@@ -104,12 +104,10 @@ jobs:
 
       - name: Create release
         id: release
-        env:
-          RELEASE_DESCRIPTION: ${{ inputs.description }}
         run: |
           VERSION=$(uvx tenzir-changelog release create \
             --${{ inputs.bump }} \
-            --intro "$RELEASE_DESCRIPTION" \
+            --intro "${{ inputs.intro }}" \
             --yes)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Created release ${VERSION}"
