@@ -1,0 +1,19 @@
+name: Blocked
+on:
+  pull_request:
+    types:
+      - opened
+      - labeled
+      - unlabeled
+      - synchronize
+
+jobs:
+  check-blocked:
+    name: Check Blocked
+    runs-on: ubuntu-latest
+    steps:
+      - name: Blocked
+        run: |
+          # Fail if the PR has the 'blocked' label.
+          echo '${{ toJson(github.event.pull_request.labels.*.name) }}' |
+            jq -re 'all(. != "blocked")'
