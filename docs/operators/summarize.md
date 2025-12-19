@@ -13,9 +13,9 @@ summarize (group|aggregation)...
 ## Description
 
 The `summarize` operator groups events according to certain fields and applies
-[aggregation functions](/reference/functions#aggregation) to each group. The operator
-consumes the entire input before producing any output, and may reorder the event
-stream.
+[aggregation functions](/reference/functions#aggregation) to each group. By default,
+the operator consumes the entire input before producing any output, and may reorder
+the event stream.
 
 The order of the output fields follows the sequence of the provided arguments.
 Unspecified fields are dropped.
@@ -24,6 +24,21 @@ Unspecified fields are dropped.
 Use caution when applying this operator to large inputs. It currently buffers
 all data in memory. Out-of-core processing is on our roadmap.
 :::
+
+### Options
+
+An optional options record can be passed as the first argument to control
+the emission behavior:
+
+- `frequency: duration` - Emit aggregation results at this interval instead
+  of only at the end of the input stream.
+- `mode: string` - Controls how aggregations are handled between emissions:
+  - `"reset"` (default): Reset aggregations after each emission
+  - `"cumulative"`: Keep accumulating values across emissions
+  - `"update"`: Keep accumulating but only emit when values change
+
+When `frequency` is specified, the operator will emit intermediate results
+at the specified interval and always emit final results when the input ends.
 
 ### `group`
 
@@ -117,6 +132,51 @@ pairs:
 ts = round(ts, 1h)
 summarize ts, src_ip, dest_ip, sum(bytes_in), sum(bytes_out)
 ```
+
+### Emit aggregations every 5 seconds
+
+Emit the current count and groups every 5 seconds, resetting the
+count after each emission:
+
+```tql
+summarize {frequency: 5s}, count(), src_ip
+```
+
+This is useful for streaming use cases where you want periodic updates
+rather than waiting for all input to arrive.
+
+### Cumulative aggregations
+
+Emit running totals every minute, with values accumulating over time:
+
+```tql
+summarize {frequency: 1min, mode: "cumulative"}, sum(bytes), dst_ip
+```
+
+In cumulative mode, the aggregations continue to grow across emissions:
+
+```tql
+{dst_ip: "1.2.3.4", "sum(bytes)": 1000}    // After 1 minute
+{dst_ip: "1.2.3.4", "sum(bytes)": 2500}    // After 2 minutes
+{dst_ip: "1.2.3.4", "sum(bytes)": 4200}    // After 3 minutes
+```
+
+### Update mode for change detection
+
+Emit running totals, but only when values change from the previous emission:
+
+```tql
+summarize {frequency: 10s, mode: "update"}, count(), src_ip
+```
+
+This mode is useful for monitoring scenarios where you only want to be
+notified when metrics actually change, reducing noise from unchanged values.
+The first emission for each group is always sent, and subsequent emissions
+only occur when aggregation values differ from the previous emission.
+
+For example, if `src_ip` "10.0.0.1" has a count of 5 at t=0s, t=10s, and t=20s,
+then increases to 8 at t=30s, only emissions at t=0s (first) and t=30s (changed)
+will be produced for that group.
 
 ## See Also
 
