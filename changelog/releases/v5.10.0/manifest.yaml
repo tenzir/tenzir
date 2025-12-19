@@ -1,4 +1,4 @@
-created: 2025-07-07
+created: 2025-07-22
 title: "OCSF Trim & Derive"
 intro: |
   This release introduces two new powerful OCSF operators that automate enum derivation and provide intelligent field trimming. The update also includes string padding functions, better HTTP requests, IP categorization and much more!
