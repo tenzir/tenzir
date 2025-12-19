@@ -1,0 +1,69 @@
+name: Auto-Label PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Label based on changed file paths
+  path-labeler:
+    name: Path Labels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+  # Label based on changelog entries
+  changelog-labeler:
+    name: Changelog Labels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: changelog/unreleased/**
+
+      - name: Determine changelog labels
+        id: changelog-labels
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          labels=""
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            if [[ -f "$file" && "$file" == *.md ]]; then
+              # Extract type from YAML frontmatter
+              type=$(sed -n '/^---$/,/^---$/p' "$file" | grep '^type:' | sed 's/type:[[:space:]]*//')
+              case "$type" in
+                breaking) labels="$labels breaking" ;;
+                feature) labels="$labels feature" ;;
+                change) labels="$labels change" ;;
+                bugfix) labels="$labels bugfix" ;;
+              esac
+            fi
+          done
+          # Deduplicate labels
+          labels=$(echo "$labels" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)
+          echo "labels=$labels" >> "$GITHUB_OUTPUT"
+
+      - name: Apply changelog labels
+        if: steps.changelog-labels.outputs.labels != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = '${{ steps.changelog-labels.outputs.labels }}'.split(' ').filter(l => l);
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
