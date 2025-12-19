@@ -226,6 +226,27 @@ TEST("duplicate record fields to_list") {
   // fmt::println("{}", d);
 }
 
+TEST("duplicate record fields to_list with unparsed value") {
+  auto b = data_builder{
+    data_builder::settings{
+      .building_settings={
+        .duplicate_keys = duplicate_keys::to_list,
+      },
+    },
+  };
+  auto* r = b.record();
+  r->field("k")->data(int64_t{1});
+  r->field("k")->data_unparsed("2");
+  r->field("k")->data(int64_t{3});
+
+  const auto rec = safe_as_record(b.materialize());
+  const auto expected = tenzir::record{
+    {"k", tenzir::list{int64_t{1}, int64_t{2}, int64_t{3}}},
+  };
+  CHECK_EQUAL(rec, expected);
+  CHECK(not b.has_elements());
+}
+
 TEST("signature record empty") {
   auto b = data_builder{};
   (void)b.record();

@@ -684,10 +684,29 @@ auto node_object::data(object_variant_type&& v) -> void {
   value_state_ = value_state_type::has_value;
 }
 
-auto node_object::data_unparsed(std::string text) -> void {
-  mark_this_alive();
-  value_state_ = value_state_type::unparsed;
-  data_.emplace<std::string>(std::move(text));
+auto node_object::data_unparsed(std::string text, bool overwrite) -> void {
+  const auto direct = overwrite
+                      or settings_.duplicate_keys == duplicate_keys::overwrite
+                      or not is_repeat_key_list;
+  if (direct) {
+    mark_this_alive();
+    value_state_ = value_state_type::unparsed;
+    data_.emplace<std::string>(std::move(text));
+    return;
+  }
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  /// The node could already have been upgraded to a list. If it is, we can
+  /// just append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    l->data_unparsed(std::move(text));
+    return;
+  }
+  /// If the node isn't already upgraded to a list, we need to do it
+  auto* l = list();
+  l->data_unparsed(std::move(text));
 }
 
 auto node_object::record(bool overwrite) -> node_record* {

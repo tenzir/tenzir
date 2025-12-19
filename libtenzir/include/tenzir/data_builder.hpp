@@ -491,7 +491,7 @@ public:
   auto data(tenzir::data, bool overwrite = false) -> void;
   /// @brief Sets this field to some unparsed data.
   /// It is later parsed when a seed is potentially available.
-  auto data_unparsed(std::string raw_text) -> void;
+  auto data_unparsed(std::string raw_text, bool overwrite = false) -> void;
   auto null(bool overwrite = false) -> void;
   auto record(bool overwrite = false) -> node_record*;
   auto list(bool overwrite = false) -> node_list*;
