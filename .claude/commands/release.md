@@ -1,3 +1,7 @@
+---
+description: Cut a non-major release by analyzing changelog entries and triggering the GitHub workflow
+---
+
 # Release
 
 Create a non-major release by invoking the GitHub Release workflow.
