@@ -126,6 +126,71 @@ def build(attribute: str, is_release: bool) -> Path:
     return Path(result.stdout.strip())
 
 
+def notarize_macos_package(pkg_path: Path) -> None:
+    """Submit a signed .pkg to Apple for notarization and staple the ticket.
+
+    Requires these environment variables:
+        APPLE_API_KEY_PATH: Path to the .p8 API key file
+        APPLE_API_KEY_ID: App Store Connect API Key ID
+        APPLE_API_ISSUER_ID: App Store Connect Issuer ID
+    """
+    key_path = os.environ.get("APPLE_API_KEY_PATH")
+    key_id = os.environ.get("APPLE_API_KEY_ID")
+    issuer_id = os.environ.get("APPLE_API_ISSUER_ID")
+
+    if not all([key_path, key_id, issuer_id]):
+        warning("Apple notarization credentials not set, skipping notarization")
+        return
+
+    notice(f"Submitting {pkg_path.name} for notarization...")
+
+    # Submit for notarization and wait for completion
+    result = subprocess.run(
+        [
+            "xcrun", "notarytool", "submit",
+            str(pkg_path),
+            "--key", key_path,
+            "--key-id", key_id,
+            "--issuer", issuer_id,
+            "--wait",
+            "--timeout", "30m",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        error(f"Notarization failed: {result.stderr}")
+        notice(f"notarytool stdout: {result.stdout}")
+        raise RuntimeError(f"Notarization failed: {result.stderr}")
+
+    notice(f"Notarization successful for {pkg_path.name}")
+
+    # Staple the notarization ticket to the package
+    notice(f"Stapling notarization ticket to {pkg_path.name}")
+    result = subprocess.run(
+        ["xcrun", "stapler", "staple", str(pkg_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        error(f"Stapling failed: {result.stderr}")
+        raise RuntimeError(f"Stapling failed: {result.stderr}")
+
+    # Verify the staple
+    result = subprocess.run(
+        ["xcrun", "stapler", "validate", str(pkg_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        warning(f"Staple validation warning: {result.stderr}")
+    else:
+        notice(f"Successfully notarized and stapled {pkg_path.name}")
+
+
 def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity: str | None = None) -> Path:
     """Sign the tenzir binary inside macOS packages (.tar.gz and .pkg).
 
@@ -517,6 +582,12 @@ def main() -> int:
             warning("APPLE_INSTALLER_IDENTITY not set, skipping code signing")
         if signing_identity and installer_identity:
             pkg_dir = sign_macos_packages(pkg_dir, signing_identity, installer_identity)
+
+            # Notarize the .pkg for release builds
+            if is_release:
+                pkgs = list(pkg_dir.glob("*.pkg"))
+                if pkgs:
+                    notarize_macos_package(pkgs[0])
 
     # Output package directory for GitHub Actions
     if "GITHUB_OUTPUT" in os.environ:
