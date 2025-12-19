@@ -360,24 +360,36 @@ def upload_packages(
         "tarball": list(pkg_dir.glob("*.tar.gz")),
     }
 
+    # For releases, also upload to a "release" directory for stores that have "main"
+    # Keep "main" for backwards compatibility with the installer script
+    effective_stores = list(package_stores)
+    if release_tag:
+        for store in package_stores:
+            release_store = store.replace("/packages/main", "/packages/release")
+            if release_store != store and release_store not in effective_stores:
+                # Insert release store first so it's the primary destination
+                effective_stores.insert(0, release_store)
+
     # Upload to remote stores
-    for store in package_stores:
+    for store in effective_stores:
         store_type = store.split(":")[0]
         env = os.environ.copy()
         env[f"RCLONE_CONFIG_{store_type.upper()}_TYPE"] = store_type
 
         for label, files in packages.items():
             for pkg_file in files:
-                dest = f"{store}/{label}/{pkg_file.name}"
-                notice(f"Copying artifact to {dest}")
-                _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
+                # Only upload versioned packages for releases
+                if release_tag:
+                    dest = f"{store}/{label}/{pkg_file.name}"
+                    notice(f"Copying artifact to {dest}")
+                    _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
 
-                # Create alias copies
+                # Create alias copies directly from local file
                 for alias in aliases:
                     alias_name = re.sub(r"[0-9]+\.[0-9]+\.[0-9]+", alias, pkg_file.name)
                     alias_dest = f"{store}/{label}/{alias_name}"
                     notice(f"Copying artifact to {alias_dest}")
-                    _ = subprocess.run(["rclone", "-q", "copyto", dest, alias_dest], env=env, check=True)
+                    _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), alias_dest], env=env, check=True)
 
     # Copy to local packages directory for test steps
     notice("Copying artifacts to ./packages/")
