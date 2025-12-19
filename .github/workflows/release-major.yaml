@@ -1,0 +1,22 @@
+name: Release (Major)
+
+on:
+  workflow_dispatch:
+    inputs:
+      description:
+        description: |
+          Description of the release
+
+          The description of the release should be 1-2 sentences long, must be
+          written in active voice, and should clearly communicate the theme of
+          the release to the user. Use full sentences and avoid abbreviations.
+        required: true
+        type: string
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yaml
+    with:
+      bump: major
+      description: ${{ inputs.description }}
+    secrets: inherit
