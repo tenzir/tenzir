@@ -45,6 +45,7 @@ venv/
 # Claude
 CLAUDE.local.md
 CLAUDE-TODOS.md
+.docs/
 
 # SBOM artifacts
 /tenzir.spdx.json
