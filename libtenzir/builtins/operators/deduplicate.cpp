@@ -16,6 +16,7 @@
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 
 #include <fmt/format.h>
 #include <tsl/robin_hash.h>
@@ -58,6 +59,7 @@ struct configuration {
   std::optional<located<duration>> create_timeout;
   std::optional<located<duration>> write_timeout;
   std::optional<located<duration>> read_timeout;
+  std::optional<ast::field_path> count_field;
 
   friend auto inspect(auto& f, configuration& x) -> bool {
     return f.object(x).fields(f.field("keys", x.keys),
@@ -65,7 +67,8 @@ struct configuration {
                               f.field("distance", x.distance),
                               f.field("create_timeout", x.create_timeout),
                               f.field("write_timeout", x.write_timeout),
-                              f.field("read_timeout", x.read_timeout));
+                              f.field("read_timeout", x.read_timeout),
+                              f.field("count_field", x.count_field));
   }
 };
 
@@ -91,6 +94,30 @@ struct state {
                and now > written_at + cfg.write_timeout->inner)
            or (cfg.read_timeout and now > read_at + cfg.read_timeout->inner)
            or (cfg.distance and current_row > last_row + cfg.distance->inner);
+  }
+
+  auto is_double_expired(const configuration& cfg, int64_t current_row,
+                         std::chrono::steady_clock::time_point now) const
+    -> bool {
+    constexpr auto get_duration = [](auto opt) -> duration {
+      return opt ? opt->inner : duration::max();
+    };
+    const auto min_timeout = std::min(
+      {
+        get_duration(cfg.create_timeout),
+        get_duration(cfg.write_timeout),
+        get_duration(cfg.read_timeout),
+      },
+      std::less<>{});
+
+    if (min_timeout != duration::max()
+        and now > created_at + (2 * min_timeout)) {
+      return true;
+    }
+    if (cfg.distance and current_row > last_row + (2 * cfg.distance->inner)) {
+      return true;
+    }
+    return false;
   }
 };
 
@@ -124,7 +151,10 @@ public:
       if (now > last_cleanup_time + cleanup_duration) {
         last_cleanup_time = now;
         for (auto it = states.begin(); it != states.end();) {
-          if (it->second.is_expired(cfg_, row, now)) {
+          const auto should_remove
+            = cfg_.count_field ? it->second.is_double_expired(cfg_, row, now)
+                               : it->second.is_expired(cfg_, row, now);
+          if (should_remove) {
             it = states.erase(it);
           } else {
             ++it;
@@ -138,6 +168,13 @@ public:
       auto keys = eval(cfg_.keys, slice, ctrl.diagnostics());
       auto offset = int64_t{};
       auto ids = null_bitmap{};
+      auto count_builder = std::shared_ptr<arrow::Int64Builder>{};
+      if (cfg_.count_field) {
+        count_builder
+          = std::make_shared<arrow::Int64Builder>(arrow_memory_pool());
+        check(
+          count_builder->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
+      }
       for (const auto& key : keys.values()) {
         const auto current_row = row + offset++;
         // FIXME: This needs to materialize the data_view, otherwise this
@@ -149,26 +186,52 @@ public:
             .value()
             .reset(current_row, now);
           ids.append_bit(true);
+          if (count_builder) {
+            check(count_builder->Append(0));
+          }
           continue;
         }
         if (it->second.is_expired(cfg_, current_row, now)) {
+          if (count_builder) {
+            const auto double_expired
+              = it->second.is_double_expired(cfg_, current_row, now);
+            if (double_expired) {
+              check(count_builder->Append(0));
+            } else {
+              const auto dropped = it->second.count - cfg_.limit.inner;
+              check(count_builder->Append(dropped));
+            }
+          }
           it.value().reset(current_row, now);
           ids.append_bit(true);
           continue;
         }
         it.value().read_at = now;
         it.value().last_row = current_row;
-        if (it->second.count >= cfg_.limit.inner) {
+        it.value().count += 1;
+        if (it->second.count > cfg_.limit.inner) {
           ids.append_bit(false);
           continue;
         }
-        it.value().count += 1;
         it.value().written_at = now;
         ids.append_bit(true);
+        if (count_builder) {
+          check(count_builder->Append(0));
+        }
       }
       row += keys.length();
-      for (auto [begin, end] : select_runs(ids)) {
-        co_yield subslice(slice, begin, end);
+      if (cfg_.count_field) {
+        auto count_series = series{int64_type{}, finish(*count_builder)};
+        for (auto [begin, end] : select_runs(ids)) {
+          auto output_slice = subslice(slice, begin, end);
+          auto count_slice = count_series.slice(begin, end - begin);
+          co_yield assign(cfg_.count_field.value(), count_slice, output_slice,
+                          ctrl.diagnostics(), assign_position::back);
+        }
+      } else {
+        for (auto [begin, end] : select_runs(ids)) {
+          co_yield subslice(slice, begin, end);
+        }
       }
     }
   }
@@ -261,6 +324,7 @@ public:
     parser.named("create_timeout", cfg.create_timeout);
     parser.named("write_timeout", cfg.write_timeout);
     parser.named("read_timeout", cfg.read_timeout);
+    parser.named("count_field", cfg.count_field);
     auto parser_inv
       = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
     TRY(parser.parse(parser_inv, ctx));
