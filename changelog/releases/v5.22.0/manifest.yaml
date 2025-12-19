@@ -1,4 +1,4 @@
-created: 2025-10-27
+created: 2025-12-16
 title: "UDO Arguments"
 intro: |
   This release introduces support for arguments in user-defined operators, letting operators declare positional and named parameters with optional default values and use them just like built-in operators. It also enhances parser behavior for duplicate keys and includes several important stability, parsing, and retention improvements to make pipelines more flexible and reliable.

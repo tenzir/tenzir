@@ -1,4 +1,4 @@
-created: 2025-09-02
+created: 2025-09-11
 title: "SentinelOne Data Lake"
 intro: |
   This release introduces an integration fo SentinelOne Singularity™ Data Lake and a new message based `to_kafka` operator that features a one to one event to message relation.

@@ -1,4 +1,4 @@
-created: 2025-06-11
+created: 2025-06-12
 title: "Format Strings"
 intro: |
   With the introduction of format strings to TQL, this release makes string construction from multiple parts easier than ever before.
