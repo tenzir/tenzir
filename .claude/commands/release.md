@@ -69,13 +69,15 @@ The title and intro must be driven by the headline feature:
 
 Examples of good headline-driven titles and intros:
 
-- Title: "UDO Arguments"
+- Title: "Operator Arguments"
   Intro: "This release introduces support for arguments in user-defined
-  operators..."
+  operators, enabling parameterized pipelines that can be customized at
+  invocation time."
 
 - Title: "Better Backpressure"
   Intro: "This release improves the stability of pipelines by applying
-  backpressure more effectively..."
+  backpressure more effectively when downstream operators are slower than
+  upstream sources."
 
 - Title: "Publishing Bugfix"
   Intro: "This release fixes a bug where the publish operator could drop
