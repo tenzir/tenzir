@@ -193,19 +193,53 @@ struct std::hash<tenzir::SubKeyView> {
 namespace tenzir {
 #endif
 
+template <class T>
+class Err {
+public:
+  explicit Err(T value) : value_{std::move(value)} {
+  }
+
+  auto unwrap() && -> T {
+    return std::move(value_);
+  }
+
+private:
+  T value_;
+};
+
+using Unit = std::monostate;
+
+template <class T>
+using VoidToUnit = std::conditional_t<std::is_void_v<T>, Unit, T>;
+
 template <class Value, class Error>
 class [[nodiscard]] Result {
 public:
   using ValueRef = std::add_lvalue_reference_t<Value>;
 
+  Result() = default;
+
+  template <class T>
+    requires std::constructible_from<Value, T>
+  explicit(false) Result(T value) : value_{std::move(value)} {
+  }
+
+  explicit(false) Result(Err<Error> err) : value_{std::move(err)} {
+  }
+
   auto expect(std::string_view msg) -> ValueRef {
     TENZIR_UNUSED(msg);
-    TENZIR_TODO();
+    if (is_err()) {
+      TENZIR_TODO();
+    }
   };
 
   auto is_err() const -> bool {
-    return false;
+    return is<Err<Error>>(value_);
   }
+
+private:
+  variant<VoidToUnit<Value>, Err<Error>> value_;
 };
 
 TENZIR_ENUM(
@@ -221,12 +255,15 @@ struct OperatorMsg : variant<T, Signal> {
   using variant<T, Signal>::variant;
 };
 
+template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Push<OperatorMsg<table_slice>>& push) : push_{push} {
+  explicit OpenPipeline(Push<OperatorMsg<Input>>& push) : push_{push} {
   }
 
-  auto push(table_slice input) -> Task<Result<void, table_slice>> {
+  // TODO: What if the pipeline starts with a source?
+  template <std::same_as<Input> In>
+  auto push(In input) -> Task<Result<void, In>> {
     // FIXME: What to do when closed?
     TENZIR_WARN("pushing {} rows to subpipeline", input.rows());
     co_await push_(std::move(input));
@@ -235,19 +272,22 @@ public:
   }
 
   auto close() -> void {
-    TENZIR_TODO();
+    // FIXME: TODO
   }
 
 private:
-  std::reference_wrapper<Push<OperatorMsg<table_slice>>> push_;
+  std::reference_wrapper<Push<OperatorMsg<Input>>> push_;
 };
+
+using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<table_slice>>;
 
 class SubManager {
 public:
-  virtual auto spawn_sub(SubKey key, plan::pipeline pipe) -> Task<OpenPipeline>
+  virtual auto spawn_sub(SubKey key, plan::pipeline pipe)
+    -> Task<AnyOpenPipeline>
     = 0;
 
-  virtual auto get_sub(SubKeyView key) -> std::optional<OpenPipeline> = 0;
+  virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
 
 protected:
   ~SubManager() = default;
@@ -295,9 +335,9 @@ public:
     co_return;
   }
 
-  auto spawn_sub(SubKey key, plan::pipeline pipe) -> Task<OpenPipeline>;
+  auto spawn_sub(SubKey key, plan::pipeline pipe) -> Task<AnyOpenPipeline>;
 
-  auto get_sub(SubKeyView key) -> std::optional<OpenPipeline>;
+  auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline>;
 
 private:
   caf::actor_system& sys_;
@@ -529,7 +569,13 @@ auto select_into_variant(SemiAwaitable&&... awaitable)
 template <class Input, class Output>
 class OperatorChain {
 public:
-  static auto try_from(std::vector<AnyOperator> operators)
+  OperatorChain(const OperatorChain&) = delete;
+  OperatorChain& operator=(const OperatorChain&) = delete;
+  OperatorChain(OperatorChain&&) = default;
+  OperatorChain& operator=(OperatorChain&&) = default;
+  ~OperatorChain() = default;
+
+  static auto try_from(std::vector<AnyOperator>&& operators)
     -> std::optional<OperatorChain<Input, Output>> {
     auto input = operator_type{tag_v<Input>};
     for (auto& op : operators) {

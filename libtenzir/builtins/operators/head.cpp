@@ -295,8 +295,10 @@ public:
     return element_type_tag{tag_v<table_slice>};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    (void)ctx;
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<table_slice>());
     return std::make_unique<head_plan>(as<int64_t>(count_));
   }
 

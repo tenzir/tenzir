@@ -134,13 +134,15 @@ public:
         co_return;
       }
       auto fin_ctx = finalize_ctx{ctx};
-      auto plan = std::move(copy).finalize(fin_ctx);
+      auto plan = std::move(copy).finalize(tag_v<table_slice>, fin_ctx);
       if (not plan) {
         co_return;
       }
       sub = co_await ctx.spawn_sub(std::move(key_data), std::move(*plan));
     }
-    auto closed = (co_await sub->push(std::move(input))).is_err();
+    TENZIR_ASSERT(sub);
+    auto& cast = as<OpenPipeline<table_slice>>(*sub);
+    auto closed = (co_await cast.push(std::move(input))).is_err();
     if (closed) {
       // TODO: Ignore?
     }
@@ -226,9 +228,10 @@ public:
     -> failure_or<std::optional<element_type_tag>> override {
     return pipe_.infer_type(input, dh);
   }
-
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    (void)ctx;
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<table_slice>());
     return std::make_unique<group_bp>(std::move(over_), std::move(pipe_), id_);
   }
 

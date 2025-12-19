@@ -305,8 +305,9 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(input, ctx);
     return std::make_unique<discard_plan>();
   }
 

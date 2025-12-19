@@ -70,7 +70,9 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  virtual auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> = 0;
+  virtual auto finalize(element_type_tag input,
+                        finalize_ctx ctx) && -> failure_or<plan::pipeline>
+    = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -170,7 +172,8 @@ struct pipeline {
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
   /// @see operator_base
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline>;
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline>;
 
   /// @see operator_base
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

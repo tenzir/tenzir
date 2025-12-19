@@ -1332,7 +1332,7 @@ public:
   }
 };
 
-class JsonImpl final : public Operator<table_slice, chunk_ptr> {
+class WriteJson final : public Operator<table_slice, chunk_ptr> {
 public:
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> {
@@ -1365,14 +1365,14 @@ public:
   }
 };
 
-class JsonPlan final : public plan::operator_base {
+class WriteJsonPlan final : public plan::operator_base {
 public:
   auto name() const -> std::string override {
-    return "json_plan";
+    return "WriteJsonPlan";
   }
 
   auto spawn() && -> AnyOperator override {
-    return JsonImpl{};
+    return WriteJson{};
   }
 };
 
@@ -1387,8 +1387,11 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    return std::make_unique<JsonPlan>();
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<table_slice>());
+    return std::make_unique<WriteJsonPlan>();
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

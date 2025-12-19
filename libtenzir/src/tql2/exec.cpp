@@ -566,7 +566,7 @@ private:
 
 auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
               diagnostic_handler& dh) -> Task<failure_or<void>> {
-  TENZIR_WARN("spawning plan");
+  TENZIR_WARN("spawning plan: {:#?}", use_default_formatter{pipe});
   auto ops = std::vector<AnyOperator>{};
   for (auto& op : std::move(pipe).unwrap()) {
     if (op->needs_node()) {
@@ -676,7 +676,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Finalize the IR into something that we can execute.
   auto i_ctx = finalize_ctx{c_ctx};
-  TRY(auto finalized, std::move(ir).finalize(i_ctx));
+  TRY(auto finalized, std::move(ir).finalize(tag_v<void>, i_ctx));
   if (cfg.dump_finalized) {
     fmt::print("{:#?}\n", use_default_formatter(finalized));
     return not ctx.has_failure();

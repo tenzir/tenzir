@@ -183,7 +183,11 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_WARN("{}", input);
+    TENZIR_ASSERT(input.is<void>());
     return std::make_unique<from_plan>(std::move(events_));
   }
 

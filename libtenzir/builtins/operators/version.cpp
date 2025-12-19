@@ -332,7 +332,7 @@ private:
 class Version final : public Operator<void, table_slice> {
 public:
   auto start(OpCtx& ctx) -> Task<void> override {
-    diagnostic::warning("HELLO from version").emit(ctx);
+    // diagnostic::warning("HELLO from version").emit(ctx);
     // auto slice = make_version(caf::content(ctx.actor_system().config()));
     // co_await push(slice);
     TENZIR_INFO("leaving Version::start");
@@ -388,7 +388,7 @@ public:
   }
 
 private:
-  static constexpr size_t total = 5;
+  static constexpr size_t total = 1;
   size_t count_ = 0;
 };
 
@@ -434,9 +434,10 @@ public:
     TENZIR_UNUSED(ctx, instantiate);
     return {};
   }
-
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<void>());
     return std::make_unique<version_plan>();
   }
 

@@ -734,7 +734,10 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<chunk_ptr>());
     return std::make_unique<SaveStdoutPlan>();
   }
 

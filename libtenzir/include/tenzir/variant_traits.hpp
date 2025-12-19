@@ -263,10 +263,10 @@ concept variant_matcher_for =
   /// Must have variant traits for `V`
   has_variant_traits<V>
   /// Must be able to `get` the first alternative.
-  and requires(F f, V v) { variant_get<0>(v); }
+  and requires(F f) { variant_get<0>(std::declval<V>()); }
   /// The functor must be invocable with the 0th alternative, as that determines
   /// the return type of the entire match.
-  and requires(F f, V v) { f(variant_get<0>(v)); }
+  and requires(F f) { f(variant_get<0>(std::declval<V>())); }
   /// The functor must be invocable for all alternatives and they must all yield
   /// the same type.
   and variant_invocable_for_all<F, V, variant_invoke_result_t<V, F>,

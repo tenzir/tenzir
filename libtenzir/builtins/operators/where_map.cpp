@@ -923,10 +923,10 @@ public:
     return {};
   }
 
-  // TODO: Should this get the type of the input?
-  // Or do we get it earlier? Or later?
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    (void)ctx;
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<table_slice>());
     return std::make_unique<where_plan>(std::move(predicate_));
   }
 

@@ -275,11 +275,13 @@ private:
       auto result = copy.substitute(substitute_ctx{ctx_, nullptr}, true);
       // TODO
       TENZIR_ASSERT(result);
+#if 0
       auto plan = std::move(copy).finalize(finalize_ctx{ctx_}).unwrap();
       sub_ = exec::make_subpipeline(
         std::move(plan),
         restore ? std::optional{restore->checkpoint_reader} : std::nullopt,
         ctx_);
+#endif
     }
   }
 
@@ -295,62 +297,138 @@ private:
   exec::subpipeline_actor sub_;
 };
 
-class Every final : public Operator<table_slice, table_slice> {
+// TODO
+#define TENZIR_TRY_COMMON_(var, expr, ret)                                     \
+  auto var = (expr);                                                           \
+  if (not tenzir::tryable<decltype(var)>::is_success(var)) [[unlikely]] {      \
+    ret tenzir::tryable<decltype(var)>::get_error(std::move(var));             \
+  }
+
+#define TENZIR_TRY_EXTRACT_(decl, var, expr, ret)                              \
+  TENZIR_TRY_COMMON_(var, expr, ret);                                          \
+  decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
+
+#define TENZIR_TRY_DISCARD_(var, expr, ret)                                    \
+  TENZIR_TRY_COMMON_(var, expr, ret)                                           \
+  if (false) {                                                                 \
+    /* trigger [[nodiscard]] */                                                \
+    tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
+  }
+
+#define TENZIR_TRY_X_1(expr, ret)                                              \
+  TENZIR_TRY_DISCARD_(TENZIR_PP_PASTE2(_try, __COUNTER__), expr, ret)
+
+#define TENZIR_TRY_X_2(decl, expr, ret)                                        \
+  TENZIR_TRY_EXTRACT_(decl, TENZIR_PP_PASTE2(_try, __COUNTER__), expr, ret)
+
+#define TENZIR_CO_TRY(...)                                                     \
+  TENZIR_PP_OVERLOAD(TENZIR_TRY_X_, __VA_ARGS__)(__VA_ARGS__, co_return)
+
+#define CO_TRY TENZIR_CO_TRY
+
+auto sleep(duration d) -> Task<void> {
+  return folly::coro::sleep(
+    std::chrono::duration_cast<folly::HighResDuration>(d));
+}
+
+auto sleep_until(time t) -> Task<void> {
+  auto now = time::clock::now();
+  // The check is needed because `-` can overflow and yield unexpected results.
+  auto diff = t < now ? duration{0} : t - time::clock::now();
+  TENZIR_WARN("diff = {}", diff);
+  return sleep(diff);
+}
+
+template <class Input>
+class EveryBase : public Operator<Input, table_slice> {
 public:
-  Every(duration interval, ir::pipeline ir)
+  EveryBase(duration interval, ir::pipeline ir)
     : interval_{interval}, ir_{std::move(ir)} {
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto start(OpCtx& ctx) -> Task<void> override {
+    // TODO: Do we directly want to spawn one here? What if we restore?
+    // (co_await spawn_new(ctx)).ignore();
+    co_return;
+  }
+
+  auto await_task() const -> Task<std::any> override {
+    auto next = last_started_ + interval_;
+    TENZIR_WARN("sleeping in every until {}", next);
+    co_await sleep_until(next);
+    TENZIR_WARN("waking every");
+    co_return {};
+  }
+
+  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    last_started_ = time::clock::now();
+    if (next_ > 0) {
+      auto last_pipe = ctx.get_sub(next_ - 1);
+      if (last_pipe) {
+        auto pipe = as<OpenPipeline<Input>>(*last_pipe);
+        // TODO: Does this get rid of it?
+        pipe.close();
+      } else {
+        // FIXME
+      }
+    }
+    (co_await spawn_new(ctx)).ignore();
+  }
+
+  auto spawn_new(OpCtx& ctx) -> Task<failure_or<AnyOpenPipeline>> {
     auto copy = ir_;
-    // FIXME: Don't do ths.
+    // FIXME: Don't do this.
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg, ctx.actor_system()};
-    if (not copy.substitute(substitute_ctx{b_ctx, nullptr}, true)) {
-      co_return;
-    }
-    auto plan = std::move(copy).finalize(finalize_ctx{b_ctx});
-    if (not plan) {
-      co_return;
-    }
-    // TODO: Don't spawn ourselves... Fragments of the plan might need to be
-    // spawned remote.
-    auto ops = std::vector<AnyOperator>{};
-    for (auto& op : std::move(*plan).unwrap()) {
-      ops.push_back(std::move(*op).spawn());
-    }
-    auto sub = co_await ctx.spawn_sub({}, std::move(*plan));
-    auto chain
-      = OperatorChain<table_slice, table_slice>::try_from(std::move(ops));
-    TENZIR_ASSERT(chain);
-    auto input_vec = std::vector<table_slice>{};
-    input_vec.push_back(std::move(input));
-    auto input_gen = folly::coro::co_invoke(
-      [input_vec
-       = std::move(input_vec)] mutable -> AsyncGenerator<table_slice> {
-        for (auto& input : input_vec) {
-          co_yield std::move(input);
-        }
-      });
-    // auto gen = run_pipeline_with_input(std::move(input_gen),
-    // std::move(*chain),
-    //                                    ctx.actor_system(), ctx);
-    // while (auto output = co_await gen.next()) {
-    //   co_await push(std::move(*output));
-    // }
+    CO_TRY(copy.substitute(substitute_ctx{b_ctx, nullptr}, true));
+    CO_TRY(auto plan,
+           std::move(copy).finalize(tag_v<Input>, finalize_ctx{b_ctx}));
+    auto id = next_;
+    next_ += 1;
+    co_return co_await ctx.spawn_sub(id, std::move(plan));
   }
 
-  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
-                   OpCtx& ctx) -> Task<void> override {
-    co_await push(std::move(slice));
+  auto snapshot(Serde& s) -> void override {
+    s("next", next_);
+    s("last_started", last_started_);
   }
 
-private:
+protected:
   duration interval_;
   ir::pipeline ir_;
+
+  time last_started_ = time::min();
+  size_t next_ = 0;
 };
 
+template <class Input>
+class Every;
+
+template <>
+class Every<table_slice> final : public EveryBase<table_slice> {
+public:
+  using EveryBase::EveryBase;
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ERROR("got input in every: {}", input.rows());
+    TENZIR_UNUSED(push);
+    // TODO: Do we know that we have a subpipeline running?
+    TENZIR_ASSERT(this->next_ > 0);
+    auto sub
+      = as<OpenPipeline<table_slice>>(check(ctx.get_sub(this->next_ - 1)));
+    (co_await sub.push(std::move(input))).expect("not closed?");
+  }
+};
+
+template <>
+class Every<void> final : public EveryBase<void> {
+public:
+  using EveryBase<void>::EveryBase;
+};
+
+template <class Input>
 class every_plan final : public plan::operator_base {
 public:
   every_plan() = default;
@@ -360,7 +438,12 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "every_plan";
+    // TODO: Can we do better?
+    if constexpr (std::same_as<Input, void>) {
+      return "every_plan_void";
+    } else {
+      return "every_plan_events";
+    }
   }
 
   auto spawn(plan::operator_spawn_args args) const
@@ -370,7 +453,7 @@ public:
   }
 
   auto spawn() && -> AnyOperator override {
-    return Every{interval_, std::move(pipe_)};
+    return Every<Input>{interval_, std::move(pipe_)};
   }
 
   friend auto inspect(auto& f, every_plan& x) -> bool {
@@ -379,19 +462,9 @@ public:
   }
 
 private:
-  // TODO: This needs to be part of the actor.
-  auto start_new(base_ctx ctx) const -> failure_or<plan::pipeline> {
-    auto copy = pipe_;
-    TRY(copy.substitute(substitute_ctx{ctx, nullptr}, true));
-    // TODO: Where is the type check?
-    return std::move(copy).finalize(finalize_ctx{ctx});
-  }
-
   duration interval_{};
   ir::pipeline pipe_;
 };
-
-using every_exec_plugin = inspection_plugin<plan::operator_base, every_plan>;
 
 class every_ir final : public ir::operator_base {
 public:
@@ -405,14 +478,22 @@ public:
     return "every_ir";
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     // TODO: Test the instantiation of the subpipeline? But in general,
     // instantiation is done later by the actor.
     // TRY(auto pipe, tenzir::instantiate(std::move(pipe_), ctx));
     // We know that this succeeds because instantiation must happen before.
     auto interval = as<duration>(interval_);
-    return std::make_unique<every_plan>(interval, std::move(pipe_));
+    return match(
+      input,
+      [&]<class Input>(tag<Input>) -> plan::operator_ptr {
+        return std::make_unique<every_plan<Input>>(interval, std::move(pipe_));
+      },
+      [&](tag<chunk_ptr>) -> plan::operator_ptr {
+        TENZIR_UNREACHABLE();
+      });
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
@@ -500,6 +581,12 @@ public:
 
 } // namespace tenzir::plugins::every_cron
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_exec_plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::plan::operator_base,
+                            tenzir::plugins::every_cron::every_plan<void>>)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<
+    tenzir::plan::operator_base,
+    tenzir::plugins::every_cron::every_plan<tenzir::table_slice>>)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_ir_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_compiler_plugin)

@@ -56,8 +56,9 @@ public:
 
   friend auto inspect(auto& f, pipeline& x) -> bool {
     // TODO: Tests?
-    return f.object(x).fields( // f.field("id", x.id_),
-      f.field("operators", x.operators_));
+    return f.apply(x.operators_);
+    // return f.object(x).fields(f.field("id", x.id_),
+    //                           f.field("operators", x.operators_));
   }
 
 private:

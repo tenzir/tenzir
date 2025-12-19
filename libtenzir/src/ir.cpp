@@ -172,7 +172,10 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<table_slice>());
     return std::make_unique<set_plan>(std::move(assignments_), order_);
   }
 
@@ -286,11 +289,14 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TRY(auto then_instance, std::move(then_).finalize(ctx));
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(input.is<table_slice>());
+    TRY(auto then_instance, std::move(then_).finalize(input, ctx));
     auto else_instance = plan::pipeline{};
     if (else_) {
-      TRY(else_instance, std::move(else_->pipe).finalize(ctx));
+      TRY(else_instance, std::move(else_->pipe).finalize(input, ctx));
     }
     return std::make_unique<if_exec>(std::move(condition_),
                                      std::move(then_instance),
@@ -582,8 +588,9 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    (void)ctx;
+  auto finalize(element_type_tag input,
+                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
+    TENZIR_UNUSED(input, ctx);
     auto op = as<operator_ptr>(std::move(state_));
     if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
       auto result = std::vector<plan::operator_ptr>{};
@@ -732,6 +739,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           op.inner(),
           [&](const native_operator& op) -> failure_or<void> {
             if (not op.ir_plugin) {
+// FIXME: Decider whether to make a hard cut or not.
+#if 0
               TENZIR_ASSERT(op.factory_plugin);
               for (auto& x : x.args) {
                 // TODO: This doesn't work for operators which take
@@ -744,6 +753,12 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
               TRY(operators.back()->substitute(substitute_ctx{ctx, nullptr},
                                                false));
               return {};
+#else
+              diagnostic::error("this operator was not ported yet")
+                .primary(x.op)
+                .emit(ctx);
+              return failure::promise();
+#endif
             }
             // If there is a pipeline argument, we can't resolve `let`s in there
             // because the operator might introduce its own bindings. Thus, we
@@ -854,9 +869,11 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> {
+auto ir::pipeline::finalize(element_type_tag input,
+                            finalize_ctx ctx) && -> failure_or<plan::pipeline> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
+  // TODO: This is probably not the right place for optimizations.
   auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
   TENZIR_ASSERT(opt.replacement.lets.empty());
   // TODO: Should we really ignore this here?
@@ -868,9 +885,15 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> {
   *this = std::move(opt.replacement);
   auto result = std::vector<plan::operator_ptr>{};
   for (auto& op : operators) {
-    TRY(auto ops, std::move(*op).finalize(ctx));
+    // We already checked, there should be no diagnostics here.
+    auto dh = null_diagnostic_handler{};
+    auto output = op->infer_type(input, dh);
+    TENZIR_ASSERT(output);
+    TENZIR_ASSERT(*output);
+    TRY(auto ops, std::move(*op).finalize(input, ctx));
     result.insert(result.end(), std::move_iterator{ops.begin()},
                   std::move_iterator{ops.end()});
+    input = **output;
   }
   TENZIR_DIAGNOSTIC_PUSH
   TENZIR_DIAGNOSTIC_IGNORE_REDUNDANT_MOVE
