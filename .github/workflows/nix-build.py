@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 from pathlib import Path
 
@@ -124,6 +125,114 @@ def build(attribute: str, is_release: bool) -> Path:
     notice(f"Building {attribute}")
     result = run(cmd)
     return Path(result.stdout.strip())
+
+
+def notarize_macos_package(pkg_path: Path) -> None:
+    """Submit a signed .pkg to Apple for notarization and staple the ticket.
+
+    Requires these environment variables:
+        APPLE_API_KEY_PATH: Path to the .p8 API key file
+        APPLE_API_KEY_ID: App Store Connect API Key ID
+        APPLE_API_ISSUER_ID: App Store Connect Issuer ID
+    """
+    key_path = os.environ.get("APPLE_API_KEY_PATH")
+    key_id = os.environ.get("APPLE_API_KEY_ID")
+    issuer_id = os.environ.get("APPLE_API_ISSUER_ID")
+
+    if not all([key_path, key_id, issuer_id]):
+        warning("Apple notarization credentials not set, skipping notarization")
+        return
+
+    notice(f"Submitting {pkg_path.name} for notarization...")
+
+    # Submit for notarization and wait for completion
+    result = subprocess.run(
+        [
+            "xcrun", "notarytool", "submit",
+            str(pkg_path),
+            "--key", key_path,
+            "--key-id", key_id,
+            "--issuer", issuer_id,
+            "--wait",
+            "--timeout", "30m",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    notice(f"notarytool stdout: {result.stdout}")
+    if result.stderr:
+        notice(f"notarytool stderr: {result.stderr}")
+
+    # Extract submission ID for log fetching
+    submission_id = None
+    for line in result.stdout.splitlines():
+        if line.strip().startswith("id:"):
+            submission_id = line.split(":", 1)[1].strip()
+            break
+
+    def fetch_notarization_log() -> None:
+        """Fetch and display the notarization log for debugging."""
+        if not submission_id:
+            warning("Could not extract submission ID for log fetching")
+            return
+        notice(f"Fetching notarization log for submission {submission_id}")
+        log_result = subprocess.run(
+            [
+                "xcrun", "notarytool", "log",
+                submission_id,
+                "--key", key_path,
+                "--key-id", key_id,
+                "--issuer", issuer_id,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        notice(f"Notarization log:\n{log_result.stdout}")
+        if log_result.stderr:
+            notice(f"Log stderr: {log_result.stderr}")
+
+    if result.returncode != 0:
+        error(f"Notarization failed with return code {result.returncode}")
+        fetch_notarization_log()
+        raise RuntimeError(f"Notarization failed: {result.stderr}")
+
+    # Check for actual success status in output
+    if "status: Accepted" not in result.stdout:
+        error(f"Notarization was not accepted")
+        fetch_notarization_log()
+        raise RuntimeError(f"Notarization status was not 'Accepted'")
+
+    notice(f"Notarization successful for {pkg_path.name}")
+
+    # Staple the notarization ticket to the package
+    # Retry a few times as there can be a delay before the ticket is available
+    notice(f"Stapling notarization ticket to {pkg_path.name}")
+    max_attempts = 5
+    retry_delay = 30  # seconds
+
+    for attempt in range(1, max_attempts + 1):
+        result = subprocess.run(
+            ["xcrun", "stapler", "staple", str(pkg_path)],
+            capture_output=True,
+            text=True,
+        )
+
+        # Check for success message in stdout (stapler prints warnings to stderr even on success)
+        if "The staple and validate action worked!" in result.stdout:
+            notice(f"Successfully notarized and stapled {pkg_path.name}")
+            return
+
+        # Check if it's a "Record not found" error (ticket not yet available)
+        if "Record not found" in result.stdout and attempt < max_attempts:
+            notice(f"Ticket not yet available, retrying in {retry_delay}s (attempt {attempt}/{max_attempts})")
+            time.sleep(retry_delay)
+            continue
+
+        # Final attempt failed or non-recoverable error
+        error(f"Stapling failed: {result.stderr}")
+        error(f"stdout: {result.stdout}")
+        raise RuntimeError(f"Stapling failed after {attempt} attempts")
 
 
 def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity: str | None = None) -> Path:
@@ -517,6 +626,12 @@ def main() -> int:
             warning("APPLE_INSTALLER_IDENTITY not set, skipping code signing")
         if signing_identity and installer_identity:
             pkg_dir = sign_macos_packages(pkg_dir, signing_identity, installer_identity)
+
+            # Notarize the .pkg for release builds
+            if is_release:
+                pkgs = list(pkg_dir.glob("*.pkg"))
+                if pkgs:
+                    notarize_macos_package(pkgs[0])
 
     # Output package directory for GitHub Actions
     if "GITHUB_OUTPUT" in os.environ:

@@ -114,6 +114,15 @@ jobs:
           INSTALLER_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | grep -o '"[^"]*"' | head -1 | tr -d '"')
           echo "APPLE_INSTALLER_IDENTITY=$INSTALLER_IDENTITY" >> "$GITHUB_ENV"
           echo "::notice::Installer signing identity: $INSTALLER_IDENTITY"
+      - name: Setup Apple notarization credentials
+        if: runner.os == 'macOS' && github.event_name == 'release'
+        run: |
+          # Write the API key to a temporary file
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "$API_KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=${{ secrets.APPLE_API_KEY_ID }}" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER_ID=${{ secrets.APPLE_API_ISSUER_ID }}" >> "$GITHUB_ENV"
       - name: Build and Publish
         id: build
         env:
