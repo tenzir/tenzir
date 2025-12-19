@@ -11,10 +11,8 @@ Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
 ```tql
 to_splunk url:string, hec_token=string,
           [event=any, host=string, source=string, sourcetype=expr, index=expr,
-          tls=bool, skip_peer_verification=bool, cacert=string, certfile=string,
-          keyfile=string, tls_minium_version=string, tls_ciphers=string,
           print_nulls=bool, max_content_length=int, buffer_timeout=duration,
-          compress=bool]
+          compress=bool, tls=record]
 ```
 
 ## Description

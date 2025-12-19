@@ -50,10 +50,10 @@ tenzir:
     # minimum total cache capacity of 64MiB.
     #capacity: 1Gi
 
-  # SSL configuration options globally applies to all operators that support SSL/TSL.
+  # TLS configuration options globally applies to all operators that support TLS.
   # Arguments passed to the operator itself will always take precedence over these
   # configuration values.
-  operator-tls:
+  tls:
     # Enable TLS on all operators that support it.
     #enable: true
 
@@ -73,27 +73,30 @@ tenzir:
     # A key file used as the default for operators
     #keyfile:
 
+    # A password for the keyfile
+    #password:
+
     # Minimum TLS protocol version to accept/use.
     # Valid values: "1.0", "1.1", "1.2", "1.3"
     # Recommended: "1.2" or higher for security.
-    #tls-min-version: "1.2"
+    #tls-min-version:
 
     # OpenSSL cipher list to use for TLS connections.
     # This is a colon-separated string of cipher suites.
     # Example: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
     # See OpenSSL documentation for cipher list format.
-    #tls-ciphers:
+    #ciphers:
 
     # Path to a CA certificate file for validating client certificates (server mode only).
     # When set along with `tls_require_client_cert`, the server will verify client
     # certificates against this CA.
-    #tls-client-ca:
+    #client-ca:
 
     # Require clients to present valid certificates (server mode only). When enabled,
-    # clients MUST present a certificate signed by the CA specified in `tls_client_ca`,
+    # clients MUST present a certificate signed by the CA specified in `tls-client-ca`,
     # otherwise the connection will be rejected. This enables mutual TLS (mTLS)
     # authentication.
-    #tls_require_client_cert: false
+    #require-client-cert: false
 
   # The file system path used for persistent state.
   # Defaults to one of the following paths, selecting the first that is

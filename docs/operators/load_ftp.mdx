@@ -7,9 +7,7 @@ example: 'load_ftp "ftp.example.org"'
 Loads a byte stream via FTP.
 
 ```tql
-load_ftp url:str [tls=bool, skip_peer_verification=bool, cacert=string,
-                  certfile=string, keyfile=string,
-                  tls_minium_version=string, tls_ciphers=string]
+load_ftp url:str [tls=record]
 ```
 
 ## Description

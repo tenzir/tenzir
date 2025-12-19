@@ -140,92 +140,6 @@ auto try_decompress_body(const std::string_view encoding,
   return out;
 }
 
-auto make_tls_context(const tls_options& ssl_opts, operator_control_plane& ctrl,
-                      diagnostic_handler& dh,
-                      std::optional<caf::uri> uri = std::nullopt,
-                      const std::optional<located<std::string>>& password
-                      = std::nullopt) -> caf::expected<ssl::context> {
-  const auto tls_enabled
-    = ssl_opts.get_tls(&ctrl).inner or (uri and uri->scheme() == "https");
-  auto min_version = ssl::tls::any;
-  if (auto min = ssl_opts.get_tls_min_version(&ctrl)) {
-    if (not min->inner.empty()) {
-      if (auto parsed = parse_caf_tls_version(min->inner)) {
-        min_version = *parsed;
-      } else {
-        diagnostic::error(parsed.error()).primary(*min).emit(dh);
-        return caf::make_error(ec::invalid_configuration,
-                               "invalid TLS minimum version");
-      }
-    }
-  }
-  auto ctx = ssl::context::enable(tls_enabled)
-               .and_then(ssl::emplace_context(min_version))
-               .and_then(ssl::use_private_key_file_if(
-                 inner(ssl_opts.get_keyfile(&ctrl)), ssl::format::pem))
-               .and_then(ssl::use_certificate_file_if(
-                 inner(ssl_opts.get_certfile(&ctrl)), ssl::format::pem))
-               .and_then(ssl::use_password_if(inner(password)));
-  if (uri) {
-    ctx = std::move(ctx).and_then(ssl::use_sni_hostname(std::move(*uri)));
-  }
-  if (not ctx) {
-    return ctx;
-  }
-  auto& concrete = *ctx;
-  const auto require_client_cert
-    = ssl_opts.get_tls_require_client_cert(&ctrl).inner;
-  const auto skip_peer_verification
-    = ssl_opts.get_skip_peer_verification(&ctrl).inner;
-  auto verify_mode = ssl::verify::none;
-  if (not skip_peer_verification or require_client_cert) {
-    verify_mode |= ssl::verify::peer;
-    if (require_client_cert) {
-      verify_mode |= ssl::verify::fail_if_no_peer_cert;
-    }
-  }
-  concrete.verify_mode(verify_mode);
-  if (verify_mode != ssl::verify::none) {
-    auto load_ca = [&](const located<std::string>& ca) -> caf::expected<void> {
-      if (concrete.load_verify_file(ca.inner)) {
-        return {};
-      }
-      diagnostic::error("failed to load TLS CA certificate")
-        .primary(ca)
-        .emit(dh);
-      return caf::make_error(ec::invalid_configuration,
-                             "failed to load TLS CA certificate");
-    };
-    if (require_client_cert) {
-      if (auto client_ca = ssl_opts.get_tls_client_ca(&ctrl)) {
-        if (auto res = load_ca(*client_ca); not res) {
-          return caf::make_error(ec::invalid_configuration,
-                                 "failed to configure TLS client CA");
-        }
-      }
-    }
-    if (auto cacert = ssl_opts.get_cacert(&ctrl)) {
-      if (auto res = load_ca(*cacert); not res) {
-        return caf::make_error(ec::invalid_configuration,
-                               "failed to configure TLS CA");
-      }
-    } else if (not concrete.enable_default_verify_paths()) {
-      return caf::make_error(ec::invalid_configuration,
-                             "failed to enable default verify paths");
-    }
-  }
-  if (auto ciphers = ssl_opts.get_tls_ciphers(&ctrl)) {
-    if (auto* native = static_cast<SSL_CTX*>(concrete.native_handle())) {
-      if (SSL_CTX_set_cipher_list(native, ciphers->inner.c_str()) != 1) {
-        diagnostic::warning("failed to set TLS cipher list")
-          .primary(*ciphers)
-          .emit(dh);
-      }
-    }
-  }
-  return ctx;
-}
-
 struct http_actor_traits final {
   using signatures = caf::type_list<
     /// Push events from subpipeline into self.
@@ -712,7 +626,6 @@ struct from_http_args {
   std::optional<located<uint64_t>> max_request_size;
   std::optional<located<uint64_t>> max_connections;
   tls_options ssl{{.tls_default = false, .is_server = true}};
-  std::optional<located<std::string>> password;
   std::optional<located<pipeline>> parse;
 
   auto add_to(argument_parser2& p) {
@@ -733,7 +646,6 @@ struct from_http_args {
     p.named("max_request_size", max_request_size);
     p.named("max_connections", max_connections);
     ssl.add_tls_options(p);
-    p.named("password", password);
     p.positional("{ … }", parse);
   }
 
@@ -1003,14 +915,12 @@ struct from_http_args {
 
   auto make_ssl_context(operator_control_plane& ctrl) const
     -> caf::expected<ssl::context> {
-    return make_tls_context(ssl, ctrl, ctrl.diagnostics(), std::nullopt,
-                            password);
+    return ssl.make_caf_context(ctrl, std::nullopt);
   }
 
   auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
     -> caf::expected<ssl::context> {
-    return make_tls_context(ssl, ctrl, ctrl.diagnostics(), std::move(uri),
-                            password);
+    return ssl.make_caf_context(ctrl, std::move(uri));
   }
 
   friend auto inspect(auto& f, from_http_args& x) -> bool {
@@ -1025,8 +935,7 @@ struct from_http_args {
       f.field("max_retry_count", x.max_retry_count),
       f.field("retry_delay", x.retry_delay), f.field("parse", x.parse),
       f.field("server", x.server), f.field("responses", x.responses),
-      f.field("ssl", x.ssl), f.field("password", x.password),
-      f.field("max_request_size", x.max_request_size),
+      f.field("ssl", x.ssl), f.field("max_request_size", x.max_request_size),
       f.field("max_connections", x.max_connections));
   }
 };
@@ -1588,7 +1497,6 @@ struct http_args {
   located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
   tls_options ssl{{.tls_default = false}};
-  std::optional<located<std::string>> password;
   located<duration> connection_timeout{5s, location::unknown};
   uint64_t max_retry_count{};
   located<duration> retry_delay{1s, location::unknown};
@@ -1722,8 +1630,7 @@ struct http_args {
 
   auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
     -> caf::expected<ssl::context> {
-    return make_tls_context(ssl, ctrl, ctrl.diagnostics(), std::move(uri),
-                            password);
+    return ssl.make_caf_context(ctrl, std::move(uri));
   }
 
   friend auto inspect(auto& f, http_args& x) -> bool {
@@ -1736,7 +1643,6 @@ struct http_args {
       f.field("error_field", x.error_field), f.field("paginate", x.paginate),
       f.field("paginate_delay", x.paginate_delay),
       f.field("parallel", x.parallel), f.field("ssl", x.ssl),
-      f.field("password", x.password),
       f.field("connection_timeout", x.connection_timeout),
       f.field("max_retry_count", x.max_retry_count),
       f.field("retry_delay", x.retry_delay), f.field("parse", x.parse),

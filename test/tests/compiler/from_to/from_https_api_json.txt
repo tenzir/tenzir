@@ -14,7 +14,7 @@
     ssl: {
       uses_curl_http: false,
       is_server: true,
-      tls: false @ 0..0
+      tls: bool false @ 0..0
     }
   }
 ]

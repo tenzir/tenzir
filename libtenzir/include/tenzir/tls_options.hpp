@@ -10,11 +10,11 @@
 
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/curl.hpp"
+#include "tenzir/data.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/net/fwd.hpp>
 
-#include <mutex>
 #include <optional>
 #include <string_view>
 
@@ -37,7 +37,7 @@ public:
   explicit tls_options(options opts)
     : uses_curl_http_{opts.uses_curl_http},
       is_server_{opts.is_server},
-      tls_{located{opts.tls_default, location::unknown}} {
+      tls_{located{data{opts.tls_default}, location::unknown}} {
   }
   tls_options() = default;
 
@@ -58,6 +58,10 @@ public:
   /// `tenzir.cacert` as a `cacert_fallbacl` if none is set explicitly.
   auto apply_to(curl::easy& easy, std::string_view url,
                 operator_control_plane* ctrl) const -> caf::error;
+
+  auto make_caf_context(operator_control_plane& ctrl,
+                        std::optional<caf::uri> uri = std::nullopt) const
+    -> caf::expected<caf::net::ssl::context>;
 
   /// Updates values in *this using the config.
   auto update_from_config(operator_control_plane& ctrl) -> void;
@@ -82,6 +86,9 @@ public:
   auto get_keyfile(operator_control_plane* ctrl) const
     -> std::optional<located<std::string>>;
 
+  auto get_password(operator_control_plane* ctrl) const
+    -> std::optional<located<std::string>>;
+
   auto get_tls_min_version(operator_control_plane* ctrl) const
     -> std::optional<located<std::string>>;
 
@@ -95,18 +102,24 @@ public:
     -> located<bool>;
 
 private:
+  auto get_record_bool(std::string_view key) const
+    -> std::optional<located<bool>>;
+  auto get_record_string(std::string_view key) const
+    -> std::optional<located<std::string>>;
+  auto validate_tls_record(diagnostic_handler& dh) const -> failure_or<void>;
+
   bool uses_curl_http_ = false;
   bool is_server_ = false;
-  mutable std::optional<located<bool>> tls_;
+  mutable std::optional<located<data>> tls_;
   mutable std::optional<located<bool>> skip_peer_verification_;
   mutable std::optional<located<std::string>> cacert_;
   mutable std::optional<located<std::string>> certfile_;
   mutable std::optional<located<std::string>> keyfile_;
+  mutable std::optional<located<std::string>> password_;
   mutable std::optional<located<std::string>> tls_min_version_;
   mutable std::optional<located<std::string>> tls_ciphers_;
   mutable std::optional<located<std::string>> tls_client_ca_;
   mutable std::optional<located<bool>> tls_require_client_cert_;
-  // std::mutex mut_; /// TODO: use this?
 
   friend auto inspect(auto& f, tls_options& x) -> bool {
     return f.object(x).fields(
@@ -115,6 +128,7 @@ private:
       f.field("skip_peer_verification", x.skip_peer_verification_),
       f.field("cacert", x.cacert_), f.field("certfile", x.certfile_),
       f.field("keyfile", x.keyfile_), f.field("keyfile", x.keyfile_),
+      f.field("password", x.password_),
       f.field("tls_min_version", x.tls_min_version_),
       f.field("tls_ciphers", x.tls_ciphers_),
       f.field("tls_client_ca", x.tls_client_ca_),

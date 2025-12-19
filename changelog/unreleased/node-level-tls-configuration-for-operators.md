@@ -9,7 +9,7 @@ created: 2025-12-17T16:33:15.093565Z
 
 All operators and connectors that use TLS now support centralized node-level
 configuration. Instead of passing TLS options to each operator individually,
-you can configure them once in `tenzir.yaml` under `tenzir.operator-tls`.
+you can configure them once in `tenzir.yaml` under `tenzir.tls`.
 
 Arguments passed directly to the operator itself via an argument take precedence
 over the configuration entry.
@@ -38,7 +38,7 @@ Example configuration enforcing TLS 1.2+ with specific ciphers:
 
 ```yaml
 tenzir:
-  operator-tls:
+  tls:
     tls-min-version: "1.2"
     tls-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
     cacert: "/etc/ssl/certs/ca-certificates.crt"

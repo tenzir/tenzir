@@ -9,10 +9,7 @@ Receives events via Fluent Bit.
 ```tql
 from_fluent_bit plugin:string, [options=record, fluent_bit_options=record,
                 schema=string, selector=string, schema_only=bool, merge=bool,
-                raw=bool, unflatten=string, tls=bool,
-                skip_peer_verification=bool, cacert=string,
-                certfile=string, keyfile=string, tls_minium_version=string,
-                tls_ciphers=string]
+                raw=bool, unflatten=string, tls=record]
 ```
 
 ## Description

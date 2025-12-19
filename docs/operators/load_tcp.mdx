@@ -7,11 +7,7 @@ example: 'load_tcp "0.0.0.0:8090" { read_json }'
 Loads bytes from a TCP or TLS connection.
 
 ```tql
-load_tcp endpoint:string, [parallel=int, peer_field=field, tls=bool,
-                           skip_peer_verification=bool, cacert=string,
-                           certfile=string, keyfile=string,
-                           tls_minium_version=string, tls_ciphers=string,
-                           tls_client_ca=string, tls_require_client_cert=bool,
+load_tcp endpoint:string, [parallel=int, peer_field=field, tls=record,
                            max_buffered_chunks=int { … }]
 ```
 
