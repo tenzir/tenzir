@@ -142,8 +142,9 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          # Stage all changes including release files and version updates
-          git add --all
+          # Stage changes safely: -u for tracked files, explicit path for new release dir
+          git add -u
+          git add changelog/releases/
           # The --commit flag commits staged changes, --tag creates and pushes
           # a signed tag (via git config), and --no-latest prevents backports
           # from becoming the "Latest" release on GitHub.
