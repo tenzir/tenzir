@@ -115,7 +115,7 @@ jobs:
       - name: Update version.json and Python package versions
         run: |
           # Extract version without 'v' prefix
-          VERSION_NUMBER=$(echo "${{ steps.release.outputs.version }}" | sed 's/^v//')
+          VERSION_NUMBER=$(uvx tenzir-changelog release version --bare)
 
           # Update tenzir-version in version.json using jq
           jq --arg version "${VERSION_NUMBER}" '.["tenzir-version"] = $version' version.json > version.json.tmp
@@ -147,7 +147,7 @@ jobs:
           # The --commit flag commits staged changes, --tag creates and pushes
           # a signed tag (via git config), and --no-latest prevents backports
           # from becoming the "Latest" release on GitHub.
-          uvx tenzir-changelog release publish "${{ steps.release.outputs.version }}" \
+          uvx tenzir-changelog release publish \
             --commit \
             --tag \
             ${{ steps.release_type.outputs.is_latest == 'false' && '--no-latest' || '' }} \
