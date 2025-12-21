@@ -30,7 +30,8 @@ public:
   shared_diagnostic_handler& operator=(shared_diagnostic_handler&&) noexcept
     = default;
 
-  inline shared_diagnostic_handler(const exec_node_actor& exec_node) noexcept
+  inline shared_diagnostic_handler(
+    const receiver_actor<diagnostic>& exec_node) noexcept
     : weak_exec_node_{exec_node} {
   }
 
@@ -55,7 +56,7 @@ public:
   }
 
 private:
-  detail::weak_handle<exec_node_actor> weak_exec_node_ = {};
+  detail::weak_handle<receiver_actor<diagnostic>> weak_exec_node_ = {};
 };
 
 } // namespace tenzir

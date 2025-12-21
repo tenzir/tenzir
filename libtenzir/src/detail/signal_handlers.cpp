@@ -9,6 +9,8 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
+#include <iostream>
+#include <string.h>
 #include <cstdlib>
 #include <cxxabi.h>
 #include <unistd.h>

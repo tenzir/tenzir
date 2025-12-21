@@ -54,6 +54,7 @@ let
       llhttp,
       pfs,
       c-ares,
+      folly,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
       extraPlugins ? [ ],
@@ -255,6 +256,7 @@ let
               caf
               curl
               flatbuffers
+              folly
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb

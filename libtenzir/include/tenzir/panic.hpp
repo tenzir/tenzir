@@ -28,12 +28,18 @@ struct panic_exception final : std::exception {
   }
 
   auto what() const noexcept -> const char* override {
-    return message.c_str();
+    // TODO: Is this safe?
+    if (what_.empty()) {
+      what_ = fmt::format("{} (at {}:{})", message, location.file_name(),
+                          location.column());
+    }
+    return what_.c_str();
   }
 
   std::string message;
   std::source_location location;
   boost::stacktrace::stacktrace stacktrace;
+  mutable std::string what_;
 
   // We can't include the location.hpp header here as that'd be a circular
   // include, so we roll our own and convert it into a location upon printing.

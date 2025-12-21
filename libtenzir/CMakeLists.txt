@@ -116,6 +116,10 @@ find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 find_package(re2 REQUIRED)
 provide_find_module(re2)
 
+# -- folly ---------------------------------------------------------------------
+
+find_package(folly REQUIRED)
+
 # -- reproc --------------------------------------------------------------------
 
 find_package(reproc++ REQUIRED)
@@ -445,6 +449,11 @@ dependency_summary("Boost" Boost::headers "Dependencies")
 target_link_libraries(libtenzir PUBLIC re2::re2)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
+
+# Link against folly.
+target_link_libraries(libtenzir PUBLIC Folly::folly)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
+dependency_summary("folly" Folly::folly "Dependencies")
 
 # Link against reproc.
 target_link_libraries(libtenzir PUBLIC reproc++)
