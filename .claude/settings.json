@@ -9,6 +9,7 @@
   },
   "enabledPlugins": {
     "changelog@tenzir": true,
+    "cpp@tenzir": true,
     "docs@tenzir": true,
     "formatter@tenzir": true,
     "git@tenzir": true,
