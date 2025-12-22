@@ -13,8 +13,10 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
 
+#include <caf/event_based_actor.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
 
@@ -141,6 +143,34 @@ public:
 private:
   std::shared_ptr<std::vector<table_slice>> result_;
 };
+
+auto make_diagnostics_receiver() -> receiver_actor<diagnostic>::behavior_type {
+  return {
+    [](diagnostic diag) -> caf::result<void> {
+      if (diag.severity == severity::error) {
+        TENZIR_ERROR("transformer diagnostic: {:?}", diag);
+      } else {
+        TENZIR_WARN("transformer diagnostic: {:?}", diag);
+      }
+      return {};
+    },
+  };
+}
+
+auto make_metrics_receiver() -> metrics_receiver_actor::behavior_type {
+  // We just ignore all metrics for the partition transformer.
+  return {
+    [](uint64_t, uuid, type) -> caf::result<void> {
+      return {};
+    },
+    [](uint64_t, uuid, record) -> caf::result<void> {
+      return {};
+    },
+    [](operator_metric) -> caf::result<void> {
+      return {};
+    },
+  };
+}
 
 } // namespace
 
@@ -324,92 +354,118 @@ auto partition_transformer(
         return caf::make_error(ec::logic_error, "internal error: {}",
                                closed.error());
       }
-      auto executor = make_local_executor(std::move(pipe));
-      for (auto&& result : executor) {
-        if (!result) {
-          TENZIR_ERROR("{} failed pipeline execution: {}", *self,
-                       result.error());
-          self->state().transform_error = result.error();
-          return {};
+      // Spawn diagnostics and metrics receivers.
+      auto diagnostics_receiver = self->spawn(make_diagnostics_receiver);
+      auto metrics_receiver = self->spawn(make_metrics_receiver);
+      // Spawn the pipeline executor actor.
+      auto executor = self->spawn(pipeline_executor, std::move(pipe),
+                                  std::string{}, diagnostics_receiver,
+                                  metrics_receiver, node_actor{}, false, false);
+      // Monitor the executor to detect when it finishes and process results.
+      self->monitor(executor, [self, output, executor](const caf::error& err) {
+        if (err && err != caf::exit_reason::normal) {
+          TENZIR_ERROR("{} pipeline executor failed: {}", *self, err);
+          self->state().transform_error = err;
+        } else {
+          TENZIR_DEBUG("{} pipeline executor completed successfully", *self);
         }
-      }
-      for (auto& slice : *output) {
-        auto& partition_data = self->state().create_or_get_partition(slice);
-        if (!partition_data.synopsis) {
-          partition_data.id = tenzir::uuid::random();
-          partition_data.store_id = self->state().store_id;
-          partition_data.events = 0ull;
-          partition_data.synopsis
-            = caf::make_copy_on_write<partition_synopsis>();
+        // Process the collected output slices.
+        for (auto& slice : *output) {
+          auto& partition_data = self->state().create_or_get_partition(slice);
+          if (! partition_data.synopsis) {
+            partition_data.id = tenzir::uuid::random();
+            partition_data.store_id = self->state().store_id;
+            partition_data.events = 0ull;
+            partition_data.synopsis
+              = caf::make_copy_on_write<partition_synopsis>();
+          }
+          auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
+          if (slice.import_time() == time{}) {
+            slice.import_time(self->state().min_import_time);
+          }
+          unshared_synopsis->min_import_time = self->state().min_import_time;
+          unshared_synopsis->max_import_time = self->state().max_import_time;
+          partition_data.events += slice.rows();
+          self->state().events += slice.rows();
+          self->state().partition_buildup[partition_data.id].slices.push_back(
+            std::move(slice));
         }
-        auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
-        if (slice.import_time() == time{}) {
-          slice.import_time(self->state().min_import_time);
+        auto stream_data = partition_transformer_state::stream_data{
+          .partition_chunks
+          = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
+          .synopsis_chunks = std::vector<std::tuple<tenzir::uuid, chunk_ptr>>{},
+        };
+        // We're already done if the whole partition got deleted
+        if (self->state().events == 0) {
+          store_or_fulfill(self, std::move(stream_data));
+          return;
         }
-        unshared_synopsis->min_import_time = self->state().min_import_time;
-        unshared_synopsis->max_import_time = self->state().max_import_time;
-        partition_data.events += slice.rows();
-        self->state().events += slice.rows();
-        self->state().partition_buildup[partition_data.id].slices.push_back(
-          std::move(slice));
-      }
-      auto stream_data = partition_transformer_state::stream_data{
-        .partition_chunks
-        = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
-        .synopsis_chunks = std::vector<std::tuple<tenzir::uuid, chunk_ptr>>{},
-      };
-      // We're already done if the whole partition got deleted
-      if (self->state().events == 0) {
-        store_or_fulfill(self, std::move(stream_data));
-        return {};
-      }
-      // ...otherwise, prepare for writing out the transformed data by creating
-      // new stores, sending out the slices and requesting new idspace.
-      auto store_id = self->state().store_id;
-      auto const* store_actor_plugin
-        = plugins::find<tenzir::store_actor_plugin>(store_id);
-      if (!store_actor_plugin) {
-        self->state().stream_error
-          = caf::make_error(ec::invalid_argument,
-                            "could not find a store plugin named {}", store_id);
-        store_or_fulfill(self, std::move(stream_data));
-        return {};
-      }
-      for (auto& [schema, partition_data] : self->state().data) {
-        if (partition_data.events == 0) {
-          continue;
-        }
-        auto builder_and_header = store_actor_plugin->make_store_builder(
-          self->state().fs, partition_data.id);
-        if (!builder_and_header) {
+        // ...otherwise, prepare for writing out the transformed data by creating
+        // new stores, sending out the slices and requesting new idspace.
+        auto store_id = self->state().store_id;
+        auto const* store_actor_plugin
+          = plugins::find<tenzir::store_actor_plugin>(store_id);
+        if (! store_actor_plugin) {
           self->state().stream_error
             = caf::make_error(ec::invalid_argument,
-                              "could not create store builder for backend {}",
+                              "could not find a store plugin named {}",
                               store_id);
           store_or_fulfill(self, std::move(stream_data));
-          return {};
+          return;
         }
-        partition_data.builder = builder_and_header->store_builder;
-        self->monitor(partition_data.builder, [self](const caf::error& err) {
-          // This is currently safe because we do all increases to
-          // `launched_stores` within the same continuation, but when
-          // that changes we need to take a bit more care here to avoid
-          // a race.
-          ++self->state().stores_finished;
-          TENZIR_DEBUG(
-            "{} sees builder finished for a total of {}/{} stores: {}", *self,
-            self->state().stores_finished, self->state().stores_launched, err);
-          if (self->state().stores_finished >= self->state().stores_launched) {
-            quit_or_stall(self,
-                          partition_transformer_state::stores_are_finished{});
+        for (auto& [schema, partition_data] : self->state().data) {
+          if (partition_data.events == 0) {
+            continue;
           }
-        });
-        ++self->state().stores_launched;
-        partition_data.store_header = builder_and_header->header;
-      }
-      TENZIR_DEBUG("{} received all table slices", *self);
-      return self->mail(atom::internal_v, atom::resume_v, atom::done_v)
-        .delegate(static_cast<partition_transformer_actor>(self));
+          auto builder_and_header = store_actor_plugin->make_store_builder(
+            self->state().fs, partition_data.id);
+          if (! builder_and_header) {
+            self->state().stream_error
+              = caf::make_error(ec::invalid_argument,
+                                "could not create store builder for backend {}",
+                                store_id);
+            store_or_fulfill(self, std::move(stream_data));
+            return;
+          }
+          partition_data.builder = builder_and_header->store_builder;
+          self->monitor(partition_data.builder, [self](const caf::error& err) {
+            // This is currently safe because we do all increases to
+            // `launched_stores` within the same continuation, but when
+            // that changes we need to take a bit more care here to avoid
+            // a race.
+            ++self->state().stores_finished;
+            TENZIR_DEBUG("{} sees builder finished for a total of {}/{} "
+                         "stores: {}",
+                         *self, self->state().stores_finished,
+                         self->state().stores_launched, err);
+            if (self->state().stores_finished
+                >= self->state().stores_launched) {
+              quit_or_stall(self,
+                            partition_transformer_state::stores_are_finished{});
+            }
+          });
+          ++self->state().stores_launched;
+          partition_data.store_header = builder_and_header->header;
+        }
+        TENZIR_DEBUG("{} received all table slices", *self);
+        self->mail(atom::internal_v, atom::resume_v, atom::done_v)
+          .send(static_cast<partition_transformer_actor>(self));
+      });
+      // Start the executor and return immediately.
+      auto rp = self->make_response_promise<void>();
+      self->mail(atom::start_v)
+        .request(executor, caf::infinite)
+        .then(
+          [rp]() mutable {
+            rp.deliver();
+          },
+          [self, rp](const caf::error& err) mutable {
+            TENZIR_ERROR("{} failed to start pipeline executor: {}", *self,
+                         err);
+            self->state().transform_error = err;
+            rp.deliver();
+          });
+      return rp;
     },
     [self](atom::internal, atom::resume, atom::done) {
       TENZIR_DEBUG("{} got resume", *self);
