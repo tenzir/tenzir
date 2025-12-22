@@ -643,12 +643,13 @@ struct connection_manager_state {
                 boost::asio::ssl::verify_peer
                   | boost::asio::ssl::verify_fail_if_no_peer_cert,
                 ec)) {
-            TENZIR_DEBUG("failed to set verify mode verification on handle `{}`: "
-                       "{}",
-                       connection->socket->native_handle(), ec.message());
-          diagnostic::warning("{}", ec.message())
+            TENZIR_DEBUG("failed to set verify mode verification on handle "
+                         "`{}`: "
+                         "{}",
+                         connection->socket->native_handle(), ec.message());
+            diagnostic::warning("{}", ec.message())
               .note("failed to enable client certificate verification")
-                .primary(args.ssl.get_tls_require_client_cert(nullptr))
+              .primary(args.ssl.get_tls_require_client_cert(nullptr))
               .emit(diagnostics);
             return;
           }
