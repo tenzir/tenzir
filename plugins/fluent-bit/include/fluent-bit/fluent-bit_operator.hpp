@@ -169,8 +169,8 @@ public:
   }
 
   // Opinionated version of `msgpack_unpack_next` that can only yield an object.
-  auto
-  unpack(std::span<const std::byte> bytes) -> std::optional<msgpack_object> {
+  auto unpack(std::span<const std::byte> bytes)
+    -> std::optional<msgpack_object> {
     auto offset = size_t{0};
     auto result
       = msgpack_unpack_next(&unpacked_,
@@ -326,8 +326,8 @@ public:
   static auto
   make_source(const operator_args& args, const record& global_config,
               const property_map& fluent_bit_args,
-              const property_map& plugin_args,
-              diagnostic_handler& dh) -> std::unique_ptr<engine> {
+              const property_map& plugin_args, diagnostic_handler& dh)
+    -> std::unique_ptr<engine> {
     auto result
       = make_engine(global_config, args.poll_interval, fluent_bit_args, dh);
     if (not result) {
@@ -361,8 +361,8 @@ public:
   /// Constructs a Fluent Bit engine for use as "sink" in a pipeline.
   static auto make_sink(const operator_args& args, const record& plugin_config,
                         const property_map& fluent_bit_args,
-                        const property_map& plugin_args,
-                        diagnostic_handler& dh) -> std::unique_ptr<engine> {
+                        const property_map& plugin_args, diagnostic_handler& dh)
+    -> std::unique_ptr<engine> {
     auto result
       = make_engine(plugin_config, args.poll_interval, fluent_bit_args, dh);
     if (not result) {
@@ -507,8 +507,8 @@ private:
     flb_init_env();
   }
 
-  auto input(const std::string& plugin, const property_map& properties
-                                        = {}) -> std::optional<diagnostic> {
+  auto input(const std::string& plugin, const property_map& properties = {})
+    -> std::optional<diagnostic> {
     ffd_ = flb_input(ctx_, plugin.c_str(), nullptr);
     if (ffd_ < 0) {
       return diagnostic::error("failed to setup Fluent Bit `{}` input plugin ",
@@ -531,8 +531,8 @@ private:
   }
 
   auto output(const std::string& plugin, const property_map& properties = {},
-              struct flb_lib_out_cb* callback
-              = nullptr) -> std::optional<diagnostic> {
+              struct flb_lib_out_cb* callback = nullptr)
+    -> std::optional<diagnostic> {
     auto ffd = flb_output(ctx_, plugin.c_str(), callback);
     if (ffd < 0) {
       return diagnostic::error("failed to setup Fluent Bit `{}` output plugin ",
@@ -855,8 +855,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate>
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate>
     requires enable_sink
   {
     co_yield {};
@@ -930,8 +930,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     if constexpr (enable_source) {
       auto builder_options = builder_options_;
       builder_options.settings.ordered = order == event_order::ordered;
