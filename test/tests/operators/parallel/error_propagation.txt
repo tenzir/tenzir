@@ -1,0 +1,6 @@
+error: assertion failure
+ --> tests/operators/parallel/error_propagation.tql:9:12
+  |
+9 |     assert x != 2
+  |            ^^^^^^ 
+  |

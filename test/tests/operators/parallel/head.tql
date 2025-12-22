@@ -1,0 +1,7 @@
+every 1s {
+  from {}
+}
+parallel 2 {
+  repeat
+}
+head 1

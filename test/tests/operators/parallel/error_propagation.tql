@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+batch
+parallel 2, _split_at=2 {
+  strict {
+    assert x != 2
+  }
+}
+sort x
