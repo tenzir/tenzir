@@ -1,4 +1,4 @@
 created: 2025-09-26
 title: "Stability Improvements"
-intro: |
+intro: >-
   This release brings forth stability improvements under high load that could cause platform unresponsiveness, fixes API request isolation problems, better kafka diagnostics and more.

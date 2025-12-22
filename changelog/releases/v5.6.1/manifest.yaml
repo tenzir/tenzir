@@ -1,4 +1,4 @@
 created: 2025-06-24
 title: "Fixed Distinct Counts"
-intro: |
+intro: >-
   This release restores an aggregation function that was accidentally made unavailable in Tenzir Node v5.6.0.

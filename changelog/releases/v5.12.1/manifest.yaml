@@ -1,4 +1,4 @@
 created: 2025-08-06
 title: "SecOps & SecurityLake Fixes"
-intro: |
+intro: >-
   We fixed two bugs in the `to_google_secops` and `to_amazon_security_lake` operators.

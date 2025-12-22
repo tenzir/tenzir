@@ -1,4 +1,4 @@
 created: 2025-11-19
 title: "Better Backpressure"
-intro: |
+intro: >-
   This release improves the stability of pipelines by applying backpressure more effectively, ensuring upstream components slow down before overwhelming subscribers. It also enhances daily operations by improving parquet reliability, adding Base58 support, and extending the built-in OCSF operators and functions to support the newly released OCSF 1.7.0.
