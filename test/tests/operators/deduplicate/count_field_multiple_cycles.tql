@@ -1,0 +1,13 @@
+from {x: 1, seq: 1},
+     {x: 1, seq: 2},
+     {x: 1, seq: 3},
+     {x: 2, seq: 4},
+     {x: 3, seq: 5},
+     {x: 4, seq: 6},
+     {x: 1, seq: 7},
+     {x: 1, seq: 8},
+     {x: 5, seq: 9},
+     {x: 6, seq: 10},
+     {x: 7, seq: 11},
+     {x: 1, seq: 12}
+deduplicate x, distance=3, count_field=drop_count

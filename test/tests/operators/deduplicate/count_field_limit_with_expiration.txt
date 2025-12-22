@@ -1,0 +1,25 @@
+{
+  x: 1,
+  seq: 1,
+  drop_count: 0,
+}
+{
+  x: 1,
+  seq: 2,
+  drop_count: 0,
+}
+{
+  x: 2,
+  seq: 4,
+  drop_count: 0,
+}
+{
+  x: 3,
+  seq: 5,
+  drop_count: 0,
+}
+{
+  x: 1,
+  seq: 6,
+  drop_count: 1,
+}

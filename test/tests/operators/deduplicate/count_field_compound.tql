@@ -1,0 +1,6 @@
+from {x: 1, y: "a", seq: 1},
+     {x: 1, y: "a", seq: 2},
+     {x: 1, y: "b", seq: 3},
+     {x: 1, y: "a", seq: 4},
+     {x: 1, y: "b", seq: 5}
+deduplicate x, y, distance=1, count_field=drop_count
