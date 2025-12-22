@@ -8,7 +8,8 @@ Sends a byte stream via HTTP.
 
 ```tql
 save_http url:string, [params=record, headers=record, method=string,
-          parallel=int, tls=record]
+          parallel=int, tls=bool, cacert=string, certifle=string,
+          keyfile=string, skip_peer_verification=bool]
 ```
 
 ## Description

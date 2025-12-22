@@ -8,7 +8,8 @@ Sends events via Fluent Bit.
 
 ```tql
 to_fluent_bit plugin:string, [options=record, fluent_bit_options=record,
-              tls=record]
+              tls=bool, cacert=string, certfile=string, keyfile=string,
+              skip_peer_verification=bool]
 ```
 
 ## Description

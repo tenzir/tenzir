@@ -9,7 +9,8 @@ Sends events to a ClickHouse table.
 ```tql
 to_clickhouse table=string, [host=string, port=int, user=string, password=string,
                              mode=string, primary=field,
-                             tls=record]
+                             tls=bool, cacert=string, certfile=string, keyfile=string,
+                             skip_peer_verification=bool, skip_host_verification=bool]
 ```
 
 ## Description

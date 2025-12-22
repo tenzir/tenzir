@@ -7,7 +7,8 @@ example: 'from_opensearch'
 Receives events via Opensearch Bulk API.
 
 ```tql
-from_opensearch [url:string, keep_actions=bool, max_request_size=int, tls=record]
+from_opensearch [url:string, keep_actions=bool, max_request_size=int, tls=bool,
+                 certfile=string, keyfile=string, password=string]
 ```
 
 ## Description
@@ -36,9 +37,23 @@ The maximum size of an incoming request to accept.
 
 Defaults to `10Mib`.
 
-import TLSOptions from '../../.../../../../partials/operators/TLSOptions.mdx';
+### `tls = bool (optional)`
 
-<TLSOptions tls_default="false"/>
+Enables TLS.
+
+Defaults to `false`.
+
+### `certfile = string (optional)`
+
+Path to the client certificate. Required if `tls` is `true`.
+
+### `keyfile = string (optional)`
+
+Path to the key for the client certificate. Required if `tls` is `true`.
+
+### `password = string (optional)`
+
+Password for keyfile.
 
 ## Examples
 

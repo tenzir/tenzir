@@ -10,8 +10,8 @@ Sends HTTP/1.1 requests and forwards the response.
 http url:string, [method=string, body=record|string|blob, encode=string,
      headers=record, response_field=field, metadata_field=field,
      error_field=field, paginate=record->string, paginate_delay=duration,
-     parallel=int, tls=record, connection_timeout=duration,
-     max_retry_count=int, retry_delay=duration
+     parallel=int, tls=bool, certfile=string, keyfile=string, password=string,
+     connection_timeout=duration, max_retry_count=int, retry_delay=duration
      { … }]
 ```
 
@@ -109,9 +109,21 @@ Maximum amount of requests that can be in progress at any time.
 
 Defaults to `1`.
 
-import TLSOptions from '../../.../../../../partials/operators/TLSOptions.mdx';
+### `tls = bool (optional)`
 
-<TLSOptions tls_default="false"/>
+Enables TLS.
+
+### `certfile = string (optional)`
+
+Path to the client certificate.
+
+### `keyfile = string (optional)`
+
+Path to the key for the client certificate.
+
+### `password = string (optional)`
+
+Password file for keyfile.
 
 ### `connection_timeout = duration (optional)`
 

@@ -7,7 +7,8 @@ example: 'save_ftp "ftp.example.org"'
 Saves a byte stream via FTP.
 
 ```tql
-save_ftp url:str [tls=record]
+save_ftp url:str [tls=bool, cacert=string, certifle=string,
+                  keyfile=string, skip_peer_verification=bool]
 ```
 
 ## Description

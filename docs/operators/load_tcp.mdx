@@ -7,7 +7,8 @@ example: 'load_tcp "0.0.0.0:8090" { read_json }'
 Loads bytes from a TCP or TLS connection.
 
 ```tql
-load_tcp endpoint:string, [parallel=int, peer_field=field, tls=record,
+load_tcp endpoint:string, [parallel=int, peer_field=field, tls=bool,
+                           cacert=string, certifle=string,
                            max_buffered_chunks=int { … }]
 ```
 
@@ -36,8 +37,6 @@ endpoint of the respective TCP connection into the specified field at the end of
 the nested pipeline.
 
 <TLSOptions tls_default="false"/>
-
-<TLSServerOptions/>
 
 ### `max_buffered_chunks = int (optional)`
 
@@ -94,35 +93,4 @@ You can test the endpoint locally by issuing a TLS connection:
 
 ```bash
 openssl s_client 127.0.0.1:4000
-```
-
-### Listen with mutual TLS (mTLS) authentication
-
-Require clients to present valid certificates signed by a trusted CA:
-
-```tql
-load_tcp "0.0.0.0:4000", tls=true, certfile="server.pem", keyfile="server-key.pem", tls_client_ca="ca.pem", tls_require_client_cert=true {
-  read_json
-}
-```
-
-Generate test certificates:
-
-```bash
-# Create CA
-openssl req -x509 -new -newkey rsa:2048 -nodes -keyout ca-key.pem -out ca.pem -days 365 -subj "/CN=Test CA"
-
-# Create server certificate
-openssl req -new -newkey rsa:2048 -nodes -keyout server-key.pem -out server.csr -subj "/CN=localhost"
-openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server.pem -days 365
-
-# Create client certificate
-openssl req -new -newkey rsa:2048 -nodes -keyout client-key.pem -out client.csr -subj "/CN=client"
-openssl x509 -req -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out client.pem -days 365
-```
-
-Test the mTLS connection:
-
-```bash
-openssl s_client -connect 127.0.0.1:4000 -cert client.pem -key client-key.pem -CAfile ca.pem
 ```
