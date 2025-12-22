@@ -295,37 +295,27 @@ jobs:
       config: ${{ needs.configure.outputs.docker-config }}
     secrets: inherit
 
-  openapi-spec:
-    needs:
-      - docker-tenzir
-      - configure
-    if: needs.configure.outputs.run-docker-tenzir == 'true'
-    name: OpenAPI Spec
+  sync-openapi-to-docs:
+    name: Sync OpenAPI to Docs
+    needs: [docker-tenzir, configure]
+    if: github.ref == 'refs/heads/main' && needs.configure.outputs.run-docker-tenzir == 'true'
     runs-on: ubuntu-latest
-    env:
-      DOCKER_BUILDKIT: 1
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check OpenAPI Spec
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: docs
+
+      - name: Trigger docs OpenAPI regeneration
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          docker run \
-            --pull=always --rm \
-            "ghcr.io/tenzir/tenzir:${{ needs.configure.outputs.tenzir-container-ref }}" \
-            'openapi | to "openapi.node.yaml"'
-          git add --intent-to-add openapi.node.yaml
-          git diff --quiet --exit-code || {
-            echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir 'openapi | to \"openapi.node.yaml\"'* or apply the following diff directly:"
-            git diff --exit-code
-          }
+          gh workflow run generate-openapi-node.yaml \
+            --repo tenzir/docs \
+            --field tenzir_docker_tag="${{ github.sha }}"
 
   regression-tests:
     needs:
@@ -735,7 +725,6 @@ jobs:
     needs:
       - configure
       - docker-tenzir
-      - openapi-spec
       - policy-enforcement
       - python
       - python-package
