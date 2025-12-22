@@ -3,6 +3,7 @@ title: Count dropped events in deduplicate operator
 type: feature
 authors:
   - raxyte
+pr: 5622
 created: 2025-12-22T09:57:50.846474Z
 ---
 
