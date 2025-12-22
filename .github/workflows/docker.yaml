@@ -143,11 +143,45 @@ jobs:
             done
           done
 
+  test:
+    name: Test (${{ matrix.test.tag }})
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - arch: linux/amd64
+            tag: amd64
+          - arch: linux/arm64
+            tag: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Run smoke tests
+        run: |
+          for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
+            image="ghcr.io/tenzir/tenzir:${{ matrix.test.tag }}-${tag}"
+            echo "::notice Testing image ${image}"
+            docker run --rm --platform '${{ matrix.test.arch }}' "${image}" version
+            docker run --rm --platform '${{ matrix.test.arch }}' "${image}" 'show plugins'
+            break  # Only test the first tag, they're all the same image
+          done
+
   push-manifest:
     name: Push Manifest
     runs-on: ubuntu-latest
     needs:
-      - build
+      - test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
