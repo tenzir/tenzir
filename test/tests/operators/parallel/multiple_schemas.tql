@@ -3,4 +3,4 @@ batch
 parallel 2, _split_at=2 {
   pass
 }
-sort x?, y?, z?
+sort

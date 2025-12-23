@@ -1,0 +1,10 @@
+---
+timeout: 10
+---
+
+// Multiple events arrive quickly, then more after window resets
+from {x: 0s.from_epoch()}, {x: 10ms.from_epoch()}, {x: 20ms.from_epoch()},
+     {x: 300ms.from_epoch()}, {x: 310ms.from_epoch()}
+delay x
+throttle rate=2, window=100ms, drop=true
+x = x.since_epoch()

@@ -3,6 +3,7 @@ title: Easy parallel pipeline execution
 type: feature
 authors:
   - raxyte
+pr: 5632
 created: 2025-12-23T09:37:18.145887Z
 ---
 
