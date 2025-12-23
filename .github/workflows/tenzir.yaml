@@ -276,6 +276,14 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
+          # Skip check for automated submodule bumps
+          commit_author=$(git log -1 --format='%an')
+          commit_subject=$(git log -1 --format='%s')
+          if [[ "$commit_author" == "tenzir-bot" && "$commit_subject" == "Bump submodule from"* ]]; then
+            echo "Skipping policy check for automated bump"
+            exit 0
+          fi
+
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
 
