@@ -1,17 +1,29 @@
-<a target="_blank" href="https://docs.tenzir.com">
-<p align="center">
+<div align="center">
+
+<a href="https://docs.tenzir.com">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/tenzir-white.svg">
   <source media="(prefers-color-scheme: light)" srcset="./assets/tenzir-black.svg">
-  <img alt="Tenzir" src="./assets/tenzir-white.svg">
+  <img alt="Tenzir" src="./assets/tenzir-white.svg" width="400">
 </picture>
-</p>
 </a>
 
-<h3 align="center">
-Data Pipelines for Security Teams
-</h3>
-</p>
+<h3>Data Pipelines for Security Teams</h3>
+
+<p>Collect, transform, enrich, and route your telemetry—all in one place.</p>
+
+[![Discord][discord-badge]][discord-link]
+[![Documentation][docs-badge]][docs-link]
+[![License][license-badge]][license-link]
+
+[discord-badge]: https://img.shields.io/discord/1034951833666207764?label=Discord&logo=discord&logoColor=white
+[discord-link]: https://discord.gg/xqbDgVTCxZ
+[docs-badge]: https://img.shields.io/badge/docs-docs.tenzir.com-blue
+[docs-link]: https://docs.tenzir.com
+[license-badge]: https://img.shields.io/badge/license-BSD%203--Clause-blue
+[license-link]: https://github.com/tenzir/tenzir/blob/main/LICENSE
+
+</div>
 
 ## What is Tenzir?
 
