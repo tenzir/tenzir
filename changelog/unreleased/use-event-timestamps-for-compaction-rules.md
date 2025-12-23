@@ -3,7 +3,7 @@ title: Use event timestamps for compaction rules
 type: feature
 authors:
   - jachris
-pr: 472
+pr: 5629
 created: 2025-12-23T07:20:47.211293Z
 ---
 
