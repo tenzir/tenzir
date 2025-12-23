@@ -68,8 +68,8 @@ public:
       make_secret_request("password", args_.password, args.password, dh),
     });
     co_yield std::move(x);
-    args.ssl.update_cacert(ctrl);
-    auto client = easy_client::make(args, ctrl.diagnostics());
+    args.ssl.update_from_config(ctrl);
+    auto client = easy_client::make(args, ctrl);
     if (not client) {
       co_return;
     }

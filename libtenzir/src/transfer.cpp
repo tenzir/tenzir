@@ -36,7 +36,7 @@ auto transfer::prepare(http::request req) -> caf::error {
   if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1))) {
     return err;
   }
-  TRY(options.ssl.apply_to(easy, req.uri));
+  TRY(options.ssl.apply_to(easy, req.uri, nullptr));
   // Set method.
   TENZIR_DEBUG("setting method: {}", req.method);
   if (req.method == "GET") {
@@ -266,7 +266,7 @@ auto transfer::reset() -> caf::error {
         .to_error();
     }
   }
-  if (options.ssl.skip_peer_verification) {
+  if (options.ssl.get_skip_peer_verification(nullptr).inner) {
     auto code = easy_.set(CURLOPT_SSL_VERIFYPEER, 0);
     TENZIR_ASSERT(code == curl::easy::code::ok);
     code = easy_.set(CURLOPT_SSL_VERIFYHOST, 0);

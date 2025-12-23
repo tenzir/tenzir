@@ -186,7 +186,7 @@ public:
     if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
       co_return;
     }
-    args.transfer_opts.ssl.update_cacert(ctrl);
+    args.transfer_opts.ssl.update_from_config(ctrl);
     auto tx = transfer{args.transfer_opts};
     auto req = make_request(args_, url, items);
     if (not req) {
@@ -298,7 +298,7 @@ public:
     if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
       co_return;
     }
-    args.transfer_opts.ssl.update_cacert(ctrl);
+    args.transfer_opts.ssl.update_from_config(ctrl);
     auto tx = transfer{args.transfer_opts};
     auto req = make_request(args_, url, items);
     if (not req) {
