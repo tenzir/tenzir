@@ -83,7 +83,7 @@ elif [ -z "${os}" ]; then
   echo "Could not identify package_format."
   exit 1
 fi
-platform="${arch}-${os}"
+platform="${arch}-$(echo "${os}" | tr '[:upper:]' '[:lower:]')"
 
 echo "Found ${platform} (${package_format})."
 
