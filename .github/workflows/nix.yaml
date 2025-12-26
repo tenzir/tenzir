@@ -1,0 +1,77 @@
+name: Nix
+on:
+  push:
+    branches:
+      - main
+      - v*
+    paths:
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "libtenzir/**"
+      - "libtenzir_test/**"
+      - "plugins/**"
+      - "nix/**"
+      - "tenzir/**"
+      - "version.json"
+      - ".github/workflows/nix.yaml"
+      - ".github/workflows/_nix-build.yaml"
+  pull_request:
+    paths:
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "libtenzir/**"
+      - "libtenzir_test/**"
+      - "plugins/**"
+      - "nix/**"
+      - "tenzir/**"
+      - "version.json"
+      - ".github/workflows/nix.yaml"
+      - ".github/workflows/_nix-build.yaml"
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static-aarch64-linux:
+    name: Nix (aarch64-linux)
+    uses: ./.github/workflows/_nix-build.yaml
+    with:
+      runner: ubicloud-standard-4-arm
+      os: linux
+      arch: aarch64
+      attribute: tenzir-static
+    secrets: inherit
+
+  static-x86_64-linux:
+    name: Nix (x86_64-linux)
+    uses: ./.github/workflows/_nix-build.yaml
+    with:
+      runner: ubuntu-latest
+      os: linux
+      arch: x86_64
+      attribute: tenzir-static
+    secrets: inherit
+
+  static-arm64-darwin:
+    name: Nix (arm64-darwin)
+    uses: ./.github/workflows/_nix-build.yaml
+    with:
+      runner: macos-15
+      os: darwin
+      arch: arm64
+      attribute: tenzir-static
+    secrets: inherit
+
+  push-manifest-slim:
+    name: Push tenzir-slim docker manifest
+    needs: [static-aarch64-linux, static-x86_64-linux]
+    uses: ./.github/workflows/_push-manifest.yaml
+    with:
+      source-images: "${{ needs.static-aarch64-linux.outputs.images }} ${{ needs.static-x86_64-linux.outputs.images }}"
+      arch-suffixes: "aarch64 x86_64"
+    secrets: inherit

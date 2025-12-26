@@ -1,0 +1,59 @@
+name: Gate
+on:
+  workflow_run:
+    workflows:
+      - Nix
+      - Docker
+      - macOS
+      - Python
+      - Regression Tests
+    types:
+      - completed
+
+# This workflow aggregates the results of all CI workflows for branch protection.
+# Configure GitHub branch protection to require the "Gate" status check.
+#
+# Note: workflow_run triggers are complex. Each run only knows about its own
+# triggering workflow. For comprehensive protection, also consider configuring
+# GitHub's native required status checks for individual workflows.
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  check:
+    name: Check Workflow Result
+    runs-on: ubuntu-latest
+    # Skip workflow_dispatch triggers (those don't need gating)
+    if: github.event.workflow_run.event != 'workflow_dispatch'
+    steps:
+      - name: Report workflow status
+        run: |
+          echo "Workflow: ${{ github.event.workflow_run.name }}"
+          echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Head SHA: ${{ github.event.workflow_run.head_sha }}"
+
+          if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+            echo "::error::Workflow ${{ github.event.workflow_run.name }} did not succeed"
+            exit 1
+          fi
+
+      - name: Create status check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.payload.workflow_run.head_sha;
+            const workflowName = context.payload.workflow_run.name;
+            const conclusion = context.payload.workflow_run.conclusion;
+
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state: conclusion === 'success' ? 'success' : 'failure',
+              context: `gate/${workflowName.toLowerCase().replace(/\s+/g, '-')}`,
+              description: `${workflowName} ${conclusion}`,
+              target_url: context.payload.workflow_run.html_url
+            });

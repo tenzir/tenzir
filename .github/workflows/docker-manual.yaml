@@ -96,7 +96,7 @@ jobs:
     name: Docker
     needs:
       - configure
-    uses: ./.github/workflows/docker.yaml
+    uses: ./.github/workflows/_docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
     secrets: inherit

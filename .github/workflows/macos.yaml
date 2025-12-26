@@ -1,0 +1,229 @@
+name: macOS
+on:
+  push:
+    branches:
+      - main
+      - v*
+    paths:
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "libtenzir/**"
+      - "plugins/**"
+      - "tenzir/**"
+      - "version.json"
+      - "scripts/macOS/**"
+      - ".github/workflows/macos.yaml"
+  pull_request:
+    paths:
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "libtenzir/**"
+      - "plugins/**"
+      - "tenzir/**"
+      - "version.json"
+      - "scripts/macOS/**"
+      - ".github/workflows/macos.yaml"
+  merge_group:
+    types:
+      - checks_requested
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+
+env:
+  CCACHE_MAXSIZE: "5G"
+  GCP_WORKLOAD_IDP: projects/1057156539039/locations/global/workloadIdentityPools/gh-actions-pool/providers/gh-actions-provider
+  GCP_SERVICE_ACCOUNT: github-actions@crucial-kayak-261816.iam.gserviceaccount.com
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  build:
+    name: macOS
+    runs-on: macos-15
+    env:
+      BUILD_DIR: build
+      CC: clang
+      CXX: clang++
+      CCACHE_ABSSTDERR: true
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_DIR: "/tmp/ccache"
+      CCACHE_NOHASHDIR: true
+      CCACHE_SLOPPINESS: "file_macro,time_macros"
+      CCACHE_UNIFY: true
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive contrib/tenzir-plugins
+          git submodule update --init --recursive libtenzir
+          git submodule update --init --recursive plugins
+          git submodule update --init --recursive tenzir
+
+      - name: Setup Homebrew Clang and Install Dependencies
+        run: |
+          # Setup Homebrew Clang
+          brew install llvm@20
+          llvm_root="$(brew --prefix llvm@20)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "CC=${llvm_root}/bin/clang" >> $GITHUB_ENV
+          echo "CXX=${llvm_root}/bin/clang++" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-nostdinc++ -isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+          echo "LDFLAGS=-L${llvm_root}/lib/c++ -Wl,-rpath,${llvm_root}/lib/c++" >> $GITHUB_ENV
+          # Install all other dependencies.
+          ./scripts/macOS/install-dev-dependencies.sh
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Compute Version
+        id: version
+        run: |
+          version="v$(jq -r '."tenzir-version"' version.json)"
+          id_sha="${{ github.sha }}"
+          build_version="${version}+g${id_sha:0:10}"
+          echo "build-version=${build_version}" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            echo "build-metadata=" >> $GITHUB_OUTPUT
+          else
+            echo "build-metadata=g${id_sha:0:10}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure Environment
+        run: |
+          PACKAGE_NAME="$(echo "tenzir-${{ steps.version.outputs.build-version }}-$(uname -s)-Release-Clang" | awk '{ print tolower($0) }')"
+          PUBLISH_NAME="$(echo "tenzir-$(uname -s)-Release-Clang" | awk '{ print tolower($0) }')"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
+
+      - name: Fetch ccache Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-macOS-Clang-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-macOS-Clang-${{ github.ref_name }}
+            ccache-macOS-Clang-main
+            ccache-macOS-Clang
+
+      - name: Configure
+        run: |
+          echo "$PATH"
+          python3 --version
+          python3 -m pip --version
+          bash --version
+          "$CC" --version
+          "$CXX" --version
+          ccache --version
+          # Zero the cache statistics (but not the configuration options).
+          ccache --zero-stats
+          ccache --show-config
+          # Setting different values for CMAKE_INSTALL_PREFIX and
+          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
+          # a warning. We accept this drawback because the package we generate
+          # here is built specifically as input for the plugin CI jobs and not
+          # suitable for general use.
+          cmake -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
+            -DCPACK_GENERATOR:STRING=TGZ \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
+            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
+            -DTENZIR_PLUGINS:STRING="plugins/*;contrib/tenzir-plugins/*" \
+            -DTENZIR_VERSION_BUILD_METADATA:STRING="${{ steps.version.outputs.build-metadata }}" \
+            -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
+            -DTENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL=ON \
+            -DTENZIR_PLUGINS_BLACKLIST="from_velociraptor;platform;snowflake"
+
+      - name: Compile All Targets
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
+
+      - name: Show ccache Statistics
+        run: |
+          # Print statistics counter IDs and corresponding values.
+          ccache --show-stats
+          # Print statistics about cache compression.
+          ccache --show-compression
+
+      - name: Save ccache Cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-macOS-Clang-${{ github.ref_name }}-${{ github.sha }}
+          enableCrossOsArchive: true
+
+      - name: Run Unit Tests
+        run: |
+          cmake --build "$BUILD_DIR" --target unit-tests
+
+      - name: Run Integration Tests
+        run: |
+          cmake --build "$BUILD_DIR" --target integration-tests
+
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR"
+
+      - name: Package
+        env:
+          DESTDIR: ${{ env.PWD }}
+        run: |
+          cmake --build "$BUILD_DIR" --target package
+
+      - name: Upload Artifact to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
+          if-no-files-found: error
+
+      - name: Authenticate to Google Cloud
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure GCloud Credentials
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload Artifact to GCS
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        run: |
+          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
