@@ -25,7 +25,7 @@ jobs:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
   # stock-macos:
   #   name: Provided MacOS runners
   #   strategy:
@@ -57,7 +57,7 @@ jobs:
       - name: Setup dependencies
         run: apt update && apt install -y curl sudo adduser
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
   container-redhat-based:
     name: Red Hat based distros in containers
     runs-on: ubuntu-latest
@@ -79,9 +79,9 @@ jobs:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Setup dependencies
-        run: yum install -y tar sudo
+        run: yum install -y tar sudo curl
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
 
   notify-failure:
     name: Notify on failure
