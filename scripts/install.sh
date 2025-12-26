@@ -272,7 +272,7 @@ if [ -n "${TENZIR_TOKEN:-}" ]; then
     # Read existing config, merge in token, write back.
     tql_pipeline="load_file \"${config_file}\"
       read_yaml
-      if this.has("tenzir") and tenzir.type_id() == type_id({}) {
+      if this.has(\"tenzir\") and tenzir.type_id() == type_id({}) {
         tenzir = { token: \"${TENZIR_TOKEN}\"}, ...tenzir }
       } else {
         tenzir = { token: \"${TENZIR_TOKEN}\"} }
