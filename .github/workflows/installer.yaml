@@ -79,7 +79,14 @@ jobs:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Setup dependencies
-        run: yum install -y tar sudo curl
+        run: |
+          yum install -y tar sudo
+          # Amazon Linux 2023+ ships with curl-minimal, which provides the curl
+          # command but conflicts with the full curl package. We only install
+          # curl if it's not already available.
+          if ! command -v curl >/dev/null 2>&1; then
+            yum install -y curl
+          fi
       - name: Run installer
         run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
 
