@@ -80,7 +80,7 @@ jobs:
   # Python package builds that require signed tarballs from Nix builds.
   # These run on all platforms to create platform-specific wheels.
   package:
-    name: Python Package (${{ matrix.os }})
+    name: Python Package
     runs-on: ${{ matrix.os }}
     # Only run on main/release since these need Nix build artifacts
     if: github.event_name == 'push' || github.event_name == 'release'
