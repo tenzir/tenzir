@@ -121,9 +121,9 @@ else
   elif [ "${package_format}" = "DEB" ]; then
     # Convert to Debian arch naming: x86_64 -> amd64, aarch64 -> arm64
     case "${arch}" in
-    x86_64) debarch="amd64" ;;
-    aarch64) debarch="arm64" ;;
-    *) debarch="${arch}" ;;
+      x86_64) debarch="amd64" ;;
+      aarch64) debarch="arm64" ;;
+      *) debarch="${arch}" ;;
     esac
     package_url="${package_url_base}/debian/tenzir_${TENZIR_PACKAGE_TAG}_${debarch}.deb"
   elif [ "${package_format}" = "tarball" ]; then
