@@ -45,20 +45,37 @@ auto make_function(invocation inv, session ctx) const
 Return `function_use::make()` with a lambda:
 
 ```cpp
-return function_use::make(
-  [expr = std::move(expr)](evaluator eval, session) -> series {
-    const auto& input = eval(expr);
-    auto b = string_type::make_arrow_builder(arrow_memory_pool());
-    for (auto value : input.values()) {
-      // Process each value
-      check(b->Append(result));
-    }
-    return series{string_type{}, finish(*b)};
+return function_use::make([expr = std::move(expr)](
+                            evaluator eval, session ctx) -> multi_series {
+  const auto evaluated = eval(expr);
+  return map_series(evaluated, [&](series arg) {
+    return match(
+      *arg.array,
+      [&](const arrow::StringArray& array) -> series {
+        auto b = string_type::make_arrow_builder(arrow_memory_pool());
+        for (auto v : values(string_type{}, array)) {
+          if (not v) {
+            check(b->AppendNull());
+            continue;
+          }
+          check(b->Append(process(*v)));
+        }
+        return series{string_type{}, finish(*b)};
+      },
+      [&](const auto&) {
+        diagnostic::warning("expected `string`, but got `{}`", arg.type.kind())
+          .primary(expr)
+          .emit(ctx);
+        return series::null(null_type{}, arg.length());
+      });
   });
+});
 ```
 
 ## Key Points
 
-- Evaluate expressions with `eval(expr)` inside the lambda
+- Use `map_series` with `match` on the array to handle different types
+- Iterate values with `values(type{}, array)` free function
+- Handle nulls explicitly with `if (not v) { check(b->AppendNull()); continue; }`
 - Build output using Arrow builders with `check()`
 - Return `series{type, finish(builder)}`
