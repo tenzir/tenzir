@@ -13,22 +13,7 @@ Work on **columns**, not rows. Tenzir uses Apache Arrow for columnar data
 processing. Evaluate expressions once per series or slice, then iterate if
 row-wise access is needed.
 
-## Quick Reference
-
-| Task                  | Use                    | Avoid                    |
-| --------------------- | ---------------------- | ------------------------ |
-| Iterate series        | `values3(array)`       | `values()`, `value_at()` |
-| Check variant type    | `is<T>(x)`             | `std::holds_alternative` |
-| Get variant value     | `as<T>(x)`             | `std::get`               |
-| Safe variant access   | `try_as<T>(x)`         | `std::get_if`            |
-| Multi-case dispatch   | `match(x, ...)`        | switch/if chains         |
-| Early return on error | `TRY(expr)`            | manual if/return         |
-| Assert with location  | `check(expr)`          | `TENZIR_ASSERT`          |
-| Build Arrow arrays    | `check(b.Append(...))` | unchecked calls          |
-
 ## Topics
-
-Read specific files only when you need that topic:
 
 **APIs and Patterns:**
 
