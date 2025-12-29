@@ -15,6 +15,7 @@
     "git@tenzir": true,
     "ocsf@tenzir": true,
     "prose@tenzir": true,
-    "python@tenzir": true
+    "python@tenzir": true,
+    "tql@tenzir": true
   }
 }

@@ -45,6 +45,7 @@ venv/
 
 # Claude
 CLAUDE.local.md
+.claude/settings.local.json
 CLAUDE-TODOS.md
 .docs/
 
