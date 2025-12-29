@@ -7,46 +7,46 @@ set -euo pipefail
 VERBOSE=${VERBOSE:-0}
 while [[ $# -gt 0 ]]; do
   case $1 in
-  --coverage-dir=*)
-    COVERAGE_DIR="${1#*=}"
-    shift
-    ;;
-  --source-dir=*)
-    SOURCE_DIR="${1#*=}"
-    shift
-    ;;
-  --binary-dir=*)
-    BINARY_DIR="${1#*=}"
-    shift
-    ;;
-  --tenzir-binary=*)
-    TENZIR_BINARY="${1#*=}"
-    shift
-    ;;
-  --profdata=*)
-    PROFDATA="${1#*=}"
-    shift
-    ;;
-  --llvm-profdata=*)
-    LLVM_PROFDATA="${1#*=}"
-    shift
-    ;;
-  --llvm-cov=*)
-    LLVM_COV="${1#*=}"
-    shift
-    ;;
-  --verbose)
-    VERBOSE=1
-    shift
-    ;;
-  -v)
-    VERBOSE=1
-    shift
-    ;;
-  *)
-    echo "Unknown option: $1"
-    exit 1
-    ;;
+    --coverage-dir=*)
+      COVERAGE_DIR="${1#*=}"
+      shift
+      ;;
+    --source-dir=*)
+      SOURCE_DIR="${1#*=}"
+      shift
+      ;;
+    --binary-dir=*)
+      BINARY_DIR="${1#*=}"
+      shift
+      ;;
+    --tenzir-binary=*)
+      TENZIR_BINARY="${1#*=}"
+      shift
+      ;;
+    --profdata=*)
+      PROFDATA="${1#*=}"
+      shift
+      ;;
+    --llvm-profdata=*)
+      LLVM_PROFDATA="${1#*=}"
+      shift
+      ;;
+    --llvm-cov=*)
+      LLVM_COV="${1#*=}"
+      shift
+      ;;
+    --verbose)
+      VERBOSE=1
+      shift
+      ;;
+    -v)
+      VERBOSE=1
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
   esac
 done
 

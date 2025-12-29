@@ -83,17 +83,17 @@ clang_format_diff=${dir}/clang-format-diff.py
 format_call='$(git rev-parse --show-toplevel)/scripts/clang-format-diff.py'
 while getopts "fp:h?" opt; do
   case "$opt" in
-  f)
-    force=TRUE
-    ;;
-  p)
-    fixed_path=TRUE
-    clang_format_diff="$OPTARG"
-    ;;
-  h | \?)
-    usage
-    exit 0
-    ;;
+    f)
+      force=TRUE
+      ;;
+    p)
+      fixed_path=TRUE
+      clang_format_diff="$OPTARG"
+      ;;
+    h | \?)
+      usage
+      exit 0
+      ;;
   esac
 done
 shift $(expr $OPTIND - 1)
@@ -115,20 +115,20 @@ if [ -z "$@" ]; then
   install_pre_commit
 else
   case "$1" in
-  format-show)
-    install_format_show
-    ;;
-  format)
-    install_format
-    ;;
-  format-show-branch)
-    install_format_show_branch
-    ;;
-  format-branch)
-    install_format_branch
-    ;;
-  pre-commit)
-    install_pre_commit
-    ;;
+    format-show)
+      install_format_show
+      ;;
+    format)
+      install_format
+      ;;
+    format-show-branch)
+      install_format_show_branch
+      ;;
+    format-branch)
+      install_format_branch
+      ;;
+    pre-commit)
+      install_pre_commit
+      ;;
   esac
 fi
