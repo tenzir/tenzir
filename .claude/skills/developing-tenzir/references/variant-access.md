@@ -33,19 +33,19 @@ auto result = match(
 );
 ```
 
-## Overload Helper
-
-Combine lambdas with `detail::overload{}`:
-
-```cpp
-auto handler = detail::overload{
-  [&](const arrow::StringArray& arr) { /* strings */ },
-  [&](const arrow::Int64Array& arr) { /* integers */ },
-  [&](const auto&) { /* fallback */ },
-};
-match(std::tie(*array), handler);
-```
-
 ## Applicable Types
 
-These patterns work on: `data`, `series`, `tenzir::variant`, `std::variant`.
+Types with `variant_traits` that support `is`, `as`, `try_as`, and `match`:
+
+- `data` — TQL data values
+- `series` — Columnar data arrays
+- `type` — TQL type system
+- `expression` — TQL expressions
+- `ast::expression` — AST expression nodes
+- `bitmap` — Bitmap variants
+- `secret` / `secret_view` — Secret values
+- `arrow::DataType` — Arrow type dispatching
+- `arrow::Array` — Arrow array dispatching
+- `arrow::ArrayBuilder` — Arrow builder dispatching
+- `tenzir::variant<Ts...>` — Custom variants
+- `std::variant<Ts...>` — Standard library variants
