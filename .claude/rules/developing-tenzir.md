@@ -1,5 +1,5 @@
 ---
-paths: "{libtenzir,libtenzir_test,tenzir,contrib,plugins}/**/*.{cpp,hpp}"
+paths: "{libtenzir,libtenzir_test,tenzir,contrib,plugins}/**/*"
 ---
 
-Invoke the `developing-tenzir` skill.
+Invoke the `cpp:following-conventions` and `developing-tenzir` skills.
