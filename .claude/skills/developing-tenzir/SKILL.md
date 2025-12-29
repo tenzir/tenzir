@@ -41,7 +41,4 @@ Read specific files only when you need that topic:
 
 **Tooling and Conventions:**
 
-- [clang-format.md](./references/clang-format.md) — Formatting settings
-- [clang-tidy.md](./references/clang-tidy.md) — Linting settings
-- [unit-tests.md](./references/unit-tests.md) — Test structure and fixtures
 - [external-files.md](./references/external-files.md) — Third-party code scaffold
