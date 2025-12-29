@@ -37,8 +37,7 @@ Read specific files only when you need that topic:
 - [variant-access.md](./references/variant-access.md) — Working with variants and match
 - [error-handling.md](./references/error-handling.md) — TRY, check, and expected patterns
 - [functions.md](./references/functions.md) — Implementing TQL functions
-- [operators.md](./references/operators.md) — Implementing TQL operators
-- [secrets.md](./references/secrets.md) — Resolving secrets in operators
+- [operators.md](./references/operators.md) — Implementing TQL operators (incl. secrets)
 
 **Tooling and Conventions:**
 
