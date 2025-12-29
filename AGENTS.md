@@ -86,20 +86,6 @@ Use the `tenzir` binary to execute a TQL program:
 - The pipeline may read stdin as data, based on the first operator.
 - The pipeline may produce data on stdout, based on the last operator.
 
-### Unit Tests
-
-Run unit tests after building:
-
-```sh
-./build/bin/tenzir-unit-test
-```
-
-Run a specific test:
-
-```sh
-./build/bin/tenzir-unit-test -v 3 -t "test name pattern"
-```
-
 ### Integration Tests
 
 Run integration tests from the repository root:
