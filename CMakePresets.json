@@ -323,6 +323,18 @@
     {
       "name": "nix-gcc-static-release",
       "configurePreset": "nix-gcc-static-release"
+    },
+    {
+      "name": "macos-clang-debug",
+      "configurePreset": "macos-clang-debug"
+    },
+    {
+      "name": "macos-clang-relwithdebinfo",
+      "configurePreset": "macos-clang-relwithdebinfo"
+    },
+    {
+      "name": "macos-clang-release",
+      "configurePreset": "macos-clang-release"
     }
   ]
 }
