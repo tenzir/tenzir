@@ -87,18 +87,15 @@ auto operator()(generator<table_slice> input,
                 operator_control_plane& ctrl) const
   -> generator<table_slice> {
   auto dh = ctrl.diagnostics();
-
   // Declare variables to receive resolved values
   auto url = std::string{};
   auto token = std::string{};
-
   // Resolve secrets (yields until complete)
   auto x = ctrl.resolve_secrets_must_yield({
     make_secret_request("url", args_.url, url, dh),
     make_secret_request("token", args_.token, token, dh),
   });
   co_yield std::move(x);
-
   // Now url and token contain resolved values
   for (const auto& slice : input) {
     co_yield process(slice, url, token);
