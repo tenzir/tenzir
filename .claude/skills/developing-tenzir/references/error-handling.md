@@ -4,7 +4,7 @@ Error handling patterns in Tenzir.
 
 ## TRY Macro
 
-Use `TRY()` for early return on error with `failure_or<T>` or `caf::expected<T>`:
+Use `TRY()` for early return on error with `failure_or<T>` (or legacy `caf::expected<T>`):
 
 ```cpp
 auto make_thing(args) -> failure_or<thing> {
@@ -29,7 +29,7 @@ TRY(validate_something());
 
 ## check() for Assertions
 
-Use `check()` instead of `TENZIR_ASSERT` for operations that should succeed:
+Use `check()` if you can and `TENZIR_ASSERT` if you check boolean-like values:
 
 ```cpp
 // For Arrow operations
@@ -44,7 +44,7 @@ auto array = check(builder.Finish());
 ## Return Types
 
 - `failure_or<T>` — For functions that emit diagnostics
-- `caf::expected<T>` — For functions returning errors
+- `caf::expected<T>` — Legacy type for functions returning errors
 - Use `[[nodiscard]]` on functions where ignoring errors is a bug
 
 ## Pattern
