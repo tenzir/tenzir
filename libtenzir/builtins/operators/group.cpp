@@ -203,7 +203,7 @@ private:
   let_id id_;
 };
 
-class group_ir final : public ir::operator_base {
+class group_ir final : public ir::Operator {
 public:
   group_ir() = default;
 
@@ -253,7 +253,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     TENZIR_ASSERT(inv.args.size() == 2);
     auto over = std::move(inv.args[0]);
     TRY(over.bind(ctx));
@@ -261,11 +261,11 @@ public:
     auto id = scope.let("group");
     auto pipe = as<ast::pipeline_expr>(inv.args[1]);
     TRY(auto pipe_ir, std::move(pipe.inner).compile(ctx));
-    return std::make_unique<group_ir>(std::move(over), std::move(pipe_ir), id);
+    return group_ir{std::move(over), std::move(pipe_ir), id};
   }
 };
 
-using group_ir_plugin = inspection_plugin<ir::operator_base, group_ir>;
+using group_ir_plugin = inspection_plugin<ir::Operator, group_ir>;
 using group_exec_plugin = inspection_plugin<plan::operator_base, group_bp>;
 
 } // namespace

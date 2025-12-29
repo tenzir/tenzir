@@ -162,7 +162,7 @@ private:
   std::vector<ast::expression> events_;
 };
 
-class from_ir final : public ir::operator_base {
+class from_ir final : public ir::Operator {
 public:
   from_ir() = default;
 
@@ -275,11 +275,11 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     for (auto& arg : inv.args) {
       TRY(arg.bind(ctx));
     }
-    return std::make_unique<from_ir>(std::move(inv.args));
+    return from_ir{std::move(inv.args)};
   }
 };
 
@@ -411,7 +411,7 @@ TENZIR_REGISTER_PLUGIN(
 TENZIR_REGISTER_PLUGIN(
   tenzir::operator_inspection_plugin<tenzir::from_file_sink>);
 TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::ir::operator_base,
+  tenzir::inspection_plugin<tenzir::ir::Operator,
                             tenzir::plugins::from::from_ir>);
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::plan::operator_base,

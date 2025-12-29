@@ -466,7 +466,7 @@ private:
   ir::pipeline pipe_;
 };
 
-class every_ir final : public ir::operator_base {
+class every_ir final : public ir::Operator {
 public:
   every_ir() = default;
 
@@ -552,7 +552,7 @@ private:
   ir::pipeline pipe_;
 };
 
-using every_ir_plugin = inspection_plugin<ir::operator_base, every_ir>;
+using every_ir_plugin = inspection_plugin<ir::Operator, every_ir>;
 
 class every_compiler_plugin final : public operator_compiler_plugin {
 public:
@@ -561,7 +561,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     // TODO: Improve this with argument parser.
     if (inv.args.size() != 2) {
       diagnostic::error("expected exactly two arguments")
@@ -572,8 +572,10 @@ public:
     TRY(inv.args[0].bind(ctx));
     auto pipe = as<ast::pipeline_expr>(inv.args[1]);
     TRY(auto pipe_ir, std::move(pipe.inner).compile(ctx));
-    return std::make_unique<every_ir>(std::move(inv.args[0]),
-                                      std::move(pipe_ir));
+    return every_ir{
+      std::move(inv.args[0]),
+      std::move(pipe_ir),
+    };
   }
 };
 

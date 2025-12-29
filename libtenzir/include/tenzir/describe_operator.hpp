@@ -5,7 +5,7 @@
 
 namespace tenzir {
 
-auto make_op_parser() -> ir::operator_ptr;
+auto make_op_parser() -> Box<ir::Operator>;
 
 struct operator_description {
   template <class... Args>
@@ -35,7 +35,7 @@ struct load_file_args {
 
 auto compile_described_operator(std::string name, ast::invocation inv,
                                 compile_ctx ctx)
-  -> failure_or<ir::operator_ptr>;
+  -> failure_or<Box<ir::Operator>>;
 
 class describe_operator_plugin : public virtual op_parser_plugin {
 private:
@@ -62,10 +62,10 @@ public:
   static auto named(std::string name, T Args::*) -> arg<Args>;
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> final;
+    -> failure_or<Box<ir::Operator>> final;
 };
 
-class described_operator final : public ir::operator_base {
+class described_operator final : public ir::Operator {
 public:
   described_operator() = default;
 

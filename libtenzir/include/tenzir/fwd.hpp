@@ -190,8 +190,7 @@ class finalize_ctx;
 
 namespace ir {
 
-class operator_base;
-class operator_ptr;
+class Operator;
 struct optimize_result;
 struct pipeline;
 

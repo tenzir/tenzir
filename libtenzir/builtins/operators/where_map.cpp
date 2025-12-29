@@ -904,7 +904,7 @@ private:
 };
 
 // TODO: Don't want to write this fully ourselves.
-class where_ir final : public ir::operator_base {
+class where_ir final : public ir::Operator {
 public:
   where_ir() = default;
 
@@ -957,7 +957,7 @@ private:
   ast::expression predicate_;
 };
 
-TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::Operator, where_ir>)
 TENZIR_REGISTER_PLUGIN(inspection_plugin<plan::operator_base, where_plan>)
 
 class where_plugin final : public virtual operator_factory_plugin,
@@ -979,7 +979,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     auto expr = ast::expression{};
     // TODO: We don't want to create a session here. This is just a test to see
     // how far we could go with the existing argument parser.
@@ -991,7 +991,7 @@ public:
                                                      std::move(inv.args)},
                  provider.as_session()));
     TRY(expr.bind(ctx));
-    return std::make_unique<where_ir>(loc, std::move(expr));
+    return where_ir{loc, std::move(expr)};
   }
 
   auto is_deterministic() const -> bool override {

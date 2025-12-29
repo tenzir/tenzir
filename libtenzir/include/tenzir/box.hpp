@@ -6,12 +6,28 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
+
+// FIXME: Don't include this here.
+#include "tenzir/plugin.hpp"
+
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 #pragma once
 
 namespace tenzir {
+
+// Forward declaration for the concept
+template <class T>
+class Box;
+
+/// Concept to check if T has a copy() method returning Box<T>.
+template <class T>
+concept has_box_copy = requires(const T& t) {
+  { t.copy() } -> std::same_as<Box<T>>;
+};
 
 /// A `std::unique_ptr` that is non-null and propagates `const`.
 ///
@@ -19,6 +35,9 @@ namespace tenzir {
 /// value. Moving from a box will still leave it in a "nullptr"-like state.
 /// However, the resulting object is not considered valid and must not be used
 /// afterwards. Furthermore, all access is checked for this invariant.
+///
+/// Box is copyable if T is copy-constructible and non-polymorphic, or if T
+/// provides a copy() method returning Box<T>.
 template <class T>
 class Box {
 public:
@@ -27,9 +46,12 @@ public:
     return Box{std::move(ptr)};
   }
 
-  // TODO: Is this a good idea?
-  Box() : ptr_{std::make_unique<T>()} {
-  }
+  Box(Box&&) = default;
+  Box& operator=(Box&&) = default;
+  ~Box() = default;
+
+  // FIXME: This is only default-constructible for CAF... Is that a good reason?
+  Box() = default;
 
   /// Constructs a box from a value that is pointer-compatible with `T`.
   template <class U>
@@ -40,6 +62,30 @@ public:
   template <class... Args>
   explicit Box(std::in_place_t, Args&&... args)
     : ptr_{std::make_unique<T>(std::forward<Args>(args)...)} {
+  }
+
+  // TODO: Cleanup.
+  Box(const Box& other) {
+    if constexpr (std::is_copy_constructible_v<T>
+                  && not std::is_polymorphic_v<T>) {
+      ptr_ = std::make_unique<T>(*other);
+    } else {
+      static_assert(has_box_copy<T>);
+      *this = other->copy();
+    }
+  }
+
+  auto operator=(const Box& other) -> Box& {
+    if (this != &other) {
+      if constexpr (std::is_copy_constructible_v<T>
+                    && not std::is_polymorphic_v<T>) {
+        ptr_ = std::make_unique<T>(*other);
+      } else {
+        static_assert(has_box_copy<T>);
+        *this = other->copy();
+      }
+    }
+    return *this;
   }
 
   /// Boxes can be used as pointers.
@@ -79,6 +125,10 @@ public:
   auto operator==(const Box& other) const -> bool {
     // TODO: Constraints.
     return *ptr_ == *other.ptr_;
+  }
+
+  friend auto inspect(auto& f, Box& x) -> bool {
+    return tenzir::plugin_inspect(f, x.ptr_);
   }
 
 private:

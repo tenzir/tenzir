@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/box.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
@@ -27,18 +28,18 @@ namespace ir {
 using optimize_filter = std::vector<ast::expression>;
 
 /// Base class for all IR operators.
-class operator_base {
+class Operator {
 public:
-  virtual ~operator_base() = default;
+  virtual ~Operator() = default;
 
   /// Return the name of a matching serialization plugin.
   virtual auto name() const -> std::string = 0;
 
   /// A virtual copy constructor.
-  virtual auto copy() const -> operator_ptr;
+  virtual auto copy() const -> Box<Operator>;
 
   /// A virtual move constructor.
-  virtual auto move() && -> operator_ptr;
+  virtual auto move() && -> Box<Operator>;
 
   /// Return the output type of this operator for a given input type.
   ///
@@ -87,53 +88,6 @@ public:
   }
 };
 
-/// Similar to `std::unique_ptr<operator_base>`, but copyable.
-class operator_ptr {
-public:
-  operator_ptr() = default;
-  ~operator_ptr() = default;
-  operator_ptr(const operator_ptr& other);
-  operator_ptr(operator_ptr&&) = default;
-  auto operator=(const operator_ptr& other) -> operator_ptr&;
-  auto operator=(operator_ptr&&) -> operator_ptr& = default;
-
-  explicit(false) operator_ptr(std::nullptr_t) {
-  }
-
-  template <std::derived_from<operator_base> T>
-  explicit(false) operator_ptr(std::unique_ptr<T> ptr) : ptr_{std::move(ptr)} {
-  }
-
-  operator bool() const {
-    return static_cast<bool>(ptr_);
-  }
-
-  auto operator->() const -> operator_base* {
-    TENZIR_ASSERT(ptr_);
-    return ptr_.get();
-  }
-
-  auto operator*() const -> operator_base& {
-    TENZIR_ASSERT(ptr_);
-    return *ptr_;
-  }
-
-  auto get() const -> operator_base* {
-    return ptr_.get();
-  }
-
-  auto release() -> operator_base* {
-    return ptr_.release();
-  };
-
-  friend auto inspect(auto& f, operator_ptr& x) -> bool {
-    return plugin_inspect(f, x.ptr_);
-  }
-
-private:
-  std::unique_ptr<operator_base> ptr_;
-};
-
 /// The IR representation of a `let` statement.
 struct let {
   let() = default;
@@ -155,7 +109,7 @@ struct let {
 /// The IR representation of a pipeline.
 struct pipeline {
   std::vector<let> lets;
-  std::vector<operator_ptr> operators;
+  std::vector<Box<Operator>> operators;
 
   friend auto inspect(auto& f, pipeline& x) -> bool {
     return f.object(x).fields(f.field("lets", x.lets),
@@ -164,7 +118,7 @@ struct pipeline {
 
   pipeline() = default;
 
-  pipeline(std::vector<let> lets, std::vector<operator_ptr> operators)
+  pipeline(std::vector<let> lets, std::vector<Box<Operator>> operators)
     : lets{std::move(lets)}, operators{std::move(operators)} {
   }
 
@@ -209,7 +163,7 @@ public:
   /// operator itself can introduce new bindings. Thus, we cannot bind inside
   /// pipeline expressions. For consistency, we decided to not bind anything.
   virtual auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr>
+    -> failure_or<Box<ir::Operator>>
     = 0;
 
   /// Return the name of the operator, including `::` for modules.

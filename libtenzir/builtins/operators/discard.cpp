@@ -291,7 +291,7 @@ public:
   }
 };
 
-class discard_ir final : public ir::operator_base {
+class discard_ir final : public ir::Operator {
 public:
   discard_ir() = default;
 
@@ -344,11 +344,11 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     // TODO
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(inv.args.empty());
-    return std::make_unique<discard_ir>();
+    return discard_ir{};
   }
 };
 
@@ -358,7 +358,7 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::discard::plugin)
 TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::ir::operator_base,
+  tenzir::inspection_plugin<tenzir::ir::Operator,
                             tenzir::plugins::discard::discard_ir>);
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::plan::operator_base,

@@ -25,9 +25,9 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
+#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <caf/actor_from_state.hpp>
-#include "tenzir/tql2/user_defined_operator.hpp"
 
 #include <ranges>
 
@@ -36,8 +36,8 @@ namespace tenzir {
 namespace {
 
 /// Create a `where` operator with the given expression.
-auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
-  // TODO: This should just be a `std::make_unique<where_ir>(std::move(filter))`.
+auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
+  // TODO: This should just be a `where_ir{std::move(filter)}`.
   const auto* where = plugins::find<operator_compiler_plugin>("tql2.where");
   TENZIR_ASSERT(where);
   auto args = std::vector<ast::expression>{};
@@ -151,7 +151,7 @@ private:
   event_order order_ = event_order::ordered;
 };
 
-class set_ir final : public ir::operator_base {
+class set_ir final : public ir::Operator {
 public:
   set_ir() = default;
 
@@ -183,7 +183,7 @@ public:
                 event_order order) && -> ir::optimize_result override {
     // Remember the order for potential rebatches.
     order_ = order;
-    auto ops = std::vector<ir::operator_ptr>{};
+    auto ops = std::vector<Box<ir::Operator>>{};
     if (not filter.empty()) {
       // TODO: FIXME
       TENZIR_ASSERT(filter.size() == 1);
@@ -191,7 +191,7 @@ public:
       auto where = make_where_ir(filter[0]);
       ops.push_back(std::move(where));
     }
-    ops.emplace_back(std::make_unique<set_ir>(std::move(*this)));
+    ops.emplace_back(set_ir{std::move(*this)});
     auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
     return {{}, order_, std::move(replacement)};
   }
@@ -215,10 +215,10 @@ private:
 };
 
 /// Create a `set` operator with the given assignment.
-auto make_set_ir(ast::assignment x) -> ir::operator_ptr {
+auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.push_back(std::move(x));
-  return std::make_unique<set_ir>(std::move(assignments));
+  return set_ir{std::move(assignments)};
 }
 
 } // namespace
@@ -253,7 +253,7 @@ private:
   plan::pipeline else_;
 };
 
-class if_ir final : public ir::operator_base {
+class if_ir final : public ir::Operator {
 public:
   struct else_t {
     location keyword;
@@ -548,7 +548,7 @@ private:
 };
 
 /// A wrapper for the previous operator API to make them work with the new IR.
-class legacy_ir final : public ir::operator_base {
+class legacy_ir final : public ir::Operator {
 public:
   legacy_ir() = default;
 
@@ -632,7 +632,7 @@ public:
                 event_order order) && -> ir::optimize_result override {
     auto op = try_as<operator_ptr>(state_);
     if (not op) {
-      return std::move(*this).operator_base::optimize(std::move(filter), order);
+      return std::move(*this).optimize(std::move(filter), order);
     }
     TENZIR_ASSERT(*op);
     auto legacy_conj = conjunction{};
@@ -651,9 +651,9 @@ public:
                          : (legacy_conj.size() == 1 ? std::move(legacy_conj[0])
                                                     : std::move(legacy_conj));
     auto legacy_result = (*op)->optimize(legacy_expr, order);
-    auto replacement = std::vector<ir::operator_ptr>{};
-    replacement.emplace_back(std::make_unique<legacy_ir>(
-      main_location_, std::move(legacy_result.replacement)));
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.emplace_back(
+      legacy_ir{main_location_, std::move(legacy_result.replacement)});
     for (auto& expr : filter_rest) {
       replacement.push_back(make_where_ir(std::move(expr)));
     }
@@ -703,11 +703,11 @@ namespace {
 // `TENZIR_REGISTER_PLUGINS` also from `libtenzir` itself.
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
-    new inspection_plugin<ir::operator_base, legacy_ir>{},
+    new inspection_plugin<ir::Operator, legacy_ir>{},
     new inspection_plugin<plan::operator_base, legacy_plan>{},
-    new inspection_plugin<ir::operator_base, if_ir>{},
+    new inspection_plugin<ir::Operator, if_ir>{},
     new inspection_plugin<plan::operator_base, if_exec>{},
-    new inspection_plugin<ir::operator_base, set_ir>{},
+    new inspection_plugin<ir::Operator, set_ir>{},
     new inspection_plugin<plan::operator_base, set_plan>{},
   };
   for (auto y : x) {
@@ -728,7 +728,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   // TODO: Or do we assume that entities are already resolved?
   TRY(resolve_entities(*this, ctx));
   auto lets = std::vector<ir::let>{};
-  auto operators = std::vector<ir::operator_ptr>{};
+  auto operators = std::vector<Box<ir::Operator>>{};
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
     auto result = match(
@@ -748,7 +748,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                 TRY(x.bind(ctx));
               }
               operators.emplace_back(
-                std::make_unique<legacy_ir>(op.factory_plugin, std::move(x)));
+                legacy_ir{op.factory_plugin, std::move(x))};
               // TODO: Empty substitution?
               TRY(operators.back()->substitute(substitute_ctx{ctx, nullptr},
                                                false));
@@ -767,7 +767,6 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // were not defined, for example because it can then introduce those
             // bindings by itself.
             TRY(auto compiled, op.ir_plugin->compile(x, ctx));
-            TENZIR_ASSERT(compiled);
             operators.push_back(std::move(compiled));
             return {};
           },
@@ -815,8 +814,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           TRY(auto pipe, std::move(x.else_->pipe).compile(ctx));
           else_.emplace(x.else_->kw, std::move(pipe));
         }
-        operators.emplace_back(std::make_unique<if_ir>(
-          x.if_kw, std::move(x.condition), std::move(then), std::move(else_)));
+        operators.emplace_back(if_ir{x.if_kw, std::move(x.condition),
+                                     std::move(then), std::move(else_)});
         return {};
       },
       [&](ast::match_stmt x) -> failure_or<void> {
@@ -927,10 +926,10 @@ auto ir::pipeline::optimize(optimize_filter filter,
   return {std::move(filter), order, std::move(replacement)};
 }
 
-auto ir::operator_base::optimize(optimize_filter filter,
-                                 event_order order) && -> optimize_result {
+auto ir::Operator::optimize(optimize_filter filter,
+                            event_order order) && -> optimize_result {
   (void)order;
-  auto replacement = std::vector<operator_ptr>{};
+  auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
   for (auto& expr : filter) {
     replacement.push_back(make_where_ir(expr));
@@ -939,8 +938,8 @@ auto ir::operator_base::optimize(optimize_filter filter,
           pipeline{{}, std::move(replacement)}};
 }
 
-auto ir::operator_base::copy() const -> operator_ptr {
-  auto p = plugins::find<serialization_plugin<operator_base>>(name());
+auto ir::Operator::copy() const -> Box<Operator> {
+  auto p = plugins::find<serialization_plugin<Operator>>(name());
   if (not p) {
     TENZIR_ERROR("could not find serialization plugin `{}`", name());
     TENZIR_ASSERT(false);
@@ -954,23 +953,23 @@ auto ir::operator_base::copy() const -> operator_ptr {
     TENZIR_ASSERT(false);
   }
   auto g = caf::binary_deserializer{buffer};
-  auto copy = std::unique_ptr<operator_base>{};
+  auto copy = std::unique_ptr<ir::Operator>{};
   p->deserialize(g, copy);
   if (not copy) {
     TENZIR_ERROR("failed to deserialize `{}` operator: {}", name(),
                  g.get_error());
     TENZIR_ASSERT(false);
   }
-  return copy;
+  return Box<Operator>::from_unique_ptr(std::move(copy));
 }
 
-auto ir::operator_base::move() && -> operator_ptr {
+auto ir::Operator::move() && -> Box<Operator> {
   // TODO: This should be overriden by something like CRTP.
   return copy();
 }
 
-auto ir::operator_base::infer_type(element_type_tag input,
-                                   diagnostic_handler& dh) const
+auto ir::Operator::infer_type(element_type_tag input,
+                              diagnostic_handler& dh) const
   -> failure_or<std::optional<element_type_tag>> {
   // TODO: Is this a good default to have? Should probably be pure virtual.
   (void)input, (void)dh;
@@ -983,15 +982,6 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
     result = result.substr(5);
   }
   return result;
-}
-
-ir::operator_ptr::operator_ptr(const operator_ptr& other) {
-  *this = other;
-}
-
-auto ir::operator_ptr::operator=(const operator_ptr& other) -> operator_ptr& {
-  *this = other->copy();
-  return *this;
 }
 
 } // namespace tenzir

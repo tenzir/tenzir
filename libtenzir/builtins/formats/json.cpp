@@ -1376,7 +1376,7 @@ public:
   }
 };
 
-class JsonIr final : public ir::operator_base {
+class JsonIr final : public ir::Operator {
 public:
   auto name() const -> std::string override {
     return "json_ir";
@@ -1416,8 +1416,8 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
-    return std::make_unique<JsonIr>();
+    -> failure_or<Box<ir::Operator>> override {
+    return JsonIr{};
   }
 
   auto make(invocation inv, session ctx) const
@@ -1576,5 +1576,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{true})
-TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::operator_base,
-                                                 tenzir::plugins::json::JsonIr>);
+TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<
+                       tenzir::ir::Operator, tenzir::plugins::json::JsonIr>);

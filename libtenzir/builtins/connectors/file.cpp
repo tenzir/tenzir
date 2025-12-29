@@ -723,7 +723,7 @@ public:
   }
 };
 
-class SaveStdoutIr final : public ir::operator_base {
+class SaveStdoutIr final : public ir::Operator {
 public:
   auto name() const -> std::string override {
     return "SaveStdoutIr";
@@ -768,10 +768,10 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     // FIXME
     TENZIR_UNUSED(inv, ctx);
-    return std::make_unique<SaveStdoutIr>();
+    return SaveStdoutIr{};
   }
 };
 
@@ -834,5 +834,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::save_stdout_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdin_::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdout_::plugin)
 TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::ir::operator_base,
+  tenzir::inspection_plugin<tenzir::ir::Operator,
                             tenzir::plugins::file::SaveStdoutIr>);

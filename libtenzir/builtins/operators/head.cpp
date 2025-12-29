@@ -254,7 +254,7 @@ private:
   int64_t count_;
 };
 
-class head_ir final : public ir::operator_base {
+class head_ir final : public ir::Operator {
 public:
   head_ir() = default;
 
@@ -344,7 +344,7 @@ public:
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
+    -> failure_or<Box<ir::Operator>> override {
     // TODO: Actual parsing.
     if (inv.args.size() > 1) {
       diagnostic::error("expected exactly one argument")
@@ -354,7 +354,7 @@ public:
     }
     auto expr = inv.args.empty() ? ast::constant{10, location::unknown}
                                  : std::move(inv.args[0]);
-    return std::make_unique<head_ir>(inv.op.get_location(), std::move(expr));
+    return head_ir{inv.op.get_location(), std::move(expr)};
   }
 };
 
@@ -366,5 +366,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::head::plugin)
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::plan::operator_base,
                             tenzir::plugins::head::head_plan>)
-TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::operator_base,
+TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::Operator,
                                                  tenzir::plugins::head::head_ir>)
