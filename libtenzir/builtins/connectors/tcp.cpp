@@ -148,6 +148,9 @@ public:
       [this](atom::stop) -> caf::result<void> {
         return stop();
       },
+      [this](const caf::exit_msg&) -> caf::result<void> {
+        return stop();
+      },
     };
   }
 
@@ -358,7 +361,7 @@ private:
   }
 
   void handle_connection_failure(const caf::error& error) {
-    if (current_retry_attempt_ > args_.max_retry_count.inner) {
+    if (current_retry_attempt_ >= args_.max_retry_count.inner) {
       if (pending_write_) {
         auto& [promise, chunk] = *pending_write_;
         promise.deliver(caf::make_error(
@@ -637,11 +640,14 @@ public:
   }
 
   auto stop() -> caf::result<void> {
-    work_guard_.reset();
-    worker_.join();
-    metrics_.emit();
-    if (retry_timer_) {
-      retry_timer_->cancel();
+    if (not stopped) {
+      stopped = true;
+      work_guard_.reset();
+      worker_.join();
+      metrics_.emit();
+      if (retry_timer_) {
+        retry_timer_->cancel();
+      }
     }
     return {};
   }
@@ -668,6 +674,7 @@ public:
   caf::typed_response_promise<void> connection_rp_;
   caf::typed_response_promise<void> write_rp_;
   tcp_metrics metrics_ = {};
+  bool stopped = false;
   shared_diagnostic_handler diagnostic_handler_;
   saver_args args_ = {};
 };
