@@ -131,9 +131,10 @@ find_package(c-ares REQUIRED)
 provide_find_module(c-ares)
 
 # -- expat (XML parsing) -------------------------------------------------------
+# Use MODULE mode to avoid broken CMake config in static Nix builds
 
-find_package(EXPAT REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED)")
+find_package(EXPAT REQUIRED MODULE)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED MODULE)")
 dependency_summary("expat" EXPAT::EXPAT "Dependencies")
 
 # -- jemalloc ------------------------------------------------------------------

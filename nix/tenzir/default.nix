@@ -54,6 +54,7 @@ let
       llhttp,
       pfs,
       c-ares,
+      expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
       extraPlugins ? [ ],
@@ -238,6 +239,7 @@ let
               })
               llhttp
               c-ares
+              expat
             ]
             ++ lib.optionals stdenv.isLinux [
               pfs
@@ -304,6 +306,9 @@ let
               "-DTENZIR_INSTALL_CMAKEDIR=${placeholder "dev"}/lib/cmake"
             ]
             ++ lib.optionals isStatic [
+              # Hint paths for FindEXPAT module (CMake uses MODULE mode)
+              "-DEXPAT_LIBRARY=${expat}/lib/libexpat.a"
+              "-DEXPAT_INCLUDE_DIR=${lib.getDev expat}/include"
               "-UCMAKE_INSTALL_BINDIR"
               "-UCMAKE_INSTALL_SBINDIR"
               "-UCMAKE_INSTALL_INCLUDEDIR"

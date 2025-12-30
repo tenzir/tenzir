@@ -14,7 +14,6 @@
 #include <tenzir/plugin.hpp>
 
 #include <expat.h>
-#include <functional>
 #include <map>
 #include <memory>
 #include <ranges>
@@ -81,6 +80,16 @@ struct xml_parser_deleter {
 using xml_parser_ptr
   = std::unique_ptr<std::remove_pointer_t<XML_Parser>, xml_parser_deleter>;
 
+/// Result of XML parsing: either a parsed element or an error message.
+struct xml_parse_result {
+  std::unique_ptr<xml_element> root;
+  std::string error;
+
+  explicit operator bool() const {
+    return root != nullptr;
+  }
+};
+
 /// Expat SAX callbacks.
 void XMLCALL start_element(void* user_data, const XML_Char* name,
                            const XML_Char** attrs) {
@@ -140,11 +149,11 @@ void XMLCALL character_data(void* user_data, const XML_Char* s, int len) {
 
 /// Parse XML string into a DOM tree.
 auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
-  -> std::unique_ptr<xml_element> {
+  -> xml_parse_result {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
   auto parser = xml_parser_ptr{XML_ParserCreate(nullptr)};
   if (not parser) {
-    return nullptr;
+    return {nullptr, "failed to create XML parser"};
   }
   auto state = sax_state{};
   state.strip_namespaces = strip_namespaces;
@@ -154,9 +163,26 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
   auto status = XML_Parse(parser.get(), xml.data(),
                           static_cast<int>(xml.size()), XML_TRUE);
   if (status == XML_STATUS_ERROR) {
-    return nullptr;
+    auto line = XML_GetCurrentLineNumber(parser.get());
+    auto column = XML_GetCurrentColumnNumber(parser.get());
+    auto error_code = XML_GetErrorCode(parser.get());
+    auto error_str = XML_ErrorString(error_code);
+    return {nullptr, fmt::format("line {}:{}: {}", line, column, error_str)};
   }
-  return std::move(state.root);
+  return {std::move(state.root), {}};
+}
+
+/// Collect all descendant elements with a given name.
+void collect_descendants_by_name(const xml_element* elem, std::string_view name,
+                                 std::vector<const xml_element*>& results) {
+  if (elem->name == name) {
+    results.push_back(elem);
+  }
+  for (const auto& child : elem->children) {
+    if (auto* child_elem = std::get_if<std::unique_ptr<xml_element>>(&child)) {
+      collect_descendants_by_name(child_elem->get(), name, results);
+    }
+  }
 }
 
 /// Evaluate a simple XPath expression and return matching elements.
@@ -168,27 +194,14 @@ auto evaluate_xpath(const xml_element* root, std::string_view xpath)
   if (not root or xpath.empty()) {
     return results;
   }
-  // Handle "/*" - return root children (which is the root element itself)
+  // Handle "/*" - return root element
   if (xpath == "/*") {
     results.push_back(root);
     return results;
   }
   // Handle "//" - descendant axis
   if (xpath.starts_with("//")) {
-    auto name = xpath.substr(2);
-    std::function<void(const xml_element*)> collect_by_name
-      = [&](const xml_element* elem) {
-          if (elem->name == name) {
-            results.push_back(elem);
-          }
-          for (const auto& child : elem->children) {
-            if (auto* child_elem
-                = std::get_if<std::unique_ptr<xml_element>>(&child)) {
-              collect_by_name(child_elem->get());
-            }
-          }
-        };
-    collect_by_name(root);
+    collect_descendants_by_name(root, xpath.substr(2), results);
     return results;
   }
   // Handle absolute path like "/root/child/..."
@@ -296,36 +309,70 @@ void element_to_record(RecordBuilder record, const xml_element& elem,
   }
   // Add child elements
   for (auto& [child_name, nodes] : children_by_name) {
-    // Multiple elements with same name become a list
     if (nodes.size() > 1) {
+      // Multiple elements with same name become a list
       auto list = record.field(child_name).list();
       for (const auto* node : nodes) {
-        // For list items, handle based on node type
-        if (auto* text = try_as<std::string>(*node)) {
-          list.data(*text);
-        } else {
-          auto& elem_ptr = as<std::unique_ptr<xml_element>>(*node);
-          if (depth + 1 >= opts.max_depth) {
-            list.null();
-          } else if (elem_ptr->attributes.empty()
-                     and elem_ptr->children.size() == 1
-                     and is<std::string>(elem_ptr->children[0])) {
-            // Element has only text content
-            list.data(as<std::string>(elem_ptr->children[0]));
-          } else if (elem_ptr->children.empty()
-                     and elem_ptr->attributes.empty()) {
-            list.null();
-          } else {
-            auto nested_record = list.record();
-            element_to_record(nested_record, *elem_ptr, opts, depth + 1);
-          }
-        }
+        node_to_data(list, *node, opts, depth + 1);
       }
     } else {
-      auto field = record.field(child_name);
-      node_to_data(field, *nodes[0], opts, depth + 1);
+      node_to_data(record.field(child_name), *nodes[0], opts, depth + 1);
     }
   }
+}
+
+/// Helper to create XML parsing functions with common boilerplate.
+/// The Processor is called for each successfully parsed XML document with:
+///   (builder, root, call, ctx) where builder is multi_series_builder&
+template <typename Processor>
+auto make_xml_function(location call, multi_series_builder::options msb_opts,
+                       xml_options opts, ast::expression expr,
+                       std::string_view fn_name, Processor&& process)
+  -> function_ptr {
+  return function_use::make(
+    [call, msb_opts = std::move(msb_opts), opts = std::move(opts),
+     expr = std::move(expr), fn_name = std::string{fn_name},
+     process
+     = std::forward<Processor>(process)](evaluator eval, session ctx) mutable {
+      return map_series(eval(expr), [&](series arg) {
+        return match(
+          *arg.array,
+          [&](const arrow::NullArray&) -> multi_series {
+            return arg;
+          },
+          [&](const arrow::StringArray& arr) -> multi_series {
+            auto builder = multi_series_builder{msb_opts, ctx};
+            for (auto i = int64_t{0}; i < arr.length(); ++i) {
+              if (arr.IsNull(i)) {
+                builder.null();
+                continue;
+              }
+              auto xml_str = arr.Value(i);
+              if (xml_str.empty()) {
+                builder.null();
+                continue;
+              }
+              auto result = parse_xml_dom(xml_str, opts.strip_namespaces);
+              if (not result) {
+                diagnostic::warning("failed to parse XML: {}", result.error)
+                  .primary(call)
+                  .emit(ctx);
+                builder.null();
+                continue;
+              }
+              process(builder, std::move(result.root), opts, call, ctx);
+            }
+            return multi_series{builder.finalize()};
+          },
+          [&](const auto&) -> multi_series {
+            diagnostic::warning("`{}` expected `string`, got `{}`", fn_name,
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          });
+      });
+    });
 }
 
 class parse_xml_plugin final : public virtual function_plugin {
@@ -360,9 +407,6 @@ public:
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     // Build options
     auto opts = xml_options{};
-    if (xpath) {
-      opts.attr_prefix = xpath->inner.empty() ? "" : "@";
-    }
     auto xpath_str = xpath ? xpath->inner : std::string{"/*"};
     if (attr_prefix) {
       opts.attr_prefix = attr_prefix->inner;
@@ -391,63 +435,35 @@ public:
         return failure::promise();
       }
     }
-    return function_use::make(
-      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
-       opts = std::move(opts), xpath_str = std::move(xpath_str),
-       expr = std::move(expr)](evaluator eval, session ctx) {
-        return map_series(eval(expr), [&](series arg) {
-          return match(
-            *arg.array,
-            [&](const arrow::NullArray&) -> multi_series {
-              return arg;
-            },
-            [&](const arrow::StringArray& arr) -> multi_series {
-              auto builder = multi_series_builder{msb_opts, ctx};
-              for (auto i = int64_t{0}; i < arr.length(); ++i) {
-                if (arr.IsNull(i)) {
-                  builder.null();
-                  continue;
-                }
-                auto xml_str = arr.Value(i);
-                if (xml_str.empty()) {
-                  builder.null();
-                  continue;
-                }
-                auto root = parse_xml_dom(xml_str, opts.strip_namespaces);
-                if (not root) {
-                  diagnostic::warning("failed to parse XML")
-                    .primary(call)
-                    .emit(ctx);
-                  builder.null();
-                  continue;
-                }
-                auto matches = evaluate_xpath(root.get(), xpath_str);
-                if (matches.empty()) {
-                  builder.null();
-                  continue;
-                }
-                // Return list if multiple matches
-                if (matches.size() > 1 or xpath_str == "/*") {
-                  auto list = builder.list();
-                  for (const auto* elem : matches) {
-                    auto record = list.record();
-                    element_to_record(record, *elem, opts, 0);
-                  }
-                } else {
-                  auto record = builder.record();
-                  element_to_record(record, *matches[0], opts, 0);
-                }
-              }
-              return multi_series{builder.finalize()};
-            },
-            [&](const auto&) -> multi_series {
-              diagnostic::warning("`parse_xml` expected `string`, got `{}`",
-                                  arg.type.kind())
-                .primary(call)
-                .emit(ctx);
-              return series::null(null_type{}, arg.length());
-            });
-        });
+    return make_xml_function(
+      inv.call.get_location(), std::move(msb_opts), std::move(opts),
+      std::move(expr), name(),
+      [xpath_str = std::move(xpath_str)](
+        multi_series_builder& builder, std::unique_ptr<xml_element> root,
+        const xml_options& opts, location /*call*/, session /*ctx*/) {
+        // Fast path: /* returns the root element directly
+        if (xpath_str == "/*") {
+          auto list = builder.list();
+          auto record = list.record();
+          element_to_record(record, *root, opts, 0);
+          return;
+        }
+        // General XPath evaluation
+        auto matches = evaluate_xpath(root.get(), xpath_str);
+        if (matches.empty()) {
+          builder.null();
+          return;
+        }
+        if (matches.size() > 1) {
+          auto list = builder.list();
+          for (const auto* elem : matches) {
+            auto record = list.record();
+            element_to_record(record, *elem, opts, 0);
+          }
+        } else {
+          auto record = builder.record();
+          element_to_record(record, *matches[0], opts, 0);
+        }
       });
   }
 };
@@ -537,72 +553,34 @@ public:
     auto opts = xml_options{};
     opts.attr_prefix = "";
     opts.strip_namespaces = true;
-    return function_use::make(
-      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
-       opts = std::move(opts),
-       expr = std::move(expr)](evaluator eval, session ctx) {
-        return map_series(eval(expr), [&](series arg) {
-          return match(
-            *arg.array,
-            [&](const arrow::NullArray&) -> multi_series {
-              return arg;
-            },
-            [&](const arrow::StringArray& arr) -> multi_series {
-              auto builder = multi_series_builder{msb_opts, ctx};
-              for (auto i = int64_t{0}; i < arr.length(); ++i) {
-                if (arr.IsNull(i)) {
-                  builder.null();
-                  continue;
-                }
-                auto xml_str = arr.Value(i);
-                if (xml_str.empty()) {
-                  builder.null();
-                  continue;
-                }
-                auto root = parse_xml_dom(xml_str, opts.strip_namespaces);
-                if (not root) {
-                  diagnostic::warning("failed to parse Windows Event XML")
-                    .primary(call)
-                    .emit(ctx);
-                  builder.null();
-                  continue;
-                }
-                // Find Event element (might be root or nested)
-                const xml_element* event = nullptr;
-                if (root->name == "Event") {
-                  event = root.get();
-                } else {
-                  // Search for Event in children
-                  for (const auto& child : root->children) {
-                    if (auto* elem
-                        = try_as<std::unique_ptr<xml_element>>(child)) {
-                      if ((*elem)->name == "Event") {
-                        event = elem->get();
-                        break;
-                      }
-                    }
-                  }
-                }
-                if (not event) {
-                  diagnostic::warning("no Event element found in Windows XML")
-                    .primary(call)
-                    .emit(ctx);
-                  builder.null();
-                  continue;
-                }
-                auto record = builder.record();
-                winlog_to_record(record, *event, opts);
+    return make_xml_function(
+      inv.call.get_location(), std::move(msb_opts), std::move(opts),
+      std::move(expr), name(),
+      [](multi_series_builder& builder, std::unique_ptr<xml_element> root,
+         const xml_options& opts, location call, session ctx) {
+        // Find Event element (might be root or nested)
+        const xml_element* event = nullptr;
+        if (root->name == "Event") {
+          event = root.get();
+        } else {
+          for (const auto& child : root->children) {
+            if (auto* elem = try_as<std::unique_ptr<xml_element>>(child)) {
+              if ((*elem)->name == "Event") {
+                event = elem->get();
+                break;
               }
-              return multi_series{builder.finalize()};
-            },
-            [&](const auto&) -> multi_series {
-              diagnostic::warning("`parse_winlog` expected `string`, got `{}`",
-                                  arg.type.kind())
-                .primary(call)
-                .emit(ctx);
-              return series::null(null_type{}, arg.length());
-            });
-        });
+            }
+          }
+        }
+        if (not event) {
+          diagnostic::warning("no Event element found in Windows XML")
+            .primary(call)
+            .emit(ctx);
+          builder.null();
+          return;
+        }
+        auto record = builder.record();
+        winlog_to_record(record, *event, opts);
       });
   }
 };
