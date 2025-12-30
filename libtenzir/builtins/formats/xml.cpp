@@ -12,6 +12,7 @@
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <expat.h>
 #include <map>
@@ -332,8 +333,8 @@ auto make_xml_function(location call, multi_series_builder::options msb_opts,
   return function_use::make(
     [call, msb_opts = std::move(msb_opts), opts = std::move(opts),
      expr = std::move(expr), fn_name = std::string{fn_name},
-     process
-     = std::forward<Processor>(process)](evaluator eval, session ctx) mutable {
+     process = std::forward<Processor>(process)](function_use::evaluator eval,
+                                                 session ctx) mutable {
       return map_series(eval(expr), [&](series arg) {
         return match(
           *arg.array,

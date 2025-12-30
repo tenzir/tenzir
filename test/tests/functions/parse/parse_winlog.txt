@@ -62,7 +62,7 @@
   x: "<Event><System>",
   y: null,
 }
-warning: failed to parse Windows Event XML
+warning: failed to parse XML: line 1:15: no element found
   --> tests/functions/parse/parse_winlog.tql:54:5
    |
 54 | y = x.parse_winlog()

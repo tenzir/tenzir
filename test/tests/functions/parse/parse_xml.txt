@@ -49,7 +49,7 @@
   x: "<not-closed",
   y: null,
 }
-warning: failed to parse XML
+warning: failed to parse XML: line 1:0: unclosed token
   --> tests/functions/parse/parse_xml.tql:13:5
    |
 13 | y = x.parse_xml(xpath="/*")
