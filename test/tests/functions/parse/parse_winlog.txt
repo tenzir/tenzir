@@ -1,0 +1,70 @@
+{
+  x: "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\">\n  <System>\n    <Provider Name=\"Microsoft-Windows-Security-Auditing\" Guid=\"{54849625-5478-4994-A5BA-3E3B0328C30D}\"/>\n    <EventID>4624</EventID>\n    <Version>2</Version>\n    <Level>0</Level>\n    <Task>12544</Task>\n    <Opcode>0</Opcode>\n    <Keywords>0x8020000000000000</Keywords>\n    <TimeCreated SystemTime=\"2024-01-15T10:30:00.000Z\"/>\n    <EventRecordID>12345</EventRecordID>\n    <Execution ProcessID=\"500\" ThreadID=\"520\"/>\n    <Channel>Security</Channel>\n    <Computer>WORKSTATION1</Computer>\n    <Security/>\n  </System>\n  <EventData>\n    <Data Name=\"SubjectUserSid\">S-1-5-18</Data>\n    <Data Name=\"SubjectUserName\">SYSTEM</Data>\n    <Data Name=\"LogonType\">3</Data>\n  </EventData>\n</Event>",
+  y: {
+    System: {
+      Channel: "Security",
+      Computer: "WORKSTATION1",
+      EventID: "4624",
+      EventRecordID: "12345",
+      Execution: {
+        ProcessID: "500",
+        ThreadID: "520",
+      },
+      Keywords: "0x8020000000000000",
+      Level: "0",
+      Opcode: "0",
+      Provider: {
+        Name: "Microsoft-Windows-Security-Auditing",
+        Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
+      },
+      Security: null,
+      Task: "12544",
+      TimeCreated: {
+        SystemTime: "2024-01-15T10:30:00.000Z",
+      },
+      Version: "2",
+    },
+    EventData: {
+      SubjectUserSid: "S-1-5-18",
+      SubjectUserName: "SYSTEM",
+      LogonType: "3",
+    },
+  },
+}
+{
+  x: "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\">\n  <System>\n    <Provider Name=\"Application\"/>\n    <EventID>1000</EventID>\n    <Channel>Application</Channel>\n    <Computer>SERVER1</Computer>\n  </System>\n</Event>",
+  y: {
+    System: {
+      Channel: "Application",
+      Computer: "SERVER1",
+      EventID: "1000",
+      Provider: {
+        Name: "Application",
+      },
+    },
+  },
+}
+{
+  x: "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\">\n  <System>\n    <Provider Name=\"Application\"/>\n    <EventID>1001</EventID>\n    <Channel>Application</Channel>\n    <Computer>SERVER1</Computer>\n  </System>\n  <EventData>\n    <Data>MyApp.exe</Data>\n    <Data>1.0.0.0</Data>\n  </EventData>\n</Event>",
+  y: {
+    System: {
+      Channel: "Application",
+      Computer: "SERVER1",
+      EventID: "1001",
+      Provider: {
+        Name: "Application",
+      },
+    },
+    EventData: {},
+  },
+}
+{
+  x: "<Event><System>",
+  y: null,
+}
+warning: failed to parse Windows Event XML
+  --> tests/functions/parse/parse_winlog.tql:54:5
+   |
+54 | y = x.parse_winlog()
+   |     ~~~~~~~~~~~~~~~~ 
+   |

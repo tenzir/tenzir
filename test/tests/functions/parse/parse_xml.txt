@@ -1,0 +1,57 @@
+{
+  x: "<root><item>hello</item></root>",
+  y: [
+    {
+      item: "hello",
+    },
+  ],
+}
+{
+  x: "<items><item>A</item><item>B</item><item>C</item></items>",
+  y: [
+    {
+      item: [
+        "A",
+        "B",
+        "C",
+      ],
+    },
+  ],
+}
+{
+  x: "<book id=\"1\" lang=\"en\">Title</book>",
+  y: [
+    {
+      "@id": "1",
+      "@lang": "en",
+      "#text": "Title",
+    },
+  ],
+}
+{
+  x: "<catalog><book><title>XML</title><author>Jane</author></book></catalog>",
+  y: [
+    {
+      book: {
+        author: "Jane",
+        title: "XML",
+      },
+    },
+  ],
+}
+{
+  x: "<empty/>",
+  y: [
+    {},
+  ],
+}
+{
+  x: "<not-closed",
+  y: null,
+}
+warning: failed to parse XML
+  --> tests/functions/parse/parse_xml.tql:13:5
+   |
+13 | y = x.parse_xml(xpath="/*")
+   |     ~~~~~~~~~~~~~~~~~~~~~~~ 
+   |

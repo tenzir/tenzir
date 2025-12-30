@@ -130,6 +130,12 @@ provide_find_module(libmaxminddb)
 find_package(c-ares REQUIRED)
 provide_find_module(c-ares)
 
+# -- expat (XML parsing) -------------------------------------------------------
+
+find_package(EXPAT REQUIRED)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED)")
+dependency_summary("expat" EXPAT::EXPAT "Dependencies")
+
 # -- jemalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC OFF)
@@ -290,6 +296,9 @@ endif ()
 target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
+
+# Link against expat.
+target_link_libraries(libtenzir_builtins PRIVATE EXPAT::EXPAT)
 
 # Link against jemalloc.
 if (TENZIR_ALLOCATOR_NEEDS_JEMALLOC)

@@ -1,0 +1,9 @@
+{
+  x: "<item id=\"1\">value</item>",
+  y: [
+    {
+      id: "1",
+      "#text": "value",
+    },
+  ],
+}
