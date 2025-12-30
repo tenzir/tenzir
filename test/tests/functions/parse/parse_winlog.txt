@@ -55,7 +55,30 @@
         Name: "Application",
       },
     },
-    EventData: {},
+    EventData: [
+      "MyApp.exe",
+      "1.0.0.0",
+    ],
+  },
+}
+{
+  x: "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\">\n  <System>\n    <Provider Name=\"Application\"/>\n    <EventID>1002</EventID>\n    <Channel>Application</Channel>\n    <Computer>SERVER2</Computer>\n  </System>\n  <UserData>\n    <EventXML>\n      <Details>\n        <Foo>Bar</Foo>\n      </Details>\n    </EventXML>\n  </UserData>\n</Event>",
+  y: {
+    System: {
+      Channel: "Application",
+      Computer: "SERVER2",
+      EventID: "1002",
+      Provider: {
+        Name: "Application",
+      },
+    },
+    UserData: {
+      EventXML: {
+        Details: {
+          Foo: "Bar",
+        },
+      },
+    },
   },
 }
 {
@@ -63,8 +86,8 @@
   y: null,
 }
 warning: failed to parse XML: line 1:15: no element found
-  --> tests/functions/parse/parse_winlog.tql:54:5
+  --> tests/functions/parse/parse_winlog.tql:72:5
    |
-54 | y = x.parse_winlog()
+72 | y = x.parse_winlog()
    |     ~~~~~~~~~~~~~~~~ 
    |

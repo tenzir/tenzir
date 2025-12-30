@@ -49,6 +49,24 @@ from {
   </EventData>
 </Event>"#
      },
+     // Event with structured UserData
+     {
+       x: r#"<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Application"/>
+    <EventID>1002</EventID>
+    <Channel>Application</Channel>
+    <Computer>SERVER2</Computer>
+  </System>
+  <UserData>
+    <EventXML>
+      <Details>
+        <Foo>Bar</Foo>
+      </Details>
+    </EventXML>
+  </UserData>
+</Event>"#
+     },
      // Malformed XML
      {x: "<Event><System>"}
 y = x.parse_winlog()

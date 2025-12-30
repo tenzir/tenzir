@@ -469,35 +469,39 @@ public:
   }
 };
 
-/// Transform EventData for Windows Event Log:
-/// <EventData><Data Name="x">v</Data></EventData> -> {EventData: {x: "v"}}
+/// Return the Name attribute value for a <Data> element, if present.
+auto data_name_attr(const xml_element& data_elem) -> const std::string* {
+  for (const auto& [attr, val] : data_elem.attributes) {
+    if (attr == "Name") {
+      return &val;
+    }
+  }
+  return nullptr;
+}
+
+template <typename Builder>
+void append_data_value(Builder builder, const xml_element& data_elem) {
+  if (not data_elem.children.empty()) {
+    if (auto* text = try_as<std::string>(data_elem.children[0])) {
+      builder.data(*text);
+      return;
+    }
+  }
+  builder.null();
+}
+
+/// Transform EventData for Windows Event Log.
+/// Named Data elements become record fields: {x: "v"}
+/// Unnamed Data elements get numeric keys: {"0": "v1", "1": "v2"}
 template <typename RecordBuilder>
-void transform_event_data(RecordBuilder record, const xml_element& event_data) {
-  // Look for Data elements with Name attribute
-  for (const auto& child : event_data.children) {
-    if (auto* elem = try_as<std::unique_ptr<xml_element>>(child)) {
-      if ((*elem)->name == "Data") {
-        // Find Name attribute
-        std::string field_name;
-        for (const auto& [attr, val] : (*elem)->attributes) {
-          if (attr == "Name") {
-            field_name = val;
-            break;
-          }
-        }
-        if (field_name.empty()) {
-          // Unnamed Data element - use index
-          continue;
-        }
-        // Get text content
-        if (not(*elem)->children.empty()) {
-          if (auto* text = try_as<std::string>((*elem)->children[0])) {
-            record.field(field_name).data(*text);
-          }
-        } else {
-          record.field(field_name).null();
-        }
-      }
+void transform_event_data(RecordBuilder record,
+                          const std::vector<const xml_element*>& data_elems) {
+  size_t unnamed_index = 0;
+  for (const auto* elem : data_elems) {
+    if (const auto* name = data_name_attr(*elem)) {
+      append_data_value(record.field(*name), *elem);
+    } else {
+      append_data_value(record.field(std::to_string(unnamed_index++)), *elem);
     }
   }
 }
@@ -509,10 +513,37 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
   for (const auto& child : event.children) {
     if (auto* elem_ptr = try_as<std::unique_ptr<xml_element>>(child)) {
       auto& elem = *elem_ptr;
-      if (elem->name == "EventData" or elem->name == "UserData") {
-        // Special handling for EventData/UserData
-        auto event_data_record = record.field(elem->name).record();
-        transform_event_data(event_data_record, *elem);
+      if (elem->name == "EventData") {
+        std::vector<const xml_element*> data_elems;
+        bool has_named = false;
+        bool has_unnamed = false;
+        for (const auto& event_data_child : elem->children) {
+          if (auto* data_elem
+              = try_as<std::unique_ptr<xml_element>>(event_data_child)) {
+            if ((*data_elem)->name != "Data") {
+              continue;
+            }
+            data_elems.push_back(data_elem->get());
+            if (data_name_attr(*data_elem->get())) {
+              has_named = true;
+            } else {
+              has_unnamed = true;
+            }
+          }
+        }
+        if (data_elems.empty()) {
+          record.field(elem->name).record();
+          continue;
+        }
+        if (not has_named and has_unnamed) {
+          auto list = record.field(elem->name).list();
+          for (const auto* data_elem : data_elems) {
+            append_data_value(list, *data_elem);
+          }
+        } else {
+          auto event_data_record = record.field(elem->name).record();
+          transform_event_data(event_data_record, data_elems);
+        }
       } else {
         // Regular element handling
         auto field = record.field(elem->name);
