@@ -69,6 +69,17 @@ struct sax_state {
   }
 };
 
+/// RAII wrapper for libexpat XML_Parser.
+struct xml_parser_deleter {
+  void operator()(XML_Parser p) const noexcept {
+    if (p) {
+      XML_ParserFree(p);
+    }
+  }
+};
+using xml_parser_ptr
+  = std::unique_ptr<std::remove_pointer_t<XML_Parser>, xml_parser_deleter>;
+
 /// Expat SAX callbacks.
 void XMLCALL start_element(void* user_data, const XML_Char* name,
                            const XML_Char** attrs) {
@@ -129,19 +140,18 @@ void XMLCALL character_data(void* user_data, const XML_Char* s, int len) {
 /// Parse XML string into a DOM tree.
 auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
   -> std::unique_ptr<xml_element> {
-  auto parser
-    = XML_ParserCreate(nullptr); // NOLINT(cppcoreguidelines-pro-type-vararg)
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+  auto parser = xml_parser_ptr{XML_ParserCreate(nullptr)};
   if (not parser) {
     return nullptr;
   }
   auto state = sax_state{};
   state.strip_namespaces = strip_namespaces;
-  XML_SetUserData(parser, &state);
-  XML_SetElementHandler(parser, start_element, end_element);
-  XML_SetCharacterDataHandler(parser, character_data);
-  auto status
-    = XML_Parse(parser, xml.data(), static_cast<int>(xml.size()), XML_TRUE);
-  XML_ParserFree(parser);
+  XML_SetUserData(parser.get(), &state);
+  XML_SetElementHandler(parser.get(), start_element, end_element);
+  XML_SetCharacterDataHandler(parser.get(), character_data);
+  auto status = XML_Parse(parser.get(), xml.data(),
+                          static_cast<int>(xml.size()), XML_TRUE);
   if (status == XML_STATUS_ERROR) {
     return nullptr;
   }
