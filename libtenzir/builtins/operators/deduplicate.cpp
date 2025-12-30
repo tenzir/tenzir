@@ -222,12 +222,20 @@ public:
       row += keys.length();
       if (cfg_.count_field) {
         auto count_series = series{int64_type{}, finish(*count_builder)};
+        // Track count offset separately. The count array only has required
+        // entries, so all entries must be used, i.e. count_series.length() !=
+        // slice.rows() necessarily and cannot be sliced alongside.
+        auto count_offset = int64_t{};
         for (auto [begin, end] : select_runs(ids)) {
           auto output_slice = subslice(slice, begin, end);
-          auto count_slice = count_series.slice(begin, end - begin);
+          const auto delta = end - begin;
+          auto count_slice
+            = count_series.slice(count_offset, count_offset + delta);
+          count_offset += delta;
           co_yield assign(cfg_.count_field.value(), count_slice, output_slice,
                           ctrl.diagnostics(), assign_position::back);
         }
+        TENZIR_ASSERT(count_offset == count_series.length());
       } else {
         for (auto [begin, end] : select_runs(ids)) {
           co_yield subslice(slice, begin, end);
