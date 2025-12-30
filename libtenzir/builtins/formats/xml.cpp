@@ -17,6 +17,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <stack>
 #include <string>
 #include <string_view>
