@@ -61,7 +61,7 @@ jobs:
             '."editions" = [
               if ${{ inputs.push-de-to-ghcr }} then
                 {
-                  "name": "tenzir-de", "target": "tenzir-de", "registries": [
+                  "name": "tenzir-de", "target": "tenzir-de", "image-registries": [
                    "ghcr.io"
                   ]
                 }
@@ -70,7 +70,7 @@ jobs:
               end,
               if ${{ inputs.push-ce-to-ghcr }} then
                 {
-                  "name": "tenzir", "target": "tenzir", "registries": [
+                  "name": "tenzir", "target": "tenzir", "image-registries": [
                    "ghcr.io"
                   ]
                 }
@@ -79,7 +79,7 @@ jobs:
               end,
               if ${{ inputs.push-demo-to-ecr }} then
                 {
-                  "name": "tenzir-demo", "target": "tenzir-demo", "registries": [
+                  "name": "tenzir-demo", "target": "tenzir-demo", "image-registries": [
                    "622024652768.dkr.ecr.eu-west-1.amazonaws.com"
                   ]
                 }
@@ -87,7 +87,7 @@ jobs:
                 empty
               end
             ] | ."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
-            --arg vs "${{ steps.version.outputs.version-build-metadata }}" \
+            --arg vs "${{ steps.version.outputs.tenzir-version-build-metadata }}" \
             --args -- "${tags[@]}")"
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
