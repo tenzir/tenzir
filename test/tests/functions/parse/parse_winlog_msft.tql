@@ -1,0 +1,23 @@
+// Test parse_winlog with real Windows Event Log examples from Microsoft documentation.
+// Source: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/
+from {
+       // Event 4624: An account was successfully logged on
+       x: file_contents(f"{env("TENZIR_INPUTS")}/winlog/4624-logon.xml")
+     },
+     {
+       // Event 4625: An account failed to log on
+       x: file_contents(f"{env("TENZIR_INPUTS")}/winlog/4625-failed-logon.xml")
+     },
+     {
+       // Event 4627: Group membership information
+       x: file_contents(f"{env("TENZIR_INPUTS")}/winlog/4627-group-membership.xml")
+     },
+     {
+       // Event 4648: A logon was attempted using explicit credentials
+       x: file_contents(f"{env("TENZIR_INPUTS")}/winlog/4648-explicit-credentials.xml")
+     },
+     {
+       // Event 4688: A new process has been created
+       x: file_contents(f"{env("TENZIR_INPUTS")}/winlog/4688-process-creation.xml")
+     }
+y = x.parse_winlog()
