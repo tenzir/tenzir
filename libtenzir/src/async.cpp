@@ -168,18 +168,12 @@ struct AnyWrapper {
 template <class Input>
 struct SubPipeline {
   SubPipeline(Box<Push<OperatorMsg<Input>>> push,
-              Box<Pull<OperatorMsg<table_slice>>> pull,
-              Sender<FromControl> from_control, Receiver<ToControl> to_control)
-    : push{std::move(push)},
-      pull{std::move(pull)},
-      from_control{std::move(from_control)},
-      to_control{std::move(to_control)} {
+              Sender<FromControl> from_control)
+    : push{std::move(push)}, from_control{std::move(from_control)} {
   }
 
   Box<Push<OperatorMsg<Input>>> push;
-  Box<Pull<OperatorMsg<table_slice>>> pull;
   Sender<FromControl> from_control;
-  Receiver<ToControl> to_control;
 };
 
 using AnySubpipeline = variant<SubPipeline<void>, SubPipeline<table_slice>>;
@@ -263,10 +257,14 @@ private:
     // co_await handle.join();
     queue_.scope().spawn([this, pull_downstream = std::move(
                                   pull_downstream)] mutable -> Task<void> {
+      // Pulling from the subpipeline needs to happen independently from the
+      // main operator logic. This is because we might block when pushing to the
+      // subpipeline due to backpressure, but in order to alleviate the
+      // backpressure, we need to pull from it.
       while (true) {
         auto output = co_await pull_downstream();
         co_await match(
-          output,
+          std::move(output),
           [&](table_slice output) -> Task<void> {
             if constexpr (std::same_as<Output, void>) {
               co_await op_->process_sub(SubKeyView{}, std::move(output), ctx_);
@@ -278,9 +276,33 @@ private:
           },
           [&](Signal output) -> Task<void> {
             // TODO
-            TENZIR_UNUSED(output);
-            co_return;
+            switch (output) {
+              case Signal::end_of_data:
+                co_return;
+              case Signal::checkpoint:
+                TENZIR_TODO();
+            }
+            TENZIR_UNREACHABLE();
           });
+      }
+    });
+    queue_.scope().spawn([to_control_receiver = std::move(
+                            to_control_receiver)] mutable -> Task<void> {
+      while (true) {
+        auto to_control = co_await to_control_receiver.receive();
+        switch (to_control) {
+          case ToControl::no_more_input:
+            // FIXME: How do we inform the operator that the subpipeline doesn't
+            // want anymore input?
+          case ToControl::ready_for_shutdown:
+            // FIXME: Send shutdown signal and then remove it from the pipelines
+            // list once the task terminated.
+          case ToControl::checkpoint_begin:
+          case ToControl::checkpoint_ready:
+          case ToControl::checkpoint_done:
+            TENZIR_TODO();
+        }
+        TENZIR_UNREACHABLE();
       }
     });
     // TODO: Cleanup.
@@ -291,9 +313,7 @@ private:
                       auto [_, inserted] = subpipelines_.try_emplace(
                         std::move(key), SubPipeline{
                                           std::move(push_upstream),
-                                          std::move(pull_downstream),
                                           std::move(from_control_sender),
-                                          std::move(to_control_receiver),
                                         });
                       if (not inserted) {
                         panic("already have a subpipeline for that key");
@@ -481,7 +501,11 @@ private:
     for (auto& sub : subpipelines_) {
       co_await match(sub.second,
                      []<class In>(SubPipeline<In>& sub) -> Task<void> {
-                       co_await sub.push(Signal::end_of_data);
+                       // TODO: What if this is a source?
+                       if constexpr (not std::same_as<In, void>) {
+                         co_await sub.push(Signal::end_of_data);
+                         sub.from_control.send(Shutdown{});
+                       }
                        // TODO: Do we need to do anything else? Do we need to
                        // wait for them to finish?
                      });
@@ -618,10 +642,11 @@ private:
     TENZIR_WARN("waiting for all run operators to finish");
     // TODO: Or do we want to continue listening for control responses during
     // shutdown? That would require some additional coordination.
-    auto remaining = operators_.size();
+    auto ready_for_shutdown = size_t{0};
+    auto shutdown_count = size_t{0};
     queue_.spawn(from_control_.receive());
-    auto got_shutdown = false;
-    while (not got_shutdown) {
+    auto keep_running = true;
+    while (keep_running) {
       TENZIR_WARN("waiting for next info in chain runner");
       auto next = co_await queue_.next();
       // We should never be done here...
@@ -638,8 +663,10 @@ private:
               }
             },
             [&](Shutdown) {
-              TENZIR_INFO("got shutdown notice in subpipeline");
-              got_shutdown = true;
+              TENZIR_WARN("sending shutdown to all operators");
+              for (auto& sender : operator_ctrl_) {
+                sender.send(Shutdown{});
+              }
             },
             [&](StopOutput) {
               for (auto& ctrl : operator_ctrl_) {
@@ -653,24 +680,29 @@ private:
             kind,
             [&](Shutdown) {
               TENZIR_WARN("got shutdown from operator {}", index);
-              // Operator terminated. But we didn't send shutdown signal?
-              TENZIR_ASSERT(false, "oh no");
+              // TODO: What if we didn't send shutdown signal?
+              TENZIR_ASSERT(shutdown_count < operators_.size());
+              shutdown_count += 1;
+              if (shutdown_count == operators_.size()) {
+                // All operators shut down successfully.
+                keep_running = false;
+              }
             },
             [&](ToControl to_control) {
               TENZIR_WARN("got control message from operator {}: {}", index,
                           to_control);
               switch (to_control) {
                 case ToControl::ready_for_shutdown:
-                  TENZIR_ASSERT(remaining > 0);
-                  remaining -= 1;
-                  if (remaining == 0) {
+                  TENZIR_ASSERT(ready_for_shutdown < operators_.size());
+                  ready_for_shutdown += 1;
+                  if (ready_for_shutdown == operators_.size()) {
                     // Once we are here, we got a request to shutdown from all
                     // operators. However, since we might be running in a
                     // subpipeline that is not ready to shutdown yet, we first
                     // have to ask control whether we are allowed to.
                     to_control_.send(ToControl::ready_for_shutdown);
                   }
-                  break;
+                  return;
                 case ToControl::no_more_input:
                   // TODO: Inform the preceding operator that we don't need any
                   // more input.
@@ -679,20 +711,20 @@ private:
                   } else {
                     // TODO: What if we don't host the preceding operator? Then
                     // we need to notify OUR input!
+                    to_control_.send(ToControl::no_more_input);
                   }
-                  break;
+                  return;
                 case ToControl::checkpoint_begin:
                 case ToControl::checkpoint_ready:
                 case ToControl::checkpoint_done:
-                  break;
+                  return;
               }
+              TENZIR_UNREACHABLE();
             });
         });
     }
-    TENZIR_WARN("sending shutdown to all operators");
-    for (auto& sender : operator_ctrl_) {
-      sender.send(Shutdown{});
-    }
+    TENZIR_ASSERT(ready_for_shutdown == operators_.size());
+    TENZIR_ASSERT(shutdown_count == operators_.size());
   }
 
   std::vector<AnyOperator> operators_;
