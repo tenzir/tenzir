@@ -220,7 +220,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
         .primary(x.name)
         .secondary(x.left, "type `{}`", l.type.kind())
         .emit(ctx_);
-      return null();
+      return series::null(null_type{}, l.length());
     }
     auto& s = as<arrow::StructArray>(*l.array);
     if (auto idx = rec_ty->resolve_field(x.name.name)) {
@@ -253,7 +253,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
         .hint(std::string{"append `?` to suppress this warning"})
         .emit(ctx_);
     }
-    return null();
+    return series::null(null_type{}, l.length());
   });
 }
 
@@ -348,7 +348,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             .primary(x.index)
             .secondary(x.expr, "has type `{}`", value.type.kind())
             .emit(ctx_);
-          return null();
+          return series::null(null_type{}, value.length());
         }
         auto& s = as<arrow::StructArray>(*value.array);
         auto b = series_builder{};
@@ -489,7 +489,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
               .compose(add_suppress_hint)
               .emit(ctx_);
           }
-          return null();
+          return series::null(null_type{}, value.length());
         }
         auto list_values = list->array->values();
         auto value_type = list->type.value_type();
@@ -544,7 +544,11 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         }
         return series{value_type, finish(*b)};
       }
-      return not_implemented(x);
+      diagnostic::warning("eval not implemented yet for: {:?}",
+                          use_default_formatter(x))
+        .primary(x)
+        .emit(ctx_);
+      return series::null(null_type{}, value.length());
     });
 }
 
