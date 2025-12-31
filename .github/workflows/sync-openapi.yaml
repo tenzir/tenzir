@@ -1,0 +1,30 @@
+name: Sync OpenAPI
+on:
+  workflow_run:
+    workflows: [Docker]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  sync:
+    name: Sync OpenAPI to Docs
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: docs
+
+      - name: Trigger docs OpenAPI regeneration
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh workflow run generate-openapi-node.yaml \
+            --repo tenzir/docs \
+            --field tenzir_docker_tag="${{ github.event.workflow_run.head_sha }}"

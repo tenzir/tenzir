@@ -1,176 +1,127 @@
 name: Docker
 on:
-  workflow_call:
-    inputs:
-      config:
-        type: string
-        required: true
+  push:
+    branches:
+      - main
+      - v*
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "libtenzir/**"
+      - "libtenzir_test/**"
+      - "plugins/**"
+      - "python/**"
+      - "scripts/debian/**"
+      - "version.json"
+      - ".github/workflows/docker.yaml"
+      - ".github/workflows/_docker.yaml"
+      - ".github/workflows/docker-config-base.json"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "libtenzir/**"
+      - "libtenzir_test/**"
+      - "plugins/**"
+      - "python/**"
+      - "scripts/debian/**"
+      - "version.json"
+      - ".github/workflows/docker.yaml"
+      - ".github/workflows/_docker.yaml"
+      - ".github/workflows/docker-config-base.json"
+  release:
+    types:
+      - published
+  workflow_dispatch:
 
-permissions:
-  actions: write
-  contents: read
-  id-token: write
-  packages: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    name: Build (${{ matrix.build.tag }})
-    runs-on: ${{ matrix.build.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          - runner: ubuntu-latest
-            arch: linux/amd64
-            tag: amd64
-          - runner: ubicloud-standard-4-arm
-            arch: linux/arm64
-            tag: arm64
-    steps:
-      - name: Prevent pushing protected editions to public repos
-        run: |
-          # Create 'name registry' pairs
-          jq -r '.editions[] | select(."image-registries" | length > 0) | .name as $name | ."image-registries"[]? // ."image-registries" | [ $name, . ] | join(" ")' \
-            <<< '${{ inputs.config }}' | while read -r name registry; do
-            # Explicitly allow tenzir, demo and dev images.
-            [[ "${name}" =~ ^tenzir(|-dev|-deps|-node|-de|-node-de|-demo)$ ]] && continue
-            # Explicitly allow private registries.
-            [[ "${registry}" == "622024652768.dkr.ecr.eu-west-1.amazonaws.com" ]] && continue
-            echo "::error Pushing ${name} to ${registry} is forbidden"
-            exit 1
-          done
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --recursive libtenzir
-          git submodule update --init --recursive plugins
-          git submodule update --init --recursive tenzir
-      - name: Tailscale
-        if: false
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          version: 1.66.4
-          args: --ssh
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Update submodules
-        run: |
-          git submodule update --init --recursive contrib/tenzir-plugins
-      - name: Install Nix
-        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
-        with:
-          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/0d70460758949966e91d9ecb823b821f963cefbb.tar.gz
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Login to registries
-        uses: ./.github/actions/registry-login
-        with:
-          config: ${{ inputs.config }}
-          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
-          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: actions/cache buildah
-        id: buildah-cache
-        if: ${{ ! startsWith(matrix.build.runner, 'ubicloud') }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
-        with:
-          key: ${{ matrix.build.tag }}-buildah-cache
-          path: /home/runner/work/buildah
-      - name: ubicloud/cache buildah
-        id: ubicloud-buildah-cache
-        if: ${{ startsWith(matrix.build.runner, 'ubicloud') }}
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
-        with:
-          key: ${{ matrix.build.tag }}-buildah-cache
-          path: /home/runner/work/buildah
-      - name: Setup go
-        if: steps.buildah-cache.outputs.cache-hit != true && steps.ubicloud-buildah-cache.outputs.cache-hit != true
-        uses: actions/setup-go@v5
-        with:
-          go-version: '>=1.23.0'
-      - name: Setup buildah
-        run: |
-          test -d /home/runner/work/buildah || ./scripts/debian/install-buildah.sh
-          sudo mv buildah-output /home/runner/work/buildah || true
-          sudo cp -r /home/runner/work/buildah/* /usr/local/
-          echo "BUILDAH_RUNTIME=/usr/local/bin/crun" >> $GITHUB_ENV
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: Setup actions/cache
-        if: ${{ ! startsWith(matrix.build.runner, 'ubicloud') }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
-        with:
-          key: ${{ matrix.build.tag }}-build-cache-${{ github.sha }}
-          restore-keys: ${{ matrix.build.tag }}-build-cache
-          path: /home/runner/work/cache
-      - name: Setup ubicloud/cache
-        if: ${{ startsWith(matrix.build.runner, 'ubicloud') }}
-        uses: ubicloud/cache@92361f338d82d2c58a98875f1b5c95cd14cd6b2a  # v4
-        with:
-          key: ${{ matrix.build.tag }}-build-cache-${{ github.sha }}
-          restore-keys: ${{ matrix.build.tag }}-build-cache
-          path: /home/runner/work/cache
-      - name: Reclaim space
-        run: |
-          rm -rf ~/.cargo ~/go ~/.cache
-          cd /opt
-          find . -maxdepth 1 -mindepth 1 '!' -path ./containerd '!' -path ./actionarchivecache '!' -path ./runner '!' -path ./runner-cache -exec rm -rf '{}' ';'
-      - name: Build Docker Images
-        env:
-          CACHE_REF: ghcr.io/tenzir/${{ matrix.build.tag }}-tenzir-build-cache
-        run: |
-          CACHE_PATH=/home/runner/work/cache
-          mkdir -p $CACHE_PATH
-          cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
-          jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
-            <<< '${{ inputs.config }}' | while read -r name target registry; do
-            buildah build \
-              --layers \
-              --target "${target}" \
-              --build-context cache-context=$CACHE_PATH \
-              --platform '${{ matrix.build.arch }}' \
-              --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
-              --cache-from "${CACHE_REF}" \
-              --cache-to "${CACHE_REF}" \
-              --tag "img"
-            for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
-              buildah push img "${registry}/tenzir/${name}:${{ matrix.build.tag }}-${tag}"
-            done
-          done
-
-  push-manifest:
-    name: Push Manifest
+  configure:
+    name: Configure
     runs-on: ubuntu-latest
-    needs:
-      - build
+    outputs:
+      docker-config: ${{ steps.docker.outputs.docker-config }}
+      container-ref: ${{ steps.configure.outputs.container-ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Login to registries
-        uses: ./.github/actions/registry-login
-        with:
-          config: ${{ inputs.config }}
-          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
-          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Create and push manifest
-        env:
-          BUILDX_GIT_LABELS: full
+      - name: Fetch Tags
+        run: git fetch origin +refs/tags/*:refs/tags/*
+      - name: Inject Slug Variables
+        uses: rlespinasse/github-slug-action@v5
+      - name: Configure
+        id: configure
         run: |
-          jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
-            <<< '${{ inputs.config }}' | while read -r name target registry; do
-            for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
-              echo "::notice Creating manifest for ${registry}/tenzir/${name}:${tag}"
-              docker buildx imagetools create \
-                --tag "${registry}/tenzir/${name}:${tag}" \
-                "${registry}/tenzir/${name}:amd64-${tag}" \
-                "${registry}/tenzir/${name}:arm64-${tag}"
-            done
-          done
+          # Set version numbers
+          version="v$(jq -r '."tenzir-version"' version.json)"
+          id_sha="${{ github.sha }}"
+          release_version="${version}"
+          echo "release-version=${release_version}" >> $GITHUB_OUTPUT
+
+          # Compute version build metadata
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tenzir_docker_version_build_metadata=""
+          else
+            tenzir_docker_version_build_metadata="g${id_sha:0:10}"
+            if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+              tenzir_docker_version_build_metadata="pr${{ github.event.number }}"
+            fi
+          fi
+          echo "tenzir-docker-version-build-metadata=${tenzir_docker_version_build_metadata}" >> $GITHUB_OUTPUT
+
+          # Compute container reference
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "container-ref=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
+          else
+            echo "container-ref=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Inject slug variables
+          echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
+
+      - name: Configure Docker
+        id: docker
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            tags=('main' "${{ github.sha }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            major_minor_patch='${{ steps.configure.outputs.release-version }}'
+            major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
+            major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
+            tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
+          else
+            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            exit 1
+          fi
+          docker_config="$(jq -c \
+            '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
+            .github/workflows/docker-config-base.json \
+            --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
+            --args -- "${tags[@]}")"
+          # Clear push repos in case we're in a PR, but push the community
+          # edition to ghcr.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
+              (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
+              ."image-registries") |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
+          fi
+          echo "docker-config=${docker_config}" >> $GITHUB_OUTPUT
+          echo "::notice docker-config = ${docker_config}"
+
+  build:
+    name: Build
+    needs: configure
+    uses: ./.github/workflows/_docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+    secrets: inherit

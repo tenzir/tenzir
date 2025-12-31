@@ -1,0 +1,83 @@
+name: Regression Tests
+on:
+  workflow_run:
+    workflows: [Docker]
+    types:
+      - completed
+    branches:
+      - main
+      - v*
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  configure:
+    name: Configure
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    outputs:
+      version-matrix: ${{ steps.configure.outputs.version-matrix }}
+      container-ref: ${{ steps.configure.outputs.container-ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Fetch Tags
+        run: git fetch origin +refs/tags/*:refs/tags/*
+      - name: Inject Slug Variables
+        uses: rlespinasse/github-slug-action@v5
+      - name: Configure
+        id: configure
+        run: |
+          # Create a matrix with Tenzir versions >= limit_version
+          limit_version=v5.16.0
+          if git rev-parse "${limit_version}" --; then
+            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
+            dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
+            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v5.20.2')
+            version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
+          else
+            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
+          fi
+          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
+
+          # Compute container reference
+          # For workflow_run, we use the head_sha from the triggering workflow
+          # For PRs, we use the head branch slug; otherwise the SHA
+          event_name="${{ github.event.workflow_run.event }}"
+          if [[ "$event_name" == "pull_request" ]]; then
+            echo "container-ref=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
+          else
+            echo "container-ref=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+          fi
+
+  test:
+    name: Regression Tests (${{ matrix.regression-tests.version }})
+    needs: configure
+    if: github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Regression Tests
+        run: |
+          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.container-ref }}
