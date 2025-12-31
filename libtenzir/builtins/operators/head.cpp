@@ -8,17 +8,11 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/compile_ctx.hpp>
-#include <tenzir/exec/operator.hpp>
-#include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/pipeline.hpp>
-#include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
-
-#include <caf/actor_from_state.hpp>
-#include <caf/actor_registry.hpp>
 
 namespace tenzir::plugins::head {
 
@@ -54,204 +48,6 @@ public:
 
 private:
   int64_t remaining_;
-};
-
-#if 0
-class head_exec : public exec::operator_base<uint64_t> {
-public:
-  explicit head_exec(initializer init) : operator_base{std::move(init)} {
-  }
-
-  void next(const table_slice& slice) override {
-    auto& remaining = state();
-    auto take = std::min(remaining, slice.rows());
-    push(subslice(slice, 0, take));
-    remaining -= take;
-    ready();
-  }
-
-  auto should_stop() -> bool override {
-    return get_input_ended() or state() == 0;
-  }
-};
-#else
-class head_exec : public exec::operator_base {
-public:
-  [[maybe_unused]] static constexpr auto name = "head";
-
-  head_exec(exec::operator_actor::pointer self, uint64_t count)
-    : exec::operator_base{self}, remaining_{count} {
-  }
-
-  auto on_start() -> caf::result<void> override {
-    TENZIR_WARN("head got start");
-    // TODO: Is this the right place do perform this check?
-    if (remaining_ == 0) {
-      finish();
-    }
-    return {};
-  }
-
-  void on_push(table_slice slice) override {
-    if (remaining_ == 0) {
-      TENZIR_WARN("head drops {} events", slice.rows());
-      return;
-    }
-    TENZIR_WARN("head receives {} events", slice.rows());
-    auto out = tenzir::head(std::move(slice), remaining_);
-    remaining_ -= out.rows();
-    push(std::move(out));
-    if (remaining_ == 0) {
-      // TODO: Then what?
-      finish();
-    }
-  }
-
-  void on_push(chunk_ptr chunk) override {
-    TENZIR_WARN("??");
-    TENZIR_TODO();
-  }
-
-  auto serialize() -> chunk_ptr override {
-    // TODO: What would the checkpoint say here?
-    TENZIR_INFO("head got checkpoint");
-    auto buf = caf::byte_buffer{};
-    auto ser = caf::binary_serializer{buf};
-    auto success = ser.apply(remaining_);
-    TENZIR_ASSERT(success);
-    TENZIR_INFO("head serialized into {} bytes", buf.size());
-    return chunk::make(std::move(buf));
-  }
-
-  void on_done() override {
-    finish();
-  }
-
-  void on_pull(uint64_t items) override {
-    pull(std::min(items, remaining_));
-  }
-
-#  if 0
-  auto make_behavior() -> exec::operator_actor::behavior_type {
-    return {
-      /// @see operator_actor
-      [this](exec::connect_t connect) -> caf::result<void> {
-        TENZIR_WARN("connecting heads");
-        connect_ = std::move(connect);
-        return {};
-      },
-      [this](atom::start) -> caf::result<void> {
-        TENZIR_WARN("head got start");
-        // TODO: Is this the right place do perform this check?
-        if (remaining_ == 0) {
-          done();
-        }
-        return {};
-      },
-      [this](atom::commit) -> caf::result<void> {
-        return {};
-      },
-      /// @see upstream_actor
-      [this](atom::pull, uint64_t items) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::stop) -> caf::result<void> {
-        // TODO: Anything else?
-        done();
-        return {};
-      },
-      /// @see downstream_actor
-      [this](atom::push, table_slice slice) -> caf::result<void> {
-        if (remaining_ == 0) {
-          TENZIR_WARN("head drops {} events", slice.rows());
-          return {};
-        }
-        TENZIR_WARN("head receives {} events", slice.rows());
-        auto out = tenzir::head(std::move(slice), remaining_);
-        remaining_ -= out.rows();
-        self_->mail(atom::push_v, std::move(out))
-          .request(connect_.downstream, caf::infinite)
-          .then([] {});
-        if (remaining_ == 0) {
-          // TODO: Then what?
-          done();
-        }
-        return {};
-      },
-      [this](atom::push, chunk_ptr chunk) -> caf::result<void> {
-        TENZIR_WARN("??");
-        TENZIR_TODO();
-      },
-      [this](atom::persist, exec::checkpoint check) -> caf::result<void> {
-        // TODO: What would the checkpoint say here?
-        TENZIR_INFO("head got checkpoint");
-        auto buf = caf::byte_buffer{};
-        auto ser = caf::binary_serializer{buf};
-        auto success = ser.apply(remaining_);
-        TENZIR_ASSERT(success);
-        TENZIR_INFO("head serialized into {} bytes", buf.size());
-        self_->mail(check, chunk::make(std::move(buf)))
-          .request(connect_.checkpoint_receiver, caf::infinite)
-          .then([this, check = std::move(check)] {
-            // Only forward afterwards.
-            self_->mail(atom::persist_v, check)
-              .request(connect_.downstream, caf::infinite)
-              .then([] {});
-          });
-        return {};
-      },
-      [this](atom::done) -> caf::result<void> {
-        // Since we immediately forward all events, we can declare that we are
-        // also done when upstream is done.
-        done();
-        return {};
-      },
-    };
-  }
-#  endif
-
-private:
-  uint64_t remaining_;
-};
-#endif
-
-class head_plan final : public plan::operator_base {
-public:
-  head_plan() = default;
-
-  explicit head_plan(int64_t count) : count_{count} {
-  }
-
-  auto name() const -> std::string override {
-    return "head_plan";
-  }
-
-  auto spawn(plan::operator_spawn_args args) const
-    -> exec::operator_actor override {
-    auto remaining = count_;
-    if (args.restore) {
-      // We always send things for checkpointing.
-      TENZIR_ASSERT(args.restore->chunk);
-      auto f = caf::binary_deserializer{caf::const_byte_span{
-        args.restore->chunk->data(), args.restore->chunk->size()}};
-      auto ok = f.apply(remaining);
-      TENZIR_ASSERT(ok);
-      // TODO: Assert that we are at the end?
-    }
-    return args.sys.spawn(caf::actor_from_state<head_exec>, remaining);
-  }
-
-  auto spawn() && -> AnyOperator override {
-    return Head{count_};
-  }
-
-  friend auto inspect(auto& f, head_plan& x) -> bool {
-    return f.apply(x.count_);
-  }
-
-private:
-  int64_t count_;
 };
 
 class head_ir final : public ir::Operator {
@@ -295,11 +91,9 @@ public:
     return element_type_tag{tag_v<table_slice>};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return std::make_unique<head_plan>(as<int64_t>(count_));
+    return Head{as<int64_t>(count_)};
   }
 
   auto main_location() const -> location override {
@@ -363,8 +157,5 @@ public:
 } // namespace tenzir::plugins::head
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::head::plugin)
-TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::plan::operator_base,
-                            tenzir::plugins::head::head_plan>)
-TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::Operator,
-                                                 tenzir::plugins::head::head_ir>)
+TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<
+                       tenzir::ir::Operator, tenzir::plugins::head::head_ir>)

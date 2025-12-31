@@ -11,9 +11,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/exec/operator.hpp>
 #include <tenzir/null_bitmap.hpp>
-#include <tenzir/plan/operator.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -185,30 +183,6 @@ private:
 };
 
 #endif
-class deduplicate_bp final : public plan::operator_base {
-public:
-  explicit deduplicate_bp(configuration cfg) : cfg_{std::move(cfg)} {
-  }
-
-  auto name() const -> std::string override {
-    return "head_bp";
-  }
-
-  auto spawn(plan::operator_spawn_args args) const
-    -> exec::operator_actor override {
-    // TODO: Initial state.
-    TENZIR_UNUSED(args);
-    TENZIR_TODO();
-    // return exec::spawn_operator<deduplicate3>(std::move(args), {}, cfg_);
-  }
-
-  friend auto inspect(auto& f, deduplicate_bp& x) -> bool {
-    return f.apply(x.cfg_);
-  }
-
-private:
-  configuration cfg_;
-};
 
 class deduplicate_operator final : public crtp_operator<deduplicate_operator> {
 public:

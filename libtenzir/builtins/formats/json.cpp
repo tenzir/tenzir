@@ -8,7 +8,6 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/finalize_ctx.hpp"
 #include "tenzir/json_parser.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
@@ -1365,17 +1364,6 @@ public:
   }
 };
 
-class WriteJsonPlan final : public plan::operator_base {
-public:
-  auto name() const -> std::string override {
-    return "WriteJsonPlan";
-  }
-
-  auto spawn() && -> AnyOperator override {
-    return WriteJson{};
-  }
-};
-
 class JsonIr final : public ir::Operator {
 public:
   auto name() const -> std::string override {
@@ -1387,11 +1375,9 @@ public:
     return {};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return std::make_unique<WriteJsonPlan>();
+    return WriteJson{};
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

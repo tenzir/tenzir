@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "tenzir/async.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/element_type.hpp"
-#include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -71,9 +71,7 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  virtual auto finalize(element_type_tag input,
-                        finalize_ctx ctx) && -> failure_or<plan::pipeline>
-    = 0;
+  virtual auto spawn(element_type_tag input) && -> AnyOperator = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -122,18 +120,17 @@ struct pipeline {
     : lets{std::move(lets)}, operators{std::move(operators)} {
   }
 
-  /// @see operator_base
+  /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
-  /// @see operator_base
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline>;
+  /// @see Operator
+  auto spawn(element_type_tag input) && -> std::vector<AnyOperator>;
 
-  /// @see operator_base
+  /// @see Operator
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>>;
 
-  /// @see operator_base
+  /// @see Operator
   auto
   optimize(optimize_filter filter, event_order order) && -> optimize_result;
 };

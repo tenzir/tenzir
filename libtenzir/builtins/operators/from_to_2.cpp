@@ -9,7 +9,6 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
-#include <tenzir/finalize_ctx.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/glob.hpp>
@@ -138,30 +137,6 @@ private:
   std::vector<ast::expression> events_;
 };
 
-class from_plan final : public plan::operator_base {
-public:
-  from_plan() = default;
-
-  explicit from_plan(std::vector<ast::expression> events)
-    : events_{std::move(events)} {
-  }
-
-  auto spawn() && -> AnyOperator override {
-    return From{std::move(events_)};
-  }
-
-  auto name() const -> std::string override {
-    return "from_plan";
-  }
-
-  friend auto inspect(auto& f, from_plan& x) -> bool {
-    return f.apply(x.events_);
-  }
-
-private:
-  std::vector<ast::expression> events_;
-};
-
 class from_ir final : public ir::Operator {
 public:
   from_ir() = default;
@@ -170,7 +145,7 @@ public:
     : events_{std::move(events)} {
   }
 
-  auto name() const -> std::string {
+  auto name() const -> std::string override {
     return "from_ir";
   }
 
@@ -183,12 +158,9 @@ public:
     return {};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
-    TENZIR_WARN("{}", input);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
-    return std::make_unique<from_plan>(std::move(events_));
+    return From{std::move(events_)};
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -410,9 +382,5 @@ TENZIR_REGISTER_PLUGIN(
   tenzir::operator_inspection_plugin<tenzir::from_file_source>);
 TENZIR_REGISTER_PLUGIN(
   tenzir::operator_inspection_plugin<tenzir::from_file_sink>);
-TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::ir::Operator,
-                            tenzir::plugins::from::from_ir>);
-TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::plan::operator_base,
-                            tenzir::plugins::from::from_plan>);
+TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<
+                       tenzir::ir::Operator, tenzir::plugins::from::from_ir>);

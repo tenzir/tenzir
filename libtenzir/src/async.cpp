@@ -10,9 +10,7 @@
 
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
-#include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
-#include "tenzir/plan/pipeline.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <folly/Executor.h>
@@ -208,16 +206,11 @@ public:
   }
 
 private:
-  auto spawn_sub(SubKey key, plan::pipeline pipe)
+  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
-    TENZIR_INFO("spawning subpipeline: {:#?}", use_default_formatter{pipe});
+    TENZIR_INFO("spawning subpipeline");
+    auto spawned = std::move(pipe).spawn(input);
     // TODO: Run chain in async scope?
-    auto ops = std::move(pipe).unwrap();
-    auto spawned = std::vector<AnyOperator>{};
-    spawned.reserve(ops.size());
-    for (auto& op : ops) {
-      spawned.push_back(std::move(*op).spawn());
-    }
     auto chain
       = std::invoke([&] -> variant<OperatorChain<void, table_slice>,
                                    OperatorChain<table_slice, table_slice>> {
@@ -783,9 +776,9 @@ auto run_open_pipeline(OperatorChain<void, Output> pipeline,
   TENZIR_TODO();
 }
 
-auto OpCtx::spawn_sub(SubKey key, plan::pipeline pipe)
+auto OpCtx::spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
   -> Task<AnyOpenPipeline> {
-  return sub_manager_.spawn_sub(std::move(key), std::move(pipe));
+  return sub_manager_.spawn_sub(std::move(key), std::move(pipe), input);
 }
 
 auto OpCtx::get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> {

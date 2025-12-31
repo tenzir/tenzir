@@ -11,23 +11,14 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
-#include "tenzir/exec/checkpoint.hpp"
-#include "tenzir/exec/operator_base.hpp"
-#include "tenzir/execution_node.hpp"
-#include "tenzir/finalize_ctx.hpp"
-#include "tenzir/plan/operator_spawn_args.hpp"
-#include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/rebatch.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/user_defined_operator.hpp"
-
-#include <caf/actor_from_state.hpp>
 
 #include <ranges>
 
@@ -125,32 +116,6 @@ private:
   std::vector<ast::field_path> moved_fields_;
 };
 
-class set_plan final : public plan::operator_base {
-public:
-  set_plan() = default;
-
-  explicit set_plan(std::vector<ast::assignment> assignments, event_order order)
-    : assignments_{std::move(assignments)}, order_{order} {
-  }
-
-  auto name() const -> std::string override {
-    return "set_plan";
-  }
-
-  auto spawn() && -> AnyOperator override {
-    return Set{std::move(assignments_), order_};
-  }
-
-  friend auto inspect(auto& f, set_plan& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_),
-                              f.field("order", x.order_));
-  }
-
-private:
-  std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
-};
-
 class set_ir final : public ir::Operator {
 public:
   set_ir() = default;
@@ -172,11 +137,9 @@ public:
     return {};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return std::make_unique<set_plan>(std::move(assignments_), order_);
+    return Set{std::move(assignments_), order_};
   }
 
   auto optimize(ir::optimize_filter filter,
@@ -223,36 +186,6 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
 
 } // namespace
 
-class if_exec final : public plan::operator_base {
-public:
-  if_exec() = default;
-
-  if_exec(ast::expression condition, plan::pipeline then_, plan::pipeline else_)
-    : condition_{std::move(condition)},
-      then_{std::move(then_)},
-      else_{std::move(else_)} {
-  }
-
-  auto name() const -> std::string override {
-    return "if_exec";
-  }
-
-  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
-    TENZIR_TODO();
-  }
-
-  friend auto inspect(auto& f, if_exec& x) -> bool {
-    return f.object(x).fields(f.field("condition", x.condition_),
-                              f.field("then", x.then_),
-                              f.field("else", x.else_));
-  }
-
-private:
-  ast::expression condition_;
-  plan::pipeline then_;
-  plan::pipeline else_;
-};
-
 class if_ir final : public ir::Operator {
 public:
   struct else_t {
@@ -289,18 +222,10 @@ public:
     return {};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    TRY(auto then_instance, std::move(then_).finalize(input, ctx));
-    auto else_instance = plan::pipeline{};
-    if (else_) {
-      TRY(else_instance, std::move(else_->pipe).finalize(input, ctx));
-    }
-    return std::make_unique<if_exec>(std::move(condition_),
-                                     std::move(then_instance),
-                                     std::move(else_instance));
+    // TODO: Implement If operator that handles subpipelines.
+    TENZIR_TODO();
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -343,372 +268,14 @@ private:
   std::optional<else_t> else_;
 };
 
-class legacy_metrics_receiver {
-public:
-  auto make_behavior() -> metrics_receiver_actor::behavior_type {
-    return {
-      [this](uint64_t op_index, uuid metrics_id, type) -> caf::result<void> {
-        // TODO
-        TENZIR_TODO();
-      },
-      [this](uint64_t op_index, uuid metrics_id, record) -> caf::result<void> {
-        // TODO
-        TENZIR_TODO();
-      },
-      [this](const operator_metric& metric) -> caf::result<void> {
-        // TODO
-        TENZIR_TODO();
-      },
-    };
-  }
-};
-
-class legacy_control_plane final : public operator_control_plane {
-public:
-  explicit legacy_control_plane(exec_node_actor::base& self) {
-  }
-
-  auto self() noexcept -> exec_node_actor::base& override {
-    TENZIR_TODO();
-  }
-
-  auto definition() const noexcept -> std::string_view override {
-    TENZIR_TODO();
-  }
-
-  auto run_id() const noexcept -> uuid override {
-    TENZIR_TODO();
-  }
-
-  auto node() noexcept -> node_actor override {
-    TENZIR_TODO();
-  }
-
-  auto operator_index() const noexcept -> uint64_t override {
-    TENZIR_TODO();
-  }
-
-  auto diagnostics() noexcept -> diagnostic_handler& override {
-    TENZIR_TODO();
-  }
-
-  auto metrics(type t) noexcept -> metric_handler override {
-    return metric_handler{
-      self().spawn(caf::actor_from_state<legacy_metrics_receiver>), 0, t};
-  }
-
-  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
-    TENZIR_TODO();
-  }
-
-  auto no_location_overrides() const noexcept -> bool override {
-    TENZIR_TODO();
-  }
-
-  auto has_terminal() const noexcept -> bool override {
-    TENZIR_TODO();
-  }
-
-  auto is_hidden() const noexcept -> bool override {
-    TENZIR_TODO();
-  }
-
-  auto set_waiting(bool value) noexcept -> void override {
-    TENZIR_TODO();
-  }
-
-  auto resolve_secrets_must_yield(std::vector<secret_request> requests,
-                                  final_callback_t final_callback)
-    -> secret_resolution_sentinel override {
-    TENZIR_TODO();
-  }
-};
-
-struct legacy_exec_trait {
-  using signatures
-    = exec::operator_actor::signatures::append_from<exec_node_actor::signatures>;
-};
-
-using legacy_exec_actor = caf::typed_actor<legacy_exec_trait>;
-
-// TODO: This cannot be final because of CAF...
-class legacy_exec : public exec::basic_operator<legacy_exec_actor> {
-public:
-  static constexpr auto name = "legacy-exec";
-
-  legacy_exec(legacy_exec_actor::pointer self, operator_ptr op, base_ctx ctx)
-    : basic_operator{self}, op_{std::move(op)}, ctx_{ctx} {
-    auto exec_node
-      = spawn_exec_node(self_, op_->copy(), operator_type::of<table_slice>,
-                        "TODO: definition", node_actor{},
-                        receiver_actor<diagnostic>{}, metrics_receiver_actor{},
-                        /*index*/ 0, false, false, uuid::random());
-    auto [actor, output_type] = check(exec_node);
-    // TODO: Pass `self_` as previous if it's not a source.
-    self_->mail(atom::start_v, std::vector<caf::actor>{})
-      .request(actor, caf::infinite)
-      .then([] {}, TENZIR_REPORT);
-    // TODO: Numbers.
-    self_
-      ->mail(atom::pull_v, exec_node_sink_actor{self_}, uint64_t{10},
-             uint64_t{10})
-      .request(actor, caf::infinite)
-      .then([] {}, TENZIR_REPORT);
-  }
-
-  auto make_behavior() -> legacy_exec_actor::behavior_type {
-    return extend_behavior(std::tuple{
-      [this](atom::start,
-             std::vector<caf::actor> all_previous) -> caf::result<void> {
-        TENZIR_ASSERT(all_previous.empty());
-      },
-      [this](atom::pause) -> caf::result<void> {
-        return {};
-      },
-      [this](atom::resume) -> caf::result<void> {
-        return {};
-      },
-      [this](diagnostic diag) -> caf::result<void> {
-        std::move(diag).modify().emit(ctx_);
-        return {};
-      },
-      [this](atom::pull, exec_node_sink_actor sink, uint64_t elements,
-             uint64_t batches) -> caf::result<void> {
-        pull_rp_ = self_->make_response_promise<void>();
-        pull(elements);
-        return {};
-      },
-      [this](atom::push, table_slice events) -> caf::result<void> {
-        push(std::move(events));
-        return {};
-      },
-      [this](atom::push, chunk_ptr bytes) -> caf::result<void> {
-        push(std::move(bytes));
-        return {};
-      },
-    });
-  }
-
-  auto on_start() -> caf::result<void> override {
-    return {};
-  }
-
-  void on_push(table_slice slice) override {
-    // TODO: Schedule execution?
-    // TODO: Check.
-    // as<std::deque<table_slice>>(input_).push_back(std::move(slice));
-    // run_once();
-  }
-
-  void on_push(chunk_ptr chunk) override {
-    // as<std::deque<chunk_ptr>>(input_).push_back(std::move(chunk));
-    // run_once();
-  }
-
-  void on_pull(uint64_t items) override {
-    // TODO: Can we ignore demand here?
-  }
-
-  auto serialize() -> chunk_ptr override {
-    return {};
-  }
-
-  void on_done() override {
-  }
-
-private:
-  operator_ptr op_;
-  base_ctx ctx_;
-  caf::typed_response_promise<void> pull_rp_;
-};
-
-class legacy_plan final : public plan::operator_base {
-public:
-  legacy_plan() = default;
-
-  explicit legacy_plan(operator_ptr op) : op_{std::move(op)} {
-  }
-
-  auto name() const -> std::string override {
-    return "legacy_plan";
-  }
-
-  auto spawn(plan::operator_spawn_args args) const
-    -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<legacy_exec>, op_->copy(),
-                          args.ctx);
-  }
-
-  friend auto inspect(auto& f, legacy_plan& x) -> bool {
-    return plugin_inspect(f, x.op_);
-  }
-
-private:
-  operator_ptr op_;
-};
-
-/// A wrapper for the previous operator API to make them work with the new IR.
-class legacy_ir final : public ir::Operator {
-public:
-  legacy_ir() = default;
-
-  legacy_ir(location main_location, operator_ptr op)
-    : main_location_{main_location}, state_{std::move(op)} {
-  }
-
-  legacy_ir(const operator_factory_plugin* plugin, ast::invocation inv)
-    : main_location_{inv.op.get_location()},
-      state_{partial{plugin, std::move(inv)}} {
-  }
-
-  auto name() const -> std::string override {
-    return "legacy_ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    auto state = try_as<partial>(state_);
-    if (not state) {
-      return {};
-    }
-    auto done = true;
-    for (auto& arg : state->inv.args) {
-      TRY(auto here, arg.substitute(ctx));
-      done = done and here == ast::substitute_result::no_remaining;
-    }
-    if (not done) {
-      TENZIR_ASSERT(not instantiate);
-      return {};
-    }
-    auto provider = session_provider::make(ctx);
-    TRY(state_, state->plugin->make(
-                  operator_factory_plugin::invocation{
-                    std::move(state->inv.op), std::move(state->inv.args)},
-                  provider.as_session()));
-    return {};
-  }
-
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(input, ctx);
-    auto op = as<operator_ptr>(std::move(state_));
-    if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
-      auto result = std::vector<plan::operator_ptr>{};
-      for (auto& op : std::move(*pipe).unwrap()) {
-        result.push_back(std::make_unique<legacy_plan>(std::move(op)));
-      }
-      return result;
-    }
-    return std::make_unique<legacy_plan>(std::move(op));
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    auto op = try_as<operator_ptr>(state_);
-    if (not op) {
-      return std::nullopt;
-    }
-    auto legacy_input = match(input, [](auto x) -> operator_type {
-      // TODO: This is where we could convert `chunk_ptr` types.
-      return x;
-    });
-    auto legacy_output = (*op)->infer_type(legacy_input);
-    if (not legacy_output) {
-      // TODO: Refactor message?
-      (legacy_input.is<void>()
-         ? diagnostic::error("operator cannot be used as a source")
-         : diagnostic::error("operator does not accept {}",
-                             operator_type_name(legacy_input)))
-        .primary(main_location_)
-        .emit(dh);
-      return failure::promise();
-    }
-    return match(*legacy_output, [](auto x) -> element_type_tag {
-      return x;
-    });
-  }
-
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
-    auto op = try_as<operator_ptr>(state_);
-    if (not op) {
-      return std::move(*this).optimize(std::move(filter), order);
-    }
-    TENZIR_ASSERT(*op);
-    auto legacy_conj = conjunction{};
-    auto filter_rest = ir::optimize_filter{};
-    for (auto& expr : filter) {
-      auto [legacy, rest] = split_legacy_expression(expr);
-      if (not is_true_literal(rest)) {
-        filter_rest.push_back(std::move(rest));
-      }
-      if (legacy != trivially_true_expression()) {
-        legacy_conj.push_back(std::move(legacy));
-      }
-    }
-    auto legacy_expr = legacy_conj.empty()
-                         ? trivially_true_expression()
-                         : (legacy_conj.size() == 1 ? std::move(legacy_conj[0])
-                                                    : std::move(legacy_conj));
-    auto legacy_result = (*op)->optimize(legacy_expr, order);
-    auto replacement = std::vector<Box<ir::Operator>>{};
-    replacement.emplace_back(
-      legacy_ir{main_location_, std::move(legacy_result.replacement)});
-    for (auto& expr : filter_rest) {
-      replacement.push_back(make_where_ir(std::move(expr)));
-    }
-    // TODO: Transform this back into `ast::expression`.
-    (void)legacy_result.filter;
-    return ir::optimize_result{ir::optimize_filter{}, legacy_result.order,
-                               ir::pipeline{{}, std::move(replacement)}};
-  }
-
-  auto main_location() const -> location override {
-    return main_location_;
-  }
-
-  friend auto inspect(auto& f, legacy_ir& x) -> bool {
-    return f.apply(x.state_);
-  }
-
-private:
-  struct partial {
-    const operator_factory_plugin* plugin;
-    ast::invocation inv;
-
-    friend auto inspect(auto& f, partial& x) -> bool {
-      return f.object(x).fields(
-        f.field(
-          "plugin",
-          [&]() {
-            TENZIR_ASSERT(x.plugin);
-            return x.plugin->name();
-          },
-          [&](std::string name) {
-            x.plugin = plugins::find<operator_factory_plugin>(name);
-            TENZIR_ASSERT(x.plugin);
-            return true;
-          }),
-        f.field("inv", x.inv));
-    }
-  };
-
-  location main_location_;
-  variant<partial, operator_ptr> state_;
-};
-
 namespace {
 
 // TODO: Clean this up. We might want to be able to just use
 // `TENZIR_REGISTER_PLUGINS` also from `libtenzir` itself.
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
-    new inspection_plugin<ir::Operator, legacy_ir>{},
-    new inspection_plugin<plan::operator_base, legacy_plan>{},
     new inspection_plugin<ir::Operator, if_ir>{},
-    new inspection_plugin<plan::operator_base, if_exec>{},
     new inspection_plugin<ir::Operator, set_ir>{},
-    new inspection_plugin<plan::operator_base, set_plan>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -868,8 +435,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::finalize(element_type_tag input,
-                            finalize_ctx ctx) && -> failure_or<plan::pipeline> {
+auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   // TODO: This is probably not the right place for optimizations.
@@ -882,22 +448,17 @@ auto ir::pipeline::finalize(element_type_tag input,
                                      make_where_ir(expr));
   }
   *this = std::move(opt.replacement);
-  auto result = std::vector<plan::operator_ptr>{};
+  auto result = std::vector<AnyOperator>{};
   for (auto& op : operators) {
     // We already checked, there should be no diagnostics here.
     auto dh = null_diagnostic_handler{};
     auto output = op->infer_type(input, dh);
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
-    TRY(auto ops, std::move(*op).finalize(input, ctx));
-    result.insert(result.end(), std::move_iterator{ops.begin()},
-                  std::move_iterator{ops.end()});
+    result.push_back(std::move(*op).spawn(input));
     input = **output;
   }
-  TENZIR_DIAGNOSTIC_PUSH
-  TENZIR_DIAGNOSTIC_IGNORE_REDUNDANT_MOVE
-  return std::move(result);
-  TENZIR_DIAGNOSTIC_POP
+  return result;
 }
 
 auto ir::pipeline::infer_type(element_type_tag input,

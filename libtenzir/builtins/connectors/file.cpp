@@ -8,7 +8,6 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/finalize_ctx.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -28,7 +27,6 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
-#include <tenzir/plan/operator.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -76,7 +74,7 @@ public:
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error override {
-    while (!buffer.empty()) {
+    while (! buffer.empty()) {
       auto written = ::write(fd_, buffer.data(), buffer.size());
       if (written == -1) {
         if (errno != EINTR) {
@@ -308,7 +306,7 @@ public:
     }
     if (status.type() == std::filesystem::file_type::socket) {
       auto uds = detail::unix_domain_socket::connect(args_.path.inner);
-      if (!uds) {
+      if (! uds) {
         diagnostic::error("could not connect to UNIX domain socket at {}",
                           args_.path.inner)
           .primary(args_.path.source)
@@ -336,7 +334,7 @@ public:
   auto default_parser() const -> std::string override {
     auto name
       = detail::file_path_to_plugin_name(args_.path.inner).value_or("json");
-    if (!plugins::find<parser_parser_plugin>(name)) {
+    if (! plugins::find<parser_parser_plugin>(name)) {
       return "json";
     }
     return name;
@@ -370,7 +368,7 @@ public:
     auto path = args_.path.inner;
     if (args_.uds) {
       auto uds = detail::unix_domain_socket::connect(path);
-      if (!uds) {
+      if (! uds) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("unable to connect to UNIX "
                                            "domain socket at {}",
@@ -382,7 +380,7 @@ public:
       stream = std::make_shared<fd_writer>(STDOUT_FILENO, false);
     } else {
       auto directory = std::filesystem::path{path}.parent_path();
-      if (!directory.empty()) {
+      if (! directory.empty()) {
         try {
           std::filesystem::create_directories(directory);
         } catch (const std::exception& exc) {
@@ -412,7 +410,7 @@ public:
     return [&ctrl, real_time = args_.real_time, stream = std::move(stream),
             guard = std::make_shared<decltype(guard)>(std::move(guard))](
              chunk_ptr chunk) {
-      if (!chunk || chunk->size() == 0) {
+      if (! chunk || chunk->size() == 0) {
         return;
       }
       if (auto error = stream->write(std::span{chunk->data(), chunk->size()})) {
@@ -455,7 +453,7 @@ public:
     -> caf::error override {
     auto timeout
       = try_get<tenzir::duration>(global_config, "tenzir.import.read-timeout");
-    if (!timeout.has_value()) {
+    if (! timeout.has_value()) {
       return std::move(timeout.error());
     }
     if (timeout->has_value()) {
@@ -712,17 +710,6 @@ public:
   }
 };
 
-class SaveStdoutPlan final : public plan::operator_base {
-public:
-  auto name() const -> std::string override {
-    return "SaveStdoutPlan";
-  }
-
-  auto spawn() && -> AnyOperator override {
-    return SaveStdoutImpl{};
-  }
-};
-
 class SaveStdoutIr final : public ir::Operator {
 public:
   auto name() const -> std::string override {
@@ -734,11 +721,9 @@ public:
     return {};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<chunk_ptr>());
-    return std::make_unique<SaveStdoutPlan>();
+    return SaveStdoutImpl{};
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

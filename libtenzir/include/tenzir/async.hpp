@@ -14,6 +14,7 @@
 #include "tenzir/async/task.hpp"
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/box.hpp"
+#include "tenzir/element_type.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -283,7 +284,7 @@ using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<table_slice>>;
 
 class SubManager {
 public:
-  virtual auto spawn_sub(SubKey key, plan::pipeline pipe)
+  virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline>
     = 0;
 
@@ -335,7 +336,8 @@ public:
     co_return;
   }
 
-  auto spawn_sub(SubKey key, plan::pipeline pipe) -> Task<AnyOpenPipeline>;
+  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline>;
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline>;
 

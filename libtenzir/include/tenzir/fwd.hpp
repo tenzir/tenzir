@@ -196,13 +196,6 @@ struct pipeline;
 
 } // namespace ir
 
-namespace plan {
-
-class operator_base;
-class pipeline;
-
-} // namespace plan
-
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
@@ -336,19 +329,6 @@ using time = caf::timestamp;
 using enumeration = uint8_t;
 
 class secret;
-
-namespace exec {
-
-struct checkpoint;
-template <class T>
-struct message;
-struct exhausted;
-struct handshake;
-struct handshake_response;
-struct connect_t;
-using payload = variant<table_slice, chunk_ptr>;
-
-} // namespace exec
 
 namespace fbs {
 
@@ -520,10 +500,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
 
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::chunk_ptr>))
-
-  TENZIR_ADD_TYPE_ID((tenzir::exec::connect_t))
-  TENZIR_ADD_TYPE_ID((tenzir::exec::checkpoint))
-  TENZIR_ADD_TYPE_ID((tenzir::exec::payload))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See tenzir/aliases.hpp for their definitions.

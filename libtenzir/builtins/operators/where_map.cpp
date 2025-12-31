@@ -20,15 +20,12 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/exec/operator.hpp>
 #include <tenzir/expression.hpp>
-#include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/null_bitmap.hpp>
 #include <tenzir/pipeline.hpp>
-#include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -872,38 +869,6 @@ private:
 };
 
 // TODO: Don't want to write this fully ourselves.
-class where_plan final : public plan::operator_base {
-public:
-  where_plan() = default;
-
-  auto name() const -> std::string override {
-    return "where_plan";
-  }
-
-  explicit where_plan(ast::expression predicate)
-    : predicate_{std::move(predicate)} {
-  }
-
-  auto spawn(plan::operator_spawn_args args) const
-    -> exec::operator_actor override {
-    TENZIR_UNUSED(args);
-    TENZIR_TODO();
-    // return exec::spawn_operator<where_exec>(std::move(args), predicate_);
-  }
-
-  auto spawn() && -> AnyOperator override {
-    return Where{std::move(predicate_)};
-  }
-
-  friend auto inspect(auto& f, where_plan& x) -> bool {
-    return f.apply(x.predicate_);
-  }
-
-private:
-  ast::expression predicate_;
-};
-
-// TODO: Don't want to write this fully ourselves.
 class where_ir final : public ir::Operator {
 public:
   where_ir() = default;
@@ -923,11 +888,9 @@ public:
     return {};
   }
 
-  auto finalize(element_type_tag input,
-                finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
-    TENZIR_UNUSED(ctx);
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return std::make_unique<where_plan>(std::move(predicate_));
+    return Where{std::move(predicate_)};
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -958,7 +921,6 @@ private:
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::Operator, where_ir>)
-TENZIR_REGISTER_PLUGIN(inspection_plugin<plan::operator_base, where_plan>)
 
 class where_plugin final : public virtual operator_factory_plugin,
                            public virtual function_plugin,

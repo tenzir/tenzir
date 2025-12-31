@@ -12,13 +12,10 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/exec/pipeline.hpp"
 #include "tenzir/exec_pipeline.hpp"
-#include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/plan/operator.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -521,62 +518,9 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 
 namespace {
 
-auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
-  auto self = caf::scoped_actor{ctx};
-  self->monitor(pipe);
-  auto started
-    = self->mail(atom::start_v).request(pipe, caf::infinite).receive();
-  if (not started) {
-    if (started.error() != ec::silent) {
-      // TODO: What do we do here?
-      diagnostic::error("start failed: {}", started.error()).emit(ctx);
-    }
-    return failure::promise();
-  }
-  auto down_msg = std::optional<caf::down_msg>{};
-  self->receive_while([&] {
-    return not down_msg;
-  })([&down_msg](caf::down_msg msg) {
-    down_msg = std::move(msg);
-  });
-  TENZIR_ASSERT(down_msg);
-  if (down_msg->reason) {
-    diagnostic::error("failed: {}", down_msg->reason).emit(ctx);
-    return failure::promise();
-  }
-  return {};
-}
-
-class RestoreId {
-public:
-  static auto make(uint32_t id) -> RestoreId {
-    return RestoreId{id};
-  }
-
-  auto unwrap() const -> uint32_t {
-    return id_;
-  }
-
-private:
-  RestoreId(uint32_t id) : id_{id} {
-  }
-
-  uint32_t id_;
-};
-
-auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
+auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
               diagnostic_handler& dh) -> Task<failure_or<void>> {
-  TENZIR_WARN("spawning plan: {:#?}", use_default_formatter{pipe});
-  auto ops = std::vector<AnyOperator>{};
-  for (auto& op : std::move(pipe).unwrap()) {
-    if (op->needs_node()) {
-      // TODO: Send fragment of plan to other process, run multiple chains
-      // connected by some transport layer (e.g., CAF, or maybe even just TCP).
-      TENZIR_TODO();
-    } else {
-    }
-    ops.push_back(std::move(*op).spawn());
-  }
+  TENZIR_WARN("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
@@ -590,17 +534,16 @@ auto run_plan(plan::pipeline pipe, caf::actor_system& sys,
   co_return {};
 }
 
-auto run_plan_blocking(plan::pipeline pipe, caf::actor_system& sys,
+auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
                        diagnostic_handler& dh) -> failure_or<void> {
 #if 1
-  return folly::coro::blockingWait(run_plan(std::move(pipe), sys, dh));
+  return folly::coro::blockingWait(run_plan(std::move(ops), sys, dh));
 #else
   TENZIR_WARN("running {}/{} threads",
               folly::getGlobalCPUExecutorCounters().numActiveThreads,
               folly::getGlobalCPUExecutorCounters().numThreads);
-  return folly::coro::blockingWait(run_plan(std::move(pipe), sys, dh)
-                                     .semi()
-                                     .via(folly::getGlobalCPUExecutor()));
+  return folly::coro::blockingWait(
+    run_plan(std::move(ops), sys, dh).semi().via(folly::getGlobalCPUExecutor()));
 #endif
 }
 
@@ -674,11 +617,11 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // Finalize the IR into something that we can execute.
-  auto i_ctx = finalize_ctx{c_ctx};
-  TRY(auto finalized, std::move(ir).finalize(tag_v<void>, i_ctx));
+  // Spawn operators from the IR.
+  auto spawned = std::move(ir).spawn(tag_v<void>);
   if (cfg.dump_finalized) {
-    fmt::print("{:#?}\n", use_default_formatter(finalized));
+    // TODO: Should we have a different flag for this?
+    fmt::print("spawned {} operators\n", spawned.size());
     return not ctx.has_failure();
   }
   // Do not proceed to execution if there has been an error.
@@ -686,34 +629,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
-#if 1
-  TRY(run_plan_blocking(std::move(finalized), sys, ctx));
+  TRY(run_plan_blocking(std::move(spawned), sys, ctx));
   return true;
-#else
-  auto exec = exec::make_pipeline(
-    std::move(finalized), exec::pipeline_settings{}, std::nullopt, b_ctx);
-  return run_pipeline(std::move(exec), b_ctx).is_success();
-#endif
-}
-
-auto exec_restore2(std::string_view job_id, RestoreId restore_id,
-                   caf::actor_system& sys, diagnostic_handler& dh) {
-  // 1. Get `plan::pipeline` to spawn operators again.
-  // TODO: How do the operators with subpipelines get restored?
-}
-
-// TODO: Source for diagnostic handler?
-auto exec_restore(std::span<const std::byte> plan_bytes,
-                  exec::checkpoint_reader_actor checkpoint_reader, base_ctx ctx)
-  -> failure_or<void> {
-  auto f = caf::binary_deserializer{
-    caf::const_byte_span{plan_bytes.data(), plan_bytes.size()}};
-  auto plan = plan::pipeline{};
-  auto ok = f.apply(plan);
-  TENZIR_ASSERT(ok);
-  auto exec = exec::make_pipeline(std::move(plan), exec::pipeline_settings{},
-                                  std::move(checkpoint_reader), ctx);
-  return run_pipeline(std::move(exec), ctx);
 }
 
 } // namespace
