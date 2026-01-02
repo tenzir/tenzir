@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "tenzir-operator"
-version = "5.23.0"
+version = "5.23.1"
 description = "Tenzir Python operator runtime"
 requires-python = ">=3.9"
 license = "BSD-3-Clause"
@@ -22,7 +22,7 @@ classifiers = [
 # add it as a dependency to the `tenzir` siblingproject as well instead.
 dependencies = [
   "python-box>=7.0",
-  "tenzir-common>=5.23.0,<5.24.0",
+  "tenzir-common>=5.23.1,<5.24.0",
 ]
 
 [tool.uv.sources]
