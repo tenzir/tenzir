@@ -37,7 +37,7 @@ auto compile_described_operator(std::string name, ast::invocation inv,
                                 compile_ctx ctx)
   -> failure_or<Box<ir::Operator>>;
 
-class describe_operator_plugin : public virtual op_parser_plugin {
+class describe_operator_plugin : public virtual operator_compiler_plugin {
 private:
   template <class Args>
   class arg {
@@ -50,6 +50,9 @@ private:
     validate(std::function<
              auto(located<duration>, diagnostic_handler& dh)->failure_or<void>>
                f) && -> arg<Args>;
+
+    template <class T>
+    auto excludes(T Args::*) && -> arg<Args>;
   };
 
 public:
@@ -111,7 +114,7 @@ public:
     return operator_description{
       positional("path", &load_file_args::path),
       named("follow", &load_file_args::follow),
-      named("mmap", &load_file_args::mmap),
+      named("mmap", &load_file_args::mmap).excludes(&load_file_args::follow),
       named("timeout", &load_file_args::timeout)
         .validate(
           [](located<duration> x, diagnostic_handler& dh) -> failure_or<void> {
