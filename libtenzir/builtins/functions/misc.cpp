@@ -53,7 +53,7 @@ public:
         check(b.Reserve(eval.length()));
         for (auto& part : value.parts()) {
           auto type_id = part.type.make_fingerprint();
-          for (auto i = int64_t{0}; i < value.length(); ++i) {
+          for (auto i = int64_t{0}; i < part.length(); ++i) {
             check(b.Append(type_id));
           }
         }
@@ -575,7 +575,7 @@ public:
           return match(
             subject.type,
             [&](const null_type&) {
-              return series::null(result_type, eval.length());
+              return series::null(result_type, subject.length());
             },
             [&](const record_type& type) {
               auto keys_builder = arrow::StringBuilder{};
@@ -591,7 +591,7 @@ public:
                     finish(keys_builder),
                     result_type.to_arrow_type(),
                   },
-                  eval.length(), tenzir::arrow_memory_pool())),
+                  subject.length(), tenzir::arrow_memory_pool())),
               };
             },
             [&](const auto&) {
@@ -599,7 +599,7 @@ public:
                                   subject.type.kind())
                 .primary(expr)
                 .emit(ctx);
-              return series::null(result_type, eval.length());
+              return series::null(result_type, subject.length());
             });
         });
       });

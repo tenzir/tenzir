@@ -1081,7 +1081,7 @@ public:
     });
     for (const auto& s : ms.parts()) {
       if (s.type.kind().template is<null_type>()) {
-        for (auto i = size_t{}; i < slice.rows(); ++i) {
+        for (auto i = int64_t{}; i < s.length(); ++i) {
           co_yield make_default();
         }
         continue;
@@ -1125,7 +1125,7 @@ public:
                           s.type.kind())
         .primary(args_.loc(expr))
         .emit(dh);
-      for (auto i = size_t{}; i < slice.rows(); ++i) {
+      for (auto i = int64_t{}; i < s.length(); ++i) {
         co_yield make_default();
       }
     }

@@ -671,7 +671,7 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
                                 x.op.inner, left.type.kind(), right.type.kind())
               .primary(x)
               .emit(self.ctx());
-            return self.null();
+            return series::null(null_type{}, left.length());
           }
         });
     });
