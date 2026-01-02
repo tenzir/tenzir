@@ -104,10 +104,12 @@ jobs:
 
       - name: Create release
         id: release
+        env:
+          RELEASE_INTRO: ${{ inputs.intro }}
         run: |
           VERSION=$(uvx tenzir-changelog release create \
             --${{ inputs.bump }} \
-            --intro "${{ inputs.intro }}" \
+            --intro "$RELEASE_INTRO" \
             --yes)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Created release ${VERSION}"
