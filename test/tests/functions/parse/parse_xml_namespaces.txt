@@ -1,0 +1,28 @@
+{
+  x: "<ns:root xmlns:ns=\"http://example.com\"><ns:item>A</ns:item></ns:root>",
+  y: [
+    {
+      item: "A",
+    },
+  ],
+  z: [
+    {
+      "@xmlns:ns": "http://example.com",
+      "ns:item": "A",
+    },
+  ],
+}
+{
+  x: "<ns:root xmlns:ns=\"http://example.com\"><ns:item>B</ns:item></ns:root>",
+  y: [
+    {
+      item: "B",
+    },
+  ],
+  z: [
+    {
+      "@xmlns:ns": "http://example.com",
+      "ns:item": "B",
+    },
+  ],
+}
