@@ -50,6 +50,7 @@ struct tcp_listen_args {
   bool no_location_overrides = false;
   bool has_terminal = false;
   bool is_hidden = false;
+  std::string pipeline_id = {};
 
   friend auto inspect(auto& f, tcp_listen_args& x) -> bool {
     return f.object(x).fields(
@@ -62,7 +63,7 @@ struct tcp_listen_args {
       f.field("operator_index", x.operator_index),
       f.field("no_location_overrides", x.no_location_overrides),
       f.field("has_terminal", x.has_terminal),
-      f.field("is_hidden", x.is_hidden));
+      f.field("is_hidden", x.is_hidden), f.field("pipeline_id", x.pipeline_id));
   }
 };
 
@@ -71,13 +72,15 @@ public:
   tcp_listen_control_plane(shared_diagnostic_handler diagnostics,
                            metrics_receiver_actor metrics_receiver,
                            uint64_t operator_index, bool has_terminal,
-                           bool no_location_overrides, bool is_hidden)
+                           bool no_location_overrides, bool is_hidden,
+                           std::string pipeline_id)
     : diagnostics_{std::move(diagnostics)},
       metrics_receiver_{std::move(metrics_receiver)},
       operator_index_{operator_index},
       no_location_overrides_{no_location_overrides},
       has_terminal_{has_terminal},
-      is_hidden_{is_hidden} {
+      is_hidden_{is_hidden},
+      pipeline_id_{std::move(pipeline_id)} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -129,7 +132,7 @@ public:
   }
 
   auto pipeline_id() const noexcept -> std::string_view override {
-    return {};
+    return pipeline_id_;
   }
 
   auto set_waiting(bool value) noexcept -> void override {
@@ -150,6 +153,7 @@ private:
   bool no_location_overrides_;
   bool has_terminal_;
   bool is_hidden_;
+  std::string pipeline_id_;
 };
 
 using bridge_actor = caf::typed_actor<
@@ -224,7 +228,8 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
   self->state().ctrl = std::make_unique<tcp_listen_control_plane>(
     std::move(diagnostics), self->state().args.metrics_receiver,
     self->state().args.operator_index, self->state().args.no_location_overrides,
-    self->state().args.has_terminal, self->state().args.is_hidden);
+    self->state().args.has_terminal, self->state().args.is_hidden,
+    self->state().args.pipeline_id);
   self->state().metric_handler = self->state().ctrl->metrics({
     "tenzir.metrics.tcp",
     record_type{
@@ -553,6 +558,7 @@ public:
     args.no_location_overrides = ctrl.no_location_overrides();
     args.has_terminal = ctrl.has_terminal();
     args.is_hidden = ctrl.is_hidden();
+    args.pipeline_id = std::string{ctrl.pipeline_id()};
     auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, std::move(args),
                                                  ctrl.shared_diagnostics());
     while (true) {
