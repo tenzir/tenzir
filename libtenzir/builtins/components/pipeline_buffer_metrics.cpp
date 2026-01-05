@@ -28,7 +28,7 @@ struct pipeline_buffer_metrics_state {
   static constexpr auto name = "pipeline-buffer-metrics";
 
   inline static const auto schema = type{
-    "tenzir.metrics.pipeline_buffers",
+    "tenzir.metrics.operator_buffers",
     record_type{
       {"timestamp", time_type{}},
       {"pipeline_id", string_type{}},
