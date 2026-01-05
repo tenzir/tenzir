@@ -512,9 +512,9 @@ struct exec_node_state {
       pipeline_id{std::move(pipeline_id)},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
-    // Initialize buffer stats for non-source operators
+    // Initialize buffer stats for non-source operators of non-hidden pipelines
     if constexpr (not std::is_same_v<Input, std::monostate>) {
-      if (not this->pipeline_id.empty()) {
+      if (not is_hidden and not this->pipeline_id.empty()) {
         buffer_stats = pipeline_buffer_registry::instance().get_or_create(
           this->pipeline_id);
       }
