@@ -466,6 +466,7 @@ struct connection_manager_state {
   static constexpr auto has_terminal = false;
   bool is_hidden = {};
   node_actor node = {};
+  std::string pipeline_id = {};
 
   connection_manager_state() = default;
   connection_manager_state(const connection_manager_state&) = delete;
@@ -749,8 +750,8 @@ struct connection_manager_state {
     connection->pipeline_executor
       = self->spawn(pipeline_executor, std::move(pipeline), definition,
                     receiver_actor<diagnostic>{self},
-                    metrics_receiver_actor{self}, node, has_terminal,
-                    is_hidden);
+                    metrics_receiver_actor{self}, node, has_terminal, is_hidden,
+                    pipeline_id);
     self->monitor(
       connection->pipeline_executor,
       [this, source = connection->pipeline_executor->address()](
@@ -895,7 +896,7 @@ auto make_connection_manager(
   std::string definition, const load_tcp_args& args,
   const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
-  bool is_hidden, const node_actor& node)
+  bool is_hidden, const node_actor& node, std::string pipeline_id)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state().self = self;
   self->state().definition = std::move(definition);
@@ -905,6 +906,7 @@ auto make_connection_manager(
   self->state().operator_id = operator_id;
   self->state().is_hidden = is_hidden;
   self->state().node = node;
+  self->state().pipeline_id = std::move(pipeline_id);
   if (auto ok = self->state().start(); not ok) {
     self->quit(std::move(ok.error()));
     return connection_manager_actor<
@@ -968,7 +970,8 @@ public:
       = scope_linked{ctrl.self().spawn<caf::linked>(
         make_connection_manager<Elements>, std::string{ctrl.definition()}, args,
         ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
-        ctrl.operator_index(), ctrl.is_hidden(), ctrl.node())};
+        ctrl.operator_index(), ctrl.is_hidden(), ctrl.node(),
+        std::string{ctrl.pipeline_id()})};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);

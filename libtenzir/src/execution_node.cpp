@@ -23,6 +23,7 @@
 #include "tenzir/ecc.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/pipeline_buffer_stats.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/secret_store.hpp"
 #include "tenzir/si_literals.hpp"
@@ -235,6 +236,10 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   auto is_hidden() const noexcept -> bool override {
     return is_hidden_;
+  }
+
+  auto pipeline_id() const noexcept -> std::string_view override {
+    return state.pipeline_id;
   }
 
   auto set_waiting(bool value) noexcept -> void override {
@@ -499,12 +504,21 @@ struct exec_node_state {
                   std::string definition, const node_actor& node,
                   const receiver_actor<diagnostic>& diagnostic_handler,
                   const metrics_receiver_actor& metrics_receiver, int index,
-                  bool has_terminal, bool is_hidden, uuid run_id)
+                  bool has_terminal, bool is_hidden, uuid run_id,
+                  std::string pipeline_id)
     : self{self},
       definition{std::move(definition)},
       run_id{run_id},
+      pipeline_id{std::move(pipeline_id)},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
+    // Initialize buffer stats for non-source operators of non-hidden pipelines
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      if (not is_hidden and not this->pipeline_id.empty()) {
+        buffer_stats = pipeline_buffer_registry::instance().get_or_create(
+          this->pipeline_id);
+      }
+    }
     auto read_config = [&]<class T>(std::string_view config, T min, T fallback,
                                     bool element_specific) -> T {
       static_assert(caf::detail::tl_contains_v<data::types, T>);
@@ -678,6 +692,12 @@ struct exec_node_state {
   /// A unique identifier for the current run.
   uuid run_id = {};
 
+  /// The pipeline's unique identifier for buffer metrics.
+  std::string pipeline_id;
+
+  /// Shared stats for tracking buffered data across all exec nodes in pipeline.
+  std::shared_ptr<pipeline_buffer_stats> buffer_stats;
+
   /// Buffer limits derived from the configuration.
   uint64_t min_elements = exec_node_defaults<Input>::min_elements;
   uint64_t max_elements = exec_node_defaults<Input>::max_elements;
@@ -761,6 +781,24 @@ struct exec_node_state {
 
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
+    // Clean up buffer stats for any remaining items in inbound_buffer.
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      if (buffer_stats and not inbound_buffer.empty()) {
+        auto total_bytes = uint64_t{0};
+        auto total_events = uint64_t{0};
+        for (const auto& item : inbound_buffer) {
+          total_bytes += approx_bytes(item);
+          if constexpr (std::is_same_v<Input, table_slice>) {
+            total_events += item.rows();
+          }
+        }
+        buffer_stats->bytes.fetch_sub(total_bytes, std::memory_order_relaxed);
+        if constexpr (std::is_same_v<Input, table_slice>) {
+          buffer_stats->events.fetch_sub(total_events,
+                                         std::memory_order_relaxed);
+        }
+      }
+    }
     emit_generic_op_metrics();
     instance.reset();
     ctrl.reset();
@@ -1042,6 +1080,15 @@ struct exec_node_state {
       inbound_buffer.pop_front();
       const auto input_size = size(input);
       inbound_buffer_elements -= input_size;
+      // Update buffer stats for metrics
+      if (buffer_stats) {
+        buffer_stats->bytes.fetch_sub(approx_bytes(input),
+                                      std::memory_order_relaxed);
+        if constexpr (std::is_same_v<Input, table_slice>) {
+          buffer_stats->events.fetch_sub(input.rows(),
+                                         std::memory_order_relaxed);
+        }
+      }
       TENZIR_TRACE("{} {} uses {} elements", *self, op->name(), input_size);
       co_yield std::move(input);
     }
@@ -1228,6 +1275,14 @@ struct exec_node_state {
     metrics.inbound_measurement.num_elements += input_size;
     metrics.inbound_measurement.num_batches += 1;
     metrics.inbound_measurement.num_approx_bytes += approx_bytes(input);
+    // Update buffer stats for metrics
+    if (buffer_stats) {
+      buffer_stats->bytes.fetch_add(approx_bytes(input),
+                                    std::memory_order_relaxed);
+      if constexpr (std::is_same_v<Input, table_slice>) {
+        buffer_stats->events.fetch_add(input.rows(), std::memory_order_relaxed);
+      }
+    }
     inbound_buffer_elements += input_size;
     inbound_buffer.push_back(std::move(input));
     schedule_run(false);
@@ -1299,7 +1354,8 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden, uuid run_id)
+                     bool has_terminal, bool is_hidden, uuid run_id,
+                     std::string pipeline_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -1323,11 +1379,11 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         caf::actor_from_state<exec_node_state<input_type, output_type>>,
         std::move(op), std::move(definition), std::move(node),
         std::move(diagnostics_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden, run_id);
+        has_terminal, is_hidden, run_id, std::move(pipeline_id));
       return result;
     };
   };
-  return std::pair {
+  return std::pair{
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),

@@ -32,25 +32,29 @@ public:
              std::string definition,
              const receiver_actor<diagnostic>& diagnostic_handler,
              const metrics_receiver_actor& metrics_receiver, int32_t index,
-             bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
+             bool is_hidden, uuid run_id,
+             std::string pipeline_id) -> caf::result<exec_node_actor> {
         return spawn_exec_node(std::move(box), input_type,
                                std::move(definition), diagnostic_handler,
-                               metrics_receiver, index, is_hidden, run_id);
+                               metrics_receiver, index, is_hidden, run_id,
+                               std::move(pipeline_id));
       },
     };
   }
 
-  auto spawn_exec_node(operator_box box, operator_type input_type,
-                       std::string definition,
-                       const receiver_actor<diagnostic>& diagnostic_handler,
-                       const metrics_receiver_actor& metrics_receiver,
-                       int32_t index, bool is_hidden, uuid run_id)
+  auto
+  spawn_exec_node(operator_box box, operator_type input_type,
+                  std::string definition,
+                  const receiver_actor<diagnostic>& diagnostic_handler,
+                  const metrics_receiver_actor& metrics_receiver, int32_t index,
+                  bool is_hidden, uuid run_id, std::string pipeline_id)
     -> caf::result<exec_node_actor> {
     TENZIR_ASSERT(box);
     auto op = std::move(box).unwrap();
     auto spawn_result = tenzir::spawn_exec_node(
       self_, std::move(op), input_type, std::move(definition), node_,
-      diagnostic_handler, metrics_receiver, index, false, is_hidden, run_id);
+      diagnostic_handler, metrics_receiver, index, false, is_hidden, run_id,
+      std::move(pipeline_id));
     if (not spawn_result) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} failed to spawn execution node "

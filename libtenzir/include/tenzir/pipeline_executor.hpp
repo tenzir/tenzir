@@ -51,6 +51,9 @@ struct pipeline_executor_state {
   /// Determines whether the pipeline has been started.
   bool is_started = {};
 
+  /// The pipeline's unique identifier for buffer metrics.
+  std::string pipeline_id;
+
   /// Determine whether this executor is running in an ad-hoc tenzir cli
   /// or in a node.
   auto running_in_node() const -> bool;
@@ -74,6 +77,7 @@ auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type;
+  bool is_hidden, std::string pipeline_id)
+  -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

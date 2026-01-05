@@ -80,7 +80,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     auto spawn_result
       = spawn_exec_node(self, std::move(op), input_type, definition, node,
                         diagnostics, metrics, op_index, has_terminal, is_hidden,
-                        run_id);
+                        run_id, pipeline_id);
     if (not spawn_result) {
       abort_start(diagnostic::error(spawn_result.error())
                     .note("failed to spawn {} locally", description)
@@ -126,7 +126,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     exec_nodes.emplace_back();
     self
       ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type, definition,
-             diagnostics, metrics, op_index, is_hidden, run_id)
+             diagnostics, metrics, op_index, is_hidden, run_id, pipeline_id)
       .request(shell, caf::infinite)
       .then(
         [this, description, index](exec_node_actor& exec_node) {
@@ -344,7 +344,8 @@ auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type {
+  bool is_hidden, std::string pipeline_id)
+  -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
   self->attach_functor([self] {
     TENZIR_TRACE("{} was destroyed", *self);
@@ -359,6 +360,7 @@ auto pipeline_executor(
     self->system().config(), "tenzir.no-location-overrides", false);
   self->state().has_terminal = has_terminal;
   self->state().is_hidden = is_hidden;
+  self->state().pipeline_id = std::move(pipeline_id);
   self->set_exception_handler([self](const std::exception_ptr& exception)
                                 -> caf::error {
     auto error = std::invoke([&] {

@@ -563,7 +563,8 @@ struct every_cron_operator final : public operator_base {
       const auto exec
         = ctrl.self().spawn(pipeline_executor, std::move(pipe),
                             std::string{ctrl.definition()}, hdl, hdl,
-                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden());
+                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
+                            std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error&) {
         spawn_pipeline(ctrl, hdl, start, finish, cron);
       });
@@ -596,7 +597,8 @@ struct every_cron_operator final : public operator_base {
       const auto exec
         = ctrl.self().spawn(pipeline_executor, std::move(pipe),
                             std::string{ctrl.definition()}, hdl, hdl,
-                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden());
+                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
+                            std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error&) {
         TENZIR_TRACE("[every_cron] subpipeline shut down");
         ++state.count;
