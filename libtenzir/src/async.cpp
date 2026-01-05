@@ -196,6 +196,7 @@ public:
   Runner& operator=(Runner&&) = delete;
   Runner(const Runner&) = delete;
   Runner& operator=(const Runner&) = delete;
+  ~Runner() = default;
 
   auto run_to_completion() && -> Task<void> {
     TENZIR_WARN("starting operator runner");

@@ -17,26 +17,41 @@ namespace tenzir {
 
 namespace _::operator_plugin {
 
-using DataArgTypes = detail::tl_filter_not_type_t<data::types, pattern>;
+using LocatedTypes = detail::tl_concat_t<
+  detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
+                   as_located>,
+  caf::type_list<located<pipeline>, ast::expression, ast::field_path,
+                 ast::lambda_expr, located<data>>>;
 
-using ArgTypes
-  = detail::tl_concat_t<DataArgTypes, caf::type_list<ast::expression>>;
+template <class T>
+concept LocatedType = detail::tl_contains_v<LocatedTypes, T>;
+
+using BareTypes
+  = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
+                     caf::detail::value_type_of>;
+
+using ArgTypes = detail::tl_concat_t<LocatedTypes, BareTypes>;
 
 template <class T>
 concept ArgType = detail::tl_contains_v<ArgTypes, T>;
 
-template <ArgType T>
+template <LocatedType T>
 using Setter = std::function<void(std::any&, T)>;
 
-template <ArgType T>
+template <LocatedType T>
 struct AsSetter : std::type_identity<Setter<T>> {};
 
-using Setters = detail::tl_map_t<ArgTypes, AsSetter>;
+using Setters = detail::tl_map_t<LocatedTypes, AsSetter>;
 
 using AnySetter = detail::tl_apply_t<Setters, variant>;
 
 struct Positional {
+  Positional(std::string name, std::string type, AnySetter setter)
+    : name{std::move(name)}, type{std::move(type)}, setter{std::move(setter)} {
+  }
+
   std::string name;
+  std::string type;
   AnySetter setter;
 };
 
@@ -89,6 +104,38 @@ public:
   auto non_negative() -> Argument;
 };
 
+template <class Args, class T>
+auto make_setter(T Args::* ptr) -> auto {
+  using Value = decltype(std::invoke([] {
+    if constexpr (detail::is_specialization_of<std::optional, T>::value) {
+      return tag_v<typename T::value_type>;
+    } else {
+      return tag_v<T>;
+    }
+  }))::type;
+  if constexpr (std::same_as<T, std::optional<location>>) {
+    return Setter<located<bool>>{[ptr](std::any& args, located<bool> value) {
+      if (value.inner) {
+        (&std::any_cast<Args&>(args))->*ptr = value.source;
+      } else {
+        (&std::any_cast<Args&>(args))->*ptr = std::nullopt;
+      }
+    }};
+  } else if constexpr (argument_parser_bare_type<Value>) {
+    return Setter<located<Value>>{[ptr](std::any& args, located<Value> value) {
+      (&std::any_cast<Args&>(args))->*ptr = std::move(value.inner);
+    }};
+  } else {
+    return Setter<Value>{[ptr](std::any& args, Value value) {
+      (&std::any_cast<Args&>(args))->*ptr = std::move(value);
+    }};
+  }
+}
+
+// TODO
+template <class T>
+static constexpr char const* type_default = "";
+
 template <class Args, class... Impls>
 class Describer {
 public:
@@ -113,46 +160,45 @@ public:
   }
 
   template <ArgType T>
-  auto positional(std::string name, T Args::* ptr) -> Argument<Args, T> {
+  auto positional(std::string name, T Args::* ptr,
+                  std::string type = type_default<T>) -> Argument<Args, T> {
     // TODO: Check exact type?
     if (desc_.first_optional) {
       panic("cannot have required positional after optional positional");
     }
     desc_.positional.push_back(Positional{
       std::move(name),
-      Setter<T>{[ptr](std::any& args, T value) {
-        (&std::any_cast<Args&>(args))->*ptr = std::move(value);
-      }},
+      std::move(type),
+      make_setter(ptr),
     });
     return Argument<Args, T>{};
   }
 
   template <ArgType T>
-  auto positional(std::string name, std::optional<T> Args::* ptr)
+  auto positional(std::string name, std::optional<T> Args::* ptr,
+                  std::string type = type_default<T>) -> Argument<Args, T> {
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+    });
+    return Argument<Args, T>{};
+  }
+
+  template <ArgType T>
+  auto optional_positional(std::string name, T Args::* ptr,
+                           std::string type = type_default<T>)
     -> Argument<Args, T> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
     desc_.positional.push_back(Positional{
       std::move(name),
-      Setter<T>{[ptr](std::any& args, T value) {
-        (&std::any_cast<Args&>(args))->*ptr = std::move(value);
-      }},
-    });
-    return Argument<Args, T>{};
-  }
-
-  template <ArgType T>
-  auto optional_positional(std::string name, T Args::* ptr)
-    -> Argument<Args, T> {
-    if (not desc_.first_optional) {
-      desc_.first_optional = desc_.positional.size();
-    }
-    desc_.positional.push_back(Positional{
-      std::move(name),
-      Setter<T>{[ptr](std::any& args, T value) {
-        (&std::any_cast<Args&>(args))->*ptr = std::move(value);
-      }},
+      std::move(type),
+      make_setter(ptr),
     });
     return Argument<Args, T>{};
   }

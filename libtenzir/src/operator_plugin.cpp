@@ -195,7 +195,9 @@ public:
         if (instantiate or expr.is_deterministic(ctx)) {
           TRY(auto value, const_eval(expr, ctx));
           if (auto integer = try_as<int64_t>(value);
-              integer and is<Setter<uint64_t>>(desc_->positional[idx].setter)) {
+              integer
+              and is<Setter<located<uint64_t>>>(
+                desc_->positional[idx].setter)) {
             if (*integer < 0) {
               diagnostic::error("expected positive integer, got `{}`", *integer)
                 .primary(expr)
@@ -205,30 +207,39 @@ public:
             }
             value = detail::narrow<uint64_t>(*integer);
           }
-          TRY(arg, match(
-                     desc_->positional[idx].setter,
-                     [&]<class T>(const Setter<T>&) -> failure_or<Arg> {
-                       auto cast = try_as<T>(value);
-                       if (not cast) {
-                         diagnostic::error(
-                           "expected {} but got {}",
-                           type_kind::of<data_to_type_t<T>>,
-                           match(value,
-                                 []<class U>(const U& x) {
-                                   // TODO: Proper type.
-                                   return detail::pretty_type_name(x);
-                                   // return
-                                   // type_kind::of<data_to_type_t<U>>;
-                                 }))
-                           .primary(expr)
-                           .emit(ctx);
-                         return failure::promise();
-                       }
-                       return std::move(*cast);
-                     },
-                     [&](const Setter<ast::expression>&) -> failure_or<Arg> {
-                       TENZIR_UNREACHABLE();
-                     }));
+          auto result = match(
+            desc_->positional[idx].setter,
+            [&]<class T>(const Setter<located<T>>&) -> failure_or<Arg> {
+              auto cast = try_as<T>(value);
+              if (not cast) {
+                diagnostic::error("expected {} but got {}", "TODO",
+                                  match(value,
+                                        []<class U>(const U& x) {
+                                          // TODO: Proper type.
+                                          return detail::pretty_type_name(x);
+                                          // return
+                                          // type_kind::of<data_to_type_t<U>>;
+                                        }))
+                  .primary(expr)
+                  .emit(ctx);
+                return failure::promise();
+              }
+              return located{std::move(*cast), expr.get_location()};
+            },
+            [&](const Setter<located<data>>&) -> failure_or<Arg> {
+              TENZIR_TODO();
+            },
+            [&](const Setter<located<tenzir::pipeline>>&) -> failure_or<Arg> {
+              TENZIR_TODO();
+            },
+            [&]<class T>(const Setter<T>&) -> failure_or<Arg> {
+              TENZIR_TODO();
+            },
+            [&](const Setter<ast::expression>&) -> failure_or<Arg> {
+              // We already checked this above.
+              TENZIR_UNREACHABLE();
+            });
+          TRY(arg, result);
         }
       } else {
         TENZIR_TODO();
@@ -258,7 +269,7 @@ private:
   };
 
   using WithIncomplete
-    = detail::tl_concat_t<ArgTypes, detail::type_list<Incomplete>>;
+    = detail::tl_concat_t<LocatedTypes, detail::type_list<Incomplete>>;
 
   using Arg = detail::tl_apply_t<WithIncomplete, variant>;
 
