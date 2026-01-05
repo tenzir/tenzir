@@ -636,7 +636,8 @@ auto node(node_actor::stateful_pointer<node_state> self,
            std::string definition,
            const receiver_actor<diagnostic>& diagnostic_handler,
            const metrics_receiver_actor& metrics_receiver, int index,
-           bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
+           bool is_hidden, uuid run_id,
+           std::string pipeline_id) -> caf::result<exec_node_actor> {
       auto op = std::move(box).unwrap();
       if (op->location() == operator_location::local) {
         return caf::make_error(ec::logic_error,
@@ -649,7 +650,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
         = spawn_exec_node(self, std::move(op), input_type,
                           std::move(definition), static_cast<node_actor>(self),
                           diagnostic_handler, metrics_receiver, index, false,
-                          is_hidden, run_id);
+                          is_hidden, run_id, std::move(pipeline_id));
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "

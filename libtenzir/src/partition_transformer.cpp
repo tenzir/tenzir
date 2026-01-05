@@ -234,12 +234,12 @@ void partition_transformer_state::fulfill(
     self->quit();
     return;
   }
-  if (!stream_data.partition_chunks) {
+  if (! stream_data.partition_chunks) {
     promise.deliver(stream_data.partition_chunks.error());
     self->quit();
     return;
   }
-  if (!stream_data.synopsis_chunks) {
+  if (! stream_data.synopsis_chunks) {
     promise.deliver(stream_data.synopsis_chunks.error());
     self->quit();
     return;
@@ -248,7 +248,7 @@ void partition_transformer_state::fulfill(
   // no error during packing, so at least one of these chunks must be
   // nonnull.
   for (auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
-    if (!synopsis_chunk) {
+    if (! synopsis_chunk) {
       continue;
     }
     auto filename = fmt::format(
@@ -342,7 +342,7 @@ auto partition_transformer(
       // We copy the pipeline because we will modify it.
       auto pipe = self->state().transform;
       auto open = pipe.check_type<table_slice, table_slice>();
-      if (!open) {
+      if (! open) {
         return open.error();
       }
       pipe.prepend(
@@ -350,7 +350,7 @@ auto partition_transformer(
       auto output = std::make_shared<std::vector<table_slice>>();
       pipe.append(std::make_unique<collecting_sink>(output));
       auto closed = pipe.check_type<void, void>();
-      if (!closed) {
+      if (! closed) {
         return caf::make_error(ec::logic_error, "internal error: {}",
                                closed.error());
       }
@@ -358,9 +358,10 @@ auto partition_transformer(
       auto diagnostics_receiver = self->spawn(make_diagnostics_receiver);
       auto metrics_receiver = self->spawn(make_metrics_receiver);
       // Spawn the pipeline executor actor.
-      auto executor = self->spawn(pipeline_executor, std::move(pipe),
-                                  std::string{}, diagnostics_receiver,
-                                  metrics_receiver, node_actor{}, false, false);
+      auto executor
+        = self->spawn(pipeline_executor, std::move(pipe), std::string{},
+                      diagnostics_receiver, metrics_receiver, node_actor{},
+                      false, false, std::string{});
       // Monitor the executor to detect when it finishes and process results.
       self->monitor(executor, [self, output, executor](const caf::error& err) {
         if (err && err != caf::exit_reason::normal) {
@@ -532,7 +533,7 @@ auto partition_transformer(
             return;
           }
           auto partition = pack_full(partition_data, record_type{});
-          if (!partition) {
+          if (! partition) {
             stream_data.partition_chunks = partition.error();
             return;
           }
@@ -543,7 +544,7 @@ auto partition_transformer(
              self->state().data) { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
           auto synopsis = pack(builder, *partition_data.synopsis);
-          if (!synopsis) {
+          if (! synopsis) {
             stream_data.synopsis_chunks = synopsis.error();
             return;
           }

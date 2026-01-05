@@ -100,14 +100,14 @@ public:
                   std::unique_ptr<diagnostic_handler> dh,
                   std::string definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
-                  uint64_t operator_index);
+                  uint64_t operator_index, std::string pipeline_id);
   from_file_state(from_file_actor::pointer self, from_file_args args,
                   std::string expanded, std::string path,
                   std::shared_ptr<arrow::fs::FileSystem> fs, event_order order,
                   std::unique_ptr<diagnostic_handler> dh,
                   std::string definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
-                  uint64_t operator_index);
+                  uint64_t operator_index, std::string pipeline_id);
   auto make_behavior() -> from_file_actor::behavior_type;
 
 private:
@@ -163,6 +163,7 @@ private:
   std::string definition_;
   node_actor node_;
   bool is_hidden_;
+  std::string pipeline_id_;
 
   // Job management.
   size_t active_jobs_ = 0;

@@ -183,10 +183,11 @@ public:
     auto pipe = pipe_.inner;
     pipe.prepend(
       std::make_unique<internal_fork_source_operator>(side_channel.get()));
-    const auto pipeline_executor = scope_linked{ctrl.self().spawn(
-      tenzir::pipeline_executor, std::move(pipe),
-      std::string{ctrl.definition()}, side_channel.get(), side_channel.get(),
-      ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden())};
+    const auto pipeline_executor = scope_linked{
+      ctrl.self().spawn(tenzir::pipeline_executor, std::move(pipe),
+                        std::string{ctrl.definition()}, side_channel.get(),
+                        side_channel.get(), ctrl.node(), ctrl.has_terminal(),
+                        ctrl.is_hidden(), std::string{ctrl.pipeline_id()})};
     ctrl.self().monitor(pipeline_executor.get(), [&](caf::error err) {
       if (err and err != caf::exit_reason::user_shutdown) {
         diagnostic::error(std::move(err))

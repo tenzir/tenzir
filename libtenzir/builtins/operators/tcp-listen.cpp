@@ -128,6 +128,10 @@ public:
     return is_hidden_;
   }
 
+  auto pipeline_id() const noexcept -> std::string_view override {
+    return {};
+  }
+
   auto set_waiting(bool value) noexcept -> void override {
     (void)value;
     TENZIR_UNIMPLEMENTED();

@@ -171,7 +171,8 @@ from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
   std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
+  std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     args_{std::move(args)},
@@ -179,6 +180,7 @@ from_file_state::from_file_state(
     definition_{std::move(definition)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
+    pipeline_id_{std::move(pipeline_id)},
     operator_index_{operator_index},
     metrics_receiver_{std::move(metrics_receiver)} {
   TENZIR_ASSERT(dh_);
@@ -210,7 +212,8 @@ from_file_state::from_file_state(
   std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
   std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
+  std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     fs_{std::move(fs)},
@@ -219,6 +222,7 @@ from_file_state::from_file_state(
     definition_{std::move(definition)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
+    pipeline_id_{std::move(pipeline_id)},
     operator_index_{operator_index},
     metrics_receiver_{std::move(metrics_receiver)} {
   TENZIR_ASSERT(dh_);
@@ -483,8 +487,9 @@ auto from_file_state::start_stream(
                        : std::nullopt));
     pipe = pipe.optimize_if_closed();
   }
-  auto executor = self_->spawn(pipeline_executor, std::move(pipe), definition_,
-                               self_, self_, node_, false, is_hidden_);
+  auto executor
+    = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
+                   self_, node_, false, is_hidden_, pipeline_id_);
   self_->attach_functor([this, weak]() {
     if (auto strong = weak.lock()) {
       // FIXME: This should not be necessary to ensure that the actor is
