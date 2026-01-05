@@ -781,6 +781,24 @@ struct exec_node_state {
 
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
+    // Clean up buffer stats for any remaining items in inbound_buffer.
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      if (buffer_stats and not inbound_buffer.empty()) {
+        auto total_bytes = uint64_t{0};
+        auto total_events = uint64_t{0};
+        for (const auto& item : inbound_buffer) {
+          total_bytes += approx_bytes(item);
+          if constexpr (std::is_same_v<Input, table_slice>) {
+            total_events += item.rows();
+          }
+        }
+        buffer_stats->bytes.fetch_sub(total_bytes, std::memory_order_relaxed);
+        if constexpr (std::is_same_v<Input, table_slice>) {
+          buffer_stats->events.fetch_sub(total_events,
+                                         std::memory_order_relaxed);
+        }
+      }
+    }
     emit_generic_op_metrics();
     instance.reset();
     ctrl.reset();
