@@ -11,6 +11,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/stable_map.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
@@ -362,16 +363,7 @@ auto evaluate_xpath(const xml_element* root, std::string_view xpath)
   }
   // Handle absolute path like "/root/child/..." with optional predicates
   if (xpath.starts_with("/")) {
-    auto path = xpath.substr(1);
-    std::vector<std::string> parts;
-    size_t pos = 0;
-    while ((pos = path.find('/')) != std::string_view::npos) {
-      parts.emplace_back(path.substr(0, pos));
-      path = path.substr(pos + 1);
-    }
-    if (not path.empty()) {
-      parts.emplace_back(path);
-    }
+    auto parts = detail::split(xpath.substr(1), "/");
     if (parts.empty()) {
       return results;
     }
