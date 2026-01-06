@@ -47,6 +47,7 @@ struct xml_element {
 struct xml_options {
   std::string attr_prefix = "@";
   std::string text_key = "#text";
+  std::string key_attr; // If set, use this attribute's value as field name
   int64_t max_depth = 10;
   bool strip_namespaces = true;
 };
@@ -415,6 +416,106 @@ template <typename RecordBuilder>
 void element_to_record(RecordBuilder record, const xml_element& elem,
                        const xml_options& opts, int depth);
 
+/// Get the value of key_attr from an element, or nullptr if not present.
+auto get_key_attr_value(const xml_element& elem, const std::string& key_attr)
+  -> const std::string* {
+  if (key_attr.empty()) {
+    return nullptr;
+  }
+  for (const auto& [attr_name, attr_val] : elem.attributes) {
+    if (attr_name == key_attr) {
+      return &attr_val;
+    }
+  }
+  return nullptr;
+}
+
+/// Convert element content to data, used when key_attr extracts field name.
+/// Outputs the element's value (text or nested record) without the key_attr.
+template <typename ObjectBuilder>
+void element_value_to_data(ObjectBuilder field, const xml_element& elem,
+                           const xml_options& opts, int depth) {
+  if (depth >= opts.max_depth) {
+    field.null();
+    return;
+  }
+  // Count non-key_attr attributes
+  size_t other_attrs = 0;
+  for (const auto& [attr_name, _] : elem.attributes) {
+    if (attr_name != opts.key_attr) {
+      ++other_attrs;
+    }
+  }
+  // If only text content and no other attributes, return just the text
+  if (other_attrs == 0 and elem.children.size() == 1
+      and is<std::string>(elem.children[0])) {
+    field.data(as<std::string>(elem.children[0]));
+    return;
+  }
+  // If empty element with no other attributes
+  if (other_attrs == 0 and elem.children.empty()) {
+    field.null();
+    return;
+  }
+  // Build a record with remaining attributes and children
+  auto record = field.record();
+  // Add non-key_attr attributes
+  for (const auto& [name, value] : elem.attributes) {
+    if (name != opts.key_attr) {
+      auto field_name = opts.attr_prefix + name;
+      record.field(field_name).data(value);
+    }
+  }
+  // Process children (recursively, so key_attr applies at all levels)
+  std::map<std::string, std::vector<const xml_node*>> children_by_name;
+  std::vector<const std::string*> text_children;
+  for (const auto& child : elem.children) {
+    if (auto* text = try_as<std::string>(child)) {
+      text_children.push_back(text);
+    } else if (auto* child_elem = try_as<std::unique_ptr<xml_element>>(child)) {
+      // Check if child has key_attr - if so, use that value as the key
+      if (auto* key_val = get_key_attr_value(**child_elem, opts.key_attr)) {
+        children_by_name[*key_val].push_back(&child);
+      } else {
+        children_by_name[(*child_elem)->name].push_back(&child);
+      }
+    }
+  }
+  // Handle text content
+  if (not text_children.empty()) {
+    std::string combined;
+    for (const auto* text : text_children) {
+      if (not combined.empty()) {
+        combined += " ";
+      }
+      combined += *text;
+    }
+    record.field(opts.text_key).data(combined);
+  }
+  // Add child elements
+  for (auto& [child_key, nodes] : children_by_name) {
+    if (nodes.size() > 1) {
+      auto list = record.field(child_key).list();
+      for (const auto* node : nodes) {
+        auto& child_elem = as<std::unique_ptr<xml_element>>(*node);
+        if (get_key_attr_value(*child_elem, opts.key_attr)) {
+          element_value_to_data(list, *child_elem, opts, depth + 1);
+        } else {
+          node_to_data(list, *node, opts, depth + 1);
+        }
+      }
+    } else {
+      auto& child_elem_ptr = as<std::unique_ptr<xml_element>>(*nodes[0]);
+      if (get_key_attr_value(*child_elem_ptr, opts.key_attr)) {
+        element_value_to_data(record.field(child_key), *child_elem_ptr, opts,
+                              depth + 1);
+      } else {
+        node_to_data(record.field(child_key), *nodes[0], opts, depth + 1);
+      }
+    }
+  }
+}
+
 /// Convert an XML node (element or text) to data.
 template <typename ObjectBuilder>
 void node_to_data(ObjectBuilder field, const xml_node& node,
@@ -443,19 +544,27 @@ void node_to_data(ObjectBuilder field, const xml_node& node,
 template <typename RecordBuilder>
 void element_to_record(RecordBuilder record, const xml_element& elem,
                        const xml_options& opts, int depth) {
-  // Add attributes with prefix
+  // Add attributes with prefix (skip key_attr if set)
   for (const auto& [name, value] : elem.attributes) {
+    if (not opts.key_attr.empty() and name == opts.key_attr) {
+      continue;
+    }
     auto field_name = opts.attr_prefix + name;
     record.field(field_name).data(value);
   }
-  // Group children by name to detect lists
-  std::map<std::string, std::vector<const xml_node*>> children_by_name;
+  // Group children by name (or key_attr value if present)
+  std::map<std::string, std::vector<const xml_node*>> children_by_key;
   std::vector<const std::string*> text_children;
   for (const auto& child : elem.children) {
     if (auto* text = try_as<std::string>(child)) {
       text_children.push_back(text);
     } else if (auto* child_elem = try_as<std::unique_ptr<xml_element>>(child)) {
-      children_by_name[(*child_elem)->name].push_back(&child);
+      // Check if child has key_attr - if so, use that value as the key
+      if (auto* key_val = get_key_attr_value(**child_elem, opts.key_attr)) {
+        children_by_key[*key_val].push_back(&child);
+      } else {
+        children_by_key[(*child_elem)->name].push_back(&child);
+      }
     }
   }
   // Handle text content
@@ -470,15 +579,27 @@ void element_to_record(RecordBuilder record, const xml_element& elem,
     record.field(opts.text_key).data(combined);
   }
   // Add child elements
-  for (auto& [child_name, nodes] : children_by_name) {
+  for (auto& [child_key, nodes] : children_by_key) {
     if (nodes.size() > 1) {
-      // Multiple elements with same name become a list
-      auto list = record.field(child_name).list();
+      // Multiple elements with same key become a list
+      auto list = record.field(child_key).list();
       for (const auto* node : nodes) {
-        node_to_data(list, *node, opts, depth + 1);
+        auto& child_elem = as<std::unique_ptr<xml_element>>(*node);
+        if (get_key_attr_value(*child_elem, opts.key_attr)) {
+          element_value_to_data(list, *child_elem, opts, depth + 1);
+        } else {
+          node_to_data(list, *node, opts, depth + 1);
+        }
       }
     } else {
-      node_to_data(record.field(child_name), *nodes[0], opts, depth + 1);
+      auto* child_elem_ptr = try_as<std::unique_ptr<xml_element>>(*nodes[0]);
+      if (child_elem_ptr
+          and get_key_attr_value(**child_elem_ptr, opts.key_attr)) {
+        element_value_to_data(record.field(child_key), **child_elem_ptr, opts,
+                              depth + 1);
+      } else {
+        node_to_data(record.field(child_key), *nodes[0], opts, depth + 1);
+      }
     }
   }
 }
@@ -554,6 +675,7 @@ public:
     auto xpath = std::optional<located<std::string>>{};
     auto attr_prefix = std::optional<located<std::string>>{};
     auto text_key = std::optional<located<std::string>>{};
+    auto key_attr = std::optional<located<std::string>>{};
     auto max_depth = std::optional<located<int64_t>>{};
     auto namespaces = std::optional<located<std::string>>{};
     auto parser = argument_parser2::function(name());
@@ -561,6 +683,7 @@ public:
     parser.named("xpath", xpath);
     parser.named("attr_prefix", attr_prefix);
     parser.named("text_key", text_key);
+    parser.named("key_attr", key_attr);
     parser.named("max_depth", max_depth);
     parser.named("namespaces", namespaces);
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -576,6 +699,9 @@ public:
     }
     if (text_key) {
       opts.text_key = text_key->inner;
+    }
+    if (key_attr) {
+      opts.key_attr = key_attr->inner;
     }
     if (max_depth) {
       if (max_depth->inner < 0) {

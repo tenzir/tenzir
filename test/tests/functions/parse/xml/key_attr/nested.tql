@@ -1,0 +1,8 @@
+// KEY with child elements (value is a record)
+from {xml: r#"<root>
+  <KEY name="details">
+    <severity>High</severity>
+    <cvss>9.8</cvss>
+  </KEY>
+</root>"#}
+this = xml.parse_xml(xpath="/root", key_attr="name")
