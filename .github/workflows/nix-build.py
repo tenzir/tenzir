@@ -235,12 +235,59 @@ def notarize_macos_package(pkg_path: Path) -> None:
         raise RuntimeError(f"Stapling failed after {attempt} attempts")
 
 
+def find_macho_binaries(directory: Path) -> list[Path]:
+    """Find all Mach-O binaries in a directory tree."""
+    binaries = []
+    for path in directory.rglob("*"):
+        if not path.is_file():
+            continue
+        # Use 'file' command to detect Mach-O binaries
+        result = subprocess.run(
+            ["file", "--brief", str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if "Mach-O" in result.stdout:
+            binaries.append(path)
+    return binaries
+
+
+def sign_binary(binary_path: Path, signing_identity: str) -> None:
+    """Sign a single binary with hardened runtime and timestamp."""
+    notice(f"Signing {binary_path}")
+    result = subprocess.run(
+        [
+            "codesign",
+            "--force",
+            "--sign", signing_identity,
+            "--timestamp",
+            "--options", "runtime",
+            str(binary_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error(f"codesign failed for {binary_path}: {result.stderr}")
+        raise RuntimeError(f"Code signing failed: {result.stderr}")
+
+    # Verify signature
+    result = subprocess.run(
+        ["codesign", "--verify", "--verbose", str(binary_path)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error(f"Signature verification failed for {binary_path}: {result.stderr}")
+        raise RuntimeError(f"Signature verification failed: {result.stderr}")
+
+
 def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity: str | None = None) -> Path:
-    """Sign the tenzir binary inside macOS packages (.tar.gz and .pkg).
+    """Sign all binaries inside macOS packages (.tar.gz and .pkg).
 
     This function:
-    1. Extracts the tarball, signs the binary, and repacks it
-    2. Extracts the .pkg, replaces the binary with the signed one, and repacks it
+    1. Extracts the tarball, signs all Mach-O binaries, and repacks it
+    2. Extracts the .pkg, replaces binaries with signed ones, and repacks it
     3. Signs the .pkg itself with productsign (if installer_identity is provided)
 
     The signing uses hardened runtime (--options runtime) which is required
@@ -268,7 +315,7 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity
     signed_pkg_dir.mkdir(exist_ok=True)
 
     tarball = tarballs[0]
-    notice(f"Signing binary in {tarball.name}")
+    notice(f"Signing binaries in {tarball.name}")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -279,39 +326,17 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity
         with tarfile.open(tarball, "r:gz") as tf:
             tf.extractall(extract_dir, filter="data")
 
-        # Find and sign the binary
-        binary_path = extract_dir / "opt" / "tenzir" / "bin" / "tenzir"
-        if not binary_path.exists():
-            error(f"Binary not found at {binary_path}")
+        # Find and sign all Mach-O binaries
+        binaries = find_macho_binaries(extract_dir)
+        if not binaries:
+            error("No Mach-O binaries found in tarball")
             return pkg_dir
 
-        notice(f"Signing {binary_path}")
-        result = subprocess.run(
-            [
-                "codesign",
-                "--force",
-                "--sign", signing_identity,
-                "--timestamp",
-                "--options", "runtime",
-                str(binary_path),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error(f"codesign failed: {result.stderr}")
-            raise RuntimeError(f"Code signing failed: {result.stderr}")
+        notice(f"Found {len(binaries)} Mach-O binaries to sign")
+        for binary_path in binaries:
+            sign_binary(binary_path, signing_identity)
 
-        # Verify signature
-        result = subprocess.run(
-            ["codesign", "--verify", "--verbose", str(binary_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error(f"Signature verification failed: {result.stderr}")
-            raise RuntimeError(f"Signature verification failed: {result.stderr}")
-        notice("Signature verified successfully")
+        notice(f"Successfully signed {len(binaries)} binaries")
 
         # Repack tarball to signed-packages directory
         signed_tarball = signed_pkg_dir / tarball.name
@@ -372,13 +397,18 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity
                         error(f"cpio extraction failed: {result.stderr.decode()}")
                         raise RuntimeError(f"Failed to extract Payload: {result.stderr.decode()}")
 
-                # Replace the binary with the signed one
-                pkg_binary_path = payload_extract_dir / "opt" / "tenzir" / "bin" / "tenzir"
-                if pkg_binary_path.exists():
-                    shutil.copy2(binary_path, pkg_binary_path)
-                    notice("Replaced binary in .pkg payload with signed version")
-                else:
-                    warning(f"Binary not found in .pkg at expected path: {pkg_binary_path}")
+                # Replace all binaries with signed versions from extract_dir
+                replaced_count = 0
+                for signed_binary in binaries:
+                    # Get the relative path from extract_dir
+                    rel_path = signed_binary.relative_to(extract_dir)
+                    pkg_binary_path = payload_extract_dir / rel_path
+                    if pkg_binary_path.exists():
+                        shutil.copy2(signed_binary, pkg_binary_path)
+                        replaced_count += 1
+                    else:
+                        warning(f"Binary not found in .pkg at expected path: {pkg_binary_path}")
+                notice(f"Replaced {replaced_count} binaries in .pkg payload with signed versions")
 
                 # Recreate Payload (cpio | gzip)
                 # Get list of files relative to payload_extract_dir
