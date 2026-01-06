@@ -679,7 +679,7 @@ public:
     auto max_depth = std::optional<located<int64_t>>{};
     auto namespaces = std::optional<located<std::string>>{};
     auto parser = argument_parser2::function(name());
-    parser.positional("x", expr, "string");
+    parser.positional("input", expr, "string");
     parser.named("xpath", xpath);
     parser.named("attr_prefix", attr_prefix);
     parser.named("text_key", text_key);
@@ -863,7 +863,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto parser = argument_parser2::function(name());
-    parser.positional("x", expr, "string");
+    parser.positional("input", expr, "string");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
     msb_parser.add_settings_to_parser(parser, true, false);
