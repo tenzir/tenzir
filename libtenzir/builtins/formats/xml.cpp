@@ -91,14 +91,8 @@ using xml_parser_ptr
   = std::unique_ptr<std::remove_pointer_t<XML_Parser>, xml_parser_deleter>;
 
 /// Result of XML parsing: either a parsed element or an error message.
-struct xml_parse_result {
-  std::unique_ptr<xml_element> root;
-  std::string error;
-
-  explicit operator bool() const {
-    return root != nullptr;
-  }
-};
+using xml_parse_result
+  = std::expected<std::unique_ptr<xml_element>, std::string>;
 
 /// Expat SAX callbacks.
 void XMLCALL start_element(void* user_data, const XML_Char* name,
@@ -172,7 +166,7 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces,
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
   auto parser = xml_parser_ptr{XML_ParserCreate(nullptr)};
   if (not parser) {
-    return {nullptr, "failed to create XML parser"};
+    return std::unexpected{"failed to create XML parser"};
   }
   auto state = sax_state{};
   state.strip_namespaces = strip_namespaces;
@@ -187,13 +181,14 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces,
     auto column = XML_GetCurrentColumnNumber(parser.get());
     auto error_code = XML_GetErrorCode(parser.get());
     auto error_str = XML_ErrorString(error_code);
-    return {nullptr, fmt::format("line {}:{}: {}", line, column, error_str)};
+    return std::unexpected{
+      fmt::format("line {}:{}: {}", line, column, error_str)};
   }
   if (state.depth_exceeded) {
-    return {nullptr,
-            fmt::format("maximum nesting depth of {} exceeded", max_depth)};
+    return std::unexpected{
+      fmt::format("maximum nesting depth of {} exceeded", max_depth)};
   }
-  return {std::move(state.root), {}};
+  return std::move(state.root);
 }
 
 /// Parsed XPath predicate.
@@ -630,13 +625,13 @@ auto make_xml_function(location call, multi_series_builder::options msb_opts,
               auto result
                 = parse_xml_dom(xml_str, opts.strip_namespaces, max_sax_depth);
               if (not result) {
-                diagnostic::warning("failed to parse XML: {}", result.error)
+                diagnostic::warning("failed to parse XML: {}", result.error())
                   .primary(call)
                   .emit(ctx);
                 builder.null();
                 continue;
               }
-              process(builder, std::move(result.root), opts, call, ctx);
+              process(builder, std::move(*result), opts, call, ctx);
             }
             return multi_series{builder.finalize()};
           },
