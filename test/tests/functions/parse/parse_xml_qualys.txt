@@ -1,0 +1,111 @@
+{
+  header: {
+    COMPANY_INFO: {
+      CITY: "San Francisco",
+      COUNTRY: "United States",
+      NAME: "ACME Corporation",
+    },
+    GENERATION_DATETIME: "2024-01-15 12:00:00 (GMT+0000)",
+    NAME: "Vulnerabilities",
+  },
+  first_vuln: {
+    KEY: [
+      {
+        "@name": "QID",
+        "#text": "10001",
+      },
+      {
+        "@name": "CVE_ID",
+        "#text": "CVE-2024-1234",
+      },
+      {
+        "@name": "TITLE",
+        "#text": "Example SQL Injection Vulnerability",
+      },
+      {
+        "@name": "SEVERITY",
+        "#text": "Vulnerability - level 4",
+      },
+      {
+        "@name": "CATEGORY",
+        "#text": "Web Application",
+      },
+      {
+        "@name": "CVSS_BASE",
+        "#text": "7.5",
+      },
+    ],
+  },
+  last_vuln: {
+    KEY: [
+      {
+        "@name": "QID",
+        "#text": "10005",
+      },
+      {
+        "@name": "CVE_ID",
+        "#text": "CVE-2024-7890",
+      },
+      {
+        "@name": "TITLE",
+        "#text": "Example Privilege Escalation",
+      },
+      {
+        "@name": "SEVERITY",
+        "#text": "Vulnerability - level 4",
+      },
+      {
+        "@name": "CATEGORY",
+        "#text": "Operating System",
+      },
+      {
+        "@name": "CVSS_BASE",
+        "#text": "8.8",
+      },
+    ],
+  },
+  qids: [
+    {
+      "@name": "QID",
+      "#text": "10001",
+    },
+    {
+      "@name": "QID",
+      "#text": "10002",
+    },
+    {
+      "@name": "QID",
+      "#text": "10003",
+    },
+    {
+      "@name": "QID",
+      "#text": "10004",
+    },
+    {
+      "@name": "QID",
+      "#text": "10005",
+    },
+  ],
+  severities: [
+    {
+      "@name": "SEVERITY",
+      "#text": "Vulnerability - level 4",
+    },
+    {
+      "@name": "SEVERITY",
+      "#text": "Vulnerability - level 3",
+    },
+    {
+      "@name": "SEVERITY",
+      "#text": "Vulnerability - level 5",
+    },
+    {
+      "@name": "SEVERITY",
+      "#text": "Vulnerability - level 3",
+    },
+    {
+      "@name": "SEVERITY",
+      "#text": "Vulnerability - level 4",
+    },
+  ],
+}
