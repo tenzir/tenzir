@@ -536,7 +536,14 @@ def upload_packages(
         local_dir = Path(f"./packages/{label}")
         local_dir.mkdir(parents=True, exist_ok=True)
         for pkg_file in files:
-            _ = subprocess.run(["cp", "-v", str(pkg_file), str(local_dir)], check=True)
+            dest = local_dir / pkg_file.name
+            # Remove existing file if present (may be read-only from previous nix store copy)
+            if dest.exists():
+                dest.chmod(0o644)
+                dest.unlink()
+            shutil.copy2(pkg_file, dest)
+            dest.chmod(0o644)  # Ensure file is writable
+            notice(f"Copied {pkg_file} -> {dest}")
 
     # Attach to GitHub release
     if release_tag:
