@@ -29,6 +29,9 @@ namespace tenzir::plugins::xml {
 
 namespace {
 
+/// Maximum nesting depth during SAX parsing to prevent stack overflow.
+constexpr size_t max_sax_depth = 256;
+
 // Forward declarations
 struct xml_element;
 using xml_node = std::variant<std::string, std::unique_ptr<xml_element>>;
@@ -62,6 +65,9 @@ struct sax_state {
   std::unique_ptr<xml_element> root;
   std::stack<xml_element*> element_stack;
   bool strip_namespaces = true;
+  size_t current_depth = 0;
+  size_t max_depth = 256;
+  bool depth_exceeded = false;
 
   auto process_name(std::string_view name) -> std::string {
     if (strip_namespaces) {
@@ -96,6 +102,12 @@ struct xml_parse_result {
 void XMLCALL start_element(void* user_data, const XML_Char* name,
                            const XML_Char** attrs) {
   auto* state = static_cast<sax_state*>(user_data);
+  // Check depth limit to prevent stack overflow on deeply nested XML
+  if (state->current_depth >= state->max_depth) {
+    state->depth_exceeded = true;
+    return;
+  }
+  ++state->current_depth;
   auto elem = std::make_unique<xml_element>();
   elem->name = state->process_name(name);
   // Parse attributes
@@ -122,6 +134,9 @@ void XMLCALL start_element(void* user_data, const XML_Char* name,
 
 void XMLCALL end_element(void* user_data, const XML_Char*) {
   auto* state = static_cast<sax_state*>(user_data);
+  if (state->current_depth > 0) {
+    --state->current_depth;
+  }
   if (not state->element_stack.empty()) {
     state->element_stack.pop();
   }
@@ -150,8 +165,8 @@ void XMLCALL character_data(void* user_data, const XML_Char* s, int len) {
 }
 
 /// Parse XML string into a DOM tree.
-auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
-  -> xml_parse_result {
+auto parse_xml_dom(std::string_view xml, bool strip_namespaces,
+                   size_t max_depth = 256) -> xml_parse_result {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
   auto parser = xml_parser_ptr{XML_ParserCreate(nullptr)};
   if (not parser) {
@@ -159,6 +174,7 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
   }
   auto state = sax_state{};
   state.strip_namespaces = strip_namespaces;
+  state.max_depth = max_depth;
   XML_SetUserData(parser.get(), &state);
   XML_SetElementHandler(parser.get(), start_element, end_element);
   XML_SetCharacterDataHandler(parser.get(), character_data);
@@ -170,6 +186,10 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
     auto error_code = XML_GetErrorCode(parser.get());
     auto error_str = XML_ErrorString(error_code);
     return {nullptr, fmt::format("line {}:{}: {}", line, column, error_str)};
+  }
+  if (state.depth_exceeded) {
+    return {nullptr,
+            fmt::format("maximum nesting depth of {} exceeded", max_depth)};
   }
   return {std::move(state.root), {}};
 }
@@ -354,7 +374,8 @@ auto make_xml_function(location call, multi_series_builder::options msb_opts,
                 builder.null();
                 continue;
               }
-              auto result = parse_xml_dom(xml_str, opts.strip_namespaces);
+              auto result
+                = parse_xml_dom(xml_str, opts.strip_namespaces, max_sax_depth);
               if (not result) {
                 diagnostic::warning("failed to parse XML: {}", result.error)
                   .primary(call)
