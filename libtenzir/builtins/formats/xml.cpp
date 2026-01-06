@@ -194,6 +194,132 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces,
   return {std::move(state.root), {}};
 }
 
+/// Parsed XPath predicate.
+struct xpath_predicate {
+  enum class type { none, position, last, attr_exists, attr_equals };
+  type kind = type::none;
+  int64_t position = 0;   // For position predicates (1-indexed)
+  std::string attr_name;  // For attribute predicates
+  std::string attr_value; // For [@attr='value']
+};
+
+/// Parse an XPath predicate from "[...]" syntax.
+auto parse_predicate(std::string_view pred_str) -> xpath_predicate {
+  xpath_predicate result;
+  if (pred_str.empty() or pred_str.front() != '[' or pred_str.back() != ']') {
+    return result;
+  }
+  auto inner = pred_str.substr(1, pred_str.size() - 2);
+  // Handle [last()]
+  if (inner == "last()") {
+    result.kind = xpath_predicate::type::last;
+    return result;
+  }
+  // Handle [@attr] or [@attr='value']
+  if (inner.starts_with("@")) {
+    auto attr_part = inner.substr(1);
+    auto eq_pos = attr_part.find('=');
+    if (eq_pos == std::string_view::npos) {
+      // [@attr] - attribute exists
+      result.kind = xpath_predicate::type::attr_exists;
+      result.attr_name = std::string{attr_part};
+    } else {
+      // [@attr='value'] or [@attr="value"]
+      result.kind = xpath_predicate::type::attr_equals;
+      result.attr_name = std::string{attr_part.substr(0, eq_pos)};
+      auto val = attr_part.substr(eq_pos + 1);
+      // Strip quotes
+      if (val.size() >= 2
+          and ((val.front() == '\'' and val.back() == '\'')
+               or (val.front() == '"' and val.back() == '"'))) {
+        val = val.substr(1, val.size() - 2);
+      }
+      result.attr_value = std::string{val};
+    }
+    return result;
+  }
+  // Handle [n] - position predicate (1-indexed)
+  auto pos = int64_t{0};
+  auto [ptr, ec]
+    = std::from_chars(inner.data(), inner.data() + inner.size(), pos);
+  if (ec == std::errc{} and ptr == inner.data() + inner.size() and pos > 0) {
+    result.kind = xpath_predicate::type::position;
+    result.position = pos;
+  }
+  return result;
+}
+
+/// Split element name from predicate: "name[pred]" -> {"name", "[pred]"}
+auto split_name_predicate(std::string_view step)
+  -> std::pair<std::string_view, std::string_view> {
+  auto bracket = step.find('[');
+  if (bracket == std::string_view::npos) {
+    return {step, {}};
+  }
+  return {step.substr(0, bracket), step.substr(bracket)};
+}
+
+/// Check if element has the specified attribute.
+auto has_attribute(const xml_element& elem, std::string_view name) -> bool {
+  for (const auto& [attr_name, _] : elem.attributes) {
+    if (attr_name == name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Get attribute value, or nullptr if not present.
+auto get_attribute(const xml_element& elem, std::string_view name)
+  -> const std::string* {
+  for (const auto& [attr_name, attr_val] : elem.attributes) {
+    if (attr_name == name) {
+      return &attr_val;
+    }
+  }
+  return nullptr;
+}
+
+/// Apply predicate filter to a list of elements.
+auto apply_predicate(std::vector<const xml_element*> elems,
+                     const xpath_predicate& pred)
+  -> std::vector<const xml_element*> {
+  if (pred.kind == xpath_predicate::type::none or elems.empty()) {
+    return elems;
+  }
+  std::vector<const xml_element*> result;
+  switch (pred.kind) {
+    case xpath_predicate::type::position:
+      if (pred.position > 0
+          and static_cast<size_t>(pred.position) <= elems.size()) {
+        result.push_back(elems[pred.position - 1]); // 1-indexed
+      }
+      break;
+    case xpath_predicate::type::last:
+      result.push_back(elems.back());
+      break;
+    case xpath_predicate::type::attr_exists:
+      for (const auto* elem : elems) {
+        if (has_attribute(*elem, pred.attr_name)) {
+          result.push_back(elem);
+        }
+      }
+      break;
+    case xpath_predicate::type::attr_equals:
+      for (const auto* elem : elems) {
+        if (const auto* val = get_attribute(*elem, pred.attr_name)) {
+          if (*val == pred.attr_value) {
+            result.push_back(elem);
+          }
+        }
+      }
+      break;
+    case xpath_predicate::type::none:
+      break;
+  }
+  return result;
+}
+
 /// Collect all descendant elements with a given name.
 void collect_descendants_by_name(const xml_element* elem, std::string_view name,
                                  std::vector<const xml_element*>& results) {
@@ -208,8 +334,9 @@ void collect_descendants_by_name(const xml_element* elem, std::string_view name,
 }
 
 /// Evaluate a simple XPath expression and return matching elements.
-/// Supports: "/*" (root children), "//name" (all descendants named 'name'),
-/// "/root/child" (specific path).
+/// Supports: "/*" (root), "//name" (descendants), "//name[pred]" (with
+/// predicate),
+/// "/root/child" (path). Predicates: [n], [last()], [@attr], [@attr='value'].
 auto evaluate_xpath(const xml_element* root, std::string_view xpath)
   -> std::vector<const xml_element*> {
   std::vector<const xml_element*> results;
@@ -221,12 +348,18 @@ auto evaluate_xpath(const xml_element* root, std::string_view xpath)
     results.push_back(root);
     return results;
   }
-  // Handle "//" - descendant axis
+  // Handle "//" - descendant axis with optional predicate
   if (xpath.starts_with("//")) {
-    collect_descendants_by_name(root, xpath.substr(2), results);
+    auto expr = xpath.substr(2);
+    auto [name, pred_str] = split_name_predicate(expr);
+    collect_descendants_by_name(root, name, results);
+    if (not pred_str.empty()) {
+      auto pred = parse_predicate(pred_str);
+      results = apply_predicate(std::move(results), pred);
+    }
     return results;
   }
-  // Handle absolute path like "/root/child/..."
+  // Handle absolute path like "/root/child/..." with optional predicates
   if (xpath.starts_with("/")) {
     auto path = xpath.substr(1);
     std::vector<std::string> parts;
@@ -241,28 +374,35 @@ auto evaluate_xpath(const xml_element* root, std::string_view xpath)
     if (parts.empty()) {
       return results;
     }
-    // Start from root
-    const xml_element* current = root;
-    // First part must match root name
-    if (parts[0] != root->name) {
+    // Start from root - check first part (may have predicate)
+    auto [root_name, root_pred_str] = split_name_predicate(parts[0]);
+    if (root_name != root->name) {
       return results;
     }
+    const xml_element* current = root;
     // Navigate through path
     for (size_t i = 1; i < parts.size(); ++i) {
-      const xml_element* next = nullptr;
+      auto [step_name, step_pred_str] = split_name_predicate(parts[i]);
+      // Collect all matching children
+      std::vector<const xml_element*> matches;
       for (const auto& child : current->children) {
         if (auto* child_elem
             = std::get_if<std::unique_ptr<xml_element>>(&child)) {
-          if ((*child_elem)->name == parts[i]) {
-            next = child_elem->get();
-            break;
+          if ((*child_elem)->name == step_name) {
+            matches.push_back(child_elem->get());
           }
         }
       }
-      if (not next) {
+      // Apply predicate if present
+      if (not step_pred_str.empty()) {
+        auto pred = parse_predicate(step_pred_str);
+        matches = apply_predicate(std::move(matches), pred);
+      }
+      if (matches.empty()) {
         return results;
       }
-      current = next;
+      // For path navigation, take the first match
+      current = matches[0];
     }
     results.push_back(current);
     return results;
