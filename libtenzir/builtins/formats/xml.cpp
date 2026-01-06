@@ -9,9 +9,11 @@
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/collect.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/stable_map.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/generator.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
@@ -318,14 +320,17 @@ auto apply_predicate(std::vector<const xml_element*> elems,
 }
 
 /// Collect all descendant elements with a given name.
-void collect_descendants_by_name(const xml_element* elem, std::string_view name,
-                                 std::vector<const xml_element*>& results) {
+auto collect_descendants_by_name(const xml_element* elem, std::string_view name)
+  -> generator<const xml_element*> {
   if (elem->name == name) {
-    results.push_back(elem);
+    co_yield elem;
   }
   for (const auto& child : elem->children) {
     if (auto* child_elem = std::get_if<std::unique_ptr<xml_element>>(&child)) {
-      collect_descendants_by_name(child_elem->get(), name, results);
+      for (auto* descendant :
+           collect_descendants_by_name(child_elem->get(), name)) {
+        co_yield descendant;
+      }
     }
   }
 }
@@ -349,7 +354,7 @@ auto evaluate_xpath(const xml_element* root, std::string_view xpath)
   if (xpath.starts_with("//")) {
     auto expr = xpath.substr(2);
     auto [name, pred_str] = split_name_predicate(expr);
-    collect_descendants_by_name(root, name, results);
+    results = collect(collect_descendants_by_name(root, name));
     if (not pred_str.empty()) {
       auto pred = parse_predicate(pred_str);
       results = apply_predicate(std::move(results), pred);
