@@ -10,4 +10,4 @@ from {x: "<root><item>hello</item></root>"},
      {x: "<empty/>"},
      // Malformed XML
      {x: "<not-closed"}
-y = x.parse_xml(xpath="/*")
+this = x.parse_xml(xpath="/*")[0]

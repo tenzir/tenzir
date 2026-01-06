@@ -20,4 +20,4 @@ from {
        // Event 4688: A new process has been created
        x: file_contents(f"{env("TENZIR_INPUTS")}/winlog/4688-process-creation.xml")
      }
-y = x.parse_winlog()
+this = x.parse_winlog()

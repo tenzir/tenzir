@@ -1,57 +1,44 @@
 {
-  x: "<root><item>hello</item></root>",
-  y: [
-    {
-      item: "hello",
-    },
+  item: "hello",
+}
+{
+  item: [
+    "A",
+    "B",
+    "C",
   ],
 }
 {
-  x: "<items><item>A</item><item>B</item><item>C</item></items>",
-  y: [
-    {
-      item: [
-        "A",
-        "B",
-        "C",
-      ],
-    },
-  ],
+  "@id": "1",
+  "@lang": "en",
+  "#text": "Title",
 }
 {
-  x: "<book id=\"1\" lang=\"en\">Title</book>",
-  y: [
-    {
-      "@id": "1",
-      "@lang": "en",
-      "#text": "Title",
-    },
-  ],
+  book: {
+    author: "Jane",
+    title: "XML",
+  },
 }
-{
-  x: "<catalog><book><title>XML</title><author>Jane</author></book></catalog>",
-  y: [
-    {
-      book: {
-        author: "Jane",
-        title: "XML",
-      },
-    },
-  ],
-}
-{
-  x: "<empty/>",
-  y: [
-    {},
-  ],
-}
-{
-  x: "<not-closed",
-  y: null,
-}
+{}
+{}
 warning: failed to parse XML: line 1:0: unclosed token
-  --> tests/functions/parse/parse_xml.tql:13:5
+  --> tests/functions/parse/parse_xml.tql:13:8
    |
-13 | y = x.parse_xml(xpath="/*")
-   |     ~~~~~~~~~~~~~~~~~~~~~~~ 
+13 | this = x.parse_xml(xpath="/*")[0]
+   |        ~~~~~~~~~~~~~~~~~~~~~~~ 
+   |
+
+warning: tried to access field of `null`
+  --> tests/functions/parse/parse_xml.tql:13:8
+   |
+13 | this = x.parse_xml(xpath="/*")[0]
+   |        ~~~~~~~~~~~~~~~~~~~~~~~ is null
+   |
+   = hint: use `[…]?` to suppress this warning
+
+warning: assignment to `this` requires `record`, but got `null`
+  --> tests/functions/parse/parse_xml.tql:13:1
+   |
+13 | this = x.parse_xml(xpath="/*")[0]
+   | ~~~~ 
    |

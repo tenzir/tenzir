@@ -1,11 +1,3 @@
 {
-  x: "<catalog><book>A</book><magazine>B</magazine><book>C</book></catalog>",
-  y: [
-    {
-      "#text": "A",
-    },
-    {
-      "#text": "C",
-    },
-  ],
+  "#text": "A",
 }

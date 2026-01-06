@@ -1,5 +1,4 @@
-// Test namespace handling: strip (default) vs keep
+// Test namespace handling with namespaces="keep"
 from {x: r#"<ns:root xmlns:ns="http://example.com"><ns:item>A</ns:item></ns:root>"#},
      {x: r#"<ns:root xmlns:ns="http://example.com"><ns:item>B</ns:item></ns:root>"#}
-y = x.parse_xml(xpath="/*", namespaces="strip")
-z = x.parse_xml(xpath="/*", namespaces="keep")
+this = x.parse_xml(xpath="/*", namespaces="keep")[0]

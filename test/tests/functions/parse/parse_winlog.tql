@@ -69,4 +69,4 @@ from {
      },
      // Malformed XML
      {x: "<Event><System>"}
-y = x.parse_winlog()
+this = x.parse_winlog()
