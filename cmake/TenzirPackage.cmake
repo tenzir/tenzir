@@ -18,8 +18,8 @@ endif ()
 # simplifies a re-addition if it becomes necessary in the future.
 #set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
 
-# Lowercase fits better for file names and such.
-set(CPACK_PACKAGE_NAME "tenzir")
+# Capitalized for display purposes; file names are handled separately.
+set(CPACK_PACKAGE_NAME "Tenzir")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
 string(REGEX REPLACE "^v" "" CPACK_PACKAGE_VERSION "${TENZIR_VERSION}")
@@ -63,8 +63,15 @@ endif ()
 set(CPACK_PACKAGE_DIRECTORY "package")
 set(CPACK_VERBATIM_VARIABLES ON)
 
-# TODO: Must be html files for productbuild.
-if (NOT APPLE)
+# productbuild requires HTML files for welcome, readme, and license.
+if (APPLE)
+  set(CPACK_RESOURCE_FILE_WELCOME
+      "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/welcome.html")
+  set(CPACK_RESOURCE_FILE_README
+      "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/readme.html")
+  set(CPACK_RESOURCE_FILE_LICENSE
+      "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/license.html")
+else ()
   set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
   set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 endif ()
@@ -106,10 +113,7 @@ endif ()
 # and development Debian packages.
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 
-# Enable the component-based packages for specified Generators.
-# We only opt-in for the `DEB` and `ARCHIVE` Generators because those are the
-# ones we support, and the list of available Generators can change with future
-# releases of CMake.
+# Enable the component-based packages for the Generators we user.
 # https://cmake.org/cmake/help/latest/module/CPackComponent.html#variable:CPACK_%3CGENNAME%3E_COMPONENT_INSTALL
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
