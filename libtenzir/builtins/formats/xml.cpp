@@ -53,12 +53,12 @@ struct xml_options {
 };
 
 /// Strip the namespace prefix from a name (e.g., "ns:item" -> "item").
-auto strip_namespace(std::string_view name) -> std::string {
+auto strip_namespace(std::string_view name) -> std::string_view {
   auto pos = name.find(':');
   if (pos != std::string_view::npos) {
-    return std::string{name.substr(pos + 1)};
+    return name.substr(pos + 1);
   }
-  return std::string{name};
+  return name;
 }
 
 /// SAX handler state for building a DOM from XML.
@@ -72,7 +72,7 @@ struct sax_state {
 
   auto process_name(std::string_view name) -> std::string {
     if (strip_namespaces) {
-      return strip_namespace(name);
+      return std::string{strip_namespace(name)};
     }
     return std::string{name};
   }
