@@ -1,0 +1,7 @@
+// KEY elements alongside regular elements
+from {xml: r#"<record>
+  <KEY name="id">123</KEY>
+  <KEY name="type">alert</KEY>
+  <status>active</status>
+</record>"#}
+this = xml.parse_xml(xpath="/record", key_attr="name")

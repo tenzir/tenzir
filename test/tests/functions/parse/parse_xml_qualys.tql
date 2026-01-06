@@ -1,0 +1,66 @@
+// Test XPath predicates with Qualys-style vulnerability report structure
+from {xml: r#"<?xml version="1.0" encoding="UTF-8" ?>
+<DATALIST>
+  <HEADER>
+    <NAME>Vulnerabilities</NAME>
+    <GENERATION_DATETIME>2024-01-15 12:00:00 (GMT+0000)</GENERATION_DATETIME>
+    <COMPANY_INFO>
+      <NAME>ACME Corporation</NAME>
+      <CITY>San Francisco</CITY>
+      <COUNTRY>United States</COUNTRY>
+    </COMPANY_INFO>
+  </HEADER>
+  <LIST>
+    <NB_RECORDS>5</NB_RECORDS>
+    <RECORD>
+      <KEY name="QID">10001</KEY>
+      <KEY name="CVE_ID">CVE-2024-1234</KEY>
+      <KEY name="TITLE">Example SQL Injection Vulnerability</KEY>
+      <KEY name="SEVERITY">Vulnerability - level 4</KEY>
+      <KEY name="CATEGORY">Web Application</KEY>
+      <KEY name="CVSS_BASE">7.5</KEY>
+    </RECORD>
+    <RECORD>
+      <KEY name="QID">10002</KEY>
+      <KEY name="CVE_ID">CVE-2024-5678</KEY>
+      <KEY name="TITLE">Example XSS Vulnerability</KEY>
+      <KEY name="SEVERITY">Vulnerability - level 3</KEY>
+      <KEY name="CATEGORY">Web Application</KEY>
+      <KEY name="CVSS_BASE">5.4</KEY>
+    </RECORD>
+    <RECORD>
+      <KEY name="QID">10003</KEY>
+      <KEY name="CVE_ID">CVE-2024-9012</KEY>
+      <KEY name="TITLE">Example Buffer Overflow</KEY>
+      <KEY name="SEVERITY">Vulnerability - level 5</KEY>
+      <KEY name="CATEGORY">Operating System</KEY>
+      <KEY name="CVSS_BASE">9.8</KEY>
+    </RECORD>
+    <RECORD>
+      <KEY name="QID">10004</KEY>
+      <KEY name="CVE_ID">CVE-2024-3456</KEY>
+      <KEY name="TITLE">Example Path Traversal</KEY>
+      <KEY name="SEVERITY">Vulnerability - level 3</KEY>
+      <KEY name="CATEGORY">Web Application</KEY>
+      <KEY name="CVSS_BASE">6.5</KEY>
+    </RECORD>
+    <RECORD>
+      <KEY name="QID">10005</KEY>
+      <KEY name="CVE_ID">CVE-2024-7890</KEY>
+      <KEY name="TITLE">Example Privilege Escalation</KEY>
+      <KEY name="SEVERITY">Vulnerability - level 4</KEY>
+      <KEY name="CATEGORY">Operating System</KEY>
+      <KEY name="CVSS_BASE">8.8</KEY>
+    </RECORD>
+  </LIST>
+</DATALIST>"#}
+// Get report metadata
+header = xml.parse_xml(xpath="//HEADER")
+// Get first and last vulnerability records
+first_vuln = xml.parse_xml(xpath="//RECORD[1]")
+last_vuln = xml.parse_xml(xpath="//RECORD[last()]")
+// Get all QID values using attribute predicate
+qids = xml.parse_xml(xpath="//KEY[@name='QID']")
+// Get only severity entries
+severities = xml.parse_xml(xpath="//KEY[@name='SEVERITY']")
+select header, first_vuln, last_vuln, qids, severities

@@ -1,0 +1,6 @@
+// Event 4627: Group membership information
+// Source: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4627
+from_file f"{env("TENZIR_INPUTS")}/winlog/4627-group-membership.xml" {
+  read_all
+}
+this = data.parse_winlog()

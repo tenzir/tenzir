@@ -1,0 +1,3 @@
+// Test custom attr_prefix (empty removes @ prefix)
+from {x: r#"<item id="1">value</item>"#}
+this = x.parse_xml(xpath="/*", attr_prefix="")[0]

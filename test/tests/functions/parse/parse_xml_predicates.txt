@@ -1,0 +1,41 @@
+{
+  first: {
+    "@id": "1",
+    "@type": "a",
+    "#text": "first",
+  },
+  last: {
+    "@id": "3",
+    "@type": "b",
+    "#text": "third",
+  },
+  with_id: [
+    {
+      "@id": "1",
+      "@type": "a",
+      "#text": "first",
+    },
+    {
+      "@id": "2",
+      "@type": "a",
+      "#text": "second",
+    },
+    {
+      "@id": "3",
+      "@type": "b",
+      "#text": "third",
+    },
+  ],
+  type_a: [
+    {
+      "@id": "1",
+      "@type": "a",
+      "#text": "first",
+    },
+    {
+      "@id": "2",
+      "@type": "a",
+      "#text": "second",
+    },
+  ],
+}

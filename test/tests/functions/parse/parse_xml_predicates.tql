@@ -1,0 +1,11 @@
+// Test XPath predicates: position, last(), attribute existence, attribute value
+from {xml: r#"<root>
+  <item id="1" type="a">first</item>
+  <item id="2" type="a">second</item>
+  <item id="3" type="b">third</item>
+</root>"#}
+first = xml.parse_xml(xpath="//item[1]")
+last = xml.parse_xml(xpath="//item[last()]")
+with_id = xml.parse_xml(xpath="//item[@id]")
+type_a = xml.parse_xml(xpath="//item[@type='a']")
+select first, last, with_id, type_a

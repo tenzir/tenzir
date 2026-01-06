@@ -1,0 +1,22 @@
+{}
+warning: failed to parse XML: maximum nesting depth of 256 exceeded
+ --> tests/functions/parse/parse_xml_depth.tql:3:8
+  |
+3 | this = x.parse_xml(xpath="/*")[0]
+  |        ~~~~~~~~~~~~~~~~~~~~~~~ 
+  |
+
+warning: tried to access field of `null`
+ --> tests/functions/parse/parse_xml_depth.tql:3:8
+  |
+3 | this = x.parse_xml(xpath="/*")[0]
+  |        ~~~~~~~~~~~~~~~~~~~~~~~ is null
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: assignment to `this` requires `record`, but got `null`
+ --> tests/functions/parse/parse_xml_depth.tql:3:1
+  |
+3 | this = x.parse_xml(xpath="/*")[0]
+  | ~~~~ 
+  |

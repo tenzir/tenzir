@@ -1,0 +1,12 @@
+{
+  records: [
+    {
+      QID: "10001",
+      TITLE: "Vuln A",
+    },
+    {
+      QID: "10002",
+      TITLE: "Vuln B",
+    },
+  ],
+}
