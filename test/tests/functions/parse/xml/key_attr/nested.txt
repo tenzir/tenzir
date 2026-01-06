@@ -1,6 +1,6 @@
 {
   details: {
-    cvss: "9.8",
     severity: "High",
+    cvss: "9.8",
   },
 }

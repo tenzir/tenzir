@@ -10,13 +10,13 @@
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/stable_map.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <expat.h>
-#include <map>
 #include <memory>
 #include <ranges>
 #include <stack>
@@ -467,7 +467,7 @@ void element_value_to_data(ObjectBuilder field, const xml_element& elem,
     }
   }
   // Process children (recursively, so key_attr applies at all levels)
-  std::map<std::string, std::vector<const xml_node*>> children_by_name;
+  detail::stable_map<std::string, std::vector<const xml_node*>> children_by_name;
   std::vector<const std::string*> text_children;
   for (const auto& child : elem.children) {
     if (auto* text = try_as<std::string>(child)) {
@@ -553,7 +553,7 @@ void element_to_record(RecordBuilder record, const xml_element& elem,
     record.field(field_name).data(value);
   }
   // Group children by name (or key_attr value if present)
-  std::map<std::string, std::vector<const xml_node*>> children_by_key;
+  detail::stable_map<std::string, std::vector<const xml_node*>> children_by_key;
   std::vector<const std::string*> text_children;
   for (const auto& child : elem.children) {
     if (auto* text = try_as<std::string>(child)) {

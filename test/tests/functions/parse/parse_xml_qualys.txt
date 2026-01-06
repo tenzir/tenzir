@@ -1,12 +1,12 @@
 {
   header: {
+    NAME: "Vulnerabilities",
+    GENERATION_DATETIME: "2024-01-15 12:00:00 (GMT+0000)",
     COMPANY_INFO: {
+      NAME: "ACME Corporation",
       CITY: "San Francisco",
       COUNTRY: "United States",
-      NAME: "ACME Corporation",
     },
-    GENERATION_DATETIME: "2024-01-15 12:00:00 (GMT+0000)",
-    NAME: "Vulnerabilities",
   },
   first_vuln: {
     KEY: [

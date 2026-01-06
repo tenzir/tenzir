@@ -1,29 +1,29 @@
 {
   System: {
-    Channel: "Security",
-    Computer: "WIN-GG82ULGC9GO",
-    Correlation: {
-      ActivityID: "{00D66690-1CDF-0000-AC66-D600DF1CD101}",
-    },
-    EventID: "4624",
-    EventRecordID: "211",
-    Execution: {
-      ProcessID: "716",
-      ThreadID: "760",
-    },
-    Keywords: "0x8020000000000000",
-    Level: "0",
-    Opcode: "0",
     Provider: {
       Name: "Microsoft-Windows-Security-Auditing",
       Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
     },
-    Security: null,
+    EventID: "4624",
+    Version: "2",
+    Level: "0",
     Task: "12544",
+    Opcode: "0",
+    Keywords: "0x8020000000000000",
     TimeCreated: {
       SystemTime: "2015-11-12T00:24:35.079785200Z",
     },
-    Version: "2",
+    EventRecordID: "211",
+    Correlation: {
+      ActivityID: "{00D66690-1CDF-0000-AC66-D600DF1CD101}",
+    },
+    Execution: {
+      ProcessID: "716",
+      ThreadID: "760",
+    },
+    Channel: "Security",
+    Computer: "WIN-GG82ULGC9GO",
+    Security: null,
   },
   EventData: {
     SubjectUserSid: "S-1-5-18",
@@ -57,28 +57,28 @@
 }
 {
   System: {
-    Channel: "Security",
-    Computer: "DC01.contoso.local",
-    Correlation: null,
-    EventID: "4625",
-    EventRecordID: "229977",
-    Execution: {
-      ProcessID: "516",
-      ThreadID: "3240",
-    },
-    Keywords: "0x8010000000000000",
-    Level: "0",
-    Opcode: "0",
     Provider: {
       Name: "Microsoft-Windows-Security-Auditing",
       Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
     },
-    Security: null,
+    EventID: "4625",
+    Version: "0",
+    Level: "0",
     Task: "12546",
+    Opcode: "0",
+    Keywords: "0x8010000000000000",
     TimeCreated: {
       SystemTime: "2015-09-08T22:54:54.962511700Z",
     },
-    Version: "0",
+    EventRecordID: "229977",
+    Correlation: null,
+    Execution: {
+      ProcessID: "516",
+      ThreadID: "3240",
+    },
+    Channel: "Security",
+    Computer: "DC01.contoso.local",
+    Security: null,
   },
   EventData: {
     SubjectUserSid: "S-1-5-18",
@@ -106,30 +106,30 @@
 }
 {
   System: {
-    Channel: "Security",
-    Computer: "WIN-GG82ULGC9GO.contoso.local",
-    Correlation: {
-      ActivityID: "{913FBE70-1CE6-0000-67BF-3F91E61CD101}",
-    },
-    EventID: "4627",
-    EventRecordID: "3081",
-    Execution: {
-      ProcessID: "736",
-      ThreadID: "808",
-    },
-    Keywords: "0x8020000000000000",
-    Level: "0",
-    Opcode: "0",
     Provider: {
       Name: "Microsoft-Windows-Security-Auditing",
       Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
     },
-    Security: null,
+    EventID: "4627",
+    Version: "0",
+    Level: "0",
     Task: "12554",
+    Opcode: "0",
+    Keywords: "0x8020000000000000",
     TimeCreated: {
       SystemTime: "2015-11-12T03:51:25.843673000Z",
     },
-    Version: "0",
+    EventRecordID: "3081",
+    Correlation: {
+      ActivityID: "{913FBE70-1CE6-0000-67BF-3F91E61CD101}",
+    },
+    Execution: {
+      ProcessID: "736",
+      ThreadID: "808",
+    },
+    Channel: "Security",
+    Computer: "WIN-GG82ULGC9GO.contoso.local",
+    Security: null,
   },
   EventData: {
     SubjectUserSid: "S-1-0-0",
@@ -148,28 +148,28 @@
 }
 {
   System: {
-    Channel: "Security",
-    Computer: "DC01.contoso.local",
-    Correlation: null,
-    EventID: "4648",
-    EventRecordID: "233200",
-    Execution: {
-      ProcessID: "516",
-      ThreadID: "1116",
-    },
-    Keywords: "0x8020000000000000",
-    Level: "0",
-    Opcode: "0",
     Provider: {
       Name: "Microsoft-Windows-Security-Auditing",
       Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
     },
-    Security: null,
+    EventID: "4648",
+    Version: "0",
+    Level: "0",
     Task: "12544",
+    Opcode: "0",
+    Keywords: "0x8020000000000000",
     TimeCreated: {
       SystemTime: "2015-09-10T02:54:50.771459000Z",
     },
-    Version: "0",
+    EventRecordID: "233200",
+    Correlation: null,
+    Execution: {
+      ProcessID: "516",
+      ThreadID: "1116",
+    },
+    Channel: "Security",
+    Computer: "DC01.contoso.local",
+    Security: null,
   },
   EventData: {
     SubjectUserSid: "S-1-5-21-3457937927-2839227994-823803824-1104",
@@ -190,28 +190,28 @@
 }
 {
   System: {
-    Channel: "Security",
-    Computer: "WIN-GG82ULGC9GO.contoso.local",
-    Correlation: null,
-    EventID: "4688",
-    EventRecordID: "2814",
-    Execution: {
-      ProcessID: "4",
-      ThreadID: "400",
-    },
-    Keywords: "0x8020000000000000",
-    Level: "0",
-    Opcode: "0",
     Provider: {
       Name: "Microsoft-Windows-Security-Auditing",
       Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
     },
-    Security: null,
+    EventID: "4688",
+    Version: "2",
+    Level: "0",
     Task: "13312",
+    Opcode: "0",
+    Keywords: "0x8020000000000000",
     TimeCreated: {
       SystemTime: "2015-11-12T02:24:52.377352500Z",
     },
-    Version: "2",
+    EventRecordID: "2814",
+    Correlation: null,
+    Execution: {
+      ProcessID: "4",
+      ThreadID: "400",
+    },
+    Channel: "Security",
+    Computer: "WIN-GG82ULGC9GO.contoso.local",
+    Security: null,
   },
   EventData: {
     SubjectUserSid: "S-1-5-18",

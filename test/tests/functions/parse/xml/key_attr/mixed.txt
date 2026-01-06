@@ -1,5 +1,5 @@
 {
   id: "123",
-  status: "active",
   type: "alert",
+  status: "active",
 }

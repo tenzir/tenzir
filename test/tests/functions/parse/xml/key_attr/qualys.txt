@@ -1,18 +1,18 @@
 {
   first: {
-    CVE: "CVE-2024-1234",
     QID: "10001",
+    CVE: "CVE-2024-1234",
     SEVERITY: "Critical",
   },
   all: [
     {
-      CVE: "CVE-2024-1234",
       QID: "10001",
+      CVE: "CVE-2024-1234",
       SEVERITY: "Critical",
     },
     {
-      CVE: "CVE-2024-5678",
       QID: "10002",
+      CVE: "CVE-2024-5678",
       SEVERITY: "Medium",
     },
   ],

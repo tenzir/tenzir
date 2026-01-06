@@ -1,26 +1,26 @@
 {
   System: {
-    Channel: "Security",
-    Computer: "WORKSTATION1",
+    Provider: {
+      Name: "Microsoft-Windows-Security-Auditing",
+      Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
+    },
     EventID: "4624",
+    Version: "2",
+    Level: "0",
+    Task: "12544",
+    Opcode: "0",
+    Keywords: "0x8020000000000000",
+    TimeCreated: {
+      SystemTime: "2024-01-15T10:30:00.000Z",
+    },
     EventRecordID: "12345",
     Execution: {
       ProcessID: "500",
       ThreadID: "520",
     },
-    Keywords: "0x8020000000000000",
-    Level: "0",
-    Opcode: "0",
-    Provider: {
-      Name: "Microsoft-Windows-Security-Auditing",
-      Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
-    },
+    Channel: "Security",
+    Computer: "WORKSTATION1",
     Security: null,
-    Task: "12544",
-    TimeCreated: {
-      SystemTime: "2024-01-15T10:30:00.000Z",
-    },
-    Version: "2",
   },
   EventData: {
     SubjectUserSid: "S-1-5-18",
@@ -30,22 +30,22 @@
 }
 {
   System: {
-    Channel: "Application",
-    Computer: "SERVER1",
-    EventID: "1000",
     Provider: {
       Name: "Application",
     },
+    EventID: "1000",
+    Channel: "Application",
+    Computer: "SERVER1",
   },
 }
 {
   System: {
-    Channel: "Application",
-    Computer: "SERVER1",
-    EventID: "1001",
     Provider: {
       Name: "Application",
     },
+    EventID: "1001",
+    Channel: "Application",
+    Computer: "SERVER1",
   },
   EventData: [
     "MyApp.exe",
@@ -54,12 +54,12 @@
 }
 {
   System: {
-    Channel: "Application",
-    Computer: "SERVER2",
-    EventID: "1002",
     Provider: {
       Name: "Application",
     },
+    EventID: "1002",
+    Channel: "Application",
+    Computer: "SERVER2",
   },
   UserData: {
     EventXML: {
