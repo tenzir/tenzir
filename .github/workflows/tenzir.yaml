@@ -407,8 +407,6 @@ jobs:
             container: null
             name: macOS
             compiler: Clang
-            cc: clang
-            cxx: clang++
             cmake-extra-flags: |
               -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
               -DTENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL=ON \
@@ -421,8 +419,6 @@ jobs:
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
-      CC: ${{ matrix.tenzir.cc }}
-      CXX: ${{ matrix.tenzir.cxx }}
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
@@ -476,15 +472,19 @@ jobs:
       - name: Setup Homebrew Clang and Install Dependencies (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
         run: |
+          # Use CommandLineTools SDK instead of Xcode's SDK for LLVM compatibility
+          sudo xcode-select --switch /Library/Developer/CommandLineTools
           # Setup Homebrew Clang
-          brew install llvm@20
-          llvm_root="$(brew --prefix llvm@20)"
+          brew install llvm
+          llvm_root="$(brew --prefix llvm)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
-          echo "CC=${llvm_root}/bin/clang" >> $GITHUB_ENV
-          echo "CXX=${llvm_root}/bin/clang++" >> $GITHUB_ENV
-          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
-          echo "CXXFLAGS=-nostdinc++ -isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
-          echo "LDFLAGS=-L${llvm_root}/lib/c++ -Wl,-rpath,${llvm_root}/lib/c++" >> $GITHUB_ENV
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "BUILD_DIR=build/clang/relwithdebinfo" >> $GITHUB_ENV
+            echo "CMAKE_PRESET=macos-clang-relwithdebinfo" >> $GITHUB_ENV
+          else
+            echo "BUILD_DIR=build/clang/release" >> $GITHUB_ENV
+            echo "CMAKE_PRESET=macos-clang-release" >> $GITHUB_ENV
+          fi
           # Install all other dependencies.
           ./scripts/macOS/install-dev-dependencies.sh
       - name: Setup Python (macOS)
@@ -520,8 +520,6 @@ jobs:
           python3 --version
           python3 -m pip --version
           bash --version
-          "$CC" --version
-          "$CXX" --version
           ccache --version
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
@@ -531,8 +529,7 @@ jobs:
           # a warning. We accept this drawback because the package we generate
           # here is built specifically as input for the plugin CI jobs and not
           # suitable for general use.
-          cmake -B "$BUILD_DIR" \
-            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
+          cmake --preset "${CMAKE_PRESET}" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
