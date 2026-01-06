@@ -41,6 +41,25 @@ auto array = check(builder.Finish());
 
 `check()` captures source location for better error messages.
 
+## Narrowing Casts
+
+Use `detail::narrow<T>()` for checked narrowing casts that panic if the value
+changed:
+
+```cpp
+#include <tenzir/detail/narrow.hpp>
+
+// Checked: panics if xml.size() > INT_MAX
+auto len = detail::narrow<int>(xml.size());
+
+// Unchecked: use only when you're certain the value fits
+auto len = detail::narrow_cast<int>(xml.size());
+```
+
+Prefer `detail::narrow<T>()` over `static_cast<T>()` when narrowing to catch
+overflow bugs. Use `detail::narrow_cast<T>()` only when the narrowing is
+provably safe.
+
 ## Return Types
 
 - `failure_or<T>` — For functions that emit diagnostics

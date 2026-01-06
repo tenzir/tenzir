@@ -9,6 +9,7 @@
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/detail/narrow.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
@@ -162,7 +163,7 @@ auto parse_xml_dom(std::string_view xml, bool strip_namespaces)
   XML_SetElementHandler(parser.get(), start_element, end_element);
   XML_SetCharacterDataHandler(parser.get(), character_data);
   auto status = XML_Parse(parser.get(), xml.data(),
-                          static_cast<int>(xml.size()), XML_TRUE);
+                          detail::narrow<int>(xml.size()), XML_TRUE);
   if (status == XML_STATUS_ERROR) {
     auto line = XML_GetCurrentLineNumber(parser.get());
     auto column = XML_GetCurrentColumnNumber(parser.get());
