@@ -1170,7 +1170,7 @@ struct exec_node_state {
                        op->name(), err);
           TENZIR_ASSERT(issue_demand_inflight);
           issue_demand_inflight = false;
-          if (err and err != caf::sec::request_receiver_down
+          if (err.valid() and err != caf::sec::request_receiver_down
               and err != caf::exit_reason::remote_link_unreachable) {
             diagnostic::error(err)
               .note("{} {} failed to pull from previous execution node", *self,
@@ -1300,7 +1300,7 @@ struct exec_node_state {
 
   void handle_exit_msg(const caf::exit_msg& msg) {
     if (not instance) {
-      if (msg.reason) {
+      if (msg.reason.valid()) {
         self->quit(msg.reason);
       }
     }
@@ -1337,7 +1337,7 @@ struct exec_node_state {
       TENZIR_DEBUG("{} {} got exit message from previous execution node with "
                    "address {}: {}",
                    *self, op->name(), msg.source, msg.reason);
-      if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
+      if (msg.reason.valid() and msg.reason != caf::exit_reason::unreachable) {
         on_error(msg.reason);
         return;
       }

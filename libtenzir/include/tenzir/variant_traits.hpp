@@ -15,6 +15,7 @@
 #include <caf/detail/is_complete.hpp>
 #include <caf/detail/pretty_type_name.hpp>
 
+#include <functional>
 #include <utility>
 #include <variant>
 

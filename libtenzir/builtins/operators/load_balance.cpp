@@ -201,7 +201,7 @@ auto make_load_balancer(
                     has_terminal, is_hidden, self->state().pipeline_id);
     self->monitor(
       executor, [self, source = executor->address()](const caf::error& err) {
-        if (err) {
+        if (err.valid()) {
           diagnostic::error(err).emit(self->state().diagnostics);
         }
         auto it = std::ranges::find(self->state().executors, source,

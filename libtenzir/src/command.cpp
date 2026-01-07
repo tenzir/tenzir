@@ -359,7 +359,8 @@ parse(const command& root, command::argument_iterator first,
   invocation result;
   const command* target = nullptr;
   if (auto err = parse_impl(result, root, sanitized_arguments.begin(),
-                            sanitized_arguments.end(), &target)) {
+                            sanitized_arguments.end(), &target);
+      err.valid()) {
     render_parse_error(*target, result, err, std::cerr);
     return ec::silent;
   }

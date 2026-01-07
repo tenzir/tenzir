@@ -421,7 +421,7 @@ auto set(easy& handle, chunk_ptr chunk) -> caf::error {
   TENZIR_ASSERT(chunk);
   TENZIR_ASSERT(chunk->size() > 0);
   auto size = detail::narrow_cast<long>(chunk->size());
-  if (auto err = to_error(handle.set_infilesize(size))) {
+  if (auto err = to_error(handle.set_infilesize(size)); err.valid()) {
     return err;
   }
   auto on_read = [chunk](std::span<std::byte> buffer) mutable -> size_t {

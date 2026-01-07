@@ -77,13 +77,13 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   auto lhs_bits = lhs.empty() ? lhs_bits_type{} : *lhs_begin++;
   auto rhs_bits = rhs.empty() ? rhs_bits_type{} : *rhs_begin++;
   // Iterate.
-  while (!lhs_bits.empty() && !rhs_bits.empty()) {
+  while (! lhs_bits.empty() && ! rhs_bits.empty()) {
     auto data = op(lhs_bits.data(), rhs_bits.data());
-    if (lhs_bits.is_run() && !rhs_bits.is_run()) {
+    if (lhs_bits.is_run() && ! rhs_bits.is_run()) {
       result.append(result_bits_type{data, rhs_bits.size()});
       lhs_bits = drop(lhs_bits, rhs_bits.size());
       rhs_bits = {};
-    } else if (!lhs_bits.is_run() && rhs_bits.is_run()) {
+    } else if (! lhs_bits.is_run() && rhs_bits.is_run()) {
       result.append(result_bits_type{data, lhs_bits.size()});
       rhs_bits = drop(rhs_bits, lhs_bits.size());
       lhs_bits = {};
@@ -97,13 +97,13 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
     if (lhs_bits.empty()) {
       if (lhs_begin != lhs_end) {
         lhs_bits = *lhs_begin++;
-        TENZIR_ASSERT(!lhs_bits.empty());
+        TENZIR_ASSERT(! lhs_bits.empty());
       }
     }
     if (rhs_bits.empty()) {
       if (rhs_begin != rhs_end) {
         rhs_bits = *rhs_begin++;
-        TENZIR_ASSERT(!rhs_bits.empty());
+        TENZIR_ASSERT(! rhs_bits.empty());
       }
     }
   }
@@ -112,16 +112,20 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   // we woudn't fill up the bitmap, we would end up with a shorter bitmap that
   // doesn't reflect the true result size.
   if constexpr (FillLHS) {
-    if (!lhs_bits.empty())
+    if (! lhs_bits.empty()) {
       result.append(lhs_bits);
-    while (lhs_begin != lhs_end)
+    }
+    while (lhs_begin != lhs_end) {
       result.append(*lhs_begin++);
+    }
   }
   if constexpr (FillRHS) {
-    if (!rhs_bits.empty())
+    if (! rhs_bits.empty()) {
       result.append(rhs_bits);
-    while (rhs_begin != rhs_end)
+    }
+    while (rhs_begin != rhs_end) {
       result.append(*rhs_begin++);
+    }
   }
   auto max_size = std::max(lhs.size(), rhs.size());
   TENZIR_ASSERT(max_size >= result.size());
@@ -157,17 +161,19 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
     return lhs.bitmap->size() > rhs.bitmap->size();
   };
   std::priority_queue<element, std::vector<element>, decltype(cmp)> queue{cmp};
-  for (; begin != end; ++begin)
+  for (; begin != end; ++begin) {
     queue.emplace(&*begin);
+  }
   // Evaluate bitmaps.
-  while (!queue.empty()) {
+  while (! queue.empty()) {
     auto lhs = queue.top();
     queue.pop();
-    if (queue.empty())
+    if (queue.empty()) {
       // When our input sequence consists of a single bitmap, we end up with an
       // element that has no data. Otherwise we would have had a least one
       // intermediary result, which would be stored as data.
       return lhs.data ? std::move(*lhs.data) : *lhs.bitmap;
+    }
     auto rhs = queue.top();
     queue.pop();
     queue.emplace(op(*lhs.bitmap, *rhs.bitmap));
@@ -253,8 +259,9 @@ rank(const Bitmap& bm, typename Bitmap::size_type i) {
   auto result = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   for (auto b : bit_range(bm)) {
-    if (i >= n && i < n + b.size())
+    if (i >= n && i < n + b.size()) {
       return result + rank<Bit>(b, i - n);
+    }
     result += Bit ? rank<1>(b) : b.size() - rank<1>(b);
     n += b.size();
   }
@@ -287,16 +294,18 @@ select(const Bitmap& bm, typename Bitmap::size_type i) {
     auto last = Bitmap::word_type::npos;
     for (auto b : bit_range(bm)) {
       auto l = find_last(b);
-      if (l != Bitmap::word_type::npos)
+      if (l != Bitmap::word_type::npos) {
         last = n + l;
+      }
       n += b.size();
     }
     return last;
   }
   for (auto b : bit_range(bm)) {
     auto count = Bit ? rank<1>(b) : b.size() - rank<1>(b);
-    if (rnk + count >= i)
+    if (rnk + count >= i) {
       return n + select<Bit>(b, i - rnk); // Last sequence.
+    }
     rnk += count;
     n += b.size();
   }
@@ -323,21 +332,21 @@ public:
   /// @returns The current bit sequence.
   /// @pre `!done()`
   [[nodiscard]] const bits_type& bits() const {
-    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(! done());
     return rng_.get();
   }
 
   /// @returns The current position in the range.
   /// @pre `!done()`
   [[nodiscard]] id offset() const {
-    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(! done());
     return n_ + i_;
   }
 
   /// @returns The bit value at the current position.
   /// @pre `!done()`
   [[nodiscard]] bool value() const {
-    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(! done());
     return bits()[i_];
   }
 
@@ -346,7 +355,7 @@ public:
   /// Retrieves the current position in the range.
   /// @pre `!done()`
   [[nodiscard]] size_type get() const {
-    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(! done());
     return offset();
   }
 
@@ -357,7 +366,7 @@ public:
 
   /// Advances to the next bit in the range.
   void next() {
-    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(! done());
     ++i_;
     if (i_ == bits().size()) {
       n_ += bits().size();
@@ -374,7 +383,7 @@ public:
   void next(size_type k) {
     TENZIR_ASSERT(k > 0);
     TENZIR_ASSERT(i_ != npos);
-    TENZIR_ASSERT(!bits().empty());
+    TENZIR_ASSERT(! bits().empty());
     auto remaining_bits = bits().size() - i_ - 1;
     if (k <= remaining_bits) {
       i_ += k - 1;
@@ -382,7 +391,7 @@ public:
       return;
     }
     for (k -= remaining_bits, i_ = npos, n_ += bits().size(), rng_.next();
-         !rng_.done() && k > 0;
+         ! rng_.done() && k > 0;
          k -= bits().size(), n_ += bits().size(), rng_.next()) {
       if (k <= bits().size()) {
         i_ = k - 1;
@@ -400,8 +409,9 @@ public:
     while (i_ == npos) {
       n_ += bits().size();
       rng_.next();
-      if (rng_.done())
+      if (rng_.done()) {
         return;
+      }
       i_ = find_first<Bit>(bits());
     }
   }
@@ -423,12 +433,13 @@ public:
       return;
     }
     for (k -= remaining, i_ = npos, n_ += bits().size(), rng_.next();
-         !rng_.done(); n_ += bits().size(), rng_.next()) {
+         ! rng_.done(); n_ += bits().size(), rng_.next()) {
       TENZIR_ASSERT(k > 0);
       if (k <= bits().size()) {
         i_ = select<Bit>(bits(), k);
-        if (i_ != npos)
+        if (i_ != npos) {
           break;
+        }
       }
       k -= rank<Bit>(bits());
     }
@@ -439,15 +450,17 @@ public:
   /// @pre `!done() && x >= offset()`
   template <bool Bit = true>
   void select_from(id x) {
-    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(! done());
     TENZIR_ASSERT(x >= offset());
     if (x > offset()) {
       next(x - offset());
-      if (done())
+      if (done()) {
         return;
+      }
     }
-    if (value() != Bit)
+    if (value() != Bit) {
       select<Bit>();
+    }
   }
 
 private:
@@ -470,8 +483,9 @@ template <bool Bit, class BitRange>
 class select_range : public detail::range_facade<select_range<Bit, BitRange>> {
 public:
   select_range(BitRange rng) : rng_{std::move(rng)} {
-    if (!rng_.done() && rng_.bits()[0] != Bit)
+    if (! rng_.done() && rng_.bits()[0] != Bit) {
       next();
+    }
   }
 
   [[nodiscard]] auto get() const {
@@ -514,13 +528,15 @@ auto select(const IDs& ids) {
 template <bool Bit = true, class Bitmap>
 auto select_runs(const Bitmap& bitmap) -> generator<id_range> {
   auto rng = each(bitmap);
-  if (rng.value() != Bit)
+  if (rng.value() != Bit) {
     rng.template select<Bit>();
+  }
   while (true) {
-    if (rng.done())
+    if (rng.done()) {
       co_return;
+    }
     auto first = rng.get();
-    rng.template select<!Bit>();
+    rng.template select<! Bit>();
     if (rng.done()) {
       co_yield {first, bitmap.size()};
       co_return;
@@ -558,17 +574,20 @@ select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
     // Make the ID range catch up if it's behind.
     if (rng.get() < first) {
       rng.next_from(first);
-      if (!rng)
+      if (! rng) {
         break;
+      }
     }
     if (rng.get() >= first && rng.get() < last) {
       // If the next ID falls in the current slice, we invoke the processing
       // function and move forward.
-      if (auto error = g(*begin))
+      if (auto error = g(*begin); error.valid()) {
         return error;
+      }
       rng.next_from(last);
-      if (!rng)
+      if (! rng) {
         break;
+      }
     }
   }
   return caf::none;
@@ -598,8 +617,9 @@ auto frame(const Bitmap& bm) {
   }
   for (; begin != end; n += begin->size(), ++begin) {
     auto last = find_last<Bit>(*begin);
-    if (last != Bitmap::word_type::npos)
+    if (last != Bitmap::word_type::npos) {
       result.second = n + last;
+    }
   }
   return result;
 }
@@ -610,20 +630,25 @@ auto frame(const Bitmap& bm) {
 /// @relates all
 template <bool Bit = true, class Bitmap>
 bool any(const Bitmap& bm) {
-  if (bm.empty())
+  if (bm.empty()) {
     return false;
+  }
   if constexpr (Bit) {
-    for (auto b : bit_range(bm))
-      if (b.data())
+    for (auto b : bit_range(bm)) {
+      if (b.data()) {
         return true;
+      }
+    }
   } else {
     using word_type = typename Bitmap::word_type;
     for (auto b : bit_range(bm)) {
       auto x = b.data();
-      if (b.size() < word_type::width)
+      if (b.size() < word_type::width) {
         x |= word_type::msb_fill(word_type::width - b.size());
-      if (x != word_type::all)
+      }
+      if (x != word_type::all) {
         return true;
+      }
     }
   }
   return false;
@@ -637,7 +662,7 @@ bool any(const Bitmap& bm) {
 /// @relates any
 template <bool Bit = true, class Bitmap>
 auto all(const Bitmap& bm) {
-  return !any<!Bit>(bm);
+  return ! any<! Bit>(bm);
 }
 
 /// Tests whether *xs* is a subset of *ys*.

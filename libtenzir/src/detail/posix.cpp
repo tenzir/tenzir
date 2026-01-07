@@ -50,8 +50,9 @@ auto describe_errno(int err) -> std::string {
 
 int uds_listen(const std::string& path) {
   int fd;
-  if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+  if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
     return fd;
+  }
   ::sockaddr_un un;
   std::memset(&un, 0, sizeof(un));
   un.sun_family = AF_UNIX;
@@ -66,13 +67,15 @@ int uds_listen(const std::string& path) {
 }
 
 int uds_accept(int socket) {
-  if (socket < 0)
+  if (socket < 0) {
     return -1;
+  }
   int fd;
   ::sockaddr_un un;
   socklen_t size = sizeof(un);
-  if ((fd = ::accept(socket, reinterpret_cast<::sockaddr*>(&un), &size)) < 0)
+  if ((fd = ::accept(socket, reinterpret_cast<::sockaddr*>(&un), &size)) < 0) {
     return -1;
+  }
   return fd;
 }
 
@@ -92,30 +95,34 @@ uds_datagram_sender::operator=(uds_datagram_sender&& other) noexcept {
 }
 
 uds_datagram_sender::~uds_datagram_sender() {
-  if (src_fd != -1)
+  if (src_fd != -1) {
     ::close(src_fd);
+  }
 }
 
 caf::expected<uds_datagram_sender>
 uds_datagram_sender::make(const std::string& path) {
   auto result = uds_datagram_sender{};
   result.src_fd = ::socket(AF_UNIX, SOCK_DGRAM, 0);
-  if (result.src_fd < 0)
+  if (result.src_fd < 0) {
     return caf::make_error(
       ec::system_error,
       "failed to obtain an AF_UNIX DGRAM socket: ", detail::describe_errno());
-  if (auto err = make_nonblocking(result.src_fd))
+  }
+  if (auto err = make_nonblocking(result.src_fd); err.valid()) {
     return err;
+  }
   // Create a unique temporary directory for a place to bind the sending side
   // to. There is no mktemp variant for sockets, so that is unfortunately
   // necessary.
   // NOTE: The temporary directory will be removed at the end of this function.
   char mkd_template[] = "/tmp/tenzir-XXXXXX\0socket";
   char* src_name = ::mkdtemp(&mkd_template[0]);
-  if (src_name == nullptr)
+  if (src_name == nullptr) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed in mkdtemp({}): {}",
                                        mkd_template, detail::describe_errno()));
+  }
   // Replace the first null terminator with a directory separator to get the
   // full path.
   src_name[16] = '/';
@@ -123,9 +130,11 @@ uds_datagram_sender::make(const std::string& path) {
   std::memset(&src, 0, sizeof(src));
   src.sun_family = AF_UNIX;
   std::strncpy(src.sun_path, src_name, sizeof(src.sun_path) - 1);
-  if (::bind(result.src_fd, reinterpret_cast<sockaddr*>(&src), sizeof(src)) < 0)
+  if (::bind(result.src_fd, reinterpret_cast<sockaddr*>(&src), sizeof(src))
+      < 0) {
     return caf::make_error(ec::system_error, "failed to bind client socket:",
                            detail::describe_errno());
+  }
   // From https://man7.org/linux/man-pages/man2/unlink.2.html:
   //   If the name was the last link to a file but any processes still
   //   have the file open, the file will remain in existence until the
@@ -137,9 +146,10 @@ uds_datagram_sender::make(const std::string& path) {
                 detail::describe_errno());
   } else {
     src_name[16] = '\0';
-    if (::rmdir(src_name) != 0)
+    if (::rmdir(src_name) != 0) {
       TENZIR_WARN("{} failed in rmdir({}): {}", __func__, src_name,
                   detail::describe_errno());
+    }
   }
   // Prepare the destination socket address.
   std::memset(&result.dst, 0, sizeof(result.dst));
@@ -155,21 +165,26 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   auto sent
     = ::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un));
-  if (sent == detail::narrow_cast<int>(data.size()))
+  if (sent == detail::narrow_cast<int>(data.size())) {
     return caf::none;
-  if (sent >= 0)
+  }
+  if (sent >= 0) {
     return caf::make_error(ec::incomplete,
                            fmt::format("::sendto could only transmit {} of {} "
                                        "bytes in a single datagram",
                                        sent, data.size()));
-  if (errno != EAGAIN && errno != EWOULDBLOCK)
+  }
+  if (errno != EAGAIN && errno != EWOULDBLOCK) {
     return caf::make_error(ec::system_error,
                            "::sendto: ", detail::describe_errno());
-  if (timeout_usec == 0)
+  }
+  if (timeout_usec == 0) {
     return ec::timeout;
+  }
   auto ready = wpoll(src_fd, timeout_usec);
-  if (!ready)
+  if (! ready) {
     return ready.error();
+  }
   // We just attempt to send again instead of returning ec::timeout outright.
   // This handles the case when the receiving socket was replaced on the file
   // system, but the original one was kept alive with an open file descriptor.
@@ -177,16 +192,19 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   sent
     = ::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un));
-  if (sent == detail::narrow_cast<int>(data.size()))
+  if (sent == detail::narrow_cast<int>(data.size())) {
     return caf::none;
-  if (sent >= 0)
+  }
+  if (sent >= 0) {
     return caf::make_error(ec::incomplete,
                            fmt::format("::sendto could only transmit {} of {} "
                                        "bytes in a single datagram",
                                        sent, data.size()));
-  if (errno != EAGAIN && errno != EWOULDBLOCK)
+  }
+  if (errno != EAGAIN && errno != EWOULDBLOCK) {
     return caf::make_error(ec::system_error,
                            "::sendto: ", detail::describe_errno());
+  }
   return ec::timeout;
 }
 
@@ -195,12 +213,14 @@ int uds_connect(const std::string& path, uds_socket_type type) {
   switch (type) {
     case uds_socket_type::stream:
     case uds_socket_type::fd:
-      if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+      if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
         return fd;
+      }
       break;
     case uds_socket_type::datagram:
-      if ((fd = ::socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+      if ((fd = ::socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
         return fd;
+      }
       ::sockaddr_un clt;
       std::memset(&clt, 0, sizeof(clt));
       clt.sun_family = AF_UNIX;
@@ -219,7 +239,7 @@ int uds_connect(const std::string& path, uds_socket_type type) {
   srv.sun_family = AF_UNIX;
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
-    if (!(type == uds_socket_type::datagram && errno == ENOENT)) {
+    if (! (type == uds_socket_type::datagram && errno == ENOENT)) {
       TENZIR_WARN("{} failed in connect: {}", __func__,
                   detail::describe_errno());
       return -1;
@@ -233,8 +253,9 @@ TENZIR_DIAGNOSTIC_PUSH
 TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION
 
 bool uds_send_fd(int socket, int fd) {
-  if (socket < 0)
+  if (socket < 0) {
     return -1;
+  }
   char dummy = '*';
   ::iovec iov[1];
   iov[0].iov_base = &dummy;
@@ -261,8 +282,9 @@ bool uds_send_fd(int socket, int fd) {
 }
 
 int uds_recv_fd(int socket) {
-  if (socket < 0)
+  if (socket < 0) {
     return -1;
+  }
   char ctrl_buf[CMSG_SPACE(sizeof(int))];
   std::memset(ctrl_buf, 0, CMSG_SPACE(sizeof(int)));
   char dummy;
@@ -279,12 +301,15 @@ int uds_recv_fd(int socket) {
   m.msg_iov = iov;
   m.msg_iovlen = 1;
   // Receive a message.
-  if (::recvmsg(socket, &m, 0) <= 0)
+  if (::recvmsg(socket, &m, 0) <= 0) {
     return -1;
+  }
   // Iterate over control message headers until we find the descriptor.
-  for (auto c = CMSG_FIRSTHDR(&m); c != nullptr; c = CMSG_NXTHDR(&m, c))
-    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS)
+  for (auto c = CMSG_FIRSTHDR(&m); c != nullptr; c = CMSG_NXTHDR(&m, c)) {
+    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS) {
       return *reinterpret_cast<int*>(CMSG_DATA(c));
+    }
+  }
   return -1;
 }
 
@@ -294,8 +319,9 @@ int uds_sendmsg(int socket, const std::string& destination,
                 const std::string& msg, int flags) {
   struct sockaddr_un dst;
   std::memset(&dst, 0, sizeof(dst));
-  if (destination.empty() || destination.size() >= sizeof(dst.sun_path))
+  if (destination.empty() || destination.size() >= sizeof(dst.sun_path)) {
     return -EINVAL;
+  }
   dst.sun_family = AF_UNIX;
   std::strncpy(dst.sun_path, destination.data(), sizeof(dst.sun_path) - 1);
   struct iovec iovec;
@@ -323,8 +349,9 @@ unix_domain_socket unix_domain_socket::listen(const std::string& path) {
 
 unix_domain_socket unix_domain_socket::accept(const std::string& path) {
   auto server = detail::uds_listen(path);
-  if (server != -1)
+  if (server != -1) {
     return unix_domain_socket{detail::uds_accept(server)};
+  }
   return unix_domain_socket{};
 }
 
@@ -351,13 +378,15 @@ namespace {
 
 [[nodiscard]] caf::error make_nonblocking(int fd, bool flag) {
   auto flags = ::fcntl(fd, F_GETFL, 0);
-  if (flags == -1)
+  if (flags == -1) {
     return caf::make_error(ec::filesystem_error,
                            "failed in fcntl(2):", detail::describe_errno());
+  }
   flags = flag ? flags | O_NONBLOCK : flags & ~O_NONBLOCK;
-  if (::fcntl(fd, F_SETFL, flags) == -1)
+  if (::fcntl(fd, F_SETFL, flags) == -1) {
     return caf::make_error(ec::filesystem_error,
                            "failed in fcntl(2):", detail::describe_errno());
+  }
   return caf::none;
 }
 
@@ -377,10 +406,11 @@ caf::expected<bool> rpoll(int fd, int usec) {
   FD_SET(fd, &read_set);
   timeval timeout{0, usec};
   auto rc = ::select(fd + 1, &read_set, nullptr, nullptr, &timeout);
-  if (rc < 0)
+  if (rc < 0) {
     return caf::make_error(ec::filesystem_error,
                            "failed in select(2):", detail::describe_errno());
-  return !!FD_ISSET(fd, &read_set);
+  }
+  return ! ! FD_ISSET(fd, &read_set);
 }
 
 caf::expected<bool> wpoll(int fd, int usec) {
@@ -389,10 +419,11 @@ caf::expected<bool> wpoll(int fd, int usec) {
   FD_SET(fd, &write_set);
   timeval timeout{0, usec};
   auto rc = ::select(fd + 1, nullptr, &write_set, nullptr, &timeout);
-  if (rc < 0)
+  if (rc < 0) {
     return caf::make_error(ec::filesystem_error,
                            "failed in select(2):", detail::describe_errno());
-  return !!FD_ISSET(fd, &write_set);
+  }
+  return ! ! FD_ISSET(fd, &write_set);
 }
 
 caf::error close(int fd) {
@@ -400,9 +431,10 @@ caf::error close(int fd) {
   do {
     result = ::close(fd);
   } while (result < 0 && errno == EINTR);
-  if (result != 0)
+  if (result != 0) {
     return caf::make_error(ec::filesystem_error,
                            "failed in close(2):", detail::describe_errno());
+  }
   return caf::none;
 }
 
@@ -421,11 +453,13 @@ caf::expected<size_t> read(int fd, void* buffer, size_t bytes) {
     do {
       taken = ::read(fd, buf + total, request_size);
     } while (taken < 0 && errno == EINTR);
-    if (taken < 0) // error
+    if (taken < 0) { // error
       return caf::make_error(ec::filesystem_error,
                              "failed in read(2):", detail::describe_errno());
-    if (taken == 0) // EOF
+    }
+    if (taken == 0) { // EOF
       break;
+    }
     total += static_cast<size_t>(taken);
   }
   return total;
@@ -446,22 +480,25 @@ caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
     do {
       written = ::write(fd, buf + total, request_size);
     } while (written < 0 && errno == EINTR);
-    if (written < 0)
+    if (written < 0) {
       return caf::make_error(ec::filesystem_error,
                              "failed in write(2):", detail::describe_errno());
+    }
     // write should not return 0 if it wasn't asked to write that amount. We
     // want to cover this case anyway in case it ever happens.
-    if (written == 0)
+    if (written == 0) {
       return caf::make_error(ec::filesystem_error, "write(2) returned 0");
+    }
     total += static_cast<size_t>(written);
   }
   return total;
 }
 
 caf::error seek(int fd, size_t bytes) {
-  if (::lseek(fd, bytes, SEEK_CUR) == -1)
+  if (::lseek(fd, bytes, SEEK_CUR) == -1) {
     return caf::make_error(ec::filesystem_error,
                            "failed in seek(2):", detail::describe_errno());
+  }
   return caf::none;
 }
 

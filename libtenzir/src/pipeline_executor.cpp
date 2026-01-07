@@ -205,7 +205,7 @@ void pipeline_executor_state::abort_start(diagnostic reason) {
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
-  TENZIR_ASSERT(reason);
+  TENZIR_ASSERT(reason.valid());
   if (reason == ec::silent) {
     TENZIR_DEBUG("{} delivers silent start abort", *self);
     start_rp.deliver(ec::silent);
@@ -425,7 +425,7 @@ auto pipeline_executor(
         self->quit(std::move(msg.reason));
         return;
       }
-      if (msg.reason) {
+      if (msg.reason.valid()) {
         self->quit(std::move(msg.reason));
       }
     },

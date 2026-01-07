@@ -93,7 +93,7 @@ public:
 
   /// @relates synopsis
   friend inline bool operator!=(const synopsis& x, const synopsis& y) {
-    return !(x == y);
+    return ! (x == y);
   }
 
 private:
@@ -122,23 +122,25 @@ synopsis_ptr make_synopsis(const type& t);
 bool deserialize(auto& source, synopsis_ptr& ptr) {
   // Read synopsis type
   legacy_type t;
-  if (!source.apply(t))
+  if (! source.apply(t)) {
     return false;
+  }
   // Only nullptr has an none type.
-  if (!t) {
+  if (! t) {
     ptr.reset();
     return true;
   }
   // Deserialize into a new instance.
   auto new_ptr = make_synopsis(type::from_legacy_type(t));
-  if (!new_ptr) {
+  if (! new_ptr) {
     TENZIR_WARN("Error during synopsis deserialization {}",
                 caf::make_error(ec::invalid_synopsis_type));
     return false;
   }
   synopsis::supported_inspectors i{std::ref(source)};
-  if (!new_ptr->inspect_impl(i))
+  if (! new_ptr->inspect_impl(i)) {
     return false;
+  }
   // Change `ptr` only after successfully deserializing.
   using std::swap;
   swap(ptr, new_ptr);
@@ -147,26 +149,29 @@ bool deserialize(auto& source, synopsis_ptr& ptr) {
 
 /// Saves the contents (excluding the schema!) of this slice to `sink`.
 bool serialize(auto& sink, synopsis_ptr& ptr) {
-  if (!ptr) {
+  if (! ptr) {
     static legacy_type dummy;
     return sink.apply(dummy);
   }
   auto err = caf::error::eval(
     [&] {
-      if (!sink.apply(ptr->type().to_legacy_type()) && !sink.get_error())
+      if (! sink.apply(ptr->type().to_legacy_type())
+          && sink.get_error().empty()) {
         return caf::make_error(ec::serialization_error, "Apply for "
                                                         "synopsis_ptr failed");
+      }
       return sink.get_error();
     },
     [&] {
       synopsis::supported_inspectors i{std::ref(sink)};
-      if (!ptr->inspect_impl(i) && !sink.get_error())
+      if (! ptr->inspect_impl(i) && sink.get_error().empty()) {
         return caf::make_error(ec::serialization_error, "serialize for "
                                                         "synopsis_ptr failed");
+      }
       return sink.get_error();
     });
 
-  if (err) {
+  if (err.valid()) {
     TENZIR_WARN("Error during synopsis_ptr serialization, {}", err);
     return false;
   }

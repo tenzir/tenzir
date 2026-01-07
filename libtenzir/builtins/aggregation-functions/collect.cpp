@@ -80,7 +80,7 @@ public:
         return;
       }
       auto element = data{};
-      if (auto err = unpack(*fb_element, element)) {
+      if (auto err = unpack(*fb_element, element); err.valid()) {
         diagnostic::warning("{}", err)
           .note("failed to restore `collect` aggregation instance")
           .emit(ctx);

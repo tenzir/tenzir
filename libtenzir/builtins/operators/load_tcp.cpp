@@ -761,7 +761,7 @@ struct connection_manager_state {
               return connection.second->pipeline_executor.address() == source;
             });
         TENZIR_ASSERT(connection != connections.end());
-        if (err) {
+        if (err.valid()) {
           TENZIR_DEBUG("nested pipeline terminated unexpectedly on handle "
                        "`{}`: {}",
                        connection->first, err);

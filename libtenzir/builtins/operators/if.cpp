@@ -122,7 +122,7 @@ public:
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
-            if (not err or err == caf::sec::request_receiver_down
+            if (err.empty() or err == caf::sec::request_receiver_down
                 or err == caf::exit_reason::remote_link_unreachable) {
               done = true;
               result = table_slice{};
@@ -193,7 +193,7 @@ public:
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
-            if (not err or err == caf::sec::request_receiver_down
+            if (err.empty() or err == caf::sec::request_receiver_down
                 or err == caf::exit_reason::remote_link_unreachable) {
               ctrl.set_waiting(false);
               return;
@@ -301,7 +301,7 @@ private:
                                is_hidden_, pipeline_id_);
     ++running_branches_;
     self_->monitor(handle, [this, source = pipe->source](caf::error err) {
-      if (err) {
+      if (err.valid()) {
         self_->quit(diagnostic::error(std::move(err))
                       .primary(source, "nested pipeline failed")
                       .to_error());

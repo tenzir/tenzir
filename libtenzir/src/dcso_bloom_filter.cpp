@@ -49,7 +49,7 @@ public:
     write(*x.params_.m);
     write(x.num_elements_);
     // Write Bloom filter.
-    if (!inspect(*this, const_cast<bloom_filter_type&>(x.bloom_filter_))) {
+    if (! inspect(*this, const_cast<bloom_filter_type&>(x.bloom_filter_))) {
       return false;
     }
     // Write auxiliary data.
@@ -143,7 +143,7 @@ public:
                     bloom_filter_bytes, remaining_bytes));
       return false;
     }
-    if (!inspect(*this, x.bloom_filter_)) {
+    if (! inspect(*this, x.bloom_filter_)) {
       return false;
     }
     // Interpret remaining bytes as auxiliary data.
@@ -255,8 +255,8 @@ auto convert(std::span<const std::byte> xs, dcso_bloom_filter& x)
     return caf::make_error(ec::parse_error, "bloom filter buffer too small");
   }
   dcso_bloom_filter::deserializer source{xs};
-  if (!source(x)) {
-    if (auto err = std::move(source).last_error()) {
+  if (! source(x)) {
+    if (auto err = std::move(source).last_error(); err.valid()) {
       return err;
     }
     return caf::make_error(ec::parse_error, "dcso_bloom_filter deserialization "

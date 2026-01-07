@@ -104,7 +104,7 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   }
   // We're using a nonblocking socket and polling because blocking recvfrom(2)
   // doesn't deliver the data fast enough. We were always one datagram behind.
-  if (auto err = detail::make_nonblocking(*socket.fd)) {
+  if (auto err = detail::make_nonblocking(*socket.fd); err.valid()) {
     diagnostic::error("failed to make socket nonblocking")
       .note(detail::describe_errno())
       .note("{}", err)

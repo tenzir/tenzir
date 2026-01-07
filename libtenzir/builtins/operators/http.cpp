@@ -324,7 +324,7 @@ struct http_state {
       },
       [this](const caf::exit_msg& msg) {
         exited = true;
-        if (slices_.empty() or msg.reason) {
+        if (slices_.empty() or msg.reason.valid()) {
           self_->quit(msg.reason);
         }
       },
@@ -497,7 +497,7 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
                               static_cast<exec_node_actor>(&ctrl.self()));
   ctrl.self().monitor(ha, [&ctrl, is_warning,
                            loc = pipe.source](const caf::error& e) {
-    if (e) {
+    if (e.valid()) {
       diagnostic::error(e)
         .primary(loc)
         .severity(is_warning ? severity::warning : severity::error)

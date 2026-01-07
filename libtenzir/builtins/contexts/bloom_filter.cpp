@@ -244,7 +244,7 @@ public:
 
   auto save() const -> caf::expected<context_save_result> override {
     std::vector<std::byte> buffer;
-    if (auto err = convert(bloom_filter_, buffer)) {
+    if (auto err = convert(bloom_filter_, buffer); err.valid()) {
       return diagnostic::error(err)
         .note("failed to serialize Bloom filter context")
         .to_error();
@@ -266,7 +266,7 @@ struct v1_loader : public context_loader {
     -> caf::expected<std::unique_ptr<context>> {
     TENZIR_ASSERT(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
-    if (auto err = convert(as_bytes(serialized), bloom_filter)) {
+    if (auto err = convert(as_bytes(serialized), bloom_filter); err.valid()) {
       return diagnostic::error(err)
         .note("failed to deserialize Bloom filter context")
         .to_error();

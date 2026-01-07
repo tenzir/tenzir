@@ -104,7 +104,7 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
              [&](caf::error err) {
                error = std::move(err);
              });
-  if (error) {
+  if (error.valid()) {
     return caf::make_message(error);
   }
   self->monitor(node);

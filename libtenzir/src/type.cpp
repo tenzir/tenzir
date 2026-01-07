@@ -3654,7 +3654,7 @@ merge(const record_type& lhs, const record_type& rhs,
     }
   }
   auto result = lhs.transform(std::move(transformations));
-  if (err) {
+  if (err.valid()) {
     return err;
   }
   TENZIR_ASSERT(result);

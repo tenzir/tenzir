@@ -258,7 +258,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       for (const auto* value : *from.data_as_list()->values()) {
         TENZIR_ASSERT(value);
         auto element_buffer = data{};
-        if (auto err = unpack(*value, element_buffer)) {
+        if (auto err = unpack(*value, element_buffer); err.valid()) {
           return err;
         }
         list_buffer.emplace_back(std::move(element_buffer));
@@ -272,11 +272,11 @@ caf::error unpack(const fbs::Data& from, data& to) {
       for (const auto* entry : *from.data_as_map()->entries()) {
         TENZIR_ASSERT(entry);
         auto key_buffer = data{};
-        if (auto err = unpack(*entry->key(), key_buffer)) {
+        if (auto err = unpack(*entry->key(), key_buffer); err.valid()) {
           return err;
         }
         auto value_buffer = data{};
-        if (auto err = unpack(*entry->value(), value_buffer)) {
+        if (auto err = unpack(*entry->value(), value_buffer); err.valid()) {
           return err;
         }
         map_buffer.emplace_back(std::move(key_buffer), std::move(value_buffer));
@@ -290,7 +290,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       for (const auto* field : *from.data_as_record()->fields()) {
         TENZIR_ASSERT(field);
         auto data_buffer = data{};
-        if (auto err = unpack(*field->data(), data_buffer)) {
+        if (auto err = unpack(*field->data(), data_buffer); err.valid()) {
           return err;
         }
         record_buffer.emplace_back(field->name()->str(),
@@ -578,7 +578,7 @@ void merge(const record& src, record& dst,
 caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
   for (const auto& [k, v] : xs) {
     caf::config_value x;
-    if (auto err = convert(v, x)) {
+    if (auto err = convert(v, x); err.valid()) {
       return err;
     }
     ys[to_string(k)] = std::move(x);
@@ -589,7 +589,7 @@ caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys) {
   for (const auto& [k, v] : xs) {
     caf::config_value x;
-    if (auto err = convert(v, x)) {
+    if (auto err = convert(v, x); err.valid()) {
       return err;
     }
     ys[k] = std::move(x);
@@ -599,7 +599,7 @@ caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys) {
 
 caf::error convert(const record& xs, caf::config_value& cv) {
   caf::config_value::dictionary result;
-  if (auto err = convert(xs, result)) {
+  if (auto err = convert(xs, result); err.valid()) {
     return err;
   }
   cv = std::move(result);
@@ -633,7 +633,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
       result.reserve(xs.size());
       for (const auto& x : xs) {
         caf::config_value y;
-        if (auto err = convert(x, y)) {
+        if (auto err = convert(x, y); err.valid()) {
           return err;
         }
         result.push_back(std::move(y));
@@ -644,7 +644,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
     [&](const map& xs) -> caf::error {
       // We treat maps like records.
       caf::dictionary<caf::config_value> result;
-      if (auto err = convert(xs, result)) {
+      if (auto err = convert(xs, result); err.valid()) {
         return err;
       }
       cv = std::move(result);
@@ -652,7 +652,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
     },
     [&](const record& xs) -> caf::error {
       caf::dictionary<caf::config_value> result;
-      if (auto err = convert(xs, result)) {
+      if (auto err = convert(xs, result); err.valid()) {
         return err;
       }
       cv = std::move(result);

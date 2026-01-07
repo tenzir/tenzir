@@ -170,7 +170,7 @@ public:
       return;
     }
     auto result = data{};
-    if (auto err = unpack(*fb_result, result)) {
+    if (auto err = unpack(*fb_result, result); err.valid()) {
       diagnostic::warning("{}", err)
         .note("failed to restore `{}` aggregation instance",
               Mode == mode::min ? "min" : "max")

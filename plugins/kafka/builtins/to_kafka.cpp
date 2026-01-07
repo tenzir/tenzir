@@ -72,7 +72,7 @@ public:
     }
     const auto guard = detail::scope_guard([&] noexcept {
       TENZIR_DEBUG("[to_kafka] waiting 10 seconds to flush pending messages");
-      if (const auto err = p->flush(10s)) {
+      if (const auto err = p->flush(10s); err.valid()) {
         TENZIR_WARN(err);
       }
       const auto num_messages = p->queue_size();
@@ -108,7 +108,8 @@ public:
                 continue;
               }
               if (auto e = p->produce(args_.topic, as_bytes(array.Value(i)),
-                                      key, timestamp)) {
+                                      key, timestamp);
+                  e.valid()) {
                 diagnostic::error(std::move(e)).primary(args_.op).emit(dh);
               }
             }
