@@ -4,19 +4,19 @@
       Name: "Microsoft-Windows-Security-Auditing",
       Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
     },
-    EventID: "4624",
-    Version: "2",
-    Level: "0",
-    Task: "12544",
-    Opcode: "0",
+    EventID: 4624,
+    Version: 2,
+    Level: 0,
+    Task: 12544,
+    Opcode: 0,
     Keywords: "0x8020000000000000",
     TimeCreated: {
-      SystemTime: "2024-01-15T10:30:00.000Z",
+      SystemTime: 2024-01-15T10:30:00Z,
     },
-    EventRecordID: "12345",
+    EventRecordID: 12345,
     Execution: {
-      ProcessID: "500",
-      ThreadID: "520",
+      ProcessID: 500,
+      ThreadID: 520,
     },
     Channel: "Security",
     Computer: "WORKSTATION1",
@@ -25,7 +25,7 @@
   EventData: {
     SubjectUserSid: "S-1-5-18",
     SubjectUserName: "SYSTEM",
-    LogonType: "3",
+    LogonType: 3,
   },
 }
 {
@@ -33,7 +33,7 @@
     Provider: {
       Name: "Application",
     },
-    EventID: "1000",
+    EventID: 1000,
     Channel: "Application",
     Computer: "SERVER1",
   },
@@ -43,7 +43,7 @@
     Provider: {
       Name: "Application",
     },
-    EventID: "1001",
+    EventID: 1001,
     Channel: "Application",
     Computer: "SERVER1",
   },
@@ -57,7 +57,7 @@
     Provider: {
       Name: "Application",
     },
-    EventID: "1002",
+    EventID: 1002,
     Channel: "Application",
     Computer: "SERVER2",
   },
@@ -70,6 +70,9 @@
   },
 }
 {}
+warning: type mismatch between list elements
+ = note: field `EventData`
+
 warning: failed to parse XML: line 1:15: no element found
   --> tests/functions/parse/parse_winlog.tql:72:8
    |

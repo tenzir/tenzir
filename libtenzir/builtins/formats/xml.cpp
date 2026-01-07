@@ -10,6 +10,7 @@
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
+#include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/stable_map.hpp>
 #include <tenzir/detail/string.hpp>
@@ -763,7 +764,7 @@ template <typename Builder>
 void append_data_value(Builder builder, const xml_element& data_elem) {
   if (not data_elem.children.empty()) {
     if (auto* text = try_as<std::string>(data_elem.children[0])) {
-      builder.data(*text);
+      builder.data_unparsed(*text); // Type inference: "2" → 2, "-" stays "-"
       return;
     }
   }
@@ -786,6 +787,91 @@ void transform_event_data(RecordBuilder record,
   }
 }
 
+/// Handle System element with proper typing for Windows Event Log.
+template <typename RecordBuilder>
+void winlog_system_to_record(RecordBuilder record,
+                             const xml_element& system_elem) {
+  for (const auto& child : system_elem.children) {
+    auto* elem_ptr = try_as<std::unique_ptr<xml_element>>(child);
+    if (not elem_ptr) {
+      continue;
+    }
+    auto& elem = **elem_ptr;
+    // Integer fields (element text content).
+    if (elem.name == "EventID" or elem.name == "Version" or elem.name == "Level"
+        or elem.name == "Task" or elem.name == "Opcode"
+        or elem.name == "EventRecordID") {
+      if (elem.children.size() == 1) {
+        if (auto* text = try_as<std::string>(elem.children[0])) {
+          auto val = int64_t{};
+          if (parsers::i64(*text, val)) {
+            record.field(elem.name).data(val);
+          } else {
+            // Parsing failed: preserve original string value.
+            record.field(elem.name).data(*text);
+          }
+          continue;
+        }
+      }
+      record.field(elem.name).null();
+      continue;
+    }
+    // TimeCreated: parse SystemTime attribute as timestamp within record.
+    if (elem.name == "TimeCreated") {
+      if (auto* sys_time = get_attribute(elem, "SystemTime")) {
+        auto time_record = record.field(elem.name).record();
+        auto ts = tenzir::time{};
+        if (parsers::time(*sys_time, ts)) {
+          time_record.field("SystemTime").data(ts);
+        } else {
+          // Parsing failed: preserve original string value.
+          time_record.field("SystemTime").data(*sys_time);
+        }
+        continue;
+      }
+      record.field(elem.name).null();
+      continue;
+    }
+    // Execution: ProcessID and ThreadID as integers.
+    if (elem.name == "Execution") {
+      auto exec_record = record.field(elem.name).record();
+      if (auto* pid = get_attribute(elem, "ProcessID")) {
+        auto val = int64_t{};
+        if (parsers::i64(*pid, val)) {
+          exec_record.field("ProcessID").data(val);
+        } else {
+          // Parsing failed: preserve original string value.
+          exec_record.field("ProcessID").data(*pid);
+        }
+      }
+      if (auto* tid = get_attribute(elem, "ThreadID")) {
+        auto val = int64_t{};
+        if (parsers::i64(*tid, val)) {
+          exec_record.field("ThreadID").data(val);
+        } else {
+          // Parsing failed: preserve original string value.
+          exec_record.field("ThreadID").data(*tid);
+        }
+      }
+      continue;
+    }
+    // Provider, Correlation, Security: keep as records with string attributes.
+    // Channel, Computer, Keywords: keep as strings.
+    auto field = record.field(elem.name);
+    if (elem.attributes.empty() and elem.children.size() == 1
+        and is<std::string>(elem.children[0])) {
+      field.data(as<std::string>(elem.children[0]));
+    } else if (elem.children.empty() and elem.attributes.empty()) {
+      field.null();
+    } else {
+      auto nested = field.record();
+      for (const auto& [name, value] : elem.attributes) {
+        nested.field(name).data(value);
+      }
+    }
+  }
+}
+
 /// Convert Windows Event to record with special EventData handling.
 template <typename RecordBuilder>
 void winlog_to_record(RecordBuilder record, const xml_element& event,
@@ -793,7 +879,10 @@ void winlog_to_record(RecordBuilder record, const xml_element& event,
   for (const auto& child : event.children) {
     if (auto* elem_ptr = try_as<std::unique_ptr<xml_element>>(child)) {
       auto& elem = *elem_ptr;
-      if (elem->name == "EventData") {
+      if (elem->name == "System") {
+        auto system_record = record.field(elem->name).record();
+        winlog_system_to_record(system_record, *elem);
+      } else if (elem->name == "EventData") {
         std::vector<const xml_element*> data_elems;
         bool has_named = false;
         bool has_unnamed = false;
