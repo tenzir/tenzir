@@ -13,6 +13,8 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/si_literals.hpp"
 
+#include <caf/logger.hpp>
+
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -100,14 +102,9 @@ auto stats::note_deallocation(std::int64_t remove) noexcept -> void {
 
 namespace {
 
-constexpr auto align_mask(std::align_val_t alignment) noexcept
-  -> std::uintptr_t {
-  return std::to_underlying(alignment) - 1;
-}
-
 constexpr auto is_aligned(void* ptr, std::align_val_t alignment) noexcept
   -> bool {
-  return (reinterpret_cast<std::uintptr_t>(ptr) & align_mask(alignment)) == 0;
+  return detail::mod(reinterpret_cast<uintptr_t>(ptr), alignment) == 0;
 }
 
 [[nodiscard]] constexpr auto
@@ -280,28 +277,28 @@ template <typename Function>
 
 #  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1)]]
-#endif
+#  endif
 auto native_malloc(std::size_t size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_malloc(size);
-#else
+#  else
   using function_type = void* (*)(std::size_t);
   const static auto fn = lookup_symbol<function_type>("malloc");
   return fn(size);
-#endif
+#  endif
 }
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1, 2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2)]]
-#endif
+#  endif
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_calloc(count, size);
-#else
+#  else
   using function_type = void* (*)(std::size_t, std::size_t);
   const static auto fn = lookup_symbol<function_type>("calloc");
   if (fn == nullptr) {
@@ -309,68 +306,68 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
     return nullptr;
   }
   return fn(count, size);
-#endif
+#  endif
 }
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2)]]
-#endif
+#  endif
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_realloc(ptr, new_size);
-#else
+#  else
   using function_type = void* (*)(void*, std::size_t);
   const static auto fn = lookup_symbol<function_type>("realloc");
   return fn(ptr, new_size);
-#endif
+#  endif
 }
 
 [[gnu::hot]]
 auto native_free(void* ptr) noexcept -> void {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   __real_free(ptr);
-#else
+#  else
   using function_type = void (*)(void*);
   static auto fn = lookup_symbol<function_type>("free");
   fn(ptr);
-#endif
+#  endif
 }
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2),
   gnu::alloc_align(1)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(1)]]
-#endif
+#  endif
 auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_aligned_alloc(alignment, size);
-#else
+#  else
   using function_type = void* (*)(std::size_t, std::size_t);
   const static auto fn = lookup_symbol<function_type>("aligned_alloc");
   return fn(alignment, size);
-#endif
+#  endif
 }
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1),
   gnu::alloc_align(2)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1), gnu::alloc_align(2)]]
-#endif
+#  endif
 auto malloc_aligned(std::size_t size, std::size_t alignment) noexcept -> void* {
   return native_aligned_alloc(alignment, size);
 }
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(2),
   gnu::alloc_align(3)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(2), gnu::alloc_align(3)]]
-#endif
+#  endif
 auto realloc_aligned(void* ptr, std::size_t new_size,
                      std::size_t alignment) noexcept -> void* {
   // `realloc` does not give alignment guarantees. Because of this, we need to
@@ -402,12 +399,12 @@ auto realloc_aligned(void* ptr, std::size_t new_size,
   return new_ptr_expensive;
 }
 
-#ifndef __clang__
+#  ifndef __clang__
 [[nodiscard, gnu::hot, gnu::malloc(native_free), gnu::alloc_size(1, 2),
   gnu::alloc_align(3)]]
-#else
+#  else
 [[nodiscard, gnu::hot, gnu::malloc, gnu::alloc_size(1, 2), gnu::alloc_align(3)]]
-#endif
+#  endif
 auto calloc_aligned(std::size_t count, std::size_t size,
                     std::size_t alignment) noexcept -> void* {
   if (alignment < alignof(std::max_align_t)) {
@@ -471,10 +468,18 @@ auto selected_backend_impl(const char* env_name) noexcept
   }
   const auto env_str = std::string_view{env_value};
   if (env_str == "jemalloc") {
+#if TENZIR_ALLOCATOR_HAS_JEMALLOC
     return backend::jemalloc;
+#else
+    write_error("FATAL ERROR: selected allocator 'jemalloc' is not available");
+#endif
   }
   if (env_str == "mimalloc") {
+#if TENZIR_ALLOCATOR_HAS_MIMALLOC
     return backend::mimalloc;
+#else
+    write_error("FATAL ERROR: selected allocator 'mimalloc' is not available");
+#endif
   }
   if (env_str == "system") {
     return backend::system;
@@ -493,6 +498,13 @@ auto enable_stats(const char* env_name) noexcept -> bool {
     return true;
   }
   return enable_stats_impl("TENZIR_ALLOC_STATS");
+}
+
+auto enable_actor_stats(const char* env_name) noexcept -> bool {
+  if (enable_stats_impl(env_name)) {
+    return true;
+  }
+  return enable_stats_impl("TENZIR_ALLOC_ACTOR_STATS");
 }
 
 auto selected_backend(const char* var_name) noexcept -> enum backend {

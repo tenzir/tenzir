@@ -14,6 +14,8 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/type.hpp>
 
+#include <caf/actor_registry.hpp>
+#include <caf/actor_system.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <atomic>
@@ -477,7 +479,53 @@ auto make_procfs_metrics() -> record {
   return result;
 }
 
-auto get_raminfo() -> caf::expected<record> {
+auto make_actor_stats_for(caf::actor_system& system,
+                          memory::polymorphic_allocator& alloc) -> list {
+  auto res = list{};
+  /// Reserve memory for one element. This is critical to ensure that the
+  /// metrics collector is in the list of actors, which means that any
+  /// allocations we do below can be non-blocking, which otherwise would
+  /// deadlock with the read lock we hold on the stats.
+  res.reserve(1);
+  const auto stats = alloc.actor_stats();
+  if (not stats) {
+    return res;
+  }
+  for (const auto& [id, stats] : *stats) {
+    auto& entry = as<record>(res.emplace_back(record{}));
+    entry.reserve(5);
+    if (auto ptr = system.registry().get(id)) {
+      entry.try_emplace("name", ptr->get()->name());
+    } else {
+      entry.try_emplace("name", fmt::to_string(id));
+    }
+    entry.try_emplace(
+      "bytes_allocated_cumulative",
+      stats.bytes_allocated_cumulative.load(std::memory_order_acquire));
+    entry.try_emplace(
+      "bytes_deallocated_cumulative",
+      stats.bytes_deallocated_cumulative.load(std::memory_order_acquire));
+    entry.try_emplace(
+      "bytes_reallocated_cumulative",
+      stats.bytes_reallocated_cumulative.load(std::memory_order_acquire));
+    entry.try_emplace("bytes_alive",
+                      stats.bytes_alive.load(std::memory_order_acquire));
+  }
+  return res;
+}
+
+auto make_actor_stats(caf::actor_system& system) -> record {
+  auto result = record{};
+  result.reserve(3);
+  result.try_emplace("arrow",
+                     make_actor_stats_for(system, memory::arrow_allocator()));
+  result.try_emplace("cpp",
+                     make_actor_stats_for(system, memory::cpp_allocator()));
+  result.try_emplace("c", make_actor_stats_for(system, memory::c_allocator()));
+  return result;
+}
+
+auto get_raminfo(caf::actor_system& system) -> caf::expected<record> {
   auto result = record{};
   result.reserve(9);
   result.try_emplace("system", make_system_info());
@@ -487,10 +535,12 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("arrow", caf::none);
   result.try_emplace("cpp", caf::none);
   result.try_emplace("c", caf::none);
+  result.try_emplace("actor", caf::none);
 #else
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
+  result.try_emplace("actor", make_actor_stats(system));
 #endif
 #if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
   result.try_emplace("malloc", make_malloc_metrics());
@@ -517,12 +567,16 @@ public:
     return "memory";
   }
 
-  auto make_collector(caf::actor_system&) const
+  auto make_collector(caf::actor_system& system) const
     -> caf::expected<collector> override {
 #ifdef _SC_AVPHYS_PAGES
-    return get_raminfo;
+    return [&system]() {
+      return get_raminfo(system);
+    };
 #elif __has_include(<mach/mach.h>)
-    return get_raminfo;
+    return [&system]() {
+      return get_raminfo(system);
+    };
 #else
     return caf::make_error(ec::invalid_configuration,
                            "not supported on this platform");
@@ -542,6 +596,18 @@ public:
     const auto bytes_and_allocations = record_type{
       {"bytes", stats},
       {"allocations", stats},
+    };
+    const auto actor_stats0 = list_type{record_type{
+      {"name", string_type{}},
+      {"bytes_allocated_cumulative", int64_type{}},
+      {"bytes_deallocated_cumulative", int64_type{}},
+      {"bytes_reallocated_cumulative", int64_type{}},
+      {"bytes_alive", int64_type{}},
+    }};
+    const auto actor_stats = record_type{
+      {"arrow", actor_stats0},
+      {"cpp", actor_stats0},
+      {"c", actor_stats0},
     };
     const auto table_slice_stats = record_type{
       {"serialized_bytes", int64_type{}},
@@ -598,6 +664,7 @@ public:
       {"arrow", bytes_and_allocations},
       {"cpp", bytes_and_allocations},
       {"c", bytes_and_allocations},
+      {"actor", actor_stats},
       {"malloc", malloc_stats},
       {"table_slices", table_slice_stats},
       {"chunks", bytes_and_count},
