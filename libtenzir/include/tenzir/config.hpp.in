@@ -1,5 +1,7 @@
 #pragma once
 
+#include <caf/detail/log_level.hpp>
+
 #include <cstdint>
 #include <optional>
 #include <string_view>

@@ -37,7 +37,6 @@
 #include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
-#include <caf/detail/is_one_of.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 

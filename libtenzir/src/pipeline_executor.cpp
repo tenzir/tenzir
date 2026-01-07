@@ -51,7 +51,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](const caf::error& err) mutable {
-        if (not err) {
+        if (err.empty()) {
           // TODO: Is this even reachable?
           finish_start();
           return;

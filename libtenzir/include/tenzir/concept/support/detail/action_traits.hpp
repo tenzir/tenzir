@@ -10,7 +10,7 @@
 
 #include "tenzir/detail/type_list.hpp"
 
-#include <caf/detail/type_traits.hpp>
+#include <caf/detail/callable_trait.hpp>
 
 #include <type_traits>
 

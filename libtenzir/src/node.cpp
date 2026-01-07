@@ -43,7 +43,6 @@
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
-#include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
 

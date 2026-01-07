@@ -17,7 +17,6 @@
 
 #include <arrow/array.h>
 #include <arrow/record_batch.h>
-#include <caf/detail/is_one_of.hpp>
 
 #include <memory>
 

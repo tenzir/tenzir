@@ -10,7 +10,6 @@
 
 #include "tenzir/detail/type_list.hpp"
 
-#include <caf/detail/type_traits.hpp>
 #include <experimental/type_traits>
 
 #include <iterator>

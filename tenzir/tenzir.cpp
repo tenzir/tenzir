@@ -55,124 +55,6 @@ auto is_server_from_app_path(std::string_view app_path) {
   return app_name == "tenzir-node";
 }
 
-/// A faster alternative to the built-in actor clock.
-class actor_clock final : public caf::actor_clock {
-public:
-  // We currently just use a single thread for our actor clock. If it ever turns
-  // out that the clock is saturated (which could still happen if there are
-  // incredibly many cores), then the number of threads can be increased.
-  static constexpr auto threads = 1;
-
-  explicit actor_clock(caf::actor_system& sys) {
-    for (auto i = 0; i < threads; ++i) {
-      threads_.push_back(
-        sys.launch_thread("tnz.clock", caf::thread_owner::system, [this] {
-          thread();
-        }));
-    }
-  }
-
-  auto operator=(actor_clock&&) -> actor_clock& = delete;
-  auto operator=(const actor_clock&) -> actor_clock& = delete;
-  actor_clock(actor_clock&&) = delete;
-  actor_clock(const actor_clock&) = delete;
-
-  ~actor_clock() override {
-    auto lock = std::unique_lock{mutex_};
-    push(entry{time_point::min(), caf::action{}});
-    lock.unlock();
-    cv_.notify_all();
-    for (auto& thread : threads_) {
-      thread.join();
-    }
-  }
-
-  auto schedule(time_point t, caf::action f) -> caf::disposable override {
-    TENZIR_ASSERT(f);
-    auto lock = std::unique_lock{mutex_};
-    // We only need to notify threads if they are waiting without a timeout, or
-    // if the new timeout would be smaller than the old one.
-    auto notify = true;
-    if (not queue_.empty()) {
-      notify = t < queue_.front().time;
-    }
-    push(entry{t, f});
-    lock.unlock();
-    if (notify) {
-      cv_.notify_one();
-    }
-    return std::move(f).as_disposable();
-  }
-
-private:
-  struct entry {
-    entry(time_point t, caf::action f) : time{t}, fn{std::move(f)} {
-    }
-
-    auto operator<(const entry& other) const -> bool {
-      // Greatest entry comes first.
-      return time > other.time;
-    }
-
-    time_point time;
-    caf::action fn;
-  };
-
-  void push(entry e) {
-    queue_.push_back(std::move(e));
-    std::push_heap(queue_.begin(), queue_.end());
-  }
-
-  void pop() {
-    std::pop_heap(queue_.begin(), queue_.end());
-    queue_.pop_back();
-  }
-
-  void thread() {
-    while (true) {
-      auto lock = std::unique_lock{mutex_};
-      // We wait up until the timeout would expire. If more than one clock
-      // thread is used, this means that some threads wake up but will not get
-      // the job. If load is low, this does not matter, and if load is high,
-      // then they will likely just get another job instead.
-      while (true) {
-        auto timeout = std::optional<time_point>{};
-        auto now = this->now();
-        if (not queue_.empty()) {
-          if (now >= queue_.front().time) {
-            // Found something to execute!
-            break;
-          }
-          timeout = queue_.front().time;
-        }
-        // Do not simplify this into using `time_point::max()` as the default.
-        // On some systems, this does not work correctly.
-        if (timeout) {
-          cv_.wait_until(lock, *timeout);
-        } else {
-          cv_.wait(lock);
-        }
-      }
-      auto& job = queue_.front();
-      if (not job.fn) {
-        // Our signal to exit.
-        TENZIR_ASSERT(job.time == time_point::min());
-        return;
-      }
-      auto fn = std::move(job.fn);
-      pop();
-      lock.unlock();
-      TENZIR_ASSERT(fn);
-      fn.run();
-    }
-  };
-
-  std::vector<std::thread> threads_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
-  std::vector<entry> queue_;
-};
-
 } // namespace
 
 auto main(int argc, char** argv) -> int try {
@@ -437,9 +319,6 @@ auto main(int argc, char** argv) -> int try {
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
-  cfg.set_clock_factory([](caf::actor_system& sys) {
-    return std::make_unique<actor_clock>(sys);
-  });
   auto sys = caf::actor_system{cfg};
   auto run_error = caf::error{};
   if (is_server) {
@@ -515,7 +394,7 @@ auto main(int argc, char** argv) -> int try {
       }}(*result);
     }
   }
-  if (run_error) {
+  if (not run_error.empty()) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
   }

@@ -39,6 +39,7 @@ Checks: >
   -readability-magic-numbers,
   -readability-named-parameter,
   -readability-redundant-inline-specifier,
+  -readability-qualified-auto,
   -readability-uppercase-literal-suffix,
 WarningsAsErrors:      ''
 HeaderFilterRegex:     '/tenzir/'

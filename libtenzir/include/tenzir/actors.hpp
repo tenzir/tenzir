@@ -48,8 +48,20 @@ struct typed_actor_fwd {
   template <class Handle>
   using extend_with = typename extend_with_helper<Handle>::type;
 
-  using unwrap = caf::typed_actor<Fs...>;
-  using unwrap_as_broker = caf::io::typed_broker<Fs...>;
+  template <class... Gs>
+  struct unwrap_helper {
+    using type = caf::typed_actor<Gs...>;
+    using broker_type = caf::io::typed_broker<Gs...>;
+  };
+
+  template <>
+  struct unwrap_helper<> {
+    using type = void;
+    using broker_type = void;
+  };
+
+  using unwrap = typename unwrap_helper<Fs...>::type;
+  using unwrap_as_broker = typename unwrap_helper<Fs...>::broker_type;
 };
 
 /// The FLUSH LISTENER actor interface.
