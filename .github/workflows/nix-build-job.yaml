@@ -178,6 +178,13 @@ jobs:
           args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
           docker exec -e TENZIR_LEGACY=true installer-test-ubuntu \
             /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
+          # Install uv and run select integration tests
+          docker exec installer-test-ubuntu bash -c \
+                 "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y coreutils python3 tzdata"
+          docker exec installer-test-ubuntu bash -c \
+                 "curl -LsSf https://astral.sh/uv/install.sh | sh"
+          docker exec installer-test-ubuntu bash -c \
+                 'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/test tests/functions/time'
           docker exec installer-test-ubuntu halt
       - name: Test Installation (Rocky Linux)
         if: runner.os == 'Linux'
@@ -197,4 +204,9 @@ jobs:
           args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
           docker exec -e TENZIR_LEGACY=true installer-test-rocky \
             /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
+          # Install uv and run select integration tests
+          docker exec installer-test-rocky bash -c \
+                 "curl -LsSf https://astral.sh/uv/install.sh | sh"
+          docker exec installer-test-rocky bash -c \
+                 'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/test tests/functions/time'
           docker exec installer-test-rocky halt
