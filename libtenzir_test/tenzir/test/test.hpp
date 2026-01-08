@@ -8,10 +8,6 @@
 
 #pragma once
 
-#ifdef SUITE
-#  define CAF_SUITE SUITE
-#endif
-
 #include "tenzir/span.hpp"
 
 #include <caf/allowed_unsafe_message_type.hpp>
@@ -153,7 +149,7 @@ bool check_eq(const T0& lhs, const T1& rhs,
 #define CHECK_GREATER(x, y) ::caf::test::runnable::current().check_gt((x), (y))
 #define CHECK_GREATER_EQUAL(x, y)                                              \
   ::caf::test::runnable::current().check_ge((x), (y))
-#define CHECK_ERROR(x) CHECK_EQUAL((x).empty(), true)
+#define CHECK_ERROR(x) CHECK_EQUAL(not(x), true)
 #define CHECK_SUCCESS(x) CHECK_EQUAL((x), caf::none)
 #define CHECK_FAILURE(x) CHECK_NOT_EQUAL((x), caf::none)
 #define CHECK_VARIANT_EQUAL(x, y)                                              \

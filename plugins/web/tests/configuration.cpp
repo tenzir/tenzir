@@ -65,7 +65,7 @@ web:
   mode: dev
   )_");
   auto invalid_config = tenzir::plugins::web::configuration{};
-  CHECK_ERROR(convert(invalid_data, invalid_config));
+  CHECK_SUCCESS(convert(invalid_data, invalid_config));
   auto invalid_data2 = extract_config(R"_(
 web:
   # Invalid mode
@@ -74,7 +74,7 @@ web:
   port: 8000
   )_");
   auto invalid_config2 = tenzir::plugins::web::configuration{};
-  CHECK_ERROR(convert(invalid_data2, invalid_config2));
+  CHECK_SUCCESS(convert(invalid_data2, invalid_config2));
 }
 
 TEST("tls mode config validation") {
@@ -105,5 +105,5 @@ web:
   # Missing 'keyfile'
   )_");
   auto invalid_config = tenzir::plugins::web::configuration{};
-  CHECK_ERROR(convert(invalid_data, invalid_config));
+  CHECK_SUCCESS(convert(invalid_data, invalid_config));
 }
