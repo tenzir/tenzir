@@ -775,7 +775,7 @@ function (TenzirRegisterPlugin)
     foreach (test_source IN LISTS PLUGIN_TEST_SOURCES)
       get_filename_component(suite "${test_source}" NAME_WE)
       set_property(SOURCE "${test_source}" PROPERTY COMPILE_DEFINITIONS
-                                                    "SUITE=${suite}")
+                                                    "CAF_TEST_SUITE_NAME=${suite}")
       list(APPEND suites "${suite}")
     endforeach ()
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
