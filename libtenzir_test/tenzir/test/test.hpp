@@ -87,8 +87,7 @@ auto stringify(const T& value) {
 
 template <class T0, class T1>
 bool check_eq(const T0& lhs, const T1& rhs,
-              caf::detail::source_location location
-              = caf::detail::source_location::current()) {
+              std::source_location location = std::source_location::current()) {
   // Adapted from CAF, but without safety checks.
   if (lhs == rhs) {
     caf::test::reporter::instance().pass(location);

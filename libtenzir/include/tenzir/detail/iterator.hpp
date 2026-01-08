@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/operators.hpp"
 
+#include <iterator>
 #include <memory>
 
 namespace tenzir::detail {
@@ -58,18 +59,11 @@ private:
 };
 
 /// A simple version of `boost::iterator_facade`.
-template <
-  class Derived,
-  class Value,
-  class Category,
-  class Reference  = Value&,
-  class Difference = std::ptrdiff_t
->
-class iterator_facade : totally_ordered<
-                          iterator_facade<
-                            Derived, Value, Category, Reference, Difference
-                          >
-                        > {
+template <class Derived, class Value, class Category, class Reference = Value&,
+          class Difference = std::ptrdiff_t>
+class iterator_facade
+  : totally_ordered<
+      iterator_facade<Derived, Value, Category, Reference, Difference>> {
 private:
   template <class R, class P>
   struct operator_arrow_dispatch {
@@ -113,17 +107,9 @@ public:
   using value_type = std::remove_cv_t<Value>;
   using reference = Reference;
   using difference_type = Difference;
-  using arrow_dispatcher =
-    operator_arrow_dispatch<
-      reference,
-      std::add_pointer_t<
-        std::conditional_t<
-          std::is_const_v<Value>,
-          value_type const,
-          value_type
-        >
-      >
-    >;
+  using arrow_dispatcher = operator_arrow_dispatch<
+    reference, std::add_pointer_t<std::conditional_t<
+                 std::is_const_v<Value>, value_type const, value_type>>>;
 
   struct postfix_increment_proxy {
     explicit postfix_increment_proxy(const Derived& x) : value(*x) {
@@ -136,13 +122,9 @@ public:
     mutable value_type value;
   };
 
-  using postfix_increment_result =
-    std::conditional_t<
-      std::is_convertible_v<reference,
-                            std::add_lvalue_reference_t<Value const>>,
-      postfix_increment_proxy,
-      Derived
-    >;
+  using postfix_increment_result = std::conditional_t<
+    std::is_convertible_v<reference, std::add_lvalue_reference_t<Value const>>,
+    postfix_increment_proxy, Derived>;
 
   using pointer = typename arrow_dispatcher::result_type;
 
@@ -219,73 +201,63 @@ public:
   }
 
 protected:
-  using iterator_facade_type =
-    iterator_facade<Derived, Value, Category, Reference, Difference>;
+  using iterator_facade_type
+    = iterator_facade<Derived, Value, Category, Reference, Difference>;
 };
 
 /// A simple version of `boost::iterator_adaptor`.
-template <
-  class Derived,
-  class Base,
-  class Value,
-  class Category,
-  class Reference = Value&,
-  class Difference = std::ptrdiff_t
->
+template <class Derived, class Base, class Value, class Category,
+          class Reference = Value&, class Difference = std::ptrdiff_t>
 class iterator_adaptor
-  : public iterator_facade<
-             Derived, Value, Category, Reference, Difference
-           > {
- public:
-    using base_iterator = Base;
-    using super = iterator_adaptor<
-      Derived, Base, Value, Category, Reference, Difference
-    >;
+  : public iterator_facade<Derived, Value, Category, Reference, Difference> {
+public:
+  using base_iterator = Base;
+  using super
+    = iterator_adaptor<Derived, Base, Value, Category, Reference, Difference>;
 
-    iterator_adaptor() = default;
+  iterator_adaptor() = default;
 
-    explicit iterator_adaptor(const Base& b)
-      : iterator_{b} {
-    }
+  explicit iterator_adaptor(const Base& b) : iterator_{b} {
+  }
 
-    [[nodiscard]] const Base& base() const {
-      return iterator_;
-    }
+  [[nodiscard]] const Base& base() const {
+    return iterator_;
+  }
 
- protected:
-    Base& base() {
-      return iterator_;
-    }
+protected:
+  Base& base() {
+    return iterator_;
+  }
 
- private:
-    friend iterator_access;
+private:
+  friend iterator_access;
 
-    [[nodiscard]] Reference dereference() const {
-      return *iterator_;
-    }
+  [[nodiscard]] Reference dereference() const {
+    return *iterator_;
+  }
 
-    [[nodiscard]] bool equals(const iterator_adaptor& other) const {
-      return iterator_ == other.base();
-    }
+  [[nodiscard]] bool equals(const iterator_adaptor& other) const {
+    return iterator_ == other.base();
+  }
 
-    void advance(Difference n) {
-      iterator_ += n;
-    }
+  void advance(Difference n) {
+    iterator_ += n;
+  }
 
-    void increment() {
-      ++iterator_;
-    }
+  void increment() {
+    ++iterator_;
+  }
 
-    void decrement() {
-      --iterator_;
-    }
+  void decrement() {
+    --iterator_;
+  }
 
-    [[nodiscard]] Difference distance_to(const iterator_adaptor& other) const {
-      return other.base() - iterator_;
-    }
+  [[nodiscard]] Difference distance_to(const iterator_adaptor& other) const {
+    return std::distance(iterator_, other.base());
+  }
 
- private:
-    Base iterator_;
+private:
+  Base iterator_;
 };
 
 } // namespace tenzir::detail

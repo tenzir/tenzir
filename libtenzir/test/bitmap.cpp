@@ -235,18 +235,19 @@ struct bitmap_test_harness {
     auto n = size_t{0};
     for (auto i : select(b)) {
       ++n;
-      if (n == 1)
+      if (n == 1) {
         CHECK_EQUAL(i, 0u);
-      else if (n == 100)
+      } else if (n == 100) {
         CHECK_EQUAL(i, 99u);
-      else if (n == 222)
+      } else if (n == 222) {
         CHECK_EQUAL(i, 221u);
-      else if (n == 223)
+      } else if (n == 223) {
         CHECK_EQUAL(i, 223u);
-      else if (n == 224)
+      } else if (n == 224) {
         CHECK_EQUAL(i, 227u);
-      else if (n == r)
+      } else if (n == r) {
         CHECK_EQUAL(i, b.size() - 1);
+      }
     }
     CHECK_EQUAL(r, n);
     MESSAGE("bitwise_range::select(n)");
@@ -262,7 +263,7 @@ struct bitmap_test_harness {
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), last);
     rng.select(42); // nothing left
-    CHECK(!rng);
+    CHECK(! rng);
     MESSAGE("bitwise_range::next(n)");
     rng = each(b);
     rng.next(b.size() - 1); // start at 0, then go to last bit.
@@ -277,7 +278,7 @@ struct bitmap_test_harness {
     CHECK_EQUAL(rng.get(), 227u);
     rng = each(b);
     rng.next(1024); // out of range
-    CHECK(!rng);
+    CHECK(! rng);
     MESSAGE("bitwise_range::select_from(x)");
     rng = each(b);
     rng.select_from(225);
@@ -296,53 +297,53 @@ struct bitmap_test_harness {
       return x;
     };
     intervals ys;
-    auto g = [&](auto& x) {
+    auto g = [&](auto& x) -> caf::error {
       ys.push_back(x);
-      return caf::none;
+      return {};
     };
     // The very first ID.
     auto err = select_with(make_ids({0}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{0, 10}}));
     ys.clear();
     // An intermediate ID in the first interval.
     err = select_with(make_ids({5}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{0, 10}}));
     ys.clear();
     // The last ID in the first interval.
     err = select_with(make_ids({10}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{10, 20}}));
     ys.clear();
     // The first ID in an intermediate interval.
     err = select_with(make_ids({30}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{30, 40}}));
     ys.clear();
     // An intermediate ID in an intermediate interval.
     err = select_with(make_ids({42}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{40, 50}}));
     ys.clear();
     // The last ID in an intermediate interval.
     err = select_with(make_ids({50}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK(ys.empty());
     ys.clear();
     // An ID outside of the interval range.
     err = select_with(make_ids({100}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK(ys.empty());
     ys.clear();
     // Multiple IDs in the first interval.
     err = select_with(make_ids({0, 1, 2}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{0, 10}}));
     ys.clear();
     // Multiple IDs in several intervals.
     err = select_with(make_ids({5, 10, 42}), xs.begin(), xs.end(), identity, g);
-    CHECK(!err);
+    CHECK(err.empty());
     CHECK_EQUAL(ys, (intervals{{0, 10}, {10, 20}, {40, 50}}));
   }
 
@@ -383,36 +384,36 @@ struct bitmap_test_harness {
     MESSAGE("all");
     CHECK(all<0>(Bitmap{}));
     CHECK(all<1>(Bitmap{}));
-    CHECK(!all<0>(a));
-    CHECK(!all<0>(b));
-    CHECK(!all<1>(a));
-    CHECK(!all<1>(b));
+    CHECK(! all<0>(a));
+    CHECK(! all<0>(b));
+    CHECK(! all<1>(a));
+    CHECK(! all<1>(b));
     CHECK(all<0>(Bitmap{10, false}));
     CHECK(all<0>(Bitmap{1000, false}));
-    CHECK(!all<0>(Bitmap{10, true}));
-    CHECK(!all<0>(Bitmap{1000, true}));
+    CHECK(! all<0>(Bitmap{10, true}));
+    CHECK(! all<0>(Bitmap{1000, true}));
     CHECK(all<1>(Bitmap{10, true}));
     CHECK(all<1>(Bitmap{1000, true}));
-    CHECK(!all<1>(Bitmap{10, false}));
-    CHECK(!all<1>(Bitmap{1000, false}));
+    CHECK(! all<1>(Bitmap{10, false}));
+    CHECK(! all<1>(Bitmap{1000, false}));
   }
 
   void test_any() {
     MESSAGE("any");
-    CHECK(!any<0>(Bitmap{}));
-    CHECK(!any<1>(Bitmap{}));
+    CHECK(! any<0>(Bitmap{}));
+    CHECK(! any<1>(Bitmap{}));
     CHECK(any<0>(a));
     CHECK(any<0>(b));
     CHECK(any<1>(a));
     CHECK(any<1>(b));
     CHECK(any<0>(Bitmap{10, false}));
     CHECK(any<0>(Bitmap{1000, false}));
-    CHECK(!any<0>(Bitmap{10, true}));
-    CHECK(!any<0>(Bitmap{1000, true}));
+    CHECK(! any<0>(Bitmap{10, true}));
+    CHECK(! any<0>(Bitmap{1000, true}));
     CHECK(any<1>(Bitmap{10, true}));
     CHECK(any<1>(Bitmap{1000, true}));
-    CHECK(!any<1>(Bitmap{10, false}));
-    CHECK(!any<1>(Bitmap{1000, false}));
+    CHECK(! any<1>(Bitmap{10, false}));
+    CHECK(! any<1>(Bitmap{1000, false}));
   }
 
   void test_flatbuffers() {

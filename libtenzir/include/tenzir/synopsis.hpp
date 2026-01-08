@@ -153,26 +153,28 @@ bool serialize(auto& sink, synopsis_ptr& ptr) {
     static legacy_type dummy;
     return sink.apply(dummy);
   }
-  auto err = caf::error::eval(
-    [&] {
-      if (! sink.apply(ptr->type().to_legacy_type())
-          && sink.get_error().empty()) {
-        return caf::make_error(ec::serialization_error, "Apply for "
-                                                        "synopsis_ptr failed");
-      }
-      return sink.get_error();
-    },
-    [&] {
-      synopsis::supported_inspectors i{std::ref(sink)};
-      if (! ptr->inspect_impl(i) && sink.get_error().empty()) {
-        return caf::make_error(ec::serialization_error, "serialize for "
-                                                        "synopsis_ptr failed");
-      }
-      return sink.get_error();
-    });
-
-  if (err.valid()) {
+  if (! sink.apply(ptr->type().to_legacy_type())) {
+    auto err = sink.get_error();
+    if (err.empty()) {
+      err = caf::make_error(ec::serialization_error,
+                            "Apply for synopsis_ptr failed");
+    }
     TENZIR_WARN("Error during synopsis_ptr serialization, {}", err);
+    return false;
+  }
+  synopsis::supported_inspectors i{std::ref(sink)};
+  if (! ptr->inspect_impl(i)) {
+    auto err = sink.get_error();
+    if (err.empty()) {
+      err = caf::make_error(ec::serialization_error,
+                            "serialize for synopsis_ptr failed");
+    }
+    TENZIR_WARN("Error during synopsis_ptr serialization, {}", err);
+    return false;
+  }
+  if (sink.get_error().valid()) {
+    TENZIR_WARN("Error during synopsis_ptr serialization, {}",
+                sink.get_error());
     return false;
   }
   return true;

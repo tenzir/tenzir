@@ -38,8 +38,9 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
   auto start = argv + 1;
   auto end = argv + argc;
   auto args_start = std::find(start, end, delimiter);
-  if (args_start == end)
+  if (args_start == end) {
     return {};
+  }
   return {args_start + 1, end};
 }
 
@@ -52,7 +53,7 @@ int main(int argc, char** argv) {
                 == caf::none);
   std::string tenzir_loglevel = "quiet";
   auto test_args = get_test_args(argc, argv);
-  if (!test_args.empty()) {
+  if (! test_args.empty()) {
     auto options = caf::config_option_set{}
                      .add(tenzir_loglevel, "tenzir-verbosity",
                           "console verbosity for libtenzir")
@@ -78,7 +79,7 @@ int main(int argc, char** argv) {
   // and allow the unit tests to specify a list of required
   // plugins and their config.
   for (auto& plugin : tenzir::plugins::get_mutable()) {
-    if (auto err = plugin->initialize({}, {})) {
+    if (auto err = plugin->initialize({}, {}); err.valid()) {
       fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
                  err);
       return EXIT_FAILURE;
