@@ -1,0 +1,6 @@
+from {val: 1}, {val: 2}, {val: 3}, {val: 4}, {val: 5}, {val: 6}
+batch
+parallel 2, _split_at=3 {
+  summarize total=sum(val), cnt=count(val)
+}
+sort total

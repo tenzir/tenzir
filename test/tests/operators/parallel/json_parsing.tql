@@ -1,0 +1,6 @@
+from {line: r#"{"a": 1}"#}, {line: r#"{"a": 2}"#}, {line: r#"{"a": 3}"#}, {line: r#"{"a": 4}"#}
+batch
+parallel 2, _split_at=2 {
+  parsed = line.parse_json()
+}
+sort parsed.a
