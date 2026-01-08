@@ -8,10 +8,10 @@ pr: 5605
 The `summarize` operator now supports periodic emission of aggregation results at
 fixed intervals, enabling real-time streaming analytics and monitoring use cases.
 
-Use the optional `frequency` parameter to emit results every N seconds:
+Use the `options` named argument with `frequency` to emit results every N seconds:
 
 ```tql
-summarize {frequency: 5s}, count(this), src_ip
+summarize count(this), src_ip, options={frequency: 5s}
 ```
 
 This emits aggregation results every 5 seconds, showing the count per source IP for
@@ -31,14 +31,14 @@ The `mode` parameter controls how aggregations behave across emissions:
 per-interval metrics:
 
 ```tql
-summarize {frequency: 10s}, sum(bytes)
+summarize sum(bytes), options={frequency: 10s}
 // Shows bytes per 10-second window
 ```
 
 **Cumulative mode** accumulates values across emissions, providing running totals:
 
 ```tql
-summarize {frequency: 10s, mode: "cumulative"}, sum(bytes)
+summarize sum(bytes), options={frequency: 10s, mode: "cumulative"}
 // Shows total bytes seen so far
 ```
 
@@ -46,7 +46,7 @@ summarize {frequency: 10s, mode: "cumulative"}, sum(bytes)
 output noise in monitoring scenarios:
 
 ```tql
-summarize {frequency: 1s, mode: "update"}, count(this), severity
+summarize count(this), severity, options={frequency: 1s, mode: "update"}
 // Only emits when the count for a severity level changes
 ```
 

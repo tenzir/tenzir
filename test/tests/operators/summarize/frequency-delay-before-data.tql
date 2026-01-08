@@ -1,4 +1,4 @@
 // Ensure frequency timer does not emit before first input arrives.
 from {ts: 200ms.from_epoch(), x: 1}
 delay ts
-summarize {frequency: 50ms}, count=count()
+summarize count=count(), options={frequency: 50ms}

@@ -3,4 +3,4 @@ error: true
 ---
 
 from {x: 1}
-summarize {frequency: 1s, mode: "invalid"}, count=count()
+summarize count=count(), options={frequency: 1s, mode: "invalid"}

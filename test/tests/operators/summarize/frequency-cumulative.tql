@@ -4,4 +4,4 @@ from {ts: 0ms.from_epoch(), x: 1},
      {ts: 120ms.from_epoch(), x: 1},
      {ts: 220ms.from_epoch(), x: 1}
 delay ts
-summarize {frequency: 100ms, mode: "cumulative"}, count=count()
+summarize count=count(), options={frequency: 100ms, mode: "cumulative"}

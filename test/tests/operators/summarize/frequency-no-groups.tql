@@ -2,4 +2,4 @@
 from {x: 1},
      {x: 2},
      {x: 3}
-summarize {frequency: 1s}, count=count()
+summarize count=count(), options={frequency: 1s}

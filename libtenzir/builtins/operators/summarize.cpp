@@ -560,58 +560,68 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto cfg = config{};
+    auto failed = false;
 
-    // Check for options record as first argument
-    if (! inv.args.empty()) {
-      if (auto* rec = try_as<ast::record>(inv.args[0])) {
-        for (auto& item : rec->items) {
-          auto* field = try_as<ast::record::field>(item);
-          if (! field) {
-            diagnostic::error("spread not allowed in options record")
-              .primary(rec->get_location())
-              .emit(ctx);
-            return failure::promise();
-          }
-          const auto& name = field->name.name;
-          if (name == "frequency") {
-            TRY(auto value, const_eval(field->expr, ctx));
-            auto* dur = try_as<duration>(value);
-            if (! dur) {
-              diagnostic::error("expected duration for `frequency`")
-                .primary(field->expr)
-                .emit(ctx);
-              return failure::promise();
-            }
-            cfg.frequency = *dur;
-          } else if (name == "mode") {
-            TRY(auto value, const_eval(field->expr, ctx));
-            auto* str = try_as<std::string>(value);
-            if (! str) {
-              diagnostic::error("expected string for `mode`")
-                .primary(field->expr)
-                .emit(ctx);
-              return failure::promise();
-            }
-            if (*str == "reset" || *str == "cumulative" || *str == "update") {
-              cfg.mode = *str;
-            } else {
-              diagnostic::error("invalid mode `{}`", *str)
-                .primary(field->expr)
-                .hint("expected `reset`, `cumulative`, or `update`")
-                .emit(ctx);
-              return failure::promise();
-            }
-          } else {
-            diagnostic::error("unknown option `{}`", name)
-              .primary(field->name)
-              .emit(ctx);
-            return failure::promise();
-          }
+    // Helper to parse the options record
+    auto parse_options = [&](ast::record& rec) {
+      for (auto& item : rec.items) {
+        auto* field = try_as<ast::record::field>(item);
+        if (! field) {
+          diagnostic::error("spread not allowed in options record")
+            .primary(rec.get_location())
+            .emit(ctx);
+          failed = true;
+          return;
         }
-        // Remove the options record from arguments
-        inv.args.erase(inv.args.begin());
+        const auto& name = field->name.name;
+        if (name == "frequency") {
+          auto value = const_eval(field->expr, ctx);
+          if (! value) {
+            failed = true;
+            return;
+          }
+          auto* dur = try_as<duration>(*value);
+          if (! dur) {
+            diagnostic::error("expected duration for `frequency`")
+              .primary(field->expr)
+              .emit(ctx);
+            failed = true;
+            return;
+          }
+          cfg.frequency = *dur;
+        } else if (name == "mode") {
+          auto value = const_eval(field->expr, ctx);
+          if (! value) {
+            failed = true;
+            return;
+          }
+          auto* str = try_as<std::string>(*value);
+          if (! str) {
+            diagnostic::error("expected string for `mode`")
+              .primary(field->expr)
+              .emit(ctx);
+            failed = true;
+            return;
+          }
+          if (*str == "reset" || *str == "cumulative" || *str == "update") {
+            cfg.mode = *str;
+          } else {
+            diagnostic::error("invalid mode `{}`", *str)
+              .primary(field->expr)
+              .hint("expected `reset`, `cumulative`, or `update`")
+              .emit(ctx);
+            failed = true;
+            return;
+          }
+        } else {
+          diagnostic::error("unknown option `{}`", name)
+            .primary(field->name)
+            .emit(ctx);
+          failed = true;
+          return;
+        }
       }
-    }
+    };
 
     auto add_aggregate = [&](std::optional<ast::field_path> dest,
                              ast::function_call call) {
@@ -653,6 +663,20 @@ public:
               .emit(ctx);
             return;
           }
+          // Check for `options=...` named argument
+          if (not left->has_this() && left->path().size() == 1
+              && left->path()[0].id.name == "options") {
+            auto* rec = try_as<ast::record>(arg.right);
+            if (not rec) {
+              diagnostic::error("expected record for `options`")
+                .primary(arg.right)
+                .emit(ctx);
+              failed = true;
+              return;
+            }
+            parse_options(*rec);
+            return;
+          }
           arg.right.match(
             [&](ast::function_call& right) {
               add_aggregate(std::move(*left), std::move(right));
@@ -680,6 +704,9 @@ public:
               .emit(ctx);
           }
         });
+    }
+    if (failed) {
+      return failure::promise();
     }
     return std::make_unique<summarize_operator2>(std::move(cfg));
   }

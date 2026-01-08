@@ -1,7 +1,7 @@
 error: invalid mode `invalid`
- --> tests/operators/summarize/frequency-invalid-mode.tql:6:33
+ --> tests/operators/summarize/frequency-invalid-mode.tql:6:56
   |
-6 | summarize {frequency: 1s, mode: "invalid"}, count=count()
-  |                                 ^^^^^^^^^ 
+6 | summarize count=count(), options={frequency: 1s, mode: "invalid"}
+  |                                                        ^^^^^^^^^ 
   |
   = hint: expected `reset`, `cumulative`, or `update`

@@ -2,4 +2,4 @@
 from {ts: 0ms.from_epoch(), x: 1},
      {ts: 150ms.from_epoch(), x: 1}
 delay ts
-summarize {frequency: 100ms, mode: "update"}, sum=sum(x)
+summarize sum=sum(x), options={frequency: 100ms, mode: "update"}
