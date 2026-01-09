@@ -561,6 +561,7 @@ struct tryable<failure_or<T>>
 class diagnostic_deduplicator {
 public:
   auto insert(const diagnostic& d) -> bool;
+  void clear();
 
 private:
   using seen_t = std::pair<std::string, std::vector<location>>;
