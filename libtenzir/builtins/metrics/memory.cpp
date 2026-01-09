@@ -479,8 +479,7 @@ auto make_procfs_metrics() -> record {
   return result;
 }
 
-auto make_actor_stats_for(caf::actor_system& system,
-                          memory::polymorphic_allocator& alloc) -> list {
+auto make_actor_stats_for(memory::polymorphic_allocator& alloc) -> list {
   auto res = list{};
   /// Reserve memory for one element. This is critical to ensure that the
   /// metrics collector is in the list of actors, which means that any
@@ -491,13 +490,13 @@ auto make_actor_stats_for(caf::actor_system& system,
   if (not stats) {
     return res;
   }
-  for (const auto& [id, stats] : *stats) {
+  for (const auto& [name, stats] : *stats) {
     auto& entry = as<record>(res.emplace_back(record{}));
     entry.reserve(5);
-    if (auto ptr = system.registry().get(id)) {
-      entry.try_emplace("name", ptr->get()->name());
+    if (std::string_view{name}.empty()) {
+      entry.try_emplace("name", caf::none);
     } else {
-      entry.try_emplace("name", fmt::to_string(id));
+      entry.try_emplace("name", std::string{name});
     }
     entry.try_emplace(
       "bytes_allocated_cumulative",
@@ -514,18 +513,16 @@ auto make_actor_stats_for(caf::actor_system& system,
   return res;
 }
 
-auto make_actor_stats(caf::actor_system& system) -> record {
+auto make_actor_stats() -> record {
   auto result = record{};
   result.reserve(3);
-  result.try_emplace("arrow",
-                     make_actor_stats_for(system, memory::arrow_allocator()));
-  result.try_emplace("cpp",
-                     make_actor_stats_for(system, memory::cpp_allocator()));
-  result.try_emplace("c", make_actor_stats_for(system, memory::c_allocator()));
+  result.try_emplace("arrow", make_actor_stats_for(memory::arrow_allocator()));
+  result.try_emplace("cpp", make_actor_stats_for(memory::cpp_allocator()));
+  result.try_emplace("c", make_actor_stats_for(memory::c_allocator()));
   return result;
 }
 
-auto get_raminfo(caf::actor_system& system) -> caf::expected<record> {
+auto get_raminfo() -> caf::expected<record> {
   auto result = record{};
   result.reserve(9);
   result.try_emplace("system", make_system_info());
@@ -540,7 +537,7 @@ auto get_raminfo(caf::actor_system& system) -> caf::expected<record> {
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
-  result.try_emplace("actor", make_actor_stats(system));
+  result.try_emplace("actor", make_actor_stats());
 #endif
 #if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
   result.try_emplace("malloc", make_malloc_metrics());
@@ -567,16 +564,12 @@ public:
     return "memory";
   }
 
-  auto make_collector(caf::actor_system& system) const
+  auto make_collector(caf::actor_system&) const
     -> caf::expected<collector> override {
 #ifdef _SC_AVPHYS_PAGES
-    return [&system]() {
-      return get_raminfo(system);
-    };
+    return get_raminfo;
 #elif __has_include(<mach/mach.h>)
-    return [&system]() {
-      return get_raminfo(system);
-    };
+    return get_raminfo;
 #else
     return caf::make_error(ec::invalid_configuration,
                            "not supported on this platform");

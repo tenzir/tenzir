@@ -81,16 +81,64 @@ round_to_alignment(std::size_t N, std::align_val_t alignment) noexcept
   return N - m + std::to_underlying(alignment);
 }
 
-/// A tag placed at the beginning of an allocation
-struct allocation_tag {
-  caf::actor_id actor_id;
-  std::size_t thread_id;
-  std::array<char, 16> thread_name;
-  std::align_val_t alignment;
+class actor_name {
+public:
+  operator std::string_view() const noexcept {
+    /// If the last character is a null, the name may be shorter.
+    if (storage_.back() == '\0') {
+      return {storage_.data()};
+    }
+    /// Otherwise, all characters are part of the string.
+    return {storage_.data(), storage_.size()};
+  }
 
-  // [padding][tag][data...]
-  // ^storage_ptr
-  //               ^data_ptr
+  friend auto operator<=>(const actor_name& lhs, const actor_name& rhs) noexcept
+    -> std::strong_ordering
+    = default;
+
+  friend auto operator==(const actor_name&, const actor_name&) noexcept -> bool
+    = default;
+
+  [[nodiscard]] static auto current() noexcept -> actor_name {
+    actor_name res;
+    res.make_current();
+    return res;
+  }
+
+  auto make_current() noexcept -> void {
+    const auto aptr = caf::logger::thread_local_aptr();
+    if (not aptr) {
+      return;
+    }
+    const char* const name = aptr->name();
+#ifndef __clang__
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
+    std::strncpy(storage_.data(), name, storage_.size());
+#ifndef __clang__
+#  pragma GCC diagnostic pop
+#endif
+  }
+
+private:
+  std::array<char, 16> storage_ = {}; // make sure this is 0 initialized.
+};
+
+static_assert(sizeof(actor_name) == 16);
+static_assert(alignof(actor_name) <= 8);
+
+/// A tag placed at the beginning of an allocation
+// [padding][tag][data...]
+// ^storage_ptr
+//               ^data_ptr
+// This relies on tag always being right up against the data section. This is
+// required to allow us to get from the data pointer to the tag pointer. The tag
+// then contains the allocations alignment, which we need to get back to the
+// storage pointer.
+struct allocation_tag {
+  class actor_name actor_name;
+  std::align_val_t alignment;
 
   struct tag_and_data {
     allocation_tag* tag_ptr;
@@ -126,13 +174,9 @@ struct allocation_tag {
     -> tag_and_data {
     auto res = obtain_from(storage_ptr, alignment);
     // Create tag with alignment information
-    const auto actor_id = caf::logger::thread_local_aid();
-    const pthread_t self = pthread_self();
-    std::array<char, 16> thread_name = {};
-    std::ignore
-      = pthread_getname_np(self, thread_name.data(), thread_name.size());
-    res.tag_ptr
-      = std::construct_at(res.tag_ptr, actor_id, self, thread_name, alignment);
+    res.tag_ptr = std::construct_at(res.tag_ptr);
+    res.tag_ptr->alignment = alignment;
+    res.tag_ptr->actor_name.make_current();
     return res;
   }
 
@@ -158,23 +202,46 @@ struct allocation_tag {
 
 struct actor_stat {
   /// Total bytes this actor has allocated
-  std::atomic<std::int64_t> bytes_allocated_cumulative = 0;
+  alignas(std::hardware_destructive_interference_size)
+    std::atomic<std::int64_t> bytes_allocated_cumulative
+    = 0;
   /// Total bytes this actor has deallocated
-  std::atomic<std::int64_t> bytes_deallocated_cumulative = 0;
+  alignas(std::hardware_destructive_interference_size)
+    std::atomic<std::int64_t> bytes_deallocated_cumulative
+    = 0;
   /// Total bytes this actor has reallocated (may be negative)
-  std::atomic<std::int64_t> bytes_reallocated_cumulative = 0;
+  alignas(std::hardware_destructive_interference_size)
+    std::atomic<std::int64_t> bytes_reallocated_cumulative
+    = 0;
   /// Bytes allocated by this actor that have not been deallocated
-  std::atomic<std::int64_t> bytes_alive = 0;
+  alignas(std::hardware_destructive_interference_size)
+    std::atomic<std::int64_t> bytes_alive
+    = 0;
   /// Last time this actor performed any allocation/deallocation/reallocation
-  std::chrono::steady_clock::time_point last_seen = {};
+  alignas(std::hardware_destructive_interference_size)
+    std::chrono::steady_clock::time_point last_seen
+    = {};
+};
+
+struct actor_name_equal {
+  static auto operator()(const actor_name& lhs, const actor_name& rhs) noexcept
+    -> bool {
+    return std::bit_cast<__uint128_t>(lhs) == std::bit_cast<__uint128_t>(rhs);
+  }
+};
+
+struct actor_name_hash {
+  static auto operator()(const actor_name& name) noexcept -> std::size_t {
+    return std::hash<__uint128_t>{}(std::bit_cast<__uint128_t>(name));
+  }
 };
 
 using actor_stat_allocator
-  = std::pmr::polymorphic_allocator<std::pair<const caf::actor_id, actor_stat>>;
+  = std::pmr::polymorphic_allocator<std::pair<const actor_name, actor_stat>>;
 
 using actor_stat_map
-  = std::unordered_map<caf::actor_id, actor_stat, std::hash<caf::actor_id>,
-                       std::equal_to<caf::actor_id>, actor_stat_allocator>;
+  = std::unordered_map<actor_name, actor_stat, actor_name_hash,
+                       actor_name_equal, actor_stat_allocator>;
 
 class actor_stats_read {
 public:
@@ -262,6 +329,18 @@ public:
   }
 };
 
+/// Simple per-actor tracking of memory. There is a map protected by a mutex,
+/// which contains atomics.
+/// When making any change to the data, there is two phases:
+///
+/// * First we obtain a shared lock and try and see if the key is in the map
+///   already.
+///   If it is, we can safely perform an atomic modification to it and are
+///   done.
+/// * Otherwise, we obtain a unique lock and try to insert the key. Notably it
+///   is possible for the key to actually exist by now, since somebody else may
+///   have gotten the write lock before us and inserted it.
+///   Because of this, we then perform atomic modifications to the value.
 template <detail::allocator_trait InternalTrait>
 class actor_stats final {
 public:
@@ -269,16 +348,15 @@ public:
     -> void {
     const auto now = std::chrono::steady_clock::now();
     auto read_lock = std::shared_lock{mut_};
-    auto it = allocations_by_actor_.find(tag.actor_id);
+    auto it = allocations_by_actor_.find(tag.actor_name);
     if (it == allocations_by_actor_.end()) {
       read_lock.unlock();
       const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, success]
-        = allocations_by_actor_.try_emplace(tag.actor_id);
-      TENZIR_ASSERT(success or tag.actor_id == caf::invalid_actor_id);
+      const auto [it, _] = allocations_by_actor_.try_emplace(tag.actor_name);
       auto& value = it->second;
-      value.bytes_alive = size;
-      value.bytes_allocated_cumulative = size;
+      value.bytes_alive.fetch_add(size, std::memory_order_relaxed);
+      value.bytes_allocated_cumulative.fetch_add(size,
+                                                 std::memory_order_relaxed);
       value.last_seen = now;
       return;
     }
@@ -292,12 +370,12 @@ public:
 
   auto note_reallocation(const detail::allocation_tag& tag,
                          std::int64_t old_size, std::int64_t new_size) -> void {
-    const auto my_id = caf::logger::thread_local_aid();
+    const auto my_name = actor_name::current();
     const auto diff = new_size - old_size;
     const auto now = std::chrono::steady_clock::now();
     auto read_lock = std::shared_lock{mut_};
     {
-      const auto it = allocations_by_actor_.find(tag.actor_id);
+      const auto it = allocations_by_actor_.find(tag.actor_name);
       TENZIR_ASSERT(it != allocations_by_actor_.end());
       auto& value = it->second;
       value.bytes_alive.fetch_add(diff, std::memory_order_relaxed);
@@ -305,14 +383,14 @@ public:
         value.last_seen = now;
       }
     }
-    const auto it = allocations_by_actor_.find(my_id);
+    const auto it = allocations_by_actor_.find(my_name);
     if (it == allocations_by_actor_.end()) {
       read_lock.unlock();
       const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, success] = allocations_by_actor_.try_emplace(my_id);
-      TENZIR_ASSERT(success or tag.actor_id == caf::invalid_actor_id);
+      const auto [it, _] = allocations_by_actor_.try_emplace(my_name);
       auto& value = it->second;
-      value.bytes_reallocated_cumulative = diff;
+      value.bytes_reallocated_cumulative.fetch_add(diff,
+                                                   std::memory_order_relaxed);
       value.last_seen = now;
       return;
     }
@@ -326,23 +404,23 @@ public:
 
   auto note_deallocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
-    const auto my_id = caf::logger::thread_local_aid();
+    const auto my_name = actor_name::current();
     const auto now = std::chrono::steady_clock::now();
     auto read_lock = std::shared_lock{mut_};
     {
-      const auto it = allocations_by_actor_.find(tag.actor_id);
+      const auto it = allocations_by_actor_.find(tag.actor_name);
       TENZIR_ASSERT(it != allocations_by_actor_.end());
       auto& value = it->second;
       value.bytes_alive.fetch_sub(size, std::memory_order_relaxed);
     }
-    const auto it = allocations_by_actor_.find(my_id);
+    const auto it = allocations_by_actor_.find(my_name);
     if (it == allocations_by_actor_.end()) {
       read_lock.unlock();
       const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, success] = allocations_by_actor_.try_emplace(my_id);
-      TENZIR_ASSERT(success or tag.actor_id == caf::invalid_actor_id);
+      const auto [it, _] = allocations_by_actor_.try_emplace(my_name);
       auto& value = it->second;
-      value.bytes_deallocated_cumulative = size;
+      value.bytes_deallocated_cumulative.fetch_add(size,
+                                                   std::memory_order_relaxed);
       value.last_seen = now;
       return;
     }
