@@ -5,10 +5,12 @@
   arrow-cpp,
   iconv,
   sqlite,
+  tzdata,
 }:
 arrow-cpp.overrideAttrs (orig: {
   patches = [
     ./arrow-cpp-fields-race.patch
+    ./arrow-cpp-nixos-zoneinfo.patch
   ];
   nativeBuildInputs =
     orig.nativeBuildInputs
@@ -33,6 +35,15 @@ arrow-cpp.overrideAttrs (orig: {
     ] ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic ) [
       iconv
     ];
+
+  # We replace the proConfigure phase of the upstream package with one that supports zoneinfo
+  # lookups in arrow's default paths again, because we don't want to ship zoneinfo with the
+  # packages built from the static binary.
+  preConfigure = if stdenv.hostPlatform.isStatic then ''
+    patchShebangs build-support/
+    substituteInPlace "src/arrow/vendored/datetime/tz.cpp" \
+      --replace-fail "NIX_STORE_ZONEINFO" "${tzdata}/share/zoneinfo"
+  '' else orig.preConfigure;
 
   cmakeFlags =
     orig.cmakeFlags
