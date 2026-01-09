@@ -130,7 +130,7 @@ endif ()
 # to avoid complexity and potential circular reference issues
 
 set(plugins_default "plugins/*")
-if (EXISTS contrib/tenzir-plugins/.git)
+if (EXISTS ${PROJECT_SOURCE_DIR}/contrib/tenzir-plugins/.git)
   list(APPEND plugins_default "contrib/tenzir-plugins/*")
 endif ()
 
