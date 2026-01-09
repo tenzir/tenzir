@@ -840,6 +840,7 @@ inline auto trim_noop() noexcept -> void {
 struct traits {
   static constexpr auto backend_value = backend::jemalloc;
   static constexpr std::string_view name = "jemalloc";
+  static constexpr auto default_alignment = std::align_val_t{16};
 
   static constexpr auto malloc = &::je_tenzir_malloc;
   static constexpr auto malloc_aligned = &je_tenzir_malloc_aligned;
@@ -854,7 +855,9 @@ struct traits {
 
 static_assert(memory::detail::allocator_trait<traits>);
 
-using allocator = memory::detail::basic_allocator<traits>;
+using allocator = memory::detail::basic_allocator<traits, traits>;
+
+static_assert(memory::detail::allocator<allocator>);
 
 } // namespace jemalloc
 #endif
@@ -870,6 +873,7 @@ inline auto trim_collect() noexcept -> void {
 struct traits {
   static constexpr auto backend_value = backend::mimalloc;
   static constexpr std::string_view name = "mimalloc";
+  static constexpr auto default_alignment = std::align_val_t{16};
 
   static constexpr auto malloc = &::mi_malloc;
   static constexpr auto malloc_aligned = &::mi_malloc_aligned;
@@ -965,10 +969,10 @@ auto calloc_aligned(std::size_t count, std::size_t size,
                     std::size_t alignment) noexcept -> void*;
 
 struct traits {
-  static constexpr auto default_alignment
-    = std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__};
   static constexpr auto backend_value = backend::system;
   static constexpr auto name = std::string_view{"system"};
+  static constexpr auto default_alignment
+    = std::align_val_t{__STDCPP_DEFAULT_NEW_ALIGNMENT__};
 
   static constexpr auto malloc = &native_malloc;
   static constexpr auto malloc_aligned = &system::malloc_aligned;
