@@ -43,7 +43,6 @@
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
-#include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
 
@@ -149,7 +148,8 @@ auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
                                                              self->state().dir);
   TENZIR_ASSERT(filesystem);
   if (auto err = register_component(
-        self, caf::actor_cast<caf::actor>(filesystem), "filesystem")) {
+        self, caf::actor_cast<caf::actor>(filesystem), "filesystem");
+      err.valid()) {
     diagnostic::error(err).note("failed to register filesystem").throw_();
   }
   return filesystem;
@@ -160,7 +160,8 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self)
   auto catalog = self->spawn<caf::detached>(tenzir::catalog);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
-                                    "catalog")) {
+                                    "catalog");
+      err.valid()) {
     diagnostic::error(err).note("failed to register catalog").throw_();
   }
   return catalog;
@@ -180,7 +181,7 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
           .note("failed to convert `tenzir.index` configuration")
           .throw_();
       }
-      if (auto err = convert(*index_settings_data, index_config)) {
+      if (auto err = convert(*index_settings_data, index_config); err.valid()) {
         diagnostic::error(err)
           .note("failed to parse `tenzir.index` configuration")
           .throw_();
@@ -204,7 +205,8 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
   }();
   TENZIR_ASSERT(index);
   if (auto err
-      = register_component(self, caf::actor_cast<caf::actor>(index), "index")) {
+      = register_component(self, caf::actor_cast<caf::actor>(index), "index");
+      err.valid()) {
     diagnostic::error(err).note("failed to register index").throw_();
   }
   return index;
@@ -215,7 +217,8 @@ auto spawn_importer(node_actor::stateful_pointer<node_state> self,
   auto importer = self->spawn(caf::actor_from_state<tenzir::importer>, index);
   TENZIR_ASSERT(importer);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
-                                    "importer")) {
+                                    "importer");
+      err.valid()) {
     diagnostic::error(err).note("failed to register importer").throw_();
   }
   return importer;
@@ -258,7 +261,7 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
       command ? *command : std::optional<std::string>{},
       std::chrono::seconds{interval},
     };
-    if (auto err = validate(disk_monitor_config)) {
+    if (auto err = validate(disk_monitor_config); err.valid()) {
       diagnostic::error(err)
         .note("failed to validate disk monitor config")
         .throw_();
@@ -278,7 +281,8 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   }();
   if (disk_monitor) {
     if (auto err = register_component(
-          self, caf::actor_cast<caf::actor>(disk_monitor), "disk-monitor")) {
+          self, caf::actor_cast<caf::actor>(disk_monitor), "disk-monitor");
+        err.valid()) {
       diagnostic::error(err).note("failed to register disk-monitor").throw_();
     }
   }
@@ -333,7 +337,8 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
         .throw_();
     }
     if (auto err
-        = register_component(self, caf::actor_cast<caf::actor>(handle), name)) {
+        = register_component(self, caf::actor_cast<caf::actor>(handle), name);
+        err.valid()) {
       diagnostic::error(err)
         .note("{} failed to register component {} in component registry", *self,
               name)
@@ -694,7 +699,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
       }
       TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
       const auto node_shutdown_reason
-        = not msg.reason or msg.reason == caf::exit_reason::user_shutdown
+        = msg.reason.empty() or msg.reason == caf::exit_reason::user_shutdown
               or msg.reason == ec::silent
             ? msg.reason
             : diagnostic::error(msg.reason)

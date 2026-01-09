@@ -309,13 +309,13 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   auto invalid
     = tenzir::validate(data, tenzir::plugins::web::configuration::schema(),
                        tenzir::validate::permissive);
-  if (invalid) {
+  if (invalid.valid()) {
     return caf::make_message(caf::make_error(
       ec::invalid_argument, fmt::format("invalid options: {}", invalid)));
   }
   web::configuration config;
   caf::error error = convert(data, config);
-  if (error) {
+  if (error.valid()) {
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
   }
@@ -505,7 +505,8 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   }
   // If we're in the same process as the node and an error occurred, we want the
   // whole process to terminate.
-  if (not stop_from_node and err and self->system().node() == node->node()) {
+  if (not stop_from_node and err.valid()
+      and self->system().node() == node->node()) {
     self->send_exit(node, err);
   }
   server_thread.join();

@@ -175,7 +175,7 @@ struct transceiver_state {
       [](const operator_metric&) {},
       [this](const caf::exit_msg& msg) {
         TENZIR_TRACE("[transceiver_actor] received exit: {}", msg.reason);
-        if (msg.reason) {
+        if (msg.reason.valid()) {
           self_->quit(msg.reason);
         }
       },

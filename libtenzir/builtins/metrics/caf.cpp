@@ -13,7 +13,9 @@
 
 #include <caf/actor_system.hpp>
 #include <caf/fwd.hpp>
-#include <caf/telemetry/int_gauge.hpp>
+#include <caf/telemetry/counter.hpp>
+#include <caf/telemetry/gauge.hpp>
+#include <caf/telemetry/histogram.hpp>
 #include <caf/telemetry/metric_registry.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <tsl/robin_map.h>

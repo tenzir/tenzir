@@ -71,13 +71,13 @@ auto socket_endpoint::parse(std::string_view url)
   if (result.addr.is_v4()) {
     auto sa = sockaddr_in{};
     auto err = convert(result.addr, sa);
-    TENZIR_ASSERT(not err);
+    TENZIR_ASSERT(err.empty());
     sa.sin_port = detail::to_network_order(result.port);
     result.sock_addr = sa;
   } else {
     auto sa = sockaddr_in6{};
     auto err = convert(result.addr, sa);
-    TENZIR_ASSERT(not err);
+    TENZIR_ASSERT(err.empty());
     sa.sin6_port = detail::to_network_order(result.port);
     result.sock_addr = sa;
   }
@@ -133,7 +133,7 @@ socket::~socket() {
 }
 
 socket::operator bool() const {
-  return fd and * fd >= 0;
+  return fd and *fd >= 0;
 }
 
 auto socket::connect(socket_endpoint peer) -> int {

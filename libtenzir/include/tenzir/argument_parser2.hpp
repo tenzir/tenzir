@@ -14,13 +14,21 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
-#include <caf/detail/is_one_of.hpp>
+#include <caf/detail/concepts.hpp>
 #include <caf/detail/type_list.hpp>
-#include <caf/detail/type_traits.hpp>
 
 #include <functional>
 
 namespace tenzir {
+
+namespace detail {
+
+template <class T>
+struct value_type_of {
+  using type = typename T::value_type;
+};
+
+} // namespace detail
 
 using argument_parser_data_types
   = detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
@@ -33,7 +41,7 @@ using argument_parser_full_types = detail::tl_concat_t<
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
-                     caf::detail::value_type_of>;
+                     detail::value_type_of>;
 
 using argument_parser_types
   = detail::tl_concat_t<argument_parser_full_types, argument_parser_bare_types>;

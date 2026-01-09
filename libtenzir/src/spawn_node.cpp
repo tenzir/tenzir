@@ -62,7 +62,7 @@ auto spawn_node(caf::scoped_actor& self)
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
   TENZIR_DEBUG("node acquires PID lock {}", pid_file.string());
-  if (auto err = detail::acquire_pid_file(pid_file)) {
+  if (auto err = detail::acquire_pid_file(pid_file); err.valid()) {
     return err;
   }
   // Remove old VERSION file if it exists. This can be removed once the minimum

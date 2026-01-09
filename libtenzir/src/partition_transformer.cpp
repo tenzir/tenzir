@@ -217,12 +217,12 @@ void partition_transformer_state::fulfill(
   stream_data&& stream_data, path_data&& path_data) const {
   TENZIR_DEBUG("{} fulfills promise", *self);
   auto promise = path_data.promise;
-  if (self->state().stream_error) {
+  if (self->state().stream_error.valid()) {
     promise.deliver(self->state().stream_error);
     self->quit();
     return;
   }
-  if (self->state().transform_error) {
+  if (self->state().transform_error.valid()) {
     promise.deliver(self->state().transform_error);
     self->quit();
     return;
@@ -364,7 +364,7 @@ auto partition_transformer(
                       false, false, std::string{});
       // Monitor the executor to detect when it finishes and process results.
       self->monitor(executor, [self, output, executor](const caf::error& err) {
-        if (err && err != caf::exit_reason::normal) {
+        if (err.valid() && err != caf::exit_reason::normal) {
           TENZIR_ERROR("{} pipeline executor failed: {}", *self, err);
           self->state().transform_error = err;
         } else {

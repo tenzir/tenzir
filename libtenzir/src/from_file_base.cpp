@@ -38,7 +38,7 @@ void add_actor_callback(caf::scheduled_actor* self,
     = std::conditional_t<std::same_as<T, arrow::internal::Empty>, arrow::Status,
                          arrow::Result<T>>;
   future.AddCallback(
-    [self, weak = caf::weak_actor_ptr{self->ctrl()},
+    [self, weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref},
      f = std::forward<F>(f)](const result_type& result) mutable {
       if (auto strong = weak.lock()) {
         self->schedule_fn([f = std::move(f), result]() mutable -> void {
@@ -478,7 +478,7 @@ auto from_file_state::start_stream(
   }
   auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
                              std::move(*stream));
-  auto weak = caf::weak_actor_ptr{source->ctrl()};
+  auto weak = caf::weak_actor_ptr{source->ctrl(), caf::add_ref};
   pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
   if (not pipe.is_closed()) {
     pipe.append(std::make_unique<from_file_sink>(
@@ -507,7 +507,7 @@ auto from_file_state::start_stream(
       self_->send_exit(strong, caf::exit_reason::user_shutdown);
     }
     active_jobs_ -= 1;
-    if (error) {
+    if (error.valid()) {
       pipeline_failed(std::move(error))
         .note("coming from `{}`", path)
         .emit(*dh_);

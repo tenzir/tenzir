@@ -22,7 +22,6 @@
 
 #include <arrow/compute/api_scalar.h>
 #include <caf/detail/is_complete.hpp>
-#include <caf/detail/is_one_of.hpp>
 
 #include <type_traits>
 

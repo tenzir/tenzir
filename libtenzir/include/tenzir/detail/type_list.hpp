@@ -9,7 +9,6 @@
 #pragma once
 
 #include <caf/config.hpp>
-#include <caf/detail/is_one_of.hpp>
 #include <caf/detail/type_list.hpp>
 
 namespace tenzir::detail {

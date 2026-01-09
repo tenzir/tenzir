@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include <caf/actor_cast.hpp>
+#include <caf/add_ref.hpp>
 
 namespace tenzir::detail {
 
@@ -37,7 +38,8 @@ struct weak_handle : caf::weak_actor_ptr {
   ~weak_handle() noexcept = default;
 
   explicit(false) weak_handle(const Handle& handle) noexcept
-    : weak_ptr_{handle ? handle->ctrl() : caf::weak_actor_ptr{}} {
+    : weak_ptr_{handle ? caf::weak_actor_ptr{handle->ctrl(), caf::add_ref}
+                       : caf::weak_actor_ptr{}} {
     // nop
   }
 

@@ -242,7 +242,7 @@ auto exec_pipeline(pipeline pipe, std::string definition,
                       node_actor{}, true, true, fmt::to_string(uuid::random()));
       self->monitor(self->state().executor, [&, self](caf::error err) {
         TENZIR_DEBUG("command received down message `{}`", err);
-        if (err) {
+        if (not err.empty()) {
           result = err == caf::exit_reason::user_shutdown or err == ec::silent
                      ? ec::silent
                      : diagnostic::error(std::move(err)).to_error();

@@ -26,7 +26,7 @@ class debug_writer : public caf::serializer {
 private:
   using type_id_t = caf::type_id_t;
   template <class T>
-  using span = caf::span<T>;
+  using span = std::span<T>;
 
 public:
   // -- member types -----------------------------------------------------------

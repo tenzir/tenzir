@@ -189,7 +189,7 @@ public:
                         side_channel.get(), ctrl.node(), ctrl.has_terminal(),
                         ctrl.is_hidden(), std::string{ctrl.pipeline_id()})};
     ctrl.self().monitor(pipeline_executor.get(), [&](caf::error err) {
-      if (err and err != caf::exit_reason::user_shutdown) {
+      if (err.valid() and err != caf::exit_reason::user_shutdown) {
         diagnostic::error(std::move(err))
           .primary(pipe_, "pipeline failed")
           .emit(ctrl.diagnostics());

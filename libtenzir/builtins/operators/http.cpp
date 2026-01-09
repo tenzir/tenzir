@@ -324,7 +324,7 @@ struct http_state {
       },
       [this](const caf::exit_msg& msg) {
         exited = true;
-        if (slices_.empty() or msg.reason) {
+        if (slices_.empty() or msg.reason.valid()) {
           self_->quit(msg.reason);
         }
       },
@@ -445,7 +445,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
     }
   }
   const auto& headers = r.header_fields();
-  const auto* mit = std::ranges::find_if(headers, [](const auto& x) {
+  const auto mit = std::ranges::find_if(headers, [](const auto& x) {
     return caf::icase_equal(x.first, "content-type");
   });
   if (mit == std::ranges::end(headers) or mit->second.empty()) {
@@ -497,7 +497,7 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
                               static_cast<exec_node_actor>(&ctrl.self()));
   ctrl.self().monitor(ha, [&ctrl, is_warning,
                            loc = pipe.source](const caf::error& e) {
-    if (e) {
+    if (e.valid()) {
       diagnostic::error(e)
         .primary(loc)
         .severity(is_warning ? severity::warning : severity::error)
@@ -1172,7 +1172,7 @@ public:
         TENZIR_TRACE("[http] handling response with size: {}B",
                      r.body().size_bytes());
         const auto& headers = r.header_fields();
-        const auto* eit = std::ranges::find_if(headers, [](const auto& x) {
+        const auto eit = std::ranges::find_if(headers, [](const auto& x) {
           return caf::icase_equal(x.first, "content-encoding");
         });
         const auto encoding
@@ -1683,7 +1683,7 @@ public:
                          r.body().size_bytes());
             ctrl.set_waiting(false);
             const auto& headers = r.header_fields();
-            const auto* it = std::ranges::find_if(headers, [](const auto& x) {
+            const auto it = std::ranges::find_if(headers, [](const auto& x) {
               return caf::icase_equal(x.first, "content-encoding");
             });
             const auto encoding

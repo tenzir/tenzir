@@ -70,7 +70,7 @@ public:
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
     if (args_.exit) {
-      if (auto err = cfg->set("enable.partition.eof", "true")) {
+      if (auto err = cfg->set("enable.partition.eof", "true"); err.valid()) {
         diagnostic::error("failed to enable partition EOF: {}", err)
           .primary(args_.operator_location)
           .emit(dh);
@@ -78,7 +78,7 @@ public:
       }
     }
     // Disable auto-commit to use manual commit for precise message counting
-    if (auto err = cfg->set("enable.auto.commit", "false")) {
+    if (auto err = cfg->set("enable.auto.commit", "false"); err.valid()) {
       diagnostic::error("failed to disable auto-commit: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -92,7 +92,7 @@ public:
       TENZIR_INFO("kafka adjusts offset to {} ({})", args_.offset->inner,
                   offset);
     }
-    if (auto err = cfg->set_rebalance_cb(offset)) {
+    if (auto err = cfg->set_rebalance_cb(offset); err.valid()) {
       diagnostic::error("failed to set rebalance callback: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -115,7 +115,7 @@ public:
       co_return;
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
-    if (auto err = client->subscribe({args_.topic})) {
+    if (auto err = client->subscribe({args_.topic}); err.valid()) {
       diagnostic::error("failed to subscribe to topic: {}", err)
         .primary(args_.operator_location)
         .emit(dh);

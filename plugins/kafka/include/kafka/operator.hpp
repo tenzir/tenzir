@@ -135,7 +135,7 @@ inline auto offset_parser() {
 inline void
 set_or_fail(const std::string& key, const std::string& value, location loc,
             kafka::configuration& cfg, diagnostic_handler& dh) {
-  if (auto e = cfg.set(key, value)) {
+  if (auto e = cfg.set(key, value); e.valid()) {
     diagnostic::error("failed to set librdkafka option {}={}: {}", key, value,
                       e)
       .primary(loc)
@@ -223,7 +223,7 @@ public:
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
     if (args_.exit) {
-      if (auto err = cfg->set("enable.partition.eof", "true")) {
+      if (auto err = cfg->set("enable.partition.eof", "true"); err.valid()) {
         diagnostic::error("failed to enable partition EOF: {}", err)
           .primary(args_.operator_location)
           .emit(dh);
@@ -231,7 +231,7 @@ public:
       }
     }
     // Disable auto-commit to use manual commit for precise message counting
-    if (auto err = cfg->set("enable.auto.commit", "false")) {
+    if (auto err = cfg->set("enable.auto.commit", "false"); err.valid()) {
       diagnostic::error("failed to disable auto-commit: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -245,7 +245,7 @@ public:
       TENZIR_INFO("kafka adjusts offset to {} ({})", args_.offset->inner,
                   offset);
     }
-    if (auto err = cfg->set_rebalance_cb(offset)) {
+    if (auto err = cfg->set_rebalance_cb(offset); err.valid()) {
       diagnostic::error("failed to set rebalance callback: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -267,7 +267,7 @@ public:
         .emit(dh);
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
-    if (auto err = client->subscribe({args_.topic})) {
+    if (auto err = client->subscribe({args_.topic}); err.valid()) {
       diagnostic::error("failed to subscribe to topic: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -468,7 +468,7 @@ public:
     };
     auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
-      if (auto err = client.flush(10s)) {
+      if (auto err = client.flush(10s); err.valid()) {
         TENZIR_WARN(err);
       }
       auto num_messages = client.queue_size();
@@ -494,7 +494,8 @@ public:
       for (const auto& topic : topics) {
         TENZIR_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
         if (auto error
-            = client->produce(topic, as_bytes(chunk), key, timestamp)) {
+            = client->produce(topic, as_bytes(chunk), key, timestamp);
+            error.valid()) {
           diagnostic::error(error).emit(ctrl.diagnostics());
         }
       }

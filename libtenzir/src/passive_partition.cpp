@@ -110,7 +110,7 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
       reinterpret_cast<const std::byte*>(store_header->data()->data()),
       store_header->data()->size()};
   }
-  if (auto error = unpack(*partition.uuid(), state.id)) {
+  if (auto error = unpack(*partition.uuid(), state.id); error.valid()) {
     return error;
   }
   state.events = partition.events();
@@ -125,7 +125,7 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     auto const* name = type_ids_tuple->name();
     auto const* ids_data = type_ids_tuple->ids();
     auto& ids = state.type_ids_[name->str()];
-    if (auto error = fbs::deserialize_bytes(ids_data, ids)) {
+    if (auto error = fbs::deserialize_bytes(ids_data, ids); error.valid()) {
       return error;
     }
   }
@@ -225,7 +225,7 @@ passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
                            "partition at contains unknown identifier {}",
                            flatbuffers::GetBufferIdentifier(chunk->data()));
   }
-  if (auto error = unpack(*flatbuffer, *this)) {
+  if (auto error = unpack(*flatbuffer, *this); error.valid()) {
     return caf::make_error(
       ec::format_error, fmt::format("failed to unpack partition: {}", error));
   }
@@ -250,7 +250,8 @@ partition_actor::behavior_type passive_partition(
         TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
         TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
         TENZIR_ASSERT(! self->state().partition_chunk);
-        if (auto err = self->state().initialize_from_chunk(chunk)) {
+        if (auto err = self->state().initialize_from_chunk(chunk);
+            err.valid()) {
           TENZIR_ERROR("{} failed to initialize passive partition from file "
                        "{}: "
                        "{}",
