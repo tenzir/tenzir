@@ -1,7 +1,11 @@
 ---
 description: Compile a target
 argument-hint: "[target] [cmake-options...]"
+context: fork
+model: haiku
 ---
+
+Execute:
 
 ```sh
 scripts/build.sh $ARGUMENTS
