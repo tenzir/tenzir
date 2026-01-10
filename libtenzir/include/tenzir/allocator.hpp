@@ -21,6 +21,7 @@
 #include <concepts>
 #include <cstddef>
 #include <mutex>
+#include <pthread.h>
 #include <shared_mutex>
 #if TENZIR_ALLOCATOR_HAS_JEMALLOC
 #  include <jemalloc/jemalloc.h>
@@ -81,9 +82,14 @@ round_to_alignment(std::size_t N, std::align_val_t alignment) noexcept
   return N - m + std::to_underlying(alignment);
 }
 
-class actor_name {
+enum class entity_kind : char {
+  actor,
+  thread,
+};
+
+class entity_identifier {
 public:
-  operator std::string_view() const noexcept {
+  auto name() const noexcept -> std::string_view {
     /// If the last character is a null, the name may be shorter.
     if (storage_.back() == '\0') {
       return {storage_.data()};
@@ -92,24 +98,39 @@ public:
     return {storage_.data(), storage_.size()};
   }
 
-  friend auto operator<=>(const actor_name& lhs, const actor_name& rhs) noexcept
+  auto kind() const noexcept -> enum entity_kind {
+    return kind_;
+  }
+
+  auto is_actor() const noexcept -> bool {
+    return kind_ == entity_kind::actor;
+  }
+
+  friend auto operator<=>(const entity_identifier& lhs,
+                          const entity_identifier& rhs) noexcept
     -> std::strong_ordering
     = default;
 
-  friend auto operator==(const actor_name&, const actor_name&) noexcept -> bool
+  friend auto
+  operator==(const entity_identifier&, const entity_identifier&) noexcept
+    -> bool
     = default;
 
-  [[nodiscard]] static auto current() noexcept -> actor_name {
-    actor_name res;
-    res.make_current();
+  [[nodiscard]] static auto current() noexcept -> entity_identifier {
+    entity_identifier res;
+    res.make_this_current();
     return res;
   }
 
-  auto make_current() noexcept -> void {
+  auto make_this_current() noexcept -> void {
     const auto aptr = caf::logger::thread_local_aptr();
     if (not aptr) {
+      const auto thread = pthread_self();
+      kind_ = entity_kind::thread;
+      pthread_getname_np(thread, storage_.data(), storage_.size());
       return;
     }
+    kind_ = entity_kind::actor;
     const char* const name = aptr->name();
 #ifndef __clang__
 #  pragma GCC diagnostic push
@@ -122,11 +143,12 @@ public:
   }
 
 private:
-  std::array<char, 16> storage_ = {}; // make sure this is 0 initialized.
+  enum entity_kind kind_ = entity_kind::thread;
+  std::array<char, 15> storage_ = {}; // make sure this is 0 initialized.
 };
 
-static_assert(sizeof(actor_name) == 16);
-static_assert(alignof(actor_name) <= 8);
+static_assert(sizeof(entity_identifier) == 16);
+static_assert(alignof(entity_identifier) <= 8);
 
 /// A tag placed at the beginning of an allocation
 // [padding][tag][data...]
@@ -137,7 +159,7 @@ static_assert(alignof(actor_name) <= 8);
 // then contains the allocations alignment, which we need to get back to the
 // storage pointer.
 struct allocation_tag {
-  class actor_name actor_name;
+  class entity_identifier source_identifier;
   std::align_val_t alignment;
 
   struct tag_and_data {
@@ -176,7 +198,7 @@ struct allocation_tag {
     // Create tag with alignment information
     res.tag_ptr = std::construct_at(res.tag_ptr);
     res.tag_ptr->alignment = alignment;
-    res.tag_ptr->actor_name.make_current();
+    res.tag_ptr->source_identifier.make_this_current();
     return res;
   }
 
@@ -200,53 +222,54 @@ struct allocation_tag {
   }
 };
 
-struct actor_stat {
-  /// Total bytes this actor has allocated
+struct entity_stat {
+  /// Total bytes this entity has allocated
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> bytes_allocated_cumulative
     = 0;
-  /// Total bytes this actor has deallocated
+  /// Total bytes this entity has deallocated
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> bytes_deallocated_cumulative
     = 0;
-  /// Total bytes this actor has reallocated (may be negative)
+  /// Total bytes this entity has reallocated (may be negative)
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> bytes_reallocated_cumulative
     = 0;
-  /// Bytes allocated by this actor that have not been deallocated
+  /// Bytes allocated by this entity that have not been deallocated
   alignas(std::hardware_destructive_interference_size)
     std::atomic<std::int64_t> bytes_alive
     = 0;
-  /// Last time this actor performed any allocation/deallocation/reallocation
+  /// Last time this entity performed any allocation/deallocation/reallocation
   alignas(std::hardware_destructive_interference_size)
     std::chrono::steady_clock::time_point last_seen
     = {};
 };
 
-struct actor_name_equal {
-  static auto operator()(const actor_name& lhs, const actor_name& rhs) noexcept
-    -> bool {
+struct entity_name_equal {
+  static auto operator()(const entity_identifier& lhs,
+                         const entity_identifier& rhs) noexcept -> bool {
     return std::bit_cast<__uint128_t>(lhs) == std::bit_cast<__uint128_t>(rhs);
   }
 };
 
-struct actor_name_hash {
-  static auto operator()(const actor_name& name) noexcept -> std::size_t {
+struct entity_name_hsh {
+  static auto operator()(const entity_identifier& name) noexcept
+    -> std::size_t {
     return std::hash<__uint128_t>{}(std::bit_cast<__uint128_t>(name));
   }
 };
 
-using actor_stat_allocator
-  = std::pmr::polymorphic_allocator<std::pair<const actor_name, actor_stat>>;
+using entity_stat_allocator = std::pmr::polymorphic_allocator<
+  std::pair<const entity_identifier, entity_stat>>;
 
-using actor_stat_map
-  = std::unordered_map<actor_name, actor_stat, actor_name_hash,
-                       actor_name_equal, actor_stat_allocator>;
+using entity_stat_map
+  = std::unordered_map<entity_identifier, entity_stat, entity_name_hsh,
+                       entity_name_equal, entity_stat_allocator>;
 
-class actor_stats_read {
+class entity_stats_read {
 public:
-  actor_stats_read() = default;
-  actor_stats_read(std::shared_mutex& mut, const detail::actor_stat_map& map)
+  entity_stats_read() = default;
+  entity_stats_read(std::shared_mutex& mut, const detail::entity_stat_map& map)
     : lock_{mut}, map_{&map} {
   }
   auto has_value() const noexcept -> bool {
@@ -257,13 +280,13 @@ public:
     return has_value();
   }
 
-  auto operator*() const -> const detail::actor_stat_map& {
+  auto operator*() const -> const detail::entity_stat_map& {
     return *map_;
   }
 
 private:
   std::shared_lock<std::shared_mutex> lock_;
-  const detail::actor_stat_map* map_;
+  const detail::entity_stat_map* map_;
 };
 
 template <typename T>
@@ -278,7 +301,8 @@ concept allocator = requires(T t, std::size_t size, std::align_val_t alignment,
   { t.deallocate(ptr) } noexcept -> std::same_as<void>;
   { t.trim() } noexcept;
   { t.stats() } noexcept -> std::same_as<const stats&>;
-  { t.actor_stats() } noexcept -> std::same_as<actor_stats_read>;
+  { t.actor_stats() } noexcept -> std::same_as<entity_stats_read>;
+  { t.thread_stats() } noexcept -> std::same_as<entity_stats_read>;
   { t.backend() } noexcept -> std::same_as<enum backend>;
   { t.backend_name() } noexcept -> std::same_as<std::string_view>;
   { t.size(cptr) } noexcept -> std::same_as<std::size_t>;
@@ -329,7 +353,7 @@ public:
   }
 };
 
-/// Simple per-actor tracking of memory. There is a map protected by a mutex,
+/// Simple per-entity tracking of memory. There is a map protected by a mutex,
 /// which contains atomics.
 /// When making any change to the data, there is two phases:
 ///
@@ -342,17 +366,18 @@ public:
 ///   have gotten the write lock before us and inserted it.
 ///   Because of this, we then perform atomic modifications to the value.
 template <detail::allocator_trait InternalTrait>
-class actor_stats final {
+class entity_stats final {
 public:
   auto note_allocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
     const auto now = std::chrono::steady_clock::now();
     auto read_lock = std::shared_lock{mut_};
-    auto it = allocations_by_actor_.find(tag.actor_name);
-    if (it == allocations_by_actor_.end()) {
+    auto it = allocations_by_entity_.find(tag.source_identifier);
+    if (it == allocations_by_entity_.end()) {
       read_lock.unlock();
       const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, _] = allocations_by_actor_.try_emplace(tag.actor_name);
+      const auto [it, _]
+        = allocations_by_entity_.try_emplace(tag.source_identifier);
       auto& value = it->second;
       value.bytes_alive.fetch_add(size, std::memory_order_relaxed);
       value.bytes_allocated_cumulative.fetch_add(size,
@@ -370,24 +395,24 @@ public:
 
   auto note_reallocation(const detail::allocation_tag& tag,
                          std::int64_t old_size, std::int64_t new_size) -> void {
-    const auto my_name = actor_name::current();
+    const auto my_name = entity_identifier::current();
     const auto diff = new_size - old_size;
     const auto now = std::chrono::steady_clock::now();
     auto read_lock = std::shared_lock{mut_};
     {
-      const auto it = allocations_by_actor_.find(tag.actor_name);
-      TENZIR_ASSERT(it != allocations_by_actor_.end());
+      const auto it = allocations_by_entity_.find(tag.source_identifier);
+      TENZIR_ASSERT(it != allocations_by_entity_.end());
       auto& value = it->second;
       value.bytes_alive.fetch_add(diff, std::memory_order_relaxed);
       if (value.last_seen < now) {
         value.last_seen = now;
       }
     }
-    const auto it = allocations_by_actor_.find(my_name);
-    if (it == allocations_by_actor_.end()) {
+    const auto it = allocations_by_entity_.find(my_name);
+    if (it == allocations_by_entity_.end()) {
       read_lock.unlock();
       const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, _] = allocations_by_actor_.try_emplace(my_name);
+      const auto [it, _] = allocations_by_entity_.try_emplace(my_name);
       auto& value = it->second;
       value.bytes_reallocated_cumulative.fetch_add(diff,
                                                    std::memory_order_relaxed);
@@ -404,20 +429,20 @@ public:
 
   auto note_deallocation(const detail::allocation_tag& tag, std::int64_t size)
     -> void {
-    const auto my_name = actor_name::current();
+    const auto my_name = entity_identifier::current();
     const auto now = std::chrono::steady_clock::now();
     auto read_lock = std::shared_lock{mut_};
     {
-      const auto it = allocations_by_actor_.find(tag.actor_name);
-      TENZIR_ASSERT(it != allocations_by_actor_.end());
+      const auto it = allocations_by_entity_.find(tag.source_identifier);
+      TENZIR_ASSERT(it != allocations_by_entity_.end());
       auto& value = it->second;
       value.bytes_alive.fetch_sub(size, std::memory_order_relaxed);
     }
-    const auto it = allocations_by_actor_.find(my_name);
-    if (it == allocations_by_actor_.end()) {
+    const auto it = allocations_by_entity_.find(my_name);
+    if (it == allocations_by_entity_.end()) {
       read_lock.unlock();
       const auto write_lock = std::scoped_lock{mut_};
-      const auto [it, _] = allocations_by_actor_.try_emplace(my_name);
+      const auto [it, _] = allocations_by_entity_.try_emplace(my_name);
       auto& value = it->second;
       value.bytes_deallocated_cumulative.fetch_add(size,
                                                    std::memory_order_relaxed);
@@ -433,8 +458,8 @@ public:
   }
 
   /// Obtains a reading lock on the internal data structure and a reference to it
-  [[nodiscard]] auto read() -> detail::actor_stats_read {
-    return {mut_, allocations_by_actor_};
+  [[nodiscard]] auto read() -> detail::entity_stats_read {
+    return {mut_, allocations_by_entity_};
   }
 
   auto prune() {
@@ -446,11 +471,11 @@ public:
     const auto l = std::scoped_lock{mut_};
     last_prune_ = now;
     const auto cutoff = now - prune_interval;
-    for (auto it = allocations_by_actor_.begin();
-         it != allocations_by_actor_.end();) {
+    for (auto it = allocations_by_entity_.begin();
+         it != allocations_by_entity_.end();) {
       auto& value = it->second;
       if (value.bytes_alive == 0 and value.last_seen < cutoff) {
-        it = allocations_by_actor_.erase(it);
+        it = allocations_by_entity_.erase(it);
       } else {
         ++it;
       }
@@ -460,9 +485,69 @@ public:
 private:
   detail::basic_pmr_resource<InternalTrait> resource_;
   std::shared_mutex mut_;
-  detail::actor_stat_map allocations_by_actor_{
-    detail::actor_stat_allocator{&resource_}};
+  detail::entity_stat_map allocations_by_entity_{
+    detail::entity_stat_allocator{&resource_}};
   std::chrono::steady_clock::time_point last_prune_;
+};
+
+/// Tracks allocations per-actor or per-thread if it is not an actor
+template <detail::allocator_trait InternalTrait>
+class fine_grained_stats final {
+public:
+  auto note_allocation(const detail::allocation_tag& tag, std::int64_t size)
+    -> void {
+    switch (tag.source_identifier.kind()) {
+      using enum entity_kind;
+      case actor:
+        return actor_stats_.note_allocation(tag, size);
+      case thread:
+        return thread_stats_.note_allocation(tag, size);
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto note_reallocation(const detail::allocation_tag& tag,
+                         std::int64_t old_size, std::int64_t new_size) -> void {
+    switch (tag.source_identifier.kind()) {
+      using enum entity_kind;
+      case actor:
+        return actor_stats_.note_reallocation(tag, old_size, new_size);
+      case thread:
+        return thread_stats_.note_reallocation(tag, old_size, new_size);
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto note_deallocation(const detail::allocation_tag& tag, std::int64_t size)
+    -> void {
+    switch (tag.source_identifier.kind()) {
+      using enum entity_kind;
+      case actor:
+        return actor_stats_.note_deallocation(tag, size);
+      case thread:
+        return thread_stats_.note_deallocation(tag, size);
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  /// Obtains a reading lock on the internal data structure and a reference to it
+  [[nodiscard]] auto actor_stats() -> detail::entity_stats_read {
+    return actor_stats_.read();
+  }
+
+  /// Obtains a reading lock on the internal data structure and a reference to it
+  [[nodiscard]] auto thread_stats() -> detail::entity_stats_read {
+    return thread_stats_.read();
+  }
+
+  auto prune() {
+    actor_stats_.prune();
+    thread_stats_.prune();
+  }
+
+private:
+  entity_stats<InternalTrait> actor_stats_;
+  entity_stats<InternalTrait> thread_stats_;
 };
 
 } // namespace detail
@@ -487,7 +572,8 @@ struct polymorphic_allocator {
   virtual auto size(const void*) const noexcept -> std::size_t = 0;
   virtual auto trim() noexcept -> void = 0;
   virtual auto stats() const noexcept -> const struct stats& = 0;
-  virtual auto actor_stats() const noexcept -> detail::actor_stats_read = 0;
+  virtual auto actor_stats() const noexcept -> detail::entity_stats_read = 0;
+  virtual auto thread_stats() const noexcept -> detail::entity_stats_read = 0;
   virtual auto backend() const noexcept -> enum backend = 0;
   virtual auto backend_name() const noexcept -> std::string_view = 0;
 };
@@ -508,8 +594,9 @@ template <allocator_trait Traits, allocator_trait InternalTrait>
 class basic_allocator final : public polymorphic_allocator {
 public:
   constexpr explicit basic_allocator(
-    struct stats* stats, detail::actor_stats<InternalTrait>* actor_stats)
-    : stats_{stats}, actor_stats_{actor_stats} {
+    struct stats* stats,
+    detail::fine_grained_stats<InternalTrait>* fine_grained_stats)
+    : stats_{stats}, fine_grained_stats_{fine_grained_stats} {
   }
 
   static_assert(std::align_val_t{alignof(allocation_tag)}
@@ -520,22 +607,22 @@ public:
     if (size == 0) {
       return &zero_size_area;
     }
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       size = allocation_tag::storage_size_for(size, Traits::default_alignment);
     }
     auto* const ptr = Traits::malloc(size);
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ || fine_grained_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
       }
-      if (actor_stats_) {
+      if (fine_grained_stats_) {
         const auto& [tag, data_ptr]
           = allocation_tag::create_at(ptr, Traits::default_alignment);
-        actor_stats_->note_allocation(*tag, usable);
+        fine_grained_stats_->note_allocation(*tag, usable);
         return data_ptr;
       }
     }
@@ -552,7 +639,7 @@ public:
     if (size == 0) {
       return &zero_size_area;
     }
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       size = allocation_tag::storage_size_for(size, alignment);
     }
     auto* const ptr
@@ -560,14 +647,14 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ || fine_grained_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
       }
-      if (actor_stats_) {
+      if (fine_grained_stats_) {
         const auto& [tag, data_ptr] = allocation_tag::create_at(ptr, alignment);
-        actor_stats_->note_allocation(*tag, usable);
+        fine_grained_stats_->note_allocation(*tag, usable);
         return data_ptr;
       }
     }
@@ -582,7 +669,7 @@ public:
       return &zero_size_area;
     }
     void* ptr = nullptr;
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       size = allocation_tag::storage_size_for(count * size,
                                               Traits::default_alignment);
       count = 1;
@@ -591,15 +678,15 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ || fine_grained_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
       }
-      if (actor_stats_) {
+      if (fine_grained_stats_) {
         const auto& [tag, data_ptr]
           = allocation_tag::create_at(ptr, Traits::default_alignment);
-        actor_stats_->note_allocation(*tag, usable);
+        fine_grained_stats_->note_allocation(*tag, usable);
         return data_ptr;
       }
     }
@@ -617,7 +704,7 @@ public:
       return &zero_size_area;
     }
     void* ptr = nullptr;
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       size = allocation_tag::storage_size_for(count * size, alignment);
       count = 1;
     }
@@ -625,14 +712,14 @@ public:
     if (ptr == nullptr) {
       return nullptr;
     }
-    if (stats_ || actor_stats_) {
+    if (stats_ || fine_grained_stats_) {
       const auto usable = Traits::usable_size(ptr);
       if (stats_) {
         stats_->note_allocation(usable);
       }
-      if (actor_stats_) {
+      if (fine_grained_stats_) {
         const auto& [tag, data_ptr] = allocation_tag::create_at(ptr, alignment);
-        actor_stats_->note_allocation(*tag, usable);
+        fine_grained_stats_->note_allocation(*tag, usable);
         return data_ptr;
       }
     }
@@ -649,7 +736,7 @@ public:
     if (not old_ptr or old_ptr == &zero_size_area) {
       return allocate(new_size);
     }
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       new_size
         = allocation_tag::storage_size_for(new_size, Traits::default_alignment);
       const auto [old_storage_ptr, old_tag]
@@ -667,7 +754,8 @@ public:
       }
       auto [new_tag, new_data_ptr] = allocation_tag::obtain_from(
         new_storage_ptr, Traits::default_alignment);
-      actor_stats_->note_reallocation(*new_tag, old_size, actual_new_size);
+      fine_grained_stats_->note_reallocation(*new_tag, old_size,
+                                             actual_new_size);
       return new_data_ptr;
     } else if (stats_) {
       const auto old_size = Traits::usable_size(old_ptr);
@@ -696,7 +784,7 @@ public:
     if (not old_ptr or old_ptr == &zero_size_area) {
       return allocate(new_size, alignment);
     }
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       new_size = allocation_tag::storage_size_for(new_size, alignment);
       const auto [old_storage_ptr, old_tag]
         = allocation_tag::get_storage_and_tag(old_ptr);
@@ -714,7 +802,8 @@ public:
       }
       auto [new_tag, data_ptr]
         = allocation_tag::obtain_from(new_storage_ptr, alignment);
-      actor_stats_->note_reallocation(*new_tag, old_size, actual_new_size);
+      fine_grained_stats_->note_reallocation(*new_tag, old_size,
+                                             actual_new_size);
       return data_ptr;
     } else if (stats_) {
       const auto old_size = Traits::usable_size(old_ptr);
@@ -740,14 +829,14 @@ public:
       return;
     }
     void* storage_ptr = ptr;
-    if (actor_stats_) {
+    if (fine_grained_stats_) {
       const auto [storage, tag] = allocation_tag::get_storage_and_tag(ptr);
       storage_ptr = storage;
       const auto usable = Traits::usable_size(storage_ptr);
       if (stats_) {
         stats_->note_deallocation(usable);
       }
-      actor_stats_->note_deallocation(tag, usable);
+      fine_grained_stats_->note_deallocation(tag, usable);
     } else if (stats_) {
       const auto usable = Traits::usable_size(storage_ptr);
       stats_->note_deallocation(usable);
@@ -769,9 +858,18 @@ public:
     return stats_ ? *stats_ : zero_stats;
   }
 
-  [[nodiscard]] auto actor_stats() const noexcept -> actor_stats_read override {
-    if (actor_stats_) {
-      return actor_stats_->read();
+  [[nodiscard]] auto actor_stats() const noexcept
+    -> entity_stats_read override {
+    if (fine_grained_stats_) {
+      return fine_grained_stats_->actor_stats();
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto thread_stats() const noexcept
+    -> entity_stats_read override {
+    if (fine_grained_stats_) {
+      return fine_grained_stats_->thread_stats();
     }
     return {};
   }
@@ -788,7 +886,7 @@ public:
 
 private:
   struct stats* const stats_{nullptr};
-  detail::actor_stats<InternalTrait>* const actor_stats_{nullptr};
+  detail::fine_grained_stats<InternalTrait>* const fine_grained_stats_{nullptr};
 };
 
 } // namespace detail
@@ -1002,7 +1100,7 @@ auto enable_stats(const char* env) noexcept -> bool;
 [[gnu::const]]
 /// Checks if actor stats collection is enabled for the specific component or in
 /// general.
-auto enable_actor_stats(const char* env) noexcept -> bool;
+auto enable_fine_grained_stats(const char* env) noexcept -> bool;
 
 [[gnu::const]]
 /// Gets the trim interval from the environment.
@@ -1019,21 +1117,22 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> polymorphic_allocator& {                                              \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<system::traits>{};        \
+      static auto fine_grained_stats_                                          \
+        = detail::fine_grained_stats<system::traits>{};                        \
       static auto jemalloc_ = jemalloc::allocator{                             \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
+        enable_fine_grained_stats("TENZIR_ALLOC_STATS_FINE" ENV_SUFFIX)        \
+          ? &fine_grained_stats_                                               \
           : nullptr};                                                          \
       static auto mimalloc_ = mimalloc::allocator{                             \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
+        enable_fine_grained_stats("TENZIR_ALLOC_STATS_FINE" ENV_SUFFIX)        \
+          ? &fine_grained_stats_                                               \
           : nullptr};                                                          \
       static auto system_ = system::allocator{                                 \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
+        enable_fine_grained_stats("TENZIR_ALLOC_STATS_FINE" ENV_SUFFIX)        \
+          ? &fine_grained_stats_                                               \
           : nullptr};                                                          \
       static auto& instance = [] {                                             \
         switch (selected_backend("TENZIR_ALLOC_" ENV_SUFFIX)) {                \
@@ -1055,11 +1154,12 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> jemalloc::allocator& {                                                \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<jemalloc::traits>{};      \
+      static auto fine_grained_stats_                                          \
+        = detail::fine_grained_stats<jemalloc::traits>{};                      \
       static auto instance = jemalloc::allocator{                              \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
+        enable_fine_grained_stats("TENZIR_ALLOC_STATS_FINE" ENV_SUFFIX)        \
+          ? &fine_grained_stats_                                               \
           : nullptr};                                                          \
       return instance;                                                         \
     }
@@ -1070,11 +1170,12 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> mimalloc::allocator& {                                                \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<mimalloc::traits>{};      \
+      static auto fine_grained_stats_                                          \
+        = detail::fine_grained_stats<mimalloc::traits>{};                      \
       static auto instance = mimalloc::allocator{                              \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
+        enable_fine_grained_stats("TENZIR_ALLOC_STATS_FINE" ENV_SUFFIX)        \
+          ? &fine_grained_stats_                                               \
           : nullptr};                                                          \
       return instance;                                                         \
     }
@@ -1085,11 +1186,12 @@ auto selected_backend(const char* env) noexcept -> backend;
     [[nodiscard, gnu::hot, gnu::const]] inline auto NAME() noexcept            \
       -> system::allocator& {                                                  \
       constinit static auto stats_ = stats{};                                  \
-      static auto actor_stats_ = detail::actor_stats<system::traits>{};        \
+      static auto fine_grained_stats_                                          \
+        = detail::fine_grained_stats<system::traits>{};                        \
       static auto instance = system::allocator{                                \
         enable_stats("TENZIR_ALLOC_STATS_" ENV_SUFFIX) ? &stats_ : nullptr,    \
-        enable_actor_stats("TENZIR_ALLOC_ACTOR_STATS_" ENV_SUFFIX)             \
-          ? &actor_stats_                                                      \
+        enable_fine_grained_stats("TENZIR_ALLOC_STATS_FINE" ENV_SUFFIX)        \
+          ? &fine_grained_stats_                                               \
           : nullptr};                                                          \
       return instance;                                                         \
     }
@@ -1101,6 +1203,14 @@ auto selected_backend(const char* env) noexcept -> backend;
 struct dummy_allocator {
   static auto stats() noexcept -> const stats& {
     return detail::zero_stats;
+  }
+
+  static auto actor_stats() noexcept -> const detail::entity_stats_read {
+    return {};
+  }
+
+  static auto thread_stats() noexcept -> const detail::entity_stats_read {
+    return {};
   }
 };
 

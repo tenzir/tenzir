@@ -500,11 +500,11 @@ auto enable_stats(const char* env_name) noexcept -> bool {
   return enable_stats_impl("TENZIR_ALLOC_STATS");
 }
 
-auto enable_actor_stats(const char* env_name) noexcept -> bool {
+auto enable_fine_grained_stats(const char* env_name) noexcept -> bool {
   if (enable_stats_impl(env_name)) {
     return true;
   }
-  return enable_stats_impl("TENZIR_ALLOC_ACTOR_STATS");
+  return enable_stats_impl("TENZIR_ALLOC_STATS_FINE");
 }
 
 auto selected_backend(const char* var_name) noexcept -> enum backend {

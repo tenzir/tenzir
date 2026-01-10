@@ -479,24 +479,25 @@ auto make_procfs_metrics() -> record {
   return result;
 }
 
-auto make_actor_stats_for(memory::polymorphic_allocator& alloc) -> list {
+auto make_entity_stats_for(memory::polymorphic_allocator& alloc, auto f)
+  -> list {
   auto res = list{};
   /// Reserve memory for one element. This is critical to ensure that the
   /// metrics collector is in the list of actors, which means that any
   /// allocations we do below can be non-blocking, which otherwise would
   /// deadlock with the read lock we hold on the stats.
   res.reserve(1);
-  const auto stats = alloc.actor_stats();
+  const auto stats = (alloc.*f)();
   if (not stats) {
     return res;
   }
-  for (const auto& [name, stats] : *stats) {
+  for (const auto& [identifier, stats] : *stats) {
     auto& entry = as<record>(res.emplace_back(record{}));
-    entry.reserve(5);
-    if (std::string_view{name}.empty()) {
+    entry.reserve(6);
+    if (identifier.name().empty()) {
       entry.try_emplace("name", caf::none);
     } else {
-      entry.try_emplace("name", std::string{name});
+      entry.try_emplace("name", std::string{identifier.name()});
     }
     entry.try_emplace(
       "bytes_allocated_cumulative",
@@ -513,12 +514,13 @@ auto make_actor_stats_for(memory::polymorphic_allocator& alloc) -> list {
   return res;
 }
 
-auto make_actor_stats() -> record {
+auto make_actor_stats(auto f) -> record {
   auto result = record{};
   result.reserve(3);
-  result.try_emplace("arrow", make_actor_stats_for(memory::arrow_allocator()));
-  result.try_emplace("cpp", make_actor_stats_for(memory::cpp_allocator()));
-  result.try_emplace("c", make_actor_stats_for(memory::c_allocator()));
+  result.try_emplace("arrow",
+                     make_entity_stats_for(memory::arrow_allocator(), f));
+  result.try_emplace("cpp", make_entity_stats_for(memory::cpp_allocator(), f));
+  result.try_emplace("c", make_entity_stats_for(memory::c_allocator(), f));
   return result;
 }
 
@@ -537,7 +539,10 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
-  result.try_emplace("actor", make_actor_stats());
+  result.try_emplace(
+    "actor", make_actor_stats(&memory::polymorphic_allocator::actor_stats));
+  result.try_emplace(
+    "thread", make_actor_stats(&memory::polymorphic_allocator::thread_stats));
 #endif
 #if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
   result.try_emplace("malloc", make_malloc_metrics());
@@ -590,17 +595,17 @@ public:
       {"bytes", stats},
       {"allocations", stats},
     };
-    const auto actor_stats0 = list_type{record_type{
+    const auto entity_stats_entry = list_type{record_type{
       {"name", string_type{}},
       {"bytes_allocated_cumulative", int64_type{}},
       {"bytes_deallocated_cumulative", int64_type{}},
       {"bytes_reallocated_cumulative", int64_type{}},
       {"bytes_alive", int64_type{}},
     }};
-    const auto actor_stats = record_type{
-      {"arrow", actor_stats0},
-      {"cpp", actor_stats0},
-      {"c", actor_stats0},
+    const auto entity_stats = record_type{
+      {"arrow", entity_stats_entry},
+      {"cpp", entity_stats_entry},
+      {"c", entity_stats_entry},
     };
     const auto table_slice_stats = record_type{
       {"serialized_bytes", int64_type{}},
@@ -657,7 +662,8 @@ public:
       {"arrow", bytes_and_allocations},
       {"cpp", bytes_and_allocations},
       {"c", bytes_and_allocations},
-      {"actor", actor_stats},
+      {"actor", entity_stats},
+      {"thread", entity_stats},
       {"malloc", malloc_stats},
       {"table_slices", table_slice_stats},
       {"chunks", bytes_and_count},
