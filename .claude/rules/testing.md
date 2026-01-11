@@ -1,5 +1,6 @@
 ---
-paths: "test/**/*"
+paths:
+  - "test/**/*"
 ---
 
 When working with tests in the `test/` directory:
