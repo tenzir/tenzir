@@ -309,9 +309,8 @@ auto pipeline_executor_state::pause() -> caf::result<void> {
   }
   TENZIR_ASSERT(not exec_nodes.empty());
   auto rp = self->make_response_promise<void>();
-  self
-    ->fan_out_request<caf::policy::select_all>(exec_nodes, caf::infinite,
-                                               atom::pause_v)
+  self->mail(atom::pause_v)
+    .fan_out_request(exec_nodes, caf::infinite, caf::policy::select_all_tag)
     .then(
       [rp]() mutable {
         rp.deliver();
@@ -326,9 +325,8 @@ auto pipeline_executor_state::pause() -> caf::result<void> {
 auto pipeline_executor_state::resume() -> caf::result<void> {
   TENZIR_ASSERT(not exec_nodes.empty());
   auto rp = self->make_response_promise<void>();
-  self
-    ->fan_out_request<caf::policy::select_all>(exec_nodes, caf::infinite,
-                                               atom::resume_v)
+  self->mail(atom::resume_v)
+    .fan_out_request(exec_nodes, caf::infinite, caf::policy::select_all_tag)
     .then(
       [rp]() mutable {
         rp.deliver();

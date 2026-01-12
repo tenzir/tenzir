@@ -568,7 +568,7 @@ struct every_cron_operator final : public operator_base {
                             ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
                             std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
-        if (err) {
+        if (err.valid()) {
           diagnostic::error(err)
             .compose(add_diagnostic_location())
             .emit(ctrl.diagnostics());
@@ -608,7 +608,7 @@ struct every_cron_operator final : public operator_base {
                             std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
         TENZIR_TRACE("[every_cron] subpipeline shut down");
-        if (err) {
+        if (err.valid()) {
           diagnostic::error(err)
             .compose(add_diagnostic_location())
             .emit(ctrl.diagnostics());
