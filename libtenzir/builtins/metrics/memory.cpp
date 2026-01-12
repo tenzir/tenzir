@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
+
 #include <tenzir/allocator.hpp>
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/config.hpp>
@@ -479,48 +481,85 @@ auto make_procfs_metrics() -> record {
   return result;
 }
 
-auto make_entity_stats_for(memory::polymorphic_allocator& alloc, auto f)
-  -> list {
-  auto res = list{};
-  /// Reserve memory for one element. This is critical to ensure that the
-  /// metrics collector is in the list of actors, which means that any
-  /// allocations we do below can be non-blocking, which otherwise would
-  /// deadlock with the read lock we hold on the stats.
-  res.reserve(1);
-  const auto stats = (alloc.*f)();
-  if (not stats) {
-    return res;
+struct component_stats {
+  std::int64_t bytes_current;
+  std::int64_t bytes_cumulative;
+  std::int64_t bytes_peak;
+  std::int64_t allocations_current;
+  std::int64_t allocations_cumulative;
+  std::int64_t allocations_peak;
+
+  auto as_record() const -> record {
+    auto result = record{};
+    result.reserve(2);
+    const auto [bytes_it, bytes_success]
+      = result.try_emplace("bytes", record{});
+    TENZIR_ASSERT_EXPENSIVE(bytes_success);
+    auto& bytes = as<record>(bytes_it->second);
+    bytes.reserve(3);
+    bytes.try_emplace("current", bytes_current);
+    bytes.try_emplace("peak", bytes_peak);
+    bytes.try_emplace("cumulative", bytes_cumulative);
+    const auto [alloc_it, alloc_success]
+      = result.try_emplace("allocations", record{});
+    TENZIR_ASSERT_EXPENSIVE(alloc_success);
+    auto& allocations = as<record>(alloc_it->second);
+    allocations.reserve(3);
+    allocations.try_emplace("current", allocations_current);
+    allocations.try_emplace("peak", allocations_peak);
+    allocations.try_emplace("cumulative", allocations_cumulative);
+    return result;
   }
-  for (const auto& [identifier, stats] : *stats) {
-    auto& entry = as<record>(res.emplace_back(record{}));
-    entry.reserve(6);
-    if (identifier.name().empty()) {
-      entry.try_emplace("name", caf::none);
-    } else {
-      entry.try_emplace("name", std::string{identifier.name()});
+};
+
+struct actor_stats {
+  component_stats arrow;
+  component_stats cpp;
+  component_stats c;
+};
+
+using stats_map = std::unordered_map<std::string, actor_stats,
+                                     detail::heterogeneous_string_hash,
+                                     detail::heterogeneous_string_equal>;
+
+auto update_entity_stats(component_stats actor_stats::* which,
+                         const memory::polymorphic_allocator& alloc,
+                         stats_map& res) -> void {
+  auto stats = alloc.actor_stats();
+  for (const auto& [k, v] : stats) {
+    const auto name = k.name();
+    auto it = res.find(name);
+    if (it == res.end()) {
+      it = res.emplace(name, actor_stats{}).first;
     }
-    entry.try_emplace(
-      "bytes_allocated_cumulative",
-      stats.bytes_allocated_cumulative.load(std::memory_order_acquire));
-    entry.try_emplace(
-      "bytes_deallocated_cumulative",
-      stats.bytes_deallocated_cumulative.load(std::memory_order_acquire));
-    entry.try_emplace(
-      "bytes_reallocated_cumulative",
-      stats.bytes_reallocated_cumulative.load(std::memory_order_acquire));
-    entry.try_emplace("bytes_alive",
-                      stats.bytes_alive.load(std::memory_order_acquire));
+    (it->second.*which).allocations_cumulative = v.allocations_cumulative;
+    (it->second.*which).allocations_peak = v.allocations_peak;
+    (it->second.*which).allocations_current = v.allocations_current;
+    (it->second.*which).bytes_cumulative = v.bytes_cumulative;
+    (it->second.*which).bytes_peak = v.bytes_peak;
+    (it->second.*which).bytes_current = v.bytes_current;
   }
-  return res;
 }
 
-auto make_actor_stats(auto f) -> record {
-  auto result = record{};
-  result.reserve(3);
-  result.try_emplace("arrow",
-                     make_entity_stats_for(memory::arrow_allocator(), f));
-  result.try_emplace("cpp", make_entity_stats_for(memory::cpp_allocator(), f));
-  result.try_emplace("c", make_entity_stats_for(memory::c_allocator(), f));
+auto make_actor_stats() -> list {
+  static stats_map stats;
+  update_entity_stats(&actor_stats::arrow, memory::arrow_allocator(), stats);
+  update_entity_stats(&actor_stats::cpp, memory::cpp_allocator(), stats);
+  update_entity_stats(&actor_stats::c, memory::c_allocator(), stats);
+  auto result = list{};
+  result.reserve(stats.size());
+  for (const auto& [k, v] : stats) {
+    auto& r = as<record>(result.emplace_back(record{}));
+    r.reserve(4);
+    if (k.empty()) {
+      r.try_emplace("name", caf::none);
+    } else {
+      r.try_emplace("name", k);
+    }
+    r.try_emplace("arrow", v.arrow.as_record());
+    r.try_emplace("cpp", v.cpp.as_record());
+    r.try_emplace("c", v.c.as_record());
+  }
   return result;
 }
 
@@ -539,10 +578,7 @@ auto get_raminfo() -> caf::expected<record> {
   result.try_emplace("arrow", make_from(memory::arrow_allocator().stats()));
   result.try_emplace("cpp", make_from(memory::cpp_allocator().stats()));
   result.try_emplace("c", make_from(memory::c_allocator().stats()));
-  result.try_emplace(
-    "actor", make_actor_stats(&memory::polymorphic_allocator::actor_stats));
-  result.try_emplace(
-    "thread", make_actor_stats(&memory::polymorphic_allocator::thread_stats));
+  result.try_emplace("actor", make_actor_stats());
 #endif
 #if TENZIR_ALLOCATOR_MAY_USE_SYSTEM
   result.try_emplace("malloc", make_malloc_metrics());
@@ -595,18 +631,12 @@ public:
       {"bytes", stats},
       {"allocations", stats},
     };
-    const auto entity_stats_entry = list_type{record_type{
+    const auto actor_stats = list_type{record_type{
       {"name", string_type{}},
-      {"bytes_allocated_cumulative", int64_type{}},
-      {"bytes_deallocated_cumulative", int64_type{}},
-      {"bytes_reallocated_cumulative", int64_type{}},
-      {"bytes_alive", int64_type{}},
+      {"arrow", bytes_and_allocations},
+      {"cpp", bytes_and_allocations},
+      {"c", bytes_and_allocations},
     }};
-    const auto entity_stats = record_type{
-      {"arrow", entity_stats_entry},
-      {"cpp", entity_stats_entry},
-      {"c", entity_stats_entry},
-    };
     const auto table_slice_stats = record_type{
       {"serialized_bytes", int64_type{}},
       {"non_serialized_bytes", int64_type{}},
@@ -662,8 +692,7 @@ public:
       {"arrow", bytes_and_allocations},
       {"cpp", bytes_and_allocations},
       {"c", bytes_and_allocations},
-      {"actor", entity_stats},
-      {"thread", entity_stats},
+      {"actor", actor_stats},
       {"malloc", malloc_stats},
       {"table_slices", table_slice_stats},
       {"chunks", bytes_and_count},

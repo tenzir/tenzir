@@ -258,10 +258,6 @@ namespace system {
 
 namespace {
 
-auto write_error(const char* txt) noexcept {
-  write(STDERR_FILENO, txt, strlen(txt));
-}
-
 template <typename Function>
 [[nodiscard]] auto lookup_symbol(const char* name) noexcept -> Function {
   dlerror();
@@ -472,6 +468,7 @@ auto selected_backend_impl(const char* env_name) noexcept
     return backend::jemalloc;
 #else
     write_error("FATAL ERROR: selected allocator 'jemalloc' is not available");
+    std::exit(EXIT_FAILURE);
 #endif
   }
   if (env_str == "mimalloc") {
@@ -479,6 +476,7 @@ auto selected_backend_impl(const char* env_name) noexcept
     return backend::mimalloc;
 #else
     write_error("FATAL ERROR: selected allocator 'mimalloc' is not available");
+    std::exit(EXIT_FAILURE);
 #endif
   }
   if (env_str == "system") {
@@ -500,11 +498,11 @@ auto enable_stats(const char* env_name) noexcept -> bool {
   return enable_stats_impl("TENZIR_ALLOC_STATS");
 }
 
-auto enable_fine_grained_stats(const char* env_name) noexcept -> bool {
+auto enable_actor_stats(const char* env_name) noexcept -> bool {
   if (enable_stats_impl(env_name)) {
     return true;
   }
-  return enable_stats_impl("TENZIR_ALLOC_STATS_FINE");
+  return enable_stats_impl("TENZIR_ALLOC_ACTOR_STATS");
 }
 
 auto selected_backend(const char* var_name) noexcept -> enum backend {
