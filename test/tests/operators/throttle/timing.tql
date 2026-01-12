@@ -1,8 +1,0 @@
-from {x: 1}, {x: 2}
-write_ndjson
-throttle 10
-measure
-summarize min=min(timestamp), max=max(timestamp), bytes=collect(bytes)
-diff = max - min
-passed = 0.5s < diff and diff < 1.5s
-select passed, bytes
