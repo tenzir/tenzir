@@ -1,6 +1,8 @@
 # Common Types
 
-Reusable common types from `include/tenzir/`.
+**Use these types instead of hand-rolling your own.** These are battle-tested,
+well-integrated abstractions from `include/tenzir/` that handle edge cases and
+provide consistent behavior across the codebase.
 
 ## Generator — `tenzir/generator.hpp`
 
