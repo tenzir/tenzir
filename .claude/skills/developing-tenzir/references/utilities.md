@@ -34,36 +34,36 @@ detail::lru_cache<Key, Value> cache{capacity, [](const Key& k) {
 auto& value = cache.get(key);  // Creates if missing
 ```
 
-## Iteration — `detail/enumerate.hpp`, `detail/zip_iterator.hpp`
+## Iteration — `detail/enumerate.hpp`, `<ranges>`
 
 ```cpp
 for (auto [index, value] : detail::enumerate(container)) { ... }
 
-for (auto [a, b] : detail::zip(vec1, vec2)) { ... }
-for (auto [a, b] : detail::zip_equal(vec1, vec2)) { ... }  // Asserts same size
+for (auto [a, b] : std::views::zip(vec1, vec2)) { ... }  // Use C++23 std::views::zip
 ```
 
 ## Numerics
 
 - `detail/narrow.hpp` — `narrow<T>()` (checked, panics on overflow),
   `narrow_cast<T>()` (unchecked)
+- `detail/checked_math.hpp` — `checked_add()`, `checked_sub()`, `checked_mul()`
+  (returns `std::nullopt` on overflow)
 - `detail/saturating_arithmetic.hpp` — `saturating_add()`, `saturating_sub()`,
   `saturating_mul()`
 - `detail/byteswap.hpp` — `to_network_order()`, `to_host_order()`
 
-## Operators — `detail/operators.hpp`
+## Comparisons
 
-CRTP mixins: implement `<` and `==`, get all comparison operators.
+Use C++20's spaceship operator for comparison. Implement `operator<=>` and
+`operator==` to get all comparison operators automatically:
 
 ```cpp
-struct my_type : detail::totally_ordered<my_type> {
-  bool operator<(const my_type& other) const;
-  bool operator==(const my_type& other) const;
-  // Automatically provides: !=, >, <=, >=
+struct my_type {
+  auto operator<=>(const my_type&) const = default;
+  bool operator==(const my_type&) const = default;
+  // Automatically provides: <, >, <=, >=, !=
 };
 ```
-
-Other mixins: `addable`, `subtractable`, `multipliable`, `dividable`.
 
 ## Scope Guard — `detail/scope_guard.hpp`
 
