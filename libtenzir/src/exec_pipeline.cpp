@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/defaults.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/pipeline.hpp>
@@ -259,6 +261,10 @@ auto exec_pipeline(pipeline pipe, std::string definition,
             result = diagnostic::error(std::move(err)).to_error();
             self->quit();
           });
+      detail::weak_run_delayed_loop(
+        self, defaults::diagnostic_deduplication_interval, [&dedup] {
+          dedup.clear();
+        });
       return {
         [&](diagnostic& d) {
           if (cfg.strict and d.severity >= severity::warning and result) {

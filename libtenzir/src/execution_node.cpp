@@ -131,6 +131,10 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   exec_node_diagnostic_handler(exec_node_state<Input, Output>& state,
                                receiver_actor<diagnostic> handle)
     : state{state}, handle{std::move(handle)} {
+    loop_at(state.self, state.self->clock().now(),
+            defaults::diagnostic_deduplication_interval, [this] {
+              deduplicator_.clear();
+            });
   }
 
   void emit(diagnostic diag) override {

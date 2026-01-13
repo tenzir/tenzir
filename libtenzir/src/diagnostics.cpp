@@ -96,7 +96,7 @@ public:
         // TODO: This is a hack for the case where we don't have the information.
         break;
       }
-      if (!annotation.source) {
+      if (! annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
@@ -267,6 +267,10 @@ auto diagnostic_deduplicator::insert(const diagnostic& d) -> bool {
   auto inserted
     = seen_.emplace(std::pair{d.message, std::move(locations)}).second;
   return inserted;
+}
+
+void diagnostic_deduplicator::clear() {
+  seen_.clear();
 }
 
 auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
