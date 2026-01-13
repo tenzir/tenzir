@@ -30,4 +30,4 @@ row-wise access is needed.
 - [utilities.md](./references/utilities.md) — Generic utilities in tenzir::detail
 - [hashing.md](./references/hashing.md) — Hashing infrastructure
 - [parser-combinators.md](./references/parser-combinators.md) — Parser combinator framework
-- [generic-types.md](./references/generic-types.md) — Reusable generic types
+- [common-types.md](./references/common-types.md) — Reusable common types
