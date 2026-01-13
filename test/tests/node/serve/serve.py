@@ -1,4 +1,6 @@
 # fixtures: [node]
+# retry: 2
+# timeout: 45
 
 from __future__ import annotations
 

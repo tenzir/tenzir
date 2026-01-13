@@ -554,9 +554,15 @@ jobs:
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}-${{ github.sha }}
           enableCrossOsArchive: true
       - name: Run Unit Tests
+        env:
+          TENZIR_ALLOC_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
+          TENZIR_ALLOC_ACTOR_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
         run: |
           cmake --build "$BUILD_DIR" --target unit-tests
       - name: Run Integration Tests
+        env:
+          TENZIR_ALLOC_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
+          TENZIR_ALLOC_ACTOR_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
         run: |
           cmake --build "$BUILD_DIR" --target integration-tests
       - name: Install
