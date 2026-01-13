@@ -13,7 +13,6 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -61,7 +60,8 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
   return map_series(arrays, [&](std::span<series> arrays) {
     auto length = arrays.empty() ? length_ : arrays.front().length();
     auto fields = detail::stable_map<std::string, series>{};
-    for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
+    TENZIR_ASSERT(arrays.size() == x.items.size());
+    for (auto [array, item] : std::views::zip(arrays, x.items)) {
       match(
         item,
         [&](const ast::record::field& field) {
@@ -133,7 +133,8 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
     const auto slice_length = arrays.front().length();
     auto results = std::vector<result_t>{};
     auto value_type = type{null_type{}};
-    for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
+    TENZIR_ASSERT(arrays.size() == x.items.size());
+    for (auto [array, item] : std::views::zip(arrays, x.items)) {
       item.match(
         [&](const ast::expression& expr) {
           auto unified = unify(value_type, array.type);

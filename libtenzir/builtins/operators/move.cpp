@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/table_slice.hpp"
@@ -14,6 +13,8 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/set.hpp"
+
+#include <ranges>
 
 namespace tenzir::plugins::move {
 namespace {
@@ -40,7 +41,8 @@ struct move_operator final : public crtp_operator<move_operator> {
         rhs_values.push_back(eval(field, slice, ctrl.diagnostics()));
       }
       slice = drop(slice, rhs_, ctrl.diagnostics(), false);
-      for (const auto& [field, value] : detail::zip_equal(lhs_, rhs_values)) {
+      TENZIR_ASSERT(lhs_.size() == rhs_values.size());
+      for (const auto& [field, value] : std::views::zip(lhs_, rhs_values)) {
         slice = assign(field, value, slice, ctrl.diagnostics());
       }
       co_yield std::move(slice);
