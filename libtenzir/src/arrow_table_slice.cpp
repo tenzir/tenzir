@@ -13,7 +13,6 @@
 #include "tenzir/config.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/fbs/utils.hpp"
@@ -26,6 +25,7 @@
 #include <arrow/status.h>
 
 #include <memory>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -74,8 +74,8 @@ public:
 
   std::shared_ptr<arrow::RecordBatch>
   decode(const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
-    TENZIR_ASSERT(!record_batch_);
-    if (auto status = decoder_.Consume(flat_record_batch); !status.ok()) {
+    TENZIR_ASSERT(! record_batch_);
+    if (auto status = decoder_.Consume(flat_record_batch); ! status.ok()) {
       TENZIR_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
                    status.ToString());
       return {};
@@ -317,7 +317,7 @@ transform_columns(type schema,
   };
   const auto impl = [](const auto& impl, unpacked_layer layer, offset index,
                        auto& current, const auto sentinel) -> unpacked_layer {
-    TENZIR_ASSERT(!index.empty());
+    TENZIR_ASSERT(! index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer. For every entry in the current layer, we
     // need to do one of three things:
@@ -456,7 +456,7 @@ transform_columns(const table_slice& slice,
   auto input_struct_array = check(input_batch->ToStructArray());
   auto [output_schema, output_struct_array] = transform_columns(
     slice.schema(), input_struct_array, std::move(transformations));
-  if (!output_schema) {
+  if (! output_schema) {
     return {};
   }
   auto output_batch = arrow::RecordBatch::Make(output_schema.to_arrow_schema(),
@@ -493,7 +493,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   };
   const auto impl = [](const auto& impl, unpacked_layer layer, offset index,
                        auto& current, const auto sentinel) -> unpacked_layer {
-    TENZIR_ASSERT(!index.empty());
+    TENZIR_ASSERT(! index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer, backwards. For every entry in the current
     // layer, we need to do one of two things:
@@ -588,7 +588,7 @@ table_slice
 select_columns(const table_slice& slice, std::vector<offset> indices) {
   auto [schema, batch] = select_columns(slice.schema(), to_record_batch(slice),
                                         std::move(indices));
-  if (!schema) {
+  if (! schema) {
     return {};
   }
   auto result = table_slice{batch, std::move(schema)};
@@ -616,7 +616,7 @@ auto make_struct_array(int64_t length,
   auto field_types = arrow::FieldVector{};
   const auto rt_fields = collect(rt.fields());
   for (const auto& [name, array, rt_field] :
-       detail::zip(field_names, field_arrays, rt_fields)) {
+       std::views::zip(field_names, field_arrays, rt_fields)) {
     field_types.push_back(
       std::make_shared<arrow::Field>(std::move(name), array->type(), true,
                                      rt_field.type.make_arrow_metadata()));
@@ -634,7 +634,7 @@ auto make_struct_array(
   auto field_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
   field_arrays.reserve(fields.size());
   auto rt_fields = collect(rt.fields());
-  for (const auto& [field, rt_field] : detail::zip(fields, rt_fields)) {
+  for (const auto& [field, rt_field] : std::views::zip(fields, rt_fields)) {
     field_types.push_back(
       std::make_shared<arrow::Field>(field.first, field.second->type(), true,
                                      rt_field.type.make_arrow_metadata()));

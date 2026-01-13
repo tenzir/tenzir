@@ -8,7 +8,6 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
-#include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -323,44 +322,44 @@ public:
     TRY(argument_parser2::function(name())
           .positional("x", expr, "subnet")
           .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        TENZIR_UNUSED(ctx);
-        auto value = eval(expr);
-        if (value.parts().size() == 1) {
-          if (auto subnets = value.part(0).as<subnet_type>()) {
-            return series{
-              ip_type{},
-              check(subnets->array->storage()->GetFlattenedField(
-                0, tenzir::arrow_memory_pool())),
-            };
-          }
-        }
-        auto b = ip_type::make_arrow_builder(arrow_memory_pool());
-        check(b->Reserve(eval.length()));
-        for (auto& value : value) {
-          auto f = detail::overload{
-            [&](const subnet_type::array_type& array) {
-              check(append_array(*b, ip_type{},
-                                 as<ip_type::array_type>(
-                                   *check(array.storage()->GetFlattenedField(
-                                     0, tenzir::arrow_memory_pool())))));
-            },
-            [&](const arrow::NullArray& array) {
-              check(b->AppendNulls(array.length()));
-            },
-            [&]<class T>(const T& array) {
-              diagnostic::warning("expected `subnet`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b->AppendNulls(array.length()));
-            },
+    return function_use::make([expr = std::move(expr)](evaluator eval,
+                                                       session ctx) -> series {
+      TENZIR_UNUSED(ctx);
+      auto value = eval(expr);
+      if (value.parts().size() == 1) {
+        if (auto subnets = value.part(0).as<subnet_type>()) {
+          return series{
+            ip_type{},
+            check(subnets->array->storage()->GetFlattenedField(
+              0, tenzir::arrow_memory_pool())),
           };
-          match(*value.array, f);
         }
-        return series{ip_type{}, finish(*b)};
-      });
+      }
+      auto b = ip_type::make_arrow_builder(arrow_memory_pool());
+      check(b->Reserve(eval.length()));
+      for (auto& value : value) {
+        auto f = detail::overload{
+          [&](const subnet_type::array_type& array) {
+            check(append_array(
+              *b, ip_type{},
+              as<ip_type::array_type>(*check(array.storage()->GetFlattenedField(
+                0, tenzir::arrow_memory_pool())))));
+          },
+          [&](const arrow::NullArray& array) {
+            check(b->AppendNulls(array.length()));
+          },
+          [&]<class T>(const T& array) {
+            diagnostic::warning("expected `subnet`, got `{}`",
+                                value.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            check(b->AppendNulls(array.length()));
+          },
+        };
+        match(*value.array, f);
+      }
+      return series{ip_type{}, finish(*b)};
+    });
   }
 };
 
@@ -643,8 +642,8 @@ public:
           [&](const arrow::StructArray& array) -> series {
             auto arrays = arrow::ArrayVector{};
             auto fields = arrow::FieldVector{};
-            for (const auto& [field, array] :
-                 detail::zip(array.struct_type()->fields(), array.fields())) {
+            for (const auto& [field, array] : std::views::zip(
+                   array.struct_type()->fields(), array.fields())) {
               if (pattern.search(field->name()) == select) {
                 fields.push_back(field);
                 arrays.push_back(array);

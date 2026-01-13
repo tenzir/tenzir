@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/url.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -18,6 +17,8 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+
+#include <ranges>
 
 // Include our compatibility header for Boost < 1.86
 #include <boost/version.hpp>
@@ -271,8 +272,9 @@ public:
         if (it == groups.end()) {
           TENZIR_TRACE("creating group for: {}", key_data);
           auto relative_path = std::string{};
+          TENZIR_ASSERT(args_.by.size() == as<list>(key_data).size());
           for (auto [sel, data] :
-               detail::zip_equal(args_.by, as<list>(key_data))) {
+               std::views::zip(args_.by, as<list>(key_data))) {
             auto f = detail::overload{
               [](int64_t x) {
                 return fmt::to_string(x);
