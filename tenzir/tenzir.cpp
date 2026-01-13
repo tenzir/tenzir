@@ -34,6 +34,7 @@
 #include <caf/detail/actor_system_access.hpp>
 #include <caf/fwd.hpp>
 #include <caf/telemetry/metric_family_impl.hpp>
+#include <caf/telemetry/metric_registry.hpp>
 #include <caf/thread_owner.hpp>
 #include <sys/resource.h>
 
@@ -363,7 +364,9 @@ auto main(int argc, char** argv) -> int try {
     sys.registry().erase("signal-reflector");
     pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
     sys.await_actors_before_shutdown(false);
-    sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    if (sys.running_actors_count() > 0) {
+      std::this_thread::sleep_for(std::chrono::seconds{1});
+    }
     std::unordered_map<std::string, int64_t> zombies = {};
     auto collector = [&](const caf::telemetry::metric_family* /*family*/,
                          const caf::telemetry::metric* instance,
@@ -372,15 +375,15 @@ auto main(int argc, char** argv) -> int try {
         zombies[std::string{instance->labels()[0].value()}] = wrapped->value();
       }
     };
-    for (int cnt = 10; cnt > 0 and sys.registry().running() > 0; cnt--) {
+    for (int cnt = 10; cnt > 0 and sys.running_actors_count() > 0; cnt--) {
       zombies.clear();
       sys.running_actors_metric_family()->collect(collector);
       TENZIR_INFO("waiting {} more seconds for leftover components to "
                   "terminate: {}",
                   cnt, zombies);
-      sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+      std::this_thread::sleep_for(std::chrono::seconds{1});
     }
-    if (sys.registry().running() > 0) {
+    if (sys.running_actors_count() > 0) {
       zombies.clear();
       sys.running_actors_metric_family()->collect(collector);
       TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
