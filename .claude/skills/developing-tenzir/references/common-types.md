@@ -1,6 +1,6 @@
-# Generic Types
+# Common Types
 
-Reusable generic types from `include/tenzir/`.
+Reusable common types from `include/tenzir/`.
 
 ## Generator — `tenzir/generator.hpp`
 
