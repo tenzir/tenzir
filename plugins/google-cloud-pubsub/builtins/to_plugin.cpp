@@ -9,6 +9,7 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 
 #include <tenzir/concepts.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -101,6 +102,31 @@ public:
         }
         pending.swap(still_pending);
       };
+    auto finalize_guard = detail::scope_guard{[&]() noexcept {
+      // Flush all pending publishes before destruction. This ensures that gRPC
+      // has completed all in-flight operations before the publisher is
+      // destroyed.
+      publisher.Flush();
+      for (auto& [future, _] : pending) {
+        auto s = future.wait_for(timeout);
+        if (s != std::future_status::ready) {
+          if (not timeout_warned) {
+            diagnostic::warning("reached a {} timeout while trying to publish",
+                                timeout)
+              .primary(args_.op)
+              .emit(dh);
+            timeout_warned = true;
+          }
+          continue;
+        }
+        auto id = future.get();
+        if (not id) {
+          diagnostic::error("failed to publish: {}", id.status().message())
+            .primary(args_.op)
+            .emit(dh);
+        }
+      }
+    }};
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -132,28 +158,7 @@ public:
       flush_pending(std::chrono::steady_clock::now());
       co_yield {};
     }
-    // Flush all pending publishes before destruction. This ensures that gRPC
-    // has completed all in-flight operations before the publisher is destroyed.
-    publisher.Flush();
-    for (auto& [future, _] : pending) {
-      auto s = future.wait_for(timeout);
-      if (s != std::future_status::ready) {
-        if (not timeout_warned) {
-          diagnostic::warning("reached a {} timeout while trying to publish",
-                              timeout)
-            .primary(args_.op)
-            .emit(dh);
-          timeout_warned = true;
-        }
-        continue;
-      }
-      auto id = future.get();
-      if (not id) {
-        diagnostic::error("failed to publish: {}", id.status().message())
-          .primary(args_.op)
-          .emit(dh);
-      }
-    }
+    finalize_guard.trigger();
   }
 
   auto name() const -> std::string override {

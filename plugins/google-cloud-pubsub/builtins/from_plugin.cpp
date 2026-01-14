@@ -9,6 +9,7 @@
 #include "tenzir/multi_series_builder.hpp"
 
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -118,26 +119,10 @@ public:
         }
         std::move(h).ack();
       });
-    while (session.valid()) {
-      if (session.is_ready()) {
-        break;
+    auto session_guard = detail::scope_guard{[&]() noexcept {
+      if (not session.valid()) {
+        return;
       }
-      // Must hold the mutex while yielding to prevent concurrent modification
-      // by the callback. We collect slices under the lock, then yield outside.
-      auto slices = [&] {
-        auto guard = std::scoped_lock{builder_mut};
-        return msb.yield_ready_as_table_slice();
-      }();
-      auto yielded = false;
-      for (auto&& s : slices) {
-        yielded = true;
-        co_yield std::move(s);
-      }
-      if (not yielded) {
-        co_yield {};
-      }
-    }
-    if (session.valid()) {
       if (not session.is_ready()) {
         // Initiate cancellation of the subscription.
         session.cancel();
@@ -152,7 +137,28 @@ public:
           .primary(args_.operator_location)
           .emit(ctrl.diagnostics());
       }
+    }};
+    while (session.valid()) {
+      if (session.is_ready()) {
+        break;
+      }
+      // Must hold the mutex while collecting slices to prevent concurrent
+      // modification by the callback. We collect slices under the lock, then
+      // yield outside.
+      auto slices = [&] {
+        auto guard = std::scoped_lock{builder_mut};
+        return msb.yield_ready_as_table_slice();
+      }();
+      auto yielded = false;
+      for (auto&& s : slices) {
+        yielded = true;
+        co_yield std::move(s);
+      }
+      if (not yielded) {
+        co_yield {};
+      }
     }
+    session_guard.trigger();
     for (auto&& s : msb.finalize_as_table_slice()) {
       co_yield std::move(s);
     }
