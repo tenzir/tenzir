@@ -174,6 +174,8 @@ public:
     // - How optimization of the operator behaves
     auto d = Describer<HeadArgs, Head>{};
     d.optional_positional("count", &HeadArgs::count);
+    d.named_optional("foo", &HeadArgs::count);
+    d.named_optional("foo2", &HeadArgs::count, "yo");
 #if 0
     auto count = d.positional("count", &HeadArgs::count);
     d.validate([=](diagnostic_handler& dh) -> Empty {

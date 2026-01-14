@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/data.hpp"
 #include "tenzir/async.hpp"
-#include "tenzir/ir.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
+#include "tenzir/ir.hpp"
 
 #include <any>
 
@@ -55,6 +55,20 @@ struct Positional {
   AnySetter setter;
 };
 
+struct Named {
+  Named(std::string name, std::string type, AnySetter setter, bool required)
+    : name{std::move(name)},
+      type{std::move(type)},
+      setter{std::move(setter)},
+      required{required} {
+  }
+
+  std::string name;
+  std::string type;
+  AnySetter setter;
+  bool required = false;
+};
+
 template <class Input, class Output>
 using Spawn = std::function<auto(std::any)->Box<Operator<Input, Output>>>;
 
@@ -70,6 +84,7 @@ public:
   std::any args;
   std::vector<Positional> positional;
   std::optional<size_t> first_optional;
+  std::vector<Named> named;
   std::vector<AnySpawn> spawns;
 };
 
@@ -121,6 +136,10 @@ auto make_setter(T Args::* ptr) -> auto {
         (&std::any_cast<Args&>(args))->*ptr = std::nullopt;
       }
     }};
+  } else if constexpr (std::same_as<T, bool>) {
+    return Setter<located<bool>>{[ptr](std::any& args, located<bool> value) {
+      (&std::any_cast<Args&>(args))->*ptr = value.inner;
+    }};
   } else if constexpr (argument_parser_bare_type<Value>) {
     return Setter<located<Value>>{[ptr](std::any& args, located<Value> value) {
       (&std::any_cast<Args&>(args))->*ptr = std::move(value.inner);
@@ -132,8 +151,11 @@ auto make_setter(T Args::* ptr) -> auto {
   }
 }
 
-// TODO
+/// For some types, we do not want to implicitly default to a generic string.
+/// If your code fails to compile because of this constraint, add a third
+/// parameter which describes the argument "type".
 template <class T>
+  requires(not concepts::one_of<T, ast::expression, list, located<list>>)
 static constexpr char const* type_default = "";
 
 template <class Args, class... Impls>
@@ -203,8 +225,68 @@ public:
     return Argument<Args, T>{};
   }
 
-  template <class T>
-  auto named(std::string name, T Args::* ptr) -> Argument<Args, T>;
+  /// Adds a required named argument.
+  template <ArgType T>
+  auto
+  named(std::string name, T Args::* ptr, std::string type = type_default<T>)
+    -> Argument<Args, T> {
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      true,
+    });
+    return Argument<Args, T>{};
+  }
+
+  /// Adds an optional named argument.
+  template <ArgType T>
+  auto named(std::string name, std::optional<T> Args::* ptr,
+             std::string type = type_default<T>) -> Argument<Args, T> {
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      false,
+    });
+    return Argument<Args, T>{};
+  }
+
+  /// Adds an optional named argument with a default value.
+  template <ArgType T>
+  auto named_optional(std::string name, T Args::* ptr,
+                      std::string type = type_default<T>) -> Argument<Args, T> {
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      false,
+    });
+    return Argument<Args, T>{};
+  }
+
+  /// Adds an optional boolean flag.
+  auto named(std::string name, bool Args::* ptr, std::string type = "")
+    -> Argument<Args, bool> {
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      false,
+    });
+    return Argument<Args, bool>{};
+  }
+
+  /// Adds an optional location flag.
+  auto named(std::string name, std::optional<location> Args::* ptr,
+             std::string type = "") -> void {
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      make_setter(ptr),
+      false,
+    });
+  }
 
   auto validate(std::function<auto(diagnostic_handler&)->Empty>) -> void;
 
@@ -218,14 +300,15 @@ public:
   }
 
   auto order_invariant() -> Description;
+
 private:
   Description desc_;
 };
 
 } // namespace _::operator_plugin
 
-using _::operator_plugin::OperatorPlugin;
-using _::operator_plugin::Description;
 using _::operator_plugin::Describer;
+using _::operator_plugin::Description;
+using _::operator_plugin::OperatorPlugin;
 
 } // namespace tenzir
