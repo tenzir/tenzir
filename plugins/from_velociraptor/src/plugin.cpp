@@ -353,6 +353,7 @@ public:
       auto ok = false;
       while (completion_queue.Next(&output_tag, &ok)) {
         if (reinterpret_cast<uintptr_t>(output_tag) == finish_tag) {
+          TENZIR_ASSERT(ok);
           break;
         }
       }
