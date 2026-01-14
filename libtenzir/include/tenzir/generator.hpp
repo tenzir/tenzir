@@ -17,23 +17,14 @@
 
 #include "tenzir/fwd.hpp"
 
+#include <coroutine>
 #include <exception>
 #include <functional>
 #include <iterator>
 #include <type_traits>
 #include <utility>
 
-#if __has_include(<coroutine>)
-
-#  include <coroutine>
 namespace stdcoro = std;
-
-#else
-
-#  include <experimental/coroutine>
-namespace stdcoro = std::experimental;
-
-#endif
 
 namespace tenzir {
 
