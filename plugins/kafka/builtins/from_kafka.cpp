@@ -138,8 +138,9 @@ public:
     const auto arrow_schema = schema.to_arrow_schema();
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
     const auto finish_as_slice = [&] -> table_slice {
+      const auto l = b->length();
       return table_slice{
-        arrow::RecordBatch::Make(arrow_schema, b->length(), {finish(*b)}),
+        arrow::RecordBatch::Make(arrow_schema, l, {finish(*b)}),
       };
     };
     while (true) {
