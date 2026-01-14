@@ -9,9 +9,9 @@
   musl-fts,
   libbacktrace,
   libbpf,
-  libnghttp2,
   libyaml,
   luajit,
+  nghttp2,
   nix-update-script,
   nixosTests,
   openssl,
@@ -26,19 +26,19 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "fluent-bit";
-  version = "4.0.3";
+  version = "4.2.2";
 
   src = fetchFromGitHub {
     owner = "fluent";
     repo = "fluent-bit";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-hxlvidzrEE/5xzka414CerGQ/Vi2jXUnNvO/oSxrHQQ=";
+    hash = "sha256-BYaJ76iX969SLxCUMyIRbHnVt5/N+wjMMvsqxFmLqUI=";
   };
 
   patches = [
     ./fix-install-paths.patch
     ./fix-log-level-check.patch
-    ./fix-strerror_r.patch
+    #./fix-strerror_r.patch
   ];
 
   # `src/CMakeLists.txt` installs fluent-bit's systemd unit files at the path in the `SYSTEMD_UNITDIR` CMake variable.
@@ -91,9 +91,9 @@ stdenv.mkDerivation (finalAttrs: {
       # Needed by rdkafka.
       curl
       libbacktrace
-      libnghttp2
       libyaml
       luajit
+      nghttp2.dev
       openssl
       rdkafka
       # Needed by rdkafka.
@@ -122,7 +122,6 @@ stdenv.mkDerivation (finalAttrs: {
       "-DFLB_SECURITY=Off"
     ]
     ++ lib.optionals stdenv.hostPlatform.isStatic [
-      # FLB_SECURITY causes bad linker options for Clang to be set.
       "-DFLB_BINARY=OFF"
       "-DFLB_SHARED_LIB=OFF"
       "-DFLB_LUAJIT=OFF"
