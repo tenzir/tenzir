@@ -122,8 +122,14 @@ public:
       if (session.is_ready()) {
         break;
       }
+      // Must hold the mutex while yielding to prevent concurrent modification
+      // by the callback. We collect slices under the lock, then yield outside.
+      auto slices = [&] {
+        auto guard = std::scoped_lock{builder_mut};
+        return msb.yield_ready_as_table_slice();
+      }();
       auto yielded = false;
-      for (auto&& s : msb.yield_ready_as_table_slice()) {
+      for (auto&& s : slices) {
         yielded = true;
         co_yield std::move(s);
       }
