@@ -154,47 +154,16 @@ auto get_usage(const Description& desc) -> std::string {
 } // namespace
 
 class GenericIr final : public ir::Operator {
-  /// Argument that is not yet fully parsed.
-  struct Incomplete {
-    Incomplete() = default;
-
-    explicit Incomplete(ast::expression expr) : expr{std::move(expr)} {
-    }
-
-    friend auto inspect(auto& f, Incomplete& x) -> bool {
-      return f.apply(x.expr);
-    }
-
-    ast::expression expr;
-  };
-
-  using WithIncomplete
-    = detail::tl_concat_t<LocatedTypes, detail::type_list<Incomplete>>;
-
-  using Arg = detail::tl_apply_t<WithIncomplete, variant>;
-
-  /// Named argument with its index in the description and its value.
-  struct NamedArg {
-    NamedArg() = default;
-
-    NamedArg(size_t index, Arg value) : index{index}, value{std::move(value)} {
-    }
-
-    friend auto inspect(auto& f, NamedArg& x) -> bool {
-      return f.object(x).fields(f.field("index", x.index),
-                                f.field("value", x.value));
-    }
-
-    size_t index = 0;
-    Arg value;
-  };
-
 public:
   GenericIr() = default;
 
   static auto make(SharedDescription desc, ast::entity op,
                    std::vector<ast::expression> args, compile_ctx ctx)
     -> failure_or<GenericIr> {
+    for (auto& arg : args) {
+      // TODO: This assumes that there are no subpipelines...
+      TRY(arg.bind(ctx));
+    }
     auto failed = false;
     auto emit = [&](diagnostic_builder d) {
       failed = true;
@@ -433,6 +402,11 @@ public:
       TENZIR_ASSERT(named_arg.index < desc_->named.size());
       TRY(substitute_arg(named_arg.value, desc_->named[named_arg.index].setter,
                          true));
+    }
+    // Run custom validation if provided.
+    if (desc_->validator) {
+      auto validate_ctx = ValidateCtx{args_, named_args_, *desc_, ctx};
+      (*desc_->validator)(validate_ctx);
     }
     return {};
   }

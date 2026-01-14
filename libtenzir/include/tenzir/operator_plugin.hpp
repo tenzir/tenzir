@@ -12,6 +12,7 @@
 #include "tenzir/ir.hpp"
 
 #include <any>
+#include <span>
 
 namespace tenzir {
 
@@ -75,6 +76,19 @@ using Spawn = std::function<auto(std::any)->Box<Operator<Input, Output>>>;
 // TODO: Complete.
 using AnySpawn = variant<Spawn<table_slice, table_slice>>;
 
+// FIXME: Do we need this?
+class Empty {
+public:
+  Empty() = default;
+
+  explicit(false) Empty(std::nullopt_t) {
+  }
+};
+
+class ValidateCtx;
+
+using Validator = std::function<Empty(ValidateCtx&)>;
+
 struct Description {
 public:
   Description() = default;
@@ -86,6 +100,7 @@ public:
   std::optional<size_t> first_optional;
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
+  std::optional<Validator> validator;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -98,25 +113,29 @@ public:
     -> failure_or<Box<ir::Operator>> final;
 };
 
-// FIXME: Do we need this?
-class Empty {
-public:
-  Empty() = default;
-
-  explicit(false) Empty(std::nullopt_t) {
-  }
-};
-
 template <class Args, ArgType T>
 class Argument {
 public:
-  auto value() const -> std::optional<T>;
+  Argument() = default;
 
-  auto get_location() const -> location;
+  Argument(bool is_named, size_t index) : is_named_{is_named}, index_{index} {
+  }
+
+  auto is_named() const -> bool {
+    return is_named_;
+  }
+
+  auto index() const -> size_t {
+    return index_;
+  }
 
   // TODO
   auto positive() -> Argument;
   auto non_negative() -> Argument;
+
+private:
+  bool is_named_ = false;
+  size_t index_ = 0;
 };
 
 template <class Args, class T>
@@ -150,6 +169,137 @@ auto make_setter(T Args::* ptr) -> auto {
     }};
   }
 }
+
+/// Represents an argument that is not yet fully evaluated.
+struct Incomplete {
+  Incomplete() = default;
+
+  explicit Incomplete(ast::expression expr) : expr{std::move(expr)} {
+  }
+
+  ast::expression expr;
+
+  friend auto inspect(auto& f, Incomplete& x) -> bool {
+    return f.apply(x.expr);
+  }
+};
+
+using ArgWithIncomplete
+  = detail::tl_concat_t<LocatedTypes, detail::type_list<Incomplete>>;
+
+using Arg = detail::tl_apply_t<ArgWithIncomplete, variant>;
+
+/// Named argument with its index in the description and its value.
+struct NamedArg {
+  NamedArg() = default;
+
+  NamedArg(size_t index, Arg value) : index{index}, value{std::move(value)} {
+  }
+
+  size_t index = 0;
+  Arg value;
+
+  friend auto inspect(auto& f, NamedArg& x) -> bool {
+    return f.object(x).fields(f.field("index", x.index),
+                              f.field("value", x.value));
+  }
+};
+
+class ValidateCtx {
+public:
+  ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
+              const Description& /*desc*/, diagnostic_handler& dh)
+    : args_{args}, named_args_{named_args}, dh_{&dh} {
+  }
+
+  template <class Args, class T>
+  auto get(Argument<Args, T> arg) -> std::optional<T> {
+    const Arg* value = nullptr;
+    if (arg.is_named()) {
+      // Find the named argument with matching index
+      for (const auto& named : named_args_) {
+        if (named.index == arg.index()) {
+          value = &named.value;
+          break;
+        }
+      }
+      if (not value) {
+        // Named argument was not provided
+        return std::nullopt;
+      }
+    } else {
+      // Positional argument
+      if (arg.index() >= args_.size()) {
+        // Positional argument was not provided
+        return std::nullopt;
+      }
+      value = &args_[arg.index()];
+    }
+    // Check if still incomplete
+    if (is<Incomplete>(*value)) {
+      return std::nullopt;
+    }
+    // Extract the value
+    return match(
+      *value,
+      [](const Incomplete&) -> std::optional<T> {
+        TENZIR_UNREACHABLE();
+      },
+      []<class U>(const located<U>& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v.inner;
+        } else if constexpr (std::same_as<T, located<U>>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
+      },
+      [](const auto&) -> std::optional<T> {
+        return std::nullopt;
+      });
+  }
+
+  template <class Args, class T>
+  auto get_location(Argument<Args, T> arg) -> std::optional<location> {
+    const Arg* value = nullptr;
+    if (arg.is_named()) {
+      for (const auto& named : named_args_) {
+        if (named.index == arg.index()) {
+          value = &named.value;
+          break;
+        }
+      }
+      if (not value) {
+        return std::nullopt;
+      }
+    } else {
+      if (arg.index() >= args_.size()) {
+        return std::nullopt;
+      }
+      value = &args_[arg.index()];
+    }
+    return match(
+      *value,
+      [](const Incomplete& v) -> std::optional<location> {
+        return v.expr.get_location();
+      },
+      []<class U>(const located<U>& v) -> std::optional<location> {
+        return v.source;
+      },
+      [](const auto& v) -> std::optional<location> {
+        return v.get_location();
+      });
+  }
+
+  explicit(false) operator diagnostic_handler&() {
+    return *dh_;
+  }
+
+private:
+  std::span<const Arg> args_;
+  std::span<const NamedArg> named_args_;
+  diagnostic_handler* dh_;
+};
 
 /// For some types, we do not want to implicitly default to a generic string.
 /// If your code fails to compile because of this constraint, add a third
@@ -188,12 +338,13 @@ public:
     if (desc_.first_optional) {
       panic("cannot have required positional after optional positional");
     }
+    auto index = desc_.positional.size();
     desc_.positional.push_back(Positional{
       std::move(name),
       std::move(type),
       make_setter(ptr),
     });
-    return Argument<Args, T>{};
+    return Argument<Args, T>{false, index};
   }
 
   template <ArgType T>
@@ -202,12 +353,13 @@ public:
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
+    auto index = desc_.positional.size();
     desc_.positional.push_back(Positional{
       std::move(name),
       std::move(type),
       make_setter(ptr),
     });
-    return Argument<Args, T>{};
+    return Argument<Args, T>{false, index};
   }
 
   template <ArgType T>
@@ -217,12 +369,13 @@ public:
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
+    auto index = desc_.positional.size();
     desc_.positional.push_back(Positional{
       std::move(name),
       std::move(type),
       make_setter(ptr),
     });
-    return Argument<Args, T>{};
+    return Argument<Args, T>{false, index};
   }
 
   /// Adds a required named argument.
@@ -230,65 +383,73 @@ public:
   auto
   named(std::string name, T Args::* ptr, std::string type = type_default<T>)
     -> Argument<Args, T> {
+    auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
       std::move(type),
       make_setter(ptr),
       true,
     });
-    return Argument<Args, T>{};
+    return Argument<Args, T>{true, index};
   }
 
   /// Adds an optional named argument.
   template <ArgType T>
   auto named(std::string name, std::optional<T> Args::* ptr,
              std::string type = type_default<T>) -> Argument<Args, T> {
+    auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
       std::move(type),
       make_setter(ptr),
       false,
     });
-    return Argument<Args, T>{};
+    return Argument<Args, T>{true, index};
   }
 
   /// Adds an optional named argument with a default value.
   template <ArgType T>
   auto named_optional(std::string name, T Args::* ptr,
                       std::string type = type_default<T>) -> Argument<Args, T> {
+    auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
       std::move(type),
       make_setter(ptr),
       false,
     });
-    return Argument<Args, T>{};
+    return Argument<Args, T>{true, index};
   }
 
   /// Adds an optional boolean flag.
   auto named(std::string name, bool Args::* ptr, std::string type = "")
     -> Argument<Args, bool> {
+    auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
       std::move(type),
       make_setter(ptr),
       false,
     });
-    return Argument<Args, bool>{};
+    return Argument<Args, bool>{true, index};
   }
 
   /// Adds an optional location flag.
   auto named(std::string name, std::optional<location> Args::* ptr,
-             std::string type = "") -> void {
+             std::string type = "") -> Argument<Args, bool> {
+    auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
       std::move(type),
       make_setter(ptr),
       false,
     });
+    return Argument<Args, bool>{true, index};
   }
 
-  auto validate(std::function<auto(diagnostic_handler&)->Empty>) -> void;
+  auto validate(Validator validator) -> void {
+    desc_.validator = std::move(validator);
+  }
 
   // TODO
   template <class F>
@@ -309,6 +470,8 @@ private:
 
 using _::operator_plugin::Describer;
 using _::operator_plugin::Description;
+using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
+using _::operator_plugin::ValidateCtx;
 
 } // namespace tenzir

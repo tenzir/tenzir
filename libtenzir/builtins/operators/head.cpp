@@ -173,9 +173,16 @@ public:
     // - Whether the operator declares its own dollar var
     // - How optimization of the operator behaves
     auto d = Describer<HeadArgs, Head>{};
-    d.optional_positional("count", &HeadArgs::count);
-    d.named_optional("foo", &HeadArgs::count);
-    d.named_optional("foo2", &HeadArgs::count, "yo");
+    auto count = d.optional_positional("count", &HeadArgs::count);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(count));
+      if (value == 123) {
+        diagnostic::error("value must not be 123")
+          .primary(ctx.get_location(count).value())
+          .emit(ctx);
+      }
+      return {};
+    });
 #if 0
     auto count = d.positional("count", &HeadArgs::count);
     d.validate([=](diagnostic_handler& dh) -> Empty {
