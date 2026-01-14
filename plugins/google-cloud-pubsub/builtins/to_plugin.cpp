@@ -132,6 +132,9 @@ public:
       flush_pending(std::chrono::steady_clock::now());
       co_yield {};
     }
+    // Flush all pending publishes before destruction. This ensures that gRPC
+    // has completed all in-flight operations before the publisher is destroyed.
+    publisher.Flush();
     for (auto& [future, _] : pending) {
       auto s = future.wait_for(timeout);
       if (s != std::future_status::ready) {

@@ -343,12 +343,34 @@ public:
         }
       }
     }
+    // Properly finish the gRPC stream and wait for completion.
     auto status = grpc::Status{};
-    reader->Finish(&status, nullptr);
+    constexpr auto finish_tag = uintptr_t{0xFFFFFFFF};
+    reader->Finish(&status, reinterpret_cast<void*>(finish_tag));
+    // Wait for the Finish operation to complete.
+    {
+      void* output_tag = nullptr;
+      auto ok = false;
+      while (completion_queue.Next(&output_tag, &ok)) {
+        if (reinterpret_cast<uintptr_t>(output_tag) == finish_tag) {
+          break;
+        }
+      }
+    }
     if (not status.ok()) {
       diagnostic::warning("failed to finish Velociraptor gRPC stream")
         .note("{}", status.error_message())
         .emit(ctrl.diagnostics());
+    }
+    // Shutdown the completion queue and drain remaining events to ensure
+    // gRPC threads are no longer accessing the queue before destruction.
+    completion_queue.Shutdown();
+    {
+      void* ignored_tag = nullptr;
+      bool ignored_ok = false;
+      while (completion_queue.Next(&ignored_tag, &ignored_ok)) {
+        // Drain remaining events.
+      }
     }
   }
 

@@ -131,15 +131,21 @@ public:
         co_yield {};
       }
     }
-    if (session.is_ready()) {
+    if (session.valid()) {
+      if (not session.is_ready()) {
+        // Initiate cancellation of the subscription.
+        session.cancel();
+      }
+      // Always wait for the session to fully stop. This is critical to ensure
+      // that gRPC background threads are no longer accessing captured locals
+      // (builder_mut, msb, args_) before they are destroyed.
       auto status = session.get();
-      if (not status.ok()) {
+      if (not status.ok()
+          and status.code() != google::cloud::StatusCode::kCancelled) {
         diagnostic::error("google-cloud-subscriber: {}", status.message())
           .primary(args_.operator_location)
           .emit(ctrl.diagnostics());
       }
-    } else if (session.valid()) {
-      session.cancel();
     }
     for (auto&& s : msb.finalize_as_table_slice()) {
       co_yield std::move(s);
