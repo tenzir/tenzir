@@ -277,6 +277,46 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
+    },
+    {
+      "name": "macos-xcode-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/curl",
+        "CURL_ROOT": "/opt/homebrew/opt/curl",
+        "TENZIR_PLUGINS_BLACKLIST": "from_velociraptor"
+      },
+      "environment": {
+        "PKG_CONFIG_PATH": "/opt/homebrew/opt/curl/lib/pkgconfig"
+      }
+    },
+    {
+      "name": "macos-xcode-debug",
+      "displayName": "macOS Xcode Debug",
+      "inherits": ["macos-xcode-base"],
+      "binaryDir": "${sourceDir}/build/xcode/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-xcode-relwithdebinfo",
+      "displayName": "macOS Xcode RelWithDebInfo",
+      "inherits": ["macos-xcode-base"],
+      "binaryDir": "${sourceDir}/build/xcode/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "macos-xcode-release",
+      "displayName": "macOS Xcode Release",
+      "inherits": ["macos-xcode-base"],
+      "binaryDir": "${sourceDir}/build/xcode/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -335,6 +375,18 @@
     {
       "name": "macos-clang-release",
       "configurePreset": "macos-clang-release"
+    },
+    {
+      "name": "macos-xcode-debug",
+      "configurePreset": "macos-xcode-debug"
+    },
+    {
+      "name": "macos-xcode-relwithdebinfo",
+      "configurePreset": "macos-xcode-relwithdebinfo"
+    },
+    {
+      "name": "macos-xcode-release",
+      "configurePreset": "macos-xcode-release"
     }
   ]
 }
