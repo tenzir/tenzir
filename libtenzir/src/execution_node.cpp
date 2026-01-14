@@ -312,41 +312,51 @@ struct exec_node_control_plane final : public operator_control_plane {
       TENZIR_UNREACHABLE();
     }
 
+    // Helper struct to work around GCC 15 ICE in lambda_expr_this_capture
+    // when using explicit object parameters with captures.
+    struct secret_resolver {
+      const request_map_t& requested;
+      tenzir::diagnostic_handler& dh;
+      location loc;
+
+      using ret_t = failure_or<ecc::cleansing_blob>;
+
+      auto operator()(const fbs::data::SecretLiteral& l) const -> ret_t {
+        const auto& v = detail::secrets::deref(l.value());
+        const auto v_bytes = as_bytes(v);
+        return ecc::cleansing_blob{v_bytes.begin(), v_bytes.end()};
+      }
+
+      auto operator()(const fbs::data::SecretName& l) const -> ret_t {
+        const auto it = requested.find(detail::secrets::deref(l.value()).str());
+        TENZIR_ASSERT(it != requested.end());
+        return it->second.value;
+      }
+
+      auto operator()(const fbs::data::SecretConcatenation& concat) const
+        -> ret_t {
+        auto res = ecc::cleansing_blob{};
+        for (auto* p : detail::secrets::deref(concat.secrets())) {
+          TRY(auto part, match(detail::secrets::deref(p), *this));
+          res.insert(res.end(), part.begin(), part.end());
+        }
+        return res;
+      }
+
+      auto operator()(const fbs::data::SecretTransformed& trafo) const
+        -> ret_t {
+        TRY(auto nested, match(detail::secrets::deref(trafo.secret()), *this));
+        return apply_transformation(std::move(nested), trafo.transformation(),
+                                    dh, loc);
+      }
+    };
+
     auto finish(const request_map_t& requested,
                 exec_node_diagnostic_handler<Input, Output>& dh) const
       -> failure_or<void> {
       // For every element in the original secret
       bool all_literal = true;
-      using ret_t = failure_or<ecc::cleansing_blob>;
-      const auto f = detail::overload{
-        [](const fbs::data::SecretLiteral& l) -> ret_t {
-          const auto& v = detail::secrets::deref(l.value());
-          const auto v_bytes = as_bytes(v);
-          return ecc::cleansing_blob{v_bytes.begin(), v_bytes.end()};
-        },
-        [&requested](const fbs::data::SecretName& l) -> ret_t {
-          const auto it
-            = requested.find(detail::secrets::deref(l.value()).str());
-          TENZIR_ASSERT(it != requested.end());
-          return it->second.value;
-        },
-        [](this const auto& self,
-           const fbs::data::SecretConcatenation& concat) -> ret_t {
-          auto res = ecc::cleansing_blob{};
-          for (auto* p : detail::secrets::deref(concat.secrets())) {
-            TRY(auto part, match(detail::secrets::deref(p), self));
-            res.insert(res.end(), part.begin(), part.end());
-          }
-          return res;
-        },
-        [&dh, loc
-              = this->loc](this const auto& self,
-                           const fbs::data::SecretTransformed& trafo) -> ret_t {
-          TRY(auto nested, match(detail::secrets::deref(trafo.secret()), self));
-          return apply_transformation(std::move(nested), trafo.transformation(),
-                                      dh, loc);
-        },
-      };
+      const auto f = secret_resolver{requested, dh, this->loc};
       TRY(auto res, match(secret, f));
       // Finally, we invoke the callback
       return callback(resolved_secret_value{std::move(res), all_literal});
