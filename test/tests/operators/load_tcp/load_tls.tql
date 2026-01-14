@@ -3,5 +3,5 @@ fixtures: [tcp_tls_source]
 timeout: 60
 ---
 
-load_tcp env("TCP_TLS_ENDPOINT"), tls=true, certfile=env("TCP_TLS_CERTFILE"), keyfile=env("TCP_TLS_KEYFILE") { read_lines }
+load_tcp env("TCP_TLS_ENDPOINT"), tls={certfile: env("TCP_TLS_CERTFILE"), keyfile: env("TCP_TLS_KEYFILE")} { read_lines }
 head 1

@@ -29,7 +29,7 @@ concept LocatedType = detail::tl_contains_v<LocatedTypes, T>;
 
 using BareTypes
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
-                     caf::detail::value_type_of>;
+                     detail::value_type_of>;
 
 using ArgTypes = detail::tl_concat_t<LocatedTypes, BareTypes>;
 

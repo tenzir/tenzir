@@ -34,9 +34,11 @@ save(const std::filesystem::path& filename, std::span<const std::byte> xs) {
   }
   auto tmp = filename;
   tmp += ".tmp";
-  if (auto err = write(tmp, xs)) {
-    if (const auto removed = std::filesystem::remove(tmp, ec); !removed || ec)
+  if (auto err = write(tmp, xs); err.valid()) {
+    if (const auto removed = std::filesystem::remove(tmp, ec);
+        ! removed || ec) {
       TENZIR_WARN("failed to remove file {} : {}", tmp, ec.message());
+    }
     return err;
   }
   std::filesystem::rename(tmp, filename, ec);

@@ -217,7 +217,7 @@ make_application(std::string_view path) {
 
 void render_error(const command& root, const caf::error& err,
                   std::ostream& os) {
-  if (! err || err == ec::silent) {
+  if (err.empty() || err == ec::silent) {
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
   }

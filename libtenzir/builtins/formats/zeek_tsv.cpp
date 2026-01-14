@@ -20,7 +20,6 @@
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
 #include "tenzir/detail/zeekify.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
@@ -40,6 +39,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -180,7 +180,7 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
     // - src/format/pcap.cpp
     t = type{"port", uint64_type{}};
   }
-  if (!t
+  if (! t
       && (zeek_type.starts_with("vector") or zeek_type.starts_with("set")
           or zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
@@ -193,14 +193,14 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
                              std::string{zeek_type});
     }
     auto elem = parse_type(zeek_type.substr(open + 1, close - open - 1));
-    if (!elem) {
+    if (! elem) {
       return elem.error();
     }
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In Tenzir, they are all lists.
     t = type{list_type{*elem}};
   }
-  if (!t) {
+  if (! t) {
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
   }
@@ -647,7 +647,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       auto record_fields = std::vector<record_type::field_view>{};
       record_fields.reserve(document.fields.size());
       for (const auto& [field, zeek_type] :
-           detail::zip(document.fields, document.types)) {
+           std::views::zip(document.fields, document.types)) {
         auto parsed_type = parse_type(zeek_type);
         if (not parsed_type) {
           diagnostic::warning("failed to parse Zeek type `{}`", zeek_type)
@@ -819,7 +819,7 @@ public:
       auto input_type = as<record_type>(input_schema);
       auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       auto first = true;
-      auto is_first_schema = not * last_schema;
+      auto is_first_schema = not *last_schema;
       auto did_schema_change = *last_schema != input_schema;
       *last_schema = input_schema;
       for (const auto& row : values(input_type, *array)) {
@@ -890,7 +890,7 @@ class write_zeek_tsv final
           .parse(inv, ctx));
     if (set_separator) {
       auto converted = to_xsv_sep(set_separator->inner);
-      if (!converted) {
+      if (! converted) {
         diagnostic::error("`{}` is not a valid separator", set_separator->inner)
           .primary(set_separator->source)
           .note(fmt::to_string(converted.error()))

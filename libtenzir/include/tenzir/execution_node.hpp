@@ -48,6 +48,7 @@ namespace tenzir {
 /// @param has_terminal True if the operator shall have access to the terminal.
 /// @param is_hidden Whether the operator is run in the background.
 /// @param run_id A unique id for the current pipeline run.
+/// @param pipeline_id The pipeline's unique identifier for buffer metrics.
 ///
 /// @returns The execution node actor and its output type, or an error.
 /// @pre op != nullptr
@@ -58,7 +59,8 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden, uuid run_id)
+                     bool has_terminal, bool is_hidden, uuid run_id,
+                     std::string pipeline_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 
 } // namespace tenzir

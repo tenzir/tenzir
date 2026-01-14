@@ -151,7 +151,7 @@ public:
             continue;
           }
         }
-        for (auto i = int64_t{0}; i < eval.length(); ++i) {
+        for (auto i = int64_t{0}; i < length; ++i) {
           if (src_ips->array->IsNull(i) or dst_ips->array->IsNull(i)
               or protos->array->IsNull(i)) {
             check(b.AppendNull());

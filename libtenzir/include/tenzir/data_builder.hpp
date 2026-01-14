@@ -153,6 +153,8 @@ constexpr inline size_t type_index_generic_mismatch
   = detail::tl_size<field_type_list>::value + 1;
 constexpr inline size_t type_index_numeric_mismatch
   = detail::tl_size<field_type_list>::value + 2;
+constexpr inline size_t type_index_must_stringify
+  = detail::tl_size<field_type_list>::value + 3;
 constexpr inline size_t type_index_null
   = detail::tl_index_of<field_type_list, caf::none_t>::value;
 constexpr inline size_t type_index_string
@@ -489,7 +491,7 @@ public:
   auto data(tenzir::data, bool overwrite = false) -> void;
   /// @brief Sets this field to some unparsed data.
   /// It is later parsed when a seed is potentially available.
-  auto data_unparsed(std::string raw_text) -> void;
+  auto data_unparsed(std::string raw_text, bool overwrite = false) -> void;
   auto null(bool overwrite = false) -> void;
   auto record(bool overwrite = false) -> node_record*;
   auto list(bool overwrite = false) -> node_list*;
@@ -550,6 +552,11 @@ private:
             value_path path, bool mark_dead = true) -> void;
   /// @brief marks the node and its contents as dead
   auto clear() -> void;
+
+  /// @brief Turns the node into a string representation. This is used in lists
+  /// of incompatible types.
+  auto stringify_or_null(class data_builder& rb, const tenzir::type* seed)
+    -> void;
 
   object_variant_type data_;
 

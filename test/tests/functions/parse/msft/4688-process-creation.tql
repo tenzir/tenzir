@@ -1,0 +1,6 @@
+// Event 4688: A new process has been created
+// Source: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4688
+from_file f"{env("TENZIR_INPUTS")}/winlog/4688-process-creation.xml" {
+  read_all
+}
+this = data.parse_winlog()

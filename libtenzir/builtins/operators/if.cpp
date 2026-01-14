@@ -122,7 +122,7 @@ public:
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
-            if (not err or err == caf::sec::request_receiver_down
+            if (err.empty() or err == caf::sec::request_receiver_down
                 or err == caf::exit_reason::remote_link_unreachable) {
               done = true;
               result = table_slice{};
@@ -193,7 +193,7 @@ public:
             ctrl.set_waiting(false);
           },
           [&](caf::error err) {
-            if (not err or err == caf::sec::request_receiver_down
+            if (err.empty() or err == caf::sec::request_receiver_down
                 or err == caf::exit_reason::remote_link_unreachable) {
               ctrl.set_waiting(false);
               return;
@@ -225,7 +225,7 @@ class branch {
 public:
   branch(branch_actor::pointer self, std::string definition, node_actor node,
          shared_diagnostic_handler dh, metrics_receiver_actor metrics_receiver,
-         bool is_hidden, uint64_t operator_index,
+         bool is_hidden, uint64_t operator_index, std::string pipeline_id,
          ast::expression predicate_expr, located<pipeline> then_pipe,
          std::optional<located<pipeline>> else_pipe)
     : self_{self},
@@ -235,6 +235,7 @@ public:
       metrics_receiver_{std::move(metrics_receiver)},
       is_hidden_{is_hidden},
       operator_index_{operator_index},
+      pipeline_id_{std::move(pipeline_id)},
       predicate_expr_{std::move(predicate_expr)},
       then_branch_{check(spawn_branch(std::move(then_pipe), true))},
       else_branch_{spawn_branch(std::move(else_pipe), false)} {
@@ -293,14 +294,14 @@ private:
         branch_actor{self_}, predicate, pipe->source));
       TENZIR_ASSERT(pipe->inner.is_closed());
     }
-    auto handle
-      = self_->spawn(pipeline_executor,
-                     std::move(pipe->inner).optimize_if_closed(), definition_,
-                     receiver_actor<diagnostic>{self_},
-                     metrics_receiver_actor{self_}, node_, false, is_hidden_);
+    auto handle = self_->spawn(pipeline_executor,
+                               std::move(pipe->inner).optimize_if_closed(),
+                               definition_, receiver_actor<diagnostic>{self_},
+                               metrics_receiver_actor{self_}, node_, false,
+                               is_hidden_, pipeline_id_);
     ++running_branches_;
     self_->monitor(handle, [this, source = pipe->source](caf::error err) {
-      if (err) {
+      if (err.valid()) {
         self_->quit(diagnostic::error(std::move(err))
                       .primary(source, "nested pipeline failed")
                       .to_error());
@@ -518,6 +519,7 @@ private:
   bool is_hidden_;
 
   uint64_t operator_index_ = 0;
+  std::string pipeline_id_;
 
   size_t running_branches_ = 0;
   ast::expression predicate_expr_;
@@ -646,8 +648,8 @@ public:
     auto branch = scope_linked{ctrl.self().spawn<caf::linked>(
       caf::actor_from_state<class branch>, std::string{ctrl.definition()},
       ctrl.node(), ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
-      ctrl.is_hidden(), ctrl.operator_index(), predicate_, then_pipe_,
-      else_pipe_)};
+      ctrl.is_hidden(), ctrl.operator_index(), std::string{ctrl.pipeline_id()},
+      predicate_, then_pipe_, else_pipe_)};
     ctrl.self().system().registry().put(
       fmt::format("tenzir.branch.{}.{}", id_, ctrl.run_id()), branch.get());
     co_yield {};

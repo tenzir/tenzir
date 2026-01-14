@@ -14,10 +14,29 @@ jobs:
     name: Update OCSF Schemas
     runs-on: ubuntu-latest
     steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up GPG for signing
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "tenzir-bot"
+          git config --global user.email "engineering@tenzir.com"
 
       - name: Reset branch to latest main
         run: |
@@ -42,7 +61,7 @@ jobs:
       - name: Create or Update Pull Request
         uses: gr2m/create-or-update-pull-request-action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           title: Update OCSF schemas
           body: |
@@ -51,4 +70,5 @@ jobs:
             This PR was automatically created by the update-ocsf-schemas workflow.
           branch: topic/update-ocsf-schemas
           commit-message: Update OCSF schemas
+          author: tenzir-bot <engineering@tenzir.com>
           labels: maintenance

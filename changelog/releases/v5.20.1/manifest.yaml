@@ -1,0 +1,4 @@
+created: 2025-11-13
+title: "More Memory Metrics"
+intro: >-
+  This patch release comes with a few new experimental memory metrics. Furthermore, it resolves an issue where the memory usage would grow without bounds on some systems.

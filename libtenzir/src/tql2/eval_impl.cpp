@@ -13,7 +13,6 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_string.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -61,7 +60,8 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
   return map_series(arrays, [&](std::span<series> arrays) {
     auto length = arrays.empty() ? length_ : arrays.front().length();
     auto fields = detail::stable_map<std::string, series>{};
-    for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
+    TENZIR_ASSERT(arrays.size() == x.items.size());
+    for (auto [array, item] : std::views::zip(arrays, x.items)) {
       match(
         item,
         [&](const ast::record::field& field) {
@@ -133,7 +133,8 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
     const auto slice_length = arrays.front().length();
     auto results = std::vector<result_t>{};
     auto value_type = type{null_type{}};
-    for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
+    TENZIR_ASSERT(arrays.size() == x.items.size());
+    for (auto [array, item] : std::views::zip(arrays, x.items)) {
       item.match(
         [&](const ast::expression& expr) {
           auto unified = unify(value_type, array.type);
@@ -220,7 +221,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
         .primary(x.name)
         .secondary(x.left, "type `{}`", l.type.kind())
         .emit(ctx_);
-      return null();
+      return series::null(null_type{}, l.length());
     }
     auto& s = as<arrow::StructArray>(*l.array);
     if (auto idx = rec_ty->resolve_field(x.name.name)) {
@@ -253,7 +254,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
         .hint(std::string{"append `?` to suppress this warning"})
         .emit(ctx_);
     }
-    return null();
+    return series::null(null_type{}, l.length());
   });
 }
 
@@ -348,7 +349,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             .primary(x.index)
             .secondary(x.expr, "has type `{}`", value.type.kind())
             .emit(ctx_);
-          return null();
+          return series::null(null_type{}, value.length());
         }
         auto& s = as<arrow::StructArray>(*value.array);
         auto b = series_builder{};
@@ -489,7 +490,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
               .compose(add_suppress_hint)
               .emit(ctx_);
           }
-          return null();
+          return series::null(null_type{}, value.length());
         }
         auto list_values = list->array->values();
         auto value_type = list->type.value_type();
@@ -544,7 +545,11 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         }
         return series{value_type, finish(*b)};
       }
-      return not_implemented(x);
+      diagnostic::warning("eval not implemented yet for: {:?}",
+                          use_default_formatter(x))
+        .primary(x)
+        .emit(ctx_);
+      return series::null(null_type{}, value.length());
     });
 }
 

@@ -29,8 +29,9 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
                                            const std::filesystem::path& to) {
   const auto from_absolute = root / from;
   const auto to_absolute = root / to;
-  if (from_absolute == to_absolute)
+  if (from_absolute == to_absolute) {
     return atom::done_v;
+  }
   std::error_code err;
   std::filesystem::rename(from, to, err);
   if (err) {
@@ -41,15 +42,15 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
   return atom::done_v;
 }
 
-auto read_recursive(const std::filesystem::path& root,
-                    size_t& total_size) -> caf::expected<record> {
+auto read_recursive(const std::filesystem::path& root, size_t& total_size)
+  -> caf::expected<record> {
   constexpr size_t MAX_TOTAL_SIZE = 64 * 1024 * 1024; // 64 MiB
   auto result = record{};
   for (const auto& entry : std::filesystem::directory_iterator(root)) {
     auto name = entry.path().filename();
     if (entry.is_directory()) {
       auto recursive_result = read_recursive(entry.path(), total_size);
-      if (!recursive_result) {
+      if (! recursive_result) {
         return recursive_result.error();
       }
       result[name] = *recursive_result;
@@ -61,7 +62,7 @@ auto read_recursive(const std::filesystem::path& root,
           .to_error();
       }
       auto contents = io::read(entry.path());
-      if (!contents) {
+      if (! contents) {
         return diagnostic::error(contents.error())
           .note("while trying to read file {}", entry.path())
           .to_error();
@@ -76,19 +77,21 @@ auto read_recursive(const std::filesystem::path& root,
 filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
                  std::filesystem::path root) {
-  if (self->getf(caf::local_actor::is_detached_flag))
+  if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.posix-fs");
+  }
   self->state().root = std::move(root);
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
       const auto path
         = filename.is_absolute() ? filename : self->state().root / filename;
-      if (chk == nullptr)
+      if (chk == nullptr) {
         return caf::make_error(ec::invalid_argument,
                                fmt::format("{} tried to write a nullptr to {}",
                                            *self, path));
-      if (auto err = io::save(path, as_bytes(chk))) {
+      }
+      if (auto err = io::save(path, as_bytes(chk)); err.valid()) {
         return err;
       }
       return atom::ok_v;
@@ -117,13 +120,13 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         const auto full_path
           = path.is_absolute() ? path : self->state().root / path;
         auto err = std::error_code{};
-        if (!std::filesystem::exists(full_path, err)) {
+        if (! std::filesystem::exists(full_path, err)) {
           result.emplace_back(record{});
           continue;
         }
         auto total_size = size_t{0};
         auto contents = read_recursive(full_path, total_size);
-        if (!contents) {
+        if (! contents) {
           return diagnostic::error("failed to read directory")
             .note("trying to read {}", path)
             .note("encountered error {}", contents.error())
@@ -144,8 +147,9 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       std::error_code err;
       for (const auto& [from, to] : files) {
         auto result = self->state().rename_single_file(from, to);
-        if (!result)
+        if (! result) {
           return result.error();
+        }
       }
       return atom::done_v;
     },

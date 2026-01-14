@@ -1,0 +1,5 @@
+{
+  events: 2,
+}
+warning: json parser: type mismatch between list elements
+ = note: field `y`

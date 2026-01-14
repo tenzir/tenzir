@@ -10,7 +10,7 @@ unset(suites)
 foreach (test_source IN LISTS test_sources)
   get_filename_component(suite "${test_source}" NAME_WE)
   set_property(SOURCE "${test_source}" PROPERTY COMPILE_DEFINITIONS
-                                                "SUITE=${suite}")
+                                                "CAF_TEST_SUITE_NAME=${suite}")
   list(APPEND suites "${suite}")
 endforeach ()
 list(REMOVE_DUPLICATES suites)

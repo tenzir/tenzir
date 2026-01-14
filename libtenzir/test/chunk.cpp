@@ -104,7 +104,7 @@ TEST("as_bytes") {
 namespace {
 
 struct fixture : public fixtures::filesystem {
-  fixture() : fixtures::filesystem(TENZIR_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::filesystem(TENZIR_PP_STRINGIFY(CAF_TEST_SUITE_NAME)) {
   }
 };
 

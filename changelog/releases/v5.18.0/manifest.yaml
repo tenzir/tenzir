@@ -1,0 +1,4 @@
+created: 2025-10-20
+title: "Performance Improvements"
+intro: >-
+  This release focuses on improving performance and memory usage. Pipelines are now faster, especially when using if conditions or parsing highly heterogeneous events. Memory usage has also been substantially reduced.

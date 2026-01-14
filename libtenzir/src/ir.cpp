@@ -10,7 +10,6 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
@@ -80,7 +79,7 @@ public:
       begin = end;
       auto new_state = std::vector<table_slice>{};
       for (auto [assignment, value] :
-           detail::zip_equal(assignments_, values_slice)) {
+           std::views::zip(assignments_, values_slice)) {
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());

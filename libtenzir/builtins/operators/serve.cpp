@@ -526,7 +526,7 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    if (err) {
+    if (err.valid()) {
       delete_serve();
       return;
     }

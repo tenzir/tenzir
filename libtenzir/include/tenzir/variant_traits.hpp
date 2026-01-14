@@ -12,8 +12,11 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
 
+#include <caf/detail/is_complete.hpp>
 #include <caf/detail/pretty_type_name.hpp>
 
+#include <algorithm>
+#include <functional>
 #include <utility>
 #include <variant>
 

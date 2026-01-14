@@ -1,6 +1,0 @@
-title: "Smarter HTTP Ingestion"
-description: "This release introduces format and compression inference from URLs for HTTP data sources, streamlining data loading workflows. It also includes bug fixes for secret resolution and HTTP server mode."
-changes:
-  - about-event-fifth
-  - itself-large-create
-  - poetry-almost-mobile

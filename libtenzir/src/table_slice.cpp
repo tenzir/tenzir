@@ -18,7 +18,6 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/overload.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/ids.hpp"
@@ -1684,7 +1683,9 @@ void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
   // We need to flatten the null bitmap here because it can happen that the
   // fields are saved to a record that is made non-null by another entry.
   auto fields = check(array.Flatten(tenzir::arrow_memory_pool()));
-  for (auto [name, data] : detail::zip_equal(names, fields)) {
+  TENZIR_ASSERT(array.struct_type()->num_fields()
+                == detail::narrow<int>(fields.size()));
+  for (auto [name, data] : std::views::zip(names, fields)) {
     auto segments
       = name | std::views::split(sep)
         | std::views::transform([](auto subrange) {

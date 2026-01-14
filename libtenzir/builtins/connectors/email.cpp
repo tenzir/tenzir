@@ -92,19 +92,19 @@ public:
                                                 *transfer_opts.authzid, dh));
     }
     co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
-    transfer_opts.ssl.update_cacert(ctrl);
+    transfer_opts.ssl.update_from_config(ctrl);
     auto tx = transfer{transfer_opts};
-    if (auto err = tx.prepare(std::move(args_.endpoint))) {
+    if (auto err = tx.prepare(std::move(args_.endpoint)); err.valid()) {
       diagnostic::error("failed to prepare SMTP server request")
         .note("{}", err)
         .emit(ctrl.diagnostics());
     }
-    if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1))) {
+    if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1)); err.valid()) {
       diagnostic::error(err).emit(ctrl.diagnostics());
     }
     if (args_.from) {
-      if (auto err
-          = to_error(tx.handle().set(CURLOPT_MAIL_FROM, *args_.from))) {
+      if (auto err = to_error(tx.handle().set(CURLOPT_MAIL_FROM, *args_.from));
+          err.valid()) {
         diagnostic::error("failed to set MAIL FROM")
           .note("from: {}", *args_.from)
           .note("{}", err)
@@ -117,12 +117,13 @@ public:
 #else
     auto allowfails = CURLOPT_MAIL_RCPT_ALLOWFAILS;
 #endif
-    if (auto err = to_error(tx.handle().set(allowfails, 1))) {
+    if (auto err = to_error(tx.handle().set(allowfails, 1)); err.valid()) {
       diagnostic::error("failed to adjust recipient failure mode")
         .note("{}", err)
         .emit(ctrl.diagnostics());
     }
-    if (auto err = to_error(tx.handle().add_mail_recipient(args_.to))) {
+    if (auto err = to_error(tx.handle().add_mail_recipient(args_.to));
+        err.valid()) {
       diagnostic::error("failed to set To header")
         .note("to: {}", args_.to)
         .note("{}", err)
@@ -153,7 +154,7 @@ public:
         code = tx.handle().set(std::move(mime));
         TENZIR_ASSERT(code == curl::easy::code::ok);
         // Send the message.
-        if (auto err = tx.perform()) {
+        if (auto err = tx.perform(); err.valid()) {
           diagnostic::error("failed to send message")
             .note("{}", err)
             .emit(ctrl.diagnostics());
@@ -175,13 +176,14 @@ public:
       auto mail = fmt::format("{}\r\n{}", fmt::join(headers, "\r\n"), body);
       TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
                    args_.to);
-      if (auto err = set(tx.handle(), chunk::make(std::move(mail)))) {
+      if (auto err = set(tx.handle(), chunk::make(std::move(mail)));
+          err.valid()) {
         diagnostic::error("failed to assign message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
       // Send the message.
-      if (auto err = tx.perform()) {
+      if (auto err = tx.perform(); err.valid()) {
         diagnostic::error("failed to send message")
           .note("{}", err)
           .emit(ctrl.diagnostics());

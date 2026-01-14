@@ -1,0 +1,7 @@
+created: 2025-12-23
+title: Tenzir Node v5.23.0
+intro: >-
+  This release introduces centralized node-level TLS configuration, allowing you to
+  configure TLS settings once in tenzir.yaml instead of passing options to each operator
+  individually. It also adds support for event-timestamp-based compaction rules and
+  a count field in the deduplicate operator.

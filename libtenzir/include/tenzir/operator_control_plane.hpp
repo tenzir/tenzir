@@ -61,6 +61,9 @@ struct operator_control_plane {
   /// background.
   virtual auto is_hidden() const noexcept -> bool = 0;
 
+  /// Returns the pipeline's unique identifier.
+  virtual auto pipeline_id() const noexcept -> std::string_view = 0;
+
   /// Suspend or resume the operator's runloop. A suspended operator will not
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;

@@ -51,7 +51,7 @@ auto aggregation_plugin::make_function(invocation inv, session ctx) const
       evaluator eval, session ctx) mutable -> multi_series {
       return map_series(eval(subject_arg), [&](series subject) -> series {
         if (is<null_type>(subject.type)) {
-          return series::null(null_type{}, eval.length());
+          return series::null(null_type{}, subject.length());
         }
         const auto lists = subject.as<list_type>();
         if (not lists) {
@@ -59,7 +59,7 @@ auto aggregation_plugin::make_function(invocation inv, session ctx) const
                               subject.type.kind())
             .primary(subject_arg)
             .emit(ctx);
-          return series::null(null_type{}, eval.length());
+          return series::null(null_type{}, subject.length());
         }
         const auto dummy_type = type{
           "dummy",

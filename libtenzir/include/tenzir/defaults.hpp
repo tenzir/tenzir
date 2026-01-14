@@ -283,6 +283,9 @@ inline constexpr auto metrics_interval = std::chrono::seconds{1};
 inline constexpr auto packaged_pipeline_restart_on_error
   = std::chrono::minutes{1};
 
+/// The time interval within which diagnostics are deduplicated.
+inline constexpr auto diagnostic_deduplication_interval = std::chrono::hours{4};
+
 /// Whether to enable pipeline subprocesses.
 inline constexpr bool pipeline_subprocesses =
 #if TENZIR_LINUX

@@ -34,26 +34,26 @@ declare -a extraPlugins
 
 while [ $# -ne 0 ]; do
   case "$1" in
-  -D*)
-    cmakeFlags="$cmakeFlags \"$1\""
-    shift
-    continue
-    ;;
-  -*=*)
-    optarg="$(echo "$1" | sed 's/[-_a-zA-Z0-9]*=//')"
-    ;;
-  *)
-    optarg=
-    ;;
+    -D*)
+      cmakeFlags="$cmakeFlags \"$1\""
+      shift
+      continue
+      ;;
+    -*=*)
+      optarg="$(echo "$1" | sed 's/[-_a-zA-Z0-9]*=//')"
+      ;;
+    *)
+      optarg=
+      ;;
   esac
   case "$1" in
-  --help | -h)
-    usage
-    exit 1
-    ;;
-  --with-plugin=*)
-    extraPlugins+=("$(realpath "${optarg}")")
-    ;;
+    --help | -h)
+      usage
+      exit 1
+      ;;
+    --with-plugin=*)
+      extraPlugins+=("$(realpath "${optarg}")")
+      ;;
   esac
   shift
 done

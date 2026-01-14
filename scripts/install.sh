@@ -83,7 +83,7 @@ elif [ -z "${os}" ]; then
   echo "Could not identify package_format."
   exit 1
 fi
-platform="${arch}-${os}"
+platform="${arch}-$(echo "${os}" | tr '[:upper:]' '[:lower:]')"
 
 echo "Found ${platform} (${package_format})."
 
@@ -119,7 +119,13 @@ else
   if [ "${package_format}" = "RPM" ]; then
     package_url="${package_url_base}/rpm/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.rpm"
   elif [ "${package_format}" = "DEB" ]; then
-    package_url="${package_url_base}/debian/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.deb"
+    # Convert to Debian arch naming: x86_64 -> amd64, aarch64 -> arm64
+    case "${arch}" in
+      x86_64) debarch="amd64" ;;
+      aarch64) debarch="arm64" ;;
+      *) debarch="${arch}" ;;
+    esac
+    package_url="${package_url_base}/debian/tenzir_${TENZIR_PACKAGE_TAG}_${debarch}.deb"
   elif [ "${package_format}" = "tarball" ]; then
     package_url="${package_url_base}/tarball/tenzir-${TENZIR_PACKAGE_TAG}-${platform}-static.tar.gz"
   elif [ "${package_format}" = "NixOS" ]; then
@@ -266,7 +272,7 @@ if [ -n "${TENZIR_TOKEN:-}" ]; then
     # Read existing config, merge in token, write back.
     tql_pipeline="load_file \"${config_file}\"
       read_yaml
-      if this.has("tenzir") and tenzir.type_id() == type_id({}) {
+      if this.has(\"tenzir\") and tenzir.type_id() == type_id({}) {
         tenzir = { token: \"${TENZIR_TOKEN}\"}, ...tenzir }
       } else {
         tenzir = { token: \"${TENZIR_TOKEN}\"} }

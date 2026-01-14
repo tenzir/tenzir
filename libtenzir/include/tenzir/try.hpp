@@ -73,7 +73,7 @@ struct tenzir::tryable<std::optional<T>> {
 template <>
 struct tenzir::tryable<caf::error> {
   static auto is_success(const caf::error& x) -> bool {
-    return !x;
+    return x.empty();
   }
 
   static void get_success(caf::error&& x) {
@@ -103,7 +103,7 @@ struct tenzir::tryable<caf::expected<T>> {
 template <>
 struct tenzir::tryable<caf::expected<void>> {
   static auto is_success(const caf::expected<void>& x) -> bool {
-    return !!x;
+    return ! ! x;
   }
 
   static void get_success(caf::expected<void>&& x) {

@@ -18,8 +18,6 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
-#include <caf/detail/is_one_of.hpp>
-
 #include <type_traits>
 #include <unordered_map>
 

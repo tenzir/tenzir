@@ -1,0 +1,5 @@
+from {x: 42}
+batch
+parallel 4, _split_at=1 {
+  y = x * 2
+}

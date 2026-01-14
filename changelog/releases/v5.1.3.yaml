@@ -1,9 +1,0 @@
-title: URL Encoding
-description: |
-  This release adds support for URL encoding and decoding, and fixes the
-  handling of user-defined operators in TQL2.
-changes:
-  - GnCuozfIsp3gVT5ZLuRD5kt4pn
-  - NvltFrs9lD82yc1FLKe2UvNnqH
-  - arFYn0U8DXwPy9YtvLAO6vX0L1
-  - xHjEv51iTOpFbI5XWiHJgU3zOV

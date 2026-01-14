@@ -8,11 +8,14 @@
     }
   },
   "enabledPlugins": {
-    "changelog@tenzir": false,
+    "cpp@tenzir": true,
     "docs@tenzir": true,
     "formatter@tenzir": true,
     "git@tenzir": true,
+    "ocsf@tenzir": true,
+    "prose@tenzir": true,
     "python@tenzir": true,
-    "writing@tenzir": true
+    "ship@tenzir": true,
+    "tql@tenzir": true
   }
 }

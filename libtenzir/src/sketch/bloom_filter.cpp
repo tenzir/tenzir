@@ -21,7 +21,7 @@ frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
   TENZIR_ASSERT(table_->data() != nullptr);
   auto root = check(flatbuffer<fbs::BloomFilter>::make(chunk_ptr{table_}));
   auto err = unpack(*root, view_);
-  TENZIR_ASSERT(!err);
+  TENZIR_ASSERT(err.empty());
 }
 
 bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
@@ -38,10 +38,12 @@ size_t mem_usage(const frozen_bloom_filter& x) noexcept {
 
 caf::expected<bloom_filter> bloom_filter::make(bloom_filter_config cfg) {
   if (auto params = evaluate(cfg)) {
-    if (params->k == 0)
+    if (params->k == 0) {
       return caf::make_error(ec::invalid_argument, "need >= 1 hash functions");
-    if (params->m == 0)
+    }
+    if (params->m == 0) {
       return caf::make_error(ec::invalid_argument, "size cannot be 0");
+    }
     return bloom_filter{*params};
   }
   return caf::make_error(ec::invalid_argument, "failed to evaluate parameters");
@@ -70,16 +72,18 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
   // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t' over
   // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
   using ::flatbuffers::soffset_t;
-  if (expected_size >= FLATBUFFERS_MAX_BUFFER_SIZE)
+  if (expected_size >= FLATBUFFERS_MAX_BUFFER_SIZE) {
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("frozen size {} exceeds max flatbuffer size of {} bytes",
                   expected_size, FLATBUFFERS_MAX_BUFFER_SIZE));
+  }
   // We know the exact size, so we reserve it to avoid re-allocations.
   flatbuffers::FlatBufferBuilder builder{expected_size};
   auto bloom_filter_offset = pack(builder, x.view_);
-  if (!bloom_filter_offset)
+  if (! bloom_filter_offset) {
     return bloom_filter_offset.error();
+  }
   builder.Finish(*bloom_filter_offset);
   auto buffer = builder.Release();
   TENZIR_ASSERT(buffer.size() == expected_size);

@@ -272,7 +272,7 @@ public:
       auto code = std::string{};
       if (const auto* path = try_as<std::filesystem::path>(code_.inner)) {
         auto code_chunk = chunk::make_empty();
-        if (auto err = read(*path, code_chunk)) {
+        if (auto err = read(*path, code_chunk); err.valid()) {
           diagnostic::error(err)
             .note("failed to read code from file")
             .emit(ctrl.diagnostics());

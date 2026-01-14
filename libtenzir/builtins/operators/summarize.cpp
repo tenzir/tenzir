@@ -14,7 +14,6 @@
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
-#include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/operator_control_plane.hpp>
@@ -194,7 +193,8 @@ public:
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
-      for (auto&& [key_value, group] : detail::zip_equal(key, group_values)) {
+      TENZIR_ASSERT(key.size() == group_values.size());
+      for (auto&& [key_value, group] : std::views::zip(key, group_values)) {
         key_value = group.value_at(row);
       }
       auto it = groups_.find(key);

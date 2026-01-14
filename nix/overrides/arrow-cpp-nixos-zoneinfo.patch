@@ -1,0 +1,34 @@
+diff --git i/src/arrow/vendored/datetime/tz.cpp w/src/arrow/vendored/datetime/tz.cpp
+index 2cf6c62a84..062739947b 100644
+--- i/src/arrow/vendored/datetime/tz.cpp
++++ w/src/arrow/vendored/datetime/tz.cpp
+@@ -486,6 +486,13 @@ discover_tz_dir()
+ {
+     struct stat sb;
+     using namespace std;
++
++    CONSTDATA auto tz_dir_nixstore = "NIX_STORE_ZONEINFO";
++
++    // Check updatable path first
++    if(stat(tz_dir_nixstore, &sb) == 0 && S_ISDIR(sb.st_mode))
++        return tz_dir_nixstore;
++
+ #  if defined(ANDROID) || defined(__ANDROID__)
+     CONSTDATA auto tz_dir_default = "/apex/com.android.tzdata/etc/tz";
+     CONSTDATA auto tz_dir_fallback = "/system/usr/share/zoneinfo";
+@@ -500,12 +507,15 @@ discover_tz_dir()
+ #  elif !defined(__APPLE__)
+     CONSTDATA auto tz_dir_default = "/usr/share/zoneinfo";
+     CONSTDATA auto tz_dir_buildroot = "/usr/share/zoneinfo/uclibc";
++    CONSTDATA auto tz_dir_etc = "/etc/zoneinfo";
+ 
+     // Check special path which is valid for buildroot with uclibc builds
+     if(stat(tz_dir_buildroot, &sb) == 0 && S_ISDIR(sb.st_mode))
+         return tz_dir_buildroot;
+     else if(stat(tz_dir_default, &sb) == 0 && S_ISDIR(sb.st_mode))
+         return tz_dir_default;
++    else if(stat(tz_dir_etc, &sb) == 0 && S_ISDIR(sb.st_mode))
++        return tz_dir_etc;
+     else
+         throw runtime_error("discover_tz_dir failed to find zoneinfo\n");
+ #  else  // __APPLE__

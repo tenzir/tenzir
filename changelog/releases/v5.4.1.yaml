@@ -1,5 +1,0 @@
-title: JSON Printer Fix
-description: This release fixes a bug within the JSON printer that could lead to invalid JSON being produced, and also led to response timeouts when using the Tenzir Platform.
-changes:
-  - Bf9B2A5wAKlHFZWTi4EEwa7yAE
-  - Ew9iMYjaT6kd3H4xyU7RlMFLRn

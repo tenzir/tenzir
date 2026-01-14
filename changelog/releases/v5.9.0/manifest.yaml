@@ -1,0 +1,4 @@
+created: 2025-07-06
+title: "UUID Functions"
+intro: >-
+  This release brings a family of UUID functions to TQL, making it easier to generate random numbers for a variety of use cases.

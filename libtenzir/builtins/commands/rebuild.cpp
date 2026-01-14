@@ -233,7 +233,7 @@ struct rebuilder_state {
         run.reset();
         return;
       }
-      if (err) {
+      if (err.valid()) {
         rp.deliver(std::move(err));
         run.reset();
         return;

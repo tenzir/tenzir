@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "20 2 * * *"  # every day at 2:20
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
 
 # IMPORTANT NOTE: The distros that are tested here were chosen to maximize test
 # coverage of the installer script. That doesn't imply that we commit to support
@@ -22,7 +25,7 @@ jobs:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
   # stock-macos:
   #   name: Provided MacOS runners
   #   strategy:
@@ -42,7 +45,6 @@ jobs:
           [
             "ubuntu:22.04",
             "ubuntu:24.04",
-            "ubuntu:24.10",
             "debian:11",
             "debian:12",
           ]
@@ -55,7 +57,7 @@ jobs:
       - name: Setup dependencies
         run: apt update && apt install -y curl sudo adduser
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
   container-redhat-based:
     name: Red Hat based distros in containers
     runs-on: ubuntu-latest
@@ -77,6 +79,29 @@ jobs:
       TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Setup dependencies
-        run: yum install -y tar sudo
+        run: |
+          yum install -y tar sudo
+          # Amazon Linux 2023+ ships with curl-minimal, which provides the curl
+          # command but conflicts with the full curl package. We only install
+          # curl if it's not already available.
+          if ! command -v curl >/dev/null 2>&1; then
+            yum install -y curl
+          fi
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: curl -fsSL https://get.tenzir.app -o /tmp/tenzir-install.sh && sh /tmp/tenzir-install.sh
+
+  notify-failure:
+    name: Notify on failure
+    runs-on: ubuntu-latest
+    needs: [stock-linux, container-debian-based, container-redhat-based]
+    if: failure()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEVELOPERS }}
+        run: |
+          .github/scripts/notify-discord.sh \
+            "⚠️ Installer Test Failed" \
+            "The install script tests failed. The installer may be broken for users."

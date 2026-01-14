@@ -222,7 +222,7 @@ public:
       TENZIR_TRACE("yielding chunk with {} bytes", chk->size());
       co_yield chk;
     }
-    if (auto error = child->wait()) {
+    if (auto error = child->wait(); error.valid()) {
       diagnostic::error(error)
         .note("child process execution failed")
         .emit(ctrl.diagnostics());
@@ -288,7 +288,7 @@ public:
           // Pass operator input to the child's stdin.
           // TODO: If the reading end of the pipe to the child's stdin is
           // already closed, this will generate a SIGPIPE.
-          if (auto err = child->write(as_bytes(chunk))) {
+          if (auto err = child->write(as_bytes(chunk)); err.valid()) {
             diagnostic::error(err)
               .note("failed to write to child process")
               .emit(ctrl.diagnostics());
@@ -317,7 +317,7 @@ public:
       unplanned_exit.disable();
       child->close_stdin();
       thread.join();
-      if (auto error = child->wait()) {
+      if (auto error = child->wait(); error.valid()) {
         diagnostic::error(error)
           .note("child process execution failed")
           .emit(ctrl.diagnostics());

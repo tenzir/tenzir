@@ -48,8 +48,21 @@ struct typed_actor_fwd {
   template <class Handle>
   using extend_with = typename extend_with_helper<Handle>::type;
 
-  using unwrap = caf::typed_actor<Fs...>;
-  using unwrap_as_broker = caf::io::typed_broker<Fs...>;
+  template <bool Empty, class... Gs>
+  struct unwrap_helper {
+    using type = caf::typed_actor<Gs...>;
+    using broker_type = caf::io::typed_broker<Gs...>;
+  };
+
+  template <class... Gs>
+  struct unwrap_helper<true, Gs...> {
+    using type = void;
+    using broker_type = void;
+  };
+
+  using unwrap = typename unwrap_helper<sizeof...(Fs) == 0, Fs...>::type;
+  using unwrap_as_broker =
+    typename unwrap_helper<sizeof...(Fs) == 0, Fs...>::broker_type;
 };
 
 /// The FLUSH LISTENER actor interface.
@@ -334,7 +347,7 @@ struct pipeline_shell_actor_traits {
     // execution nodes.
     auto(atom::spawn, operator_box, operator_type, std::string definition,
          receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
-         bool is_hidden, uuid run_id)
+         bool is_hidden, uuid run_id, std::string pipeline_id)
       ->caf::result<exec_node_actor>>;
 };
 using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;

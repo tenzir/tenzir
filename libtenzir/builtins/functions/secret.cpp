@@ -8,7 +8,6 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
-#include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>

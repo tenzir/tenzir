@@ -458,7 +458,7 @@ public:
           conn->poll_monitor(timeout);
         } while (conn->num_peers() == 0);
       }
-      if (auto error = conn->send(chunk)) {
+      if (auto error = conn->send(chunk); error.valid()) {
         diagnostic::error(error).emit(ctrl.diagnostics());
       }
     }

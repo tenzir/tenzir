@@ -16,7 +16,7 @@ on:
         required: true
     outputs:
       images:
-        description: 'Space-separated list of pushed image URLs'
+        description: "Space-separated list of pushed image URLs"
         value: ${{ jobs.build.outputs.images }}
 
 permissions:
@@ -151,13 +151,8 @@ jobs:
               --release-tag "$version"
             )
           fi
-          nix shell --inputs-from ./. \
-            nixpkgs#git \
-            nixpkgs#python3 \
-            nixpkgs#python3Packages.boto3 \
-            nixpkgs#rclone \
-            nixpkgs#skopeo \
-            -c python3 .github/workflows/nix-build.py "${args[@]}"
+          nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' git rclone skopeo \
+            --run "python3 .github/workflows/nix-build.py ${args[*]}"
       - name: Upload signed tarball artifact
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
@@ -183,6 +178,13 @@ jobs:
           args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
           docker exec -e TENZIR_LEGACY=true installer-test-ubuntu \
             /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
+          # Install uv and run select integration tests
+          docker exec installer-test-ubuntu bash -c \
+                 "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y coreutils python3 tzdata"
+          docker exec installer-test-ubuntu bash -c \
+                 "curl -LsSf https://astral.sh/uv/install.sh | sh"
+          docker exec installer-test-ubuntu bash -c \
+                 'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/test tests/functions/time'
           docker exec installer-test-ubuntu halt
       - name: Test Installation (Rocky Linux)
         if: runner.os == 'Linux'
@@ -202,4 +204,9 @@ jobs:
           args=$(jq -cen '{definition: "from \"udp://0.0.0.0:514\" { read_syslog } | discard", autostart: {created: true}}')
           docker exec -e TENZIR_LEGACY=true installer-test-rocky \
             /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
+          # Install uv and run select integration tests
+          docker exec installer-test-rocky bash -c \
+                 "curl -LsSf https://astral.sh/uv/install.sh | sh"
+          docker exec installer-test-rocky bash -c \
+                 'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/test tests/functions/time'
           docker exec installer-test-rocky halt

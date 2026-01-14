@@ -142,6 +142,16 @@ type _ocsf.v1_8_0_dev.object.agent = record{
   version: string #optional,
 }
 
+// The AI Model object describes the characteristics of an AI/ML model. Examples
+// include language models like GPT-4, embedding models like text-embedding-
+// ada-002, and computer vision models like CLIP.
+type _ocsf.v1_8_0_dev.object.ai_model = record{
+  ai_provider: string #required,
+  name: string #required,
+  uid: string #recommended,
+  version: string #recommended,
+}
+
 // The Aircraft object represents any aircraft or otherwise airborne asset such
 // as an unmanned system, airplane, balloon, spacecraft, or otherwise. The
 // Aircraft object is intended to normalized data captured or otherwise logged
@@ -626,13 +636,14 @@ type _ocsf.v1_8_0_dev.object.database = record{
   data_classification: _ocsf.v1_8_0_dev.object.data_classification #recommended #profile=data_classification,
   data_classifications: list<_ocsf.v1_8_0_dev.object.data_classification> #recommended #profile=data_classification,
   desc: string #optional,
+  embedding_model: string #optional,
   groups: list<_ocsf.v1_8_0_dev.object.group> #optional,
   modified_time: time #epochtime #optional,
   modified_time_dt: time #optional #profile=datetime,
   name: string #recommended,
   size: int64 #optional,
   type: string #recommended,
-  type_id: int64 #required #enum=c768b9f4 #sibling=type,
+  type_id: int64 #required #enum=f73a806f #sibling=type,
   uid: string #recommended,
 }
 
@@ -1089,6 +1100,7 @@ type _ocsf.v1_8_0_dev.object.file = record{
   product: _ocsf.v1_8_0_dev.object.product #optional,
   security_descriptor: string #optional,
   signature: _ocsf.v1_8_0_dev.object.digital_signature #optional,
+  signatures: list<_ocsf.v1_8_0_dev.object.digital_signature> #optional,
   size: int64 #optional,
   storage_class: string #optional #profile=cloud,
   tags: list<_ocsf.v1_8_0_dev.object.key_value_object> #optional,
@@ -1628,6 +1640,20 @@ type _ocsf.v1_8_0_dev.object.managed_entity = record{
   uid: string #recommended,
   user: _ocsf.v1_8_0_dev.object.user #recommended,
   version: string #recommended,
+}
+
+// Communication context for AI system interactions including protocols, roles,
+// clients, and session information for MCP and other AI communication systems.
+type _ocsf.v1_8_0_dev.object.message_context = record{
+  ai_role: string #optional,
+  ai_role_id: int64 #recommended #enum=dbfb44b1 #sibling=ai_role,
+  application: _ocsf.v1_8_0_dev.object.application #recommended,
+  completion_tokens: int64 #optional,
+  name: string #recommended,
+  prompt_tokens: int64 #optional,
+  service: _ocsf.v1_8_0_dev.object.service #recommended,
+  total_tokens: int64 #optional,
+  uid: string #recommended,
 }
 
 // The Metadata object describes the metadata associated with the event.
@@ -3212,6 +3238,7 @@ type _ocsf.v1_8_0_dev.api_activity = record{
   activity_id: int64 #required #enum=885ca710 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_8_0_dev.object.actor #required,
+  ai_model: _ocsf.v1_8_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_8_0_dev.object.api #required,
   attacks: list<_ocsf.v1_8_0_dev.object.attack> #optional #profile=security_control,
   authorizations: list<_ocsf.v1_8_0_dev.object.authorization> #optional #profile=security_control,
@@ -3239,6 +3266,7 @@ type _ocsf.v1_8_0_dev.api_activity = record{
   malware: list<_ocsf.v1_8_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_8_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_8_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_8_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_8_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_8_0_dev.object.osint> #required #profile=osint,
@@ -4020,6 +4048,7 @@ type _ocsf.v1_8_0_dev.datastore_activity = record{
   activity_id: int64 #required #enum=6e8dcc90 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_8_0_dev.object.actor #required,
+  ai_model: _ocsf.v1_8_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_8_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_8_0_dev.object.attack> #optional #profile=security_control,
   authorizations: list<_ocsf.v1_8_0_dev.object.authorization> #optional #profile=security_control,
@@ -4049,6 +4078,7 @@ type _ocsf.v1_8_0_dev.datastore_activity = record{
   malware: list<_ocsf.v1_8_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_8_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_8_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_8_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_8_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_8_0_dev.object.osint> #required #profile=osint,

@@ -38,7 +38,7 @@ void add_actor_callback(caf::scheduled_actor* self,
     = std::conditional_t<std::same_as<T, arrow::internal::Empty>, arrow::Status,
                          arrow::Result<T>>;
   future.AddCallback(
-    [self, weak = caf::weak_actor_ptr{self->ctrl()},
+    [self, weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref},
      f = std::forward<F>(f)](const result_type& result) mutable {
       if (auto strong = weak.lock()) {
         self->schedule_fn([f = std::move(f), result]() mutable -> void {
@@ -125,6 +125,7 @@ auto from_file_args::add_to(argument_parser2& p) -> void {
   p.named_optional("remove", remove);
   p.named("rename", rename, "string -> string");
   p.named("path_field", path_field);
+  p.named("max_age", max_age);
   p.positional("{ … }", pipe);
 }
 
@@ -157,6 +158,12 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
       .emit(ctx);
     return failure::promise();
   }
+  if (max_age and max_age->inner <= duration::zero()) {
+    diagnostic::error("`max_age` must be a positive duration")
+      .primary(max_age->source)
+      .emit(ctx);
+    return failure::promise();
+  }
   return result;
 }
 
@@ -164,7 +171,8 @@ from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
   std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
+  std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     args_{std::move(args)},
@@ -172,6 +180,7 @@ from_file_state::from_file_state(
     definition_{std::move(definition)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
+    pipeline_id_{std::move(pipeline_id)},
     operator_index_{operator_index},
     metrics_receiver_{std::move(metrics_receiver)} {
   TENZIR_ASSERT(dh_);
@@ -203,7 +212,8 @@ from_file_state::from_file_state(
   std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
   std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
+  std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     fs_{std::move(fs)},
@@ -212,6 +222,7 @@ from_file_state::from_file_state(
     definition_{std::move(definition)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
+    pipeline_id_{std::move(pipeline_id)},
     operator_index_{operator_index},
     metrics_receiver_{std::move(metrics_receiver)} {
   TENZIR_ASSERT(dh_);
@@ -342,6 +353,17 @@ auto from_file_state::query_files() -> void {
 
 auto from_file_state::process_file(arrow::fs::FileInfo file) -> void {
   if (file.IsFile() and matches(file.path(), glob_)) {
+    if (args_.max_age) {
+      if (file.mtime() == arrow::fs::kNoTime) {
+        diagnostic::warning("could not get last modification time for "
+                            "file `{}`",
+                            root_path_)
+          .note("assuming file was recently modified")
+          .emit(*dh_);
+      } else if (time::clock::now() - file.mtime() >= args_.max_age->inner) {
+        return;
+      }
+    }
     add_job(std::move(file));
   }
 }
@@ -456,7 +478,7 @@ auto from_file_state::start_stream(
   }
   auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
                              std::move(*stream));
-  auto weak = caf::weak_actor_ptr{source->ctrl()};
+  auto weak = caf::weak_actor_ptr{source->ctrl(), caf::add_ref};
   pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
   if (not pipe.is_closed()) {
     pipe.append(std::make_unique<from_file_sink>(
@@ -465,8 +487,9 @@ auto from_file_state::start_stream(
                        : std::nullopt));
     pipe = pipe.optimize_if_closed();
   }
-  auto executor = self_->spawn(pipeline_executor, std::move(pipe), definition_,
-                               self_, self_, node_, false, is_hidden_);
+  auto executor
+    = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
+                   self_, node_, false, is_hidden_, pipeline_id_);
   self_->attach_functor([this, weak]() {
     if (auto strong = weak.lock()) {
       // FIXME: This should not be necessary to ensure that the actor is
@@ -484,7 +507,7 @@ auto from_file_state::start_stream(
       self_->send_exit(strong, caf::exit_reason::user_shutdown);
     }
     active_jobs_ -= 1;
-    if (error) {
+    if (error.valid()) {
       pipeline_failed(std::move(error))
         .note("coming from `{}`", path)
         .emit(*dh_);

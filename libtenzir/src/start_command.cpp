@@ -140,7 +140,8 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     // A single line of output to publish out address for scripts.
     if (const auto* path = caf::get_if<std::string>(
           &inv.options, "tenzir.start.write-endpoint")) {
-      if (auto err = io::write(*path, as_bytes(*listen_endpoint))) {
+      if (auto err = io::write(*path, as_bytes(*listen_endpoint));
+          err.valid()) {
         TENZIR_WARN("failed to write listen_endpoint to {}: {}", *path, err);
       }
     }
@@ -150,7 +151,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     }
   }
   // Notify the service manager if it expects an update.
-  if (auto error = systemd::notify_ready()) {
+  if (auto error = systemd::notify_ready(); error.valid()) {
     auto err = diagnostic::error("failed to signal readiness to systemd")
                  .note("{}", error)
                  .to_error();

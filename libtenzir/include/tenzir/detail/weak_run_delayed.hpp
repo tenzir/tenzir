@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include <caf/add_ref.hpp>
 #include <caf/scheduled_actor.hpp>
 
 namespace tenzir::detail {
@@ -27,7 +28,7 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
   return self->clock().schedule(
     self->clock().now() + delay,
     caf::make_action(std::forward<Function>(function)),
-    caf::weak_actor_ptr{self->ctrl()});
+    caf::weak_actor_ptr{self->ctrl(), caf::add_ref});
 }
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.
@@ -45,7 +46,7 @@ void weak_run_delayed_loop_at(caf::scheduled_actor* self,
       std::invoke(f);
       weak_run_delayed_loop_at(self, start + delay, delay, std::move(f));
     }),
-    caf::weak_actor_ptr{self->ctrl()});
+    caf::weak_actor_ptr{self->ctrl(), caf::add_ref});
 }
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.

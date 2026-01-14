@@ -1,0 +1,6 @@
+// Event 4624: An account was successfully logged on
+// Source: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624
+from_file f"{env("TENZIR_INPUTS")}/winlog/4624-logon.xml" {
+  read_all
+}
+this = data.parse_winlog()

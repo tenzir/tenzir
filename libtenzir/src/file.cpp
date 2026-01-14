@@ -29,23 +29,27 @@ file::file(std::filesystem::path p) : path_{std::move(p)} {
 
 file::~file() {
   // Don't close stdin/stdout implicitly.
-  if (path_.string() != "-")
+  if (path_.string() != "-") {
     close();
+  }
 }
 
 caf::expected<void> file::open(open_mode mode, bool append) {
-  if (is_open_)
+  if (is_open_) {
     return caf::make_error(ec::filesystem_error, "file already open");
-  if (mode == read_only && append)
+  }
+  if (mode == read_only && append) {
     return caf::make_error(ec::filesystem_error, "cannot open file in read and "
                                                  "append mode simultaneously");
+  }
 #if TENZIR_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_.string() == "-") {
-    if (mode == read_write)
+    if (mode == read_write) {
       return caf::make_error(ec::filesystem_error,
                              "cannot open - in read/write "
                              "mode");
+    }
     handle_ = ::fileno(mode == read_only ? stdin : stdout);
     is_open_ = true;
     return {};
@@ -64,17 +68,18 @@ caf::expected<void> file::open(open_mode mode, bool append) {
       flags = O_CREAT | O_WRONLY;
       break;
   }
-  if (append)
+  if (append) {
     flags |= O_APPEND;
+  }
   errno = 0;
   std::error_code err{};
   if (path_.has_parent_path()) {
     const auto parent = path_.parent_path();
     const auto file_exists = std::filesystem::exists(parent, err);
-    if (mode != read_only && !file_exists) {
+    if (mode != read_only && ! file_exists) {
       const auto created_directory
         = std::filesystem::create_directories(parent, err);
-      if (!created_directory) {
+      if (! created_directory) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("failed to create parent directory "
                                            "{}: {}",
@@ -95,10 +100,12 @@ caf::expected<void> file::open(open_mode mode, bool append) {
 }
 
 bool file::close() {
-  if (!is_open_)
+  if (! is_open_) {
     return false;
-  if (detail::close(handle_))
+  }
+  if (detail::close(handle_).valid()) {
     return false;
+  }
   is_open_ = false;
   return true;
 }
@@ -108,29 +115,34 @@ bool file::is_open() const {
 }
 
 caf::expected<size_t> file::read(void* sink, size_t bytes) {
-  if (!is_open_)
+  if (! is_open_) {
     return caf::make_error(ec::filesystem_error, "file is not open",
                            path_.string());
+  }
   return detail::read(handle_, sink, bytes);
 }
 
 caf::error file::write(const void* source, size_t bytes) {
-  if (!is_open_)
+  if (! is_open_) {
     return caf::make_error(ec::filesystem_error, "file is not open",
                            path_.string());
+  }
   auto count = detail::write(handle_, source, bytes);
-  if (!count)
+  if (! count) {
     return count.error();
-  if (*count != bytes)
+  }
+  if (*count != bytes) {
     return caf::make_error(ec::filesystem_error, "incomplete read",
                            path_.string());
+  }
   return caf::none;
 }
 
 bool file::seek(size_t bytes) {
-  if (!is_open_ || seek_failed_)
+  if (! is_open_ || seek_failed_) {
     return false;
-  if (!detail::seek(handle_, bytes)) {
+  }
+  if (detail::seek(handle_, bytes).valid()) {
     seek_failed_ = true;
     return false;
   }

@@ -111,6 +111,8 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::backpressure_overflow:
     case caf::sec::too_many_worker_failures:
     case caf::sec::cannot_combine_empty_observables:
+    case caf::sec::mail_cache_closed:
+    case caf::sec::resource_destroyed:
       return true;
     case caf::sec::incompatible_versions:
     case caf::sec::incompatible_application_ids:

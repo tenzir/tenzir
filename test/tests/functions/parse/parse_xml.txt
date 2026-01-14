@@ -1,0 +1,44 @@
+{
+  item: "hello",
+}
+{
+  item: [
+    "A",
+    "B",
+    "C",
+  ],
+}
+{
+  "@id": "1",
+  "@lang": "en",
+  "#text": "Title",
+}
+{
+  book: {
+    title: "XML",
+    author: "Jane",
+  },
+}
+{}
+{}
+warning: failed to parse XML: line 1:0: unclosed token
+  --> tests/functions/parse/parse_xml.tql:13:8
+   |
+13 | this = x.parse_xml(xpath="/*")[0]
+   |        ~~~~~~~~~~~~~~~~~~~~~~~ 
+   |
+
+warning: tried to access field of `null`
+  --> tests/functions/parse/parse_xml.tql:13:8
+   |
+13 | this = x.parse_xml(xpath="/*")[0]
+   |        ~~~~~~~~~~~~~~~~~~~~~~~ is null
+   |
+   = hint: use `[…]?` to suppress this warning
+
+warning: assignment to `this` requires `record`, but got `null`
+  --> tests/functions/parse/parse_xml.tql:13:1
+   |
+13 | this = x.parse_xml(xpath="/*")[0]
+   | ~~~~ 
+   |

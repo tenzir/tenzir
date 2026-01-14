@@ -1,0 +1,14 @@
+---
+timeout: 10
+---
+
+// Rate limit hit - should wait for window to pass
+// 4 events with rate=2 per 1s means 2 windows needed
+// We verify by checking time elapsed is at least 900ms (allowing for timing variance)
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+batch
+throttle rate=2, window=1s
+t = now()
+summarize start=min(t), end=max(t)
+assert end - start >= 900ms, message=f"{end - start}"
+discard

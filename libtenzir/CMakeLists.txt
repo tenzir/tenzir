@@ -134,6 +134,13 @@ provide_find_module(libmaxminddb)
 find_package(c-ares REQUIRED)
 provide_find_module(c-ares)
 
+# -- expat (XML parsing) -------------------------------------------------------
+# Use MODULE mode to avoid broken CMake config in static Nix builds
+
+find_package(EXPAT REQUIRED MODULE)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED MODULE)")
+dependency_summary("expat" EXPAT::EXPAT "Dependencies")
+
 # -- jemalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC OFF)
@@ -294,6 +301,9 @@ endif ()
 target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
+
+# Link against expat.
+target_link_libraries(libtenzir_builtins PRIVATE EXPAT::EXPAT)
 
 # Link against jemalloc.
 if (TENZIR_ALLOCATOR_NEEDS_JEMALLOC)

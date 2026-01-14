@@ -1,7 +1,0 @@
-title: Compression Fixes
-description: |
-  This PR restores the ability to customize the `import` operator's compression
-  level.
-changes:
-  - JvjTnjAMLzFS0KokvAE4mexE1M
-  - uWTkkNerGSevmMjEu5VTCAOPXx

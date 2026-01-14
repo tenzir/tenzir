@@ -13,10 +13,12 @@
 #include "tenzir/json_parser.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/tls_options.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_from_state.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/async/spsc_buffer.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
@@ -35,10 +37,6 @@ namespace {
 
 namespace http = caf::net::http;
 namespace ssl = caf::net::ssl;
-
-constexpr auto inner(const located<std::string>& x) -> std::string {
-  return x.inner;
-}
 
 auto split_at_newline(const chunk_ptr& chunk)
   -> std::vector<std::vector<std::byte>> {
@@ -67,10 +65,7 @@ struct opensearch_args {
   location op;
   located<std::string> url{"0.0.0.0:9200", location::unknown};
   bool keep_actions{false};
-  std::optional<location> tls;
-  std::optional<located<std::string>> keyfile;
-  std::optional<located<std::string>> certfile;
-  std::optional<located<std::string>> password;
+  tls_options tls;
   uint16_t port{9200};
   located<uint64_t> max_request_size{10 * 1024 * 1024, location::unknown};
 
@@ -79,14 +74,12 @@ struct opensearch_args {
     p.positional("url", url_op);
     p.named_optional("keep_actions", keep_actions);
     p.named_optional("max_request_size", max_request_size);
-    p.named("tls", tls);
-    p.named("certfile", certfile);
-    p.named("keyfile", keyfile);
-    p.named("password", password);
+    tls.add_tls_options(p);
   }
 
   auto validate(std::optional<located<std::string>> url_op,
                 diagnostic_handler& dh) -> failure_or<void> {
+    TRY(tls.validate(dh));
     if (url_op) {
       url = std::move(*url_op);
     }
@@ -113,43 +106,15 @@ struct opensearch_args {
         .emit(dh);
       return failure::promise();
     }
-    const auto tls_logic
-      = [&](const std::optional<located<std::string>>& opt,
-            std::string_view name, bool required = false) -> failure_or<void> {
-      if (not tls) {
-        if (opt) {
-          diagnostic::error("`{}` is unused when `tls` is disabled", name)
-            .primary(*opt)
-            .emit(dh);
-          return failure::promise();
-        }
-        return {};
-      }
-      if (not opt and required) {
-        diagnostic::error("`{}` must be set when enabling `tls`", name)
-          .secondary(*tls)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (opt and opt->inner.empty()) {
-        diagnostic::error("`{}` must not be empty", name).primary(*opt).emit(dh);
-        return failure::promise();
-      }
-      return {};
-    };
-    TRY(tls_logic(certfile, "certfile", true));
-    TRY(tls_logic(keyfile, "keyfile", true));
-    TRY(tls_logic(password, "password"));
     return {};
   }
 
   friend auto inspect(auto& f, opensearch_args& x) -> bool {
-    return f.object(x).fields(
-      f.field("op", x.op), f.field("port", x.port), f.field("url", x.url),
-      f.field("max_request_size", x.max_request_size),
-      f.field("keep_actions", x.keep_actions), f.field("tls", x.tls),
-      f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
-      f.field("password", x.password));
+    return f.object(x).fields(f.field("op", x.op), f.field("port", x.port),
+                              f.field("url", x.url),
+                              f.field("max_request_size", x.max_request_size),
+                              f.field("keep_actions", x.keep_actions),
+                              f.field("tls", x.tls));
   }
 };
 
@@ -285,15 +250,8 @@ public:
     auto slices = std::vector<table_slice>{};
     auto stream = std::optional<caf::typed_stream<std::vector<table_slice>>>{};
     auto [ptr, launch] = ctrl.self().system().spawn_inactive();
-    auto context
-      = ssl::context::enable(args_.tls.has_value())
-          .and_then(ssl::emplace_server(ssl::tls::any))
-          .and_then(ssl::use_private_key_file_if(args_.keyfile.transform(inner),
-                                                 ssl::format::pem))
-          .and_then(ssl::use_certificate_file_if(
-            args_.certfile.transform(inner), ssl::format::pem))
-          .and_then(ssl::use_password_if(args_.password.transform(inner)))
-          .and_then(ssl::enable_default_verify_paths());
+
+    auto context = args_.tls.make_caf_context(ctrl);
     auto server
       = http::with(ctrl.self().system())
           .context(std::move(context))

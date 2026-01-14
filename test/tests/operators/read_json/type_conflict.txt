@@ -3,7 +3,7 @@
     "1",
     "2.3.4.5",
     "example.org",
-    "{\"z\":[]}",
+    "{\"z\": []}",
   ],
 }
 warning: json parser: type mismatch between list elements

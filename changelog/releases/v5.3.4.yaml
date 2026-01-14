@@ -1,4 +1,0 @@
-title: Fix Demo Node Packages
-description: This release fixes a bug that caused package installation outside of the Tenzir Library to fail, which caused Demo Nodes in the Tenzir Platform to not have any packages installed.
-changes:
-  - QVpYoNAIq0CKpifrLEzZfUeVFO

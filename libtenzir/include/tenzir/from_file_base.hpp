@@ -57,18 +57,18 @@ struct from_file_args {
   located<bool> remove{false, location::unknown};
   std::optional<ast::lambda_expr> rename;
   std::optional<ast::field_path> path_field;
+  std::optional<located<duration>> max_age;
   std::optional<located<pipeline>> pipe;
 
   auto add_to(argument_parser2& p) -> void;
   auto handle(session ctx) const -> failure_or<pipeline>;
 
   friend auto inspect(auto& f, from_file_args& x) -> bool {
-    return f.object(x).fields(f.field("oploc", x.oploc), f.field("url", x.url),
-                              f.field("watch", x.watch),
-                              f.field("remove", x.remove),
-                              f.field("move", x.rename),
-                              f.field("path_field", x.path_field),
-                              f.field("pipe", x.pipe));
+    return f.object(x).fields(
+      f.field("oploc", x.oploc), f.field("url", x.url),
+      f.field("watch", x.watch), f.field("remove", x.remove),
+      f.field("move", x.rename), f.field("path_field", x.path_field),
+      f.field("max_age", x.max_age), f.field("pipe", x.pipe));
   }
 };
 
@@ -100,14 +100,14 @@ public:
                   std::unique_ptr<diagnostic_handler> dh,
                   std::string definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
-                  uint64_t operator_index);
+                  uint64_t operator_index, std::string pipeline_id);
   from_file_state(from_file_actor::pointer self, from_file_args args,
                   std::string expanded, std::string path,
                   std::shared_ptr<arrow::fs::FileSystem> fs, event_order order,
                   std::unique_ptr<diagnostic_handler> dh,
                   std::string definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
-                  uint64_t operator_index);
+                  uint64_t operator_index, std::string pipeline_id);
   auto make_behavior() -> from_file_actor::behavior_type;
 
 private:
@@ -163,6 +163,7 @@ private:
   std::string definition_;
   node_actor node_;
   bool is_hidden_;
+  std::string pipeline_id_;
 
   // Job management.
   size_t active_jobs_ = 0;

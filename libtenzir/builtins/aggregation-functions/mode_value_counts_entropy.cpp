@@ -146,7 +146,7 @@ public:
         return;
       }
       auto value = data{};
-      if (auto err = unpack(*fb_element_value, value)) {
+      if (auto err = unpack(*fb_element_value, value); err.valid()) {
         diagnostic::warning("{}", err)
           .note("failed to restore `{}` aggregation instance", Kind)
           .emit(ctx);

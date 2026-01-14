@@ -8,6 +8,8 @@
 
 #include "tenzir/detail/type_list.hpp"
 
+#include "tenzir/test/test.hpp"
+
 namespace {
 
 using namespace tenzir::detail;
@@ -32,3 +34,7 @@ static_assert(
   std::is_same_v<tl_common_types_t<type_list<>, type_list<int>>, type_list<>>);
 
 } // namespace
+
+TEST("dummy") {
+  // Empty test suites are not allowed.
+}

@@ -1,0 +1,15 @@
+// KEY elements inside nested structure with multiple matches
+from {xml: r#"<datalist>
+  <list>
+    <record>
+      <KEY name="QID">10001</KEY>
+      <KEY name="TITLE">Vuln A</KEY>
+    </record>
+    <record>
+      <KEY name="QID">10002</KEY>
+      <KEY name="TITLE">Vuln B</KEY>
+    </record>
+  </list>
+</datalist>"#}
+records = xml.parse_xml(xpath="//record", key_attr="name")
+select records

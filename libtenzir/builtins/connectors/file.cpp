@@ -64,7 +64,7 @@ public:
   }
 
   ~fd_writer() override {
-    if (auto error = close()) {
+    if (auto error = close(); error.valid()) {
       TENZIR_WARN("closing failed in destructor: {}", error);
     }
   }
@@ -114,7 +114,7 @@ public:
   }
 
   ~file_writer() override {
-    if (auto error = close()) {
+    if (auto error = close(); error.valid()) {
       TENZIR_WARN("closing failed in destructor: {}", error);
     }
   }
@@ -401,7 +401,7 @@ public:
     }
     TENZIR_ASSERT(stream);
     auto guard = detail::scope_guard([&ctrl, stream]() noexcept {
-      if (auto error = stream->close()) {
+      if (auto error = stream->close(); error.valid()) {
         diagnostic::error(error)
           .note("failed to close stream")
           .emit(ctrl.diagnostics());
@@ -413,14 +413,15 @@ public:
       if (! chunk || chunk->size() == 0) {
         return;
       }
-      if (auto error = stream->write(std::span{chunk->data(), chunk->size()})) {
+      if (auto error = stream->write(std::span{chunk->data(), chunk->size()});
+          error.valid()) {
         diagnostic::error(error)
           .note("failed to write to stream")
           .emit(ctrl.diagnostics());
         return;
       }
       if (real_time) {
-        if (auto error = stream->flush()) {
+        if (auto error = stream->flush(); error.valid()) {
           diagnostic::error(error)
             .note("failed to flush stream")
             .emit(ctrl.diagnostics());
