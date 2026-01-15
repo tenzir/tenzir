@@ -124,6 +124,7 @@ public:
   }
 
   auto send(T x) -> void {
+    TENZIR_ASSERT(queue_);
     queue_->enqueue(std::move(x));
   }
 
@@ -538,7 +539,11 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Sender<ToControl> to_control, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
-  co_await Runner<Input, Output>{
+  // Store the Runner in a Box to ensure it outlives the coroutine returned by
+  // run_to_completion(). Without this, the Runner temporary would be destroyed
+  // when we suspend at co_await, causing a use-after-free.
+  auto runner = Box<Runner<Input, Output>>{
+    std::in_place,
     std::move(op),
     std::move(pull_upstream),
     std::move(push_downstream),
@@ -546,8 +551,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
     std::move(to_control),
     sys,
     dh,
-  }
-    .run_to_completion();
+  };
+  co_await std::move(*runner).run_to_completion();
 }
 
 } // namespace
