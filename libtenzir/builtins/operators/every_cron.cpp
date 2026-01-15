@@ -88,8 +88,8 @@ public:
     co_return {};
   }
 
-  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process_task(std::any result, Push<table_slice>& push,
+                    OpCtx& ctx) -> Task<void> override {
     last_started_ = time::clock::now();
     if (next_ > 0) {
       auto last_pipe = ctx.get_sub(next_ - 1);
@@ -101,7 +101,8 @@ public:
         // FIXME
       }
     }
-    (co_await spawn_new(ctx)).ignore();
+    auto spawn_result = co_await spawn_new(ctx);
+    spawn_result.ignore();
   }
 
   auto spawn_new(OpCtx& ctx) -> Task<failure_or<AnyOpenPipeline>> {
@@ -136,8 +137,8 @@ class Every<table_slice> final : public EveryBase<table_slice> {
 public:
   using EveryBase::EveryBase;
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(table_slice input, Push<table_slice>& push,
+               OpCtx& ctx) -> Task<void> override {
     TENZIR_ERROR("got input in every: {}", input.rows());
     TENZIR_UNUSED(push);
     // TODO: Do we know that we have a subpipeline running?
@@ -179,8 +180,8 @@ public:
       });
   }
 
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
+  auto substitute(substitute_ctx ctx,
+                  bool instantiate) -> failure_or<void> override {
     TRY(match(
       interval_,
       [&](ast::expression& expr) -> failure_or<void> {
@@ -243,8 +244,9 @@ public:
     return "tql2.every";
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
+  auto
+  compile(ast::invocation inv,
+          compile_ctx ctx) const -> failure_or<Box<ir::Operator>> override {
     // TODO: Improve this with argument parser.
     if (inv.args.size() != 2) {
       diagnostic::error("expected exactly two arguments")
