@@ -378,6 +378,14 @@ public:
     return Argument<Args, T>{false, index};
   }
 
+  // TODO
+  // template<typename T>
+  // auto variadic(std::string,
+  //               vector<T> Args::* ptr,
+  //               std::string type = type_default<T>) {
+  //
+  // }
+
   /// Adds a required named argument.
   template <ArgType T>
   auto
@@ -460,7 +468,10 @@ public:
     return std::move(desc_);
   }
 
-  auto order_invariant() -> Description;
+  auto order_invariant() -> Description {
+    // TODO
+    return std::move(desc_);
+  }
 
 private:
   Description desc_;
