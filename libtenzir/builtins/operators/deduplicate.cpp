@@ -106,9 +106,9 @@ struct state {
     );
   }
 
-  auto is_double_expired(const configuration& cfg, int64_t current_row,
-                         std::chrono::steady_clock::time_point now) const
-    -> bool {
+  auto
+  is_double_expired(const configuration& cfg, int64_t current_row,
+                    std::chrono::steady_clock::time_point now) const -> bool {
     constexpr auto get_duration = [](auto opt) -> duration {
       return opt ? opt->inner : duration::max();
     };
@@ -132,14 +132,15 @@ struct state {
 };
 
 struct deduplicate_state {
-  tsl::robin_map<data, state> state = {};
+  tsl::robin_map<data, state> states = {};
   int64_t row = 0;
   std::chrono::steady_clock::time_point last_cleanup_time
     = std::chrono::steady_clock::now();
 
   friend auto inspect(auto& f, deduplicate_state& x) -> bool {
     // FIXME: Make `last_cleanup_time` inspectable.
-    return f.object(x).fields(f.field("state", x.state), f.field("row", x.row));
+    return f.object(x).fields(f.field("states", x.states),
+                              f.field("row", x.row));
   }
 };
 
@@ -160,13 +161,13 @@ public:
       if (now > state.last_cleanup_time + std::chrono::minutes{15}) {
         state.last_cleanup_time = now;
         auto expired_keys = std::vector<data>{};
-        for (const auto& [key, value] : state.state) {
+        for (const auto& [key, value] : state.states) {
           if (value.is_expired(cfg_, state.row, now)) {
             expired_keys.push_back(key);
           }
         }
         for (const auto& key : expired_keys) {
-          state.state.erase(key);
+          state.states.erase(key);
         }
       }
       return;
@@ -176,9 +177,9 @@ public:
     auto ids = null_bitmap{};
     for (auto&& key : keys.values()) {
       const auto current_row = state.row + offset++;
-      auto it = state.state.find(key);
-      if (it == state.state.end()) {
-        state.state.emplace_hint(it, materialize(key), deduplicate::state{})
+      auto it = state.states.find(key);
+      if (it == state.states.end()) {
+        state.states.emplace_hint(it, materialize(key), deduplicate::state{})
           .value()
           .reset(current_row, now);
         ids.append_bit(true);
@@ -219,8 +220,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto states = tsl::robin_map<data, state>{};
     auto row = int64_t{};
     constexpr auto get_duration = [](auto opt) -> duration {
@@ -338,8 +339,8 @@ public:
     return "deduplicate";
   }
 
-  auto optimize(const expression& filter, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order) const -> optimize_result override {
     if (cfg_.distance) {
       // When the `distance` option is used, we're not allowed to optimize at
       // all. Here's a simple example that proves this:
@@ -361,8 +362,8 @@ private:
 
 class plugin final : public operator_plugin2<deduplicate_operator> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto expressions = std::vector<ast::expression>{};
     auto named_args = std::vector<ast::expression>{};
     auto seen_named = false;
