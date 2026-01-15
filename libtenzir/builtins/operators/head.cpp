@@ -7,13 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/compile_ctx.hpp>
-#include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql2/eval.hpp>
 
 namespace tenzir::plugins::head {
 
@@ -59,7 +55,6 @@ private:
 };
 
 class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_compiler_plugin,
                      public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -88,34 +83,9 @@ public:
   }
 
   auto describe() const -> Description override {
-    //
-    // What we need to know besides arguments:
-    // - A link to the docs
-    // - A set of `Operator<In, Out>` classes
-    // - Whether instantiate should propagate to subpipeline
-    // - Whether the operator declares its own dollar var
-    // - How optimization of the operator behaves
-    auto d = Describer<HeadArgs, Head>{};
-    auto count = d.optional_positional("count", &HeadArgs::count);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
-      TRY(auto value, ctx.get(count));
-      if (value == 123) {
-        diagnostic::error("value must not be 123")
-          .primary(ctx.get_location(count).value())
-          .emit(ctx);
-      }
-      return {};
-    });
-#if 0
-    auto count = d.positional("count", &HeadArgs::count);
-    d.validate([=](diagnostic_handler& dh) -> Empty {
-      TRY(auto count_value, count.value());
-      if (count_value % 123 == 0) {
-        diagnostic::error("foo is divisible by 123").primary(count).emit(dh);
-      }
-      return {};
-    });
-#endif
+    auto d
+      = Describer<HeadArgs, Head>{"https://docs.tenzir.com/operators/head"};
+    d.optional_positional("count", &HeadArgs::count);
     return d.without_optimize();
   }
 };
