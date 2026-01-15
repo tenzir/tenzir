@@ -30,6 +30,9 @@ public:
     TENZIR_ASSERT(not state_->notified);
     co_await state_->notify.wait();
     state_->notified = true;
+    TENZIR_ASSERT_ALWAYS(not state_->value.is_exception()
+                           or state_->value.exception(),
+                         "AsyncHandle::join() got empty exception wrapper");
     if constexpr (std::same_as<T, void>) {
       std::move(state_->value).unwrap();
       co_return {};
@@ -164,6 +167,8 @@ auto async_scope(F&& f) -> Task<
     guard.trigger();
   }
   // Now return the result of the user-provided function.
+  TENZIR_ASSERT_ALWAYS(not result.is_exception() or result.exception(),
+                       "async_scope function returned empty exception wrapper");
   co_return std::move(result).unwrap();
 }
 

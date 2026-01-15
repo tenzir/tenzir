@@ -93,7 +93,11 @@ public:
     TENZIR_VERBOSE("waiting for queue in receiver ({}): {}",
                    fmt::ptr(queue_.get()), token.isCancellationRequested());
     TENZIR_ASSERT(queue_);
-    auto result = co_await queue_->dequeue();
+    auto try_result = co_await folly::coro::co_awaitTry(queue_->dequeue());
+    TENZIR_ASSERT_ALWAYS(not try_result.hasException()
+                           or try_result.exception(),
+                         "Receiver::receive() got empty exception wrapper");
+    auto result = std::move(try_result).value();
     TENZIR_WARN("got item for queue in receiver");
     guard.disable();
     co_return result;
@@ -347,7 +351,10 @@ private:
       }
       TENZIR_INFO("-> post start");
       queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task()};
+        auto result = co_await folly::coro::co_awaitTry(op_->await_task());
+        TENZIR_ASSERT_ALWAYS(not result.hasException() or result.exception(),
+                             "await_task() returned empty exception wrapper");
+        co_return AnyWrapper{std::move(result).value()};
       });
       queue_.spawn(pull_upstream_());
       queue_.spawn(from_control_.receive());
@@ -400,7 +407,10 @@ private:
       co_await handle_done();
     } else {
       queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task()};
+        auto result = co_await folly::coro::co_awaitTry(op_->await_task());
+        TENZIR_ASSERT_ALWAYS(not result.hasException() or result.exception(),
+                             "await_task() returned empty exception wrapper");
+        co_return AnyWrapper{std::move(result).value()};
       });
     }
     TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
@@ -541,8 +551,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
   // Store the Runner in a Box to ensure it outlives the coroutine returned by
   // run_to_completion(). Without this, the Runner temporary would be destroyed
   // when we suspend at co_await, causing a use-after-free.
-  auto runner = Box<Runner<Input, Output>>{
-    std::in_place,
+  auto runner = Runner<Input, Output>{
     std::move(op),
     std::move(pull_upstream),
     std::move(push_downstream),
@@ -551,7 +560,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
     sys,
     dh,
   };
-  co_await std::move(*runner).run_to_completion();
+  co_await std::move(runner).run_to_completion();
 }
 
 } // namespace
@@ -619,7 +628,13 @@ private:
         TENZIR_INFO("spawning operator task");
         queue_.spawn([task = std::move(task),
                       index] mutable -> Task<std::pair<size_t, Shutdown>> {
-          co_await std::move(task);
+          auto result = co_await folly::coro::co_awaitTry(std::move(task));
+          TENZIR_ASSERT_ALWAYS(not result.hasException() or result.exception(),
+                               "operator task returned empty exception "
+                               "wrapper");
+          if (result.hasException()) {
+            result.exception().throw_exception();
+          }
           TENZIR_INFO("got termination from operator {}", index);
           co_return {index, Shutdown{}};
         });
@@ -628,7 +643,12 @@ private:
           [to_control_receiver = std::move(to_control_receiver), index] mutable
             -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
             while (true) {
-              co_yield {index, co_await to_control_receiver.receive()};
+              auto result = co_await folly::coro::co_awaitTry(
+                to_control_receiver.receive());
+              TENZIR_ASSERT_ALWAYS(
+                not result.hasException() or result.exception(),
+                "to_control_receiver.receive() returned empty exception");
+              co_yield {index, std::move(result).value()};
             }
           });
         TENZIR_INFO("done with operator");

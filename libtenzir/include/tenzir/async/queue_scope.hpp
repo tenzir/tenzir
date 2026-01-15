@@ -120,7 +120,19 @@ public:
     remaining_ += 1;
     scope_->spawn([this, f = std::move(f)] mutable -> Task<void> {
       auto generator = std::invoke(f);
-      while (auto next = co_await generator.next()) {
+      while (true) {
+        auto result = co_await folly::coro::co_awaitTry(generator.next());
+        TENZIR_ASSERT_ALWAYS(not result.hasException() or result.exception(),
+                             "generator.next() returned empty exception "
+                             "wrapper");
+        if (result.hasException()) {
+          co_await results_.enqueue(std::move(result).exception());
+          co_return;
+        }
+        auto next = std::move(result).value();
+        if (not next) {
+          break;
+        }
         remaining_ += 1;
         co_await results_.enqueue(std::move(*next));
       }
@@ -157,6 +169,8 @@ public:
         // that didn't produce a result.
         continue;
       }
+      TENZIR_ASSERT_ALWAYS(not result.is_exception() or result.exception(),
+                           "QueueScope::next() got empty exception wrapper");
       if constexpr (std::same_as<T, void>) {
         std::move(result).unwrap();
         co_return std::monostate{};

@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include <folly/Try.h>
+#include "tenzir/logger.hpp"
+
 #include <folly/OperationCancelled.h>
+#include <folly/Try.h>
 
 namespace tenzir {
 
@@ -58,6 +60,10 @@ public:
 
   template <class Self>
   auto unwrap(this Self&& self) -> decltype(auto) {
+    TENZIR_ASSERT_ALWAYS(not self.value_.hasException()
+                           or self.value_.exception().has_exception_ptr(),
+                         "AsyncResult::unwrap() called with empty exception "
+                         "wrapper");
     return std::forward<Self>(self).value_.value();
   }
 
