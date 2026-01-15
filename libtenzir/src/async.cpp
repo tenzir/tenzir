@@ -88,10 +88,11 @@ public:
     auto guard = detail::scope_guard{[] noexcept {
       TENZIR_DEBUG("CANCELLED");
     }};
+    auto cancellation_requested
+      = (co_await folly::coro::co_current_cancellation_token)
+          .isCancellationRequested();
     TENZIR_VERBOSE("waiting for queue in receiver ({}): {}",
-                   fmt::ptr(queue_.get()),
-                   (co_await folly::coro::co_current_cancellation_token)
-                     .isCancellationRequested());
+                   fmt::ptr(queue_.get()), cancellation_requested);
     TENZIR_ASSERT(queue_);
     auto result = co_await queue_->dequeue();
     TENZIR_WARN("got item for queue in receiver");

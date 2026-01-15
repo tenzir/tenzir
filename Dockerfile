@@ -182,14 +182,21 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan8 \
+      libboost-context1.83.0 \
       libboost-filesystem1.83.0 \
-      libboost-url1.83.0 \
+      libboost-program-options1.83.0 \
+      libboost-regex1.83.0 \
       libboost-stacktrace1.83.0 \
+      libboost-thread1.83.0 \
+      libboost-url1.83.0 \
       libc++1 \
       libc++abi1 \
       libcap2-bin \
+      libdouble-conversion3 \
+      libevent-2.1-7 \
       libflatbuffers23.5.26 \
       libfmt10 \
+      libgoogle-glog0v6 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
       libmaxminddb0 \

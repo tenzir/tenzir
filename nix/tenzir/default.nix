@@ -54,8 +54,11 @@ let
       llhttp,
       pfs,
       c-ares,
-      folly,
+      double-conversion,
       expat,
+      glog,
+      libevent,
+      libblake3,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
       extraPlugins ? [ ],
@@ -240,7 +243,11 @@ let
               })
               llhttp
               c-ares
+              double-conversion
               expat
+              glog
+              libevent
+              libblake3
             ]
             ++ lib.optionals stdenv.isLinux [
               pfs
@@ -258,7 +265,6 @@ let
               caf
               curl
               flatbuffers
-              folly
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb
