@@ -110,6 +110,10 @@ stdenv.mkDerivation (finalAttrs: {
       systemd
     ];
 
+  env = lib.optionalAttrs stdenv.hostPlatform.isDarwin {
+    NIX_LDFLAGS = "-lzstd";
+  };
+
   cmakeFlags =
     [
       "-DFLB_RELEASE=ON"
