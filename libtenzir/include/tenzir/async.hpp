@@ -6,6 +6,40 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+/// @file async.hpp
+/// @brief Pipeline executor API for implementing operators.
+///
+/// ## Operator Base Class
+///
+/// Operators derive from `Operator<Input, Output>` where Input/Output are
+/// `void`, `table_slice`, or `chunk_ptr`. The executor calls methods based on
+/// operator type.
+///
+/// ## Lifecycle for Transformations (Input != void)
+///
+/// 1. `process(input, push, ctx)` - Called for each incoming data item
+/// 2. `finalize(push, ctx)` - Called once when upstream signals end-of-data
+/// 3. `state()` - Polled to check if operator is done
+///
+/// ## Lifecycle for Sources (Input == void)
+///
+/// Sources don't receive input via `process()`. Instead:
+/// 1. `await_task()` - Returns Task<std::any> the executor awaits
+/// 2. `process_task(result, push, ctx)` - Called when task completes
+/// 3. `state()` - Polled after; return `done` to stop, else loop continues
+///
+/// ## Key Invariants
+///
+/// - `process()` is only called when input is available; operators cannot rely
+///   on periodic invocation.
+/// - `finalize()` is called exactly once when upstream closes. Use for
+///   buffering operators (tail, sort, aggregations) that must see all input.
+/// - Buffering operators may `co_return` from `process()` without pushing.
+/// - `state() == done` signals early completion (e.g., head after N rows).
+/// - For sources, `await_task()` returns immediately for simple sources, or
+///   sleeps for time-based sources. To run indefinitely, never return `done`.
+/// - `snapshot()` handles both serialization and deserialization via `Serde`.
+
 #pragma once
 
 #include "tenzir/async/mutex.hpp"
@@ -360,6 +394,7 @@ class CheckpointId {};
 template <class Input, class Output>
 class OperatorInputOutputBase {
 public:
+  /// Process a single input item. See file-level docs for invariants.
   virtual auto process(Input input, Push<Output>& push, OpCtx& ctx)
     -> Task<void>
     = 0;
@@ -383,6 +418,7 @@ protected:
 template <class Output>
 class OperatorOutputBase {
 public:
+  /// Process result of `await_task()` for sources. See file-level docs.
   virtual auto process_task(std::any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
     TENZIR_UNUSED(result, push, ctx);
@@ -390,6 +426,7 @@ public:
     co_return;
   }
 
+  /// Called once at end-of-stream. See file-level docs.
   virtual auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(push, ctx);
     co_return;
@@ -495,16 +532,14 @@ public:
     // TODO: Assert we read everything?
   }
 
+  /// Serialize/deserialize state for checkpointing. See file-level docs.
   virtual auto snapshot(Serde& serde) -> void {
     TENZIR_UNUSED(serde);
   }
 
-  // TODO: Do we rather want to expose an interface to wait for multiple
-  // futures? The problem is that if we restore after a failure, we need to
-  // restore the task that we were waiting on. Thus, forcing there to exist a
-  // single task that is derived from state looks like a good idea.
+  /// Return task for sources to await. See file-level docs.
   virtual auto await_task() const -> Task<std::any> {
-    // We craft a task that will never complete on purpose.
+    // Default: sleep forever (transformation operators don't use this).
     co_await folly::coro::sleep(std::chrono::years{1});
     TENZIR_ERROR("TODO");
     TENZIR_UNREACHABLE();
@@ -526,6 +561,7 @@ public:
     co_return;
   }
 
+  /// Return operator state. See file-level docs.
   virtual auto state() -> OperatorState {
     return OperatorState::unspecified;
   }
