@@ -283,9 +283,17 @@ public:
     begin = parse_int(false);
     end = parse_int(true);
     stride = parse_int(true);
-    auto result = pipeline::internal_parse_as_operator(
-      fmt::format("slice begin={} end={} stride={}", begin.value_or(0),
-                  end.value_or(0), stride.value_or(1)));
+    auto args = std::string{"slice"};
+    if (begin) {
+      args += fmt::format(" begin={}", *begin);
+    }
+    if (end) {
+      args += fmt::format(" end={}", *end);
+    }
+    if (stride) {
+      args += fmt::format(" stride={}", *stride);
+    }
+    auto result = pipeline::internal_parse_as_operator(args);
     if (not result) {
       diagnostic::error("failed to parse slice operator: {}", result.error())
         .throw_();
@@ -294,10 +302,20 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SliceArgs, Slice>{};
+    auto d
+      = Describer<SliceArgs, Slice>{"https://docs.tenzir.com/operators/slice"};
     d.named("begin", &SliceArgs::begin);
     d.named("end", &SliceArgs::end);
-    d.named("stride", &SliceArgs::stride);
+    auto stride = d.named("stride", &SliceArgs::stride);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(stride));
+      if (value == 0) {
+        diagnostic::error("stride must not be zero")
+          .primary(ctx.get_location(stride).value())
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 };
