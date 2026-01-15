@@ -72,7 +72,7 @@ struct configuration {
   }
 };
 
-struct state {
+struct State {
   int64_t count = {};
   int64_t last_row = {};
   std::chrono::steady_clock::time_point created_at;
@@ -96,7 +96,7 @@ struct state {
            or (cfg.distance and current_row > last_row + cfg.distance->inner);
   }
 
-  friend auto inspect(auto& f, state& x) -> bool {
+  friend auto inspect(auto& f, State& x) -> bool {
     // FIXME: Inspect time points.
     return f.object(x).fields(f.field("count", x.count),
                               f.field("last_row", x.last_row)
@@ -132,7 +132,7 @@ struct state {
 };
 
 struct deduplicate_state {
-  tsl::robin_map<data, state> state = {};
+  tsl::robin_map<data, State> state;
   int64_t row = 0;
   std::chrono::steady_clock::time_point last_cleanup_time
     = std::chrono::steady_clock::now();
@@ -221,7 +221,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto states = tsl::robin_map<data, state>{};
+    auto states = tsl::robin_map<data, State>{};
     auto row = int64_t{};
     constexpr auto get_duration = [](auto opt) -> duration {
       return opt ? opt->inner : duration::max();
@@ -272,7 +272,7 @@ public:
         auto k = materialize(key);
         auto it = states.find(k);
         if (it == states.end()) {
-          states.emplace_hint(it, std::move(k), state{})
+          states.emplace_hint(it, std::move(k), State{})
             .value()
             .reset(current_row, now);
           ids.append_bit(true);
