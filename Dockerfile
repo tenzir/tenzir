@@ -2,14 +2,20 @@ FROM public.ecr.aws/docker/library/debian:trixie-slim AS runtime-base
 
 FROM runtime-base AS build-base
 
-ENV CC="gcc-14" \
-    CXX="g++-14" \
+ENV CC="gcc-15" \
+    CXX="g++-15" \
     CMAKE_C_COMPILER_LAUNCHER=ccache \
     CCACHE_DIR=/ccache \
     CMAKE_CXX_COMPILER_LAUNCHER=ccache \
     CMAKE_INSTALL_PREFIX=/usr/local
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
+
+# Add unstable repository and configure APT preferences for gcc-15
+RUN echo "deb http://deb.debian.org/debian/ unstable main" > /etc/apt/sources.list.d/unstable.list && \
+    printf "Package: *\nPin: release a=trixie\nPin-Priority: 900\n\nPackage: *\nPin: release a=unstable\nPin-Priority: 50\n" > /etc/apt/preferences.d/trixie-unstable && \
+    apt-get update && \
+    apt-get -y --no-install-recommends install -t unstable gcc-15 g++-15
 
 # -- aws-sdk-cpp-package -------------------------------------------------------
 
@@ -96,12 +102,12 @@ COPY CMakeLists.txt LICENSE README.md VERSIONING.md \
 
 # -- development ---------------------------------------------------------------
 
-FROM dependencies AS development
+FROM dependencies AS development-configured
 
 ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:/opt/tenzir/libexec:${PATH}" \
-    CC="gcc-14" \
-    CXX="g++-14"
+    CC="gcc-15" \
+    CXX="g++-15"
 
 # When changing these, make sure to also update the corresponding entries in the
 # flake.nix file.
@@ -129,6 +135,8 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
     ${TENZIR_BUILD_OPTIONS}
+
+FROM development-configured AS development
 
 # Build step
 RUN --mount=target=/ccache,type=cache \

@@ -3,6 +3,12 @@
 set -euo pipefail
 
 apt-get update
+# Install gcc-15 and g++-15 from unstable
+apt-get -y --no-install-recommends install -t unstable gcc-15 g++-15
+# Install libjansson from unstable first to get consistent versions
+# (trixie has version skew between libjansson4 and libjansson-dev)
+apt-get -y --no-install-recommends install -t unstable libjansson4 libjansson-dev
+# Install remaining packages from trixie
 apt-get -y --no-install-recommends install \
   build-essential \
   ca-certificates \
@@ -12,8 +18,6 @@ apt-get -y --no-install-recommends install \
   cppzmq-dev \
   curl \
   flatbuffers-compiler-dev \
-  g++-14 \
-  gcc-14 \
   git-core \
   gnupg2 gnupg-agent jq \
   libboost-context-dev \
