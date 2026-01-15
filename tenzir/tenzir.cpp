@@ -71,7 +71,11 @@ auto main(int argc, char** argv) -> int try {
   }
 #endif
   // Initialize Folly singletons (required for folly::coro::sleep, etc.).
-  folly::Init folly_init{&argc, &argv, false};
+  // auto init = folly::Init{&argc, &argv,
+  // folly::InitOptions().installFatalSignalCallbacks(false)};
+  int argc2 = 1;
+  const char* argv2[] = {"foo"};
+  folly::Init folly_init{&argc2, &argv2, false};
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
