@@ -58,67 +58,6 @@ private:
   uint64_t remaining_;
 };
 
-class head_ir final : public ir::Operator {
-public:
-  head_ir() = default;
-
-  explicit head_ir(location self, ast::expression count)
-    : self_{self}, count_{std::move(count)} {
-  }
-
-  auto name() const -> std::string override {
-    return "head_ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    if (auto expr = try_as<ast::expression>(count_)) {
-      TRY(expr->substitute(ctx));
-      if (instantiate or expr->is_deterministic(ctx)) {
-        TRY(auto value, const_eval(*expr, ctx));
-        auto count = try_as<int64_t>(value);
-        if (not count or *count < 0) {
-          diagnostic::error("TODO").primary(*expr).emit(ctx);
-          return failure::promise();
-        }
-        count_ = *count;
-      }
-    }
-    return {};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    // TODO: Refactor.
-    if (not input.is<table_slice>()) {
-      diagnostic::error("expected events, got {}", input)
-        .primary(main_location())
-        .emit(dh);
-      return failure::promise();
-    }
-    return element_type_tag{tag_v<table_slice>};
-  }
-
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    // TODO: Narrow.
-    return Head{detail::narrow<uint64_t>(as<int64_t>(count_))};
-  }
-
-  auto main_location() const -> location override {
-    return self_;
-  }
-
-  friend auto inspect(auto& f, head_ir& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_),
-                              f.field("count", x.count_));
-  }
-
-private:
-  location self_;
-  variant<ast::expression, int64_t> count_;
-};
-
 class plugin final : public virtual operator_parser_plugin,
                      public virtual operator_compiler_plugin,
                      public virtual OperatorPlugin {
@@ -147,22 +86,6 @@ public:
     }
     return std::move(*result);
   }
-
-#if 0
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
-    // TODO: Actual parsing.
-    if (inv.args.size() > 1) {
-      diagnostic::error("expected exactly one argument")
-        .primary(inv.op)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto expr = inv.args.empty() ? ast::constant{10, location::unknown}
-                                 : std::move(inv.args[0]);
-    return head_ir{inv.op.get_location(), std::move(expr)};
-}
-#endif
 
   auto describe() const -> Description override {
     //
@@ -202,6 +125,3 @@ public:
 } // namespace tenzir::plugins::head
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::head::plugin)
-
-TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<
-                       tenzir::ir::Operator, tenzir::plugins::head::head_ir>)
