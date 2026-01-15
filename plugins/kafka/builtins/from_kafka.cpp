@@ -155,6 +155,13 @@ public:
             detail::narrow<int32_t>(last_good_message->len())));
           // Manually commit this specific message after processing
           ++num_messages;
+          if (last_good_message and args_.count
+              and args_.count->inner == num_messages) {
+            co_yield finish_as_slice();
+            std::ignore = client->commit(last_good_message.get(), dh,
+                                         args_.operator_location);
+            co_return;
+          }
           if (last_good_message
               and (num_messages % args_.commit_batch_size == 0
                    or now - last_commit_time >= commit_timeout)) {
@@ -166,13 +173,6 @@ public:
             }
             last_good_message.reset();
             continue;
-          }
-          if (last_good_message and args_.count
-              and args_.count->inner == num_messages) {
-            co_yield finish_as_slice();
-            std::ignore = client->commit(last_good_message.get(), dh,
-                                         args_.operator_location);
-            co_return;
           }
           co_yield {};
           continue;
