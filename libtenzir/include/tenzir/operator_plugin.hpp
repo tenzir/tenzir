@@ -98,6 +98,7 @@ public:
   std::any args;
   std::vector<Positional> positional;
   std::optional<size_t> first_optional;
+  std::optional<size_t> variadic_index;
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
@@ -166,6 +167,20 @@ auto make_setter(T Args::* ptr) -> auto {
   } else {
     return Setter<Value>{[ptr](std::any& args, Value value) {
       (&std::any_cast<Args&>(args))->*ptr = std::move(value);
+    }};
+  }
+}
+
+template <class Args, class T>
+auto make_variadic_setter(std::vector<T> Args::* ptr) -> auto {
+  using Value = T;
+  if constexpr (argument_parser_bare_type<Value>) {
+    return Setter<located<Value>>{[ptr](std::any& args, located<Value> value) {
+      ((&std::any_cast<Args&>(args))->*ptr).push_back(std::move(value.inner));
+    }};
+  } else {
+    return Setter<Value>{[ptr](std::any& args, Value value) {
+      ((&std::any_cast<Args&>(args))->*ptr).push_back(std::move(value));
     }};
   }
 }
@@ -378,13 +393,50 @@ public:
     return Argument<Args, T>{false, index};
   }
 
-  // TODO
-  // template<typename T>
-  // auto variadic(std::string,
-  //               vector<T> Args::* ptr,
-  //               std::string type = type_default<T>) {
-  //
-  // }
+  /// Adds a variadic positional argument (requires at least one value).
+  template <ArgType T>
+  auto variadic(std::string name, std::vector<T> Args::* ptr,
+                std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot have multiple variadic positional arguments");
+    }
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.variadic_index = index;
+    // Append "..." to the type string to indicate variadic
+    auto variadic_type = type.empty() ? "..." : type + "...";
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(variadic_type),
+      make_variadic_setter(ptr),
+    });
+    return Argument<Args, T>{false, index};
+  }
+
+  /// Adds an optional variadic positional argument (accepts zero or more values).
+  template <ArgType T>
+  auto optional_variadic(std::string name, std::vector<T> Args::* ptr,
+                         std::string type = type_default<T>)
+    -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot have multiple variadic positional arguments");
+    }
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.variadic_index = index;
+    // Append "..." to the type string to indicate variadic
+    auto variadic_type = type.empty() ? "..." : type + "...";
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(variadic_type),
+      make_variadic_setter(ptr),
+    });
+    return Argument<Args, T>{false, index};
+  }
 
   /// Adds a required named argument.
   template <ArgType T>

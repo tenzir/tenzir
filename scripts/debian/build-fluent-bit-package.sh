@@ -32,7 +32,13 @@ apt-get install -y --reinstall \
 mkdir -p source
 pushd source
 curl -L "https://github.com/fluent/fluent-bit/archive/refs/tags/${FLUENT_BIT_TAG}.tar.gz" | tar -xz --strip-components=1
+
+# Use gcc-14 for Fluent Bit - it doesn't compile with gcc-15 due to
+# stricter type checking (onigmo incompatible-pointer-types errors and
+# processor_sql parser yylex declaration conflicts).
 cmake -B build \
+  -DCMAKE_C_COMPILER=gcc-14 \
+  -DCMAKE_CXX_COMPILER=g++-14 \
   -DFLB_RELEASE=ON \
   "${EXTRA_CMAKE_ARGS[@]}"
 
