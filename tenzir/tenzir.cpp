@@ -35,6 +35,7 @@
 #include <caf/fwd.hpp>
 #include <caf/telemetry/metric_family_impl.hpp>
 #include <caf/thread_owner.hpp>
+#include <folly/init/Init.h>
 #include <sys/resource.h>
 
 #include <csignal>
@@ -69,6 +70,8 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
 #endif
+  // Initialize Folly singletons (required for folly::coro::sleep, etc.).
+  folly::Init folly_init{&argc, &argv, false};
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
