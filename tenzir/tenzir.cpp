@@ -60,6 +60,9 @@ auto is_server_from_app_path(std::string_view app_path) {
 
 auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
+  // auto init = folly::Init{&argc, &argv,
+  // folly::InitOptions().installFatalSignalCallbacks(false)};
+  auto init = folly::Init{&argc, &argv};
   // Ensure the signal handler object file is linked (needed for static builds).
   signal_handlers_anchor();
   arrow::util::InitializeUTF8();
