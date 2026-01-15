@@ -20,15 +20,11 @@
 /// 1. `process(input, push, ctx)` - Called for each incoming data item
 /// 2. `state()` - Polled to check if operator is done
 ///
-/// ## Lifecycle for Sources (Input == void)
-///
-/// Sources don't receive input via `process()`. Instead:
-/// 1. `await_task()` - Returns Task<std::any> the executor awaits
-/// 2. `process_task(result, push, ctx)` - Called when task completes
-/// 3. `state()` - Polled after; return `done` to stop, else loop continues
-///
 /// ## Common Methods (all operator types)
 ///
+/// - `await_task()` - Returns Task<std::any> the executor awaits. Sources use
+///   this to produce data; non-sources typically sleep forever (the default).
+/// - `process_task(result, push, ctx)` - Called when `await_task()` completes.
 /// - `finalize(push, ctx)` - Called exactly once when upstream signals
 ///   end-of-data. Use for buffering operators (tail, sort, aggregations) that
 ///   must see all input before producing output.
@@ -39,8 +35,8 @@
 /// - `process()` is only called when input is available; operators cannot rely
 ///   on periodic invocation.
 /// - Buffering operators may `co_return` from `process()` without pushing.
-/// - For sources, `await_task()` returns immediately for simple sources, or
-///   sleeps for time-based sources. To run indefinitely, never return `done`.
+/// - Sources use `await_task()` to drive data production. To run indefinitely,
+///   never return `done` from `state()`.
 /// - `snapshot()` handles both serialization and deserialization via `Serde`.
 
 #pragma once
