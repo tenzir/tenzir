@@ -387,7 +387,7 @@ public:
           TRY(arg, result);
         }
       } else {
-        TENZIR_TODO();
+        // TENZIR_TODO();
         arg = std::move(expr);
       }
       return {};
