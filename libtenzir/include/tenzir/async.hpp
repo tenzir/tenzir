@@ -15,11 +15,10 @@
 /// `void`, `table_slice`, or `chunk_ptr`. The executor calls methods based on
 /// operator type.
 ///
-/// ## Lifecycle for Transformations (Input != void)
+/// ## Lifecycle for Non-Source Operators (Input != void)
 ///
 /// 1. `process(input, push, ctx)` - Called for each incoming data item
-/// 2. `finalize(push, ctx)` - Called once when upstream signals end-of-data
-/// 3. `state()` - Polled to check if operator is done
+/// 2. `state()` - Polled to check if operator is done
 ///
 /// ## Lifecycle for Sources (Input == void)
 ///
@@ -28,14 +27,18 @@
 /// 2. `process_task(result, push, ctx)` - Called when task completes
 /// 3. `state()` - Polled after; return `done` to stop, else loop continues
 ///
+/// ## Common Methods (all operator types)
+///
+/// - `finalize(push, ctx)` - Called exactly once when upstream signals
+///   end-of-data. Use for buffering operators (tail, sort, aggregations) that
+///   must see all input before producing output.
+/// - `state()` - Polled after processing; return `done` for early completion.
+///
 /// ## Key Invariants
 ///
 /// - `process()` is only called when input is available; operators cannot rely
 ///   on periodic invocation.
-/// - `finalize()` is called exactly once when upstream closes. Use for
-///   buffering operators (tail, sort, aggregations) that must see all input.
 /// - Buffering operators may `co_return` from `process()` without pushing.
-/// - `state() == done` signals early completion (e.g., head after N rows).
 /// - For sources, `await_task()` returns immediately for simple sources, or
 ///   sleeps for time-based sources. To run indefinitely, never return `done`.
 /// - `snapshot()` handles both serialization and deserialization via `Serde`.
