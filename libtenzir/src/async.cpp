@@ -29,8 +29,8 @@ namespace tenzir {
 
 class Pass final : public Operator<table_slice, table_slice> {
 public:
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(table_slice input, Push<table_slice>& push,
+               OpCtx& ctx) -> Task<void> override {
     co_await push(std::move(input));
   }
 };
@@ -200,7 +200,6 @@ public:
   ~Runner() = default;
 
   auto run_to_completion() && -> Task<void> {
-    TENZIR_WARN("starting operator runner");
     auto guard = detail::scope_guard{[] noexcept {
       TENZIR_WARN("returning from operator runner");
     }};
@@ -208,8 +207,8 @@ public:
   }
 
 private:
-  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline> override {
+  auto spawn_sub(SubKey key, ir::pipeline pipe,
+                 element_type_tag input) -> Task<AnyOpenPipeline> override {
     TENZIR_INFO("spawning subpipeline");
     auto spawned = std::move(pipe).spawn(input);
     // TODO: Run chain in async scope?
@@ -330,7 +329,6 @@ private:
   }
 
   auto run() -> Task<void> {
-    TENZIR_INFO("entering run loop of {}", typeid(*op_).name());
     // co_await folly::coro::co_scope_exit(
     //   [](Runner* self) -> Task<void> {
     //     TENZIR_WARN("shutting down operator {} with {} pending",
@@ -368,6 +366,7 @@ private:
       TENZIR_ERROR("shutting down operator after uncaught exception");
       throw;
     }
+    TENZIR_WARN("CANCELING queue");
     queue_.cancel();
   }
 
@@ -455,8 +454,7 @@ private:
   }
 
   auto process(FromControl message) -> Task<void> {
-    co_await match(
-      std::move(message),
+    auto overloads = detail::overload{
       [&](PostCommit) -> Task<void> {
         TENZIR_VERBOSE("got post commit in {}", typeid(*op_).name());
         co_await op_->post_commit();
@@ -469,7 +467,8 @@ private:
       },
       [&](StopOutput) -> Task<void> {
         co_await handle_done();
-      });
+      }};
+    co_await match(std::move(message), overloads);
     queue_.spawn(from_control_.receive());
   }
 
@@ -627,7 +626,7 @@ private:
         TENZIR_INFO("inserting control receiver task");
         queue_.spawn(
           [to_control_receiver = std::move(to_control_receiver), index] mutable
-            -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
+          -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
             while (true) {
               co_yield {index, co_await to_control_receiver.receive()};
             }
@@ -776,14 +775,14 @@ auto run_chain(OperatorChain<Input, Output> chain,
 template <class Output>
   requires(not std::same_as<Output, void>)
 auto run_open_pipeline(OperatorChain<void, Output> pipeline,
-                       caf::actor_system& sys, diagnostic_handler& dh)
-  -> AsyncGenerator<Output> {
+                       caf::actor_system& sys,
+                       diagnostic_handler& dh) -> AsyncGenerator<Output> {
   TENZIR_UNUSED(pipeline, sys, dh);
   TENZIR_TODO();
 }
 
-auto OpCtx::spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-  -> Task<AnyOpenPipeline> {
+auto OpCtx::spawn_sub(SubKey key, ir::pipeline pipe,
+                      element_type_tag input) -> Task<AnyOpenPipeline> {
   return sub_manager_.spawn_sub(std::move(key), std::move(pipe), input);
 }
 
@@ -951,8 +950,8 @@ auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>> {
   return {OpPush<T>{shared}, OpPull<T>{shared}};
 }
 
-template auto make_op_channel<void>(size_t limit)
-  -> PushPull<OperatorMsg<void>>;
+template auto
+make_op_channel<void>(size_t limit) -> PushPull<OperatorMsg<void>>;
 
 class RunPipelineSettings {
 public:
@@ -973,12 +972,11 @@ public:
 
   virtual auto make_operator_channel_void() -> PushPull<OperatorMsg<void>> = 0;
 
-  virtual auto make_operator_channel_events()
-    -> PushPull<OperatorMsg<table_slice>>
-    = 0;
+  virtual auto
+  make_operator_channel_events() -> PushPull<OperatorMsg<table_slice>> = 0;
 
-  virtual auto make_operator_channel_bytes() -> PushPull<OperatorMsg<chunk_ptr>>
-    = 0;
+  virtual auto
+  make_operator_channel_bytes() -> PushPull<OperatorMsg<chunk_ptr>> = 0;
 };
 
 auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
