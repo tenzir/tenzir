@@ -13,6 +13,7 @@
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -102,8 +103,8 @@ public:
   }
 
   /// Processes a single slice with the corresponding schema-specific state.
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
+  auto
+  process(table_slice slice, state_type& state) const -> output_type override {
     if (state) {
       return transform_columns(slice, *state);
     }
@@ -114,8 +115,8 @@ public:
     return "drop";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -172,8 +173,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -183,8 +184,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -197,10 +198,52 @@ private:
   std::vector<ast::field_path> selectors_;
 };
 
-class plugin2 final : public virtual operator_plugin2<drop_operator2> {
+struct DropArgs {
+  ast::expression field;
+  // std::vector<ast::field_path> fields;
+};
+
+class Drop final : public Operator<table_slice, table_slice> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  explicit Drop(DropArgs args) {
+    auto fp = ast::field_path::try_from(args.field);
+    TENZIR_ASSERT(fp);
+    fields_ = std::vector<ast::field_path>{*fp};
+  }
+
+  auto process(table_slice input, Push<table_slice>& push,
+               OpCtx& ctx) -> Task<void> override {
+    auto result = tenzir::drop(input, fields_, ctx.dh(), true);
+    co_await push(std::move(result));
+  }
+
+private:
+  std::vector<ast::field_path> fields_;
+};
+
+class plugin2 final : public virtual operator_plugin2<drop_operator2>,
+                      public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<DropArgs, Drop>{};
+    auto field = d.positional("field", &DropArgs::field, "field");
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(field));
+      auto fp = ast::field_path::try_from(value);
+      if (! fp) {
+        diagnostic::error("value must be a valid field path")
+          .primary(ctx.get_location(field).value())
+          .note("value was {:?}", value)
+          .emit(ctx);
+        // TODO: map string -> field_path here
+      }
+      return {};
+    });
+    return d.order_invariant();
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("drop");
     auto selectors = std::vector<ast::field_path>{};
     for (auto& arg : inv.args) {
