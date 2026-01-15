@@ -47,7 +47,8 @@ public:
     }
     TENZIR_ASSERT(sub);
     auto& cast = as<OpenPipeline<table_slice>>(*sub);
-    auto closed = (co_await cast.push(std::move(input))).is_err();
+    auto result = co_await cast.push(std::move(input));
+    auto closed = result.is_err();
     if (closed) {
       // TODO: Ignore?
     }

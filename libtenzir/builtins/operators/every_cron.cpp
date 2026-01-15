@@ -101,7 +101,8 @@ public:
         // FIXME
       }
     }
-    (co_await spawn_new(ctx)).ignore();
+    auto spawn_result = co_await spawn_new(ctx);
+    spawn_result.ignore();
   }
 
   auto spawn_new(OpCtx& ctx) -> Task<failure_or<AnyOpenPipeline>> {
