@@ -116,6 +116,23 @@ find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 find_package(re2 REQUIRED)
 provide_find_module(re2)
 
+# -- gflags (transitive dependency via folly) ---------------------------------
+
+# folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
+# We need to find gflags first and fix its target configuration, because
+# Homebrew gflags only exports IMPORTED_LOCATION_RELEASE.
+find_package(gflags QUIET)
+if(TARGET gflags_shared)
+  get_target_property(_gflags_loc gflags_shared IMPORTED_LOCATION_RELEASE)
+  if(_gflags_loc)
+    set_target_properties(gflags_shared PROPERTIES
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_gflags_loc}"
+      IMPORTED_LOCATION_DEBUG "${_gflags_loc}"
+      IMPORTED_LOCATION_MINSIZEREL "${_gflags_loc}"
+    )
+  endif()
+endif()
+
 # -- folly ---------------------------------------------------------------------
 
 find_package(folly REQUIRED)
