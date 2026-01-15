@@ -128,6 +128,7 @@ public:
   std::vector<Positional> positional;
   std::optional<Pipeline> pipeline;
   std::optional<size_t> first_optional;
+  std::optional<size_t> variadic_index;
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
@@ -141,8 +142,8 @@ public:
 
   auto describe_shared() const -> std::shared_ptr<const Description>;
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> final;
+  auto compile(ast::invocation inv,
+               compile_ctx ctx) const -> failure_or<Box<ir::Operator>> final;
 
 private:
   mutable std::once_flag desc_init_flag_;
@@ -180,7 +181,7 @@ private:
 };
 
 template <class Args, class T>
-auto make_setter(T Args::* ptr) -> auto {
+auto make_setter(T Args::*ptr) -> auto {
   using Value = decltype(std::invoke([] {
     if constexpr (detail::is_specialization_of<std::optional, T>::value) {
       return tag_v<typename T::value_type>;
@@ -213,6 +214,20 @@ auto make_setter(T Args::* ptr) -> auto {
   } else {
     return Setter<Value>{[ptr](Any& args, Value value) {
       (&args.as<Args>())->*ptr = std::move(value);
+    }};
+  }
+}
+
+template <class Args, class T>
+auto make_variadic_setter(std::vector<T> Args::*ptr) -> auto {
+  using Value = T;
+  if constexpr (argument_parser_bare_type<Value>) {
+    return Setter<located<Value>>{[ptr](Any& args, located<Value> value) {
+      ((&args.as<Args>())->*ptr).push_back(std::move(value.inner));
+    }};
+  } else {
+    return Setter<Value>{[ptr](Any& args, Value value) {
+      ((&args.as<Args>())->*ptr).push_back(std::move(value));
     }};
   }
 }
@@ -435,7 +450,7 @@ public:
   // auto positional(std::string name, F&& f);
 
   template <ArgType T>
-  auto positional(std::string name, T Args::* ptr,
+  auto positional(std::string name, T Args::*ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
     // TODO: Check exact type?
     if (desc_.first_optional) {
@@ -451,7 +466,7 @@ public:
   }
 
   template <ArgType T>
-  auto positional(std::string name, std::optional<T> Args::* ptr,
+  auto positional(std::string name, std::optional<T> Args::*ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
@@ -466,9 +481,9 @@ public:
   }
 
   template <ArgType T>
-  auto optional_positional(std::string name, T Args::* ptr,
-                           std::string type = type_default<T>)
-    -> Argument<Args, T> {
+  auto
+  optional_positional(std::string name, T Args::*ptr,
+                      std::string type = type_default<T>) -> Argument<Args, T> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
@@ -481,7 +496,7 @@ public:
     return Argument<Args, T>{ArgumentType::positional, index};
   }
 
-  auto pipeline(located<ir::pipeline> Args::* ptr)
+  auto pipeline(located<ir::pipeline> Args::*ptr)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     desc_.pipeline = Pipeline{
@@ -492,7 +507,7 @@ public:
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
-  auto pipeline(std::optional<located<ir::pipeline>> Args::* ptr)
+  auto pipeline(std::optional<located<ir::pipeline>> Args::*ptr)
     -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     desc_.pipeline = Pipeline{
@@ -505,10 +520,10 @@ public:
 
   /// Pipeline with let bindings that are injected into the subpipeline.
   /// Usage: `d.pipeline(&Args::pipe, {{"var_name", &Args::var_let_id}, ...})`
-  auto pipeline(
-    located<ir::pipeline> Args::* ptr,
-    std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
-    -> Argument<Args, located<ir::pipeline>> {
+  auto
+  pipeline(located<ir::pipeline> Args::*ptr,
+           std::initializer_list<std::pair<std::string_view, let_id Args::*>>
+             bindings) -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     auto let_bindings = std::vector<LetBinding>{};
     for (const auto& [name, member_ptr] : bindings) {
@@ -525,10 +540,10 @@ public:
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
-  auto pipeline(
-    std::optional<located<ir::pipeline>> Args::* ptr,
-    std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
-    -> Argument<Args, located<ir::pipeline>> {
+  auto
+  pipeline(std::optional<located<ir::pipeline>> Args::*ptr,
+           std::initializer_list<std::pair<std::string_view, let_id Args::*>>
+             bindings) -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     auto let_bindings = std::vector<LetBinding>{};
     for (const auto& [name, member_ptr] : bindings) {
@@ -545,19 +560,55 @@ public:
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
-  // TODO
-  // template<typename T>
-  // auto variadic(std::string,
-  //               vector<T> Args::* ptr,
-  //               std::string type = type_default<T>) {
-  //
-  // }
+  /// Adds a variadic positional argument (requires at least one value).
+  template <ArgType T>
+  auto variadic(std::string name, std::vector<T> Args::*ptr,
+                std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot have multiple variadic positional arguments");
+    }
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.variadic_index = index;
+    // Append "..." to the type string to indicate variadic
+    auto variadic_type = type.empty() ? "..." : type + "...";
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(variadic_type),
+      make_variadic_setter(ptr),
+    });
+    return Argument<Args, T>{ArgumentType::positional, index};
+  }
+
+  /// Adds an optional variadic positional argument (accepts zero or more values).
+  template <ArgType T>
+  auto
+  optional_variadic(std::string name, std::vector<T> Args::*ptr,
+                    std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot have multiple variadic positional arguments");
+    }
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.variadic_index = index;
+    // Append "..." to the type string to indicate variadic
+    auto variadic_type = type.empty() ? "..." : type + "...";
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(variadic_type),
+      make_variadic_setter(ptr),
+    });
+    return Argument<Args, T>{ArgumentType::positional, index};
+  }
 
   /// Adds a required named argument.
   template <ArgType T>
-  auto
-  named(std::string name, T Args::* ptr, std::string type = type_default<T>)
-    -> Argument<Args, T> {
+  auto named(std::string name, T Args::*ptr,
+             std::string type = type_default<T>) -> Argument<Args, T> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
@@ -570,7 +621,7 @@ public:
 
   /// Adds an optional named argument.
   template <ArgType T>
-  auto named(std::string name, std::optional<T> Args::* ptr,
+  auto named(std::string name, std::optional<T> Args::*ptr,
              std::string type = type_default<T>) -> Argument<Args, T> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
@@ -584,7 +635,7 @@ public:
 
   /// Adds an optional named argument with a default value.
   template <ArgType T>
-  auto named_optional(std::string name, T Args::* ptr,
+  auto named_optional(std::string name, T Args::*ptr,
                       std::string type = type_default<T>) -> Argument<Args, T> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
@@ -597,8 +648,8 @@ public:
   }
 
   /// Adds an optional boolean flag.
-  auto named(std::string name, bool Args::* ptr, std::string type = "")
-    -> Argument<Args, bool> {
+  auto named(std::string name, bool Args::*ptr,
+             std::string type = "") -> Argument<Args, bool> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
@@ -610,7 +661,7 @@ public:
   }
 
   /// Adds an optional location flag.
-  auto named(std::string name, std::optional<location> Args::* ptr,
+  auto named(std::string name, std::optional<location> Args::*ptr,
              std::string type = "") -> Argument<Args, bool> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
@@ -664,7 +715,7 @@ public:
     return std::move(desc_);
   }
 
-  auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
+  auto optimize_filter(ir::optimize_filter Args::*ptr) -> Description {
     desc_.set_filter = make_setter(ptr);
     return std::move(desc_);
   }
