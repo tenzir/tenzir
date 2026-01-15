@@ -368,16 +368,27 @@ auto main(int argc, char** argv) -> int try {
       std::this_thread::sleep_for(std::chrono::seconds{1});
     }
     std::unordered_map<std::string, int64_t> zombies = {};
-    auto collector = [&](const caf::telemetry::metric_family* /*family*/,
-                         const caf::telemetry::metric* instance,
-                         const caf::telemetry::int_gauge* wrapped) {
-      if (wrapped->value() != 0) {
-        zombies[std::string{instance->labels()[0].value()}] = wrapped->value();
-      }
-    };
+    auto collector
+      = [&]<typename T>(const caf::telemetry::metric_family* family,
+                        const caf::telemetry::metric* instance,
+                        const T* wrapped) {
+          if constexpr (std::same_as<T, caf::telemetry::int_gauge>) {
+            if (family->prefix() != "caf.system"
+                or family->name() != "running-actors") {
+              return;
+            }
+            if (wrapped->value() != 0) {
+              const auto it = std::ranges::find(instance->labels(),
+                                                std::string_view{"name"},
+                                                &caf::telemetry::label::name);
+              TENZIR_ASSERT(it != instance->labels().end());
+              zombies[std::string{it->value()}] += wrapped->value();
+            }
+          }
+        };
     for (int cnt = 10; cnt > 0 and sys.running_actors_count() > 0; cnt--) {
       zombies.clear();
-      sys.running_actors_metric_family()->collect(collector);
+      sys.metrics().collect(collector);
       TENZIR_INFO("waiting {} more seconds for leftover components to "
                   "terminate: {}",
                   cnt, zombies);
@@ -385,7 +396,7 @@ auto main(int argc, char** argv) -> int try {
     }
     if (sys.running_actors_count() > 0) {
       zombies.clear();
-      sys.running_actors_metric_family()->collect(collector);
+      sys.metrics().collect(collector);
       TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
     }
   } else {

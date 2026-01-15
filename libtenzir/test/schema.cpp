@@ -25,6 +25,12 @@ using namespace tenzir;
 
 using namespace std::string_literals;
 
+template <typename T>
+auto unbox_pointer(T* v) -> const T& {
+  CHECK(v != nullptr);
+  return *v;
+}
+
 TEST("offset finding") {
   std::string str = R"__(
     type a = int64
@@ -66,12 +72,13 @@ TEST("combining") {
     type d = string
   )__"));
   auto z = module::combine(x, y);
-  CHECK_EQUAL(unbox(z.find("a")),
+  CHECK_EQUAL(unbox_pointer(z.find("a")),
               (type{"a", type{"int_custom", int64_type{}}}));
-  CHECK_EQUAL(unbox(z.find("b")), (type{"b", double_type{}}));
-  CHECK_EQUAL(unbox(z.find("c")), (type{"c", ip_type{}}));
-  CHECK_EQUAL(unbox(z.find("d")), (type{"d", string_type{}}));
-  CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
+  CHECK_EQUAL(unbox_pointer(z.find("b")), (type{"b", double_type{}}));
+  CHECK_EQUAL(unbox_pointer(z.find("c")), (type{"c", ip_type{}}));
+  CHECK_EQUAL(unbox_pointer(z.find("d")), (type{"d", string_type{}}));
+  CHECK_EQUAL(unbox_pointer(z.find("int_custom")),
+              (type{"int_custom", int64_type{}}));
 }
 
 TEST("merging") {
@@ -272,7 +279,7 @@ TEST("parseable - out of order definitions") {
   )__"sv;
   module mod;
   CHECK(parsers::module(str, mod));
-  auto baz = unbox(mod.find("baz"));
+  auto baz = unbox_pointer(mod.find("baz"));
   auto expected = type{
     "baz",
     list_type{
@@ -310,7 +317,7 @@ TEST("parseable - with context") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto bar = unbox(sch.find("bar"));
+    auto bar = unbox_pointer(sch.find("bar"));
     auto expected = type{
       "bar",
       record_type{
@@ -335,7 +342,7 @@ TEST("parseable - with context") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto bar = unbox(sch.find("bar"));
+    auto bar = unbox_pointer(sch.find("bar"));
     auto expected = type{
       "bar",
       record_type{
@@ -360,7 +367,7 @@ TEST("parseable - with context") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto bar = unbox(sch.find("bar"));
+    auto bar = unbox_pointer(sch.find("bar"));
     auto expected = type{
       "bar",
       record_type{
@@ -411,7 +418,7 @@ TEST("parseable - with context") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto gob = unbox(sch.find("gob"));
+    auto gob = unbox_pointer(sch.find("gob"));
     auto expected = type{
       "gob",
       record_type{
@@ -480,9 +487,9 @@ TEST("parseable - with context") {
         {"attr_two"},
       },
     };
-    auto lplus = unbox(sch.find("lplus"));
+    auto lplus = unbox_pointer(sch.find("lplus"));
     CHECK_EQUAL(lplus, expected_lplus);
-    auto rplus = unbox(sch.find("rplus"));
+    auto rplus = unbox_pointer(sch.find("rplus"));
     CHECK_EQUAL(rplus, expected_rplus);
   }
   {
@@ -508,7 +515,7 @@ TEST("parseable - with context") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto bar = unbox(sch.find("bar"));
+    auto bar = unbox_pointer(sch.find("bar"));
     auto expected = type{
       "bar",
       record_type{
@@ -553,8 +560,8 @@ TEST("parseable - with context") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto derived1 = unbox(sch.find("derived1"));
-    auto derived2 = unbox(sch.find("derived2"));
+    auto derived1 = unbox_pointer(sch.find("derived1"));
+    auto derived2 = unbox_pointer(sch.find("derived2"));
     auto expected = type{
       "derived1",
       record_type{
@@ -594,7 +601,7 @@ TEST("parseable - overwriting with self reference") {
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
-    auto foo = unbox(sch.find("foo"));
+    auto foo = unbox_pointer(sch.find("foo"));
     auto expected = type{
       "foo",
       record_type{
@@ -603,7 +610,7 @@ TEST("parseable - overwriting with self reference") {
       },
     };
     CHECK_EQUAL(foo, expected);
-    auto bar = unbox(sch.find("bar"));
+    auto bar = unbox_pointer(sch.find("bar"));
     expected = type{
       "bar",
       type{

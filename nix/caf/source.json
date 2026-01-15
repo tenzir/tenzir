@@ -1,7 +1,7 @@
 {
   "owner": "tenzir",
   "repo": "actor-framework",
-  "rev": "539e413c3d4bd38877ea1762709f7a4472eee28c",
-  "hash": "sha256-xdunXfIQcR6EdYT8T0RxtpcdltWaEzN02SYRTJMKBCk=",
-  "version": "1.1.0-unstable-2026-01-07"
+  "rev": "86a5125ff4cf4b250dc7f1c5145fe86bec1eaa8e",
+  "hash": "sha256-Akz3oFaX3BUlaRhbmnIx+FASRElrUTvGgh0/apcdBh0=",
+  "version": "1.1.0-123-ga21907539"
 }

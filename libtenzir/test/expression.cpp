@@ -314,7 +314,7 @@ WITH_FIXTURE(fixture) {
 
   TEST("resolve") {
     using result_type = std::vector<std::pair<offset, predicate>>;
-    auto resolve_pred = [](auto&& x, offset o, type t) -> result_type {
+    auto resolve_pred = [this](auto&& x, offset o, type t) -> result_type {
       result_type result;
       auto pred = to<predicate>(x);
       auto resolved = type_resolver{t}(unbox(pred));
