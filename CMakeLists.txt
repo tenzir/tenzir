@@ -57,6 +57,23 @@ if ("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
   endmacro ()
 endif ()
 
+# -- Homebrew configuration mapping --------------------------------------------
+
+# Homebrew packages are typically built with Release configuration only, so
+# their CMake configs only export IMPORTED_LOCATION_RELEASE. When building with
+# other configurations (Debug, RelWithDebInfo), CMake can't find the imported
+# location and falls back to using the target name as a linker flag (e.g.,
+# -lgflags_shared), which fails. This mapping tells CMake to use the Release
+# configuration of imported targets when building other configurations.
+#
+# We also include an empty string "" as a fallback for packages that use
+# config-mode find_package but only set IMPORTED_LOCATION (no config suffix).
+if (APPLE)
+  set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release "")
+  set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release "")
+  set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL Release "")
+endif ()
+
 # Set a default build type if none was specified.
 set(default_build_type "Release")
 if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
