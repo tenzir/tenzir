@@ -109,7 +109,7 @@ endif ()
 
 # -- boost ---------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers filesystem url)
+find_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)
 
 # -- re2 -----------------------------------------------------------------------
 
@@ -135,8 +135,46 @@ endif()
 
 # -- folly ---------------------------------------------------------------------
 
-find_package(folly REQUIRED)
-find_package(glog REQUIRED)
+option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" OFF)
+if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  find_package(folly REQUIRED)
+  find_package(glog REQUIRED)
+  dependency_summary("folly" Folly::folly "Dependencies")
+else ()
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/folly/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "folly not found, either use -Dfolly_dir=... or initialize the"
+        " libtenzir/aux/folly submodule"
+    )
+  endif ()
+  # Configure folly build options
+  set(BUILD_TESTS OFF CACHE BOOL "")
+  set(BUILD_BENCHMARKS OFF CACHE BOOL "")
+  set(FOLLY_HAVE_LIBGFLAGS OFF CACHE BOOL "")
+  # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
+  set(FOLLY_HAVE_MALLOC_USABLE_SIZE OFF CACHE BOOL "")
+  # Point folly to our bundled fast_float.
+  if (TENZIR_ENABLE_BUNDLED_FASTFLOAT)
+    set(FASTFLOAT_INCLUDE_DIR
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/include>"
+      CACHE PATH "")
+  endif ()
+  # Find blake3 if available - folly uses __has_include(<blake3.h>) to compile
+  # blake3 support, so we must link against it when the header is found.
+  find_package(blake3 CONFIG QUIET)
+  if (blake3_FOUND)
+    list(APPEND FOLLY_LINK_LIBRARIES BLAKE3::blake3)
+  endif ()
+  add_subdirectory(aux/folly SYSTEM)
+  # Create the Folly::folly alias that find_package would provide
+  if (NOT TARGET Folly::folly)
+    add_library(Folly::folly ALIAS folly)
+  endif ()
+  # Set variable to include bundled folly in exports
+  set(_tenzir_bundled_folly folly folly_deps)
+  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/aux/folly" "Dependencies")
+endif ()
 
 # -- reproc --------------------------------------------------------------------
 
@@ -468,9 +506,11 @@ dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
 target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
-                                       Boost::url)
+                                       Boost::url Boost::context
+                                       Boost::program_options Boost::regex
+                                       Boost::thread)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url)")
+       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
@@ -480,8 +520,9 @@ dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against folly.
 target_link_libraries(libtenzir PUBLIC Folly::folly)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
-dependency_summary("folly" Folly::folly "Dependencies")
+if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
+endif ()
 
 # Link against reproc.
 target_link_libraries(libtenzir PUBLIC reproc++)
@@ -648,7 +689,7 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
-          ${_tenzir_bundled_pfs}
+          ${_tenzir_bundled_pfs} ${_tenzir_bundled_folly}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
