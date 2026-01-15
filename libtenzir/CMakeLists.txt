@@ -166,6 +166,22 @@ else ()
   else ()
     add_subdirectory(aux/folly)
   endif ()
+  # Pass SSE/AVX flags to folly to ensure F14 containers use the same intrinsics
+  # mode across all compilation units. Without this, folly's F14Table.cpp may be
+  # compiled with different SIMD settings than code using F14 headers, causing
+  # link errors due to F14LinkCheck mismatch.
+  # Note: folly_base is the OBJECT library containing the actual sources.
+  target_compile_options(
+    folly_base
+    PRIVATE
+      $<$<BOOL:${TENZIR_ENABLE_SSE_INSTRUCTIONS}>:-msse>
+      $<$<BOOL:${TENZIR_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
+      $<$<BOOL:${TENZIR_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
+      $<$<BOOL:${TENZIR_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
+      $<$<BOOL:${TENZIR_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
+      $<$<BOOL:${TENZIR_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
+      $<$<BOOL:${TENZIR_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
+      $<$<BOOL:${TENZIR_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
   # Create the Folly::folly alias that find_package would provide
   if (NOT TARGET Folly::folly)
     add_library(Folly::folly ALIAS folly)
