@@ -158,8 +158,8 @@ public:
   GenericIr() = default;
 
   static auto make(SharedDescription desc, ast::entity op,
-                   std::vector<ast::expression> args, compile_ctx ctx)
-    -> failure_or<GenericIr> {
+                   std::vector<ast::expression> args,
+                   compile_ctx ctx) -> failure_or<GenericIr> {
     for (auto& arg : args) {
       // TODO: This assumes that there are no subpipelines...
       TRY(arg.bind(ctx));
@@ -210,16 +210,40 @@ public:
           NamedArg{idx, Incomplete{assignment->right}});
       } else {
         // Positional argument.
-        if (positional_idx >= max_positional) {
+        // Check if this is a variadic argument position
+        auto is_variadic
+          = desc->variadic_index and positional_idx == *desc->variadic_index;
+
+        if (positional_idx >= max_positional and not is_variadic) {
           emit(diagnostic::error("too many positional arguments").primary(arg));
           continue;
         }
         result.args_.push_back(Incomplete{std::move(arg)});
-        ++positional_idx;
+        // Don't increment positional_idx if we're at the variadic position
+        if (not is_variadic) {
+          ++positional_idx;
+        }
       }
     }
     // Check for missing required positional arguments.
-    if (positional_idx < min_positional) {
+    // For variadic arguments, we need to check if we have at least one when
+    // required
+    auto actual_min_positional = min_positional;
+    if (desc->variadic_index
+        and *desc->variadic_index
+              < desc->first_optional.value_or(desc->positional.size())) {
+      // Variadic is required, so we need at least one argument at that position
+      // The check is: did we reach the variadic position?
+      if (positional_idx < min_positional
+          and result.args_.size() < min_positional) {
+        auto specifier
+          = min_positional == max_positional ? "exactly" : "at least";
+        emit(diagnostic::error("expected {} {} positional argument{}",
+                               specifier, min_positional,
+                               min_positional == 1 ? "" : "s")
+               .primary(result.op_));
+      }
+    } else if (positional_idx < min_positional) {
       auto specifier
         = min_positional == max_positional ? "exactly" : "at least";
       emit(diagnostic::error("expected {} {} positional argument{}", specifier,
@@ -274,8 +298,14 @@ public:
       match(
         std::move(arg),
         [&]<class T>(T x) {
-          TENZIR_ASSERT(idx < desc_->positional.size());
-          as<Setter<T>>(desc_->positional[idx].setter)(args, std::move(x));
+          // For variadic arguments, all args >= variadic_index map to
+          // variadic_index
+          auto pos_idx = idx;
+          if (desc_->variadic_index and idx >= *desc_->variadic_index) {
+            pos_idx = *desc_->variadic_index;
+          }
+          TENZIR_ASSERT(pos_idx < desc_->positional.size());
+          as<Setter<T>>(desc_->positional[pos_idx].setter)(args, std::move(x));
         },
         [](Incomplete) {
           TENZIR_UNREACHABLE();
@@ -310,8 +340,8 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
+  auto substitute(substitute_ctx ctx,
+                  bool instantiate) -> failure_or<void> override {
     // Helper to substitute an argument using its setter.
     auto substitute_arg = [&](Arg& arg, const AnySetter& setter,
                               bool is_named) -> failure_or<void> {
@@ -394,8 +424,13 @@ public:
     };
     // Substitute positional arguments.
     for (auto [idx, arg] : detail::enumerate(args_)) {
-      TENZIR_ASSERT(idx < desc_->positional.size());
-      TRY(substitute_arg(arg, desc_->positional[idx].setter, false));
+      // For variadic arguments, all args >= variadic_index map to variadic_index
+      auto pos_idx = idx;
+      if (desc_->variadic_index and idx >= *desc_->variadic_index) {
+        pos_idx = *desc_->variadic_index;
+      }
+      TENZIR_ASSERT(pos_idx < desc_->positional.size());
+      TRY(substitute_arg(arg, desc_->positional[pos_idx].setter, false));
     }
     // Substitute named arguments.
     for (auto& named_arg : named_args_) {

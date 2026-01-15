@@ -199,16 +199,17 @@ private:
 };
 
 struct DropArgs {
-  ast::expression field;
-  // std::vector<ast::field_path> fields;
+  std::vector<ast::expression> fields;
 };
 
 class Drop final : public Operator<table_slice, table_slice> {
 public:
   explicit Drop(DropArgs args) {
-    auto fp = ast::field_path::try_from(args.field);
-    TENZIR_ASSERT(fp);
-    fields_ = std::vector<ast::field_path>{*fp};
+    for (auto& field : args.fields) {
+      auto fp = ast::field_path::try_from(field);
+      TENZIR_ASSERT(fp);
+      fields_.push_back(*fp);
+    }
   }
 
   auto process(table_slice input, Push<table_slice>& push,
@@ -226,13 +227,13 @@ class plugin2 final : public virtual operator_plugin2<drop_operator2>,
 public:
   auto describe() const -> Description override {
     auto d = Describer<DropArgs, Drop>{};
-    auto field = d.positional("field", &DropArgs::field, "field");
+    auto fields = d.variadic("fields", &DropArgs::fields, "field");
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      TRY(auto value, ctx.get(field));
+      TRY(auto value, ctx.get(fields));
       auto fp = ast::field_path::try_from(value);
       if (! fp) {
         diagnostic::error("value must be a valid field path")
-          .primary(ctx.get_location(field).value())
+          .primary(ctx.get_location(fields).value())
           .note("value was {:?}", value)
           .emit(ctx);
         // TODO: map string -> field_path here

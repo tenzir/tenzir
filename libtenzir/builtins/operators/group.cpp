@@ -25,8 +25,8 @@ public:
     : over_{std::move(over)}, pipe_{std::move(pipe)}, let_id_{let_id} {
   }
 
-  auto process(table_slice input, Push<Output>& push,
-               OpCtx& ctx) -> Task<void> override {
+  auto process(table_slice input, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_UNUSED(push);
     // TODO
     auto key_value = ast::constant::kind{"hi"};
@@ -87,8 +87,8 @@ public:
     return "group_ir";
   }
 
-  auto substitute(substitute_ctx ctx,
-                  bool instantiate) -> failure_or<void> override {
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
     TRY(over_.substitute(ctx));
     // This operator instantiates the subpipeline on its own.
     (void)instantiate;
@@ -123,9 +123,8 @@ public:
     return "group";
   }
 
-  auto
-  compile(ast::invocation inv,
-          compile_ctx ctx) const -> failure_or<Box<ir::Operator>> override {
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<Box<ir::Operator>> override {
     TENZIR_ASSERT(inv.args.size() == 2);
     auto over = std::move(inv.args[0]);
     TRY(over.bind(ctx));
