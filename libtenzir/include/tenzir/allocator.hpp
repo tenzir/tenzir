@@ -358,6 +358,7 @@ concept allocator = requires(T t, std::size_t size, std::align_val_t alignment,
   { t.trim() } noexcept;
   { t.stats() } noexcept -> std::same_as<const stats&>;
   { t.actor_stats() } noexcept -> std::same_as<actor_stats_map>;
+  { t.has_actor_stats() } noexcept -> std::same_as<bool>;
   { t.backend() } noexcept -> std::same_as<enum backend>;
   { t.backend_name() } noexcept -> std::same_as<std::string_view>;
   { t.size(cptr) } noexcept -> std::same_as<std::size_t>;
@@ -493,6 +494,7 @@ struct polymorphic_allocator {
   virtual auto trim() noexcept -> void = 0;
   virtual auto stats() const noexcept -> const struct stats& = 0;
   virtual auto actor_stats() const noexcept -> detail::actor_stats_map = 0;
+  virtual auto has_actor_stats() const noexcept -> bool = 0;
   virtual auto backend() const noexcept -> enum backend = 0;
   virtual auto backend_name() const noexcept -> std::string_view = 0;
 };
@@ -787,6 +789,10 @@ public:
       return actor_stats_->read();
     }
     return {};
+  }
+
+  [[nodiscard]] auto has_actor_stats() const noexcept -> bool override {
+    return actor_stats_ != nullptr;
   }
 
   [[nodiscard]]

@@ -266,7 +266,80 @@ template <typename Function>
   }
   write_error("failed to lookup symbol ");
   write_error(name);
-  std::exit(EXIT_FAILURE);
+  std::_Exit(EXIT_FAILURE);
+}
+
+/// Bootstrap allocator for dlsym recursion prevention.
+/// dlsym may internally call malloc, which would cause infinite recursion
+/// when we're trying to look up the malloc symbol itself.
+/// We prevent this by setting an atomic flag when first trying to lookup a
+/// symbol and clearing it after success. Each allocation created by this has
+/// the layout: [size_t size][user data aligned to max_align_t]
+constexpr std::size_t bootstrap_buffer_size = 64 * 1024; // 64KB
+alignas(std::max_align_t) std::byte bootstrap_buffer[bootstrap_buffer_size];
+std::atomic<std::byte*> bootstrap_ptr{bootstrap_buffer};
+std::atomic<bool> in_dlsym_init{false};
+const bool needs_boostrap = arrow_allocator().has_actor_stats()
+                            or cpp_allocator().has_actor_stats()
+                            or c_allocator().has_actor_stats();
+
+auto is_bootstrap_ptr(void* ptr) noexcept -> bool {
+  return ptr >= bootstrap_buffer
+         && ptr < bootstrap_buffer + bootstrap_buffer_size;
+}
+
+auto bootstrap_malloc(std::size_t size) noexcept -> void* {
+  constexpr auto header_size = alignof(std::max_align_t);
+  static_assert(header_size >= sizeof(std::size_t));
+  // Align user size to max_align_t
+  const auto aligned_size
+    = (size + alignof(std::max_align_t) - 1) & ~(alignof(std::max_align_t) - 1);
+  const auto total_size = header_size + aligned_size;
+  auto* old = bootstrap_ptr.fetch_add(total_size, std::memory_order_relaxed);
+  if (old + total_size > bootstrap_buffer + bootstrap_buffer_size) {
+    write_error("bootstrap allocator exhausted\n");
+    std::_Exit(EXIT_FAILURE);
+  }
+  // Store size in header
+  *reinterpret_cast<std::size_t*>(old) = size;
+  return old + header_size;
+}
+
+auto bootstrap_usable_size(void* ptr) noexcept -> std::size_t {
+  constexpr auto header_size = alignof(std::max_align_t);
+  auto* header = static_cast<char*>(ptr) - header_size;
+  return *reinterpret_cast<std::size_t*>(header);
+}
+
+auto bootstrap_free(void* ptr) noexcept -> void {
+  const auto size = bootstrap_usable_size(ptr);
+  auto* current_tail = reinterpret_cast<std::byte*>(ptr) + size;
+  auto* new_tail
+    = reinterpret_cast<std::byte*>(ptr) - alignof(std::max_align_t);
+  bootstrap_ptr.compare_exchange_strong(current_tail, new_tail,
+                                        std::memory_order_release);
+}
+
+auto bootstrap_calloc(std::size_t count, std::size_t size) noexcept -> void* {
+  std::size_t total = 0;
+  if (multiply_overflows(count, size, total)) {
+    return nullptr;
+  }
+  auto* ptr = bootstrap_malloc(total);
+  if (ptr) {
+    std::memset(ptr, 0, total);
+  }
+  return ptr;
+}
+
+auto bootstrap_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
+  -> void* {
+  // Bootstrap allocator only provides max_align_t alignment.
+  if (alignment > alignof(std::max_align_t)) {
+    write_error("bootstrap allocator cannot satisfy alignment\n");
+    std::_Exit(EXIT_FAILURE);
+  }
+  return bootstrap_malloc(size);
 }
 
 } // namespace
@@ -280,8 +353,22 @@ auto native_malloc(std::size_t size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_malloc(size);
 #  else
+  // If we're in the middle of dlsym initialization, use bootstrap allocator
+  // to avoid infinite recursion (dlsym may call malloc internally).
+  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
+    return bootstrap_malloc(size);
+  }
   using function_type = void* (*)(std::size_t);
-  const static auto fn = lookup_symbol<function_type>("malloc");
+  constinit static function_type fn = nullptr;
+  if (fn == nullptr) [[unlikely]] {
+    if (needs_boostrap) {
+      in_dlsym_init.store(true, std::memory_order_relaxed);
+    }
+    fn = lookup_symbol<function_type>("malloc");
+    if (needs_boostrap) {
+      in_dlsym_init.store(false, std::memory_order_relaxed);
+    }
+  }
   return fn(size);
 #  endif
 }
@@ -295,9 +382,21 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_calloc(count, size);
 #  else
+  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
+    return bootstrap_calloc(count, size);
+  }
   using function_type = void* (*)(std::size_t, std::size_t);
-  const static auto fn = lookup_symbol<function_type>("calloc");
-  if (fn == nullptr) {
+  constinit static function_type fn = nullptr;
+  if (fn == nullptr) [[unlikely]] {
+    if (needs_boostrap) {
+      in_dlsym_init.store(true, std::memory_order_relaxed);
+    }
+    fn = lookup_symbol<function_type>("calloc");
+    if (needs_boostrap) {
+      in_dlsym_init.store(false, std::memory_order_relaxed);
+    }
+  }
+  if (fn == nullptr) [[unlikely]] {
     errno = ENOSYS;
     return nullptr;
   }
@@ -314,8 +413,32 @@ auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_realloc(ptr, new_size);
 #  else
+  // Handle bootstrap pointers: must use bootstrap allocator.
+  // Bootstrap memory is never freed, so we just abandon the old allocation.
+  if (is_bootstrap_ptr(ptr)) [[unlikely]] {
+    write_error("unexpected realloc of bootstrap pointer\n");
+    std::_Exit(EXIT_FAILURE);
+  }
+  // During dlsym init, use bootstrap allocator.
+  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
+    if (ptr == nullptr) {
+      return bootstrap_malloc(new_size);
+    }
+    // realloc with non-bootstrap ptr during init shouldn't happen.
+    write_error("unexpected realloc during dlsym init\n");
+    std::_Exit(EXIT_FAILURE);
+  }
   using function_type = void* (*)(void*, std::size_t);
-  const static auto fn = lookup_symbol<function_type>("realloc");
+  constinit static function_type fn = nullptr;
+  if (fn == nullptr) [[unlikely]] {
+    if (needs_boostrap) {
+      in_dlsym_init.store(true, std::memory_order_relaxed);
+    }
+    fn = lookup_symbol<function_type>("realloc");
+    if (needs_boostrap) {
+      in_dlsym_init.store(false, std::memory_order_relaxed);
+    }
+  }
   return fn(ptr, new_size);
 #  endif
 }
@@ -325,8 +448,26 @@ auto native_free(void* ptr) noexcept -> void {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   __real_free(ptr);
 #  else
+  // Bootstrap memory is never freed - just ignore.
+  if (is_bootstrap_ptr(ptr)) [[unlikely]] {
+    return bootstrap_free(ptr);
+  }
+  // During dlsym init, we might get a free call for something else.
+  // This shouldn't happen, but if it does, just ignore it.
+  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
+    return;
+  }
   using function_type = void (*)(void*);
-  static auto fn = lookup_symbol<function_type>("free");
+  static function_type fn = nullptr;
+  if (fn == nullptr) [[unlikely]] {
+    if (needs_boostrap) {
+      in_dlsym_init.store(true, std::memory_order_relaxed);
+    }
+    fn = lookup_symbol<function_type>("free");
+    if (needs_boostrap) {
+      in_dlsym_init.store(false, std::memory_order_relaxed);
+    }
+  }
   fn(ptr);
 #  endif
 }
@@ -342,8 +483,21 @@ auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_aligned_alloc(alignment, size);
 #  else
+  // During dlsym init, use bootstrap allocator.
+  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
+    return bootstrap_aligned_alloc(alignment, size);
+  }
   using function_type = void* (*)(std::size_t, std::size_t);
-  const static auto fn = lookup_symbol<function_type>("aligned_alloc");
+  static function_type fn = nullptr;
+  if (fn == nullptr) [[unlikely]] {
+    if (needs_boostrap) {
+      in_dlsym_init.store(true, std::memory_order_relaxed);
+    }
+    fn = lookup_symbol<function_type>("aligned_alloc");
+    if (needs_boostrap) {
+      in_dlsym_init.store(false, std::memory_order_relaxed);
+    }
+  }
   return fn(alignment, size);
 #  endif
 }
@@ -427,14 +581,28 @@ auto calloc_aligned(std::size_t count, std::size_t size,
 }
 
 auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
-  using function_type = std::size_t (*)(const void*);
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_malloc_usable_size(ptr);
 #  endif
+  // Handle bootstrap pointers.
+  if (is_bootstrap_ptr(const_cast<void*>(ptr))) {
+    return bootstrap_usable_size(const_cast<void*>(ptr));
+  }
+  using function_type = std::size_t (*)(const void*);
 #  if TENZIR_LINUX
-  const static auto fn = lookup_symbol<function_type>("malloc_usable_size");
+  static function_type fn = nullptr;
+  if (fn == nullptr) {
+    in_dlsym_init.store(true, std::memory_order_relaxed);
+    fn = lookup_symbol<function_type>("malloc_usable_size");
+    in_dlsym_init.store(false, std::memory_order_relaxed);
+  }
 #  elif TENZIR_MACOS
-  const static auto fn = lookup_symbol<function_type>("malloc_size");
+  static function_type fn = nullptr;
+  if (fn == nullptr) {
+    in_dlsym_init.store(true, std::memory_order_relaxed);
+    fn = lookup_symbol<function_type>("malloc_size");
+    in_dlsym_init.store(false, std::memory_order_relaxed);
+  }
 #  endif
   return fn(ptr);
 }
@@ -443,9 +611,6 @@ auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
 #endif
 
 namespace {
-auto write_error(const char* txt) noexcept -> void {
-  write(STDERR_FILENO, txt, strlen(txt));
-}
 
 auto enable_stats_impl(const char* env_name) noexcept -> bool {
   const auto env = ::getenv(env_name);
@@ -468,7 +633,7 @@ auto selected_backend_impl(const char* env_name) noexcept
     return backend::jemalloc;
 #else
     write_error("FATAL ERROR: selected allocator 'jemalloc' is not available");
-    std::exit(EXIT_FAILURE);
+    std::_Exit(EXIT_FAILURE);
 #endif
   }
   if (env_str == "mimalloc") {
@@ -476,7 +641,7 @@ auto selected_backend_impl(const char* env_name) noexcept
     return backend::mimalloc;
 #else
     write_error("FATAL ERROR: selected allocator 'mimalloc' is not available");
-    std::exit(EXIT_FAILURE);
+    std::_Exit(EXIT_FAILURE);
 #endif
   }
   if (env_str == "system") {
@@ -487,7 +652,7 @@ auto selected_backend_impl(const char* env_name) noexcept
   write_error("' = '");
   write_error(env_value);
   write_error("'\nknown values are 'mimalloc' and 'system'\n");
-  std::exit(EXIT_FAILURE);
+  std::_Exit(EXIT_FAILURE);
 }
 } // namespace
 
