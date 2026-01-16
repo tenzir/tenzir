@@ -436,6 +436,21 @@ auto from_file_state::query_files() -> void {
 }
 
 auto from_file_state::process_file(arrow::fs::FileInfo file) -> void {
+  // Clean up directory markers (S3/Azure only) when remove=true.
+  // Directory markers are 0-sized objects with keys ending in '/'.
+  if (args_.remove.inner && file.type() == arrow::fs::FileType::Directory) {
+    auto marker_path = file.path() + '/';
+#ifdef TENZIR_ENABLE_S3_SDK
+    if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
+      std::ignore = delete_file_s3(s3_fs, marker_path);
+    }
+#endif
+#ifdef ARROW_AZURE
+    if (auto* azure_fs = dynamic_cast<arrow::fs::AzureFileSystem*>(fs_.get())) {
+      std::ignore = delete_file_azure(azure_fs, marker_path);
+    }
+#endif
+  }
   if (file.IsFile() and matches(file.path(), glob_)) {
     if (args_.max_age) {
       if (file.mtime() == arrow::fs::kNoTime) {
