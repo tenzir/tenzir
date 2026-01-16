@@ -1,0 +1,8 @@
+created: 2026-01-16
+title: Tenzir Node v5.24.0
+intro: >-
+  This release adds XML parsing functions (`parse_xml` and `parse_winlog`) for analyzing
+  XML-formatted logs including Windows Event Logs. It also introduces the `parallel`
+  operator for parallel pipeline execution, fixes a socket leak in `from_http` that
+  could cause resource exhaustion, and includes several stability fixes for gRPC operators
+  and the pipeline API.
