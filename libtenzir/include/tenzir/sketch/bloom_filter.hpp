@@ -81,7 +81,7 @@ public:
 private:
   explicit bloom_filter(bloom_filter_params params);
 
-  mutable_bloom_filter_view view_;
+  bloom_filter_params params_;
   std::vector<uint64_t> bits_;
 };
 

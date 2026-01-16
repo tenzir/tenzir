@@ -996,7 +996,7 @@ public:
           .context(args_.make_ssl_context(ctrl))
           .accept(port, url)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
-          .max_connections(inner(args_.max_connections).value_or(100'000))
+          .max_connections(inner(args_.max_connections).value_or(10))
           .max_request_size(
             inner(args_.max_request_size).value_or(10 * 1024 * 1024))
           .start([&](caf::async::consumer_resource<http::request> cr) {
