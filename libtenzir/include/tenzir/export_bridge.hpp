@@ -53,4 +53,11 @@ auto spawn_and_link_export_bridge(
   std::unique_ptr<diagnostic_handler> diagnostics_handler)
   -> export_bridge_actor;
 
+/// Spawn an export bridge without linking to a parent actor.
+/// This is used by the new executor which doesn't run operators as actors.
+auto spawn_export_bridge(caf::actor_system& sys, expression expr,
+                         export_mode mode, filesystem_actor filesystem,
+                         std::unique_ptr<diagnostic_handler> diagnostics_handler)
+  -> export_bridge_actor;
+
 } // namespace tenzir

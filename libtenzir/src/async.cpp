@@ -345,10 +345,22 @@ private:
     //   this);
     try {
       TENZIR_INFO("-> pre start");
-      if constexpr (std::same_as<Output, void>) {
-        co_await op_->start(ctx_);
-      } else {
-        co_await op_->start(ctx_);
+      auto task = op_->start(ctx_);
+      auto start_result = co_await folly::coro::co_awaitTry(std::move(task));
+      TENZIR_WARN("-> start_result: hasValue={} hasException={}",
+                  start_result.hasValue(), start_result.hasException());
+      if (start_result.hasException()) {
+        auto& ew = start_result.exception();
+        TENZIR_WARN("-> exception_wrapper: bool={} has_exception_ptr={} "
+                    "class_name={}",
+                    static_cast<bool>(ew), ew.has_exception_ptr(),
+                    ew.class_name().toStdString());
+      }
+      TENZIR_ASSERT_ALWAYS(not start_result.hasException()
+                             or start_result.exception(),
+                           "op_->start() returned empty exception wrapper");
+      if (start_result.hasException()) {
+        start_result.exception().throw_exception();
       }
       TENZIR_INFO("-> post start");
       queue_.spawn([this] -> Task<AnyWrapper> {

@@ -73,8 +73,12 @@ struct Named {
 template <class Input, class Output>
 using Spawn = std::function<auto(std::any)->Box<Operator<Input, Output>>>;
 
-// TODO: Complete.
-using AnySpawn = variant<Spawn<table_slice, table_slice>>;
+// Variant for different operator spawn functions (matches AnyOperator).
+using AnySpawn
+  = variant<Spawn<void, chunk_ptr>, Spawn<void, table_slice>,
+            Spawn<chunk_ptr, chunk_ptr>, Spawn<chunk_ptr, table_slice>,
+            Spawn<table_slice, chunk_ptr>, Spawn<table_slice, table_slice>,
+            Spawn<table_slice, void>, Spawn<chunk_ptr, void>>;
 
 // FIXME: Do we need this?
 class Empty {
@@ -320,11 +324,14 @@ public:
   /// Add an operator implementation.
   template <class Impl>
   auto impl() -> void {
-    // TODO
-    desc_.spawns.push_back(
-      [](std::any args) -> Box<Operator<table_slice, table_slice>> {
-        return Impl{std::any_cast<Args>(std::move(args))};
-      });
+    std::invoke(
+      [&]<class Input, class Output>(Operator<Input, Output>*) {
+        desc_.spawns.push_back(Spawn<Input, Output>{
+          [](std::any args) -> Box<Operator<Input, Output>> {
+            return Impl{std::any_cast<Args>(std::move(args))};
+          }});
+      },
+      static_cast<Impl*>(nullptr));
   }
 
   auto docs(std::string url) -> void {

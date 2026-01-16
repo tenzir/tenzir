@@ -6,8 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/async/unbounded_queue.hpp>
 #include <tenzir/atoms.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -20,6 +23,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
 #include <tenzir/modules.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -29,6 +33,7 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
+#include <caf/actor_companion.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
@@ -37,12 +42,118 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/timespan.hpp>
 #include <caf/typed_event_based_actor.hpp>
-
-#include <queue>
+#include <folly/coro/Result.h>
+#include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::export_ {
 
 namespace {
+
+/// Diagnostic handler that writes to an unbounded queue for async-safe usage.
+class queued_diagnostic_handler final : public diagnostic_handler {
+public:
+  explicit queued_diagnostic_handler(
+    std::shared_ptr<UnboundedQueue<diagnostic>> queue)
+    : queue_{std::move(queue)} {
+  }
+
+  auto emit(diagnostic diag) -> void override {
+    queue_->enqueue(std::move(diag));
+  }
+
+private:
+  std::shared_ptr<UnboundedQueue<diagnostic>> queue_;
+};
+
+struct ExportArgs {
+  expression expr = trivially_true_expression();
+  export_mode mode;
+};
+
+class Export final : public Operator<void, table_slice> {
+public:
+  explicit Export(ExportArgs args)
+    : expr_{std::move(args.expr)}, mode_{args.mode} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    // NOTE: Due to a bug in clang on ARM64 Darwin, std::current_exception()
+    // returns nullptr when called from unhandled_exception(). We must catch
+    // exceptions explicitly and use co_yield co_error() to propagate them.
+    // See: https://github.com/llvm/llvm-project/issues/92121
+    std::exception_ptr captured_exception;
+    try {
+      co_await OperatorBase::start(ctx);
+      auto filesystem = ctx.actor_system().registry().get<filesystem_actor>(
+        "tenzir.filesystem");
+      if (not filesystem) {
+        TENZIR_WARN("did not get file system");
+        throw std::runtime_error("filesystem is null");
+      }
+      diag_queue_ = std::make_shared<UnboundedQueue<diagnostic>>();
+      auto bridge_dh = std::make_unique<queued_diagnostic_handler>(diag_queue_);
+      bridge_
+        = spawn_export_bridge(ctx.actor_system(), expr_, mode_,
+                              std::move(filesystem), std::move(bridge_dh));
+    } catch (...) {
+      captured_exception = std::current_exception();
+    }
+    if (captured_exception) {
+      co_yield folly::coro::co_error(
+        folly::exception_wrapper(captured_exception));
+    }
+  }
+
+  auto await_task() const -> Task<std::any> override {
+    if (done_) {
+      // TODO: Properly suspend.
+      co_await await_cancel();
+      TENZIR_UNREACHABLE();
+    }
+    co_return co_await async_mail(atom::get_v).request(bridge_);
+  }
+
+  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    // Drain any buffered diagnostics from the bridge
+    while (auto diag = diag_queue_->try_dequeue()) {
+      ctx.dh().emit(std::move(*diag));
+    }
+    auto expected
+      = std::any_cast<caf::expected<table_slice>>(std::move(result));
+    if (not expected) {
+      diagnostic::error(expected.error()).note("from export-bridge").emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    if (expected->rows() == 0) {
+      done_ = true;
+      co_return;
+    }
+    co_await push(std::move(*expected));
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+  ~Export() override {
+    if (bridge_) {
+      caf::anon_send_exit(bridge_, caf::exit_reason::user_shutdown);
+    }
+  }
+
+private:
+  expression expr_;
+  export_mode mode_;
+  export_bridge_actor bridge_;
+  std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
+  bool done_ = false;
+};
 
 class export_operator final : public crtp_operator<export_operator> {
 public:
@@ -142,10 +253,17 @@ private:
 };
 
 class export_plugin final : public virtual operator_plugin<export_operator>,
-                            public virtual operator_factory_plugin {
+                            public virtual operator_factory_plugin,
+                            public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto describe() const -> Description override {
+    // TODO: Add arguments for live, retro, internal, parallel
+    auto d = Describer<ExportArgs, Export>{};
+    return d.without_optimize();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

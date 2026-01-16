@@ -120,6 +120,17 @@ private:
   caf::message msg_;
 };
 
+template <class... Ts>
+auto async_mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
+  return AsyncMail<std::decay_t<Ts>...>{
+    caf::make_message(std::forward<Ts>(xs)...)};
+}
+
+/// Returns a task that never completes but can be cancelled.
+inline auto await_cancel() -> Task<void> {
+  return folly::coro::sleep(std::chrono::years{1});
+}
+
 #if 1
 // TODO: User proper types for this?
 using SubKey = data;
@@ -516,7 +527,14 @@ class OperatorBase {
 public:
   virtual auto start(OpCtx& ctx) -> Task<void> {
     // TODO: What if we don't restore? No data? Flag?
-    auto data = co_await ctx.load();
+    auto load_result = co_await folly::coro::co_awaitTry(ctx.load());
+    TENZIR_ASSERT_ALWAYS(not load_result.hasException()
+                           or load_result.exception(),
+                         "ctx.load() returned empty exception wrapper");
+    if (load_result.hasException()) {
+      load_result.exception().throw_exception();
+    }
+    auto data = std::move(load_result).value();
     if (not data) {
       co_return;
     }
