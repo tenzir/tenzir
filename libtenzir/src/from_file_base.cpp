@@ -27,7 +27,7 @@
 
 #ifdef ARROW_AZURE
 #  include <arrow/filesystem/azurefs.h>
-#  include <azure/storage/blobs/blob_client.hpp>
+#  include <azure/storage/blobs.hpp>
 #endif
 
 #include <utility>
