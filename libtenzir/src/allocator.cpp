@@ -276,7 +276,7 @@ template <typename Function>
 /// symbol and clearing it after success. Each allocation created by this has
 /// the layout: [size_t size][user data aligned to max_align_t]
 constexpr std::size_t bootstrap_buffer_size = 64 * 1024; // 64KB
-alignas(std::max_align_t) std::byte bootstrap_buffer[bootstrap_buffer_size];
+alignas(4096) std::byte bootstrap_buffer[bootstrap_buffer_size];
 std::atomic<std::byte*> bootstrap_ptr{bootstrap_buffer};
 std::atomic<bool> in_dlsym_init{false};
 const bool needs_boostrap = arrow_allocator().has_actor_stats()
@@ -300,24 +300,20 @@ auto bootstrap_malloc(std::size_t size) noexcept -> void* {
     write_error("bootstrap allocator exhausted\n");
     std::_Exit(EXIT_FAILURE);
   }
-  // Store size in header
-  *reinterpret_cast<std::size_t*>(old) = size;
-  return old + header_size;
+  // Store size immediately before user data
+  auto* user_ptr = old + header_size;
+  *reinterpret_cast<std::size_t*>(user_ptr - sizeof(std::size_t)) = size;
+  return user_ptr;
 }
 
 auto bootstrap_usable_size(void* ptr) noexcept -> std::size_t {
-  constexpr auto header_size = alignof(std::max_align_t);
-  auto* header = static_cast<char*>(ptr) - header_size;
-  return *reinterpret_cast<std::size_t*>(header);
+  return *reinterpret_cast<std::size_t*>(static_cast<char*>(ptr)
+                                         - sizeof(std::size_t));
 }
 
-auto bootstrap_free(void* ptr) noexcept -> void {
-  const auto size = bootstrap_usable_size(ptr);
-  auto* current_tail = reinterpret_cast<std::byte*>(ptr) + size;
-  auto* new_tail
-    = reinterpret_cast<std::byte*>(ptr) - alignof(std::max_align_t);
-  bootstrap_ptr.compare_exchange_strong(current_tail, new_tail,
-                                        std::memory_order_release);
+auto bootstrap_free(void*) noexcept -> void {
+  // Intentionally empty: bootstrap allocations are never freed.
+  // The 64KB buffer is sufficient for the short dlsym initialization phase.
 }
 
 auto bootstrap_calloc(std::size_t count, std::size_t size) noexcept -> void* {
@@ -334,12 +330,26 @@ auto bootstrap_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 
 auto bootstrap_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
-  // Bootstrap allocator only provides max_align_t alignment.
-  if (alignment > alignof(std::max_align_t)) {
-    write_error("bootstrap allocator cannot satisfy alignment\n");
+  if (alignment <= alignof(std::max_align_t)) {
+    return bootstrap_malloc(size);
+  }
+  if ((alignment & (alignment - 1)) != 0) {
+    return nullptr; // alignment must be power of two
+  }
+  // Layout: [padding][size_t size][user data aligned to `alignment`]
+  // Reserve: sizeof(size_t) + alignment-1 (for alignment) + size
+  const auto total_size = sizeof(std::size_t) + alignment - 1 + size;
+  auto* old = bootstrap_ptr.fetch_add(total_size, std::memory_order_relaxed);
+  if (old + total_size > bootstrap_buffer + bootstrap_buffer_size) {
+    write_error("bootstrap allocator exhausted\n");
     std::_Exit(EXIT_FAILURE);
   }
-  return bootstrap_malloc(size);
+  // Align (old + sizeof(size_t)) up to requested alignment
+  auto user_addr = reinterpret_cast<std::uintptr_t>(old) + sizeof(std::size_t);
+  auto aligned_addr = (user_addr + alignment - 1) & ~(alignment - 1);
+  // Store size immediately before aligned user pointer
+  *reinterpret_cast<std::size_t*>(aligned_addr - sizeof(std::size_t)) = size;
+  return reinterpret_cast<void*>(aligned_addr);
 }
 
 } // namespace
