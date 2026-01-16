@@ -107,6 +107,15 @@ if (ARROW_VERSION VERSION_GREATER_EQUAL "21.0.0")
   endif ()
 endif ()
 
+# -- aws sdk (for direct S3 object deletion) -----------------------------------
+
+if (ARROW_S3)
+  find_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)")
+  dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
+endif ()
+
 # -- boost ---------------------------------------------------------------------
 
 find_package(Boost REQUIRED COMPONENTS headers filesystem url)
@@ -443,6 +452,12 @@ dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY}
                                        ${ARROW_COMPUTE_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
+
+# Link against AWS SDK (for direct S3 deletion without Arrow directory markers).
+if (ARROW_S3)
+  target_link_libraries(libtenzir PRIVATE ${AWSSDK_LINK_LIBRARIES})
+  target_compile_definitions(libtenzir PRIVATE TENZIR_ENABLE_S3_SDK=1)
+endif ()
 
 # Link against Boost.
 target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
