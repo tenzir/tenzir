@@ -607,7 +607,7 @@ public:
               diagnostic::warning("save_tcp detected disconnection: {}",
                                   ec.message())
                 .emit(diagnostic_handler_);
-              pending_write_.emplace(write_rp_, chunk);
+              pending_write_.emplace(std::exchange(write_rp_, {}), chunk);
               handle_disconnection();
               return;
             }
