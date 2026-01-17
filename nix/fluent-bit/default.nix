@@ -38,7 +38,6 @@ stdenv.mkDerivation (finalAttrs: {
   patches = [
     ./fix-install-paths.patch
     ./fix-log-level-check.patch
-    #./fix-strerror_r.patch
   ];
 
   # `src/CMakeLists.txt` installs fluent-bit's systemd unit files at the path in the `SYSTEMD_UNITDIR` CMake variable.
