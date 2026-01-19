@@ -18,6 +18,18 @@
 #include <arrow/util/future.h>
 #include <caf/actor_from_state.hpp>
 
+#ifdef ARROW_S3
+#  include <arrow/filesystem/s3fs.h>
+#  include <aws/s3/S3Client.h>
+#  include <aws/s3/S3ClientConfiguration.h>
+#  include <aws/s3/model/DeleteObjectRequest.h>
+#endif
+
+#ifdef ARROW_AZURE
+#  include <arrow/filesystem/azurefs.h>
+#  include <azure/storage/blobs.hpp>
+#endif
+
 #include <utility>
 
 namespace tenzir {
@@ -93,6 +105,78 @@ constexpr auto extract_root_path(const glob& glob_, const std::string& expanded)
   }
   return "/";
 }
+
+#ifdef ARROW_S3
+/// Parse S3 path into bucket and key.
+/// Arrow paths look like "bucket/path/to/file.txt".
+auto parse_s3_path(std::string_view path)
+  -> std::pair<std::string, std::string> {
+  auto slash = path.find('/');
+  if (slash == std::string_view::npos) {
+    return {std::string{path}, ""};
+  }
+  return {std::string{path.substr(0, slash)},
+          std::string{path.substr(slash + 1)}};
+}
+
+/// Delete an S3 object directly using the AWS SDK, bypassing Arrow's DeleteFile
+/// which creates 0-sized directory markers.
+auto delete_file_s3(arrow::fs::S3FileSystem* fs, const std::string& path)
+  -> arrow::Status {
+  const auto& options = fs->options();
+  auto config = Aws::S3::S3ClientConfiguration{};
+  config.region = options.region;
+  if (not options.endpoint_override.empty()) {
+    config.endpointOverride = options.endpoint_override;
+    // Use path-style addressing for custom endpoints (e.g., Minio).
+    config.useVirtualAddressing = options.force_virtual_addressing;
+  }
+  config.scheme = options.scheme == "http" ? Aws::Http::Scheme::HTTP
+                                           : Aws::Http::Scheme::HTTPS;
+  // Get credentials from Arrow's credential provider.
+  auto creds_provider = options.credentials_provider;
+  auto [bucket, key] = parse_s3_path(path);
+  // Arrow initializes the AWS SDK, so we can rely on that.
+  auto client = Aws::S3::S3Client{creds_provider, nullptr, config};
+  auto request = Aws::S3::Model::DeleteObjectRequest{};
+  request.SetBucket(bucket);
+  request.SetKey(key);
+  auto outcome = client.DeleteObject(request);
+  if (not outcome.IsSuccess()) {
+    const auto& error = outcome.GetError();
+    return arrow::Status::IOError("failed to delete S3 object: ",
+                                  error.GetMessage());
+  }
+  return arrow::Status::OK();
+}
+#endif // ARROW_S3
+
+#ifdef ARROW_AZURE
+/// Delete an Azure blob directly using the Azure SDK, bypassing Arrow's
+/// DeleteFile which creates 0-sized directory markers.
+auto delete_file_azure(arrow::fs::AzureFileSystem* fs, const std::string& path)
+  -> arrow::Status {
+  const auto& options = fs->options();
+  // Parse path: "container/blob_path"
+  auto slash = path.find('/');
+  auto container = path.substr(0, slash);
+  auto blob_path = slash != std::string::npos ? path.substr(slash + 1) : "";
+  // Create blob client from Arrow options.
+  auto service_client_result = options.MakeBlobServiceClient();
+  if (not service_client_result.ok()) {
+    return service_client_result.status();
+  }
+  auto service_client = std::move(*service_client_result);
+  auto container_client = service_client->GetBlobContainerClient(container);
+  auto blob_client = container_client.GetBlobClient(blob_path);
+  try {
+    blob_client.Delete();
+  } catch (const Azure::Storage::StorageException& e) {
+    return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
+  }
+  return arrow::Status::OK();
+}
+#endif // ARROW_AZURE
 
 } // namespace
 
@@ -559,22 +643,30 @@ auto from_file_state::start_stream(
         });
     }
     if (args_.remove.inner) {
-      // There is no async call available.
-      auto status = fs_->DeleteFile(path);
+      // Use SDK-based deletion for S3/Azure to avoid Arrow's directory marker
+      // creation. Arrow's DeleteFile() creates a 0-sized "directory marker"
+      // object in the parent directory after deletion, which is undesirable.
+      auto status = arrow::Status::OK();
+#ifdef ARROW_S3
+      if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
+        status = delete_file_s3(s3_fs, path);
+      } else
+#endif
+#ifdef ARROW_AZURE
+        if (auto* azure_fs
+            = dynamic_cast<arrow::fs::AzureFileSystem*>(fs_.get())) {
+        status = delete_file_azure(azure_fs, path);
+      } else
+#endif
+      {
+        // Fall back to Arrow's DeleteFile for other filesystems.
+        status = fs_->DeleteFile(path);
+      }
       if (not status.ok()) {
-        auto message = status.ToStringWithoutContextLines();
-        if (dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())
-            and message.contains("ACCESS_DENIED during PutObject")) {
-          // When deleting the last file in an S3 directory, Arrow will try to
-          // add a zero-sized object to keep the directory around. This can fail
-          // if the necessary permissions were not granted. But because the
-          // actual delete goes through first, we can just ignore this error.
-        } else {
-          diagnostic::warning("failed to remove `{}`", path)
-            .primary(args_.url)
-            .note(std::move(message))
-            .emit(*dh_);
-        }
+        diagnostic::warning("failed to remove `{}`", path)
+          .primary(args_.url)
+          .note(status.ToStringWithoutContextLines())
+          .emit(*dh_);
       }
     }
     check_jobs_and_termination();
