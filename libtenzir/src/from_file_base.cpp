@@ -18,7 +18,7 @@
 #include <arrow/util/future.h>
 #include <caf/actor_from_state.hpp>
 
-#ifdef TENZIR_ENABLE_S3_SDK
+#ifdef ARROW_S3
 #  include <arrow/filesystem/s3fs.h>
 #  include <aws/s3/S3Client.h>
 #  include <aws/s3/S3ClientConfiguration.h>
@@ -106,7 +106,7 @@ constexpr auto extract_root_path(const glob& glob_, const std::string& expanded)
   return "/";
 }
 
-#ifdef TENZIR_ENABLE_S3_SDK
+#ifdef ARROW_S3
 /// Parse S3 path into bucket and key.
 /// Arrow paths look like "bucket/path/to/file.txt".
 auto parse_s3_path(std::string_view path)
@@ -149,7 +149,7 @@ auto delete_file_s3(arrow::fs::S3FileSystem* fs, const std::string& path)
   }
   return arrow::Status::OK();
 }
-#endif // TENZIR_ENABLE_S3_SDK
+#endif // ARROW_S3
 
 #ifdef ARROW_AZURE
 /// Delete an Azure blob directly using the Azure SDK, bypassing Arrow's
@@ -647,7 +647,7 @@ auto from_file_state::start_stream(
       // creation. Arrow's DeleteFile() creates a 0-sized "directory marker"
       // object in the parent directory after deletion, which is undesirable.
       auto status = arrow::Status::OK();
-#ifdef TENZIR_ENABLE_S3_SDK
+#ifdef ARROW_S3
       if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
         status = delete_file_s3(s3_fs, path);
       } else

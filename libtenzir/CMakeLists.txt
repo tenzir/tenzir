@@ -116,6 +116,16 @@ if (ARROW_S3)
   dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 endif ()
 
+# -- azure sdk (for direct Azure blob deletion) --------------------------------
+
+if (ARROW_AZURE)
+  find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(azure-storage-blobs-cpp CONFIG REQUIRED)")
+  dependency_summary("Azure Storage Blobs" Azure::azure-storage-blobs
+                     "Dependencies")
+endif ()
+
 # -- boost ---------------------------------------------------------------------
 
 find_package(Boost REQUIRED COMPONENTS headers filesystem url)
@@ -456,7 +466,11 @@ dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 # Link against AWS SDK (for direct S3 deletion without Arrow directory markers).
 if (ARROW_S3)
   target_link_libraries(libtenzir PRIVATE ${AWSSDK_LINK_LIBRARIES})
-  target_compile_definitions(libtenzir PRIVATE TENZIR_ENABLE_S3_SDK=1)
+endif ()
+
+# Link against Azure SDK (for direct Azure blob deletion without directory markers).
+if (ARROW_AZURE)
+  target_link_libraries(libtenzir PRIVATE Azure::azure-storage-blobs)
 endif ()
 
 # Link against Boost.

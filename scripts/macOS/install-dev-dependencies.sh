@@ -6,6 +6,7 @@ brew --version
 brew install --overwrite \
   apache-arrow \
   aws-sdk-cpp \
+  azure-storage-blobs-cpp \
   bash \
   boost \
   c-ares \
