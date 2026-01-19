@@ -440,7 +440,7 @@ auto from_file_state::process_file(arrow::fs::FileInfo file) -> void {
   // Directory markers are 0-sized objects with keys ending in '/'.
   if (args_.remove.inner && file.type() == arrow::fs::FileType::Directory) {
     auto marker_path = file.path() + '/';
-#ifdef TENZIR_ENABLE_S3_SDK
+#ifdef ARROW_S3
     if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
       std::ignore = delete_file_s3(s3_fs, marker_path);
     }
