@@ -258,6 +258,16 @@ namespace system {
 
 namespace {
 
+#  if defined(__GLIBC__) && TENZIR_LINUX
+extern "C" {
+void* __libc_malloc(std::size_t);
+void* __libc_calloc(std::size_t, std::size_t);
+void* __libc_realloc(void*, std::size_t);
+void __libc_free(void*);
+void* __libc_memalign(std::size_t, std::size_t);
+}
+#  endif
+
 template <typename Function>
 [[nodiscard]] auto lookup_symbol(const char* name) noexcept -> Function {
   dlerror();
@@ -269,88 +279,12 @@ template <typename Function>
   std::_Exit(EXIT_FAILURE);
 }
 
-/// Bootstrap allocator for dlsym recursion prevention.
-/// dlsym may internally call malloc, which would cause infinite recursion
-/// when we're trying to look up the malloc symbol itself.
-/// We prevent this by setting an atomic flag when first trying to lookup a
-/// symbol and clearing it after success. Each allocation created by this has
-/// the layout: [size_t size][user data aligned to max_align_t]
-constexpr std::size_t bootstrap_buffer_size = 64 * 1024; // 64KB
-alignas(4096) std::byte bootstrap_buffer[bootstrap_buffer_size];
-std::atomic<std::byte*> bootstrap_ptr{bootstrap_buffer};
-std::atomic<bool> in_dlsym_init{false};
-const bool needs_boostrap = arrow_allocator().has_actor_stats()
-                            or cpp_allocator().has_actor_stats()
-                            or c_allocator().has_actor_stats();
-
-auto is_bootstrap_ptr(void* ptr) noexcept -> bool {
-  return ptr >= bootstrap_buffer
-         && ptr < bootstrap_buffer + bootstrap_buffer_size;
-}
-
-auto bootstrap_malloc(std::size_t size) noexcept -> void* {
-  constexpr auto header_size = alignof(std::max_align_t);
-  static_assert(header_size >= sizeof(std::size_t));
-  // Align user size to max_align_t
-  const auto aligned_size
-    = (size + alignof(std::max_align_t) - 1) & ~(alignof(std::max_align_t) - 1);
-  const auto total_size = header_size + aligned_size;
-  auto* old = bootstrap_ptr.fetch_add(total_size, std::memory_order_relaxed);
-  if (old + total_size > bootstrap_buffer + bootstrap_buffer_size) {
-    write_error("bootstrap allocator exhausted\n");
-    std::_Exit(EXIT_FAILURE);
-  }
-  // Store size immediately before user data
-  auto* user_ptr = old + header_size;
-  *reinterpret_cast<std::size_t*>(user_ptr - sizeof(std::size_t)) = size;
-  return user_ptr;
-}
-
-auto bootstrap_usable_size(void* ptr) noexcept -> std::size_t {
-  return *reinterpret_cast<std::size_t*>(static_cast<char*>(ptr)
-                                         - sizeof(std::size_t));
-}
-
-auto bootstrap_free(void*) noexcept -> void {
-  // Intentionally empty: bootstrap allocations are never freed.
-  // The 64KB buffer is sufficient for the short dlsym initialization phase.
-}
-
-auto bootstrap_calloc(std::size_t count, std::size_t size) noexcept -> void* {
-  std::size_t total = 0;
-  if (multiply_overflows(count, size, total)) {
-    return nullptr;
-  }
-  auto* ptr = bootstrap_malloc(total);
-  if (ptr) {
-    std::memset(ptr, 0, total);
-  }
-  return ptr;
-}
-
-auto bootstrap_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
-  -> void* {
-  if (alignment <= alignof(std::max_align_t)) {
-    return bootstrap_malloc(size);
-  }
-  if ((alignment & (alignment - 1)) != 0) {
-    return nullptr; // alignment must be power of two
-  }
-  // Layout: [padding][size_t size][user data aligned to `alignment`]
-  // Reserve: sizeof(size_t) + alignment-1 (for alignment) + size
-  const auto total_size = sizeof(std::size_t) + alignment - 1 + size;
-  auto* old = bootstrap_ptr.fetch_add(total_size, std::memory_order_relaxed);
-  if (old + total_size > bootstrap_buffer + bootstrap_buffer_size) {
-    write_error("bootstrap allocator exhausted\n");
-    std::_Exit(EXIT_FAILURE);
-  }
-  // Align (old + sizeof(size_t)) up to requested alignment
-  auto user_addr = reinterpret_cast<std::uintptr_t>(old) + sizeof(std::size_t);
-  auto aligned_addr = (user_addr + alignment - 1) & ~(alignment - 1);
-  // Store size immediately before aligned user pointer
-  *reinterpret_cast<std::size_t*>(aligned_addr - sizeof(std::size_t)) = size;
-  return reinterpret_cast<void*>(aligned_addr);
-}
+using malloc_function_type = void* (*)(std::size_t);
+using calloc_function_type = void* (*)(std::size_t, std::size_t);
+using realloc_function_type = void* (*)(void*, std::size_t);
+using free_function_type = void (*)(void*);
+using aligned_alloc_function_type = void* (*)(std::size_t, std::size_t);
+using malloc_usable_size_function_type = std::size_t (*)(const void*);
 
 } // namespace
 
@@ -362,24 +296,17 @@ auto bootstrap_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
 auto native_malloc(std::size_t size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_malloc(size);
+#  elif TENZIR_LINUX
+#    if defined(__GLIBC__)
+  return __libc_malloc(size);
+#    else
+#      error "native_malloc requires glibc on Linux"
+#    endif
+#  elif TENZIR_MACOS
+  static auto native_malloc_fn = lookup_symbol<malloc_function_type>("malloc");
+  return native_malloc_fn(size);
 #  else
-  // If we're in the middle of dlsym initialization, use bootstrap allocator
-  // to avoid infinite recursion (dlsym may call malloc internally).
-  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
-    return bootstrap_malloc(size);
-  }
-  using function_type = void* (*)(std::size_t);
-  constinit static function_type fn = nullptr;
-  if (fn == nullptr) [[unlikely]] {
-    if (needs_boostrap) {
-      in_dlsym_init.store(true, std::memory_order_relaxed);
-    }
-    fn = lookup_symbol<function_type>("malloc");
-    if (needs_boostrap) {
-      in_dlsym_init.store(false, std::memory_order_relaxed);
-    }
-  }
-  return fn(size);
+#    error "native_malloc requires a supported platform"
 #  endif
 }
 
@@ -391,26 +318,17 @@ auto native_malloc(std::size_t size) noexcept -> void* {
 auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_calloc(count, size);
+#  elif TENZIR_LINUX
+#    if defined(__GLIBC__)
+  return __libc_calloc(count, size);
+#    else
+#      error "native_calloc requires glibc on Linux"
+#    endif
+#  elif TENZIR_MACOS
+  static auto native_calloc_fn = lookup_symbol<calloc_function_type>("calloc");
+  return native_calloc_fn(count, size);
 #  else
-  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
-    return bootstrap_calloc(count, size);
-  }
-  using function_type = void* (*)(std::size_t, std::size_t);
-  constinit static function_type fn = nullptr;
-  if (fn == nullptr) [[unlikely]] {
-    if (needs_boostrap) {
-      in_dlsym_init.store(true, std::memory_order_relaxed);
-    }
-    fn = lookup_symbol<function_type>("calloc");
-    if (needs_boostrap) {
-      in_dlsym_init.store(false, std::memory_order_relaxed);
-    }
-  }
-  if (fn == nullptr) [[unlikely]] {
-    errno = ENOSYS;
-    return nullptr;
-  }
-  return fn(count, size);
+#    error "native_calloc requires a supported platform"
 #  endif
 }
 
@@ -422,34 +340,18 @@ auto native_calloc(std::size_t count, std::size_t size) noexcept -> void* {
 auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_realloc(ptr, new_size);
+#  elif TENZIR_LINUX
+#    if defined(__GLIBC__)
+  return __libc_realloc(ptr, new_size);
+#    else
+#      error "native_realloc requires glibc on Linux"
+#    endif
+#  elif TENZIR_MACOS
+  static auto native_realloc_fn
+    = lookup_symbol<realloc_function_type>("realloc");
+  return native_realloc_fn(ptr, new_size);
 #  else
-  // Handle bootstrap pointers: must use bootstrap allocator.
-  // Bootstrap memory is never freed, so we just abandon the old allocation.
-  if (is_bootstrap_ptr(ptr)) [[unlikely]] {
-    write_error("unexpected realloc of bootstrap pointer\n");
-    std::_Exit(EXIT_FAILURE);
-  }
-  // During dlsym init, use bootstrap allocator.
-  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
-    if (ptr == nullptr) {
-      return bootstrap_malloc(new_size);
-    }
-    // realloc with non-bootstrap ptr during init shouldn't happen.
-    write_error("unexpected realloc during dlsym init\n");
-    std::_Exit(EXIT_FAILURE);
-  }
-  using function_type = void* (*)(void*, std::size_t);
-  constinit static function_type fn = nullptr;
-  if (fn == nullptr) [[unlikely]] {
-    if (needs_boostrap) {
-      in_dlsym_init.store(true, std::memory_order_relaxed);
-    }
-    fn = lookup_symbol<function_type>("realloc");
-    if (needs_boostrap) {
-      in_dlsym_init.store(false, std::memory_order_relaxed);
-    }
-  }
-  return fn(ptr, new_size);
+#    error "native_realloc requires a supported platform"
 #  endif
 }
 
@@ -457,28 +359,17 @@ auto native_realloc(void* ptr, std::size_t new_size) noexcept -> void* {
 auto native_free(void* ptr) noexcept -> void {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   __real_free(ptr);
+#  elif TENZIR_LINUX
+#    if defined(__GLIBC__)
+  __libc_free(ptr);
+#    else
+#      error "native_free requires glibc on Linux"
+#    endif
+#  elif TENZIR_MACOS
+  static auto native_free_fn = lookup_symbol<free_function_type>("free");
+  native_free_fn(ptr);
 #  else
-  // Bootstrap memory is never freed - just ignore.
-  if (is_bootstrap_ptr(ptr)) [[unlikely]] {
-    return bootstrap_free(ptr);
-  }
-  // During dlsym init, we might get a free call for something else.
-  // This shouldn't happen, but if it does, just ignore it.
-  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
-    return;
-  }
-  using function_type = void (*)(void*);
-  static function_type fn = nullptr;
-  if (fn == nullptr) [[unlikely]] {
-    if (needs_boostrap) {
-      in_dlsym_init.store(true, std::memory_order_relaxed);
-    }
-    fn = lookup_symbol<function_type>("free");
-    if (needs_boostrap) {
-      in_dlsym_init.store(false, std::memory_order_relaxed);
-    }
-  }
-  fn(ptr);
+#    error "native_free requires a supported platform"
 #  endif
 }
 
@@ -492,23 +383,18 @@ auto native_aligned_alloc(std::size_t alignment, std::size_t size) noexcept
   -> void* {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_aligned_alloc(alignment, size);
+#  elif TENZIR_LINUX
+#    if defined(__GLIBC__)
+  return __libc_memalign(alignment, size);
+#    else
+#      error "native_aligned_alloc requires glibc on Linux"
+#    endif
+#  elif TENZIR_MACOS
+  static auto native_aligned_alloc_fn
+    = lookup_symbol<aligned_alloc_function_type>("aligned_alloc");
+  return native_aligned_alloc_fn(alignment, size);
 #  else
-  // During dlsym init, use bootstrap allocator.
-  if (in_dlsym_init.load(std::memory_order_relaxed)) [[unlikely]] {
-    return bootstrap_aligned_alloc(alignment, size);
-  }
-  using function_type = void* (*)(std::size_t, std::size_t);
-  static function_type fn = nullptr;
-  if (fn == nullptr) [[unlikely]] {
-    if (needs_boostrap) {
-      in_dlsym_init.store(true, std::memory_order_relaxed);
-    }
-    fn = lookup_symbol<function_type>("aligned_alloc");
-    if (needs_boostrap) {
-      in_dlsym_init.store(false, std::memory_order_relaxed);
-    }
-  }
-  return fn(alignment, size);
+#    error "native_aligned_alloc requires a supported platform"
 #  endif
 }
 
@@ -547,7 +433,7 @@ auto realloc_aligned(void* ptr, std::size_t new_size,
   // Compute the size we need to copy.
   const auto copy_size
     = std::min(new_size, native_malloc_usable_size(new_ptr_happy));
-  // Make an aligned alloaction
+  // Make an aligned allocation
   auto* new_ptr_expensive = malloc_aligned(new_size, alignment);
   if (not new_ptr_expensive) {
     return nullptr;
@@ -593,28 +479,22 @@ auto calloc_aligned(std::size_t count, std::size_t size,
 auto native_malloc_usable_size(const void* ptr) noexcept -> std::size_t {
 #  if TENZIR_ENABLE_STATIC_EXECUTABLE && ! TENZIR_MACOS
   return __real_malloc_usable_size(ptr);
-#  endif
-  // Handle bootstrap pointers.
-  if (is_bootstrap_ptr(const_cast<void*>(ptr))) {
-    return bootstrap_usable_size(const_cast<void*>(ptr));
+#  elif TENZIR_LINUX
+  static malloc_usable_size_function_type native_malloc_usable_size_fn
+    = nullptr;
+  if (native_malloc_usable_size_fn == nullptr) [[unlikely]] {
+    native_malloc_usable_size_fn
+      = lookup_symbol<malloc_usable_size_function_type>("malloc_usable_size");
   }
-  using function_type = std::size_t (*)(const void*);
-#  if TENZIR_LINUX
-  static function_type fn = nullptr;
-  if (fn == nullptr) {
-    in_dlsym_init.store(true, std::memory_order_relaxed);
-    fn = lookup_symbol<function_type>("malloc_usable_size");
-    in_dlsym_init.store(false, std::memory_order_relaxed);
-  }
+  TENZIR_ALLOCATOR_ASSERT(native_malloc_usable_size_fn != nullptr);
+  return native_malloc_usable_size_fn(ptr);
 #  elif TENZIR_MACOS
-  static function_type fn = nullptr;
-  if (fn == nullptr) {
-    in_dlsym_init.store(true, std::memory_order_relaxed);
-    fn = lookup_symbol<function_type>("malloc_size");
-    in_dlsym_init.store(false, std::memory_order_relaxed);
-  }
+  static auto native_malloc_usable_size_fn
+    = lookup_symbol<malloc_usable_size_function_type>("malloc_size");
+  return native_malloc_usable_size_fn(ptr);
+#  else
+#    error "native_malloc_usable_size requires a supported platform"
 #  endif
-  return fn(ptr);
 }
 
 } // namespace system
@@ -675,9 +555,20 @@ auto enable_stats(const char* env_name) noexcept -> bool {
 
 auto enable_actor_stats(const char* env_name) noexcept -> bool {
   if (enable_stats_impl(env_name)) {
+#if TENZIR_MACOS == 1
+    write_error("cannot enable allocator actor stats tracking on MacOS");
+    std::_Exit(EXIT_FAILURE);
+#endif
     return true;
   }
-  return enable_stats_impl("TENZIR_ALLOC_ACTOR_STATS");
+  if (enable_stats_impl("TENZIR_ALLOC_ACTOR_STATS")) {
+#if TENZIR_MACOS == 1
+    write_error("cannot enable allocator actor stats tracking on MacOS");
+    std::_Exit(EXIT_FAILURE);
+#endif
+    return true;
+  }
+  return false;
 }
 
 auto selected_backend(const char* var_name) noexcept -> enum backend {
