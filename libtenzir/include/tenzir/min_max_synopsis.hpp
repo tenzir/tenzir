@@ -52,13 +52,20 @@ public:
     };
     auto membership = [&]() -> std::optional<bool> {
       if (auto xs = try_as<view<list>>(&rhs)) {
+        auto outer_result = std::optional<bool>{false};
         for (auto x : **xs) {
           auto result = do_lookup(relational_operator::equal, x);
           if (result && *result) {
+            // Partition definitely contains at least one element.
             return true;
           }
+          if (not result) {
+            // Partition may contain at least one element, so it
+            // cannot be discarded at all.
+            outer_result.reset();
+          }
         }
-        return false;
+        return outer_result;
       }
       return {};
     };
@@ -67,8 +74,10 @@ public:
         return membership();
       case relational_operator::not_in:
         if (auto result = membership()) {
-          return ! *result;
+          // Invert the result if we are sure.
+          return not *result;
         } else {
+          // May or may not contain the elements.
           return result;
         }
       case relational_operator::equal:
@@ -128,7 +137,7 @@ private:
     // Thus, for range comparisons we need to test `min op rhs || max op rhs`.
     switch (op) {
       default:
-        TENZIR_ASSERT(! "unsupported operator");
+        TENZIR_ASSERT(not "unsupported operator");
         return {};
       case relational_operator::equal:
         // If the value is either the min or the max we know that it must be

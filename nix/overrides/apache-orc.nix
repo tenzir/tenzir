@@ -1,9 +1,8 @@
 {
   apache-orc,
   fetchpatch2,
-  protobuf,
 }:
-(apache-orc.overrideAttrs (orig: {
+apache-orc.overrideAttrs (orig: {
   patches = (orig.patches or [ ]) ++ [
     (fetchpatch2 {
       name = "apache-orc-protobuf-31-compat.patch";
@@ -11,7 +10,4 @@
       hash = "sha256-JOcTYQ8e+W5oJ9SiQJHGnWaxLTTzJHST901tJnFhK6M=";
     })
   ];
-})).override
-  {
-    protobuf_30 = protobuf;
-  }
+})

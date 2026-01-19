@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -281,6 +282,20 @@ public:
     auto context = grpc::ClientContext{};
     auto completion_queue = grpc::CompletionQueue{};
     auto reader = stub->AsyncQuery(&context, args, &completion_queue, nullptr);
+    auto cleanup_guard = detail::scope_guard{[&]() noexcept {
+      auto status = grpc::Status{};
+      reader->Finish(&status, nullptr);
+      // Shut down the completion queue to signal no more operations.
+      completion_queue.Shutdown();
+      // Drain remaining events including the Finish event.
+      void* tag = nullptr;
+      bool ok = false;
+      while (completion_queue.Next(&tag, &ok)) {
+        // Continue draining until all events are processed.
+      }
+      (void)status;
+      (void)ok;
+    }};
     auto done = false;
     auto read = true;
     auto response = proto::VQLResponse{};
@@ -343,13 +358,7 @@ public:
         }
       }
     }
-    auto status = grpc::Status{};
-    reader->Finish(&status, nullptr);
-    if (not status.ok()) {
-      diagnostic::warning("failed to finish Velociraptor gRPC stream")
-        .note("{}", status.error_message())
-        .emit(ctrl.diagnostics());
-    }
+    cleanup_guard.trigger();
   }
 
   auto name() const -> std::string override {

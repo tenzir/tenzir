@@ -9,6 +9,7 @@
 #include "tenzir/multi_series_builder.hpp"
 
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -118,12 +119,38 @@ public:
         }
         std::move(h).ack();
       });
+    auto session_guard = detail::scope_guard{[&]() noexcept {
+      if (not session.valid()) {
+        return;
+      }
+      if (not session.is_ready()) {
+        // Initiate cancellation of the subscription.
+        session.cancel();
+      }
+      // Always wait for the session to fully stop. This is critical to ensure
+      // that gRPC background threads are no longer accessing captured locals
+      // (builder_mut, msb, args_) before they are destroyed.
+      auto status = session.get();
+      if (not status.ok()
+          and status.code() != google::cloud::StatusCode::kCancelled) {
+        diagnostic::error("google-cloud-subscriber: {}", status.message())
+          .primary(args_.operator_location)
+          .emit(ctrl.diagnostics());
+      }
+    }};
     while (session.valid()) {
       if (session.is_ready()) {
         break;
       }
+      // Must hold the mutex while collecting slices to prevent concurrent
+      // modification by the callback. We collect slices under the lock, then
+      // yield outside.
+      auto slices = [&] {
+        auto guard = std::scoped_lock{builder_mut};
+        return msb.yield_ready_as_table_slice();
+      }();
       auto yielded = false;
-      for (auto&& s : msb.yield_ready_as_table_slice()) {
+      for (auto&& s : slices) {
         yielded = true;
         co_yield std::move(s);
       }
@@ -131,16 +158,7 @@ public:
         co_yield {};
       }
     }
-    if (session.is_ready()) {
-      auto status = session.get();
-      if (not status.ok()) {
-        diagnostic::error("google-cloud-subscriber: {}", status.message())
-          .primary(args_.operator_location)
-          .emit(ctrl.diagnostics());
-      }
-    } else if (session.valid()) {
-      session.cancel();
-    }
+    session_guard.trigger();
     for (auto&& s : msb.finalize_as_table_slice()) {
       co_yield std::move(s);
     }

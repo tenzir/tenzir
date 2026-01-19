@@ -17,8 +17,6 @@ let
   };
 in
 {
-  protobuf = finalPkgs.protobuf_31;
-
   curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
     # Brings in a conflicting libiconv via libunistring.
     idnSupport = false;

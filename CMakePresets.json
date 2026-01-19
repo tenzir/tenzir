@@ -284,8 +284,7 @@
       "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/curl",
-        "CURL_ROOT": "/opt/homebrew/opt/curl",
-        "TENZIR_PLUGINS_BLACKLIST": "from_velociraptor"
+        "CURL_ROOT": "/opt/homebrew/opt/curl"
       },
       "environment": {
         "PKG_CONFIG_PATH": "/opt/homebrew/opt/curl/lib/pkgconfig"

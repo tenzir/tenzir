@@ -64,6 +64,7 @@ let
       python3,
       uv,
       uv-bin,
+      pkgsBuildBuild,
       pkgsBuildHost,
       makeBinaryWrapper,
       isReleaseBuild ? false,
@@ -100,7 +101,7 @@ let
         ];
       py3 =
         let
-          p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildHost.python3 else python3;
+          p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
         in
         p.withPackages (
           ps: with ps; [

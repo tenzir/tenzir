@@ -50,15 +50,15 @@ caf::expected<bloom_filter> bloom_filter::make(bloom_filter_config cfg) {
 }
 
 void bloom_filter::add(uint64_t digest) noexcept {
-  view_.add(digest);
+  mutable_bloom_filter_view{params_, bits_}.add(digest);
 }
 
 bool bloom_filter::lookup(uint64_t digest) const noexcept {
-  return view_.lookup(digest);
+  return immutable_bloom_filter_view{params_, bits_}.lookup(digest);
 }
 
 const bloom_filter_params& bloom_filter::parameters() const noexcept {
-  return view_.parameters();
+  return params_;
 }
 
 size_t mem_usage(const bloom_filter& x) {
@@ -80,7 +80,8 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
   }
   // We know the exact size, so we reserve it to avoid re-allocations.
   flatbuffers::FlatBufferBuilder builder{expected_size};
-  auto bloom_filter_offset = pack(builder, x.view_);
+  auto view = immutable_bloom_filter_view{x.params_, x.bits_};
+  auto bloom_filter_offset = pack(builder, view);
   if (! bloom_filter_offset) {
     return bloom_filter_offset.error();
   }
@@ -90,12 +91,11 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
   return frozen_bloom_filter{chunk::make(std::move(buffer))};
 }
 
-bloom_filter::bloom_filter(bloom_filter_params params) {
+bloom_filter::bloom_filter(bloom_filter_params params) : params_(params) {
   TENZIR_ASSERT(params.m > 0);
   TENZIR_ASSERT(params.m & 1);
   bits_.resize((params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
-  view_ = {params, std::span{bits_.data(), bits_.size()}};
 }
 
 } // namespace tenzir::sketch
