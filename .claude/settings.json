@@ -13,6 +13,7 @@
     "formatter@tenzir": true,
     "git@tenzir": true,
     "ocsf@tenzir": true,
+    "plan@tenzir": true,
     "prose@tenzir": true,
     "python@tenzir": true,
     "ship@tenzir": true,
