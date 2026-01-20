@@ -801,17 +801,14 @@ private:
   auto derive(basic_series<record_type> input, const record_type& ty,
               value_path path) -> basic_series<record_type> {
     auto fields = std::vector<series_field>{};
-    // Build schema lookup for attribute access.
+    // Build schema lookup and sibling-to-enum map in a single pass.
     auto schema_fields = boost::unordered_flat_map<std::string_view, type>{};
-    for (auto&& [name, field_ty] : ty.fields()) {
-      schema_fields[name] = field_ty;
-    }
-    // Build reverse sibling map: sibling_name -> enum_name.
-    auto reverse_sibling
+    auto sibling_to_enum
       = boost::unordered_flat_map<std::string_view, std::string_view>{};
     for (auto&& [name, field_ty] : ty.fields()) {
+      schema_fields[name] = field_ty;
       if (auto sibling = field_ty.attribute("sibling")) {
-        reverse_sibling[*sibling] = name;
+        sibling_to_enum[*sibling] = name;
       }
     }
     // Build input lookup for fast field access.
@@ -829,7 +826,11 @@ private:
         continue; // Skip non-enums and enum lists.
       }
       auto sibling_attr = field_ty.attribute("sibling");
-      TENZIR_ASSERT(sibling_attr);
+      if (not sibling_attr) {
+        // Schema invariant violated - enum without sibling attribute.
+        // Skip this field pair; other enum fields may still be valid.
+        continue;
+      }
       auto int_name = name;
       auto string_name = *sibling_attr;
       auto int_path = path.field(int_name);
@@ -860,7 +861,9 @@ private:
       }
       auto schema_it = schema_fields.find(field.name);
       if (schema_it == schema_fields.end()) {
-        // Non-schema field: pass through as-is.
+        // Non-schema field: pass through as-is without recursive derivation.
+        // This is intentional - only fields defined in the OCSF schema
+        // participate in enum derivation. Custom fields are preserved unchanged.
         fields.emplace_back(field.name, field.data);
         processed.insert(field.name);
         continue;
@@ -870,7 +873,14 @@ private:
       if (enum_attr and not is<list_type>(field_ty)) {
         // This is an enum field (non-list).
         auto sibling_attr = field_ty.attribute("sibling");
-        TENZIR_ASSERT(sibling_attr);
+        if (not sibling_attr) {
+          // Treat as regular field if schema invariant is violated.
+          fields.emplace_back(field.name,
+                              derive(std::move(field.data), field_ty,
+                                     path.field(field.name)));
+          processed.insert(field.name);
+          continue;
+        }
         auto int_name = field.name;
         auto string_name = *sibling_attr;
         // Emit enum (use pre-computed if available).
@@ -882,22 +892,28 @@ private:
         processed.insert(int_name);
         // If sibling not in input, emit derived sibling immediately after.
         if (not input_lookup.contains(string_name)) {
-          auto sib_it = derived_siblings.find(string_name);
-          TENZIR_ASSERT(sib_it != derived_siblings.end());
-          fields.emplace_back(string_name, std::move(sib_it->second));
-          processed.insert(string_name);
+          if (auto sib_it = derived_siblings.find(string_name);
+              sib_it != derived_siblings.end()) {
+            fields.emplace_back(string_name, std::move(sib_it->second));
+            processed.insert(string_name);
+          }
+          // If not found, sibling was not derivable (e.g., invalid enum value).
+          // Skip emitting the derived sibling; the field is simply absent.
         }
-      } else if (auto rev_it = reverse_sibling.find(field.name);
-                 rev_it != reverse_sibling.end()) {
+      } else if (auto rev_it = sibling_to_enum.find(field.name);
+                 rev_it != sibling_to_enum.end()) {
         // This is a sibling field.
         auto string_name = field.name;
         auto int_name = rev_it->second;
         // If enum not in input, emit derived enum immediately before.
         if (not input_lookup.contains(int_name)) {
-          auto enum_it = derived_enums.find(int_name);
-          TENZIR_ASSERT(enum_it != derived_enums.end());
-          fields.emplace_back(int_name, std::move(enum_it->second));
-          processed.insert(int_name);
+          if (auto enum_it = derived_enums.find(int_name);
+              enum_it != derived_enums.end()) {
+            fields.emplace_back(int_name, std::move(enum_it->second));
+            processed.insert(int_name);
+          }
+          // If not found, enum was not derivable (e.g., invalid string value).
+          // Skip emitting the derived enum; the field is simply absent.
         }
         // Emit sibling (use pre-computed if available).
         if (auto it = derived_siblings.find(string_name);
