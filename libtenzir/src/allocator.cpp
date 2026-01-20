@@ -556,14 +556,22 @@ auto enable_stats(const char* env_name) noexcept -> bool {
 auto enable_actor_stats(const char* env_name) noexcept -> bool {
   if (enable_stats_impl(env_name)) {
 #if TENZIR_MACOS == 1
-    write_error("cannot enable allocator actor stats tracking on MacOS");
+    write_error("cannot enable allocator actor stats tracking on MacOS\n");
+    std::_Exit(EXIT_FAILURE);
+#elif (TENZIR_LINUX == 1 && defined(__aarch64__))
+    write_error(
+      "cannot enable allocator actor stats tracking on arm64 Linux\n");
     std::_Exit(EXIT_FAILURE);
 #endif
     return true;
   }
   if (enable_stats_impl("TENZIR_ALLOC_ACTOR_STATS")) {
 #if TENZIR_MACOS == 1
-    write_error("cannot enable allocator actor stats tracking on MacOS");
+    write_error("cannot enable allocator actor stats tracking on MacOS\n");
+    std::_Exit(EXIT_FAILURE);
+#elif (TENZIR_LINUX == 1 && defined(__aarch64__))
+    write_error(
+      "cannot enable allocator actor stats tracking on arm64 Linux\n");
     std::_Exit(EXIT_FAILURE);
 #endif
     return true;

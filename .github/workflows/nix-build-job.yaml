@@ -183,7 +183,7 @@ jobs:
                  "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y coreutils python3 tzdata"
           docker exec installer-test-ubuntu bash -c \
                  "curl -LsSf https://astral.sh/uv/install.sh | sh"
-          docker exec -e TENZIR_ALLOC_STATS=1 -e TENZIR_ALLOC_ACTOR_STATS=1 installer-test-ubuntu bash -c \
+          docker exec -e TENZIR_ALLOC_STATS=1 ${{ inputs.arch == 'x86_64' && '-e TENZIR_ALLOC_ACTOR_STATS=1' || '' }} installer-test-ubuntu bash -c \
                  'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/test tests/functions/time'
           docker exec installer-test-ubuntu halt
       - name: Test Installation (Rocky Linux)
@@ -207,6 +207,6 @@ jobs:
           # Install uv and run select integration tests
           docker exec installer-test-rocky bash -c \
                  "curl -LsSf https://astral.sh/uv/install.sh | sh"
-          docker exec -e TENZIR_ALLOC_STATS=1 -e TENZIR_ALLOC_ACTOR_STATS=1 installer-test-rocky bash -c \
+          docker exec -e TENZIR_ALLOC_STATS=1 ${{ inputs.arch == 'x86_64' && '-e TENZIR_ALLOC_ACTOR_STATS=1' || '' }} installer-test-rocky bash -c \
                  'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" && uvx tenzir-test --root /src/tenzir/test tests/functions/time'
           docker exec installer-test-rocky halt
