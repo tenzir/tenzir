@@ -20,6 +20,7 @@ let
       arrow-cpp,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
+      azure-sdk-for-cpp,
       libbacktrace,
       clickhouse-cpp,
       empty-libgcc_eh,
@@ -224,6 +225,7 @@ let
           buildInputs =
             [
               aws-sdk-cpp-tenzir
+              azure-sdk-for-cpp.storage-blobs
               libbacktrace
               clickhouse-cpp
               fast-float
