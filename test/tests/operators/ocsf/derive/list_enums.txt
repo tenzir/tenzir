@@ -1,21 +1,21 @@
 {
-  activity_id: 1,
-  activity_name: "Create",
-  class_name: "File System Activity",
-  class_uid: 1001,
   metadata: {
     version: "1.5.0",
   },
+  class_uid: 1001,
+  class_name: "File System Activity",
+  activity_id: 1,
+  activity_name: "Create",
   observables: [
     {
-      type: "User Name",
-      type_id: 4,
       value: "foo",
+      type_id: 4,
+      type: "User Name",
     },
     {
-      type: "Email Address",
-      type_id: 5,
       value: "bar",
+      type_id: 5,
+      type: "Email Address",
     },
   ],
 }

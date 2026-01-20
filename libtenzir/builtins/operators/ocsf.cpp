@@ -801,87 +801,117 @@ private:
   auto derive(basic_series<record_type> input, const record_type& ty,
               value_path path) -> basic_series<record_type> {
     auto fields = std::vector<series_field>{};
-    // Collect all input fields for fast lookup.
-    auto input_fields = boost::unordered_flat_map<std::string_view, series>{};
-    for (auto&& field : input.fields()) {
-      input_fields[field.name] = field.data;
+    // Build schema lookup for attribute access.
+    auto schema_fields = boost::unordered_flat_map<std::string_view, type>{};
+    for (auto&& [name, field_ty] : ty.fields()) {
+      schema_fields[name] = field_ty;
     }
-    // Fields that are referenced as a sibling will be handled together with the
-    // field that references them.
-    auto skip = boost::unordered_flat_set<std::string_view>{};
-    for (auto&& [_, field_ty] : ty.fields()) {
+    // Build reverse sibling map: sibling_name -> enum_name.
+    auto reverse_sibling
+      = boost::unordered_flat_map<std::string_view, std::string_view>{};
+    for (auto&& [name, field_ty] : ty.fields()) {
       if (auto sibling = field_ty.attribute("sibling")) {
-        skip.insert(*sibling);
+        reverse_sibling[*sibling] = name;
       }
     }
-    // Go over all OCSF fields marked with "enum" and "sibling" attributes.
-    for (auto&& [field_name, field_ty] : ty.fields()) {
-      if (skip.contains(field_name)) {
+    // Build input lookup for fast field access.
+    auto input_lookup = boost::unordered_flat_map<std::string_view, series>{};
+    for (auto&& field : input.fields()) {
+      input_lookup[field.name] = field.data;
+    }
+    // Phase 1: Pre-compute derived values for enum/sibling pairs.
+    auto derived_enums = boost::unordered_flat_map<std::string_view, series>{};
+    auto derived_siblings
+      = boost::unordered_flat_map<std::string_view, series>{};
+    for (auto&& [name, field_ty] : ty.fields()) {
+      auto enum_attr = field_ty.attribute("enum");
+      if (not enum_attr or is<list_type>(field_ty)) {
+        continue; // Skip non-enums and enum lists.
+      }
+      auto sibling_attr = field_ty.attribute("sibling");
+      TENZIR_ASSERT(sibling_attr);
+      auto int_name = name;
+      auto string_name = *sibling_attr;
+      auto int_path = path.field(int_name);
+      auto string_path = path.field(string_name);
+      auto int_it = input_lookup.find(int_name);
+      auto string_it = input_lookup.find(string_name);
+      if (int_it != input_lookup.end() and string_it != input_lookup.end()) {
+        // Both exist - derive bidirectionally (preserves validation).
+        auto [derived_enum, derived_sibling] = derive_bidirectionally(
+          int_it->second, string_it->second, *enum_attr, int_path, string_path);
+        derived_enums[int_name] = std::move(derived_enum);
+        derived_siblings[string_name] = std::move(derived_sibling);
+      } else if (int_it != input_lookup.end()) {
+        // Only enum exists - derive sibling.
+        derived_siblings[string_name]
+          = string_from_int(int_it->second, *enum_attr, int_path);
+      } else if (string_it != input_lookup.end()) {
+        // Only sibling exists - derive enum.
+        derived_enums[int_name]
+          = int_from_string(string_it->second, *enum_attr, string_path);
+      }
+    }
+    // Phase 2: Emit fields in original input order.
+    auto processed = boost::unordered_flat_set<std::string_view>{};
+    for (auto&& field : input.fields()) {
+      if (processed.contains(field.name)) {
         continue;
       }
+      auto schema_it = schema_fields.find(field.name);
+      if (schema_it == schema_fields.end()) {
+        // Non-schema field: pass through as-is.
+        fields.emplace_back(field.name, field.data);
+        processed.insert(field.name);
+        continue;
+      }
+      const auto& field_ty = schema_it->second;
       auto enum_attr = field_ty.attribute("enum");
-      if (enum_attr) {
-        // This is an enum field with a sibling.
-        if (is<list_type>(field_ty)) {
-          // Enum lists are not supported yet.
-          continue;
-        }
-        auto int_name = field_name;
-        auto int_path = path.field(int_name);
-        TENZIR_ASSERT(field_ty.kind().is<int64_type>());
+      if (enum_attr and not is<list_type>(field_ty)) {
+        // This is an enum field (non-list).
         auto sibling_attr = field_ty.attribute("sibling");
         TENZIR_ASSERT(sibling_attr);
+        auto int_name = field.name;
         auto string_name = *sibling_attr;
-        auto string_path = path.field(string_name);
-        auto string_ty = ty.field(string_name);
-        TENZIR_ASSERT(string_ty);
-        TENZIR_ASSERT(string_ty->kind().is<string_type>());
-        auto int_field = input_fields.find(int_name);
-        auto string_field = input_fields.find(string_name);
-        if (int_field != input_fields.end()
-            and string_field != input_fields.end()) {
-          // Both exist - derive bidirectionally.
-          auto [derived_enum, derived_sibling]
-            = derive_bidirectionally(int_field->second, string_field->second,
-                                     *enum_attr, int_path, string_path);
-          fields.emplace_back(int_name, std::move(derived_enum));
-          fields.emplace_back(string_name, std::move(derived_sibling));
-        } else if (int_field != input_fields.end()) {
-          // Only enum exists - derive sibling.
-          auto derived_sibling
-            = string_from_int(int_field->second, *enum_attr, int_path);
-          fields.emplace_back(int_name, std::move(int_field->second));
-          fields.emplace_back(string_name, std::move(derived_sibling));
-        } else if (string_field != input_fields.end()) {
-          // Only sibling exists - derive enum.
-          auto derived_enum
-            = int_from_string(string_field->second, *enum_attr, string_path);
-          fields.emplace_back(int_name, std::move(derived_enum));
-          fields.emplace_back(string_name, std::move(string_field->second));
+        // Emit enum (use pre-computed if available).
+        if (auto it = derived_enums.find(int_name); it != derived_enums.end()) {
+          fields.emplace_back(int_name, std::move(it->second));
         } else {
-          // Neither exists. This also happens for fields that are in profiles
-          // or extensions that are not used.
+          fields.emplace_back(int_name, field.data);
         }
-        skip.insert(int_name);
-        TENZIR_ASSERT(skip.contains(string_name));
+        processed.insert(int_name);
+        // If sibling not in input, emit derived sibling immediately after.
+        if (not input_lookup.contains(string_name)) {
+          auto sib_it = derived_siblings.find(string_name);
+          TENZIR_ASSERT(sib_it != derived_siblings.end());
+          fields.emplace_back(string_name, std::move(sib_it->second));
+          processed.insert(string_name);
+        }
+      } else if (auto rev_it = reverse_sibling.find(field.name);
+                 rev_it != reverse_sibling.end()) {
+        // This is a sibling field.
+        auto string_name = field.name;
+        auto int_name = rev_it->second;
+        // If enum not in input, emit derived enum immediately before.
+        if (not input_lookup.contains(int_name)) {
+          auto enum_it = derived_enums.find(int_name);
+          TENZIR_ASSERT(enum_it != derived_enums.end());
+          fields.emplace_back(int_name, std::move(enum_it->second));
+          processed.insert(int_name);
+        }
+        // Emit sibling (use pre-computed if available).
+        if (auto it = derived_siblings.find(string_name);
+            it != derived_siblings.end()) {
+          fields.emplace_back(string_name, std::move(it->second));
+        } else {
+          fields.emplace_back(string_name, field.data);
+        }
+        processed.insert(string_name);
       } else {
-        // Non-enum field processing.
-        auto field_iter = input_fields.find(field_name);
-        if (field_iter != input_fields.end()) {
-          fields.emplace_back(field_name,
-                              derive(std::move(field_iter->second), field_ty,
-                                     path.field(field_name)));
-        }
-        skip.insert(field_name);
-      }
-    }
-    // Make sure the OCSF fields are sorted. The logic above doesn't guarantee
-    // that due to the insertion of the siblings.
-    std::ranges::sort(fields, {}, &series_field::name);
-    // Add any remaining input fields not in the schema.
-    for (auto&& [field_name, field_data] : input_fields) {
-      if (not skip.contains(field_name)) {
-        fields.emplace_back(field_name, field_data);
+        // Regular field - recurse for nested records.
+        fields.emplace_back(field.name, derive(std::move(field.data), field_ty,
+                                               path.field(field.name)));
+        processed.insert(field.name);
       }
     }
     return make_record_series(fields, *input.array);

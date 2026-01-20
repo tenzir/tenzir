@@ -1,11 +1,11 @@
 {
-  activity_id: 1,
-  activity_name: "Delete",
-  class_name: "File System Activity",
-  class_uid: 1001,
   metadata: {
     version: "1.5.0",
   },
+  class_uid: 1001,
+  class_name: "File System Activity",
+  activity_id: 1,
+  activity_name: "Delete",
 }
 warning: found inconsistency between `activity_id` and `activity_name`
   --> tests/operators/ocsf/derive/conflicting_values.tql:13:1

@@ -1,9 +1,9 @@
 {
-  activity_id: 3,
-  activity_name: "Update",
-  class_name: "File System Activity",
-  class_uid: 1001,
   metadata: {
     version: "1.5.0",
   },
+  class_uid: 1001,
+  class_name: "File System Activity",
+  activity_id: 3,
+  activity_name: "Update",
 }
