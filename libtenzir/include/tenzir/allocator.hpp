@@ -199,7 +199,7 @@ public:
   }
 
   auto make_this_current() noexcept -> void {
-    const auto aptr = caf::logger::thread_local_aptr();
+    const auto aptr = caf::abstract_actor::current();
     if (not aptr) {
       const auto thread = pthread_self();
       // We want to handle the case where thread names use all characters.
