@@ -2,14 +2,14 @@
   metadata: {
     version: "1.5.0",
   },
-  class_uid: 1001,
   class_name: "File System Activity",
+  class_uid: 1001,
   activity_id: 1,
   activity_name: "Create",
   actor: {
     user: {
-      type_id: 1,
       type: "User",
+      type_id: 1,
     },
   },
 }

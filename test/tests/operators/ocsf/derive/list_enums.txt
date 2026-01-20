@@ -2,20 +2,20 @@
   metadata: {
     version: "1.5.0",
   },
-  class_uid: 1001,
   class_name: "File System Activity",
+  class_uid: 1001,
   activity_id: 1,
   activity_name: "Create",
   observables: [
     {
       value: "foo",
-      type_id: 4,
       type: "User Name",
+      type_id: 4,
     },
     {
       value: "bar",
-      type_id: 5,
       type: "Email Address",
+      type_id: 5,
     },
   ],
 }

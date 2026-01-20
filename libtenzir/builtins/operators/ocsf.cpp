@@ -883,46 +883,85 @@ private:
         }
         auto int_name = field.name;
         auto string_name = *sibling_attr;
-        // Emit enum (use pre-computed if available).
-        if (auto it = derived_enums.find(int_name); it != derived_enums.end()) {
-          fields.emplace_back(int_name, std::move(it->second));
-        } else {
-          fields.emplace_back(int_name, field.data);
-        }
-        processed.insert(int_name);
-        // If sibling not in input, emit derived sibling immediately after.
-        if (not input_lookup.contains(string_name)) {
-          if (auto sib_it = derived_siblings.find(string_name);
-              sib_it != derived_siblings.end()) {
-            fields.emplace_back(string_name, std::move(sib_it->second));
+        // Get the enum value (use pre-computed if available).
+        auto enum_value = [&]() -> std::optional<series> {
+          if (auto it = derived_enums.find(int_name);
+              it != derived_enums.end()) {
+            return std::move(it->second);
+          }
+          return std::nullopt;
+        }();
+        // Get the derived sibling value if sibling not in input.
+        auto sibling_value = [&]() -> std::optional<series> {
+          if (not input_lookup.contains(string_name)) {
+            if (auto sib_it = derived_siblings.find(string_name);
+                sib_it != derived_siblings.end()) {
+              return std::move(sib_it->second);
+            }
+          }
+          return std::nullopt;
+        }();
+        // Emit in alphabetical order to match ocsf::cast schema ordering.
+        if (int_name < string_name) {
+          // Emit enum first, then sibling.
+          fields.emplace_back(int_name,
+                              enum_value ? std::move(*enum_value) : field.data);
+          processed.insert(int_name);
+          if (sibling_value) {
+            fields.emplace_back(string_name, std::move(*sibling_value));
             processed.insert(string_name);
           }
-          // If not found, sibling was not derivable (e.g., invalid enum value).
-          // Skip emitting the derived sibling; the field is simply absent.
+        } else {
+          // Emit sibling first, then enum.
+          if (sibling_value) {
+            fields.emplace_back(string_name, std::move(*sibling_value));
+            processed.insert(string_name);
+          }
+          fields.emplace_back(int_name,
+                              enum_value ? std::move(*enum_value) : field.data);
+          processed.insert(int_name);
         }
       } else if (auto rev_it = sibling_to_enum.find(field.name);
                  rev_it != sibling_to_enum.end()) {
         // This is a sibling field.
         auto string_name = field.name;
         auto int_name = rev_it->second;
-        // If enum not in input, emit derived enum immediately before.
-        if (not input_lookup.contains(int_name)) {
-          if (auto enum_it = derived_enums.find(int_name);
-              enum_it != derived_enums.end()) {
-            fields.emplace_back(int_name, std::move(enum_it->second));
+        // Get the derived enum value if enum not in input.
+        auto enum_value = [&]() -> std::optional<series> {
+          if (not input_lookup.contains(int_name)) {
+            if (auto enum_it = derived_enums.find(int_name);
+                enum_it != derived_enums.end()) {
+              return std::move(enum_it->second);
+            }
+          }
+          return std::nullopt;
+        }();
+        // Get the sibling value (use pre-computed if available).
+        auto sibling_value = [&]() -> series {
+          if (auto it = derived_siblings.find(string_name);
+              it != derived_siblings.end()) {
+            return std::move(it->second);
+          }
+          return field.data;
+        }();
+        // Emit in alphabetical order to match ocsf::cast schema ordering.
+        if (int_name < string_name) {
+          // Emit enum first, then sibling.
+          if (enum_value) {
+            fields.emplace_back(int_name, std::move(*enum_value));
             processed.insert(int_name);
           }
-          // If not found, enum was not derivable (e.g., invalid string value).
-          // Skip emitting the derived enum; the field is simply absent.
-        }
-        // Emit sibling (use pre-computed if available).
-        if (auto it = derived_siblings.find(string_name);
-            it != derived_siblings.end()) {
-          fields.emplace_back(string_name, std::move(it->second));
+          fields.emplace_back(string_name, std::move(sibling_value));
+          processed.insert(string_name);
         } else {
-          fields.emplace_back(string_name, field.data);
+          // Emit sibling first, then enum.
+          fields.emplace_back(string_name, std::move(sibling_value));
+          processed.insert(string_name);
+          if (enum_value) {
+            fields.emplace_back(int_name, std::move(*enum_value));
+            processed.insert(int_name);
+          }
         }
-        processed.insert(string_name);
       } else {
         // Regular field - recurse for nested records.
         fields.emplace_back(field.name, derive(std::move(field.data), field_ty,
