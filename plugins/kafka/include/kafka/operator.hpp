@@ -212,8 +212,16 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
+    // Resolve secrets if explicit credentials are provided.
+    auto resolved_creds
+      = std::optional<configuration::resolved_aws_credentials>{};
+    if (args_.aws and args_.aws->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, dh);
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (! cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
         .primary(args_.operator_location)
@@ -446,16 +454,24 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    auto& dh = ctrl.diagnostics();
+    // Resolve secrets if explicit credentials are provided.
+    auto resolved_creds
+      = std::optional<configuration::resolved_aws_credentials>{};
+    if (args_.aws and args_.aws->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not cfg) {
-      diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
+      diagnostic::error(cfg.error()).emit(dh);
       co_return;
     };
     // Override configuration with arguments.
     {
-      auto secrets
-        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      auto secrets = configure_or_request(args_.options, *cfg, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     if (auto value = cfg->get("bootstrap.servers")) {
@@ -464,7 +480,7 @@ public:
     auto client = producer::make(*cfg);
     if (! client) {
       TENZIR_ERROR(client.error());
-      diagnostic::error(client.error()).emit(ctrl.diagnostics());
+      diagnostic::error(client.error()).emit(dh);
     };
     auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
@@ -496,7 +512,7 @@ public:
         if (auto error
             = client->produce(topic, as_bytes(chunk), key, timestamp);
             error.valid()) {
-          diagnostic::error(error).emit(ctrl.diagnostics());
+          diagnostic::error(error).emit(dh);
         }
       }
       // It's advised to call poll periodically to tell Kafka "you can flush

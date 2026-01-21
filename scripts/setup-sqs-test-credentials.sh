@@ -16,8 +16,9 @@ echo ""
 ACCOUNT_ID=$(aws sts get-caller-identity --profile "$PROFILE" --query Account --output text)
 echo "AWS Account ID: $ACCOUNT_ID"
 
-# Get the current region
-REGION=$(aws configure get region --profile "$PROFILE" || echo "us-east-1")
+# Get the current region (handle empty string case)
+REGION=$(aws configure get region --profile "$PROFILE" || true)
+REGION=${REGION:-us-east-1}
 echo "AWS Region: $REGION"
 echo ""
 

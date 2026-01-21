@@ -58,9 +58,17 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    co_yield {};
     auto& dh = ctrl.diagnostics();
-    auto cfg = configuration::make(config_, args_.aws, dh);
+    // Resolve secrets if explicit credentials are provided.
+    auto resolved_creds
+      = std::optional<configuration::resolved_aws_credentials>{};
+    if (args_.aws and args_.aws->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    co_yield {};
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
         .primary(args_.operator_location)

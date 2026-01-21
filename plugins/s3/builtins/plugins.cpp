@@ -79,13 +79,43 @@ public:
     auto args = s3_args{};
     auto role = std::optional<located<std::string>>{};
     auto external_id = std::optional<located<std::string>>{};
+    auto aws_iam_rec = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(this->name())
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
           .named("role", role)
           .named("external_id", external_id)
+          .named("aws_iam", aws_iam_rec)
           .parse(inv, ctx));
     args.config = config_;
+    if (aws_iam_rec) {
+      TRY(args.aws_iam,
+          aws_iam_options::from_record(std::move(*aws_iam_rec), ctx));
+      // Validate aws_iam is not used with other auth options
+      if (args.anonymous) {
+        diagnostic::error("`aws_iam` cannot be used with `anonymous`")
+          .primary(args.aws_iam->loc)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (role) {
+        diagnostic::error(
+          "`aws_iam` cannot be used with individual credential options")
+          .primary(args.aws_iam->loc)
+          .note("use either `aws_iam` or individual options, not both")
+          .emit(ctx);
+        return failure::promise();
+      }
+      // For aws_iam, explicit credentials + role is not supported for S3
+      if (args.aws_iam->has_explicit_credentials() and args.aws_iam->role) {
+        diagnostic::error("explicit credentials with role assumption is not "
+                          "supported for S3")
+          .primary(args.aws_iam->loc)
+          .note("use either explicit credentials or role assumption, not both")
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
     if (role) {
       auto& r = args.role.emplace();
       r.role = role->inner;

@@ -56,9 +56,17 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    co_yield {};
     auto& dh = ctrl.diagnostics();
-    auto config = configuration::make(config_, args_.aws, dh);
+    // Resolve secrets if explicit credentials are provided.
+    auto resolved_creds
+      = std::optional<configuration::resolved_aws_credentials>{};
+    if (args_.aws and args_.aws->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    co_yield {};
+    auto config = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not config) {
       diagnostic::error(std::move(config).error()).primary(args_.op).emit(dh);
       co_return;

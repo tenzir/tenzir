@@ -9,6 +9,7 @@
 #pragma once
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
@@ -55,16 +56,19 @@ struct s3_args {
   located<secret> uri;
   std::optional<s3_config> config;
   std::optional<s3_assume_role> role;
+  std::optional<aws_iam_options> aws_iam;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, s3_args& x) -> bool {
     return f.object(x).pretty_name("s3_args").fields(
       f.field("anonymous", x.anonymous), f.field("uri", x.uri),
-      f.field("config", x.config), f.field("role", x.role));
+      f.field("config", x.config), f.field("role", x.role),
+      f.field("aws_iam", x.aws_iam));
   }
 };
 
-auto get_options(const s3_args& args, const arrow::util::Uri& uri)
+auto get_options(const s3_args& args, const arrow::util::Uri& uri,
+                 const std::optional<resolved_aws_credentials>& resolved_creds)
   -> caf::expected<arrow::fs::S3Options> {
   auto opts = arrow::fs::S3Options::FromUri(uri);
   if (not opts.ok()) {
@@ -74,6 +78,17 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri)
   }
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
+  } else if (args.aws_iam) {
+    // aws_iam takes precedence over config-based credentials
+    if (resolved_creds) {
+      opts->ConfigureAccessKey(resolved_creds->access_key,
+                               resolved_creds->secret_key,
+                               resolved_creds->session_token);
+    } else if (args.aws_iam->role) {
+      opts->ConfigureAssumeRoleCredentials(
+        *args.aws_iam->role, args.aws_iam->session_name.value_or(""),
+        args.aws_iam->ext_id.value_or(""));
+    }
   } else if (args.role) {
     opts->ConfigureAssumeRoleCredentials(args.role->role, {},
                                          args.role->external_id);
@@ -96,12 +111,24 @@ public:
   s3_loader(s3_args args) : args_{std::move(args)} {
   }
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto& dh = ctrl.diagnostics();
     auto uri = arrow::util::Uri{};
-    co_yield ctrl.resolve_secrets_must_yield(
-      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
-    auto opts = get_options(args_, uri);
+    auto reqs = std::vector<secret_request>{
+      make_uri_request(args_.uri, "s3://", uri, dh),
+    };
+    // Resolve aws_iam credentials if provided
+    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    if (args_.aws_iam and args_.aws_iam->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
+      for (auto& r : aws_reqs) {
+        reqs.push_back(std::move(r));
+      }
+    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
+    auto opts = get_options(args_, uri, resolved_creds);
     if (not opts) {
-      diagnostic::error(opts.error()).emit(ctrl.diagnostics());
+      diagnostic::error(opts.error()).emit(dh);
       co_return;
     }
     auto fs = arrow::fs::S3FileSystem::Make(*opts);
@@ -175,41 +202,53 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    auto& dh = ctrl.diagnostics();
     auto uri = arrow::util::Uri{};
-    co_yield ctrl.resolve_secrets_must_yield(
-      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
-    auto opts = get_options(args_, uri);
+    auto reqs = std::vector<secret_request>{
+      make_uri_request(args_.uri, "s3://", uri, dh),
+    };
+    // Resolve aws_iam credentials if provided
+    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    if (args_.aws_iam and args_.aws_iam->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
+      for (auto& r : aws_reqs) {
+        reqs.push_back(std::move(r));
+      }
+    }
+    co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
+    auto opts = get_options(args_, uri, resolved_creds);
     if (not opts) {
-      diagnostic::error(opts.error()).emit(ctrl.diagnostics());
+      diagnostic::error(opts.error()).emit(dh);
     }
     auto fs = arrow::fs::S3FileSystem::Make(*opts);
     if (not fs.ok()) {
       diagnostic::error("failed to create Arrow S3 "
                         "filesystem: {}",
                         fs.status().ToStringWithoutContextLines())
-        .emit(ctrl.diagnostics());
+        .emit(dh);
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info: {}",
                         file_info.status().ToStringWithoutContextLines())
-        .emit(ctrl.diagnostics());
+        .emit(dh);
     }
     auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
     if (not output_stream.ok()) {
       diagnostic::error("failed to open output stream: {}",
                         output_stream.status().ToStringWithoutContextLines())
-        .emit(ctrl.diagnostics());
+        .emit(dh);
     }
     auto stream_guard
-      = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
+      = detail::scope_guard([this, &dh, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
           if (not output_stream.ok()) {
             diagnostic::error("failed to close stream: {}",
                               status.ToStringWithoutContextLines())
               .primary(args_.uri.source)
-              .emit(ctrl.diagnostics());
+              .emit(dh);
           }
         });
     for (const auto& chunk : input) {
@@ -223,7 +262,7 @@ public:
         diagnostic::error("failed to write to stream: {}",
                           status.ToStringWithoutContextLines())
           .primary(args_.uri.source)
-          .emit(ctrl.diagnostics());
+          .emit(dh);
       }
     }
   }

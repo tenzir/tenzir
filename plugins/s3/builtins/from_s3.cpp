@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/scope_linked.hpp>
@@ -29,16 +30,18 @@ struct from_s3_args final {
   std::optional<located<secret>> session_token;
   std::optional<located<secret>> role;
   std::optional<located<secret>> external_id;
+  std::optional<aws_iam_options> aws_iam;
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
     auto auth_methods = 0;
     if (anonymous) {
       ++auth_methods;
     }
-    if (role) {
+    if (role or (aws_iam and aws_iam->role)) {
       ++auth_methods;
     }
-    if (access_key or secret_key) {
+    if (access_key or secret_key
+        or (aws_iam and aws_iam->has_explicit_credentials())) {
       ++auth_methods;
     }
     if (auth_methods > 1) {
@@ -54,7 +57,27 @@ struct from_s3_args final {
       if (access_key) {
         diag = std::move(diag).primary(*access_key);
       }
+      if (aws_iam) {
+        diag = std::move(diag).primary(aws_iam->loc);
+      }
       std::move(diag).emit(dh);
+      return failure::promise();
+    }
+    // Check aws_iam is not used together with anonymous or individual options
+    if (aws_iam and anonymous) {
+      diagnostic::error("`aws_iam` cannot be used with `anonymous`")
+        .primary(aws_iam->loc)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (aws_iam
+        and (access_key or secret_key or session_token or role
+             or external_id)) {
+      diagnostic::error(
+        "`aws_iam` cannot be used with individual credential options")
+        .primary(aws_iam->loc)
+        .note("use either `aws_iam` or individual options, not both")
+        .emit(dh);
       return failure::promise();
     }
     if (access_key.has_value() xor secret_key.has_value()) {
@@ -76,6 +99,15 @@ struct from_s3_args final {
         .emit(dh);
       return failure::promise();
     }
+    // For aws_iam, explicit credentials + role is not supported for S3
+    if (aws_iam and aws_iam->has_explicit_credentials() and aws_iam->role) {
+      diagnostic::error("explicit credentials with role assumption is not "
+                        "supported for S3")
+        .primary(aws_iam->loc)
+        .note("use either explicit credentials or role assumption, not both")
+        .emit(dh);
+      return failure::promise();
+    }
     return {};
   }
 
@@ -84,7 +116,7 @@ struct from_s3_args final {
       f.field("base_args", x.base_args), f.field("anonymous", x.anonymous),
       f.field("access_key", x.access_key), f.field("secret_key", x.secret_key),
       f.field("session_token", x.session_token), f.field("role", x.role),
-      f.field("external_id", x.external_id));
+      f.field("external_id", x.external_id), f.field("aws_iam", x.aws_iam));
   }
 };
 
@@ -97,52 +129,73 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    auto& dh = ctrl.diagnostics();
     auto uri = arrow::util::Uri{};
     auto access_key = std::string{};
     auto secret_key = std::string{};
     auto session_token = std::string{};
     auto role = std::string{};
     auto external_id = std::string{};
+    auto session_name = std::string{};
     auto reqs = std::vector{
-      make_uri_request(args_.base_args.url, "s3://", uri, ctrl.diagnostics()),
+      make_uri_request(args_.base_args.url, "s3://", uri, dh),
     };
+    // Resolve aws_iam credentials if provided
+    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    if (args_.aws_iam and args_.aws_iam->has_explicit_credentials()) {
+      resolved_creds.emplace();
+      auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
+      for (auto& r : aws_reqs) {
+        reqs.push_back(std::move(r));
+      }
+    }
+    // Resolve individual credential options
     if (args_.access_key) {
-      reqs.emplace_back(make_secret_request("access_key", *args_.access_key,
-                                            access_key, ctrl.diagnostics()));
+      reqs.emplace_back(
+        make_secret_request("access_key", *args_.access_key, access_key, dh));
     }
     if (args_.secret_key) {
-      reqs.emplace_back(make_secret_request("secret_key", *args_.secret_key,
-                                            secret_key, ctrl.diagnostics()));
+      reqs.emplace_back(
+        make_secret_request("secret_key", *args_.secret_key, secret_key, dh));
     }
     if (args_.session_token) {
-      reqs.emplace_back(make_secret_request("session_token",
-                                            *args_.session_token, session_token,
-                                            ctrl.diagnostics()));
+      reqs.emplace_back(make_secret_request(
+        "session_token", *args_.session_token, session_token, dh));
     }
     if (args_.role) {
-      reqs.emplace_back(
-        make_secret_request("role", *args_.role, role, ctrl.diagnostics()));
+      reqs.emplace_back(make_secret_request("role", *args_.role, role, dh));
     }
     if (args_.external_id) {
       reqs.emplace_back(make_secret_request("external_id", *args_.external_id,
-                                            external_id, ctrl.diagnostics()));
+                                            external_id, dh));
     }
     co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
+    // Apply aws_iam credentials to local variables
+    if (resolved_creds) {
+      access_key = resolved_creds->access_key;
+      secret_key = resolved_creds->secret_key;
+      session_token = resolved_creds->session_token;
+    }
+    if (args_.aws_iam and args_.aws_iam->role) {
+      role = *args_.aws_iam->role;
+      external_id = args_.aws_iam->ext_id.value_or("");
+      session_name = args_.aws_iam->session_name.value_or("");
+    }
     auto path = std::string{};
     auto opts = arrow::fs::S3Options::FromUri(uri, &path);
     if (not opts.ok()) {
       diagnostic::error("failed to create Arrow S3 options: {}",
                         opts.status().ToStringWithoutContextLines())
-        .emit(ctrl.diagnostics());
+        .emit(dh);
       co_return;
     }
     if (args_.anonymous) {
       opts->ConfigureAnonymousCredentials();
     }
-    if (args_.role) {
-      opts->ConfigureAssumeRoleCredentials(role, {}, external_id);
+    if (args_.role or (args_.aws_iam and args_.aws_iam->role)) {
+      opts->ConfigureAssumeRoleCredentials(role, session_name, external_id);
     }
-    if (args_.access_key and args_.secret_key) {
+    if ((args_.access_key and args_.secret_key) or resolved_creds) {
       opts->ConfigureAccessKey(access_key, secret_key, session_token);
     }
     auto fs = arrow::fs::S3FileSystem::Make(*opts);
@@ -212,6 +265,7 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_s3_args{};
+    auto aws_iam_rec = std::optional<located<record>>{};
     auto p = argument_parser2::operator_(name());
     args.base_args.add_to(p);
     p.named("anonymous", args.anonymous);
@@ -220,7 +274,12 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
     p.named("session_token", args.session_token);
     p.named("role", args.role);
     p.named("external_id", args.external_id);
+    p.named("aws_iam", aws_iam_rec);
     TRY(p.parse(inv, ctx));
+    if (aws_iam_rec) {
+      TRY(args.aws_iam,
+          aws_iam_options::from_record(std::move(*aws_iam_rec), ctx));
+    }
     TRY(args.validate(ctx));
     TRY(auto result, args.base_args.handle(ctx));
     result.prepend(std::make_unique<from_s3_operator>(std::move(args)));

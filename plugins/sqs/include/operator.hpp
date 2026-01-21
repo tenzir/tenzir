@@ -20,6 +20,7 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/utils/Outcome.h>
+#include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/CreateQueueRequest.h>
 #include <aws/sqs/model/DeleteMessageRequest.h>
@@ -27,7 +28,6 @@
 #include <aws/sqs/model/ReceiveMessageRequest.h>
 #include <aws/sqs/model/SendMessageRequest.h>
 #include <aws/sts/STSClient.h>
-#include <aws/sts/model/AssumeRoleRequest.h>
 
 #include <string_view>
 
@@ -102,8 +102,8 @@ public:
           base_credentials
             = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
         }
-        // If role assumption is requested, call AssumeRole and use the
-        // resulting credentials.
+        // If role assumption is requested, use STSAssumeRoleCredentialsProvider
+        // for automatic credential refresh.
         if (role) {
           TENZIR_VERBOSE("[sqs] assuming role {}", *role);
           // Create an STS client configuration (inherits region from main cfg).
@@ -111,29 +111,14 @@ public:
           sts_config.region = config.region;
           sts_config.allowSystemProxy = true;
           // Create STS client using the base credentials.
-          auto sts_client
-            = Aws::STS::STSClient{base_credentials, nullptr, sts_config};
-          // Call AssumeRole to get temporary credentials.
+          auto sts_client = std::make_shared<Aws::STS::STSClient>(
+            base_credentials, nullptr, sts_config);
+          // Use STSAssumeRoleCredentialsProvider for automatic refresh.
           auto session = role_session_name.value_or("tenzir-session");
           auto ext = role_external_id.value_or("");
-          auto request = Aws::STS::Model::AssumeRoleRequest{};
-          request.SetRoleArn(*role);
-          request.SetRoleSessionName(session);
-          if (not ext.empty()) {
-            request.SetExternalId(ext);
-          }
-          auto outcome = sts_client.AssumeRole(request);
-          if (not outcome.IsSuccess()) {
-            const auto& err = outcome.GetError();
-            diagnostic::error("failed to assume role")
-              .note("{}", err.GetMessage())
-              .note("error code: {}", err.GetExceptionName())
-              .throw_();
-          }
-          const auto& assumed_creds = outcome.GetResult().GetCredentials();
-          return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-            assumed_creds.GetAccessKeyId(), assumed_creds.GetSecretAccessKey(),
-            assumed_creds.GetSessionToken());
+          return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
+            *role, session, ext, Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS,
+            sts_client);
         }
         return base_credentials;
       });

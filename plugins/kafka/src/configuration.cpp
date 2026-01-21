@@ -23,6 +23,7 @@
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
+#include <aws/sts/STSClient.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
@@ -35,16 +36,14 @@ auto configuration::aws_iam_options::from_record(located<record> config,
                                                  diagnostic_handler& dh)
   -> failure_or<aws_iam_options> {
   constexpr auto known = std::array{
-    "region",
-    "assume_role",
-    "session_name",
-    "external_id",
+    "region",        "assume_role",       "session_name",  "external_id",
+    "access_key_id", "secret_access_key", "session_token",
   };
   const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
   });
   if (unknown != std::ranges::end(config.inner)) {
-    diagnostic::error("unknown key '{}' in config", *unknown)
+    diagnostic::error("unknown key '{}' in config", (*unknown).first)
       .primary(config)
       .emit(dh);
     return failure::promise();
@@ -75,13 +74,65 @@ auto configuration::aws_iam_options::from_record(located<record> config,
     }
     return {};
   };
+  const auto assign_secret
+    = [&](std::string_view key, std::optional<secret>& x) -> failure_or<void> {
+    if (auto it = config.inner.find(key); it != config.inner.end()) {
+      if (auto* s = try_as<secret>(it->second.get_data())) {
+        x = std::move(*s);
+      } else if (auto* str = try_as<std::string>(it->second.get_data())) {
+        // Allow plain strings as well, convert to literal secret
+        x = secret::make_literal(std::move(*str));
+      } else {
+        diagnostic::error("'{}' must be a `string` or `secret`", key)
+          .primary(config)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    return {};
+  };
   auto opts = aws_iam_options{};
   opts.loc = config.source;
   TRY(assign_non_empty_string("region", opts.region));
   TRY(assign_non_empty_string("assume_role", opts.role));
   TRY(assign_non_empty_string("session_name", opts.session_name));
   TRY(assign_non_empty_string("external_id", opts.ext_id));
+  TRY(assign_secret("access_key_id", opts.access_key));
+  TRY(assign_secret("secret_access_key", opts.secret_key));
+  TRY(assign_secret("session_token", opts.session_token));
+  // Validate that access_key_id and secret_access_key are specified together
+  if (opts.access_key.has_value() xor opts.secret_key.has_value()) {
+    diagnostic::error(
+      "`access_key_id` and `secret_access_key` must be specified together")
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  // Validate that session_token requires access_key_id
+  if (opts.session_token and not opts.access_key) {
+    diagnostic::error("`session_token` specified without `access_key_id`")
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
   return opts;
+}
+
+auto configuration::aws_iam_options::make_secret_requests(
+  resolved_aws_credentials& resolved, diagnostic_handler& dh) const
+  -> std::vector<secret_request> {
+  auto requests = std::vector<secret_request>{};
+  if (access_key) {
+    requests.emplace_back(make_secret_request("access_key", *access_key, loc,
+                                              resolved.access_key, dh));
+    requests.emplace_back(make_secret_request("secret_key", *secret_key, loc,
+                                              resolved.secret_key, dh));
+    if (session_token) {
+      requests.emplace_back(make_secret_request(
+        "session_token", *session_token, loc, resolved.session_token, dh));
+    }
+  }
+  return requests;
 }
 
 auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
@@ -100,16 +151,35 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   };
   auto provider = std::invoke(
     [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
+      // Determine base credentials provider: explicit or default chain.
+      auto base_credentials
+        = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
+      if (creds_) {
+        TENZIR_VERBOSE("[kafka iam] using explicit credentials");
+        base_credentials
+          = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            creds_->access_key, creds_->secret_key, creds_->session_token);
+      } else {
+        TENZIR_VERBOSE("[kafka iam] using the default credential chain");
+        base_credentials
+          = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+      }
+      // If role assumption is requested, use STS provider.
       if (options_.role) {
         TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
                        options_.region, options_.role.value(), valid_for);
+        // Create STS client configuration with the base credentials.
+        auto sts_config = Aws::Client::ClientConfiguration{};
+        sts_config.region = options_.region;
+        auto sts_client = std::make_shared<Aws::STS::STSClient>(
+          base_credentials, nullptr, sts_config);
         return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
           options_.role.value(),
           options_.session_name.value_or("tenzir-session"),
-          options_.ext_id.value_or(""));
+          options_.ext_id.value_or(""),
+          Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
       }
-      TENZIR_VERBOSE("[kafka iam] using the default credential chain");
-      return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+      return base_credentials;
     });
   if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
     diagnostic::warning("got empty AWS credentials")
@@ -191,6 +261,7 @@ auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
 
 auto configuration::make(const record& options,
                          std::optional<aws_iam_options> aws,
+                         std::optional<resolved_aws_credentials> creds,
                          diagnostic_handler& dh)
   -> caf::expected<configuration> {
   configuration result;
@@ -206,8 +277,8 @@ auto configuration::make(const record& options,
   }
   if (aws) {
     TENZIR_VERBOSE("setting aws iam callback");
-    result.aws_
-      = std::make_shared<aws_iam_callback>(std::move(aws).value(), dh);
+    result.aws_ = std::make_shared<aws_iam_callback>(std::move(aws).value(),
+                                                     std::move(creds), dh);
     result.conf_->set("oauthbearer_token_refresh_cb", result.aws_.get(),
                       errstr);
     if (not errstr.empty()) {
