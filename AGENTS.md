@@ -62,19 +62,13 @@ git submodule update --init --recursive
 
 ### Build
 
-Configure the build:
+Assume the user has configured the build project, which they typically do by:
 
 ```sh
-cmake -B build -D CMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --preset "<preset>"
 ```
 
-Use `CMAKE_BUILD_TYPE=Debug` only when in need of advanced debugging.
-
-Build the project as follows:
-
-```bash
-cmake --build build
-```
+When the build is configured, compile via `/compile`.
 
 ### Run pipelines
 
@@ -107,4 +101,6 @@ Common options:
 - `--jobs N` or `-j N`: Control parallelism (default: number of CPUs)
 - `--debug` or `-d`: Show detailed test information
 
-For more details, see the [Test Framework Reference](https://docs.tenzir.com/reference/test-framework) and [Writing Tests Guide](https://docs.tenzir.com/guides/testing/write-tests).
+For more details, read the [Test Framework reference
+docs](https://docs.tenzir.com/reference/test-framework.md) and [guide on writing
+tests](https://docs.tenzir.com/guides/testing/write-tests.md).

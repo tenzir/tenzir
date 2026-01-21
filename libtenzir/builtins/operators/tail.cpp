@@ -7,13 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/compile_ctx.hpp>
-#include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql2/eval.hpp>
 
 namespace tenzir::plugins::tail {
 
@@ -75,7 +71,6 @@ private:
 };
 
 class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_compiler_plugin,
                      public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -103,9 +98,9 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<TailArgs, Tail>{};
-    auto count = d.optional_positional("count", &TailArgs::count);
-    TENZIR_UNUSED(count);
+    auto d
+      = Describer<TailArgs, Tail>{"https://docs.tenzir.com/operators/tail"};
+    d.optional_positional("count", &TailArgs::count);
     return d.without_optimize();
   }
 };

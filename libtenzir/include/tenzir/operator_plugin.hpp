@@ -321,6 +321,12 @@ public:
     (impl<Impls>(), ...);
   }
 
+  explicit Describer(Args initial, std::string docs = "") {
+    desc_.docs = std::move(docs);
+    desc_.args = std::move(initial);
+    (impl<Impls>(), ...);
+  }
+
   /// Add an operator implementation.
   template <class Impl>
   auto impl() -> void {
