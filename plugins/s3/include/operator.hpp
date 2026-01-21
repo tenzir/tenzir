@@ -81,8 +81,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   } else if (args.aws_iam) {
     // aws_iam takes precedence over config-based credentials
     if (resolved_creds) {
-      opts->ConfigureAccessKey(resolved_creds->access_key,
-                               resolved_creds->secret_key,
+      opts->ConfigureAccessKey(resolved_creds->access_key_id,
+                               resolved_creds->secret_access_key,
                                resolved_creds->session_token);
     } else if (args.aws_iam->role) {
       opts->ConfigureAssumeRoleCredentials(

@@ -19,8 +19,8 @@ auto aws_iam_options::from_record(located<record> config,
                                   diagnostic_handler& dh)
   -> failure_or<aws_iam_options> {
   constexpr auto known = std::array{
-    "region",        "assume_role",       "session_name",  "external_id",
-    "access_key_id", "secret_access_key", "session_token",
+    "region",      "profile",       "assume_role",       "session_name",
+    "external_id", "access_key_id", "secret_access_key", "session_token",
   };
   const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
@@ -71,14 +71,15 @@ auto aws_iam_options::from_record(located<record> config,
   auto opts = aws_iam_options{};
   opts.loc = config.source;
   TRY(assign_non_empty_string("region", opts.region));
+  TRY(assign_non_empty_string("profile", opts.profile));
   TRY(assign_non_empty_string("assume_role", opts.role));
   TRY(assign_non_empty_string("session_name", opts.session_name));
   TRY(assign_non_empty_string("external_id", opts.ext_id));
-  TRY(assign_secret("access_key_id", opts.access_key));
-  TRY(assign_secret("secret_access_key", opts.secret_key));
+  TRY(assign_secret("access_key_id", opts.access_key_id));
+  TRY(assign_secret("secret_access_key", opts.secret_access_key));
   TRY(assign_secret("session_token", opts.session_token));
   // Validate that access_key_id and secret_access_key are specified together
-  if (opts.access_key.has_value() xor opts.secret_key.has_value()) {
+  if (opts.access_key_id.has_value() xor opts.secret_access_key.has_value()) {
     diagnostic::error(
       "`access_key_id` and `secret_access_key` must be specified together")
       .primary(config)
@@ -86,8 +87,15 @@ auto aws_iam_options::from_record(located<record> config,
     return failure::promise();
   }
   // Validate that session_token requires access_key_id
-  if (opts.session_token and not opts.access_key) {
+  if (opts.session_token and not opts.access_key_id) {
     diagnostic::error("`session_token` specified without `access_key_id`")
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  // Validate that profile is not used with explicit credentials
+  if (opts.profile and opts.access_key_id) {
+    diagnostic::error("`profile` cannot be used with explicit credentials")
       .primary(config)
       .emit(dh);
     return failure::promise();
@@ -99,11 +107,12 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
                                            diagnostic_handler& dh) const
   -> std::vector<secret_request> {
   auto requests = std::vector<secret_request>{};
-  if (access_key) {
-    requests.emplace_back(make_secret_request("access_key", *access_key, loc,
-                                              resolved.access_key, dh));
-    requests.emplace_back(make_secret_request("secret_key", *secret_key, loc,
-                                              resolved.secret_key, dh));
+  if (access_key_id) {
+    requests.emplace_back(make_secret_request("access_key_id", *access_key_id,
+                                              loc, resolved.access_key_id, dh));
+    requests.emplace_back(make_secret_request("secret_access_key",
+                                              *secret_access_key, loc,
+                                              resolved.secret_access_key, dh));
     if (session_token) {
       requests.emplace_back(make_secret_request(
         "session_token", *session_token, loc, resolved.session_token, dh));

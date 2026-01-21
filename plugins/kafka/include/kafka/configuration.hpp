@@ -34,8 +34,8 @@ class configuration {
 public:
   /// Resolved AWS credentials for Kafka MSK authentication.
   struct resolved_aws_credentials {
-    std::string access_key;
-    std::string secret_key;
+    std::string access_key_id;
+    std::string secret_access_key;
     std::string session_token;
   };
 
@@ -45,9 +45,9 @@ public:
     std::optional<std::string> session_name;
     std::optional<std::string> ext_id;
     /// AWS access key ID (for explicit credentials).
-    std::optional<secret> access_key;
+    std::optional<secret> access_key_id;
     /// AWS secret access key (for explicit credentials).
-    std::optional<secret> secret_key;
+    std::optional<secret> secret_access_key;
     /// AWS session token for temporary credentials.
     std::optional<secret> session_token;
     location loc;
@@ -56,8 +56,8 @@ public:
       return f.object(x).fields(
         f.field("region", x.region), f.field("role", x.role),
         f.field("session_name", x.session_name), f.field("ext_id", x.ext_id),
-        f.field("access_key", x.access_key),
-        f.field("secret_key", x.secret_key),
+        f.field("access_key_id", x.access_key_id),
+        f.field("secret_access_key", x.secret_access_key),
         f.field("session_token", x.session_token), f.field("loc", x.loc));
     }
 
@@ -66,7 +66,7 @@ public:
 
     /// Returns true if explicit credentials are configured.
     auto has_explicit_credentials() const -> bool {
-      return access_key.has_value();
+      return access_key_id.has_value();
     }
 
     /// Creates secret requests for resolving credentials.

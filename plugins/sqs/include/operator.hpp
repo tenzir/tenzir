@@ -52,6 +52,7 @@ class sqs_queue {
 public:
   explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time,
                      std::optional<std::string> region = std::nullopt,
+                     std::optional<std::string> profile = std::nullopt,
                      std::optional<std::string> role = std::nullopt,
                      std::optional<std::string> role_session_name
                      = std::nullopt,
@@ -91,13 +92,20 @@ public:
     // Create the credentials provider based on options.
     auto credentials = std::invoke(
       [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-        // Determine base credentials provider: explicit or default chain.
+        // Determine base credentials provider: explicit, profile, or default
+        // chain.
         auto base_credentials
           = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
         if (creds) {
           base_credentials
             = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-              creds->access_key, creds->secret_key, creds->session_token);
+              creds->access_key_id, creds->secret_access_key,
+              creds->session_token);
+        } else if (profile) {
+          TENZIR_VERBOSE("[sqs] using profile {}", *profile);
+          base_credentials = std::make_shared<
+            Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
+            profile->c_str());
         } else {
           base_credentials
             = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
@@ -241,13 +249,13 @@ public:
     try {
       auto poll_time
         = args_.poll_time ? args_.poll_time->inner : default_poll_time;
-      auto region
-        = args_.aws ? std::make_optional(args_.aws->region) : std::nullopt;
+      auto region = args_.aws ? args_.aws->region : std::nullopt;
+      auto profile = args_.aws ? args_.aws->profile : std::nullopt;
       auto role = args_.aws ? args_.aws->role : std::nullopt;
       auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
       auto ext_id = args_.aws ? args_.aws->ext_id : std::nullopt;
-      auto queue = sqs_queue{args_.queue,  poll_time, region,        role,
-                             session_name, ext_id,    resolved_creds};
+      auto queue = sqs_queue{args_.queue, poll_time,    region, profile,
+                             role,        session_name, ext_id, resolved_creds};
       co_yield {};
       while (true) {
         constexpr auto num_messages = size_t{1};
@@ -317,13 +325,14 @@ public:
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;
     auto queue = std::shared_ptr<sqs_queue>{};
     try {
-      auto region
-        = args_.aws ? std::make_optional(args_.aws->region) : std::nullopt;
+      auto region = args_.aws ? args_.aws->region : std::nullopt;
+      auto profile = args_.aws ? args_.aws->profile : std::nullopt;
       auto role = args_.aws ? args_.aws->role : std::nullopt;
       auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
       auto ext_id = args_.aws ? args_.aws->ext_id : std::nullopt;
-      queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region, role,
-                                          session_name, ext_id, resolved_creds);
+      queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
+                                          profile, role, session_name, ext_id,
+                                          resolved_creds);
     } catch (diagnostic& d) {
       dh.emit(std::move(d));
     }

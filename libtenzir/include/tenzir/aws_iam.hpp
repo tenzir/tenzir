@@ -22,8 +22,8 @@ namespace tenzir {
 
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
-  std::string access_key;
-  std::string secret_key;
+  std::string access_key_id;
+  std::string secret_access_key;
   std::string session_token;
 };
 
@@ -32,8 +32,10 @@ struct resolved_aws_credentials {
 /// This struct provides common AWS authentication configuration that can be
 /// used across different AWS-related operators (SQS, S3, Kafka MSK, etc.).
 struct aws_iam_options {
-  /// AWS region for API requests.
-  std::string region;
+  /// AWS region for API requests (optional, SDK uses default resolution).
+  std::optional<std::string> region;
+  /// AWS CLI profile name to use for credentials.
+  std::optional<std::string> profile;
   /// IAM role ARN to assume.
   std::optional<std::string> role;
   /// Session name for role assumption.
@@ -41,9 +43,9 @@ struct aws_iam_options {
   /// External ID for role assumption.
   std::optional<std::string> ext_id;
   /// AWS access key ID.
-  std::optional<secret> access_key;
+  std::optional<secret> access_key_id;
   /// AWS secret access key.
-  std::optional<secret> secret_key;
+  std::optional<secret> secret_access_key;
   /// AWS session token for temporary credentials.
   std::optional<secret> session_token;
   /// Source location for diagnostics.
@@ -51,16 +53,18 @@ struct aws_iam_options {
 
   friend auto inspect(auto& f, aws_iam_options& x) -> bool {
     return f.object(x).fields(
-      f.field("region", x.region), f.field("role", x.role),
-      f.field("session_name", x.session_name), f.field("ext_id", x.ext_id),
-      f.field("access_key", x.access_key), f.field("secret_key", x.secret_key),
+      f.field("region", x.region), f.field("profile", x.profile),
+      f.field("role", x.role), f.field("session_name", x.session_name),
+      f.field("ext_id", x.ext_id), f.field("access_key_id", x.access_key_id),
+      f.field("secret_access_key", x.secret_access_key),
       f.field("session_token", x.session_token), f.field("loc", x.loc));
   }
 
   /// Parses AWS IAM options from a TQL record.
   ///
   /// Recognized keys:
-  /// - `region`: AWS region for API requests
+  /// - `region`: AWS region for API requests (optional)
+  /// - `profile`: AWS CLI profile name to use for credentials
   /// - `access_key_id`: AWS access key ID
   /// - `secret_access_key`: AWS secret access key
   /// - `session_token`: AWS session token for temporary credentials
@@ -81,7 +85,7 @@ struct aws_iam_options {
 
   /// Returns true if explicit credentials are configured.
   auto has_explicit_credentials() const -> bool {
-    return access_key.has_value();
+    return access_key_id.has_value();
   }
 };
 

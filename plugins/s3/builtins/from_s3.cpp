@@ -172,8 +172,8 @@ public:
     co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
     // Apply aws_iam credentials to local variables
     if (resolved_creds) {
-      access_key = resolved_creds->access_key;
-      secret_key = resolved_creds->secret_key;
+      access_key = resolved_creds->access_key_id;
+      secret_key = resolved_creds->secret_access_key;
       session_token = resolved_creds->session_token;
     }
     if (args_.aws_iam and args_.aws_iam->role) {

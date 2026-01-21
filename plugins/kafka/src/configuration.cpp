@@ -97,11 +97,11 @@ auto configuration::aws_iam_options::from_record(located<record> config,
   TRY(assign_non_empty_string("assume_role", opts.role));
   TRY(assign_non_empty_string("session_name", opts.session_name));
   TRY(assign_non_empty_string("external_id", opts.ext_id));
-  TRY(assign_secret("access_key_id", opts.access_key));
-  TRY(assign_secret("secret_access_key", opts.secret_key));
+  TRY(assign_secret("access_key_id", opts.access_key_id));
+  TRY(assign_secret("secret_access_key", opts.secret_access_key));
   TRY(assign_secret("session_token", opts.session_token));
   // Validate that access_key_id and secret_access_key are specified together
-  if (opts.access_key.has_value() xor opts.secret_key.has_value()) {
+  if (opts.access_key_id.has_value() xor opts.secret_access_key.has_value()) {
     diagnostic::error(
       "`access_key_id` and `secret_access_key` must be specified together")
       .primary(config)
@@ -109,7 +109,7 @@ auto configuration::aws_iam_options::from_record(located<record> config,
     return failure::promise();
   }
   // Validate that session_token requires access_key_id
-  if (opts.session_token and not opts.access_key) {
+  if (opts.session_token and not opts.access_key_id) {
     diagnostic::error("`session_token` specified without `access_key_id`")
       .primary(config)
       .emit(dh);
@@ -122,11 +122,12 @@ auto configuration::aws_iam_options::make_secret_requests(
   resolved_aws_credentials& resolved, diagnostic_handler& dh) const
   -> std::vector<secret_request> {
   auto requests = std::vector<secret_request>{};
-  if (access_key) {
-    requests.emplace_back(make_secret_request("access_key", *access_key, loc,
-                                              resolved.access_key, dh));
-    requests.emplace_back(make_secret_request("secret_key", *secret_key, loc,
-                                              resolved.secret_key, dh));
+  if (access_key_id) {
+    requests.emplace_back(make_secret_request("access_key_id", *access_key_id,
+                                              loc, resolved.access_key_id, dh));
+    requests.emplace_back(make_secret_request("secret_access_key",
+                                              *secret_access_key, loc,
+                                              resolved.secret_access_key, dh));
     if (session_token) {
       requests.emplace_back(make_secret_request(
         "session_token", *session_token, loc, resolved.session_token, dh));
@@ -158,7 +159,8 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
         TENZIR_VERBOSE("[kafka iam] using explicit credentials");
         base_credentials
           = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-            creds_->access_key, creds_->secret_key, creds_->session_token);
+            creds_->access_key_id, creds_->secret_access_key,
+            creds_->session_token);
       } else {
         TENZIR_VERBOSE("[kafka iam] using the default credential chain");
         base_credentials
