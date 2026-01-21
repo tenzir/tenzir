@@ -116,6 +116,13 @@ public:
         return failure::promise();
       }
     }
+    // Validate anonymous + role conflict
+    if (args.anonymous and role) {
+      diagnostic::error("`anonymous` and `role` cannot be used together")
+        .primary(role->source)
+        .emit(ctx);
+      return failure::promise();
+    }
     if (role) {
       auto& r = args.role.emplace();
       r.role = role->inner;

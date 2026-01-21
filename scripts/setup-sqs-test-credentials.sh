@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Setup script to create IAM resources for testing load_sqs with AWS IAM authentication
 # Uses the "playground" AWS profile
+#
+# SECURITY WARNING: This script will display AWS credentials in the terminal.
+# - Clear your terminal history after use
+# - Do not run this script in shared terminal sessions or CI logs
+# - Consider using `export HISTCONTROL=ignorespace` before running
 
 set -euo pipefail
 
@@ -145,8 +150,10 @@ echo "Attached policy to role"
 echo ""
 echo "=== Creating Access Keys ==="
 # Delete existing access keys first (user can have max 2)
-EXISTING_KEYS=$(aws iam list-access-keys --user-name "$USER_NAME" --profile "$PROFILE" --query 'AccessKeyMetadata[].AccessKeyId' --output text)
-for key in $EXISTING_KEYS; do
+# Use mapfile to safely handle the key list without word splitting issues
+mapfile -t EXISTING_KEYS < <(aws iam list-access-keys --user-name "$USER_NAME" --profile "$PROFILE" --query 'AccessKeyMetadata[].AccessKeyId' --output text | tr '\t' '\n')
+for key in "${EXISTING_KEYS[@]}"; do
+  [[ -z "$key" ]] && continue
   echo "Deleting existing access key: $key"
   aws iam delete-access-key --user-name "$USER_NAME" --access-key-id "$key" --profile "$PROFILE"
 done
@@ -170,90 +177,81 @@ echo "Queue URL: $QUEUE_URL"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 
-echo ""
-echo "=============================================="
-echo "            TEST CREDENTIALS                  "
-echo "=============================================="
-echo ""
-echo "Access Key ID:     $ACCESS_KEY_ID"
-echo "Secret Access Key: $SECRET_ACCESS_KEY"
-echo ""
-echo "Role ARN:          $ROLE_ARN"
-echo "Region:            $REGION"
-echo "Queue Name:        $QUEUE_NAME"
-echo "Queue URL:         $QUEUE_URL"
-echo ""
-echo "=============================================="
-echo ""
-echo "--- Option 1: Test with explicit credentials ---"
-echo ""
-cat <<EOF
-load_sqs "$QUEUE_NAME", aws_iam={
-  region: "$REGION",
-  access_key_id: "$ACCESS_KEY_ID",
-  secret_access_key: "$SECRET_ACCESS_KEY"
-}
+# Create a secure temporary file for credentials (not displayed in terminal)
+CREDS_FILE=$(mktemp -t "tenzir-sqs-test-creds.XXXXXX")
+chmod 600 "$CREDS_FILE"
+
+# Write credentials to the secure file
+cat >"$CREDS_FILE" <<EOF
+# Tenzir SQS Test Credentials
+# Generated: $(date -Iseconds)
+# SECURITY: Delete this file after use. DO NOT commit to version control.
+
+# AWS Credentials
+AWS_ACCESS_KEY_ID=$ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY
+AWS_REGION=$REGION
+
+# Test Resources
+ROLE_ARN=$ROLE_ARN
+QUEUE_NAME=$QUEUE_NAME
+QUEUE_URL=$QUEUE_URL
+
+# --- To load these as environment variables, run: ---
+# source "$CREDS_FILE"
+
+# --- Option 1: Test with explicit credentials ---
+# load_sqs "$QUEUE_NAME", aws_iam={
+#   region: "$REGION",
+#   access_key_id: "\$AWS_ACCESS_KEY_ID",
+#   secret_access_key: "\$AWS_SECRET_ACCESS_KEY"
+# }
+
+# --- Option 2: Test with role assumption ---
+# (Requires setting env vars first: source this file)
+# load_sqs "$QUEUE_NAME", aws_iam={
+#   region: "$REGION",
+#   assume_role: "$ROLE_ARN",
+#   session_name: "test-session"
+# }
+
+# --- Option 3: Test with explicit credentials + role assumption ---
+# load_sqs "$QUEUE_NAME", aws_iam={
+#   region: "$REGION",
+#   access_key_id: "\$AWS_ACCESS_KEY_ID",
+#   secret_access_key: "\$AWS_SECRET_ACCESS_KEY",
+#   assume_role: "$ROLE_ARN",
+#   session_name: "test-session"
+# }
+
+# --- Send test message ---
+# aws sqs send-message --queue-url '$QUEUE_URL' \\
+#   --message-body 'Hello from test' --profile $PROFILE --region $REGION
 EOF
-echo ""
-echo "--- Option 2: Test with role assumption ---"
-echo "(Requires setting env vars first for the initial credentials)"
-echo ""
-echo "  export AWS_ACCESS_KEY_ID='$ACCESS_KEY_ID'"
-echo "  export AWS_SECRET_ACCESS_KEY='$SECRET_ACCESS_KEY'"
-echo "  export AWS_REGION='$REGION'"
-echo ""
-cat <<EOF
-load_sqs "$QUEUE_NAME", aws_iam={
-  region: "$REGION",
-  assume_role: "$ROLE_ARN",
-  session_name: "test-session"
-}
-EOF
-echo ""
-echo "--- Option 3: Test with explicit credentials + role assumption ---"
-echo "(No environment variables needed)"
-echo ""
-cat <<EOF
-load_sqs "$QUEUE_NAME", aws_iam={
-  region: "$REGION",
-  access_key_id: "$ACCESS_KEY_ID",
-  secret_access_key: "$SECRET_ACCESS_KEY",
-  assume_role: "$ROLE_ARN",
-  session_name: "test-session"
-}
-EOF
-echo ""
-echo "--- Option 4: Test with default credential chain ---"
-echo "(Uses AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env vars)"
-echo ""
-echo "  export AWS_ACCESS_KEY_ID='$ACCESS_KEY_ID'"
-echo "  export AWS_SECRET_ACCESS_KEY='$SECRET_ACCESS_KEY'"
-echo "  export AWS_REGION='$REGION'"
-echo ""
-cat <<EOF
-load_sqs "$QUEUE_NAME", aws_iam={region: "$REGION"}
-EOF
+
 echo ""
 echo "=============================================="
-echo "              SEND TEST MESSAGE              "
+echo "     ✅ CREDENTIALS SAVED TO SECURE FILE     "
 echo "=============================================="
 echo ""
-echo "aws sqs send-message --queue-url '$QUEUE_URL' \\"
-echo "  --message-body 'Hello from test' --profile $PROFILE --region $REGION"
+echo "Credentials written to: $CREDS_FILE"
+echo "File permissions: 600 (owner read/write only)"
 echo ""
-echo "=============================================="
-echo "           COPY-PASTE READY VALUES           "
-echo "=============================================="
+echo "To load credentials as environment variables:"
+echo "  source \"$CREDS_FILE\""
 echo ""
-echo "# Environment variables:"
-echo "export AWS_ACCESS_KEY_ID='$ACCESS_KEY_ID'"
-echo "export AWS_SECRET_ACCESS_KEY='$SECRET_ACCESS_KEY'"
-echo "export AWS_REGION='$REGION'"
+echo "To view credentials:"
+echo "  cat \"$CREDS_FILE\""
 echo ""
-echo "# TQL values:"
-echo "QUEUE_NAME=\"$QUEUE_NAME\""
-echo "REGION=\"$REGION\""
-echo "ACCESS_KEY_ID=\"$ACCESS_KEY_ID\""
-echo "SECRET_ACCESS_KEY=\"$SECRET_ACCESS_KEY\""
-echo "ROLE_ARN=\"$ROLE_ARN\""
+echo "⚠️  IMPORTANT SECURITY NOTES:"
+echo "  - Delete this file after use: rm \"$CREDS_FILE\""
+echo "  - Do NOT commit this file to version control"
+echo "  - Do NOT share this file path in logs or CI output"
+echo "  - The credentials expire when the IAM user access key is rotated"
+echo ""
+echo "Non-sensitive test resources:"
+echo "  Role ARN:    $ROLE_ARN"
+echo "  Queue Name:  $QUEUE_NAME"
+echo "  Queue URL:   $QUEUE_URL"
+echo "  Region:      $REGION"
 echo ""

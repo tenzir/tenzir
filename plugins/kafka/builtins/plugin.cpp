@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/operator.hpp"
+#include "tenzir/aws_iam.hpp"
 #include "tenzir/tql2/eval.hpp"
 
 #include <tenzir/tql2/plugin.hpp>
@@ -76,8 +77,15 @@ public:
       TRY(check_sasl_mechanism(args.options, ctx));
       TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
-      TRY(args.aws, configuration::aws_iam_options::from_record(
+      TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
+      // Region is required for Kafka MSK authentication.
+      if (not args.aws->region) {
+        diagnostic::error("`region` is required for Kafka MSK authentication")
+          .primary(args.aws->loc)
+          .emit(ctx);
+        return failure::promise();
+      }
     }
     if (args.options.inner.contains("enable.auto.commit")) {
       diagnostic::error("`enable.auto.commit` must not be specified")
@@ -188,8 +196,15 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
       TRY(check_sasl_mechanism(args.options, ctx));
       TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
-      TRY(args.aws, configuration::aws_iam_options::from_record(
+      TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
+      // Region is required for Kafka MSK authentication.
+      if (not args.aws->region) {
+        diagnostic::error("`region` is required for Kafka MSK authentication")
+          .primary(args.aws->loc)
+          .emit(ctx);
+        return failure::promise();
+      }
     }
     // HACK: Should directly accept a time
     if (ts) {

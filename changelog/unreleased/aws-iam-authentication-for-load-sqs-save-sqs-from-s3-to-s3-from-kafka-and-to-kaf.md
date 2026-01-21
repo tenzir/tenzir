@@ -15,9 +15,9 @@ The `aws_iam` option accepts these fields:
 
 - `region`: AWS region for API requests (optional for SQS and S3, required for Kafka MSK)
 - `profile`: AWS CLI profile name for credential resolution
-- `access_key_id`: AWS access key ID (supports `secret()` references)
-- `secret_access_key`: AWS secret access key (supports `secret()` references)
-- `session_token`: AWS session token for temporary credentials (supports `secret()` references)
+- `access_key_id`: AWS access key ID (use `secret("name")` to reference stored secrets)
+- `secret_access_key`: AWS secret access key (use `secret("name")` to reference stored secrets)
+- `session_token`: AWS session token for temporary credentials (use `secret("name")` to reference stored secrets)
 - `assume_role`: IAM role ARN to assume
 - `session_name`: Session name for role assumption
 - `external_id`: External ID for role assumption
@@ -50,4 +50,4 @@ from_s3 "s3://bucket/path", aws_iam={
 }
 ```
 
-When no `aws_iam` option is specified, operators use the AWS SDK's default credential provider chain, which checks environment variables, AWS configuration files, EC2 instance metadata, and other standard sources.
+When no explicit credentials or profile are configured, operators use the AWS SDK's default credential provider chain, which checks environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), AWS configuration files (`~/.aws/credentials`), EC2/ECS instance metadata, and other standard sources. This applies both when `aws_iam` is omitted entirely and when `aws_iam` is specified without `access_key_id`, `secret_access_key`, or `profile`.
