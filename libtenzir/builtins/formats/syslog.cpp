@@ -36,6 +36,9 @@ namespace tenzir::plugins::syslog {
 
 namespace {
 
+/// Maximum allowed syslog message size for octet-counting (16MB).
+constexpr auto max_syslog_message_size = size_t{16 * 1024 * 1024};
+
 /// A parser that parses an optional value whose nullopt is presented as a dash.
 template <class Parser>
 struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
@@ -786,6 +789,12 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
           .emit(dh);
         co_return;
       }
+      if (msg_len > max_syslog_message_size) {
+        diagnostic::error("octet-counted message length {} exceeds maximum {}",
+                          msg_len, max_syslog_message_size)
+          .emit(dh);
+        co_return;
+      }
       remaining_message_length = msg_len;
       chunk_begin = it;
       // The new message is fully within this chunk
@@ -1209,7 +1218,10 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto octet_counting = std::optional<bool>{}; // nullopt = auto-detect
+    // nullopt = auto-detect: try octet-counting first, fall back to plain syslog
+    // true = require octet-counting prefix, warn if missing
+    // false = never parse octet-counting prefix
+    auto octet_counting = std::optional<bool>{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());
     parser.positional("input", expr, "string");
@@ -1279,13 +1291,23 @@ public:
                 // Handle octet counting (RFC 6587 framing)
                 if (octet_counting.value_or(true)) { // true or auto-detect
                   auto length = uint32_t{};
-                  auto it = input.begin();
+                  auto octet_it = input.begin();
                   // For auto-detection, we require the stated length to match
                   // the remaining content exactly. This prevents false positives
                   // where input coincidentally starts with "<digits><space>".
-                  if (octet_length_parser(it, input.end(), length)
-                      && detail::narrow<uint32_t>(input.end() - it) == length) {
-                    input = std::string_view{it, length};
+                  if (octet_length_parser(octet_it, input.end(), length)
+                      && detail::narrow<uint32_t>(input.end() - octet_it)
+                           == length) {
+                    if (length > max_syslog_message_size) {
+                      diagnostic::warning("octet-counted message length {} "
+                                          "exceeds maximum {}",
+                                          length, max_syslog_message_size)
+                        .primary(expr.get_location())
+                        .emit(ctx);
+                      null();
+                      continue;
+                    }
+                    input = std::string_view{octet_it, length};
                   } else if (octet_counting.has_value() && *octet_counting) {
                     // Explicitly required but not found
                     diagnostic::warning("expected octet-counted input")

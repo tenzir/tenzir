@@ -1,0 +1,4 @@
+// octet_counting=false should NOT strip numeric prefix
+// Input starting with digits should be parsed as-is (will fail syslog parse)
+from { x: "65 <165>1 2023-10-11T22:14:15.003Z host app 1234 ID01 - Test message" }
+x = x.parse_syslog(octet_counting=false)
