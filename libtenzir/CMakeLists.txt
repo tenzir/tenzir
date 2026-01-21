@@ -243,6 +243,10 @@ foreach (source IN LISTS libtenzir_builtins_sources)
   endif ()
 endforeach ()
 
+tenzircollectpluginanchors(
+  libtenzir_builtin_force_link_symbols "tenzir_libtenzir_builtin_anchor"
+  ${libtenzir_builtins_sources})
+
 file(GLOB_RECURSE libtenzir_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/*.hpp")
@@ -255,6 +259,11 @@ add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
+if (libtenzir_builtin_force_link_symbols)
+  set_target_properties(
+    libtenzir_builtins PROPERTIES TENZIR_FORCE_LINK_SYMBOLS
+                                  "${libtenzir_builtin_force_link_symbols}")
+endif ()
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
