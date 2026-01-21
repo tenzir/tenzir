@@ -9,6 +9,7 @@
 #include "tenzir/application.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
@@ -40,6 +41,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <ranges>
 #include <string_view>
@@ -54,6 +56,25 @@ auto is_server_from_app_path(std::string_view app_path) {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   return app_name == "tenzir-node";
+}
+
+/// Checks if running on an EC2 instance by examining DMI system information.
+/// This avoids the ~1.5 minute timeout that occurs when the AWS SDK tries to
+/// reach the EC2 Instance Metadata Service (IMDS) on non-EC2 machines.
+auto is_ec2_instance() -> bool {
+#if __linux__
+  // On Linux, check /sys/devices/virtual/dmi/id/sys_vendor which contains
+  // "Amazon EC2" on EC2 instances.
+  if (auto file = std::ifstream{"/sys/devices/virtual/dmi/id/sys_vendor"}) {
+    auto line = std::string{};
+    if (std::getline(file, line)) {
+      if (line.find("Amazon") != std::string::npos) {
+        return true;
+      }
+    }
+  }
+#endif
+  return false;
 }
 
 } // namespace
@@ -82,6 +103,14 @@ auto main(int argc, char** argv) -> int try {
   if (auto err = cfg.parse(argc, argv); err.valid()) {
     fmt::print(stderr, "failed to parse configuration: {}\n", err);
     return EXIT_FAILURE;
+  }
+  // Disable EC2 Instance Metadata Service (IMDS) lookups when not running on
+  // EC2. This prevents a ~1.5 minute timeout when the AWS SDK tries to reach
+  // the metadata service at 169.254.169.254. Only set the variable if the user
+  // hasn't already configured it.
+  if (not detail::getenv("AWS_EC2_METADATA_DISABLED")
+      and not is_ec2_instance()) {
+    (void)detail::setenv("AWS_EC2_METADATA_DISABLED", "true");
   }
   auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
   if (not loaded_plugin_paths) {
