@@ -71,10 +71,12 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
 #endif
-  // Initialize Folly singletons (required for folly::coro::sleep, etc.).
+  // Some Folly builds use strict mode, even though that is not the default. In
+  // that case, we need to call `folly::Init` before using its singletons.
   auto argc2 = 1;
   auto argv2 = argv;
-  auto folly_init = folly::Init{&argc2, &argv2, false};
+  auto folly_init = folly::Init{
+    &argc2, &argv2, folly::InitOptions{}.useGFlags(false).removeFlags(false)};
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
