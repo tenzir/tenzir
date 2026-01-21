@@ -26,6 +26,7 @@
 #include "tenzir/disk_monitor.hpp"
 #include "tenzir/ecc.hpp"
 #include "tenzir/execution_node.hpp"
+#include "tenzir/export_bridge.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/index.hpp"
 #include "tenzir/index_config.hpp"
@@ -795,6 +796,17 @@ auto node(node_actor::stateful_pointer<node_state> self,
           .delegate(static_cast<node_actor>(self));
       }
       return self->state().get_pipeline_shell();
+    },
+    [self](atom::spawn, expression expr,
+           export_mode mode) -> caf::result<export_bridge_actor> {
+      auto filesystem
+        = self->system().registry().get<filesystem_actor>("tenzir.filesystem");
+      if (not filesystem) {
+        return caf::make_error(ec::logic_error, "filesystem not available");
+      }
+      return spawn_export_bridge(self->system(), std::move(expr), mode,
+                                 std::move(filesystem),
+                                 std::make_unique<null_diagnostic_handler>());
     },
     [self](atom::connect, atom::shell, uint32_t child_id,
            pipeline_shell_actor handle) -> caf::result<void> {

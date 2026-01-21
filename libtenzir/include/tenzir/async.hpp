@@ -527,14 +527,7 @@ class OperatorBase {
 public:
   virtual auto start(OpCtx& ctx) -> Task<void> {
     // TODO: What if we don't restore? No data? Flag?
-    auto load_result = co_await folly::coro::co_awaitTry(ctx.load());
-    TENZIR_ASSERT_ALWAYS(not load_result.hasException()
-                           or load_result.exception(),
-                         "ctx.load() returned empty exception wrapper");
-    if (load_result.hasException()) {
-      load_result.exception().throw_exception();
-    }
-    auto data = std::move(load_result).value();
+    auto data = co_await ctx.load();
     if (not data) {
       co_return;
     }

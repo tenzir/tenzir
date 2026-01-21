@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
+#include "tenzir/connect_to_node.hpp"
 
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
@@ -42,7 +43,6 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/timespan.hpp>
 #include <caf/typed_event_based_actor.hpp>
-#include <folly/coro/Result.h>
 #include <folly/coro/Sleep.h>
 
 namespace tenzir::plugins::export_ {
@@ -70,38 +70,60 @@ struct ExportArgs {
   export_mode mode;
 };
 
+auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
+  -> Task<node_actor> {
+  // Fast path: check local registry for existing node.
+  if (auto node = sys.registry().get<node_actor>("tenzir.node")) {
+    co_return node;
+  }
+  // Get configuration.
+  const auto& opts = content(sys.config());
+  auto node_endpoint = detail::get_node_endpoint(opts);
+  if (not node_endpoint) {
+    throw std::runtime_error(
+      fmt::format("failed to get node endpoint: {}", node_endpoint.error()));
+  }
+  auto timeout = detail::node_connection_timeout(opts);
+  auto retry_delay = detail::get_retry_delay(opts);
+  auto deadline = detail::get_deadline(timeout);
+  // Spawn connector and request connection.
+  auto connector_actor
+    = sys.spawn(connector, retry_delay, deadline, internal_connection);
+  auto request = connect_request{
+    .port = node_endpoint->port->number(),
+    .host = node_endpoint->host,
+  };
+  auto result = co_await async_mail(atom::connect_v, std::move(request))
+                  .request(connector_actor);
+  if (not result) {
+    throw std::runtime_error(
+      fmt::format("failed to connect to node: {}", result.error()));
+  }
+  co_return std::move(*result);
+}
+
 class Export final : public Operator<void, table_slice> {
 public:
   explicit Export(ExportArgs args)
     : expr_{std::move(args.expr)}, mode_{args.mode} {
   }
 
+  Export(const Export&) = delete;
+  Export& operator=(const Export&) = delete;
+  Export(Export&&) = default;
+  Export& operator=(Export&&) = default;
+
   auto start(OpCtx& ctx) -> Task<void> override {
-    // NOTE: Due to a bug in clang on ARM64 Darwin, std::current_exception()
-    // returns nullptr when called from unhandled_exception(). We must catch
-    // exceptions explicitly and use co_yield co_error() to propagate them.
-    // See: https://github.com/llvm/llvm-project/issues/92121
-    std::exception_ptr captured_exception;
-    try {
-      co_await OperatorBase::start(ctx);
-      auto filesystem = ctx.actor_system().registry().get<filesystem_actor>(
-        "tenzir.filesystem");
-      if (not filesystem) {
-        TENZIR_WARN("did not get file system");
-        throw std::runtime_error("filesystem is null");
-      }
-      diag_queue_ = std::make_shared<UnboundedQueue<diagnostic>>();
-      auto bridge_dh = std::make_unique<queued_diagnostic_handler>(diag_queue_);
-      bridge_
-        = spawn_export_bridge(ctx.actor_system(), expr_, mode_,
-                              std::move(filesystem), std::move(bridge_dh));
-    } catch (...) {
-      captured_exception = std::current_exception();
+    co_await OperatorBase::start(ctx);
+    auto node = co_await connect_to_node(ctx.actor_system());
+    diag_queue_ = std::make_shared<UnboundedQueue<diagnostic>>();
+    auto result
+      = co_await async_mail(atom::spawn_v, expr_, mode_).request(node);
+    if (not result) {
+      throw std::runtime_error(
+        fmt::format("failed to spawn export bridge: {}", result.error()));
     }
-    if (captured_exception) {
-      co_yield folly::coro::co_error(
-        folly::exception_wrapper(captured_exception));
-    }
+    bridge_ = std::move(*result);
   }
 
   auto await_task() const -> Task<std::any> override {
