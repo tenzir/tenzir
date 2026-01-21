@@ -8,8 +8,6 @@
 
 #include "tenzir/tql2/plugin.hpp"
 
-#include "tenzir/detail/string_literal.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/plugin.hpp>
@@ -39,10 +37,16 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = connector_args{};
     auto dur = std::optional<located<duration>>{};
+    auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(this->name())
           .positional("queue", args.queue)
           .named("poll_time", dur)
+          .named("aws_iam", iam_opts)
           .parse(inv, ctx));
+    if (iam_opts) {
+      TRY(args.aws,
+          aws_iam_options::from_record(std::move(iam_opts).value(), ctx));
+    }
     if (args.queue.inner.empty()) {
       diagnostic::error("queue must not be empty")
         .primary(args.queue.source)
@@ -71,7 +75,7 @@ public:
     return std::make_unique<Operator>(std::move(args));
   }
 
-  virtual auto load_properties() const
+  auto load_properties() const
     -> operator_factory_plugin::load_properties_t override {
     if constexpr (std::same_as<Operator, sqs_loader>) {
       return {
@@ -83,7 +87,7 @@ public:
     }
   }
 
-  virtual auto save_properties() const
+  auto save_properties() const
     -> operator_factory_plugin::save_properties_t override {
     if constexpr (std::same_as<Operator, sqs_saver>) {
       return {
