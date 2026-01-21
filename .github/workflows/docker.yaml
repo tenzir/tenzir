@@ -148,6 +148,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    outputs:
+      images: ${{ steps.collect-images.outputs.images }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -174,3 +176,65 @@ jobs:
                 "${registry}/tenzir/${name}:arm64-${tag}"
             done
           done
+      - name: Collect images for signing
+        id: collect-images
+        run: |
+          # Generate list of all manifest images (without arch suffix)
+          jq -r '.editions[] | .name as $name | ."image-registries"[]? | [ $name, . ] | join(" ")' \
+            <<< '${{ inputs.config }}' > /tmp/editions.txt
+          images=()
+          while read -r name registry; do
+            for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
+              images+=("${registry}/tenzir/${name}:${tag}")
+            done
+          done < /tmp/editions.txt
+          printf '%s\n' "${images[@]}" | jq -R . | jq -sc '.' > /tmp/images.json
+          echo "images=$(cat /tmp/images.json)" >> "$GITHUB_OUTPUT"
+
+  sign-images:
+    name: Sign Images
+    runs-on: ubuntu-latest
+    needs:
+      - push-manifest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Login to registries
+        uses: ./.github/actions/registry-login
+        with:
+          config: ${{ inputs.config }}
+          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      # --- Cosign Signing (for general use with `cosign verify`) ---
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign images with Cosign (keyless OIDC)
+        # Keyless signing uses GitHub Actions OIDC identity.
+        # Verify with:
+        #   cosign verify \
+        #     --certificate-identity-regexp="https://github.com/tenzir/tenzir/.*" \
+        #     --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+        #     <image>
+        run: |
+          for image in $(echo '${{ needs.push-manifest.outputs.images }}' | jq -r '.[]'); do
+            echo "::notice Signing ${image} with Cosign (keyless)"
+            cosign sign --yes "${image}"
+          done
+
+      # --- Sigstore-format Signing (for Podman automatic verification) ---
+      # This creates sigstore-format signatures stored directly in the registry.
+      # No lookaside server needed - signatures are stored as OCI artifacts.
+      # Users configure /etc/containers/policy.json with the public key
+      # and set use-sigstore-attachments: true in registries.d.
+      - name: Sign images with sigstore format (Podman-compatible)
+        env:
+          COSIGN_PASSWORD: ${{ secrets.CONTAINER_SIGNING_KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.CONTAINER_SIGNING_KEY }}" > /tmp/signing-key.pem
+          for image in $(echo '${{ needs.push-manifest.outputs.images }}' | jq -r '.[]'); do
+            echo "::notice Signing ${image} with sigstore format for Podman"
+            cosign sign --yes --key /tmp/signing-key.pem "${image}"
+          done
+          rm -f /tmp/signing-key.pem
