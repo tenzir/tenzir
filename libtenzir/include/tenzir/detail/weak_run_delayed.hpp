@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include <caf/add_ref.hpp>
+#include <caf/ref_counted.hpp>
 #include <caf/scheduled_actor.hpp>
 
 namespace tenzir::detail {
@@ -24,29 +25,59 @@ namespace tenzir::detail {
 template <class Function>
   requires std::is_invocable_r_v<void, Function&&>
 auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
-                      Function&& function) {
-  return self->clock().schedule(
-    self->clock().now() + delay,
-    caf::make_action(std::forward<Function>(function)),
-    caf::weak_actor_ptr{self->ctrl(), caf::add_ref});
+                      Function&& function) -> caf::disposable {
+  return self->run_scheduled_weak(self->clock().now() + delay,
+                                  std::forward<Function>(function));
 }
+
+struct weak_run_delayed_disposable_impl final : caf::ref_counted,
+                                                caf::disposable::impl {
+  void dispose() override {
+    inner_.dispose();
+  }
+
+  bool disposed() const noexcept override {
+    return inner_.disposed();
+  }
+
+  void ref_disposable() const noexcept override {
+    ref();
+  }
+
+  void deref_disposable() const noexcept override {
+    deref();
+  }
+
+  friend void
+  intrusive_ptr_add_ref(const weak_run_delayed_disposable_impl* p) noexcept {
+    p->ref();
+  }
+
+  friend void
+  intrusive_ptr_release(const weak_run_delayed_disposable_impl* p) noexcept {
+    p->deref();
+  }
+
+  caf::disposable inner_;
+};
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.
 ///
 /// The function is first called at `start`. Even if `start` is in the past, it
 /// will be scheduled and not called immediately here.
 template <class F>
-void weak_run_delayed_loop_at(caf::scheduled_actor* self,
+auto weak_run_delayed_loop_at(caf::scheduled_actor* self,
                               caf::actor_clock::time_point start,
-                              caf::timespan delay, F&& f) {
+                              caf::timespan delay, F&& f) -> caf::disposable {
   // Using `weak_run_delayed` here would introduce clock drift.
-  self->clock().schedule(
-    start,
-    caf::make_action([self, start, delay, f = std::forward<F>(f)]() mutable {
+  auto impl = caf::make_counted<weak_run_delayed_disposable_impl>();
+  impl->inner_ = self->run_scheduled_weak(
+    start, [self, impl, start, delay, f = std::forward<F>(f)]() mutable {
       std::invoke(f);
-      weak_run_delayed_loop_at(self, start + delay, delay, std::move(f));
-    }),
-    caf::weak_actor_ptr{self->ctrl(), caf::add_ref});
+      impl->inner_
+        = weak_run_delayed_loop_at(self, start + delay, delay, std::move(f));
+    });
+  return caf::disposable{std::move(impl)};
 }
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.
@@ -56,13 +87,14 @@ void weak_run_delayed_loop_at(caf::scheduled_actor* self,
 /// @param run_immediately Whether to run the function immediately.
 template <class Function>
   requires std::is_invocable_r_v<void, std::remove_reference_t<Function>&>
-void weak_run_delayed_loop(caf::scheduled_actor* self, caf::timespan delay,
-                           Function&& function, bool run_immediately = true) {
+auto weak_run_delayed_loop(caf::scheduled_actor* self, caf::timespan delay,
+                           Function&& function, bool run_immediately = true)
+  -> caf::disposable {
   if (run_immediately) {
     std::invoke(function);
   }
-  weak_run_delayed_loop_at(self, self->clock().now() + delay, delay,
-                           std::forward<Function>(function));
+  return weak_run_delayed_loop_at(self, self->clock().now() + delay, delay,
+                                  std::forward<Function>(function));
 }
 
 } // namespace tenzir::detail

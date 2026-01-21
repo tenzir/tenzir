@@ -116,13 +116,12 @@ template <class Input, class Output>
 struct exec_node_diagnostic_handler final : public diagnostic_handler {
   exec_node_diagnostic_handler(exec_node_state<Input, Output>& state,
                                receiver_actor<diagnostic> handle)
-    : state{state}, handle{std::move(handle)} {
-    detail::weak_run_delayed_loop(
-      state.self, defaults::diagnostic_deduplication_interval,
-      [this] {
-        deduplicator_.clear();
-      },
-      false);
+    : state{state},
+      handle{std::move(handle)},
+      deduplicator_disposable_{detail::weak_run_delayed_loop(
+        state.self, defaults::diagnostic_deduplication_interval, [this] {
+          deduplicator_.clear();
+        })} {
   }
 
   void emit(diagnostic diag) override {
@@ -158,10 +157,28 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     censor.secrets.emplace(std::move(v));
   }
 
+  exec_node_diagnostic_handler(const exec_node_diagnostic_handler&) = delete;
+  exec_node_diagnostic_handler& operator=(const exec_node_diagnostic_handler&)
+    = delete;
+  exec_node_diagnostic_handler& operator=(exec_node_diagnostic_handler&&)
+    = delete;
+  exec_node_diagnostic_handler(exec_node_diagnostic_handler&& other)
+    : state{other.state},
+      handle{std::move(other.handle)},
+      deduplicator_{std::move(other.deduplicator_)},
+      deduplicator_disposable_{std::move(other.deduplicator_disposable_)},
+      censor{std::move(other.censor)} {
+  }
+
+  ~exec_node_diagnostic_handler() {
+    deduplicator_disposable_.dispose();
+  }
+
 private:
   exec_node_state<Input, Output>& state;
   receiver_actor<diagnostic> handle = {};
   diagnostic_deduplicator deduplicator_;
+  caf::disposable deduplicator_disposable_;
   secret_censor censor;
 };
 
@@ -831,13 +848,10 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    detail::weak_run_delayed_loop(
-      self, defaults::metrics_interval,
-      [this] {
-        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        emit_generic_op_metrics();
-      },
-      false);
+    detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
+      auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+      emit_generic_op_metrics();
+    });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} was already started", *self));
