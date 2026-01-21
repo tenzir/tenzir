@@ -10,6 +10,7 @@
 
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
+#include "tenzir/co_match.hpp"
 #include "tenzir/ir.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
@@ -235,20 +236,21 @@ private:
       = make_unbounded_channel<FromControl>();
     auto [to_control_sender, to_control_receiver]
       = make_unbounded_channel<ToControl>();
-    auto push_upstream
-      = match(std::move(chain),
-              [&]<class In>(OperatorChain<In, table_slice> chain)
-                -> variant<Box<Push<OperatorMsg<void>>>,
-                           Box<Push<OperatorMsg<table_slice>>>> {
-                auto [push_upstream, pull_upstream] = make_op_channel<In>(1000);
-                auto runner = run_chain(
-                  std::move(chain), std::move(pull_upstream),
-                  std::move(push_downstream), std::move(from_control_receiver),
-                  std::move(to_control_sender), ctx_.actor_system(), ctx_.dh());
-                // TODO: What do we do here? Do we need to react to it finishing?
-                auto handle = queue_.scope().spawn(std::move(runner));
-                return std::move(push_upstream);
-              });
+    auto push_upstream = co_match(
+      std::move(chain),
+      [&]<class In>(OperatorChain<In, table_slice> chain)
+        -> variant<Box<Push<OperatorMsg<void>>>,
+                   Box<Push<OperatorMsg<table_slice>>>> {
+        auto [push_upstream, pull_upstream] = make_op_channel<In>(1000);
+        auto runner = run_chain(std::move(chain), std::move(pull_upstream),
+                                std::move(push_downstream),
+                                std::move(from_control_receiver),
+                                std::move(to_control_sender),
+                                ctx_.actor_system(), ctx_.dh());
+        // TODO: What do we do here? Do we need to react to it finishing?
+        auto handle = queue_.scope().spawn(std::move(runner));
+        return std::move(push_upstream);
+      });
     // co_await handle.join();
     queue_.scope().spawn([this, pull_downstream = std::move(
                                   pull_downstream)] mutable -> Task<void> {
@@ -258,7 +260,7 @@ private:
       // backpressure, we need to pull from it.
       while (true) {
         auto output = co_await pull_downstream();
-        co_await match(
+        co_await co_match(
           std::move(output),
           [&](table_slice output) -> Task<void> {
             if constexpr (std::same_as<Output, void>) {
@@ -301,20 +303,20 @@ private:
       }
     });
     // TODO: Cleanup.
-    co_return match(push_upstream,
-                    [&]<class In>(Box<Push<OperatorMsg<In>>>& push_upstream)
-                      -> AnyOpenPipeline {
-                      auto& push = *push_upstream;
-                      auto [_, inserted] = subpipelines_.try_emplace(
-                        std::move(key), SubPipeline{
-                                          std::move(push_upstream),
-                                          std::move(from_control_sender),
-                                        });
-                      if (not inserted) {
-                        panic("already have a subpipeline for that key");
-                      }
-                      return OpenPipeline<In>{push};
-                    });
+    co_return co_match(push_upstream,
+                       [&]<class In>(Box<Push<OperatorMsg<In>>>& push_upstream)
+                         -> AnyOpenPipeline {
+                         auto& push = *push_upstream;
+                         auto [_, inserted] = subpipelines_.try_emplace(
+                           std::move(key), SubPipeline{
+                                             std::move(push_upstream),
+                                             std::move(from_control_sender),
+                                           });
+                         if (not inserted) {
+                           panic("already have a subpipeline for that key");
+                         }
+                         return OpenPipeline<In>{push};
+                       });
   }
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> override {
@@ -323,10 +325,11 @@ private:
     if (it == subpipelines_.end()) {
       return std::nullopt;
     }
-    return match(it->second,
-                 []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
-                   return OpenPipeline<In>{*subpipeline.push};
-                 });
+    return co_match(
+      it->second,
+      []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
+        return OpenPipeline<In>{*subpipeline.push};
+      });
   }
 
   auto run() -> Task<void> {
@@ -383,7 +386,7 @@ private:
     }
     TENZIR_VERBOSE("waiting in {} for message", typeid(*op_).name());
     auto message = check(co_await queue_.next());
-    co_await match(std::move(message), [&](auto message) {
+    co_await co_match(std::move(message), [&](auto message) {
       return process(std::move(message));
     });
   }
@@ -408,7 +411,7 @@ private:
   }
 
   auto process(OperatorMsg<Input> message) -> Task<void> {
-    co_await match(
+    co_await co_match(
       std::move(message),
       // The template indirection is necessary to prevent a `void` parameter.
       [&]<std::same_as<Input> Input2>(Input2 input) -> Task<void> {
@@ -455,7 +458,7 @@ private:
   }
 
   auto process(FromControl message) -> Task<void> {
-    co_await match(
+    co_await co_match(
       std::move(message),
       [&](PostCommit) -> Task<void> {
         TENZIR_VERBOSE("got post commit in {}", typeid(*op_).name());
@@ -494,16 +497,16 @@ private:
     // Afterwards, finish all subpipelines. Note that the previous step could
     // have still pushed data into them.
     for (auto& sub : subpipelines_) {
-      co_await match(sub.second,
-                     []<class In>(SubPipeline<In>& sub) -> Task<void> {
-                       // TODO: What if this is a source?
-                       if constexpr (not std::same_as<In, void>) {
-                         co_await sub.push(Signal::end_of_data);
-                         sub.from_control.send(Shutdown{});
-                       }
-                       // TODO: Do we need to do anything else? Do we need to
-                       // wait for them to finish?
-                     });
+      co_await co_match(sub.second,
+                        []<class In>(SubPipeline<In>& sub) -> Task<void> {
+                          // TODO: What if this is a source?
+                          if constexpr (not std::same_as<In, void>) {
+                            co_await sub.push(Signal::end_of_data);
+                            sub.from_control.send(Shutdown{});
+                          }
+                          // TODO: Do we need to do anything else? Do we need
+                          // to wait for them to finish?
+                        });
     }
     if constexpr (not std::same_as<Output, void>) {
       co_await push_downstream_(Signal::end_of_data);
@@ -593,7 +596,7 @@ private:
     // TODO: Polish this.
     for (auto& op : operators_) {
       auto index = detail::narrow<size_t>(&op - operators_.data());
-      match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
+      co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         TENZIR_INFO("got {}", typeid(*op).name());
         auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
         // TODO: This should be parameterized from the outside, right?
@@ -651,10 +654,10 @@ private:
       // We should never be done here...
       // TODO: Cancellation?
       TENZIR_ASSERT(next, "unexpected end of queue");
-      match(
+      co_match(
         *next,
         [&](FromControl from_control) {
-          match(
+          co_match(
             from_control,
             [&](PostCommit) {
               for (auto& ctrl : operator_ctrl_) {
@@ -675,7 +678,7 @@ private:
         },
         [&](std::pair<size_t, variant<Shutdown, ToControl>> next) {
           auto [index, kind] = std::move(next);
-          match(
+          co_match(
             kind,
             [&](Shutdown) {
               TENZIR_WARN("got shutdown from operator {}", index);
@@ -793,7 +796,7 @@ auto OpCtx::get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> {
 
 template <class T>
 static auto cost(const OperatorMsg<T>& item, size_t limit) -> size_t {
-  return std::min(match(
+  return std::min(co_match(
                     item,
                     [](const table_slice& slice) -> size_t {
                       return slice.rows();
@@ -1004,7 +1007,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
       while (is_running) {
         auto next = co_await queue.next();
         TENZIR_ASSERT(next);
-        match(
+        co_match(
           *next,
           [&](std::monostate) {
             // TODO: The pipeline terminated?
