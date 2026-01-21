@@ -1,0 +1,6 @@
+// Test octet counting in parse_syslog
+// - Auto-detect with octet-counted input (65 bytes after the space)
+// - Auto-detect with regular syslog (no prefix)
+from { x: "65 <165>1 2023-10-11T22:14:15.003Z host app 1234 ID01 - Test message" },
+     { x: "<165>1 2023-10-11T22:14:15.003Z host app 1234 ID01 - Test message" }
+x = x.parse_syslog()

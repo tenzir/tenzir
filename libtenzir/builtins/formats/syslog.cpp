@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -744,19 +745,24 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   }
 }
 
+/// RFC 6587 octet-counting length prefix parser.
+/// Parses: MSG-LEN SP
+/// where MSG-LEN is a positive decimal (NONZERO-DIGIT *DIGIT per RFC 6587).
+inline constexpr auto octet_length_parser = parsers::u32 >> ' ';
+
 inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
   -> generator<std::optional<std::string_view>> {
   auto buffer = std::string{};
-  auto remaining_message_length = std::ptrdiff_t{};
+  auto remaining_message_length = size_t{};
   for (auto&& chunk : input) {
-    if (! chunk || chunk->size() == 0) {
+    if (not chunk || chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
     auto* chunk_begin = reinterpret_cast<const char*>(chunk->data());
     const auto chunk_end = chunk_begin + chunk->size();
-    auto chunk_length = [&]() {
-      return chunk_end - chunk_begin;
+    auto chunk_length = [&]() -> size_t {
+      return static_cast<size_t>(chunk_end - chunk_begin);
     };
     // We still need bytes to continue a previous message
     if (remaining_message_length > 0) {
@@ -772,20 +778,16 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
     }
     // A new message starts in (the remainder of) the chunk
     while (chunk_begin != chunk_end) {
-      auto [ptr, ec]
-        = std::from_chars(chunk_begin, chunk_end, remaining_message_length);
-      if (ec != std::errc{}) {
-        TENZIR_WARN(
-          "`{}`", std::string_view{reinterpret_cast<const char*>(chunk->data()),
-                                   chunk_end});
+      auto msg_len = uint32_t{};
+      auto it = chunk_begin;
+      if (not octet_length_parser(it, chunk_end, msg_len)) {
         TENZIR_WARN("`{}`", std::string_view{chunk_begin, chunk_end});
-        diagnostic::error("failed to parse octet: `{}`",
-                          std::make_error_code(ec).message())
+        diagnostic::error("failed to parse octet-counting length prefix")
           .emit(dh);
         co_return;
       }
-      // Remove the size prefix and conditionally one whitespace
-      chunk_begin = ptr + (ptr != chunk_end);
+      remaining_message_length = msg_len;
+      chunk_begin = it;
       // The new message is fully within this chunk
       if (remaining_message_length <= chunk_length()) {
         const auto message_end = chunk_begin + remaining_message_length;
@@ -1207,9 +1209,11 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
+    auto octet_counting = std::optional<bool>{}; // nullopt = auto-detect
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());
     parser.positional("input", expr, "string");
+    parser.named("octet_counting", octet_counting);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
     msb_parser.add_settings_to_parser(parser, true, false);
@@ -1217,7 +1221,7 @@ public:
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     return function_use::make(
       [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
-       expr = std::move(expr)](evaluator eval, session ctx) {
+       octet_counting, expr = std::move(expr)](evaluator eval, session ctx) {
         return map_series(eval(expr), [&](series arg) {
           auto f = detail::overload{
             [&](const arrow::NullArray&) -> multi_series {
@@ -1270,11 +1274,31 @@ public:
                   null();
                   continue;
                 }
+                auto v = arg.Value(i);
+                auto input = std::string_view{v.data(), v.size()};
+                // Handle octet counting (RFC 6587 framing)
+                if (octet_counting.value_or(true)) { // true or auto-detect
+                  auto length = uint32_t{};
+                  auto it = input.begin();
+                  // For auto-detection, we require the stated length to match
+                  // the remaining content exactly. This prevents false positives
+                  // where input coincidentally starts with "<digits><space>".
+                  if (octet_length_parser(it, input.end(), length)
+                      && detail::narrow<uint32_t>(input.end() - it) == length) {
+                    input = std::string_view{it, length};
+                  } else if (octet_counting.has_value() && *octet_counting) {
+                    // Explicitly required but not found
+                    diagnostic::warning("expected octet-counted input")
+                      .primary(expr.get_location())
+                      .emit(ctx);
+                    null();
+                    continue;
+                  }
+                }
                 auto msg = message{};
                 auto legacy_msg = legacy_message{};
-                auto v = arg.Value(i);
-                auto f = v.begin();
-                auto l = v.end();
+                auto f = input.begin();
+                auto l = input.end();
                 if (auto parser = message_parser{}; parser(f, l, msg)) {
                   maybe_flush(builder_tag::syslog_builder);
                   builder.add_new({std::move(msg), 0});
