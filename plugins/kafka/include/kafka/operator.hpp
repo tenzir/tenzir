@@ -13,6 +13,7 @@
 #include "kafka/producer.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/string.hpp>
@@ -183,7 +184,7 @@ struct loader_args {
   std::uint64_t commit_batch_size = 1000;
   duration commit_timeout = 10s;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
 
   template <class Inspector>
@@ -213,8 +214,7 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
     // Resolve secrets if explicit credentials are provided.
-    auto resolved_creds
-      = std::optional<configuration::resolved_aws_credentials>{};
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
     if (args_.aws and args_.aws->has_explicit_credentials()) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -431,7 +431,7 @@ struct saver_args {
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -456,8 +456,7 @@ public:
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
     // Resolve secrets if explicit credentials are provided.
-    auto resolved_creds
-      = std::optional<configuration::resolved_aws_credentials>{};
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
     if (args_.aws and args_.aws->has_explicit_credentials()) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);

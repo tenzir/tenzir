@@ -8,6 +8,7 @@
 
 #include "kafka/configuration.hpp"
 #include "kafka/operator.hpp"
+#include "tenzir/aws_iam.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
@@ -33,7 +34,7 @@ struct to_kafka_args {
   std::optional<located<std::string>> key;
   std::optional<located<time>> timestamp;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<tenzir::aws_iam_options> aws;
 
   friend auto inspect(auto& f, to_kafka_args& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("topic", x.topic),
@@ -58,8 +59,7 @@ public:
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
     // Resolve secrets if explicit credentials are provided.
-    auto resolved_creds
-      = std::optional<configuration::resolved_aws_credentials>{};
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
     if (args_.aws and args_.aws->has_explicit_credentials()) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -209,8 +209,15 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
       TRY(check_sasl_mechanism(args.options, ctx));
       TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
-      TRY(args.aws, configuration::aws_iam_options::from_record(
+      TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
+      // Region is required for Kafka MSK authentication.
+      if (not args.aws->region) {
+        diagnostic::error("`region` is required for Kafka MSK authentication")
+          .primary(args.aws->loc)
+          .emit(ctx);
+        return failure::promise();
+      }
     }
     TRY(validate_options(args.options, ctx));
     return std::make_unique<to_kafka_operator>(std::move(args), config_);

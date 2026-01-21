@@ -9,6 +9,7 @@
 #include "kafka/configuration.hpp"
 #include "kafka/operator.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
+#include "tenzir/aws_iam.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <tenzir/generator.hpp>
@@ -32,7 +33,7 @@ struct from_kafka_args {
   std::optional<located<std::string>> offset;
   std::uint64_t commit_batch_size = 1000;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
 
   friend auto inspect(auto& f, from_kafka_args& x) -> bool {
@@ -60,8 +61,7 @@ public:
     -> generator<table_slice> {
     auto& dh = ctrl.diagnostics();
     // Resolve secrets if explicit credentials are provided.
-    auto resolved_creds
-      = std::optional<configuration::resolved_aws_credentials>{};
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
     if (args_.aws and args_.aws->has_explicit_credentials()) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -347,8 +347,15 @@ public:
       TRY(check_sasl_mechanism(args.options, ctx));
       TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
-      TRY(args.aws, configuration::aws_iam_options::from_record(
+      TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
+      // Region is required for Kafka MSK authentication.
+      if (not args.aws->region) {
+        diagnostic::error("`region` is required for Kafka MSK authentication")
+          .primary(args.aws->loc)
+          .emit(ctx);
+        return failure::promise();
+      }
     }
     if (args.options.inner.contains("enable.auto.commit")) {
       diagnostic::error("`enable.auto.commit` must not be specified")
