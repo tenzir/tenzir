@@ -6,13 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <folly/tracing/AsyncStack.h>
+
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
-#include <string.h>
 #include <cstdlib>
 #include <cxxabi.h>
+#include <iostream>
+#include <string.h>
 #include <unistd.h>
 #include <utility>
 
@@ -28,6 +30,8 @@
 #elif defined(__APPLE__)
 #  include <sys/ucontext.h>
 #endif
+
+#include <dlfcn.h>
 
 namespace {
 
@@ -46,7 +50,6 @@ void safe_write(const char* str, size_t len) {
 // Try to demangle a C++ symbol. Returns the demangled name on success,
 // or nullptr if demangling fails or the symbol is not mangled.
 // The caller must free() the returned pointer.
-[[maybe_unused]]
 char* try_demangle(const char* mangled) {
   if (not mangled || mangled[0] != '_' || mangled[1] != 'Z') {
     return nullptr;
@@ -141,13 +144,30 @@ void init_backtrace_state() {
 
 #else // !TENZIR_HAS_LIBBACKTRACE
 
-// Fallback implementation without libbacktrace - just prints addresses.
+// Fallback implementation using dladdr - gives function names but not file/line.
 void resolve_and_print_pc(uintptr_t pc, bool /*only_first_frame*/) {
-  char buf[64];
-  int n
-    = snprintf(buf, sizeof(buf), "  0x%lx\n", static_cast<unsigned long>(pc));
+  char buf[1024];
+  int n;
+  Dl_info info;
+  if (dladdr(reinterpret_cast<void*>(pc), &info) && info.dli_sname) {
+    // Try to demangle the function name.
+    char* demangled = try_demangle(info.dli_sname);
+    const char* func_name = demangled ? demangled : info.dli_sname;
+    // Calculate offset from symbol start.
+    auto offset = pc - reinterpret_cast<uintptr_t>(info.dli_saddr);
+    n = snprintf(buf, sizeof(buf), "  0x%lx %s+0x%lx\n",
+                 static_cast<unsigned long>(pc), func_name,
+                 static_cast<unsigned long>(offset));
+    free(demangled);
+  } else {
+    n = snprintf(buf, sizeof(buf), "  0x%lx\n", static_cast<unsigned long>(pc));
+  }
   if (n > 0) {
-    safe_write(buf, static_cast<size_t>(n));
+    size_t len = static_cast<size_t>(n);
+    if (len >= sizeof(buf)) {
+      len = sizeof(buf) - 1;
+    }
+    safe_write(buf, len);
   }
 }
 
@@ -156,6 +176,29 @@ void init_backtrace_state() {
 }
 
 #endif // TENZIR_HAS_LIBBACKTRACE
+
+// Walk async stack frames and collect return addresses.
+// This is async-signal-safe because it only reads thread-local pointers
+// and follows frame pointers without any heap allocation.
+// Returns the number of frames collected.
+auto get_async_stack_trace(uintptr_t* addresses, size_t max_addresses)
+  -> size_t {
+  size_t count = 0;
+  auto* root = folly::tryGetCurrentAsyncStackRoot();
+  if (! root) {
+    return 0;
+  }
+  auto* frame = root->getTopFrame();
+  while (frame && count < max_addresses) {
+    auto addr = reinterpret_cast<uintptr_t>(frame->getReturnAddress());
+    if (addr == 0) {
+      break;
+    }
+    addresses[count++] = addr;
+    frame = frame->getParentFrame();
+  }
+  return count;
+}
 
 // Extract instruction pointer and frame pointer from signal context.
 // Returns {pc, bp} where bp may be nullptr if not available.
@@ -240,6 +283,18 @@ extern "C" void fatal_signal_handler(int sig, siginfo_t* si, void* vctx) {
       bp = next_bp;
     }
   }
+
+  // Print async stack trace if available.
+  // This shows the coroutine call chain when crashing inside async code.
+  uintptr_t async_addrs[64];
+  auto async_count = get_async_stack_trace(async_addrs, 64);
+  if (async_count > 0) {
+    safe_write("\nAsync stack trace:\n");
+    for (size_t i = 0; i < async_count; ++i) {
+      resolve_and_print_pc(async_addrs[i], /*only_first_frame=*/false);
+    }
+  }
+
   // Return. With SA_RESETHAND, the kernel will immediately re-signal with
   // default action, producing a core with the original fault context.
 }
