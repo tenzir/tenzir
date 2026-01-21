@@ -43,6 +43,8 @@ stdenvNoCC.mkDerivation {
       export UV_NO_INDEX=1
       export UV_OFFLINE=1
       export UV_PYTHON=${lib.getExe py3}
+      export TENZIR_ALLOC_STATS=1
+      ${lib.optionalString (stdenvNoCC.buildPlatform.isx86_64) "export TENZIR_ALLOC_ACTOR_STATS=1"}
       mkdir -p cache data state tmp
       export XDG_CACHE_HOME=$PWD/cache
       export XDG_DATA_HOME=$PWD/data

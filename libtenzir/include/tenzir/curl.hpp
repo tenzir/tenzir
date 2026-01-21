@@ -486,7 +486,7 @@ public:
   auto poll(std::chrono::milliseconds timeout) -> code;
 
   /// `curl_multi_perform`
-  auto perform() -> std::pair<code, size_t>;
+  auto perform() -> std::pair<code, int>;
 
   /// Perform one round of transfers and waits afterwards up to a timeout
   /// to report the number of still running transfers.

@@ -210,12 +210,10 @@ auto multi::poll(std::chrono::milliseconds timeout) -> code {
   return static_cast<code>(curl_code);
 }
 
-auto multi::perform() -> std::pair<code, size_t> {
+auto multi::perform() -> std::pair<code, int> {
   auto num_running = 0;
   auto curl_code = curl_multi_perform(multi_.get(), &num_running);
-  TENZIR_ASSERT(num_running >= 0);
-  return {static_cast<code>(curl_code),
-          detail::narrow_cast<size_t>(num_running)};
+  return {static_cast<code>(curl_code), num_running};
 }
 
 auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
@@ -226,7 +224,7 @@ auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
   if (result != code::ok) {
     return to_error(result);
   }
-  return num_running;
+  return detail::narrow_cast<size_t>(num_running);
 }
 
 auto multi::loop(std::chrono::milliseconds timeout) -> caf::error {

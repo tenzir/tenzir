@@ -1,3 +1,8 @@
+---
+retry: 2
+timeout: 45
+---
+
 from {x: 1},{y: "Hello"}
 repeat 100k
 batch

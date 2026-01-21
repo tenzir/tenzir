@@ -245,7 +245,9 @@ extern "C" void fatal_signal_handler(int sig, siginfo_t* si, void* vctx) {
 // Use constructor attribute with high priority (lower number = earlier)
 // to install signal handlers before any other static initializers run.
 // Priority 101 is the earliest user-available priority (1-100 are reserved).
-__attribute__((constructor(101))) void early_install_signal_handlers() {
+// We use prio 102 here, because this MUST only be done after our allocator
+// replacements are initialized, which have prio 101.
+__attribute__((constructor(102))) void early_install_signal_handlers() {
   // Initialize backtrace state for stacktrace generation.
   init_backtrace_state();
 
