@@ -1,9 +1,14 @@
 {
-  x: null,
+  x: {
+    facility: 20,
+    severity: 5,
+    version: 1,
+    timestamp: 2023-10-11T22:14:15.003Z,
+    hostname: "host",
+    app_name: "app",
+    process_id: "1234",
+    message_id: "ID01",
+    structured_data: {},
+    message: "Test message",
+  },
 }
-warning: `input` is not valid syslog
- --> tests/functions/parse_syslog/octet_counting_length_mismatch.tql:4:5
-  |
-4 | x = x.parse_syslog()
-  |     ~ 
-  |

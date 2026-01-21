@@ -781,21 +781,19 @@ inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
     }
     // A new message starts in (the remainder of) the chunk
     while (chunk_begin != chunk_end) {
-      auto msg_len = uint32_t{};
       auto it = chunk_begin;
-      if (not octet_length_parser(it, chunk_end, msg_len)) {
+      if (not octet_length_parser(it, chunk_end, remaining_message_length)) {
         TENZIR_WARN("`{}`", std::string_view{chunk_begin, chunk_end});
         diagnostic::error("failed to parse octet-counting length prefix")
           .emit(dh);
         co_return;
       }
-      if (msg_len > max_syslog_message_size) {
+      if (remaining_message_length > max_syslog_message_size) {
         diagnostic::error("octet-counted message length {} exceeds maximum {}",
-                          msg_len, max_syslog_message_size)
+                          remaining_message_length, max_syslog_message_size)
           .emit(dh);
         co_return;
       }
-      remaining_message_length = msg_len;
       chunk_begin = it;
       // The new message is fully within this chunk
       if (remaining_message_length <= chunk_length()) {
@@ -1266,7 +1264,7 @@ public:
                 }
               };
               /// adds a null to the current builder
-              const auto null = [&]() {
+              const auto add_null = [&]() {
                 switch (last) {
                   using enum builder_tag;
                   case syslog_builder: {
@@ -1281,61 +1279,162 @@ public:
                     TENZIR_UNREACHABLE();
                 }
               };
+              /// tries to parse input as syslog; returns true on success
+              const auto try_parse = [&](std::string_view input, message& msg,
+                                         legacy_message& legacy_msg) -> bool {
+                auto f = input.begin();
+                auto l = input.end();
+                if (message_parser{}.parse(f, l, msg)) {
+                  return true;
+                }
+                f = input.begin();
+                if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
+                  return true;
+                }
+                return false;
+              };
+              /// adds a parsed message to the appropriate builder
+              const auto add_parsed
+                = [&](message& msg, legacy_message& legacy_msg) {
+                    // Check which one was populated (msg.content empty means
+                    // legacy)
+                    if (msg.hdr.version != 0 || msg.hdr.facility != 0
+                        || msg.hdr.severity != 0 || msg.hdr.ts.has_value()
+                        || msg.hdr.hostname.has_value()) {
+                      maybe_flush(builder_tag::syslog_builder);
+                      builder.add_new({std::move(msg), 0});
+                      last = builder_tag::syslog_builder;
+                    } else {
+                      maybe_flush(builder_tag::legacy_syslog_builder);
+                      legacy_builder.add_new({std::move(legacy_msg), 0});
+                      last = builder_tag::legacy_syslog_builder;
+                    }
+                  };
+              // RFC 6587 octet-counting algorithm:
+              //
+              // 1. Try to parse octet count prefix if octet_counting != false.
+              // 2. If octet_counting=true (explicit) and prefix missing/invalid
+              //    → warn, null.
+              // 3. If prefix found:
+              //    a. actual < stated → warn "exceeds actual length", null.
+              //    b. actual == stated → parse content.
+              //    c. actual > stated:
+              //       - explicit mode → truncate to stated, parse, warn.
+              //       - auto mode → try full first; fall back to truncated.
+              // 4. If no prefix → parse full input.
+              // 5. If parse fails → warn "not valid syslog", null.
+              // 6. Emit parsed message.
+              //
+              // The key distinction: explicit mode trusts the octet count,
+              // while auto mode treats it as a hint (maximizing leniency).
               for (int64_t i = 0; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
-                  null();
+                  add_null();
                   continue;
                 }
                 auto v = arg.Value(i);
                 auto input = std::string_view{v.data(), v.size()};
-                // Handle octet counting (RFC 6587 framing)
+                // Step 1: Try to parse octet count prefix (RFC 6587 framing).
+                auto has_prefix = false;
+                auto stated_length = uint32_t{};
+                auto content = input;
+                const auto is_explicit
+                  = octet_counting.has_value() && *octet_counting;
                 if (octet_counting.value_or(true)) { // true or auto-detect
-                  auto length = uint32_t{};
-                  auto octet_it = input.begin();
-                  // For auto-detection, we require the stated length to match
-                  // the remaining content exactly. This prevents false positives
-                  // where input coincidentally starts with "<digits><space>".
-                  if (octet_length_parser(octet_it, input.end(), length)
-                      && detail::narrow<uint32_t>(input.end() - octet_it)
-                           == length) {
-                    if (length > max_syslog_message_size) {
-                      diagnostic::warning("octet-counted message length {} "
-                                          "exceeds maximum {}",
-                                          length, max_syslog_message_size)
-                        .primary(expr.get_location())
-                        .emit(ctx);
-                      null();
-                      continue;
-                    }
-                    input = std::string_view{octet_it, length};
-                  } else if (octet_counting.has_value() && *octet_counting) {
-                    // Explicitly required but not found
-                    diagnostic::warning("expected octet-counted input")
+                  auto it = input.begin();
+                  if (octet_length_parser(it, input.end(), stated_length)
+                      && stated_length <= max_syslog_message_size) {
+                    has_prefix = true;
+                    content = std::string_view{it, input.end()};
+                  } else if (is_explicit) {
+                    // Step 2: Explicitly required but not found/invalid.
+                    diagnostic::warning("expected valid octet-counted input")
                       .primary(expr.get_location())
                       .emit(ctx);
-                    null();
+                    add_null();
                     continue;
                   }
                 }
+                // Step 3: Determine what to parse based on prefix and length.
                 auto msg = message{};
                 auto legacy_msg = legacy_message{};
-                auto f = input.begin();
-                auto l = input.end();
-                if (auto parser = message_parser{}; parser(f, l, msg)) {
-                  maybe_flush(builder_tag::syslog_builder);
-                  builder.add_new({std::move(msg), 0});
-                  last = builder_tag::syslog_builder;
-                } else if (auto legacy_parser = legacy_message_parser{};
-                           legacy_parser(f, l, legacy_msg)) {
-                  maybe_flush(builder_tag::legacy_syslog_builder);
-                  legacy_builder.add_new({std::move(legacy_msg), 0});
-                  last = builder_tag::legacy_syslog_builder;
+                if (has_prefix) {
+                  const auto actual = content.size();
+                  if (actual < stated_length) {
+                    // Step 3a: Message shorter than stated → incomplete.
+                    diagnostic::warning("octet count {} exceeds actual message "
+                                        "length {}",
+                                        stated_length, actual)
+                      .primary(expr.get_location())
+                      .emit(ctx);
+                    add_null();
+                    continue;
+                  }
+                  if (actual == stated_length) {
+                    // Step 3b: Exact match → parse content.
+                    if (not try_parse(content, msg, legacy_msg)) {
+                      diagnostic::warning("`input` is not valid syslog")
+                        .primary(expr.get_location())
+                        .emit(ctx);
+                      add_null();
+                      continue;
+                    }
+                  } else {
+                    // Step 3c: actual > stated_length.
+                    if (is_explicit) {
+                      // Explicit mode: trust the count, truncate, and parse.
+                      auto truncated
+                        = std::string_view{content.data(), stated_length};
+                      if (not try_parse(truncated, msg, legacy_msg)) {
+                        diagnostic::warning("`input` is not valid syslog")
+                          .primary(expr.get_location())
+                          .emit(ctx);
+                        add_null();
+                        continue;
+                      }
+                      diagnostic::warning("octet count {} less than actual "
+                                          "length {}; "
+                                          "parsed truncated message",
+                                          stated_length, actual)
+                        .primary(expr.get_location())
+                        .emit(ctx);
+                    } else {
+                      // Auto mode: try full first, fall back to truncated.
+                      if (try_parse(content, msg, legacy_msg)) {
+                        // Full parse succeeded; prefix was likely spurious.
+                      } else {
+                        // Full failed; try truncated as recovery.
+                        auto truncated
+                          = std::string_view{content.data(), stated_length};
+                        if (try_parse(truncated, msg, legacy_msg)) {
+                          diagnostic::warning("octet count {} less than actual "
+                                              "length {}; "
+                                              "parsed truncated message",
+                                              stated_length, actual)
+                            .primary(expr.get_location())
+                            .emit(ctx);
+                        } else {
+                          diagnostic::warning("`input` is not valid syslog")
+                            .primary(expr.get_location())
+                            .emit(ctx);
+                          add_null();
+                          continue;
+                        }
+                      }
+                    }
+                  }
                 } else {
-                  diagnostic::warning("`input` is not valid syslog")
-                    .primary(expr.get_location())
-                    .emit(ctx);
-                  null();
+                  // Step 4: No prefix → parse full input.
+                  if (not try_parse(input, msg, legacy_msg)) {
+                    diagnostic::warning("`input` is not valid syslog")
+                      .primary(expr.get_location())
+                      .emit(ctx);
+                    add_null();
+                    continue;
+                  }
                 }
+                // Step 6: Emit parsed message.
+                add_parsed(msg, legacy_msg);
               }
               /// We flush with a new builder tag of "unknown", as that is
               /// guaranteed to flush the last builder
