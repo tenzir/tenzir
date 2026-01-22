@@ -247,7 +247,8 @@ CMD ["--help"]
 
 FROM tenzir-de AS tenzir-node-de
 
-ENTRYPOINT ["tenzir-node"]
+USER root:root
+ENTRYPOINT ["capsh", "--caps=cap_net_bind_service,cap_setuid,cap_setgid=+eip", "--user=tenzir", "--addamb=cap_net_bind_service", "--", "-c", "/opt/tenzir/bin/tenzir-node"]
 
 # -- third-party-plugins -------------------------------------------------------------------
 
@@ -427,7 +428,8 @@ COPY --from=tenzir-ce-integration /tmp/tenzir-integration-result /tmp/tenzir-int
 
 FROM tenzir-ce AS tenzir-node-ce
 
-ENTRYPOINT ["tenzir-node"]
+USER root:root
+ENTRYPOINT ["capsh", "--caps=cap_net_bind_service,cap_setuid,cap_setgid=+eip", "--user=tenzir", "--addamb=cap_net_bind_service", "--", "-c", "/opt/tenzir/bin/tenzir-node"]
 
 # -- tenzir-demo --------------------------------------------------------------
 
