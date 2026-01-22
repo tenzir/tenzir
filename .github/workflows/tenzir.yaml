@@ -51,7 +51,7 @@ permissions:
 jobs:
   configure:
     name: Configure
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
@@ -245,7 +245,7 @@ jobs:
     needs:
       - configure
     if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -307,7 +307,7 @@ jobs:
     name: Sync OpenAPI to Docs
     needs: [docker-tenzir, configure]
     if: github.ref == 'refs/heads/main' && needs.configure.outputs.run-docker-tenzir == 'true'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - name: Generate app token
         id: app-token
@@ -335,7 +335,7 @@ jobs:
       matrix:
         regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
     name: Regression Tests (${{ matrix.regression-tests.version }})
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     env:
       DOCKER_BUILDKIT: 1
     steps:
@@ -357,7 +357,7 @@ jobs:
     name: Nix
     uses: ./.github/workflows/nix-build-job.yaml
     with:
-      runner: ubicloud-standard-4-arm
+      runner: depot-ubuntu-24.04-arm-16
       os: linux
       arch: aarch64
       attribute: tenzir-static
@@ -367,7 +367,7 @@ jobs:
     name: Nix
     uses: ./.github/workflows/nix-build-job.yaml
     with:
-      runner: ubuntu-latest
+      runner: depot-ubuntu-24.04-16
       os: linux
       arch: x86_64
       attribute: tenzir-static
@@ -377,7 +377,7 @@ jobs:
     name: Nix
     uses: ./.github/workflows/nix-build-job.yaml
     with:
-      runner: macos-15
+      runner: depot-macos-15
       os: darwin
       arch: arm64
       attribute: tenzir-static
@@ -403,7 +403,7 @@ jobs:
       fail-fast: false
       matrix:
         tenzir:
-          - os: macos-15
+          - os: depot-macos-15
             container: null
             name: macOS
             compiler: Clang
@@ -604,7 +604,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        os: [ubuntu-latest]
+        os: [depot-ubuntu-24.04]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -661,7 +661,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        os: ["macos-15", "ubuntu-latest", "ubicloud-standard-4-arm"]
+        os: ["depot-macos-15", "depot-ubuntu-24.04", "depot-ubuntu-24.04-arm"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -746,7 +746,7 @@ jobs:
       - tenzir-static-aarch64-linux
       - tenzir-static-x86_64-linux
     if: always() && github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     name: Pass Branch Protections
     steps:
       - name: Failure
