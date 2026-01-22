@@ -19,6 +19,8 @@
 
 #include <memory>
 
+#include "sts_helpers.hpp"
+
 namespace tenzir::plugins::s3 {
 namespace {
 
@@ -71,13 +73,27 @@ public:
     if (args_.anonymous) {
       opts->ConfigureAnonymousCredentials();
     } else if (args_.aws_iam) {
-      if (resolved_creds and not resolved_creds->access_key_id.empty()) {
-        // Explicit credentials were resolved from secrets
+      if (resolved_creds and not resolved_creds->access_key_id.empty()
+          and not resolved_creds->role.empty()) {
+        // Both explicit credentials and role: use STS to assume role
+        auto sts_creds = assume_role_with_credentials(
+          *resolved_creds, resolved_creds->role,
+          args_.aws_iam->session_name.value_or(""), resolved_creds->ext_id,
+          args_.aws_iam->region);
+        if (not sts_creds) {
+          diagnostic::error(sts_creds.error()).emit(dh);
+          co_return;
+        }
+        opts->ConfigureAccessKey(sts_creds->access_key_id,
+                                 sts_creds->secret_access_key,
+                                 sts_creds->session_token);
+      } else if (resolved_creds and not resolved_creds->access_key_id.empty()) {
+        // Explicit credentials only
         opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                  resolved_creds->secret_access_key,
                                  resolved_creds->session_token);
       } else if (resolved_creds and not resolved_creds->role.empty()) {
-        // Role assumption with resolved role ARN
+        // Role assumption with default credentials
         opts->ConfigureAssumeRoleCredentials(
           resolved_creds->role, args_.aws_iam->session_name.value_or(""),
           resolved_creds->ext_id);
@@ -186,15 +202,6 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
           .emit(ctx);
         return failure::promise();
       }
-      // For aws_iam, explicit credentials + role is not supported for S3
-      if (args.aws_iam->has_explicit_credentials() and args.aws_iam->role) {
-        diagnostic::error("explicit credentials with role assumption is not "
-                          "supported for S3")
-          .primary(args.aws_iam->loc)
-          .note("use either explicit credentials or role assumption, not both")
-          .emit(ctx);
-        return failure::promise();
-      }
     } else if (access_key or secret_key) {
       // Convert legacy explicit credentials to aws_iam
       if (args.anonymous) {
@@ -210,19 +217,19 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
           .emit(ctx);
         return failure::promise();
       }
-      if (role) {
-        diagnostic::error("cannot use both explicit credentials and role "
-                          "assumption")
-          .primary(*role)
-          .emit(ctx);
-        return failure::promise();
-      }
       args.aws_iam.emplace();
       args.aws_iam->loc = access_key->source;
       args.aws_iam->access_key_id = access_key->inner;
       args.aws_iam->secret_access_key = secret_key->inner;
       if (session_token) {
         args.aws_iam->session_token = session_token->inner;
+      }
+      // Also set role if provided (credentials + role assumption)
+      if (role) {
+        args.aws_iam->role = role->inner;
+        if (external_id) {
+          args.aws_iam->ext_id = external_id->inner;
+        }
       }
     } else if (role) {
       // Convert legacy role option to aws_iam

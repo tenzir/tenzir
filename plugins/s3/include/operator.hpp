@@ -22,6 +22,8 @@
 #include <arrow/util/uri.h>
 #include <fmt/core.h>
 
+#include "sts_helpers.hpp"
+
 namespace tenzir::plugins::s3 {
 
 namespace {
@@ -51,13 +53,27 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (args.aws_iam) {
-    if (resolved_creds and not resolved_creds->access_key_id.empty()) {
-      // Explicit credentials were resolved from secrets
+    if (resolved_creds and not resolved_creds->access_key_id.empty()
+        and not resolved_creds->role.empty()) {
+      // Both explicit credentials and role: use STS to assume role
+      auto sts_creds
+        = assume_role_with_credentials(*resolved_creds, resolved_creds->role,
+                                       args.aws_iam->session_name.value_or(""),
+                                       resolved_creds->ext_id,
+                                       args.aws_iam->region);
+      if (not sts_creds) {
+        return sts_creds.error();
+      }
+      opts->ConfigureAccessKey(sts_creds->access_key_id,
+                               sts_creds->secret_access_key,
+                               sts_creds->session_token);
+    } else if (resolved_creds and not resolved_creds->access_key_id.empty()) {
+      // Explicit credentials only
       opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                resolved_creds->secret_access_key,
                                resolved_creds->session_token);
     } else if (resolved_creds and not resolved_creds->role.empty()) {
-      // Role assumption with resolved role ARN
+      // Role assumption with default credentials
       opts->ConfigureAssumeRoleCredentials(
         resolved_creds->role, args.aws_iam->session_name.value_or(""),
         resolved_creds->ext_id);

@@ -113,15 +113,6 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-      // For aws_iam, explicit credentials + role is not supported for S3
-      if (args.aws_iam->has_explicit_credentials() and args.aws_iam->role) {
-        diagnostic::error("explicit credentials with role assumption is not "
-                          "supported for S3")
-          .primary(args.aws_iam->loc)
-          .note("use either explicit credentials or role assumption, not both")
-          .emit(ctx);
-        return failure::promise();
-      }
     } else if (role) {
       // Convert legacy role option to aws_iam
       if (args.anonymous) {
