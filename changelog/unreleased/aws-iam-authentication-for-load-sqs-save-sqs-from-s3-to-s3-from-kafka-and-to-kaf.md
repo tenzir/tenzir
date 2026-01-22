@@ -15,19 +15,19 @@ The `aws_iam` option accepts these fields:
 
 - `region`: AWS region for API requests (optional for SQS and S3, required for Kafka MSK)
 - `profile`: AWS CLI profile name for credential resolution
-- `access_key_id`: AWS access key ID (use `secret("name")` to reference stored secrets)
-- `secret_access_key`: AWS secret access key (use `secret("name")` to reference stored secrets)
-- `session_token`: AWS session token for temporary credentials (use `secret("name")` to reference stored secrets)
-- `assume_role`: IAM role ARN to assume (use `secret("name")` to reference stored secrets)
+- `access_key_id`: AWS access key ID
+- `secret_access_key`: AWS secret access key
+- `session_token`: AWS session token for temporary credentials
+- `assume_role`: IAM role ARN to assume
 - `session_name`: Session name for role assumption
-- `external_id`: External ID for role assumption (use `secret("name")` to reference stored secrets)
+- `external_id`: External ID for role assumption
 
 You can also combine explicit credentials with role assumption. This uses the provided credentials to call STS AssumeRole and obtain temporary credentials for the assumed role:
 
 ```tql
 load_sqs "my-queue", aws_iam={
-  access_key_id: secret("aws-key"),
-  secret_access_key: secret("aws-secret"),
+  access_key_id: "AKIAIOSFODNN7EXAMPLE",
+  secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
   assume_role: "arn:aws:iam::123456789012:role/my-role"
 }
 ```
@@ -37,8 +37,8 @@ For example, to load from SQS using explicit credentials:
 ```tql
 load_sqs "my-queue", aws_iam={
   region: "us-east-1",
-  access_key_id: secret("aws-key"),
-  secret_access_key: secret("aws-secret")
+  access_key_id: "AKIAIOSFODNN7EXAMPLE",
+  secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 }
 ```
 
