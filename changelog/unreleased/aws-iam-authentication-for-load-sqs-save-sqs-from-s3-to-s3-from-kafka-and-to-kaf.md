@@ -18,9 +18,19 @@ The `aws_iam` option accepts these fields:
 - `access_key_id`: AWS access key ID (use `secret("name")` to reference stored secrets)
 - `secret_access_key`: AWS secret access key (use `secret("name")` to reference stored secrets)
 - `session_token`: AWS session token for temporary credentials (use `secret("name")` to reference stored secrets)
-- `assume_role`: IAM role ARN to assume
+- `assume_role`: IAM role ARN to assume (use `secret("name")` to reference stored secrets)
 - `session_name`: Session name for role assumption
-- `external_id`: External ID for role assumption
+- `external_id`: External ID for role assumption (use `secret("name")` to reference stored secrets)
+
+You can also combine explicit credentials with role assumption. This uses the provided credentials to call STS AssumeRole and obtain temporary credentials for the assumed role:
+
+```tql
+load_sqs "my-queue", aws_iam={
+  access_key_id: secret("aws-key"),
+  secret_access_key: secret("aws-secret"),
+  assume_role: "arn:aws:iam::123456789012:role/my-role"
+}
+```
 
 For example, to load from SQS using explicit credentials:
 
