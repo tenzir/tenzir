@@ -80,7 +80,7 @@ auto aws_iam_options::from_record(located<record> config,
   TRY(assign_non_empty_string("profile", opts.profile));
   TRY(assign_secret("assume_role", opts.role));
   TRY(assign_non_empty_string("session_name", opts.session_name));
-  TRY(assign_secret("external_id", opts.ext_id));
+  TRY(assign_secret("external_id", opts.external_id));
   TRY(assign_secret("access_key_id", opts.access_key_id));
   TRY(assign_secret("secret_access_key", opts.secret_access_key));
   TRY(assign_secret("session_token", opts.session_token));
@@ -107,7 +107,7 @@ auto aws_iam_options::from_record(located<record> config,
     return failure::promise();
   }
   // Validate that external_id requires assume_role
-  if (opts.ext_id and not opts.role) {
+  if (opts.external_id and not opts.role) {
     diagnostic::error("`external_id` specified without `assume_role`")
       .primary(config)
       .emit(dh);
@@ -134,9 +134,9 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
   if (role) {
     requests.emplace_back(
       make_secret_request("assume_role", *role, loc, resolved.role, dh));
-    if (ext_id) {
-      requests.emplace_back(
-        make_secret_request("external_id", *ext_id, loc, resolved.ext_id, dh));
+    if (external_id) {
+      requests.emplace_back(make_secret_request("external_id", *external_id,
+                                                loc, resolved.external_id, dh));
     }
   }
   return requests;

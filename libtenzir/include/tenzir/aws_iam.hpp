@@ -26,7 +26,7 @@ struct resolved_aws_credentials {
   std::string secret_access_key;
   std::string session_token;
   std::string role;
-  std::string ext_id;
+  std::string external_id;
 };
 
 /// AWS IAM authentication options.
@@ -43,7 +43,7 @@ struct aws_iam_options {
   /// Session name for role assumption.
   std::optional<std::string> session_name;
   /// External ID for role assumption.
-  std::optional<secret> ext_id;
+  std::optional<secret> external_id;
   /// AWS access key ID.
   std::optional<secret> access_key_id;
   /// AWS secret access key.
@@ -57,7 +57,8 @@ struct aws_iam_options {
     return f.object(x).fields(
       f.field("region", x.region), f.field("profile", x.profile),
       f.field("role", x.role), f.field("session_name", x.session_name),
-      f.field("ext_id", x.ext_id), f.field("access_key_id", x.access_key_id),
+      f.field("external_id", x.external_id),
+      f.field("access_key_id", x.access_key_id),
       f.field("secret_access_key", x.secret_access_key),
       f.field("session_token", x.session_token), f.field("loc", x.loc));
   }

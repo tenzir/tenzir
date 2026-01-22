@@ -63,7 +63,7 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
       auto sts_creds
         = assume_role_with_credentials(*resolved_creds, resolved_creds->role,
                                        args.aws_iam->session_name.value_or(""),
-                                       resolved_creds->ext_id,
+                                       resolved_creds->external_id,
                                        args.aws_iam->region);
       if (not sts_creds) {
         return sts_creds.error();
@@ -87,12 +87,12 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
         .secret_access_key = profile_creds->secret_access_key,
         .session_token = profile_creds->session_token,
         .role = {},
-        .ext_id = {},
+        .external_id = {},
       };
       auto sts_creds
         = assume_role_with_credentials(base_creds, resolved_creds->role,
                                        args.aws_iam->session_name.value_or(""),
-                                       resolved_creds->ext_id,
+                                       resolved_creds->external_id,
                                        args.aws_iam->region);
       if (not sts_creds) {
         return sts_creds.error();
@@ -113,7 +113,7 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
       // Role assumption with default credentials
       opts->ConfigureAssumeRoleCredentials(
         resolved_creds->role, args.aws_iam->session_name.value_or(""),
-        resolved_creds->ext_id);
+        resolved_creds->external_id);
     }
     // Otherwise, use default credential chain (no explicit configuration)
   }

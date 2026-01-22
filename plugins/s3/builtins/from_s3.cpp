@@ -82,7 +82,7 @@ public:
         // Explicit credentials + role: use STS to assume role
         auto sts_creds = assume_role_with_credentials(
           *resolved_creds, resolved_creds->role,
-          args_.aws_iam->session_name.value_or(""), resolved_creds->ext_id,
+          args_.aws_iam->session_name.value_or(""), resolved_creds->external_id,
           args_.aws_iam->region);
         if (not sts_creds) {
           diagnostic::error(sts_creds.error()).emit(dh);
@@ -108,11 +108,11 @@ public:
           .secret_access_key = profile_creds->secret_access_key,
           .session_token = profile_creds->session_token,
           .role = {},
-          .ext_id = {},
+          .external_id = {},
         };
         auto sts_creds = assume_role_with_credentials(
           base_creds, resolved_creds->role,
-          args_.aws_iam->session_name.value_or(""), resolved_creds->ext_id,
+          args_.aws_iam->session_name.value_or(""), resolved_creds->external_id,
           args_.aws_iam->region);
         if (not sts_creds) {
           diagnostic::error(sts_creds.error()).emit(dh);
@@ -135,7 +135,7 @@ public:
         // Role assumption with default credentials
         opts->ConfigureAssumeRoleCredentials(
           resolved_creds->role, args_.aws_iam->session_name.value_or(""),
-          resolved_creds->ext_id);
+          resolved_creds->external_id);
       }
       // Otherwise, use default credential chain (no explicit configuration)
     }
@@ -267,7 +267,7 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
       if (role) {
         args.aws_iam->role = role->inner;
         if (external_id) {
-          args.aws_iam->ext_id = external_id->inner;
+          args.aws_iam->external_id = external_id->inner;
         }
       }
     } else if (role) {
@@ -282,7 +282,7 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
       args.aws_iam->loc = role->source;
       args.aws_iam->role = role->inner;
       if (external_id) {
-        args.aws_iam->ext_id = external_id->inner;
+        args.aws_iam->external_id = external_id->inner;
       }
     } else if (session_token) {
       diagnostic::error("`session_token` specified without `access_key`")

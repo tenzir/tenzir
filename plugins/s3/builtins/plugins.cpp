@@ -132,7 +132,7 @@ public:
       args.aws_iam->loc = role->source;
       args.aws_iam->role = secret::make_literal(role->inner);
       if (external_id) {
-        args.aws_iam->ext_id = secret::make_literal(external_id->inner);
+        args.aws_iam->external_id = secret::make_literal(external_id->inner);
       }
     } else if (external_id) {
       diagnostic::error(

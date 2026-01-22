@@ -265,8 +265,8 @@ public:
       if (resolved_creds and not resolved_creds->role.empty()) {
         role = resolved_creds->role;
       }
-      if (resolved_creds and not resolved_creds->ext_id.empty()) {
-        ext_id = resolved_creds->ext_id;
+      if (resolved_creds and not resolved_creds->external_id.empty()) {
+        ext_id = resolved_creds->external_id;
       }
       auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
       auto queue = sqs_queue{args_.queue, poll_time,    region, profile,
@@ -348,8 +348,8 @@ public:
       if (resolved_creds and not resolved_creds->role.empty()) {
         role = resolved_creds->role;
       }
-      if (resolved_creds and not resolved_creds->ext_id.empty()) {
-        ext_id = resolved_creds->ext_id;
+      if (resolved_creds and not resolved_creds->external_id.empty()) {
+        ext_id = resolved_creds->external_id;
       }
       auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
       queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
