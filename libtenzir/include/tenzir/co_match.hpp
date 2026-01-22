@@ -172,17 +172,38 @@ using CoMatch = std::invoke_result_t<
     std::tuple<Fs...>>,
   decltype(detail::variant_get<0>(std::declval<V>()))>;
 
+/// Invokes a callable depending on the current variant inhabitant.
+///
+/// Currently used for functions returning coroutines, but this will eventually
+/// just replace the current `match` function.
+///
+/// If multiple callables are invocable, we use this order:
+/// 1) Exact match, where the argument type is the same as the inhabitant.
+/// 2) Non-generic match, where the callable is not a template.
+/// 3) All functions that can be invoked with the inhabitant.
+/// If there is not a unique-best match, a compile-time error occurs.
+///
+/// Unlike `match`, the callables are not required to be movable or copyable, as
+/// they are simply used as references. Due to lifetime rules around
+/// subexpressions, this makes the `co_await co_match(…)` patterns safe.
 template <has_variant_traits V, class... Fs>
 constexpr auto co_match(V&& v, Fs&&... fs) -> CoMatch<V, Fs...> {
   constexpr auto count = variant_traits<std::remove_cvref_t<V>>::count;
   auto index = variant_traits<std::remove_cvref_t<V>>::index(v);
   TENZIR_ASSERT(index < count);
+  // This is intentionally not a table as the assumption is that the optimizer
+  // can deal with this better. Didn't really confirm this yet though.
 #define X(n)                                                                   \
   if constexpr ((n) < count) {                                                 \
     if (index == (n)) {                                                        \
       constexpr auto index                                                     \
         = index_for<decltype(detail::variant_get<n>(std::forward<V>(v))),      \
                     Fs...>();                                                  \
+      using Result = decltype(std::invoke(                                     \
+        std::get<index>(std::forward_as_tuple(std::forward<Fs>(fs)...)),       \
+        detail::variant_get<n>(std::forward<V>(v))));                          \
+      static_assert(std::same_as<Result, CoMatch<V, Fs...>>,                   \
+                    "inconsistent return type in match");                      \
       return std::invoke(                                                      \
         std::get<index>(std::forward_as_tuple(std::forward<Fs>(fs)...)),       \
         detail::variant_get<n>(std::forward<V>(v)));                           \
