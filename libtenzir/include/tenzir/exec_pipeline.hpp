@@ -37,6 +37,7 @@ struct exec_config {
   bool multi = false;
   bool legacy = false;
   bool strict = false;
+  bool neo = false;
 };
 
 auto exec_pipeline(std::string content, diagnostic_handler& dh,

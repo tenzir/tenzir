@@ -94,6 +94,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
   cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
+  cfg.neo = caf::get_or(inv.options, "tenzir.neo", cfg.neo);
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
