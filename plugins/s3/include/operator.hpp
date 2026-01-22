@@ -9,6 +9,7 @@
 #pragma once
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
@@ -21,8 +22,6 @@
 #include <arrow/io/api.h>
 #include <arrow/util/uri.h>
 #include <fmt/core.h>
-
-#include "sts_helpers.hpp"
 
 namespace tenzir::plugins::s3 {
 
@@ -67,10 +66,9 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
 
     if (has_explicit_creds and has_role) {
       // Explicit credentials + role: use STS to assume role
-      auto sts_creds
-        = assume_role_with_credentials(*resolved_creds, resolved_creds->role,
-                                       session_name,
-                                       resolved_creds->external_id, region);
+      auto sts_creds = tenzir::assume_role_with_credentials(
+        *resolved_creds, resolved_creds->role, session_name,
+        resolved_creds->external_id, region);
       if (not sts_creds) {
         return sts_creds.error();
       }
@@ -84,7 +82,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
                                resolved_creds->session_token);
     } else if (has_profile and has_role) {
       // Profile + role: load profile credentials, then assume role
-      auto profile_creds = load_profile_credentials(resolved_creds->profile);
+      auto profile_creds
+        = tenzir::load_profile_credentials(resolved_creds->profile);
       if (not profile_creds) {
         return profile_creds.error();
       }
@@ -98,10 +97,9 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
         .role = {},
         .external_id = {},
       };
-      auto sts_creds
-        = assume_role_with_credentials(base_creds, resolved_creds->role,
-                                       session_name,
-                                       resolved_creds->external_id, region);
+      auto sts_creds = tenzir::assume_role_with_credentials(
+        base_creds, resolved_creds->role, session_name,
+        resolved_creds->external_id, region);
       if (not sts_creds) {
         return sts_creds.error();
       }
@@ -110,7 +108,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
                                sts_creds->session_token);
     } else if (has_profile) {
       // Profile-based credentials only
-      auto profile_creds = load_profile_credentials(resolved_creds->profile);
+      auto profile_creds
+        = tenzir::load_profile_credentials(resolved_creds->profile);
       if (not profile_creds) {
         return profile_creds.error();
       }

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/from_file_base.hpp>
 #include <tenzir/pipeline.hpp>
@@ -18,8 +19,6 @@
 #include <caf/actor_from_state.hpp>
 
 #include <memory>
-
-#include "sts_helpers.hpp"
 
 namespace tenzir::plugins::s3 {
 namespace {
@@ -85,10 +84,9 @@ public:
 
       if (has_explicit_creds and has_role) {
         // Explicit credentials + role: use STS to assume role
-        auto sts_creds
-          = assume_role_with_credentials(*resolved_creds, resolved_creds->role,
-                                         session_name,
-                                         resolved_creds->external_id, region);
+        auto sts_creds = tenzir::assume_role_with_credentials(
+          *resolved_creds, resolved_creds->role, session_name,
+          resolved_creds->external_id, region);
         if (not sts_creds) {
           diagnostic::error(sts_creds.error()).emit(dh);
           co_return;
@@ -103,7 +101,8 @@ public:
                                  resolved_creds->session_token);
       } else if (has_profile and has_role) {
         // Profile + role: load profile credentials, then assume role
-        auto profile_creds = load_profile_credentials(resolved_creds->profile);
+        auto profile_creds
+          = tenzir::load_profile_credentials(resolved_creds->profile);
         if (not profile_creds) {
           diagnostic::error(profile_creds.error()).emit(dh);
           co_return;
@@ -118,10 +117,9 @@ public:
           .role = {},
           .external_id = {},
         };
-        auto sts_creds
-          = assume_role_with_credentials(base_creds, resolved_creds->role,
-                                         session_name,
-                                         resolved_creds->external_id, region);
+        auto sts_creds = tenzir::assume_role_with_credentials(
+          base_creds, resolved_creds->role, session_name,
+          resolved_creds->external_id, region);
         if (not sts_creds) {
           diagnostic::error(sts_creds.error()).emit(dh);
           co_return;
@@ -131,7 +129,8 @@ public:
                                  sts_creds->session_token);
       } else if (has_profile) {
         // Profile-based credentials only
-        auto profile_creds = load_profile_credentials(resolved_creds->profile);
+        auto profile_creds
+          = tenzir::load_profile_credentials(resolved_creds->profile);
         if (not profile_creds) {
           diagnostic::error(profile_creds.error()).emit(dh);
           co_return;

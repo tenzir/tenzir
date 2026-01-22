@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -17,17 +18,13 @@
 #include <tenzir/series_builder.hpp>
 
 #include <aws/core/Aws.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
-#include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/utils/Outcome.h>
-#include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/CreateQueueRequest.h>
 #include <aws/sqs/model/DeleteMessageRequest.h>
 #include <aws/sqs/model/GetQueueUrlRequest.h>
 #include <aws/sqs/model/ReceiveMessageRequest.h>
 #include <aws/sqs/model/SendMessageRequest.h>
-#include <aws/sts/STSClient.h>
 
 #include <string_view>
 
@@ -51,12 +48,7 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 class sqs_queue {
 public:
   explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time,
-                     std::optional<std::string> region = std::nullopt,
-                     std::optional<std::string> profile = std::nullopt,
-                     std::optional<std::string> role = std::nullopt,
-                     std::optional<std::string> role_session_name
-                     = std::nullopt,
-                     std::optional<std::string> role_external_id = std::nullopt,
+                     std::optional<std::string> region,
                      std::optional<tenzir::resolved_aws_credentials> creds
                      = std::nullopt)
     : name_{std::move(name)} {
@@ -89,57 +81,13 @@ public:
       = http_request_timeout + extra_time_for_retries_and_backoff;
     config.httpRequestTimeoutMs = long{http_request_timeout.count()};
     config.requestTimeoutMs = long{request_timeout.count()};
-    // Create the credentials provider based on options.
-    auto credentials = std::invoke(
-      [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-        // Determine base credentials provider: explicit, profile, or default
-        // chain.
-        auto base_credentials
-          = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
-        if (creds and not creds->access_key_id.empty()) {
-          base_credentials
-            = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-              creds->access_key_id, creds->secret_access_key,
-              creds->session_token);
-        } else if (profile) {
-          TENZIR_VERBOSE("[sqs] using profile {}", *profile);
-          base_credentials = std::make_shared<
-            Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
-            profile->c_str());
-        } else {
-          base_credentials
-            = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
-        }
-        // If role assumption is requested, use STSAssumeRoleCredentialsProvider
-        // for automatic credential refresh.
-        if (role) {
-          TENZIR_VERBOSE("[sqs] assuming role {}", *role);
-          // Create an STS client configuration (inherits region and endpoint
-          // from main config).
-          auto sts_config = Aws::Client::ClientConfiguration{};
-          sts_config.region = config.region;
-          // Use STS-specific endpoint if available, otherwise fall back to
-          // the general endpoint override.
-          if (auto sts_endpoint = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-            sts_config.endpointOverride = *sts_endpoint;
-          } else {
-            sts_config.endpointOverride = config.endpointOverride;
-          }
-          sts_config.allowSystemProxy = true;
-          // Create STS client using the base credentials.
-          auto sts_client = std::make_shared<Aws::STS::STSClient>(
-            base_credentials, nullptr, sts_config);
-          // Use STSAssumeRoleCredentialsProvider for automatic refresh.
-          auto session = role_session_name.value_or("tenzir-session");
-          auto ext = role_external_id.value_or("");
-          return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-            *role, session, ext, Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS,
-            sts_client);
-        }
-        return base_credentials;
-      });
+    // Create the credentials provider using the shared helper.
+    auto credentials = tenzir::make_aws_credentials_provider(creds, region);
+    if (not credentials) {
+      diagnostic::error(credentials.error()).throw_();
+    }
     // Create the client with the configuration and credentials provider.
-    client_ = Aws::SQS::SQSClient{credentials, nullptr, config};
+    client_ = Aws::SQS::SQSClient{*credentials, nullptr, config};
     // Get the queue URL.
     url_ = queue_url();
   }
@@ -264,21 +212,7 @@ public:
                       : (resolved_creds and not resolved_creds->region.empty()
                            ? std::optional{resolved_creds->region}
                            : std::nullopt);
-      auto profile = resolved_creds and not resolved_creds->profile.empty()
-                       ? std::optional{resolved_creds->profile}
-                       : std::nullopt;
-      auto role = resolved_creds and not resolved_creds->role.empty()
-                    ? std::optional{resolved_creds->role}
-                    : std::nullopt;
-      auto ext_id = resolved_creds and not resolved_creds->external_id.empty()
-                      ? std::optional{resolved_creds->external_id}
-                      : std::nullopt;
-      auto session_name
-        = resolved_creds and not resolved_creds->session_name.empty()
-            ? std::optional{resolved_creds->session_name}
-            : std::nullopt;
-      auto queue = sqs_queue{args_.queue, poll_time,    region, profile,
-                             role,        session_name, ext_id, resolved_creds};
+      auto queue = sqs_queue{args_.queue, poll_time, region, resolved_creds};
       co_yield {};
       while (true) {
         constexpr auto num_messages = size_t{1};
@@ -354,21 +288,7 @@ public:
                       : (resolved_creds and not resolved_creds->region.empty()
                            ? std::optional{resolved_creds->region}
                            : std::nullopt);
-      auto profile = resolved_creds and not resolved_creds->profile.empty()
-                       ? std::optional{resolved_creds->profile}
-                       : std::nullopt;
-      auto role = resolved_creds and not resolved_creds->role.empty()
-                    ? std::optional{resolved_creds->role}
-                    : std::nullopt;
-      auto ext_id = resolved_creds and not resolved_creds->external_id.empty()
-                      ? std::optional{resolved_creds->external_id}
-                      : std::nullopt;
-      auto session_name
-        = resolved_creds and not resolved_creds->session_name.empty()
-            ? std::optional{resolved_creds->session_name}
-            : std::nullopt;
       queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
-                                          profile, role, session_name, ext_id,
                                           resolved_creds);
     } catch (diagnostic& d) {
       dh.emit(std::move(d));
