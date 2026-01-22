@@ -531,13 +531,17 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   co_await run_pipeline(std::move(*chain),
                         // std::move(pull_input), std::move(push_output),
                         sys, dh);
+  TENZIR_WARN("blocking on pipeline done");
   co_return {};
 }
 
 auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
                        diagnostic_handler& dh) -> failure_or<void> {
 #if 1
-  return folly::coro::blockingWait(run_plan(std::move(ops), sys, dh));
+  TENZIR_INFO("begin blocking");
+  auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dh));
+  TENZIR_INFO("end blocking");
+  return result;
 #else
   TENZIR_WARN("running {}/{} threads",
               folly::getGlobalCPUExecutorCounters().numActiveThreads,

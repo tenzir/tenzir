@@ -172,7 +172,8 @@ public:
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
     if (count_ == total) {
-      co_await folly::coro::sleep(std::chrono::years{1});
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
     }
     if (count_ != 0) {
       co_await folly::coro::sleep(std::chrono::milliseconds{200});

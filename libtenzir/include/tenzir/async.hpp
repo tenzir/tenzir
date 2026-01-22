@@ -75,25 +75,34 @@ using AsyncGenerator = folly::coro::AsyncGenerator<T&&>;
 template <class Result, class Handle, class F>
 void mail_with_callback(Handle receiver, caf::message msg, F f) {
   auto companion = receiver->home_system().make_companion();
+  auto& registry = companion->home_system().registry();
+  auto companion_id = companion->id();
   // We need to wrap non-copyable functions because CAF wants a copy...
-  companion->on_enqueue(
-    [f = std::make_shared<F>(std::move(f))](caf::mailbox_element_ptr ptr) {
-      if (ptr->payload.match_elements<caf::error>()) {
-        std::invoke(std::move(*f),
-                    caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
-        return;
-      }
-      if (ptr->payload.match_element<Result>(0)) {
-        std::invoke(std::move(*f),
-                    caf::expected<Result>{ptr->payload.get_as<Result>(0)});
-        return;
-      }
+  auto handled = std::make_shared<bool>(false);
+  companion->on_enqueue([f = std::make_shared<F>(std::move(f)), handled,
+                         &registry,
+                         companion_id](caf::mailbox_element_ptr ptr) {
+    // Only process the first message (the response).
+    if (*handled) {
+      return;
+    }
+    *handled = true;
+    if (ptr->payload.match_elements<caf::error>()) {
+      std::invoke(std::move(*f),
+                  caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+    } else if (ptr->payload.match_element<Result>(0)) {
+      std::invoke(std::move(*f),
+                  caf::expected<Result>{ptr->payload.get_as<Result>(0)});
+    } else {
       // TODO: Apparently we cannot throw here?
       TENZIR_ERROR("OH NO");
-      return;
-    });
+    }
+    // Serializing the companion for network transmission registers it.
+    // Erase it to release that reference and allow cleanup.
+    registry.erase(companion_id);
+  });
   companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
-};
+}
 
 template <class Handle, class... Args>
 using AsyncMailResult = caf::expected<caf::detail::tl_head_t<
@@ -127,7 +136,8 @@ auto async_mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
 }
 
 /// Returns a task that never completes but can be cancelled.
-inline auto await_cancel() -> Task<void> {
+inline auto wait_forever() -> Task<void> {
+  // TODO: There needs to be a better way.
   return folly::coro::sleep(std::chrono::years{1});
 }
 
@@ -549,9 +559,7 @@ public:
 
   /// Return task for sources to await. See file-level docs.
   virtual auto await_task() const -> Task<std::any> {
-    // Default: sleep forever (transformation operators don't use this).
-    co_await folly::coro::sleep(std::chrono::years{1});
-    TENZIR_ERROR("TODO");
+    co_await wait_forever();
     TENZIR_UNREACHABLE();
   }
 

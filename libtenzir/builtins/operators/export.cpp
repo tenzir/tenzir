@@ -95,6 +95,7 @@ auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
   };
   auto result = co_await async_mail(atom::connect_v, std::move(request))
                   .request(connector_actor);
+  caf::anon_send_exit(connector_actor, caf::exit_reason::user_shutdown);
   if (not result) {
     throw std::runtime_error(
       fmt::format("failed to connect to node: {}", result.error()));
@@ -129,7 +130,7 @@ public:
   auto await_task() const -> Task<std::any> override {
     if (done_) {
       // TODO: Properly suspend.
-      co_await await_cancel();
+      co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
     co_return co_await async_mail(atom::get_v).request(bridge_);
