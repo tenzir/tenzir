@@ -12,8 +12,12 @@ Usage overview:
 - **AWS_SECRET_ACCESS_KEY** – Test AWS secret key (always "test").
 - **AWS_REGION** – Test AWS region (always "us-east-1").
 - **LOCALSTACK_S3_BUCKET** – Pre-created test S3 bucket name.
-- **LOCALSTACK_SQS_QUEUE** – Pre-created test SQS queue name.
-- **LOCALSTACK_SQS_QUEUE_URL** – Full URL of the pre-created SQS queue.
+- **LOCALSTACK_SQS_QUEUE_BASIC** – SQS queue name for load_sqs basic credential tests.
+- **LOCALSTACK_SQS_QUEUE_BASIC_URL** – Full URL of the basic credentials queue.
+- **LOCALSTACK_SQS_QUEUE_ROLE** – SQS queue name for load_sqs role assumption tests.
+- **LOCALSTACK_SQS_QUEUE_ROLE_URL** – Full URL of the role assumption queue.
+- **LOCALSTACK_SQS_QUEUE_SAVE** – SQS queue name for save_sqs tests.
+- **LOCALSTACK_SQS_QUEUE_SAVE_URL** – Full URL of the save_sqs queue.
 - **LOCALSTACK_ROLE_ARN** – ARN of a test IAM role for assume role tests.
 - **LOCALSTACK_EXTERNAL_ID** – External ID for assume role tests.
 
@@ -143,8 +147,8 @@ def _wait_for_localstack(endpoint: str, timeout: float) -> bool:
     return False
 
 
-def _create_test_resources(endpoint: str, region: str) -> tuple[str, str, str, str]:
-    """Create test resources, return (bucket_name, queue_name, queue_url, role_arn)."""
+def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
+    """Create test resources, return dict of resource identifiers."""
     try:
         import boto3
         from botocore.config import Config
@@ -162,7 +166,6 @@ def _create_test_resources(endpoint: str, region: str) -> tuple[str, str, str, s
     # Generate unique resource names
     suffix = uuid.uuid4().hex[:8]
     bucket_name = f"tenzir-test-bucket-{suffix}"
-    queue_name = f"tenzir-test-queue-{suffix}"
     role_name = f"tenzir-test-role-{suffix}"
 
     # Create S3 bucket
@@ -182,7 +185,7 @@ def _create_test_resources(endpoint: str, region: str) -> tuple[str, str, str, s
     s3.put_object(Bucket=bucket_name, Key="test.json", Body=test_content)
     logger.info("Uploaded test file to s3://%s/test.json", bucket_name)
 
-    # Create SQS queue
+    # Create SQS client
     sqs = boto3.client(
         "sqs",
         endpoint_url=endpoint,
@@ -190,25 +193,31 @@ def _create_test_resources(endpoint: str, region: str) -> tuple[str, str, str, s
         aws_secret_access_key=TEST_SECRET_KEY,
         config=config,
     )
-    logger.info("Creating SQS queue: %s", queue_name)
-    response = sqs.create_queue(QueueName=queue_name)
-    queue_url = response["QueueUrl"]
-    logger.info("Created SQS queue: %s", queue_url)
 
-    # Send test messages to the queue.
-    # We send multiple batches of 3 messages (with same IDs) to support multiple
-    # tests that each consume 3 messages. Each test uses `head 3 | sort id` so
-    # the output is deterministic regardless of which batch is consumed.
-    num_batches = 3  # Support up to 3 tests consuming messages
-    for batch in range(num_batches):
-        test_messages = [
-            '{"id": 1, "message": "First test message"}',
-            '{"id": 2, "message": "Second test message"}',
-            '{"id": 3, "message": "Third test message"}',
-        ]
-        for i, msg in enumerate(test_messages):
+    # Create separate queues for each test scenario to avoid message consumption
+    # conflicts (load_sqs consumes all messages regardless of head limit).
+    test_messages = [
+        '{"id": 1, "message": "First test message"}',
+        '{"id": 2, "message": "Second test message"}',
+        '{"id": 3, "message": "Third test message"}',
+    ]
+
+    queue_basic_name = f"tenzir-test-queue-basic-{suffix}"
+    queue_role_name = f"tenzir-test-queue-role-{suffix}"
+    queue_save_name = f"tenzir-test-queue-save-{suffix}"
+
+    queues = {}
+    for name, key in [(queue_basic_name, "basic"), (queue_role_name, "role"),
+                      (queue_save_name, "save")]:
+        logger.info("Creating SQS queue: %s", name)
+        response = sqs.create_queue(QueueName=name)
+        queue_url = response["QueueUrl"]
+        logger.info("Created SQS queue: %s", queue_url)
+        queues[key] = {"name": name, "url": queue_url}
+        # Send test messages to this queue
+        for msg in test_messages:
             sqs.send_message(QueueUrl=queue_url, MessageBody=msg)
-        logger.info("Sent test message batch %d to SQS queue", batch + 1)
+        logger.info("Sent %d test messages to queue %s", len(test_messages), name)
 
     # Create IAM role for assume role tests
     iam = boto3.client(
@@ -251,7 +260,11 @@ def _create_test_resources(endpoint: str, region: str) -> tuple[str, str, str, s
     )
     logger.info("Attached S3 and SQS policies to role")
 
-    return bucket_name, queue_name, queue_url, role_arn
+    return {
+        "bucket_name": bucket_name,
+        "queues": queues,
+        "role_arn": role_arn,
+    }
 
 
 @fixture(name="localstack", log_teardown=True)
@@ -277,9 +290,7 @@ def run() -> Iterator[dict[str, str]]:
                 f"LocalStack failed to start within {STARTUP_TIMEOUT} seconds"
             )
 
-        bucket_name, queue_name, queue_url, role_arn = _create_test_resources(
-            endpoint, TEST_REGION
-        )
+        resources = _create_test_resources(endpoint, TEST_REGION)
 
         yield {
             # Standard AWS environment variables
@@ -294,12 +305,17 @@ def run() -> Iterator[dict[str, str]]:
             # Disable EC2 instance metadata lookup (causes timeouts when not on EC2)
             "AWS_EC2_METADATA_DISABLED": "true",
             # Test resource identifiers
-            "LOCALSTACK_S3_BUCKET": bucket_name,
-            "LOCALSTACK_S3_TEST_URI": f"s3://{bucket_name}/test.json",
-            "LOCALSTACK_SQS_QUEUE": queue_name,
-            "LOCALSTACK_SQS_QUEUE_URL": queue_url,
+            "LOCALSTACK_S3_BUCKET": resources["bucket_name"],
+            "LOCALSTACK_S3_TEST_URI": f"s3://{resources['bucket_name']}/test.json",
+            # Separate SQS queues for each test scenario
+            "LOCALSTACK_SQS_QUEUE_BASIC": resources["queues"]["basic"]["name"],
+            "LOCALSTACK_SQS_QUEUE_BASIC_URL": resources["queues"]["basic"]["url"],
+            "LOCALSTACK_SQS_QUEUE_ROLE": resources["queues"]["role"]["name"],
+            "LOCALSTACK_SQS_QUEUE_ROLE_URL": resources["queues"]["role"]["url"],
+            "LOCALSTACK_SQS_QUEUE_SAVE": resources["queues"]["save"]["name"],
+            "LOCALSTACK_SQS_QUEUE_SAVE_URL": resources["queues"]["save"]["url"],
             # IAM role for assume role tests
-            "LOCALSTACK_ROLE_ARN": role_arn,
+            "LOCALSTACK_ROLE_ARN": resources["role_arn"],
             "LOCALSTACK_EXTERNAL_ID": TEST_EXTERNAL_ID,
         }
     finally:

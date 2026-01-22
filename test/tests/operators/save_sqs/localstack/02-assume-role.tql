@@ -2,7 +2,7 @@
 // Uses explicit credentials to assume a role, then sends to SQS.
 from {id: 100, message: "Sent with assumed role"}
 write_json
-save_sqs env("LOCALSTACK_SQS_QUEUE"), aws_iam={
+save_sqs env("LOCALSTACK_SQS_QUEUE_SAVE"), aws_iam={
   access_key_id: "test",
   secret_access_key: "test",
   region: "us-east-1",

@@ -3,7 +3,7 @@
 // from environment) to assume a role, then sends to SQS.
 from {id: 200, message: "Sent with role-only auth"}
 write_json
-save_sqs env("LOCALSTACK_SQS_QUEUE"), aws_iam={
+save_sqs env("LOCALSTACK_SQS_QUEUE_SAVE"), aws_iam={
   region: "us-east-1",
   assume_role: env("LOCALSTACK_ROLE_ARN"),
   external_id: env("LOCALSTACK_EXTERNAL_ID")
