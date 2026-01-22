@@ -457,7 +457,7 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
 
 auto OperatorPlugin::describe_shared() const
   -> std::shared_ptr<const Description> {
-  static const auto desc = std::invoke([&] {
+  std::call_once(desc_init_flag_, [this] {
     auto desc = std::make_shared<Description>(describe());
     if (desc->name.empty()) {
       desc->name = name();
@@ -465,9 +465,9 @@ auto OperatorPlugin::describe_shared() const
     if (desc->docs.empty()) {
       desc->docs = "https://docs.tenzir.com/reference/operators/" + desc->name;
     }
-    return desc;
+    cached_desc_ = std::move(desc);
   });
-  return desc;
+  return cached_desc_;
 }
 
 } // namespace tenzir::_::operator_plugin

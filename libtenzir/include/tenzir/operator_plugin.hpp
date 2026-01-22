@@ -12,6 +12,7 @@
 #include "tenzir/ir.hpp"
 
 #include <any>
+#include <mutex>
 #include <span>
 
 namespace tenzir {
@@ -115,6 +116,10 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<Box<ir::Operator>> final;
+
+private:
+  mutable std::once_flag desc_init_flag_;
+  mutable std::shared_ptr<const Description> cached_desc_;
 };
 
 template <class Args, ArgType T>
