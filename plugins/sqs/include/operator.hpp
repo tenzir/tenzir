@@ -247,10 +247,9 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
-    // Resolve secrets if explicit credentials or role are provided.
+    // Resolve all secrets from aws_iam configuration.
     auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-    if (args_.aws
-        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+    if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
@@ -258,17 +257,23 @@ public:
     try {
       auto poll_time
         = args_.poll_time ? args_.poll_time->inner : default_poll_time;
-      auto region = args_.aws ? args_.aws->region : std::nullopt;
-      auto profile = args_.aws ? args_.aws->profile : std::nullopt;
-      auto role = std::optional<std::string>{};
-      auto ext_id = std::optional<std::string>{};
-      if (resolved_creds and not resolved_creds->role.empty()) {
-        role = resolved_creds->role;
-      }
-      if (resolved_creds and not resolved_creds->external_id.empty()) {
-        ext_id = resolved_creds->external_id;
-      }
-      auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
+      // Use resolved values from secrets
+      auto region = resolved_creds and not resolved_creds->region.empty()
+                      ? std::optional{resolved_creds->region}
+                      : std::nullopt;
+      auto profile = resolved_creds and not resolved_creds->profile.empty()
+                       ? std::optional{resolved_creds->profile}
+                       : std::nullopt;
+      auto role = resolved_creds and not resolved_creds->role.empty()
+                    ? std::optional{resolved_creds->role}
+                    : std::nullopt;
+      auto ext_id = resolved_creds and not resolved_creds->external_id.empty()
+                      ? std::optional{resolved_creds->external_id}
+                      : std::nullopt;
+      auto session_name
+        = resolved_creds and not resolved_creds->session_name.empty()
+            ? std::optional{resolved_creds->session_name}
+            : std::nullopt;
       auto queue = sqs_queue{args_.queue, poll_time,    region, profile,
                              role,        session_name, ext_id, resolved_creds};
       co_yield {};
@@ -329,10 +334,9 @@ public:
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
-    // Resolve secrets if explicit credentials or role are provided.
+    // Resolve all secrets from aws_iam configuration.
     auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-    if (args_.aws
-        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+    if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
@@ -341,17 +345,23 @@ public:
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;
     auto queue = std::shared_ptr<sqs_queue>{};
     try {
-      auto region = args_.aws ? args_.aws->region : std::nullopt;
-      auto profile = args_.aws ? args_.aws->profile : std::nullopt;
-      auto role = std::optional<std::string>{};
-      auto ext_id = std::optional<std::string>{};
-      if (resolved_creds and not resolved_creds->role.empty()) {
-        role = resolved_creds->role;
-      }
-      if (resolved_creds and not resolved_creds->external_id.empty()) {
-        ext_id = resolved_creds->external_id;
-      }
-      auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
+      // Use resolved values from secrets
+      auto region = resolved_creds and not resolved_creds->region.empty()
+                      ? std::optional{resolved_creds->region}
+                      : std::nullopt;
+      auto profile = resolved_creds and not resolved_creds->profile.empty()
+                       ? std::optional{resolved_creds->profile}
+                       : std::nullopt;
+      auto role = resolved_creds and not resolved_creds->role.empty()
+                    ? std::optional{resolved_creds->role}
+                    : std::nullopt;
+      auto ext_id = resolved_creds and not resolved_creds->external_id.empty()
+                      ? std::optional{resolved_creds->external_id}
+                      : std::nullopt;
+      auto session_name
+        = resolved_creds and not resolved_creds->session_name.empty()
+            ? std::optional{resolved_creds->session_name}
+            : std::nullopt;
       queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
                                           profile, role, session_name, ext_id,
                                           resolved_creds);

@@ -40,8 +40,9 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
     Aws::ShutdownAPI({});
   }};
   // Region is required for Kafka MSK - validated at parse time.
-  TENZIR_ASSERT(options_.region.has_value());
-  const auto& region = *options_.region;
+  // Use resolved region from creds_ since options_.region is a secret.
+  TENZIR_ASSERT(creds_ and not creds_->region.empty());
+  const auto& region = creds_->region;
   const auto url = Aws::Http::URI{
     fmt::format("https://kafka.{}.amazonaws.com/", region),
   };
@@ -61,19 +62,18 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
           = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
             creds_->access_key_id, creds_->secret_access_key,
             creds_->session_token);
-      } else if (options_.profile) {
-        TENZIR_VERBOSE("[kafka iam] using profile {}", *options_.profile);
+      } else if (creds_ and not creds_->profile.empty()) {
+        TENZIR_VERBOSE("[kafka iam] using profile {}", creds_->profile);
         base_credentials
           = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
-            options_.profile->c_str());
+            creds_->profile.c_str());
       } else {
         TENZIR_VERBOSE("[kafka iam] using the default credential chain");
         base_credentials
           = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
       }
       // If role assumption is requested, use STS provider.
-      // Use resolved role/external_id from creds_ since options_.role is a
-      // secret.
+      // Use resolved values from creds_ since options_ fields are secrets.
       if (creds_ and not creds_->role.empty()) {
         TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
                        region, creds_->role, valid_for);
@@ -82,10 +82,13 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
         sts_config.region = region;
         auto sts_client = std::make_shared<Aws::STS::STSClient>(
           base_credentials, nullptr, sts_config);
+        // Get session_name from resolved credentials, default to tenzir-session
+        const auto session_name = creds_->session_name.empty()
+                                    ? std::string{"tenzir-session"}
+                                    : creds_->session_name;
         return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-          creds_->role, options_.session_name.value_or("tenzir-session"),
-          creds_->external_id, Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS,
-          sts_client);
+          creds_->role, session_name, creds_->external_id,
+          Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
       }
       return base_credentials;
     });

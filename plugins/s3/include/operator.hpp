@@ -52,19 +52,25 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   }
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
-  } else if (args.aws_iam) {
-    const auto has_explicit_creds
-      = resolved_creds and not resolved_creds->access_key_id.empty();
-    const auto has_role = resolved_creds and not resolved_creds->role.empty();
-    const auto has_profile = args.aws_iam->profile.has_value();
+  } else if (resolved_creds) {
+    const auto has_explicit_creds = not resolved_creds->access_key_id.empty();
+    const auto has_role = not resolved_creds->role.empty();
+    const auto has_profile = not resolved_creds->profile.empty();
+    // Get session_name from resolved credentials, default to empty
+    const auto session_name = resolved_creds->session_name.empty()
+                                ? std::string{}
+                                : resolved_creds->session_name;
+    // Get region from resolved credentials if available
+    const auto region = resolved_creds->region.empty()
+                          ? std::optional<std::string>{}
+                          : std::optional{resolved_creds->region};
 
     if (has_explicit_creds and has_role) {
       // Explicit credentials + role: use STS to assume role
       auto sts_creds
         = assume_role_with_credentials(*resolved_creds, resolved_creds->role,
-                                       args.aws_iam->session_name.value_or(""),
-                                       resolved_creds->external_id,
-                                       args.aws_iam->region);
+                                       session_name,
+                                       resolved_creds->external_id, region);
       if (not sts_creds) {
         return sts_creds.error();
       }
@@ -78,11 +84,14 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
                                resolved_creds->session_token);
     } else if (has_profile and has_role) {
       // Profile + role: load profile credentials, then assume role
-      auto profile_creds = load_profile_credentials(*args.aws_iam->profile);
+      auto profile_creds = load_profile_credentials(resolved_creds->profile);
       if (not profile_creds) {
         return profile_creds.error();
       }
       auto base_creds = resolved_aws_credentials{
+        .region = {},
+        .profile = {},
+        .session_name = {},
         .access_key_id = profile_creds->access_key_id,
         .secret_access_key = profile_creds->secret_access_key,
         .session_token = profile_creds->session_token,
@@ -91,9 +100,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
       };
       auto sts_creds
         = assume_role_with_credentials(base_creds, resolved_creds->role,
-                                       args.aws_iam->session_name.value_or(""),
-                                       resolved_creds->external_id,
-                                       args.aws_iam->region);
+                                       session_name,
+                                       resolved_creds->external_id, region);
       if (not sts_creds) {
         return sts_creds.error();
       }
@@ -102,7 +110,7 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
                                sts_creds->session_token);
     } else if (has_profile) {
       // Profile-based credentials only
-      auto profile_creds = load_profile_credentials(*args.aws_iam->profile);
+      auto profile_creds = load_profile_credentials(resolved_creds->profile);
       if (not profile_creds) {
         return profile_creds.error();
       }
@@ -111,9 +119,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
                                profile_creds->session_token);
     } else if (has_role) {
       // Role assumption with default credentials
-      opts->ConfigureAssumeRoleCredentials(
-        resolved_creds->role, args.aws_iam->session_name.value_or(""),
-        resolved_creds->external_id);
+      opts->ConfigureAssumeRoleCredentials(resolved_creds->role, session_name,
+                                           resolved_creds->external_id);
     }
     // Otherwise, use default credential chain (no explicit configuration)
   }
@@ -137,11 +144,9 @@ public:
     auto reqs = std::vector<secret_request>{
       make_uri_request(args_.uri, "s3://", uri, dh),
     };
-    // Resolve aws_iam credentials/role if provided
+    // Resolve all aws_iam secrets if provided
     auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (args_.aws_iam
-        and (args_.aws_iam->has_explicit_credentials()
-             or args_.aws_iam->role)) {
+    if (args_.aws_iam) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
       for (auto& r : aws_reqs) {
@@ -230,11 +235,9 @@ public:
     auto reqs = std::vector<secret_request>{
       make_uri_request(args_.uri, "s3://", uri, dh),
     };
-    // Resolve aws_iam credentials/role if provided
+    // Resolve all aws_iam secrets if provided
     auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (args_.aws_iam
-        and (args_.aws_iam->has_explicit_credentials()
-             or args_.aws_iam->role)) {
+    if (args_.aws_iam) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
       for (auto& r : aws_reqs) {

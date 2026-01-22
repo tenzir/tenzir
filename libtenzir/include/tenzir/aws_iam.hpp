@@ -22,6 +22,9 @@ namespace tenzir {
 
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
+  std::string region;
+  std::string profile;
+  std::string session_name;
   std::string access_key_id;
   std::string secret_access_key;
   std::string session_token;
@@ -35,13 +38,13 @@ struct resolved_aws_credentials {
 /// used across different AWS-related operators (SQS, S3, Kafka MSK, etc.).
 struct aws_iam_options {
   /// AWS region for API requests (optional, SDK uses default resolution).
-  std::optional<std::string> region;
+  std::optional<secret> region;
   /// AWS CLI profile name to use for credentials.
-  std::optional<std::string> profile;
+  std::optional<secret> profile;
   /// IAM role ARN to assume.
   std::optional<secret> role;
   /// Session name for role assumption.
-  std::optional<std::string> session_name;
+  std::optional<secret> session_name;
   /// External ID for role assumption.
   std::optional<secret> external_id;
   /// AWS access key ID.
