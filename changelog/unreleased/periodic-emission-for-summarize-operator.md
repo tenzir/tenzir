@@ -1,12 +1,14 @@
 ---
-title: "Add frequency based emission to summarize"
+title: Periodic emission for summarize operator
 type: feature
-authors: tobim
+authors:
+  - tobim
+  - claude
 pr: 5605
+created: 2026-01-22T15:52:19.899839Z
 ---
 
-The `summarize` operator now supports periodic emission of aggregation results at
-fixed intervals, enabling real-time streaming analytics and monitoring use cases.
+The `summarize` operator now supports periodic emission of aggregation results at fixed intervals, enabling real-time streaming analytics and monitoring use cases.
 
 Use the `options` named argument with `frequency` to emit results every N seconds:
 
@@ -14,8 +16,7 @@ Use the `options` named argument with `frequency` to emit results every N second
 summarize count(this), src_ip, options={frequency: 5s}
 ```
 
-This emits aggregation results every 5 seconds, showing the count per source IP for
-events received during each interval:
+This emits aggregation results every 5 seconds, showing the count per source IP for events received during each interval:
 
 ```tql
 {src_ip: 192.168.1.1, count: 42}
@@ -27,8 +28,7 @@ events received during each interval:
 
 The `mode` parameter controls how aggregations behave across emissions:
 
-**Reset mode** (default) resets aggregations after each emission, providing
-per-interval metrics:
+**Reset mode** (default) resets aggregations after each emission, providing per-interval metrics:
 
 ```tql
 summarize sum(bytes), options={frequency: 10s}
@@ -42,13 +42,11 @@ summarize sum(bytes), options={frequency: 10s, mode: "cumulative"}
 // Shows total bytes seen so far
 ```
 
-**Update mode** only emits when values change from the previous emission, reducing
-output noise in monitoring scenarios:
+**Update mode** emits only when values change from the previous emission, reducing output noise in monitoring scenarios:
 
 ```tql
 summarize count(this), severity, options={frequency: 1s, mode: "update"}
-// Only emits when the count for a severity level changes
+// Emits only when the count for a severity level changes
 ```
 
-The operator always emits final results when the input stream ends, ensuring no
-data is lost.
+The operator always emits final results when the input stream ends, ensuring no data is lost.

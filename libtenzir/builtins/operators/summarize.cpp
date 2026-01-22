@@ -236,7 +236,7 @@ public:
   auto flush(bool force) -> std::vector<table_slice> {
     // Avoid emitting before any input arrived unless explicitly forced (used
     // for final emission).
-    if (not force && not saw_input_) {
+    if (not force and not saw_input_) {
       return {};
     }
     if (cfg_.mode == "reset") {
@@ -333,30 +333,26 @@ public:
 
     auto b = series_builder{};
     for (const auto& [key, group] : groups_) {
-      // Get current aggregation values
+      // Get current aggregation values.
       auto current_values = std::vector<data>{};
       current_values.reserve(group->aggregations.size());
       for (const auto& aggr : group->aggregations) {
         current_values.push_back(aggr->get());
       }
-
-      // Check if values changed (or first emission for this group)
+      // Check if values changed (or first emission for this group).
       auto it = previous_values_.find(key);
-      bool should_emit
-        = (it == previous_values_.end()) || (it->second != current_values);
-
+      auto should_emit
+        = (it == previous_values_.end()) or (it->second != current_values);
       if (should_emit) {
         b.data(finish_group(key, group));
         previous_values_[key] = current_values;
       }
     }
-
     // Special case: if there are no configured groups, and no groups were
-    // created because we didn't get any input events
+    // created because we didn't get any input events.
     if (cfg_.groups.empty() and groups_.empty()) {
       b.data(finish_group(group_by_key{}, make_bucket()));
     }
-
     return b.finish_as_table_slice();
   }
 
@@ -498,8 +494,7 @@ public:
       auto maybe_slice = input.next();
       while (true) {
         // Drain pending flushes that were scheduled while idle.
-        if (pending_flush.load(std::memory_order_acquire)) {
-          pending_flush.store(false, std::memory_order_release);
+        if (pending_flush.exchange(false, std::memory_order_acq_rel)) {
           for (auto result : impl.flush()) {
             co_yield std::move(result);
           }
@@ -517,8 +512,7 @@ public:
       }
       // Flush anything that may have been scheduled while consuming the last
       // slices before producing the final result.
-      if (pending_flush.load(std::memory_order_acquire)) {
-        pending_flush.store(false, std::memory_order_release);
+      if (pending_flush.exchange(false, std::memory_order_acq_rel)) {
         for (auto result : impl.flush()) {
           co_yield std::move(result);
         }
@@ -561,12 +555,13 @@ public:
     -> failure_or<operator_ptr> override {
     auto cfg = config{};
     auto failed = false;
+    auto mode_location = std::optional<location>{};
 
     // Helper to parse the options record
     auto parse_options = [&](ast::record& rec) {
       for (auto& item : rec.items) {
         auto* field = try_as<ast::record::field>(item);
-        if (! field) {
+        if (not field) {
           diagnostic::error("spread not allowed in options record")
             .primary(rec.get_location())
             .emit(ctx);
@@ -576,7 +571,7 @@ public:
         const auto& name = field->name.name;
         if (name == "frequency") {
           auto value = const_eval(field->expr, ctx);
-          if (! value) {
+          if (not value) {
             failed = true;
             return;
           }
@@ -591,7 +586,7 @@ public:
           cfg.frequency = *dur;
         } else if (name == "mode") {
           auto value = const_eval(field->expr, ctx);
-          if (! value) {
+          if (not value) {
             failed = true;
             return;
           }
@@ -605,6 +600,7 @@ public:
           }
           if (*str == "reset" || *str == "cumulative" || *str == "update") {
             cfg.mode = *str;
+            mode_location = field->expr.get_location();
           } else {
             diagnostic::error("invalid mode `{}`", *str)
               .primary(field->expr)
@@ -655,7 +651,7 @@ public:
           add_aggregate(std::nullopt, std::move(arg));
         },
         [&](ast::assignment& arg) {
-          auto* left = std::get_if<ast::field_path>(&arg.left);
+          auto* left = try_as<ast::field_path>(arg.left);
           if (not left) {
             // TODO
             diagnostic::error("expected data selector, not meta")
@@ -664,8 +660,8 @@ public:
             return;
           }
           // Check for `options=...` named argument
-          if (not left->has_this() && left->path().size() == 1
-              && left->path()[0].id.name == "options") {
+          if (not left->has_this() and left->path().size() == 1
+              and left->path()[0].id.name == "options") {
             auto* rec = try_as<ast::record>(arg.right);
             if (not rec) {
               diagnostic::error("expected record for `options`")
@@ -706,6 +702,12 @@ public:
         });
     }
     if (failed) {
+      return failure::promise();
+    }
+    if (mode_location and not cfg.frequency) {
+      diagnostic::error("`mode` requires `frequency` to be set")
+        .primary(*mode_location)
+        .emit(ctx);
       return failure::promise();
     }
     return std::make_unique<summarize_operator2>(std::move(cfg));
