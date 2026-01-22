@@ -1,0 +1,11 @@
+// Test load_sqs with role-only authentication.
+// Uses the default credential chain (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+// from environment) to assume a role, then reads from SQS.
+load_sqs env("LOCALSTACK_SQS_QUEUE"), aws_iam={
+  region: "us-east-1",
+  assume_role: env("LOCALSTACK_ROLE_ARN"),
+  external_id: env("LOCALSTACK_EXTERNAL_ID")
+}
+read_json
+head 3
+sort id

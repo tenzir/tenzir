@@ -1,0 +1,8 @@
+// Test saving to S3 with explicit AWS credentials.
+from {data: "test content from save_s3"}
+write_json
+save_s3 "s3://" + env("LOCALSTACK_S3_BUCKET") + "/output-explicit.json", aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+}

@@ -1,0 +1,10 @@
+// Test loading messages from SQS using LocalStack.
+// The fixture creates a queue with 3 test messages.
+load_sqs env("LOCALSTACK_SQS_QUEUE"), aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+}
+read_json
+head 3
+sort id
