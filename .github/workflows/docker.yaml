@@ -72,6 +72,8 @@ jobs:
           DEPOT_PROJECT_ID: ${{ vars.DEPOT_PROJECT_ID }}
         run: |
           cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
+          # Create empty cache context directory (Dockerfile references it but Depot manages cache)
+          mkdir -p /home/runner/cache-context
           jq -r '.editions[] | .name as $name | .target as $target | ."image-registries" | select(length > 0) | [ $name, $target, (. | join(" ")) ] | join("|")' \
             <<< '${{ inputs.config }}' | while IFS='|' read -r name target registries; do
             # Build tags array
@@ -85,6 +87,7 @@ jobs:
             depot build \
               --platform linux/amd64,linux/arm64 \
               --target "${target}" \
+              --build-context cache-context=/home/runner/cache-context \
               --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
               --push \
               ${tags} \
