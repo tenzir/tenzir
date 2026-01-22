@@ -54,6 +54,8 @@ jobs:
           git submodule update --init --recursive contrib/tenzir-plugins
       - name: Setup Depot
         uses: depot/setup-action@v1
+        with:
+          oidc: true
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
