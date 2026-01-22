@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/assert.hpp"
-
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator_control_plane.hpp>
@@ -174,7 +173,7 @@ struct transceiver_state {
       [](const operator_metric&) {},
       [this](const caf::exit_msg& msg) {
         TENZIR_TRACE("[transceiver_actor] received exit: {}", msg.reason);
-        if (msg.reason) {
+        if (msg.reason.valid()) {
           self_->quit(msg.reason);
         }
       },
@@ -524,7 +523,7 @@ struct parallel_operator final : public operator_base {
     });
     ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
       TENZIR_TRACE("[parallel] subpipeline shut down");
-      if (err) {
+      if (err.valid()) {
         diagnostic::error(err)
           .compose(add_diagnostic_location())
           .emit(ctrl.diagnostics());
@@ -578,13 +577,16 @@ struct parallel_operator final : public operator_base {
       });
   }
 
-  auto optimize(const expression& filter, event_order order) const
+  auto optimize(const expression& filter, event_order) const
     -> optimize_result override {
+    auto result = args_.pipe.inner.optimize(filter, event_order::unordered);
     auto args = args_;
-    auto result = args.pipe.inner.optimize(filter, order);
     args.pipe.inner = static_cast<pipeline&&>(*result.replacement);
-    result.replacement = std::make_unique<parallel_operator>(std::move(args));
-    return result;
+    return {
+      std::move(result.filter),
+      event_order::unordered,
+      std::make_unique<parallel_operator>(std::move(args)),
+    };
   }
 
   auto name() const -> std::string override {
