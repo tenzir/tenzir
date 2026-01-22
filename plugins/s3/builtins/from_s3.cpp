@@ -92,6 +92,16 @@ public:
         opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                  resolved_creds->secret_access_key,
                                  resolved_creds->session_token);
+      } else if (args_.aws_iam->profile) {
+        // Profile-based credentials
+        auto profile_creds = load_profile_credentials(*args_.aws_iam->profile);
+        if (not profile_creds) {
+          diagnostic::error(profile_creds.error()).emit(dh);
+          co_return;
+        }
+        opts->ConfigureAccessKey(profile_creds->access_key_id,
+                                 profile_creds->secret_access_key,
+                                 profile_creds->session_token);
       } else if (resolved_creds and not resolved_creds->role.empty()) {
         // Role assumption with default credentials
         opts->ConfigureAssumeRoleCredentials(

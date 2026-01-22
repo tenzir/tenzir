@@ -51,15 +51,21 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   };
   auto provider = std::invoke(
     [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-      // Determine base credentials provider: explicit or default chain.
+      // Determine base credentials provider: explicit, profile, or default
+      // chain.
       auto base_credentials
         = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
-      if (creds_) {
+      if (creds_ and not creds_->access_key_id.empty()) {
         TENZIR_VERBOSE("[kafka iam] using explicit credentials");
         base_credentials
           = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
             creds_->access_key_id, creds_->secret_access_key,
             creds_->session_token);
+      } else if (options_.profile) {
+        TENZIR_VERBOSE("[kafka iam] using profile {}", *options_.profile);
+        base_credentials
+          = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
+            options_.profile->c_str());
       } else {
         TENZIR_VERBOSE("[kafka iam] using the default credential chain");
         base_credentials

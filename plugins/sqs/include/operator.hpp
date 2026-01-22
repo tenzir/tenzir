@@ -96,7 +96,7 @@ public:
         // chain.
         auto base_credentials
           = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
-        if (creds) {
+        if (creds and not creds->access_key_id.empty()) {
           base_credentials
             = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
               creds->access_key_id, creds->secret_access_key,
@@ -114,9 +114,17 @@ public:
         // for automatic credential refresh.
         if (role) {
           TENZIR_VERBOSE("[sqs] assuming role {}", *role);
-          // Create an STS client configuration (inherits region from main cfg).
+          // Create an STS client configuration (inherits region and endpoint
+          // from main config).
           auto sts_config = Aws::Client::ClientConfiguration{};
           sts_config.region = config.region;
+          // Use STS-specific endpoint if available, otherwise fall back to
+          // the general endpoint override.
+          if (auto sts_endpoint = detail::getenv("AWS_ENDPOINT_URL_STS")) {
+            sts_config.endpointOverride = *sts_endpoint;
+          } else {
+            sts_config.endpointOverride = config.endpointOverride;
+          }
           sts_config.allowSystemProxy = true;
           // Create STS client using the base credentials.
           auto sts_client = std::make_shared<Aws::STS::STSClient>(

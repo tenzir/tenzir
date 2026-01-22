@@ -13,6 +13,7 @@
 #include <tenzir/diagnostics.hpp>
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/AssumeRoleRequest.h>
 #include <caf/expected.hpp>
@@ -79,6 +80,26 @@ assume_role_with_credentials(const resolved_aws_credentials& base_creds,
   return sts_credentials{
     .access_key_id = creds.GetAccessKeyId(),
     .secret_access_key = creds.GetSecretAccessKey(),
+    .session_token = creds.GetSessionToken(),
+  };
+}
+
+/// Loads credentials from an AWS CLI profile.
+inline auto load_profile_credentials(const std::string& profile)
+  -> caf::expected<sts_credentials> {
+  TENZIR_VERBOSE("[s3] using profile {}", profile);
+  auto provider = Aws::Auth::ProfileConfigFileAWSCredentialsProvider{
+    profile.c_str(),
+  };
+  auto creds = provider.GetAWSCredentials();
+  if (creds.IsEmpty()) {
+    return diagnostic::error("failed to load credentials from profile")
+      .note("profile: {}", profile)
+      .to_error();
+  }
+  return sts_credentials{
+    .access_key_id = creds.GetAWSAccessKeyId(),
+    .secret_access_key = creds.GetAWSSecretKey(),
     .session_token = creds.GetSessionToken(),
   };
 }

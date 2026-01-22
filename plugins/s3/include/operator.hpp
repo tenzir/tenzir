@@ -72,6 +72,15 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
       opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                resolved_creds->secret_access_key,
                                resolved_creds->session_token);
+    } else if (args.aws_iam->profile) {
+      // Profile-based credentials
+      auto profile_creds = load_profile_credentials(*args.aws_iam->profile);
+      if (not profile_creds) {
+        return profile_creds.error();
+      }
+      opts->ConfigureAccessKey(profile_creds->access_key_id,
+                               profile_creds->secret_access_key,
+                               profile_creds->session_token);
     } else if (resolved_creds and not resolved_creds->role.empty()) {
       // Role assumption with default credentials
       opts->ConfigureAssumeRoleCredentials(
