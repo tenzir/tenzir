@@ -58,9 +58,10 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
-    // Resolve secrets if explicit credentials are provided.
+    // Resolve secrets if explicit credentials or role are provided.
     auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-    if (args_.aws and args_.aws->has_explicit_credentials()) {
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));

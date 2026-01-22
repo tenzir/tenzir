@@ -66,19 +66,19 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
           = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
       }
       // If role assumption is requested, use STS provider.
-      if (options_.role) {
+      // Use resolved role/ext_id from creds_ since options_.role is a secret.
+      if (creds_ and not creds_->role.empty()) {
         TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
-                       region, options_.role.value(), valid_for);
+                       region, creds_->role, valid_for);
         // Create STS client configuration with the base credentials.
         auto sts_config = Aws::Client::ClientConfiguration{};
         sts_config.region = region;
         auto sts_client = std::make_shared<Aws::STS::STSClient>(
           base_credentials, nullptr, sts_config);
         return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-          options_.role.value(),
-          options_.session_name.value_or("tenzir-session"),
-          options_.ext_id.value_or(""),
-          Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+          creds_->role, options_.session_name.value_or("tenzir-session"),
+          creds_->ext_id, Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS,
+          sts_client);
       }
       return base_credentials;
     });
