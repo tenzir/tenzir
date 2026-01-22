@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 from pathlib import Path
 
@@ -126,12 +127,167 @@ def build(attribute: str, is_release: bool) -> Path:
     return Path(result.stdout.strip())
 
 
+def notarize_macos_package(pkg_path: Path) -> None:
+    """Submit a signed .pkg to Apple for notarization and staple the ticket.
+
+    Requires these environment variables:
+        APPLE_API_KEY_PATH: Path to the .p8 API key file
+        APPLE_API_KEY_ID: App Store Connect API Key ID
+        APPLE_API_ISSUER_ID: App Store Connect Issuer ID
+    """
+    key_path = os.environ.get("APPLE_API_KEY_PATH")
+    key_id = os.environ.get("APPLE_API_KEY_ID")
+    issuer_id = os.environ.get("APPLE_API_ISSUER_ID")
+
+    if not all([key_path, key_id, issuer_id]):
+        warning("Apple notarization credentials not set, skipping notarization")
+        return
+
+    notice(f"Submitting {pkg_path.name} for notarization...")
+
+    # Submit for notarization and wait for completion
+    result = subprocess.run(
+        [
+            "xcrun", "notarytool", "submit",
+            str(pkg_path),
+            "--key", key_path,
+            "--key-id", key_id,
+            "--issuer", issuer_id,
+            "--wait",
+            "--timeout", "30m",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    notice(f"notarytool stdout: {result.stdout}")
+    if result.stderr:
+        notice(f"notarytool stderr: {result.stderr}")
+
+    # Extract submission ID for log fetching
+    submission_id = None
+    for line in result.stdout.splitlines():
+        if line.strip().startswith("id:"):
+            submission_id = line.split(":", 1)[1].strip()
+            break
+
+    def fetch_notarization_log() -> None:
+        """Fetch and display the notarization log for debugging."""
+        if not submission_id:
+            warning("Could not extract submission ID for log fetching")
+            return
+        notice(f"Fetching notarization log for submission {submission_id}")
+        log_result = subprocess.run(
+            [
+                "xcrun", "notarytool", "log",
+                submission_id,
+                "--key", key_path,
+                "--key-id", key_id,
+                "--issuer", issuer_id,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        notice(f"Notarization log:\n{log_result.stdout}")
+        if log_result.stderr:
+            notice(f"Log stderr: {log_result.stderr}")
+
+    if result.returncode != 0:
+        error(f"Notarization failed with return code {result.returncode}")
+        fetch_notarization_log()
+        raise RuntimeError(f"Notarization failed: {result.stderr}")
+
+    # Check for actual success status in output
+    if "status: Accepted" not in result.stdout:
+        error(f"Notarization was not accepted")
+        fetch_notarization_log()
+        raise RuntimeError(f"Notarization status was not 'Accepted'")
+
+    notice(f"Notarization successful for {pkg_path.name}")
+
+    # Staple the notarization ticket to the package
+    # Retry a few times as there can be a delay before the ticket is available
+    notice(f"Stapling notarization ticket to {pkg_path.name}")
+    max_attempts = 5
+    retry_delay = 30  # seconds
+
+    for attempt in range(1, max_attempts + 1):
+        result = subprocess.run(
+            ["xcrun", "stapler", "staple", str(pkg_path)],
+            capture_output=True,
+            text=True,
+        )
+
+        # Check for success message in stdout (stapler prints warnings to stderr even on success)
+        if "The staple and validate action worked!" in result.stdout:
+            notice(f"Successfully notarized and stapled {pkg_path.name}")
+            return
+
+        # Check if it's a "Record not found" error (ticket not yet available)
+        if "Record not found" in result.stdout and attempt < max_attempts:
+            notice(f"Ticket not yet available, retrying in {retry_delay}s (attempt {attempt}/{max_attempts})")
+            time.sleep(retry_delay)
+            continue
+
+        # Final attempt failed or non-recoverable error
+        error(f"Stapling failed: {result.stderr}")
+        error(f"stdout: {result.stdout}")
+        raise RuntimeError(f"Stapling failed after {attempt} attempts")
+
+
+def find_macho_binaries(directory: Path) -> list[Path]:
+    """Find all Mach-O binaries in a directory tree."""
+    binaries = []
+    for path in directory.rglob("*"):
+        if not path.is_file():
+            continue
+        # Use 'file' command to detect Mach-O binaries
+        result = subprocess.run(
+            ["file", "--brief", str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if "Mach-O" in result.stdout:
+            binaries.append(path)
+    return binaries
+
+
+def sign_binary(binary_path: Path, signing_identity: str) -> None:
+    """Sign a single binary with hardened runtime and timestamp."""
+    notice(f"Signing {binary_path}")
+    result = subprocess.run(
+        [
+            "codesign",
+            "--force",
+            "--sign", signing_identity,
+            "--timestamp",
+            "--options", "runtime",
+            str(binary_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error(f"codesign failed for {binary_path}: {result.stderr}")
+        raise RuntimeError(f"Code signing failed: {result.stderr}")
+
+    # Verify signature
+    result = subprocess.run(
+        ["codesign", "--verify", "--verbose", str(binary_path)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error(f"Signature verification failed for {binary_path}: {result.stderr}")
+        raise RuntimeError(f"Signature verification failed: {result.stderr}")
+
+
 def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity: str | None = None) -> Path:
-    """Sign the tenzir binary inside macOS packages (.tar.gz and .pkg).
+    """Sign all binaries inside macOS packages (.tar.gz and .pkg).
 
     This function:
-    1. Extracts the tarball, signs the binary, and repacks it
-    2. Extracts the .pkg, replaces the binary with the signed one, and repacks it
+    1. Extracts the tarball, signs all Mach-O binaries, and repacks it
+    2. Extracts the .pkg, replaces binaries with signed ones, and repacks it
     3. Signs the .pkg itself with productsign (if installer_identity is provided)
 
     The signing uses hardened runtime (--options runtime) which is required
@@ -159,7 +315,7 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity
     signed_pkg_dir.mkdir(exist_ok=True)
 
     tarball = tarballs[0]
-    notice(f"Signing binary in {tarball.name}")
+    notice(f"Signing binaries in {tarball.name}")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -170,39 +326,17 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity
         with tarfile.open(tarball, "r:gz") as tf:
             tf.extractall(extract_dir, filter="data")
 
-        # Find and sign the binary
-        binary_path = extract_dir / "opt" / "tenzir" / "bin" / "tenzir"
-        if not binary_path.exists():
-            error(f"Binary not found at {binary_path}")
+        # Find and sign all Mach-O binaries
+        binaries = find_macho_binaries(extract_dir)
+        if not binaries:
+            error("No Mach-O binaries found in tarball")
             return pkg_dir
 
-        notice(f"Signing {binary_path}")
-        result = subprocess.run(
-            [
-                "codesign",
-                "--force",
-                "--sign", signing_identity,
-                "--timestamp",
-                "--options", "runtime",
-                str(binary_path),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error(f"codesign failed: {result.stderr}")
-            raise RuntimeError(f"Code signing failed: {result.stderr}")
+        notice(f"Found {len(binaries)} Mach-O binaries to sign")
+        for binary_path in binaries:
+            sign_binary(binary_path, signing_identity)
 
-        # Verify signature
-        result = subprocess.run(
-            ["codesign", "--verify", "--verbose", str(binary_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            error(f"Signature verification failed: {result.stderr}")
-            raise RuntimeError(f"Signature verification failed: {result.stderr}")
-        notice("Signature verified successfully")
+        notice(f"Successfully signed {len(binaries)} binaries")
 
         # Repack tarball to signed-packages directory
         signed_tarball = signed_pkg_dir / tarball.name
@@ -263,13 +397,18 @@ def sign_macos_packages(pkg_dir: Path, signing_identity: str, installer_identity
                         error(f"cpio extraction failed: {result.stderr.decode()}")
                         raise RuntimeError(f"Failed to extract Payload: {result.stderr.decode()}")
 
-                # Replace the binary with the signed one
-                pkg_binary_path = payload_extract_dir / "opt" / "tenzir" / "bin" / "tenzir"
-                if pkg_binary_path.exists():
-                    shutil.copy2(binary_path, pkg_binary_path)
-                    notice("Replaced binary in .pkg payload with signed version")
-                else:
-                    warning(f"Binary not found in .pkg at expected path: {pkg_binary_path}")
+                # Replace all binaries with signed versions from extract_dir
+                replaced_count = 0
+                for signed_binary in binaries:
+                    # Get the relative path from extract_dir
+                    rel_path = signed_binary.relative_to(extract_dir)
+                    pkg_binary_path = payload_extract_dir / rel_path
+                    if pkg_binary_path.exists():
+                        shutil.copy2(signed_binary, pkg_binary_path)
+                        replaced_count += 1
+                    else:
+                        warning(f"Binary not found in .pkg at expected path: {pkg_binary_path}")
+                notice(f"Replaced {replaced_count} binaries in .pkg payload with signed versions")
 
                 # Recreate Payload (cpio | gzip)
                 # Get list of files relative to payload_extract_dir
@@ -360,24 +499,36 @@ def upload_packages(
         "tarball": list(pkg_dir.glob("*.tar.gz")),
     }
 
+    # For releases, also upload to a "release" directory for stores that have "main"
+    # Keep "main" for backwards compatibility with the installer script
+    effective_stores = list(package_stores)
+    if release_tag:
+        for store in package_stores:
+            release_store = store.replace("/packages/main", "/packages/release")
+            if release_store != store and release_store not in effective_stores:
+                # Insert release store first so it's the primary destination
+                effective_stores.insert(0, release_store)
+
     # Upload to remote stores
-    for store in package_stores:
+    for store in effective_stores:
         store_type = store.split(":")[0]
         env = os.environ.copy()
         env[f"RCLONE_CONFIG_{store_type.upper()}_TYPE"] = store_type
 
         for label, files in packages.items():
             for pkg_file in files:
-                dest = f"{store}/{label}/{pkg_file.name}"
-                notice(f"Copying artifact to {dest}")
-                _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
+                # Only upload versioned packages for releases
+                if release_tag:
+                    dest = f"{store}/{label}/{pkg_file.name}"
+                    notice(f"Copying artifact to {dest}")
+                    _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), dest], env=env, check=True)
 
-                # Create alias copies
+                # Create alias copies directly from local file
                 for alias in aliases:
                     alias_name = re.sub(r"[0-9]+\.[0-9]+\.[0-9]+", alias, pkg_file.name)
                     alias_dest = f"{store}/{label}/{alias_name}"
                     notice(f"Copying artifact to {alias_dest}")
-                    _ = subprocess.run(["rclone", "-q", "copyto", dest, alias_dest], env=env, check=True)
+                    _ = subprocess.run(["rclone", "-q", "copyto", str(pkg_file), alias_dest], env=env, check=True)
 
     # Copy to local packages directory for test steps
     notice("Copying artifacts to ./packages/")
@@ -385,7 +536,14 @@ def upload_packages(
         local_dir = Path(f"./packages/{label}")
         local_dir.mkdir(parents=True, exist_ok=True)
         for pkg_file in files:
-            _ = subprocess.run(["cp", "-v", str(pkg_file), str(local_dir)], check=True)
+            dest = local_dir / pkg_file.name
+            # Remove existing file if present (may be read-only from previous nix store copy)
+            if dest.exists():
+                dest.chmod(0o644)
+                dest.unlink()
+            shutil.copy2(pkg_file, dest)
+            dest.chmod(0o644)  # Ensure file is writable
+            notice(f"Copied {pkg_file} -> {dest}")
 
     # Attach to GitHub release
     if release_tag:
@@ -505,6 +663,12 @@ def main() -> int:
             warning("APPLE_INSTALLER_IDENTITY not set, skipping code signing")
         if signing_identity and installer_identity:
             pkg_dir = sign_macos_packages(pkg_dir, signing_identity, installer_identity)
+
+            # Notarize the .pkg for release builds
+            if is_release:
+                pkgs = list(pkg_dir.glob("*.pkg"))
+                if pkgs:
+                    notarize_macos_package(pkgs[0])
 
     # Output package directory for GitHub Actions
     if "GITHUB_OUTPUT" in os.environ:
