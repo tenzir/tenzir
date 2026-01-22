@@ -53,9 +53,13 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (args.aws_iam) {
-    if (resolved_creds and not resolved_creds->access_key_id.empty()
-        and not resolved_creds->role.empty()) {
-      // Both explicit credentials and role: use STS to assume role
+    const auto has_explicit_creds
+      = resolved_creds and not resolved_creds->access_key_id.empty();
+    const auto has_role = resolved_creds and not resolved_creds->role.empty();
+    const auto has_profile = args.aws_iam->profile.has_value();
+
+    if (has_explicit_creds and has_role) {
+      // Explicit credentials + role: use STS to assume role
       auto sts_creds
         = assume_role_with_credentials(*resolved_creds, resolved_creds->role,
                                        args.aws_iam->session_name.value_or(""),
@@ -67,13 +71,37 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
       opts->ConfigureAccessKey(sts_creds->access_key_id,
                                sts_creds->secret_access_key,
                                sts_creds->session_token);
-    } else if (resolved_creds and not resolved_creds->access_key_id.empty()) {
+    } else if (has_explicit_creds) {
       // Explicit credentials only
       opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                resolved_creds->secret_access_key,
                                resolved_creds->session_token);
-    } else if (args.aws_iam->profile) {
-      // Profile-based credentials
+    } else if (has_profile and has_role) {
+      // Profile + role: load profile credentials, then assume role
+      auto profile_creds = load_profile_credentials(*args.aws_iam->profile);
+      if (not profile_creds) {
+        return profile_creds.error();
+      }
+      auto base_creds = resolved_aws_credentials{
+        .access_key_id = profile_creds->access_key_id,
+        .secret_access_key = profile_creds->secret_access_key,
+        .session_token = profile_creds->session_token,
+        .role = {},
+        .ext_id = {},
+      };
+      auto sts_creds
+        = assume_role_with_credentials(base_creds, resolved_creds->role,
+                                       args.aws_iam->session_name.value_or(""),
+                                       resolved_creds->ext_id,
+                                       args.aws_iam->region);
+      if (not sts_creds) {
+        return sts_creds.error();
+      }
+      opts->ConfigureAccessKey(sts_creds->access_key_id,
+                               sts_creds->secret_access_key,
+                               sts_creds->session_token);
+    } else if (has_profile) {
+      // Profile-based credentials only
       auto profile_creds = load_profile_credentials(*args.aws_iam->profile);
       if (not profile_creds) {
         return profile_creds.error();
@@ -81,7 +109,7 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
       opts->ConfigureAccessKey(profile_creds->access_key_id,
                                profile_creds->secret_access_key,
                                profile_creds->session_token);
-    } else if (resolved_creds and not resolved_creds->role.empty()) {
+    } else if (has_role) {
       // Role assumption with default credentials
       opts->ConfigureAssumeRoleCredentials(
         resolved_creds->role, args.aws_iam->session_name.value_or(""),
@@ -217,6 +245,7 @@ public:
     auto opts = get_options(args_, uri, resolved_creds);
     if (not opts) {
       diagnostic::error(opts.error()).emit(dh);
+      co_return;
     }
     auto fs = arrow::fs::S3FileSystem::Make(*opts);
     if (not fs.ok()) {
@@ -224,6 +253,7 @@ public:
                         "filesystem: {}",
                         fs.status().ToStringWithoutContextLines())
         .emit(dh);
+      co_return;
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
       fmt::format("{}{}", uri.host(), uri.path()));
@@ -231,17 +261,19 @@ public:
       diagnostic::error("failed to get file info: {}",
                         file_info.status().ToStringWithoutContextLines())
         .emit(dh);
+      co_return;
     }
     auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
     if (not output_stream.ok()) {
       diagnostic::error("failed to open output stream: {}",
                         output_stream.status().ToStringWithoutContextLines())
         .emit(dh);
+      co_return;
     }
     auto stream_guard
       = detail::scope_guard([this, &dh, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
-          if (not output_stream.ok()) {
+          if (not status.ok()) {
             diagnostic::error("failed to close stream: {}",
                               status.ToStringWithoutContextLines())
               .primary(args_.uri.source)
@@ -255,11 +287,12 @@ public:
       }
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
-      if (not output_stream.ok()) {
+      if (not status.ok()) {
         diagnostic::error("failed to write to stream: {}",
                           status.ToStringWithoutContextLines())
           .primary(args_.uri.source)
           .emit(dh);
+        co_return;
       }
     }
   }

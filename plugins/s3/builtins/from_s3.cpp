@@ -73,9 +73,13 @@ public:
     if (args_.anonymous) {
       opts->ConfigureAnonymousCredentials();
     } else if (args_.aws_iam) {
-      if (resolved_creds and not resolved_creds->access_key_id.empty()
-          and not resolved_creds->role.empty()) {
-        // Both explicit credentials and role: use STS to assume role
+      const auto has_explicit_creds
+        = resolved_creds and not resolved_creds->access_key_id.empty();
+      const auto has_role = resolved_creds and not resolved_creds->role.empty();
+      const auto has_profile = args_.aws_iam->profile.has_value();
+
+      if (has_explicit_creds and has_role) {
+        // Explicit credentials + role: use STS to assume role
         auto sts_creds = assume_role_with_credentials(
           *resolved_creds, resolved_creds->role,
           args_.aws_iam->session_name.value_or(""), resolved_creds->ext_id,
@@ -87,13 +91,38 @@ public:
         opts->ConfigureAccessKey(sts_creds->access_key_id,
                                  sts_creds->secret_access_key,
                                  sts_creds->session_token);
-      } else if (resolved_creds and not resolved_creds->access_key_id.empty()) {
+      } else if (has_explicit_creds) {
         // Explicit credentials only
         opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                  resolved_creds->secret_access_key,
                                  resolved_creds->session_token);
-      } else if (args_.aws_iam->profile) {
-        // Profile-based credentials
+      } else if (has_profile and has_role) {
+        // Profile + role: load profile credentials, then assume role
+        auto profile_creds = load_profile_credentials(*args_.aws_iam->profile);
+        if (not profile_creds) {
+          diagnostic::error(profile_creds.error()).emit(dh);
+          co_return;
+        }
+        auto base_creds = resolved_aws_credentials{
+          .access_key_id = profile_creds->access_key_id,
+          .secret_access_key = profile_creds->secret_access_key,
+          .session_token = profile_creds->session_token,
+          .role = {},
+          .ext_id = {},
+        };
+        auto sts_creds = assume_role_with_credentials(
+          base_creds, resolved_creds->role,
+          args_.aws_iam->session_name.value_or(""), resolved_creds->ext_id,
+          args_.aws_iam->region);
+        if (not sts_creds) {
+          diagnostic::error(sts_creds.error()).emit(dh);
+          co_return;
+        }
+        opts->ConfigureAccessKey(sts_creds->access_key_id,
+                                 sts_creds->secret_access_key,
+                                 sts_creds->session_token);
+      } else if (has_profile) {
+        // Profile-based credentials only
         auto profile_creds = load_profile_credentials(*args_.aws_iam->profile);
         if (not profile_creds) {
           diagnostic::error(profile_creds.error()).emit(dh);
@@ -102,7 +131,7 @@ public:
         opts->ConfigureAccessKey(profile_creds->access_key_id,
                                  profile_creds->secret_access_key,
                                  profile_creds->session_token);
-      } else if (resolved_creds and not resolved_creds->role.empty()) {
+      } else if (has_role) {
         // Role assumption with default credentials
         opts->ConfigureAssumeRoleCredentials(
           resolved_creds->role, args_.aws_iam->session_name.value_or(""),
