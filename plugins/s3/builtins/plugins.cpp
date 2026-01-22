@@ -12,6 +12,13 @@
 
 namespace tenzir::plugins::s3 {
 
+// Configuration from s3.yaml (legacy config-based credentials)
+struct s3_file_config {
+  std::string access_key;
+  std::string secret_key;
+  std::string session_token;
+};
+
 template <class Operator>
 class plugin2 final : public virtual operator_plugin2<Operator> {
 public:
@@ -46,7 +53,7 @@ public:
     if (not s3_config or s3_config->empty()) {
       return {};
     }
-    config_.emplace();
+    file_config_.emplace();
     for (const auto& [key, value] : *s3_config) {
 #define X(opt, var)                                                            \
   if (key == (opt)) {                                                          \
@@ -54,7 +61,7 @@ public:
       continue;                                                                \
     }                                                                          \
     if (const auto* str = try_as<std::string>(&value)) {                       \
-      config_->var = *str;                                                     \
+      file_config_->var = *str;                                                \
       continue;                                                                \
     }                                                                          \
     return diagnostic::error("invalid S3 configuration: {} must be a string",  \
@@ -77,6 +84,7 @@ public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = s3_args{};
+    // Legacy options for backwards compatibility
     auto role = std::optional<located<std::string>>{};
     auto external_id = std::optional<located<std::string>>{};
     auto aws_iam_rec = std::optional<located<record>>{};
@@ -87,7 +95,6 @@ public:
           .named("external_id", external_id)
           .named("aws_iam", aws_iam_rec)
           .parse(inv, ctx));
-    args.config = config_;
     if (aws_iam_rec) {
       TRY(args.aws_iam,
           aws_iam_options::from_record(std::move(*aws_iam_rec), ctx));
@@ -115,27 +122,45 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-    }
-    // Validate anonymous + role conflict
-    if (args.anonymous and role) {
-      diagnostic::error("`anonymous` and `role` cannot be used together")
-        .primary(role->source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    if (role) {
-      auto& r = args.role.emplace();
-      r.role = role->inner;
-    }
-    if (external_id) {
-      if (not role) {
+    } else if (role) {
+      // Convert legacy role option to aws_iam
+      if (args.anonymous) {
+        diagnostic::error("`anonymous` and `role` cannot be used together")
+          .primary(role->source)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (external_id and not role) {
         diagnostic::error(
           "cannot specify `external_id` without specifying `role`")
           .primary(external_id->source)
           .emit(ctx);
         return failure::promise();
       }
-      args.role->external_id = external_id->inner;
+      args.aws_iam.emplace();
+      args.aws_iam->loc = role->source;
+      args.aws_iam->role = role->inner;
+      if (external_id) {
+        args.aws_iam->ext_id = external_id->inner;
+      }
+    } else if (external_id) {
+      diagnostic::error(
+        "cannot specify `external_id` without specifying `role`")
+        .primary(external_id->source)
+        .emit(ctx);
+      return failure::promise();
+    } else if (file_config_ and not args.anonymous) {
+      // Convert config-file credentials to aws_iam
+      args.aws_iam.emplace();
+      args.aws_iam->loc = inv.self.get_location();
+      args.aws_iam->access_key_id
+        = secret::make_literal(file_config_->access_key);
+      args.aws_iam->secret_access_key
+        = secret::make_literal(file_config_->secret_key);
+      if (not file_config_->session_token.empty()) {
+        args.aws_iam->session_token
+          = secret::make_literal(file_config_->session_token);
+      }
     }
     return std::make_unique<Operator>(std::move(args));
   }
@@ -162,7 +187,7 @@ public:
   }
 
 private:
-  std::optional<s3_config> config_ = {};
+  std::optional<s3_file_config> file_config_ = {};
 };
 
 using load_plugin = plugin2<s3_loader>;

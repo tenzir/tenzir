@@ -26,43 +26,15 @@ namespace tenzir::plugins::s3 {
 
 namespace {
 
-struct s3_config {
-  std::string access_key;
-  std::string secret_key;
-  std::string session_token;
-
-  friend auto inspect(auto& f, s3_config& x) -> bool {
-    return f.object(x)
-      .pretty_name("s3_config")
-      .fields(f.field("access-key", x.access_key),
-              f.field("secret-key", x.secret_key),
-              f.field("session-token", x.session_token));
-  }
-};
-
-struct s3_assume_role {
-  std::string role;
-  std::string external_id;
-
-  friend auto inspect(auto& f, s3_assume_role& x) -> bool {
-    return f.object(x)
-      .pretty_name("s3_config")
-      .fields(f.field("role", x.role), f.field("external_id", x.external_id));
-  }
-};
-
 struct s3_args {
   bool anonymous = {};
   located<secret> uri;
-  std::optional<s3_config> config;
-  std::optional<s3_assume_role> role;
   std::optional<aws_iam_options> aws_iam;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, s3_args& x) -> bool {
     return f.object(x).pretty_name("s3_args").fields(
       f.field("anonymous", x.anonymous), f.field("uri", x.uri),
-      f.field("config", x.config), f.field("role", x.role),
       f.field("aws_iam", x.aws_iam));
   }
 };
@@ -79,22 +51,18 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (args.aws_iam) {
-    // aws_iam takes precedence over config-based credentials
     if (resolved_creds) {
+      // Explicit credentials were resolved from secrets
       opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                resolved_creds->secret_access_key,
                                resolved_creds->session_token);
     } else if (args.aws_iam->role) {
+      // Role assumption
       opts->ConfigureAssumeRoleCredentials(
         *args.aws_iam->role, args.aws_iam->session_name.value_or(""),
         args.aws_iam->ext_id.value_or(""));
     }
-  } else if (args.role) {
-    opts->ConfigureAssumeRoleCredentials(args.role->role, {},
-                                         args.role->external_id);
-  } else if (args.config) {
-    opts->ConfigureAccessKey(args.config->access_key, args.config->secret_key,
-                             args.config->session_token);
+    // Otherwise, use default credential chain (no explicit configuration)
   }
   return opts.MoveValueUnsafe();
 }
