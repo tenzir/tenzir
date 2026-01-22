@@ -21,18 +21,56 @@ template <typename T>
 struct IsGenericLambda<T, std::void_t<decltype(&T::operator())>>
   : std::false_type {};
 
-template <class T, class... Fs>
-constexpr auto index_for() -> size_t {
-  auto invocable = std::array<bool, sizeof...(Fs)>{std::invocable<Fs, T>...};
+// Extract the first parameter type from a member function pointer.
+template <typename>
+struct FirstParamType {};
+
+template <typename R, typename C, typename Arg, typename... Args>
+struct FirstParamType<R (C::*)(Arg, Args...)> {
+  using type = Arg;
+};
+
+template <typename R, typename C, typename Arg, typename... Args>
+struct FirstParamType<R (C::*)(Arg, Args...) const> {
+  using type = Arg;
+};
+
+template <typename R, typename C, typename Arg, typename... Args>
+struct FirstParamType<R (C::*)(Arg, Args...) noexcept> {
+  using type = Arg;
+};
+
+template <typename R, typename C, typename Arg, typename... Args>
+struct FirstParamType<R (C::*)(Arg, Args...) const noexcept> {
+  using type = Arg;
+};
+
+// Check if a callable F has an exact match for type T (not just convertible).
+template <typename T, typename F, typename = void>
+struct IsExactMatch : std::false_type {};
+
+template <typename T, typename F>
+struct IsExactMatch<
+  T, F, std::void_t<typename FirstParamType<decltype(&F::operator())>::type>> {
+  using ParamType = typename FirstParamType<decltype(&F::operator())>::type;
+  static constexpr bool value
+    = std::same_as<std::remove_cvref_t<T>, std::remove_cvref_t<ParamType>>;
+};
+
+namespace detail {
+
+template <class... Fs>
+constexpr auto index_for_impl(std::array<bool, sizeof...(Fs)> invocable)
+  -> size_t {
   auto count = size_t{0};
-  for (auto& x : invocable) {
+  for (auto x : invocable) {
     if (x) {
       count += 1;
     }
   }
   if (count == 1) {
     auto index = size_t{0};
-    for (auto& x : invocable) {
+    for (auto x : invocable) {
       if (x) {
         return index;
       }
@@ -41,33 +79,90 @@ constexpr auto index_for() -> size_t {
     __builtin_unreachable();
   }
   if (count == 0) {
+    return size_t(-1); // No match found
+  }
+  return size_t(-2); // Multiple matches found
+}
+
+} // namespace detail
+
+template <class T, class... Fs>
+constexpr auto index_for() -> size_t {
+  auto invocable = std::array<bool, sizeof...(Fs)>{std::invocable<Fs, T>...};
+  if (auto r = detail::index_for_impl<Fs...>(invocable); r < sizeof...(Fs)) {
+    return r;
+  } else if (r == size_t(-1)) {
     throw std::runtime_error("could not find any handler for T");
   }
   // Reduce it to non-generic lambdas.
   invocable = {(std::invocable<Fs, T>
                 and not IsGenericLambda<std::remove_cvref_t<Fs>>::value)...};
-  count = 0;
-  for (auto& x : invocable) {
-    if (x) {
-      count += 1;
-    }
-  }
-  if (count == 1) {
-    auto index = size_t{0};
-    for (auto& x : invocable) {
-      if (x) {
-        return index;
-      }
-      index += 1;
-    }
-    __builtin_unreachable();
-  }
-  if (count == 0) {
+  if (auto r = detail::index_for_impl<Fs...>(invocable); r < sizeof...(Fs)) {
+    return r;
+  } else if (r == size_t(-1)) {
     throw std::runtime_error(
       "found multiple generic handlers and no non-generic handler");
   }
-  throw std::runtime_error("found multiple non-generic handlers");
+  // Reduce it to exact matches (not just convertible).
+  invocable = {(std::invocable<Fs, T>
+                and not IsGenericLambda<std::remove_cvref_t<Fs>>::value
+                and IsExactMatch<T, std::remove_cvref_t<Fs>>::value)...};
+  if (auto r = detail::index_for_impl<Fs...>(invocable); r < sizeof...(Fs)) {
+    return r;
+  } else if (r == size_t(-1)) {
+    throw std::runtime_error(
+      "found multiple non-generic handlers and no exact match");
+  }
+  throw std::runtime_error("found multiple exact-match handlers");
 }
+
+// Multi-argument version of index_for, used for tuple co_match.
+// Returns the index via invoke() - no static member to avoid eager evaluation.
+template <class ArgsTuple, class... Fs>
+struct index_for_multi;
+
+template <class... Args, class... Fs>
+struct index_for_multi<std::tuple<Args...>, Fs...> {
+  static constexpr auto invoke() -> size_t {
+    auto invocable
+      = std::array<bool, sizeof...(Fs)>{std::invocable<Fs, Args...>...};
+    if (auto r = detail::index_for_impl<Fs...>(invocable); r < sizeof...(Fs)) {
+      return r;
+    } else if (r == size_t(-1)) {
+      throw std::runtime_error("could not find any handler for Args...");
+    }
+    // Reduce it to non-generic lambdas.
+    invocable = {(std::invocable<Fs, Args...>
+                  and not IsGenericLambda<std::remove_cvref_t<Fs>>::value)...};
+    if (auto r = detail::index_for_impl<Fs...>(invocable); r < sizeof...(Fs)) {
+      return r;
+    } else if (r == size_t(-1)) {
+      throw std::runtime_error(
+        "found multiple generic handlers and no non-generic handler");
+    }
+    // For multi-arg, we skip exact match checking (would need to extend
+    // IsExactMatch). If we reach here, we have multiple non-generic handlers.
+    throw std::runtime_error("found multiple non-generic handlers");
+  }
+};
+
+// Type tag for passing type lists without instantiation.
+template <class... Ts>
+struct type_list {};
+
+// Helper to check if a handler at index I is the best match for given args.
+// Uses a constexpr function to make evaluation lazy (only when the requires
+// clause is checked), avoiding hard errors for type combinations that won't
+// be used.
+template <class FsTypeList, class ArgsTuple, size_t I>
+struct is_best_handler_for;
+
+template <class... Fs, class ArgsTuple, size_t I>
+struct is_best_handler_for<type_list<Fs...>, ArgsTuple, I> {
+  static constexpr auto check() -> bool {
+    return index_for_multi<ArgsTuple, Fs...>::invoke() == I;
+  }
+};
 
 // TODO: We just return result for first check. Could do more.
 template <has_variant_traits V, class... Fs>
@@ -112,6 +207,54 @@ constexpr auto co_match(V&& v, Fs&&... fs) -> CoMatch<V, Fs...> {
 #undef X
   static_assert(count <= 16);
   __builtin_unreachable();
+}
+
+// Implementation helper for tuple co_match with index tracking.
+template <has_variant_traits... Vs, class FsTuple, class FsTypeList,
+          size_t... Is>
+constexpr auto co_match_tuple_impl(std::tuple<Vs...>&& vs, FsTuple&& fs_tuple,
+                                   FsTypeList, std::index_sequence<Is...>)
+  -> decltype(auto) {
+  // We do create temporary lambdas here that are destroyed before the coroutine
+  // potentially returned by the supplied functions is done. However, our
+  // lambdas themselves are not coroutines, and they do not pass any state owned
+  // by them into the user-supplied coroutines.
+  return co_match(
+    std::get<0>(std::move(vs)), [&]<class X>(X&& x) -> decltype(auto) {
+      return co_match(
+        // Remove the first value from the tuple. Use std::move to preserve
+        // rvalue-ness of tuple elements (otherwise reference collapsing
+        // turns rvalue refs into lvalue refs).
+        std::apply(
+          []<class... Ws>(auto&&, Ws&&... ws) {
+            return std::tuple<Ws&&...>{std::forward<Ws>(ws)...};
+          },
+          std::move(vs)),
+        // Create wrappers with constraints using the original Fs for
+        // disambiguation. Each wrapper is only enabled when its corresponding
+        // handler is the best match according to index_for_multi.
+        [&]<class... Xs>(Xs&&... xs) -> decltype(auto)
+          requires(
+            is_best_handler_for<FsTypeList, std::tuple<X, Xs...>, Is>::check())
+        {
+          return std::invoke(std::get<Is>(fs_tuple), std::forward<X>(x),
+                             std::forward<Xs>(xs)...);
+        }...);
+    });
+}
+
+template <has_variant_traits... Vs, class... Fs>
+constexpr auto co_match(std::tuple<Vs...>&& vs, Fs&&... fs) -> decltype(auto) {
+  static_assert(sizeof...(Vs) > 0);
+  if constexpr (sizeof...(Vs) == 1) {
+    return co_match(std::get<0>(std::move(vs)), std::forward<Fs>(fs)...);
+  } else {
+    // Use a type list of the original Fs for disambiguation in wrappers.
+    using FsTypeList = type_list<std::remove_cvref_t<Fs>...>;
+    return co_match_tuple_impl(std::move(vs),
+                               std::forward_as_tuple(std::forward<Fs>(fs)...),
+                               FsTypeList{}, std::index_sequence_for<Fs...>{});
+  }
 }
 
 } // namespace tenzir

@@ -122,12 +122,22 @@ public:
   }
 
   /// Comparing boxes compares their value.
-  auto operator==(const Box& other) const -> bool {
-    // TODO: Constraints.
-    return *ptr_ == *other.ptr_;
+  template <class U>
+    requires std::equality_comparable_with<T, U>
+  auto operator==(const Box<U>& other) const -> bool {
+    return **this == *other;
   }
 
-  friend auto inspect(auto& f, Box& x) -> bool {
+  /// Boxes can also directly be compared against their inner value.
+  template <class U>
+    requires std::equality_comparable_with<T, U>
+  auto operator==(const U& other) const -> bool {
+    return **this == other;
+  }
+
+  friend auto inspect(auto& f, Box& x) -> bool
+    requires requires(T t) { t.name(); }
+  {
     return tenzir::plugin_inspect(f, x.ptr_);
   }
 
