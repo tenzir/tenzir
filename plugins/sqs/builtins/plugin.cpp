@@ -41,6 +41,7 @@ public:
     TRY(argument_parser2::operator_(this->name())
           .positional("queue", args.queue)
           .named("poll_time", dur)
+          .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .parse(inv, ctx));
     if (iam_opts) {

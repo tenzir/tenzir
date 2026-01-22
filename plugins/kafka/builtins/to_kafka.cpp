@@ -34,15 +34,15 @@ struct to_kafka_args {
   std::optional<located<std::string>> key;
   std::optional<located<time>> timestamp;
   located<record> options;
+  std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
 
   friend auto inspect(auto& f, to_kafka_args& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op), f.field("topic", x.topic),
-                              f.field("message", x.message),
-                              f.field("key", x.key),
-                              f.field("timestamp", x.timestamp),
-                              f.field("options", x.options),
-                              f.field("aws", x.aws));
+    return f.object(x).fields(
+      f.field("op", x.op), f.field("topic", x.topic),
+      f.field("message", x.message), f.field("key", x.key),
+      f.field("timestamp", x.timestamp), f.field("options", x.options),
+      f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
 
@@ -65,6 +65,13 @@ public:
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
     }
     co_yield {};
     auto config = configuration::make(config_, args_.aws, resolved_creds, dh);
@@ -196,6 +203,7 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
           .named_optional("message", args.message, "blob|string")
           .named("key", args.key)
           .named("timestamp", args.timestamp)
+          .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .named_optional("options", args.options)
           .parse(inv, ctx));
@@ -206,8 +214,10 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
       TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
       // Region is required for Kafka MSK authentication.
-      if (not args.aws->region) {
-        diagnostic::error("`region` is required for Kafka MSK authentication")
+      // Use top-level aws_region if provided, otherwise require aws_iam.region.
+      if (not args.aws_region and not args.aws->region) {
+        diagnostic::error(
+          "`aws_region` is required for Kafka MSK authentication")
           .primary(args.aws->loc)
           .emit(ctx);
         return failure::promise();

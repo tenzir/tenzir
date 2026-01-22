@@ -13,7 +13,6 @@ The `load_sqs`, `save_sqs`, `from_s3`, `to_s3`, `from_kafka`, and `to_kafka` ope
 
 The `aws_iam` option accepts these fields:
 
-- `region`: AWS region for API requests (optional for SQS and S3, required for Kafka MSK)
 - `profile`: AWS CLI profile name for credential resolution
 - `access_key_id`: AWS access key ID
 - `secret_access_key`: AWS secret access key
@@ -21,6 +20,11 @@ The `aws_iam` option accepts these fields:
 - `assume_role`: IAM role ARN to assume
 - `session_name`: Session name for role assumption
 - `external_id`: External ID for role assumption
+
+Additionally, the SQS and Kafka operators accept a top-level `aws_region` option:
+
+- For `load_sqs` and `save_sqs`: Configures the AWS SDK client region for queue URL resolution
+- For `from_kafka` and `to_kafka`: Required for MSK authentication (used to construct the authentication endpoint URL)
 
 You can also combine explicit credentials with role assumption. This uses the provided credentials to call STS AssumeRole and obtain temporary credentials for the assumed role:
 
@@ -32,11 +36,10 @@ load_sqs "my-queue", aws_iam={
 }
 ```
 
-For example, to load from SQS using explicit credentials:
+For example, to load from SQS with a specific region:
 
 ```tql
-load_sqs "my-queue", aws_iam={
-  region: "us-east-1",
+load_sqs "my-queue", aws_region="us-east-1", aws_iam={
   access_key_id: "AKIAIOSFODNN7EXAMPLE",
   secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 }
@@ -57,6 +60,14 @@ from_s3 "s3://bucket/path", aws_iam={
   assume_role: "arn:aws:iam::123456789012:role/my-role",
   session_name: "tenzir-session",
   external_id: "unique-id"
+}
+```
+
+For Kafka MSK authentication, the `aws_region` option is required:
+
+```tql
+from_kafka "my-topic", aws_region="us-east-1", aws_iam={
+  profile: "production"
 }
 ```
 

@@ -184,6 +184,7 @@ struct loader_args {
   std::uint64_t commit_batch_size = 1000;
   duration commit_timeout = 10s;
   located<record> options;
+  std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
 
@@ -195,7 +196,8 @@ struct loader_args {
               f.field("exit", x.exit), f.field("offset", x.offset),
               f.field("commit_batch_size", x.commit_batch_size),
               f.field("commit_timeout", x.commit_timeout),
-              f.field("options", x.options), f.field("aws", x.aws),
+              f.field("options", x.options),
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws),
               f.field("operator_location", x.operator_location));
   }
 };
@@ -220,6 +222,13 @@ public:
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
     }
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
@@ -432,6 +441,7 @@ struct saver_args {
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<record> options;
+  std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
@@ -440,7 +450,7 @@ struct saver_args {
       .pretty_name("saver_args")
       .fields(f.field("topic", x.topic), f.field("key", x.key),
               f.field("timestamp", x.timestamp), f.field("options", x.options),
-              f.field("aws", x.aws));
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
 
@@ -463,6 +473,13 @@ public:
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
     }
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);

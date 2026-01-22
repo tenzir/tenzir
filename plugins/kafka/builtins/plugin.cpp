@@ -69,6 +69,7 @@ public:
           .named("exit", args.exit)
           .named("offset", offset, "string|int")
           .named_optional("options", args.options)
+          .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .named_optional("commit_batch_size", args.commit_batch_size)
           .named_optional("commit_timeout", args.commit_timeout)
@@ -80,8 +81,10 @@ public:
       TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
       // Region is required for Kafka MSK authentication.
-      if (not args.aws->region) {
-        diagnostic::error("`region` is required for Kafka MSK authentication")
+      // Use top-level aws_region if provided, otherwise require aws_iam.region.
+      if (not args.aws_region and not args.aws->region) {
+        diagnostic::error(
+          "`aws_region` is required for Kafka MSK authentication")
           .primary(args.aws->loc)
           .emit(ctx);
         return failure::promise();
@@ -189,6 +192,7 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
           .positional("topic", args.topic)
           .named("key", args.key)
           .named("timestamp", ts)
+          .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .named_optional("options", args.options)
           .parse(inv, ctx));
@@ -199,8 +203,10 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
       TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
       // Region is required for Kafka MSK authentication.
-      if (not args.aws->region) {
-        diagnostic::error("`region` is required for Kafka MSK authentication")
+      // Use top-level aws_region if provided, otherwise require aws_iam.region.
+      if (not args.aws_region and not args.aws->region) {
+        diagnostic::error(
+          "`aws_region` is required for Kafka MSK authentication")
           .primary(args.aws->loc)
           .emit(ctx);
         return failure::promise();

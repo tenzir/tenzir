@@ -227,6 +227,7 @@ private:
 struct connector_args {
   located<std::string> queue;
   std::optional<located<std::chrono::seconds>> poll_time;
+  std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
@@ -234,7 +235,7 @@ struct connector_args {
     return f.object(x)
       .pretty_name("tenzir.plugins.sqs.connector_args")
       .fields(f.field("queue", x.queue), f.field("poll_time", x.poll_time),
-              f.field("aws", x.aws));
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
 
@@ -257,10 +258,12 @@ public:
     try {
       auto poll_time
         = args_.poll_time ? args_.poll_time->inner : default_poll_time;
-      // Use resolved values from secrets
-      auto region = resolved_creds and not resolved_creds->region.empty()
-                      ? std::optional{resolved_creds->region}
-                      : std::nullopt;
+      // Use top-level aws_region if provided, otherwise fall back to aws_iam
+      auto region = args_.aws_region
+                      ? std::optional{args_.aws_region->inner}
+                      : (resolved_creds and not resolved_creds->region.empty()
+                           ? std::optional{resolved_creds->region}
+                           : std::nullopt);
       auto profile = resolved_creds and not resolved_creds->profile.empty()
                        ? std::optional{resolved_creds->profile}
                        : std::nullopt;
@@ -345,10 +348,12 @@ public:
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;
     auto queue = std::shared_ptr<sqs_queue>{};
     try {
-      // Use resolved values from secrets
-      auto region = resolved_creds and not resolved_creds->region.empty()
-                      ? std::optional{resolved_creds->region}
-                      : std::nullopt;
+      // Use top-level aws_region if provided, otherwise fall back to aws_iam
+      auto region = args_.aws_region
+                      ? std::optional{args_.aws_region->inner}
+                      : (resolved_creds and not resolved_creds->region.empty()
+                           ? std::optional{resolved_creds->region}
+                           : std::nullopt);
       auto profile = resolved_creds and not resolved_creds->profile.empty()
                        ? std::optional{resolved_creds->profile}
                        : std::nullopt;
