@@ -25,6 +25,8 @@ struct resolved_aws_credentials {
   std::string access_key_id;
   std::string secret_access_key;
   std::string session_token;
+  std::string role;
+  std::string ext_id;
 };
 
 /// AWS IAM authentication options.
@@ -37,11 +39,11 @@ struct aws_iam_options {
   /// AWS CLI profile name to use for credentials.
   std::optional<std::string> profile;
   /// IAM role ARN to assume.
-  std::optional<std::string> role;
+  std::optional<secret> role;
   /// Session name for role assumption.
   std::optional<std::string> session_name;
   /// External ID for role assumption.
-  std::optional<std::string> ext_id;
+  std::optional<secret> ext_id;
   /// AWS access key ID.
   std::optional<secret> access_key_id;
   /// AWS secret access key.

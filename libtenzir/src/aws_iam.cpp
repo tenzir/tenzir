@@ -58,6 +58,12 @@ auto aws_iam_options::from_record(located<record> config,
         x = std::move(*s);
       } else if (auto* str = try_as<std::string>(it->second.get_data())) {
         // Allow plain strings as well, convert to literal secret
+        if (str->empty()) {
+          diagnostic::error("'{}' must not be empty", key)
+            .primary(config)
+            .emit(dh);
+          return failure::promise();
+        }
         x = secret::make_literal(std::move(*str));
       } else {
         diagnostic::error("'{}' must be a `string` or `secret`", key)
@@ -72,9 +78,9 @@ auto aws_iam_options::from_record(located<record> config,
   opts.loc = config.source;
   TRY(assign_non_empty_string("region", opts.region));
   TRY(assign_non_empty_string("profile", opts.profile));
-  TRY(assign_non_empty_string("assume_role", opts.role));
+  TRY(assign_secret("assume_role", opts.role));
   TRY(assign_non_empty_string("session_name", opts.session_name));
-  TRY(assign_non_empty_string("external_id", opts.ext_id));
+  TRY(assign_secret("external_id", opts.ext_id));
   TRY(assign_secret("access_key_id", opts.access_key_id));
   TRY(assign_secret("secret_access_key", opts.secret_access_key));
   TRY(assign_secret("session_token", opts.session_token));
@@ -100,6 +106,13 @@ auto aws_iam_options::from_record(located<record> config,
       .emit(dh);
     return failure::promise();
   }
+  // Validate that external_id requires assume_role
+  if (opts.ext_id and not opts.role) {
+    diagnostic::error("`external_id` specified without `assume_role`")
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
   return opts;
 }
 
@@ -116,6 +129,14 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
     if (session_token) {
       requests.emplace_back(make_secret_request(
         "session_token", *session_token, loc, resolved.session_token, dh));
+    }
+  }
+  if (role) {
+    requests.emplace_back(
+      make_secret_request("assume_role", *role, loc, resolved.role, dh));
+    if (ext_id) {
+      requests.emplace_back(
+        make_secret_request("external_id", *ext_id, loc, resolved.ext_id, dh));
     }
   }
   return requests;

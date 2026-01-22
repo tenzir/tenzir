@@ -51,16 +51,16 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (args.aws_iam) {
-    if (resolved_creds) {
+    if (resolved_creds and not resolved_creds->access_key_id.empty()) {
       // Explicit credentials were resolved from secrets
       opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                resolved_creds->secret_access_key,
                                resolved_creds->session_token);
-    } else if (args.aws_iam->role) {
-      // Role assumption
+    } else if (resolved_creds and not resolved_creds->role.empty()) {
+      // Role assumption with resolved role ARN
       opts->ConfigureAssumeRoleCredentials(
-        *args.aws_iam->role, args.aws_iam->session_name.value_or(""),
-        args.aws_iam->ext_id.value_or(""));
+        resolved_creds->role, args.aws_iam->session_name.value_or(""),
+        resolved_creds->ext_id);
     }
     // Otherwise, use default credential chain (no explicit configuration)
   }
@@ -84,9 +84,11 @@ public:
     auto reqs = std::vector<secret_request>{
       make_uri_request(args_.uri, "s3://", uri, dh),
     };
-    // Resolve aws_iam credentials if provided
+    // Resolve aws_iam credentials/role if provided
     auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (args_.aws_iam and args_.aws_iam->has_explicit_credentials()) {
+    if (args_.aws_iam
+        and (args_.aws_iam->has_explicit_credentials()
+             or args_.aws_iam->role)) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
       for (auto& r : aws_reqs) {
@@ -175,9 +177,11 @@ public:
     auto reqs = std::vector<secret_request>{
       make_uri_request(args_.uri, "s3://", uri, dh),
     };
-    // Resolve aws_iam credentials if provided
+    // Resolve aws_iam credentials/role if provided
     auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (args_.aws_iam and args_.aws_iam->has_explicit_credentials()) {
+    if (args_.aws_iam
+        and (args_.aws_iam->has_explicit_credentials()
+             or args_.aws_iam->role)) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
       for (auto& r : aws_reqs) {

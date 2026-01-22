@@ -48,9 +48,11 @@ public:
     auto reqs = std::vector{
       make_uri_request(args_.base_args.url, "s3://", uri, dh),
     };
-    // Resolve aws_iam credentials if provided
+    // Resolve aws_iam credentials/role if provided
     auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (args_.aws_iam and args_.aws_iam->has_explicit_credentials()) {
+    if (args_.aws_iam
+        and (args_.aws_iam->has_explicit_credentials()
+             or args_.aws_iam->role)) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
       for (auto& r : aws_reqs) {
@@ -69,16 +71,16 @@ public:
     if (args_.anonymous) {
       opts->ConfigureAnonymousCredentials();
     } else if (args_.aws_iam) {
-      if (resolved_creds) {
+      if (resolved_creds and not resolved_creds->access_key_id.empty()) {
         // Explicit credentials were resolved from secrets
         opts->ConfigureAccessKey(resolved_creds->access_key_id,
                                  resolved_creds->secret_access_key,
                                  resolved_creds->session_token);
-      } else if (args_.aws_iam->role) {
-        // Role assumption
+      } else if (resolved_creds and not resolved_creds->role.empty()) {
+        // Role assumption with resolved role ARN
         opts->ConfigureAssumeRoleCredentials(
-          *args_.aws_iam->role, args_.aws_iam->session_name.value_or(""),
-          args_.aws_iam->ext_id.value_or(""));
+          resolved_creds->role, args_.aws_iam->session_name.value_or(""),
+          resolved_creds->ext_id);
       }
       // Otherwise, use default credential chain (no explicit configuration)
     }
@@ -223,15 +225,19 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
         args.aws_iam->session_token = session_token->inner;
       }
     } else if (role) {
-      // Legacy role option is no longer supported - use aws_iam instead
-      // The legacy option accepted secrets for the role ARN, but aws_iam.role
-      // is a plain string. Rather than add complexity to handle this edge case,
-      // we guide users to the new syntax.
-      diagnostic::error("legacy `role` option is no longer supported")
-        .primary(*role)
-        .hint("use `aws_iam={{assume_role: \"...\"}}`")
-        .emit(ctx);
-      return failure::promise();
+      // Convert legacy role option to aws_iam
+      if (args.anonymous) {
+        diagnostic::error("`anonymous` cannot be used with `role`")
+          .primary(*args.anonymous)
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.aws_iam.emplace();
+      args.aws_iam->loc = role->source;
+      args.aws_iam->role = role->inner;
+      if (external_id) {
+        args.aws_iam->ext_id = external_id->inner;
+      }
     } else if (session_token) {
       diagnostic::error("`session_token` specified without `access_key`")
         .primary(*session_token)

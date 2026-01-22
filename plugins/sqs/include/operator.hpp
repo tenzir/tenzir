@@ -239,9 +239,10 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
-    // Resolve secrets if explicit credentials are provided.
+    // Resolve secrets if explicit credentials or role are provided.
     auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-    if (args_.aws and args_.aws->has_explicit_credentials()) {
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
@@ -251,9 +252,15 @@ public:
         = args_.poll_time ? args_.poll_time->inner : default_poll_time;
       auto region = args_.aws ? args_.aws->region : std::nullopt;
       auto profile = args_.aws ? args_.aws->profile : std::nullopt;
-      auto role = args_.aws ? args_.aws->role : std::nullopt;
+      auto role = std::optional<std::string>{};
+      auto ext_id = std::optional<std::string>{};
+      if (resolved_creds and not resolved_creds->role.empty()) {
+        role = resolved_creds->role;
+      }
+      if (resolved_creds and not resolved_creds->ext_id.empty()) {
+        ext_id = resolved_creds->ext_id;
+      }
       auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
-      auto ext_id = args_.aws ? args_.aws->ext_id : std::nullopt;
       auto queue = sqs_queue{args_.queue, poll_time,    region, profile,
                              role,        session_name, ext_id, resolved_creds};
       co_yield {};
@@ -314,9 +321,10 @@ public:
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
-    // Resolve secrets if explicit credentials are provided.
+    // Resolve secrets if explicit credentials or role are provided.
     auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-    if (args_.aws and args_.aws->has_explicit_credentials()) {
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
@@ -327,9 +335,15 @@ public:
     try {
       auto region = args_.aws ? args_.aws->region : std::nullopt;
       auto profile = args_.aws ? args_.aws->profile : std::nullopt;
-      auto role = args_.aws ? args_.aws->role : std::nullopt;
+      auto role = std::optional<std::string>{};
+      auto ext_id = std::optional<std::string>{};
+      if (resolved_creds and not resolved_creds->role.empty()) {
+        role = resolved_creds->role;
+      }
+      if (resolved_creds and not resolved_creds->ext_id.empty()) {
+        ext_id = resolved_creds->ext_id;
+      }
       auto session_name = args_.aws ? args_.aws->session_name : std::nullopt;
-      auto ext_id = args_.aws ? args_.aws->ext_id : std::nullopt;
       queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
                                           profile, role, session_name, ext_id,
                                           resolved_creds);
