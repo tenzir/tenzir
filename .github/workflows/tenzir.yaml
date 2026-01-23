@@ -719,8 +719,8 @@ jobs:
         if: ! ( runner.os == 'Linux' && runner.arch == 'X64')
         working-directory: python
         run: |
-          rm dist/*.tar.gz
-          rm dist/tenzir-common*.whl
+          rm -f dist/*.tar.gz
+          rm -f dist/tenzir-common*.whl
       - name: Publish to PyPI
         if: github.event_name == 'release'
         working-directory: python
