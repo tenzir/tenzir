@@ -12,3 +12,10 @@
     message: "Test message",
   },
 }
+warning: octet count prefix ignored
+ --> tests/functions/parse_syslog/octet_counting_length_mismatch.tql:4:5
+  |
+4 | x = x.parse_syslog()
+  |     ~
+  |
+  = note: message parsed without framing
