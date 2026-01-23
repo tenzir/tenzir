@@ -73,10 +73,12 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool add_unflatten_option,
-  bool add_merge_option) -> void {
+  merge_option add_merge_option) -> void {
   parser.named("schema_only", schema_only_);
-  if (add_merge_option) {
+  if (add_merge_option == merge_option::yes) {
     parser.named("merge", merge_);
+  } else if (add_merge_option == merge_option::hidden) {
+    parser.named("_merge", merge_);
   }
   parser.named("raw", raw_);
   if (add_unflatten_option) {
