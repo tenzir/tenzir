@@ -480,46 +480,38 @@ public:
     auto impl = implementation2{cfg_, provider.as_session()};
 
     if (cfg_.frequency) {
-      // Periodic emission mode
-      auto pending_flush = std::atomic<bool>{false};
-
+      // Periodic emission mode.
+      auto pending_flush = false;
       detail::weak_run_delayed_loop(
         &ctrl.self(), *cfg_.frequency,
         [&] {
-          pending_flush.store(true, std::memory_order_release);
+          pending_flush = true;
           ctrl.set_waiting(false);
         },
         false);
-
-      auto maybe_slice = input.next();
-      while (true) {
+      for (auto slice : input) {
         // Drain pending flushes that were scheduled while idle.
-        if (pending_flush.exchange(false, std::memory_order_acq_rel)) {
+        if (std::exchange(pending_flush, false)) {
           for (auto result : impl.flush()) {
             co_yield std::move(result);
           }
         }
-        if (not maybe_slice) {
-          break;
-        }
-        auto& slice = *maybe_slice;
         if (slice.rows() == 0) {
           co_yield {};
         } else {
           impl.add(slice);
         }
-        maybe_slice = input.next();
       }
       // Flush anything that may have been scheduled while consuming the last
       // slices before producing the final result.
-      if (pending_flush.exchange(false, std::memory_order_acq_rel)) {
+      if (std::exchange(pending_flush, false)) {
         for (auto result : impl.flush()) {
           co_yield std::move(result);
         }
       }
-      // Final emission when input ends
-      for (auto slice : impl.finish()) {
-        co_yield std::move(slice);
+      // Final emission when input ends.
+      for (auto result : impl.finish()) {
+        co_yield std::move(result);
       }
     } else {
       for (auto&& slice : input) {
