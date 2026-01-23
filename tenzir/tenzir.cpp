@@ -77,6 +77,302 @@ auto is_ec2_instance() -> bool {
   return false;
 }
 
+class actor_clock_impl : public caf::actor_clock {
+public:
+  explicit actor_clock_impl(caf::actor_system& sys) {
+    worker_ = sys.launch_thread("caf.clock", caf::thread_owner::system, [this] {
+      run();
+    });
+  }
+
+  ~actor_clock_impl() override {
+    {
+      std::unique_lock guard{mutex_};
+      push({time_point::min(), caf::action{}});
+    }
+    cv_.notify_one();
+    worker_.join();
+  }
+
+  caf::disposable schedule(time_point timeout, caf::action callback) override {
+    if (! callback) {
+      return {};
+    }
+    // Only wake up the dispatcher if the new timeout is smaller than the
+    // current timeout.
+    auto do_wakeup = false;
+    {
+      std::unique_lock guard{mutex_};
+      do_wakeup = queue_.empty() || timeout < queue_.front().timeout;
+      push({timeout, callback});
+    }
+    if (do_wakeup) {
+      cv_.notify_one();
+    }
+    return std::move(callback).as_disposable();
+  }
+
+private:
+  struct entry {
+    time_point timeout;
+    caf::action callback;
+  };
+
+  static constexpr auto entry_cmp = [](const entry& lhs, const entry& rhs) {
+    // We want the smallest entry to be at the front of the queue. Since
+    // std::push_heap will put the largest element at the front, we need to
+    // invert the comparison.
+    return lhs.timeout > rhs.timeout;
+  };
+
+  void push(entry e) {
+    queue_.push_back(std::move(e));
+    std::push_heap(queue_.begin(), queue_.end(), entry_cmp);
+  }
+
+  void pop() {
+    std::pop_heap(queue_.begin(), queue_.end(), entry_cmp);
+    queue_.pop_back();
+  }
+
+  void run() {
+    std::unique_lock guard{mutex_};
+    while (queue_.empty()) {
+      cv_.wait(guard);
+    }
+    for (;;) {
+      auto& job = queue_.front();
+      if (! job.callback) {
+        return;
+      }
+      auto timeout = job.timeout;
+      if (now() >= timeout) {
+        auto fn = std::move(job.callback);
+        pop();
+        guard.unlock();
+        fn.run();
+        guard.lock();
+        while (queue_.empty()) {
+          cv_.wait(guard);
+        }
+      } else {
+        cv_.wait_until(guard, timeout);
+      }
+    }
+  }
+
+  std::thread worker_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::vector<entry> queue_;
+};
+
+class tombstoning_actor_clock : public caf::actor_clock {
+public:
+  explicit tombstoning_actor_clock(caf::actor_system& sys) {
+    worker_ = sys.launch_thread("caf.clock", caf::thread_owner::system, [this] {
+      run();
+    });
+  }
+
+  ~tombstoning_actor_clock() override {
+    {
+      const auto guard = std::scoped_lock{mutex_};
+      push({time_point::min(), caf::action{}});
+    }
+    cv_.notify_one();
+    worker_.join();
+  }
+
+  caf::disposable schedule(time_point timeout, caf::action callback) override {
+    if (! callback) {
+      return {};
+    }
+    // Only wake up the dispatcher if the new timeout is smaller than the
+    // current timeout.
+    auto do_wakeup = false;
+    {
+      const auto guard = std::scoped_lock{mutex_};
+      do_wakeup = queue_.empty() || timeout < queue_.front().timeout;
+      push({timeout, callback});
+    }
+    if (do_wakeup) {
+      cv_.notify_one();
+    }
+    return std::move(callback).as_disposable();
+  }
+
+private:
+  struct entry {
+    time_point timeout;
+    caf::action callback;
+  };
+
+  void push(entry e) {
+    // First, find a slot *before* which we could insert this new entry.
+    const auto pos = std::ranges::upper_bound(queue_, e.timeout, std::less{},
+                                              &entry::timeout);
+    // Search backwards from the partition point of an unused/disposed slot.
+    // If no partition was found, this simply goes from the end
+    // If the partition was at begin, the search will break
+    for (auto it = pos; true;) {
+      // First check if we can decrement the iterator.
+      if (it == queue_.begin()) {
+        break;
+      }
+      // Decrement.
+      --it;
+      // If the element is disposed, we move all successive elements forward by
+      // one (placing the disposed element at pos-1) and then reset it to the
+      // new entry.
+      if (it->callback.disposed()) {
+        std::move(it + 1, pos, it);
+        *(pos - 1) = std::move(e);
+        return;
+      }
+    }
+    // If no slot was found, we insert at the partition point (which may be the
+    // end of the queue)
+    queue_.insert(pos, std::move(e));
+  }
+
+  void pop() {
+    queue_.erase(queue_.begin());
+  }
+
+  void run() {
+    std::unique_lock guard{mutex_};
+    while (queue_.empty()) {
+      cv_.wait(guard);
+    }
+    for (;;) {
+      // Delete all disposed elements at the queue front.
+      if (not queue_.empty()) {
+        auto first_valid = std::ranges::find_if(queue_, [](const entry& e) {
+          return not e.callback.disposed();
+        });
+        queue_.erase(queue_.begin(), first_valid);
+      }
+      if (queue_.empty()) {
+        cv_.wait(guard);
+        continue;
+      }
+      auto& job = queue_.front();
+      if (not job.callback) {
+        return; // Shutdown signal
+      }
+      auto timeout = job.timeout;
+      if (now() >= timeout) {
+        auto fn = std::move(job.callback);
+        pop();
+        guard.unlock();
+        fn.run();
+        guard.lock();
+      } else {
+        cv_.wait_until(guard, timeout);
+      }
+    }
+  }
+
+  std::thread worker_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::vector<entry> queue_;
+};
+
+class cleaning_actor_clock : public caf::actor_clock {
+public:
+  explicit cleaning_actor_clock(caf::actor_system& sys) {
+    worker_ = sys.launch_thread("caf.clock", caf::thread_owner::system, [this] {
+      run();
+    });
+  }
+
+  ~cleaning_actor_clock() override {
+    {
+      std::unique_lock guard{mutex_};
+      push({time_point::min(), caf::action{}});
+    }
+    cv_.notify_one();
+    worker_.join();
+  }
+
+  caf::disposable schedule(time_point timeout, caf::action callback) override {
+    if (! callback) {
+      return {};
+    }
+    // Only wake up the dispatcher if the new timeout is smaller than the
+    // current timeout.
+    auto do_wakeup = false;
+    {
+      std::unique_lock guard{mutex_};
+      do_wakeup = queue_.empty() || timeout < queue_.front().timeout;
+      push({timeout, callback});
+    }
+    if (do_wakeup) {
+      cv_.notify_one();
+    }
+    return std::move(callback).as_disposable();
+  }
+
+private:
+  struct entry {
+    time_point timeout;
+    caf::action callback;
+  };
+
+  static constexpr auto entry_cmp = [](const entry& lhs, const entry& rhs) {
+    // We want the smallest entry to be at the front of the queue. Since
+    // std::push_heap will put the largest element at the front, we need to
+    // invert the comparison.
+    return lhs.timeout > rhs.timeout;
+  };
+
+  void push(entry e) {
+    const auto partition = std::ranges::stable_partition(
+      queue_, &caf::action::disposed, &entry::callback);
+    queue_.erase(queue_.begin(), std::ranges::begin(partition));
+    const auto insert = std::ranges::lower_bound(queue_, e.timeout, std::less{},
+                                                 &entry::timeout);
+    queue_.insert(insert, std::move(e));
+  }
+
+  void pop() {
+    queue_.erase(queue_.begin());
+  }
+
+  void run() {
+    std::unique_lock guard{mutex_};
+    while (queue_.empty()) {
+      cv_.wait(guard);
+    }
+    for (;;) {
+      auto& job = queue_.front();
+      if (! job.callback) {
+        return;
+      }
+      auto timeout = job.timeout;
+      if (now() >= timeout) {
+        auto fn = std::move(job.callback);
+        pop();
+        guard.unlock();
+        fn.run();
+        guard.lock();
+        while (queue_.empty()) {
+          cv_.wait(guard);
+        }
+      } else {
+        cv_.wait_until(guard, timeout);
+      }
+    }
+  }
+
+  std::thread worker_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::vector<entry> queue_;
+};
+
 } // namespace
 
 auto main(int argc, char** argv) -> int try {
@@ -349,6 +645,9 @@ auto main(int argc, char** argv) -> int try {
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
+  cfg.set_clock_factory([](caf::actor_system& sys) {
+    return std::make_unique<actor_clock_impl>(sys);
+  });
   auto sys = caf::actor_system{cfg};
   auto run_error = caf::error{};
   if (is_server) {
