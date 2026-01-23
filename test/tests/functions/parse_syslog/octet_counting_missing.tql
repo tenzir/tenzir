@@ -1,0 +1,3 @@
+// Test octet_counting=true with input missing the octet prefix (should warn)
+from { x: "<165>1 2023-10-11T22:14:15.003Z host app 1234 ID01 - Test message" }
+x = x.parse_syslog(octet_counting=true)

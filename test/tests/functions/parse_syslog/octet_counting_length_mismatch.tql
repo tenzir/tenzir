@@ -1,0 +1,4 @@
+// Auto-detect with mismatched length prefix (10 != actual 65)
+// In auto mode, full message parses successfully; warns that prefix was ignored
+from { x: "10 <165>1 2023-10-11T22:14:15.003Z host app 1234 ID01 - Test message" }
+x = x.parse_syslog()
