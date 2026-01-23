@@ -13,6 +13,7 @@
 #include <caf/add_ref.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/scheduled_actor.hpp>
+#include <fmt/base.h>
 
 namespace tenzir::detail {
 
@@ -26,8 +27,7 @@ template <class Function>
   requires std::is_invocable_r_v<void, Function&&>
 auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
                       Function&& function) -> caf::disposable {
-  return self->run_scheduled_weak(self->clock().now() + delay,
-                                  std::forward<Function>(function));
+  return self->run_delayed_weak(delay, std::forward<Function>(function));
 }
 
 struct weak_run_delayed_disposable_impl final : caf::ref_counted,

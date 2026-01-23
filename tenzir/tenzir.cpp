@@ -77,96 +77,10 @@ auto is_ec2_instance() -> bool {
   return false;
 }
 
-class actor_clock_impl : public caf::actor_clock {
-public:
-  explicit actor_clock_impl(caf::actor_system& sys) {
-    worker_ = sys.launch_thread("caf.clock", caf::thread_owner::system, [this] {
-      run();
-    });
-  }
-
-  ~actor_clock_impl() override {
-    {
-      std::unique_lock guard{mutex_};
-      push({time_point::min(), caf::action{}});
-    }
-    cv_.notify_one();
-    worker_.join();
-  }
-
-  caf::disposable schedule(time_point timeout, caf::action callback) override {
-    if (! callback) {
-      return {};
-    }
-    // Only wake up the dispatcher if the new timeout is smaller than the
-    // current timeout.
-    auto do_wakeup = false;
-    {
-      std::unique_lock guard{mutex_};
-      do_wakeup = queue_.empty() || timeout < queue_.front().timeout;
-      push({timeout, callback});
-    }
-    if (do_wakeup) {
-      cv_.notify_one();
-    }
-    return std::move(callback).as_disposable();
-  }
-
-private:
-  struct entry {
-    time_point timeout;
-    caf::action callback;
-  };
-
-  static constexpr auto entry_cmp = [](const entry& lhs, const entry& rhs) {
-    // We want the smallest entry to be at the front of the queue. Since
-    // std::push_heap will put the largest element at the front, we need to
-    // invert the comparison.
-    return lhs.timeout > rhs.timeout;
-  };
-
-  void push(entry e) {
-    queue_.push_back(std::move(e));
-    std::push_heap(queue_.begin(), queue_.end(), entry_cmp);
-  }
-
-  void pop() {
-    std::pop_heap(queue_.begin(), queue_.end(), entry_cmp);
-    queue_.pop_back();
-  }
-
-  void run() {
-    std::unique_lock guard{mutex_};
-    while (queue_.empty()) {
-      cv_.wait(guard);
-    }
-    for (;;) {
-      auto& job = queue_.front();
-      if (! job.callback) {
-        return;
-      }
-      auto timeout = job.timeout;
-      if (now() >= timeout) {
-        auto fn = std::move(job.callback);
-        pop();
-        guard.unlock();
-        fn.run();
-        guard.lock();
-        while (queue_.empty()) {
-          cv_.wait(guard);
-        }
-      } else {
-        cv_.wait_until(guard, timeout);
-      }
-    }
-  }
-
-  std::thread worker_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
-  std::vector<entry> queue_;
-};
-
+/// Currently unused actor clock that would reuse disposed slots in the queue.
+/// It would need some more work on efficiently deciding on the backwards
+/// search. Currently it may search the entire queue backwards if there are no
+/// disposed actions.
 class tombstoning_actor_clock : public caf::actor_clock {
 public:
   explicit tombstoning_actor_clock(caf::actor_system& sys) {
@@ -286,6 +200,7 @@ public:
     worker_ = sys.launch_thread("caf.clock", caf::thread_owner::system, [this] {
       run();
     });
+    queue_.push_back(make_cleanup_entry());
   }
 
   ~cleaning_actor_clock() override {
@@ -329,16 +244,80 @@ private:
   };
 
   void push(entry e) {
-    const auto partition = std::ranges::stable_partition(
-      queue_, &caf::action::disposed, &entry::callback);
-    queue_.erase(queue_.begin(), std::ranges::begin(partition));
-    const auto insert = std::ranges::lower_bound(queue_, e.timeout, std::less{},
-                                                 &entry::timeout);
-    queue_.insert(insert, std::move(e));
+    queue_.push_back(std::move(e));
+    std::push_heap(queue_.begin(), queue_.end(), entry_cmp);
   }
 
   void pop() {
-    queue_.erase(queue_.begin());
+    std::pop_heap(queue_.begin(), queue_.end(), entry_cmp);
+    queue_.pop_back();
+  }
+
+  void sift_up(size_t i) {
+    while (i > 0) {
+      auto parent = (i - 1) / 2;
+      if (not entry_cmp(queue_[parent], queue_[i])) {
+        break;
+      }
+      std::swap(queue_[i], queue_[parent]);
+      i = parent;
+    }
+  }
+
+  void sift_down(size_t i) {
+    while (true) {
+      auto smallest = i;
+      auto left = (2 * i) + 1;
+      auto right = (2 * i) + 2;
+      if (left < queue_.size() && entry_cmp(queue_[smallest], queue_[left])) {
+        smallest = left;
+      }
+      if (right < queue_.size() && entry_cmp(queue_[smallest], queue_[right])) {
+        smallest = right;
+      }
+      if (smallest == i) {
+        break;
+      }
+      std::swap(queue_[i], queue_[smallest]);
+      i = smallest;
+    }
+  }
+
+  auto make_cleanup_entry() -> entry {
+    constexpr static auto cleanup_interval = std::chrono::minutes{1};
+    return {
+      now() + cleanup_interval,
+      caf::make_single_shot_action([this]() {
+        this->do_cleanup();
+      }),
+    };
+  }
+
+  void do_cleanup() {
+    const auto guard = std::scoped_lock{mutex_};
+    for (size_t i = queue_.size(); i-- > 0;) {
+      if (not queue_[i].callback.disposed()) {
+        continue;
+      }
+      // Swap disposed element with last and remove
+      if (i != queue_.size() - 1) {
+        std::swap(queue_[i], queue_.back());
+      }
+      queue_.pop_back();
+      // Fix heap at position i
+      if (i < queue_.size()) {
+        // Check if element needs to move up or down
+        if (i > 0) {
+          auto parent = (i - 1) / 2;
+          if (entry_cmp(queue_[parent], queue_[i])) {
+            sift_up(i);
+            continue;
+          }
+        }
+        sift_down(i);
+      }
+    }
+    push(make_cleanup_entry());
   }
 
   void run() {
@@ -646,7 +625,7 @@ auto main(int argc, char** argv) -> int try {
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
   cfg.set_clock_factory([](caf::actor_system& sys) {
-    return std::make_unique<actor_clock_impl>(sys);
+    return std::make_unique<cleaning_actor_clock>(sys);
   });
   auto sys = caf::actor_system{cfg};
   auto run_error = caf::error{};
