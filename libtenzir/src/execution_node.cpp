@@ -19,6 +19,7 @@
 #include "tenzir/detail/hex_encode.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
+#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ecc.hpp"
 #include "tenzir/metric_handler.hpp"
@@ -44,21 +45,6 @@
 namespace tenzir {
 
 namespace {
-
-template <class F>
-void loop_at(caf::scheduled_actor* self, caf::actor_clock::time_point start,
-             caf::timespan delay, F&& f) {
-  auto run = [self, start, delay, f = std::forward<F>(f)]() mutable {
-    std::invoke(f);
-    loop_at(self, start + delay, delay, std::move(f));
-  };
-  self->delay_until_fn(start + delay, std::move(run));
-}
-
-template <class F>
-void loop(caf::scheduled_actor* self, caf::timespan delay, F&& f) {
-  loop_at(self, self->clock().now() + delay, delay, std::forward<F>(f));
-}
 
 using namespace std::chrono_literals;
 using namespace si_literals;
@@ -131,10 +117,12 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   exec_node_diagnostic_handler(exec_node_state<Input, Output>& state,
                                receiver_actor<diagnostic> handle)
     : state{state}, handle{std::move(handle)} {
-    loop_at(state.self, state.self->clock().now(),
-            defaults::diagnostic_deduplication_interval, [this] {
-              deduplicator_.clear();
-            });
+    detail::weak_run_delayed_loop(
+      state.self, defaults::diagnostic_deduplication_interval,
+      [this] {
+        deduplicator_.clear();
+      },
+      false);
   }
 
   void emit(diagnostic diag) override {
@@ -843,10 +831,13 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    loop(self, defaults::metrics_interval, [this] {
-      auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-      emit_generic_op_metrics();
-    });
+    detail::weak_run_delayed_loop(
+      self, defaults::metrics_interval,
+      [this] {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        emit_generic_op_metrics();
+      },
+      false);
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} was already started", *self));
