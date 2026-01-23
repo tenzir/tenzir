@@ -194,7 +194,7 @@ auto configuration::make(const record& options,
                          diagnostic_handler& dh)
   -> caf::expected<configuration> {
   configuration result;
-  if (auto err = result.set(options)) {
+  if (auto err = result.set(options); err.valid()) {
     return err;
   }
   auto errstr = std::string{};
@@ -257,7 +257,7 @@ auto configuration::set(const record& options) -> caf::error {
     },
   };
   for (const auto& [key, value] : options) {
-    if (auto err = set(key, tenzir::match(value, stringify))) {
+    if (auto err = set(key, tenzir::match(value, stringify)); err.valid()) {
       return err;
     }
   }

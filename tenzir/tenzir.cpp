@@ -79,7 +79,7 @@ auto main(int argc, char** argv) -> int try {
   }
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
-  if (auto err = cfg.parse(argc, argv)) {
+  if (auto err = cfg.parse(argc, argv); err.valid()) {
     fmt::print(stderr, "failed to parse configuration: {}\n", err);
     return EXIT_FAILURE;
   }
@@ -104,7 +104,7 @@ auto main(int argc, char** argv) -> int try {
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (not invocation) {
-    if (invocation.error()) {
+    if (invocation.error().valid()) {
       render_error(*root, invocation.error(), std::cerr);
       return EXIT_FAILURE;
     }
@@ -169,7 +169,7 @@ auto main(int argc, char** argv) -> int try {
     TENZIR_DEBUG("loaded plugin: {}", file);
   }
   // Initialize successfully loaded plugins.
-  if (auto err = plugins::initialize(cfg)) {
+  if (auto err = plugins::initialize(cfg); err.valid()) {
     render_error(
       *root,
       diagnostic::error(err).note("failed to initialize plugins").to_error(),
