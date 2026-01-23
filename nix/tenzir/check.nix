@@ -29,10 +29,17 @@ stdenvNoCC.mkDerivation {
       template = path: ''
         if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
-          tenzir-test \
-            --root "${src}/test" \
-            -j $NIX_BUILD_CORES \
-            ${path}/test
+          # Find test directories excluding localstack (requires container runtime)
+          test_dirs=$(find "${path}/test" -type f -name "*.tql" -not -path "*/localstack/*" \
+            | xargs -r dirname | sort -u | tr '\n' ' ')
+          if [ -n "$test_dirs" ]; then
+            tenzir-test \
+              --root "${src}/test" \
+              -j $NIX_BUILD_CORES \
+              $test_dirs
+          else
+            echo "no tests found (after excluding localstack)"
+          fi
         fi
       '';
     in
