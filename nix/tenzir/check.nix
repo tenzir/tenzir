@@ -30,8 +30,6 @@ stdenvNoCC.mkDerivation {
         if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
           tenzir-test \
-            --tenzir-binary ${lib.getBin unchecked}/bin/tenzir \
-            --tenzir-node-binary ${lib.getBin unchecked}/bin/tenzir-node \
             --root "${src}/test" \
             -j $NIX_BUILD_CORES \
             ${path}/test
@@ -43,6 +41,8 @@ stdenvNoCC.mkDerivation {
       export UV_NO_INDEX=1
       export UV_OFFLINE=1
       export UV_PYTHON=${lib.getExe py3}
+      export TENZIR_BINARY=${lib.getBin unchecked}/bin/tenzir
+      export TENZIR_NODE_BINARY=${lib.getBin unchecked}/bin/tenzir-node
       export TENZIR_ALLOC_STATS=1
       ${lib.optionalString (stdenvNoCC.buildPlatform.isx86_64) "export TENZIR_ALLOC_ACTOR_STATS=1"}
       mkdir -p cache data state tmp

@@ -213,17 +213,15 @@ function (tenzir_build_test_command out_var)
   list(
     APPEND
     cmd
+    "TENZIR_BINARY=$<TARGET_FILE:tenzir::tenzir>"
+    "TENZIR_NODE_BINARY=$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
     "--"
     "${TENZIR_UV_PATH}"
     "tool"
     "run"
     "--python"
     ">=3.12"
-    "tenzir-test"
-    "--tenzir-binary"
-    "$<TARGET_FILE:tenzir::tenzir>"
-    "--tenzir-node-binary"
-    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node")
+    "tenzir-test")
 
   # Add extra arguments if provided
   if (ARG_EXTRA_ARGS)
