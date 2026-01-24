@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "tenzir-tenzir"
+  },
   "hooks": {
     "Setup": [
       {
