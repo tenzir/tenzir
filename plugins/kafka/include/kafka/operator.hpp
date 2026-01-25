@@ -13,6 +13,7 @@
 #include "kafka/producer.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/string.hpp>
@@ -183,7 +184,8 @@ struct loader_args {
   std::uint64_t commit_batch_size = 1000;
   duration commit_timeout = 10s;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<located<std::string>> aws_region;
+  std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
 
   template <class Inspector>
@@ -194,7 +196,8 @@ struct loader_args {
               f.field("exit", x.exit), f.field("offset", x.offset),
               f.field("commit_batch_size", x.commit_batch_size),
               f.field("commit_timeout", x.commit_timeout),
-              f.field("options", x.options), f.field("aws", x.aws),
+              f.field("options", x.options),
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws),
               f.field("operator_location", x.operator_location));
   }
 };
@@ -212,8 +215,23 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
+    // Resolve secrets if explicit credentials or role are provided.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
+    }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, dh);
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (! cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
         .primary(args_.operator_location)
@@ -423,7 +441,8 @@ struct saver_args {
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<located<std::string>> aws_region;
+  std::optional<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -431,7 +450,7 @@ struct saver_args {
       .pretty_name("saver_args")
       .fields(f.field("topic", x.topic), f.field("key", x.key),
               f.field("timestamp", x.timestamp), f.field("options", x.options),
-              f.field("aws", x.aws));
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
 
@@ -446,16 +465,31 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    auto& dh = ctrl.diagnostics();
+    // Resolve secrets if explicit credentials or role are provided.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
+    }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not cfg) {
-      diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
+      diagnostic::error(cfg.error()).emit(dh);
       co_return;
     };
     // Override configuration with arguments.
     {
-      auto secrets
-        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      auto secrets = configure_or_request(args_.options, *cfg, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     if (auto value = cfg->get("bootstrap.servers")) {
@@ -464,7 +498,7 @@ public:
     auto client = producer::make(*cfg);
     if (! client) {
       TENZIR_ERROR(client.error());
-      diagnostic::error(client.error()).emit(ctrl.diagnostics());
+      diagnostic::error(client.error()).emit(dh);
     };
     auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
@@ -496,7 +530,7 @@ public:
         if (auto error
             = client->produce(topic, as_bytes(chunk), key, timestamp);
             error.valid()) {
-          diagnostic::error(error).emit(ctrl.diagnostics());
+          diagnostic::error(error).emit(dh);
         }
       }
       // It's advised to call poll periodically to tell Kafka "you can flush

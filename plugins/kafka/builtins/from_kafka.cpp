@@ -9,6 +9,7 @@
 #include "kafka/configuration.hpp"
 #include "kafka/operator.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
+#include "tenzir/aws_iam.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <tenzir/generator.hpp>
@@ -32,7 +33,8 @@ struct from_kafka_args {
   std::optional<located<std::string>> offset;
   std::uint64_t commit_batch_size = 1000;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<located<std::string>> aws_region;
+  std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
 
   friend auto inspect(auto& f, from_kafka_args& x) -> bool {
@@ -40,8 +42,8 @@ struct from_kafka_args {
       f.field("topic", x.topic), f.field("count", x.count),
       f.field("exit", x.exit), f.field("offset", x.offset),
       f.field("commit_batch_size", x.commit_batch_size),
-      f.field("options", x.options), f.field("aws", x.aws),
-      f.field("operator_location", x.operator_location));
+      f.field("options", x.options), f.field("aws_region", x.aws_region),
+      f.field("aws", x.aws), f.field("operator_location", x.operator_location));
   }
 };
 
@@ -58,9 +60,24 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    co_yield {};
     auto& dh = ctrl.diagnostics();
-    auto cfg = configuration::make(config_, args_.aws, dh);
+    // Resolve secrets if explicit credentials or role are provided.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
+    }
+    co_yield {};
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
         .primary(args_.operator_location)
@@ -332,6 +349,7 @@ public:
           .named("exit", args.exit)
           .named("offset", offset, "string|int")
           .named_optional("options", args.options)
+          .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .named_optional("commit_batch_size", args.commit_batch_size)
           .parse(inv, ctx));
@@ -339,8 +357,17 @@ public:
       TRY(check_sasl_mechanism(args.options, ctx));
       TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
       args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
-      TRY(args.aws, configuration::aws_iam_options::from_record(
+      TRY(args.aws, tenzir::aws_iam_options::from_record(
                       std::move(iam_opts).value(), ctx));
+      // Region is required for Kafka MSK authentication.
+      // Use top-level aws_region if provided, otherwise require aws_iam.region.
+      if (not args.aws_region and not args.aws->region) {
+        diagnostic::error(
+          "`aws_region` is required for Kafka MSK authentication")
+          .primary(args.aws->loc)
+          .emit(ctx);
+        return failure::promise();
+      }
     }
     if (args.options.inner.contains("enable.auto.commit")) {
       diagnostic::error("`enable.auto.commit` must not be specified")

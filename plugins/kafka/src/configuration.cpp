@@ -23,6 +23,7 @@
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
+#include <aws/sts/STSClient.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
@@ -31,59 +32,6 @@
 
 namespace tenzir::plugins::kafka {
 
-auto configuration::aws_iam_options::from_record(located<record> config,
-                                                 diagnostic_handler& dh)
-  -> failure_or<aws_iam_options> {
-  constexpr auto known = std::array{
-    "region",
-    "assume_role",
-    "session_name",
-    "external_id",
-  };
-  const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
-    return std::ranges::find(known, x.first) == std::ranges::end(known);
-  });
-  if (unknown != std::ranges::end(config.inner)) {
-    diagnostic::error("unknown key '{}' in config", *unknown)
-      .primary(config)
-      .emit(dh);
-    return failure::promise();
-  }
-  if (not config.inner.contains("region")) {
-    diagnostic::error("'region' must be specified when using IAM")
-      .primary(config)
-      .emit(dh);
-    return failure::promise();
-  }
-  const auto assign_non_empty_string
-    = [&](std::string_view key, auto&& x) -> failure_or<void> {
-    if (auto it = config.inner.find(key); it != config.inner.end()) {
-      auto* extracted = try_as<std::string>(it->second.get_data());
-      if (not extracted) {
-        diagnostic::error("'{}' must be a `string`", key)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (extracted->empty()) {
-        diagnostic::error("'{}' must not be empty", key)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      x = std::move(*extracted);
-    }
-    return {};
-  };
-  auto opts = aws_iam_options{};
-  opts.loc = config.source;
-  TRY(assign_non_empty_string("region", opts.region));
-  TRY(assign_non_empty_string("assume_role", opts.role));
-  TRY(assign_non_empty_string("session_name", opts.session_name));
-  TRY(assign_non_empty_string("external_id", opts.ext_id));
-  return opts;
-}
-
 auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   RdKafka::Handle* handle, const std::string&) -> void {
   const auto valid_for = std::chrono::seconds{900};
@@ -91,8 +39,12 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   const auto aws_guard = detail::scope_guard{[] noexcept {
     Aws::ShutdownAPI({});
   }};
+  // Region is required for Kafka MSK - validated at parse time.
+  // Use resolved region from creds_ since options_.region is a secret.
+  TENZIR_ASSERT(creds_ and not creds_->region.empty());
+  const auto& region = creds_->region;
   const auto url = Aws::Http::URI{
-    fmt::format("https://kafka.{}.amazonaws.com/", options_.region),
+    fmt::format("https://kafka.{}.amazonaws.com/", region),
   };
   auto request = Aws::Http::Standard::StandardHttpRequest{
     url,
@@ -100,16 +52,45 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   };
   auto provider = std::invoke(
     [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-      if (options_.role) {
-        TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
-                       options_.region, options_.role.value(), valid_for);
-        return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-          options_.role.value(),
-          options_.session_name.value_or("tenzir-session"),
-          options_.ext_id.value_or(""));
+      // Determine base credentials provider: explicit, profile, or default
+      // chain.
+      auto base_credentials
+        = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
+      if (creds_ and not creds_->access_key_id.empty()) {
+        TENZIR_VERBOSE("[kafka iam] using explicit credentials");
+        base_credentials
+          = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            creds_->access_key_id, creds_->secret_access_key,
+            creds_->session_token);
+      } else if (creds_ and not creds_->profile.empty()) {
+        TENZIR_VERBOSE("[kafka iam] using profile {}", creds_->profile);
+        base_credentials
+          = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
+            creds_->profile.c_str());
+      } else {
+        TENZIR_VERBOSE("[kafka iam] using the default credential chain");
+        base_credentials
+          = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
       }
-      TENZIR_VERBOSE("[kafka iam] using the default credential chain");
-      return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+      // If role assumption is requested, use STS provider.
+      // Use resolved values from creds_ since options_ fields are secrets.
+      if (creds_ and not creds_->role.empty()) {
+        TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
+                       region, creds_->role, valid_for);
+        // Create STS client configuration with the base credentials.
+        auto sts_config = Aws::Client::ClientConfiguration{};
+        sts_config.region = region;
+        auto sts_client = std::make_shared<Aws::STS::STSClient>(
+          base_credentials, nullptr, sts_config);
+        // Get session_name from resolved credentials, default to tenzir-session
+        const auto session_name = creds_->session_name.empty()
+                                    ? std::string{"tenzir-session"}
+                                    : creds_->session_name;
+        return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
+          creds_->role, session_name, creds_->external_id,
+          Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+      }
+      return base_credentials;
     });
   if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
     diagnostic::warning("got empty AWS credentials")
@@ -124,7 +105,7 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   const auto signer = Aws::Client::AWSAuthV4Signer{
     provider,
     "kafka-cluster",
-    options_.region,
+    region,
   };
   TENZIR_ASSERT(signer.PresignRequest(request, valid_for.count()));
   request.AddQueryStringParameter("User-Agent", "Tenzir");
@@ -191,6 +172,7 @@ auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
 
 auto configuration::make(const record& options,
                          std::optional<aws_iam_options> aws,
+                         std::optional<resolved_aws_credentials> creds,
                          diagnostic_handler& dh)
   -> caf::expected<configuration> {
   configuration result;
@@ -206,8 +188,8 @@ auto configuration::make(const record& options,
   }
   if (aws) {
     TENZIR_VERBOSE("setting aws iam callback");
-    result.aws_
-      = std::make_shared<aws_iam_callback>(std::move(aws).value(), dh);
+    result.aws_ = std::make_shared<aws_iam_callback>(std::move(aws).value(),
+                                                     std::move(creds), dh);
     result.conf_->set("oauthbearer_token_refresh_cb", result.aws_.get(),
                       errstr);
     if (not errstr.empty()) {

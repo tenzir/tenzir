@@ -14,9 +14,12 @@ endif()
 include(CTest)
 
 find_package(Tenzir REQUIRED)
+find_package(AWSSDK COMPONENTS sts REQUIRED CONFIG)
 
 TenzirRegisterPlugin(
   TARGET s3
   ENTRYPOINT src/plugin.cpp
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
+
+target_link_libraries(s3 PUBLIC ${AWSSDK_LINK_LIBRARIES})
