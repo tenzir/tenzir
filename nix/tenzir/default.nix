@@ -37,6 +37,7 @@ let
       rabbitmq-c,
       yaml-cpp,
       yara,
+      jansson,
       rdkafka,
       cyrus_sasl,
       reproc,
@@ -55,6 +56,11 @@ let
       pfs,
       c-ares,
       folly,
+      double-conversion,
+      libevent,
+      liburing,
+      libsodium,
+      snappy,
       expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
@@ -251,6 +257,7 @@ let
             ]
             ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
               yara
+              jansson
             ];
           propagatedBuildInputs =
             [
@@ -260,6 +267,11 @@ let
               curl
               flatbuffers
               folly
+              double-conversion
+              libevent
+              liburing
+              libsodium
+              snappy
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb

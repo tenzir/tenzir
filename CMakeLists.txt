@@ -847,7 +847,7 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   find_package(glog REQUIRED)
   dependency_summary("folly" Folly::folly "Dependencies")
 else ()
-  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/folly/CMakeLists.txt")
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly/CMakeLists.txt")
     message(
       FATAL_ERROR
         "folly not found, either use -Dfolly_dir=... or initialize the"
@@ -858,12 +858,13 @@ else ()
   set(BUILD_TESTS OFF CACHE BOOL "")
   set(BUILD_BENCHMARKS OFF CACHE BOOL "")
   set(FOLLY_HAVE_LIBGFLAGS OFF CACHE BOOL "")
+  add_definitions(-DGLOG_USE_GLOG_EXPORT)
   # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
   set(FOLLY_HAVE_MALLOC_USABLE_SIZE OFF CACHE BOOL "")
   # Point folly to our bundled fast_float.
   if (TENZIR_ENABLE_BUNDLED_FASTFLOAT)
     set(FASTFLOAT_INCLUDE_DIR
-      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/include>"
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/fast_float/include>"
       CACHE PATH "")
   endif ()
   # Find blake3 if available - folly uses __has_include(<blake3.h>) to compile
@@ -872,30 +873,47 @@ else ()
   if (blake3_FOUND)
     list(APPEND FOLLY_LINK_LIBRARIES BLAKE3::blake3)
   endif ()
-  add_subdirectory(aux/folly SYSTEM)
   # Pass SSE/AVX flags to folly to ensure F14 containers use the same intrinsics
   # mode across all compilation units. Without this, folly's F14Table.cpp may be
   # compiled with different SIMD settings than code using F14 headers, causing
   # link errors due to F14LinkCheck mismatch.
-  # Note: folly_base is the OBJECT library containing the actual sources.
-  target_compile_options(
-    folly_base
-    PRIVATE
-      $<$<BOOL:${TENZIR_ENABLE_SSE_INSTRUCTIONS}>:-msse>
-      $<$<BOOL:${TENZIR_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
-      $<$<BOOL:${TENZIR_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
-      $<$<BOOL:${TENZIR_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
-      $<$<BOOL:${TENZIR_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
-      $<$<BOOL:${TENZIR_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
-      $<$<BOOL:${TENZIR_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
-      $<$<BOOL:${TENZIR_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
-  # Create the Folly::folly alias that find_package would provide
+  # We temporarily modify CMAKE_CXX_FLAGS because folly's folly_add_library()
+  # function uses cmake_parse_arguments with prefix FOLLY_LIB, which shadows
+  # any variable named FOLLY_LIB_COMPILE_OPTIONS set from the parent scope.
+  set(_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
+  if (TENZIR_ENABLE_SSE_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse")
+  endif ()
+  if (TENZIR_ENABLE_SSE2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse2")
+  endif ()
+  if (TENZIR_ENABLE_SSE3_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse3")
+  endif ()
+  if (TENZIR_ENABLE_SSSE3_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mssse3")
+  endif ()
+  if (TENZIR_ENABLE_SSE4_1_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse4.1")
+  endif ()
+  if (TENZIR_ENABLE_SSE4_2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse4.2")
+  endif ()
+  if (TENZIR_ENABLE_AVX_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mavx")
+  endif ()
+  if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mavx2")
+  endif ()
+  message(STATUS "Folly CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+  add_subdirectory(libtenzir/aux/folly SYSTEM)
+  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
   if (NOT TARGET Folly::folly)
     add_library(Folly::folly ALIAS folly)
   endif ()
   # Set variable to include bundled folly in exports
   set(_tenzir_bundled_folly folly folly_deps)
-  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/aux/folly" "Dependencies")
+  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly" "Dependencies")
 endif ()
 
 
