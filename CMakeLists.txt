@@ -822,6 +822,83 @@ else ()
                      "Dependencies")
 endif ()
 
+# -- gflags (transitive dependency via folly) ---------------------------------
+
+# folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
+# We need to find gflags first and fix its target configuration, because
+# Homebrew gflags only exports IMPORTED_LOCATION_RELEASE.
+find_package(gflags QUIET)
+if(TARGET gflags_shared)
+  get_target_property(_gflags_loc gflags_shared IMPORTED_LOCATION_RELEASE)
+  if(_gflags_loc)
+    set_target_properties(gflags_shared PROPERTIES
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_gflags_loc}"
+      IMPORTED_LOCATION_DEBUG "${_gflags_loc}"
+      IMPORTED_LOCATION_MINSIZEREL "${_gflags_loc}"
+    )
+  endif()
+endif()
+
+# -- folly ---------------------------------------------------------------------
+
+option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" OFF)
+if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  find_package(folly REQUIRED)
+  find_package(glog REQUIRED)
+  dependency_summary("folly" Folly::folly "Dependencies")
+else ()
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/folly/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "folly not found, either use -Dfolly_dir=... or initialize the"
+        " libtenzir/aux/folly submodule"
+    )
+  endif ()
+  # Configure folly build options
+  set(BUILD_TESTS OFF CACHE BOOL "")
+  set(BUILD_BENCHMARKS OFF CACHE BOOL "")
+  set(FOLLY_HAVE_LIBGFLAGS OFF CACHE BOOL "")
+  # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
+  set(FOLLY_HAVE_MALLOC_USABLE_SIZE OFF CACHE BOOL "")
+  # Point folly to our bundled fast_float.
+  if (TENZIR_ENABLE_BUNDLED_FASTFLOAT)
+    set(FASTFLOAT_INCLUDE_DIR
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/include>"
+      CACHE PATH "")
+  endif ()
+  # Find blake3 if available - folly uses __has_include(<blake3.h>) to compile
+  # blake3 support, so we must link against it when the header is found.
+  find_package(blake3 CONFIG QUIET)
+  if (blake3_FOUND)
+    list(APPEND FOLLY_LINK_LIBRARIES BLAKE3::blake3)
+  endif ()
+  add_subdirectory(aux/folly SYSTEM)
+  # Pass SSE/AVX flags to folly to ensure F14 containers use the same intrinsics
+  # mode across all compilation units. Without this, folly's F14Table.cpp may be
+  # compiled with different SIMD settings than code using F14 headers, causing
+  # link errors due to F14LinkCheck mismatch.
+  # Note: folly_base is the OBJECT library containing the actual sources.
+  target_compile_options(
+    folly_base
+    PRIVATE
+      $<$<BOOL:${TENZIR_ENABLE_SSE_INSTRUCTIONS}>:-msse>
+      $<$<BOOL:${TENZIR_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
+      $<$<BOOL:${TENZIR_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
+      $<$<BOOL:${TENZIR_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
+      $<$<BOOL:${TENZIR_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
+      $<$<BOOL:${TENZIR_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
+      $<$<BOOL:${TENZIR_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
+      $<$<BOOL:${TENZIR_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
+  # Create the Folly::folly alias that find_package would provide
+  if (NOT TARGET Folly::folly)
+    add_library(Folly::folly ALIAS folly)
+  endif ()
+  # Set variable to include bundled folly in exports
+  set(_tenzir_bundled_folly folly folly_deps)
+  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/aux/folly" "Dependencies")
+endif ()
+
+
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS
     AND CAF_LIBRARY_CORE)
