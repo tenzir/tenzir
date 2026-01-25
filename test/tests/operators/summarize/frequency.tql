@@ -1,8 +1,8 @@
 // Reset mode: aggregation resets after each emission.
 // Schedule events so the timer fires between them.
 from {ts: 0ms.from_epoch(), x: 1},
-     {ts: 50ms.from_epoch(), x: 1},
-     {ts: 120ms.from_epoch(), x: 1},
-     {ts: 220ms.from_epoch(), x: 1}
+     {ts: 90ms.from_epoch(), x: 1},
+     {ts: 360ms.from_epoch(), x: 1},
+     {ts: 660ms.from_epoch(), x: 1}
 delay ts
-summarize count=count(), options={frequency: 100ms}
+summarize count=count(), options={frequency: 300ms}
