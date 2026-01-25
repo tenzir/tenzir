@@ -85,6 +85,8 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "serve-multi",
     // High resolution pipeline activity info is available
     "hr-pipeline-activity",
+    // summarize supports streaming mode via the frequency option.
+    "summarize_frequency",
   };
   return result;
 }
