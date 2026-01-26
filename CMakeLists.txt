@@ -841,7 +841,7 @@ endif ()
 
 # -- folly ---------------------------------------------------------------------
 
-option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" OFF)
+option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" ON)
 if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   find_package(folly REQUIRED)
   find_package(glog REQUIRED)
