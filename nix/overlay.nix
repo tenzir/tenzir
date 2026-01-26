@@ -47,6 +47,7 @@ in
   };
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
+  folly = callFunction ./overrides/folly.nix { inherit (prevPkgs) folly; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };
