@@ -13,7 +13,8 @@
 #include <caf/add_ref.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/scheduled_actor.hpp>
-#include <fmt/base.h>
+
+#include <shared_mutex>
 
 namespace tenzir::detail {
 
@@ -30,13 +31,16 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
   return self->run_delayed_weak(delay, std::forward<Function>(function));
 }
 
-struct weak_run_delayed_disposable_impl final : caf::ref_counted,
-                                                caf::disposable::impl {
+class weak_run_delayed_disposable_impl final : public caf::ref_counted,
+                                               public caf::disposable::impl {
+public:
   void dispose() override {
+    auto l = std::scoped_lock{mut_};
     inner_.dispose();
   }
 
   bool disposed() const noexcept override {
+    auto l = std::shared_lock{mut_};
     return inner_.disposed();
   }
 
@@ -58,6 +62,12 @@ struct weak_run_delayed_disposable_impl final : caf::ref_counted,
     p->deref();
   }
 
+  // These data members are not private because we need to access them from the
+  // lambda in `weak_run_delayed_loop_at`.
+
+  // Mutex to protect `inner_`.
+  mutable std::shared_mutex mut_;
+  // The original scheduled action.
   caf::disposable inner_;
 };
 
@@ -66,19 +76,45 @@ struct weak_run_delayed_disposable_impl final : caf::ref_counted,
 /// The function is first called at `start`. Even if `start` is in the past, it
 /// will be scheduled and not called immediately here.
 template <class F>
-auto weak_run_delayed_loop_at(caf::scheduled_actor* self,
+auto weak_run_delayed_loop_at(caf::scheduled_actor* actor,
                               caf::actor_clock::time_point start,
                               caf::timespan delay, F&& f) -> caf::disposable {
-  // Using `weak_run_delayed` here would introduce clock drift.
   auto impl = caf::make_counted<weak_run_delayed_disposable_impl>();
-  impl->inner_ = self->run_scheduled_weak(
-    start, [self, impl, start, delay, f = std::forward<F>(f)]() mutable {
-      std::invoke(f);
-      impl->inner_
-        = weak_run_delayed_loop_at(self, start + delay, delay, std::move(f));
-    });
+  // Using `weak_run_delayed` here would introduce
+  // clock drift.
+  impl->inner_ = actor->clock().schedule(
+    start,
+    caf::make_action(
+      [actor, impl, start, delay, f = std::forward<F>(f)](this auto&& self) {
+        auto read_lock = std::scoped_lock{impl->mut_};
+        if (impl->inner_.disposed()) {
+          return;
+        }
+        std::invoke(f);
+        start += delay;
+        auto astart = start;
+        auto ptr = caf::weak_actor_ptr{actor->ctrl(), caf::add_ref};
+        auto raw_impl = impl.get();
+        raw_impl->inner_ = actor->clock().schedule(
+          astart, caf::make_action(std::move(self)), std::move(ptr));
+      }),
+    caf::weak_actor_ptr{actor->ctrl(), caf::add_ref});
   return caf::disposable{std::move(impl)};
 }
+
+// template <class F>
+// auto weak_run_delayed_loop_at(caf::scheduled_actor* self,
+//                               caf::actor_clock::time_point start,
+//                               caf::timespan delay, F&& f) -> caf::disposable {
+//   // Using `weak_run_delayed` here would introduce clock drift.
+//   return self->clock().schedule(
+//     start,
+//     caf::make_action([self, start, delay, f = std::forward<F>(f)]() mutable {
+//       std::invoke(f);
+//       weak_run_delayed_loop_at(self, start + delay, delay, std::move(f));
+//     }),
+//     caf::weak_actor_ptr{self->ctrl(), caf::add_ref});
+// }
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.
 /// @param self The hosting actor pointer.
@@ -90,10 +126,11 @@ template <class Function>
 auto weak_run_delayed_loop(caf::scheduled_actor* self, caf::timespan delay,
                            Function&& function, bool run_immediately = true)
   -> caf::disposable {
-  if (run_immediately) {
-    std::invoke(function);
+  auto start = self->clock().now();
+  if (not run_immediately) {
+    start += delay;
   }
-  return weak_run_delayed_loop_at(self, self->clock().now() + delay, delay,
+  return weak_run_delayed_loop_at(self, start, delay,
                                   std::forward<Function>(function));
 }
 
