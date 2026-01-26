@@ -119,9 +119,11 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     : state{state},
       handle{std::move(handle)},
       deduplicator_disposable_{detail::weak_run_delayed_loop(
-        state.self, defaults::diagnostic_deduplication_interval, [this] {
+        state.self, defaults::diagnostic_deduplication_interval,
+        [this] {
           deduplicator_.clear();
-        })} {
+        },
+        false)} {
   }
 
   void emit(diagnostic diag) override {
