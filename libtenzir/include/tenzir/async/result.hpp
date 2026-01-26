@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <folly/Try.h>
 #include <folly/OperationCancelled.h>
+#include <folly/Try.h>
 
 namespace tenzir {
 

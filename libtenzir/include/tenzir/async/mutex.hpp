@@ -28,7 +28,8 @@ public:
   }
 
   RawMutexGuard(const RawMutexGuard&) = delete;
-  RawMutexGuard(RawMutexGuard&& other) noexcept : semaphore_{std::exchange(other.semaphore_, nullptr)} {
+  RawMutexGuard(RawMutexGuard&& other) noexcept
+    : semaphore_{std::exchange(other.semaphore_, nullptr)} {
   }
   RawMutexGuard& operator=(RawMutexGuard&& other) noexcept {
     semaphore_ = std::exchange(other.semaphore_, nullptr);
@@ -45,7 +46,8 @@ private:
 /// This mutex is similar to folly::coro::Mutex but supports cancellation.
 class RawMutex {
 public:
-  RawMutex() : semaphore_{1} {}
+  RawMutex() : semaphore_{1} {
+  }
 
   auto lock() -> Task<RawMutexGuard> {
     co_await semaphore_.co_wait();
