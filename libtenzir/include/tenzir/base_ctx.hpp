@@ -20,7 +20,8 @@ namespace tenzir {
 /// type interning, etc.
 class base_ctx {
 public:
-  base_ctx(diagnostic_handler& dh, const registry& reg) : dh_{dh}, reg_{reg} {
+  base_ctx(diagnostic_handler& dh, const registry& reg)
+    : dh_{dh}, reg_{reg}, sys_{nullptr} {
   }
 
   base_ctx(diagnostic_handler& dh, const registry& reg, caf::actor_system& sys)
