@@ -284,11 +284,13 @@ public:
   }
 };
 
-template<class Future, class Callback>
+template <class Future, class Callback>
 void run_with_callback(Future future, Callback callback) {
-  (void)std::invoke([](Future future, Callback callback) -> FireAndForget {
-    std::invoke(std::move(callback), co_await future);
-  }, std::move(future), std::move(callback));
+  (void)std::invoke(
+    [](Future future, Callback callback) -> FireAndForget {
+      std::invoke(std::move(callback), co_await future);
+    },
+    std::move(future), std::move(callback));
 }
 
 template <class T>
@@ -302,7 +304,7 @@ public:
     return ReceiveFuture<T>{*state_};
   }
 
-  template<class Callback>
+  template <class Callback>
   auto receive(Callback callback) -> void {
     run_with_callback(receive().operator co_await(), std::move(callback));
   }
@@ -311,7 +313,7 @@ private:
   std::shared_ptr<Channel<T>> state_;
 };
 
-template<class T>
+template <class T>
 struct SenderReceiver {
   Sender<T> sender;
   Receiver<T> receiver;
@@ -348,7 +350,8 @@ struct RawAsyncMutexImpl {
 
 class [[nodiscard]] RawMutexFuture {
 public:
-  explicit RawMutexFuture(RawAsyncMutexImpl& data) : data_{data} {}
+  explicit RawMutexFuture(RawAsyncMutexImpl& data) : data_{data} {
+  }
 
   auto await_ready() -> bool {
     data_.mutex.lock();
