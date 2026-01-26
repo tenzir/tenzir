@@ -31,3 +31,7 @@
 [submodule "plugins/web/aux/llhttp"]
 	path = plugins/web/aux/llhttp
 	url = https://github.com/nodejs/llhttp.git
+[submodule "libtenzir/aux/folly"]
+	path = libtenzir/aux/folly
+	url = https://github.com/facebook/folly
+	shallow = true

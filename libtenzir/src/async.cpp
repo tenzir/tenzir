@@ -89,10 +89,10 @@ public:
     auto guard = detail::scope_guard{[] noexcept {
       TENZIR_DEBUG("CANCELLED");
     }};
+    folly::CancellationToken token
+      = co_await folly::coro::co_current_cancellation_token;
     TENZIR_VERBOSE("waiting for queue in receiver ({}): {}",
-                   fmt::ptr(queue_.get()),
-                   (co_await folly::coro::co_current_cancellation_token)
-                     .isCancellationRequested());
+                   fmt::ptr(queue_.get()), token.isCancellationRequested());
     TENZIR_ASSERT(queue_);
     auto result = co_await queue_->dequeue();
     TENZIR_WARN("got item for queue in receiver");
@@ -201,7 +201,6 @@ public:
   ~Runner() = default;
 
   auto run_to_completion() && -> Task<void> {
-    TENZIR_WARN("starting operator runner");
     auto guard = detail::scope_guard{[] noexcept {
       TENZIR_WARN("returning from operator runner");
     }};
@@ -333,7 +332,6 @@ private:
   }
 
   auto run() -> Task<void> {
-    TENZIR_INFO("entering run loop of {}", typeid(*op_).name());
     // co_await folly::coro::co_scope_exit(
     //   [](Runner* self) -> Task<void> {
     //     TENZIR_WARN("shutting down operator {} with {} pending",
@@ -371,6 +369,7 @@ private:
       TENZIR_ERROR("shutting down operator after uncaught exception");
       throw;
     }
+    TENZIR_WARN("CANCELING queue");
     queue_.cancel();
   }
 
@@ -458,8 +457,7 @@ private:
   }
 
   auto process(FromControl message) -> Task<void> {
-    co_await co_match(
-      std::move(message),
+    auto overloads = detail::overload{
       [&](PostCommit) -> Task<void> {
         TENZIR_VERBOSE("got post commit in {}", typeid(*op_).name());
         co_await op_->post_commit();
@@ -472,7 +470,8 @@ private:
       },
       [&](StopOutput) -> Task<void> {
         co_await handle_done();
-      });
+      }};
+    co_await match(std::move(message), overloads);
     queue_.spawn(from_control_.receive());
   }
 

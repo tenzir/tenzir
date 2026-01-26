@@ -16,13 +16,20 @@ apt-get -y --no-install-recommends install \
   gcc-14 \
   git-core \
   gnupg2 gnupg-agent jq \
+  libboost-context-dev \
   libboost-dev \
   libboost-filesystem-dev \
-  libboost-url-dev \
+  libboost-program-options-dev \
+  libboost-regex-dev \
   libboost-stacktrace-dev \
+  libboost-thread-dev \
+  libboost-url-dev \
   libc-ares-dev \
+  libdouble-conversion-dev \
+  libevent-dev \
   libflatbuffers-dev \
   libfmt-dev \
+  libgoogle-glog-dev \
   libgrpc-dev \
   libgrpc++-dev \
   libmaxminddb-dev \

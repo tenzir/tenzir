@@ -123,8 +123,9 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 ARG TENZIR_BUILD_OPTIONS
 
 ENV LDFLAGS="-Wl,--copy-dt-needed-entries"
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -B build -G Ninja \
+
+# Configure step
+RUN cmake -B build -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
@@ -132,11 +133,15 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
       -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_FOLLY:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-    ${TENZIR_BUILD_OPTIONS} && \
-  cmake --build build --parallel && \
+    ${TENZIR_BUILD_OPTIONS}
+
+# Build step
+RUN --mount=target=/ccache,type=cache \
+    cmake --build build --parallel && \
     cmake --build build --target unit-tests && \
     cmake --install build --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build && \
@@ -192,14 +197,21 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan8 \
+      libboost-context1.83.0 \
       libboost-filesystem1.83.0 \
-      libboost-url1.83.0 \
+      libboost-program-options1.83.0 \
+      libboost-regex1.83.0 \
       libboost-stacktrace1.83.0 \
+      libboost-thread1.83.0 \
+      libboost-url1.83.0 \
       libc++1 \
       libc++abi1 \
       libcap2-bin \
+      libdouble-conversion3 \
+      libevent-2.1-7 \
       libflatbuffers23.5.26 \
       libfmt10 \
+      libgoogle-glog0v6 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
       libmaxminddb0 \
@@ -254,7 +266,7 @@ ENTRYPOINT ["tenzir-node"]
 FROM plugins-source AS compaction-plugin
 
 COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-compaction --parallel 1 && \
@@ -264,7 +276,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS context-plugin
 
 COPY contrib/tenzir-plugins/context ./contrib/tenzir-plugins/context
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-context --parallel && \
@@ -274,7 +286,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS pipeline-manager-plugin
 
 COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-manager
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-pipeline-manager --parallel && \
@@ -286,7 +298,7 @@ FROM plugins-source AS packages-plugin
 # TODO: We can't run the packages integration tests here at the moment, since
 # they require the context and pipeline-manager plugins to be available.
 COPY contrib/tenzir-plugins/packages ./contrib/tenzir-plugins/packages
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-packages --parallel && \
@@ -296,7 +308,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS platform-plugin
 
 COPY contrib/tenzir-plugins/platform ./contrib/tenzir-plugins/platform
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-platform --parallel && \
@@ -306,7 +318,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS snowflake-plugin
 
 COPY contrib/tenzir-plugins/snowflake ./contrib/tenzir-plugins/snowflake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-snowflake --parallel && \
@@ -316,7 +328,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS to_amazon_security_lake-plugin
 
 COPY contrib/tenzir-plugins/to_amazon_security_lake ./contrib/tenzir-plugins/to_amazon_security_lake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_amazon_security_lake -B build-to_amazon_security_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_amazon_security_lake --parallel && \
@@ -326,7 +338,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS to_azure_log_analytics-plugin
 
 COPY contrib/tenzir-plugins/to_azure_log_analytics ./contrib/tenzir-plugins/to_azure_log_analytics
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_azure_log_analytics -B build-to_azure_log_analytics -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_azure_log_analytics --parallel && \
@@ -336,7 +348,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS to_splunk-plugin
 
 COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_splunk --parallel && \
@@ -346,7 +358,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS to_google_secops-plugin
 
 COPY contrib/tenzir-plugins/to_google_secops ./contrib/tenzir-plugins/to_google_secops
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_google_secops --parallel && \
@@ -356,7 +368,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS to_google_cloud_logging-plugin
 
 COPY contrib/tenzir-plugins/to_google_cloud_logging ./contrib/tenzir-plugins/to_google_cloud_logging
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_google_cloud_logging -B build-to_google_cloud_logging -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
@@ -367,7 +379,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS to_sentinelone_data_lake-plugin
 
 COPY contrib/tenzir-plugins/to_sentinelone_data_lake ./contrib/tenzir-plugins/to_sentinelone_data_lake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_sentinelone_data_lake --parallel && \
@@ -377,7 +389,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
 FROM plugins-source AS vast-plugin
 
 COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
-RUN --mount=target=/ccache,type=cache,from=cache-context \
+RUN --mount=target=/ccache,type=cache \
     cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-vast --parallel && \

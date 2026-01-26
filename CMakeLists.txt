@@ -822,6 +822,101 @@ else ()
                      "Dependencies")
 endif ()
 
+# -- gflags (transitive dependency via folly) ---------------------------------
+
+# folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
+# We need to find gflags first and fix its target configuration, because
+# Homebrew gflags only exports IMPORTED_LOCATION_RELEASE.
+find_package(gflags QUIET)
+if(TARGET gflags_shared)
+  get_target_property(_gflags_loc gflags_shared IMPORTED_LOCATION_RELEASE)
+  if(_gflags_loc)
+    set_target_properties(gflags_shared PROPERTIES
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_gflags_loc}"
+      IMPORTED_LOCATION_DEBUG "${_gflags_loc}"
+      IMPORTED_LOCATION_MINSIZEREL "${_gflags_loc}"
+    )
+  endif()
+endif()
+
+# -- folly ---------------------------------------------------------------------
+
+option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" OFF)
+if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  find_package(folly REQUIRED)
+  find_package(glog REQUIRED)
+  dependency_summary("folly" Folly::folly "Dependencies")
+else ()
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "folly not found, either use -Dfolly_dir=... or initialize the"
+        " libtenzir/aux/folly submodule"
+    )
+  endif ()
+  # Configure folly build options
+  set(BUILD_TESTS OFF CACHE BOOL "")
+  set(BUILD_BENCHMARKS OFF CACHE BOOL "")
+  set(FOLLY_HAVE_LIBGFLAGS OFF CACHE BOOL "")
+  add_definitions(-DGLOG_USE_GLOG_EXPORT)
+  # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
+  set(FOLLY_HAVE_MALLOC_USABLE_SIZE OFF CACHE BOOL "")
+  # Point folly to our bundled fast_float.
+  if (TENZIR_ENABLE_BUNDLED_FASTFLOAT)
+    set(FASTFLOAT_INCLUDE_DIR
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/fast_float/include>"
+      CACHE PATH "")
+  endif ()
+  # Find blake3 if available - folly uses __has_include(<blake3.h>) to compile
+  # blake3 support, so we must link against it when the header is found.
+  find_package(blake3 CONFIG QUIET)
+  if (blake3_FOUND)
+    list(APPEND FOLLY_LINK_LIBRARIES BLAKE3::blake3)
+  endif ()
+  # Pass SSE/AVX flags to folly to ensure F14 containers use the same intrinsics
+  # mode across all compilation units. Without this, folly's F14Table.cpp may be
+  # compiled with different SIMD settings than code using F14 headers, causing
+  # link errors due to F14LinkCheck mismatch.
+  # We temporarily modify CMAKE_CXX_FLAGS because folly's folly_add_library()
+  # function uses cmake_parse_arguments with prefix FOLLY_LIB, which shadows
+  # any variable named FOLLY_LIB_COMPILE_OPTIONS set from the parent scope.
+  set(_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
+  if (TENZIR_ENABLE_SSE_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse")
+  endif ()
+  if (TENZIR_ENABLE_SSE2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse2")
+  endif ()
+  if (TENZIR_ENABLE_SSE3_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse3")
+  endif ()
+  if (TENZIR_ENABLE_SSSE3_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mssse3")
+  endif ()
+  if (TENZIR_ENABLE_SSE4_1_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse4.1")
+  endif ()
+  if (TENZIR_ENABLE_SSE4_2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse4.2")
+  endif ()
+  if (TENZIR_ENABLE_AVX_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mavx")
+  endif ()
+  if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mavx2")
+  endif ()
+  message(STATUS "Folly CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+  add_subdirectory(libtenzir/aux/folly SYSTEM)
+  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
+  if (NOT TARGET Folly::folly)
+    add_library(Folly::folly ALIAS folly)
+  endif ()
+  # Set variable to include bundled folly in exports
+  set(_tenzir_bundled_folly folly folly_deps)
+  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly" "Dependencies")
+endif ()
+
+
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS
     AND CAF_LIBRARY_CORE)
