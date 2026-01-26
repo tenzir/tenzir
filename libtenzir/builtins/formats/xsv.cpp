@@ -261,7 +261,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
                                                                  false);
   }
 
-  auto add_to_parser(argument_parser2& parser, bool add_merge_option,
+  auto add_to_parser(argument_parser2& parser, merge_option add_merge_option,
                      bool header_required) -> void {
     if (mode_ == mode::special_optional) {
       TENZIR_ASSERT(list_separator_);
@@ -915,7 +915,8 @@ public:
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto opt_parser = xsv_common_parser_options_parser{name()};
-    opt_parser.add_to_parser(parser, true, false);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::yes, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     TRY(auto opts, opt_parser.get_options(ctx));
@@ -943,7 +944,8 @@ public:
       std::string{ListSep},
       std::string{Null.str()},
     };
-    opt_parser.add_to_parser(parser, true, false);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::yes, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     TRY(auto opts, opt_parser.get_options(ctx));
@@ -1047,7 +1049,8 @@ class parse_xsv : public function_plugin {
     auto parser = argument_parser2::function(name());
     parser.positional("input", input, "string");
     auto opt_parser = xsv_common_parser_options_parser{name()};
-    opt_parser.add_to_parser(parser, false, true);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::hidden, true);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, opt_parser.get_options(ctx));
     opts.name = "xsv";
@@ -1084,7 +1087,8 @@ public:
       std::string{ListSep},
       std::string{Null.str()},
     };
-    opt_parser.add_to_parser(parser, false, true);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::hidden, true);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, opt_parser.get_options(ctx));
     opts.name = Name.str();
