@@ -18,8 +18,7 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none
 endif ()
 
 TenzirTargetEnableTooling(tenzir)
-target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir
-                                     Folly::folly)
+target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
 add_executable(tenzir::tenzir ALIAS tenzir)
 
