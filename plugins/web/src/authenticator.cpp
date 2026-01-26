@@ -24,7 +24,7 @@ caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   // can just assert there presence below.
   auto fb = flatbuffer<fbs::ServerState, fbs::ServerStateIdentifier>::make(
     std::move(chunk));
-  if (!fb) {
+  if (! fb) {
     return fb.error();
   }
   if ((*fb)->server_state_type() != fbs::server_state::ServerState::v0) {
@@ -138,7 +138,7 @@ get_authenticator(caf::scoped_actor& self, node_actor node,
       [&](caf::error& err) {
         maybe_authenticator = std::move(err);
       });
-  if (!maybe_authenticator) {
+  if (! maybe_authenticator) {
     return maybe_authenticator.error();
   }
   auto authenticator
@@ -156,7 +156,7 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
     .await(
       [self](chunk_ptr chunk) {
         auto error = self->state().initialize_from(std::move(chunk));
-        if (error) {
+        if (error.valid()) {
           TENZIR_ERROR("{} encountered error while deserializing state: {}",
                        *self, error);
           self->quit(error);

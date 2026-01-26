@@ -1,0 +1,9 @@
+{
+  x: null,
+}
+warning: `input` is not valid syslog
+ --> tests/functions/parse_syslog/octet_counting_zero_length.tql:3:5
+  |
+3 | x = x.parse_syslog(octet_counting=true)
+  |     ~ 
+  |

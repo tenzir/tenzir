@@ -187,7 +187,7 @@ class BdistWheel(_bdist_wheel):
             if system == "linux" and machine in {"x86_64", "amd64"}:
                 self.plat_name = "manylinux_2_5_x86_64"
             elif system == "linux" and machine in {"aarch64", "arm64"}:
-                self.plat_name = "manylinux_2_5_aarch64"
+                self.plat_name = "manylinux_2_17_aarch64"
             elif system == "darwin" and machine in {"arm64", "aarch64"}:
                 self.plat_name = "macosx_11_0_arm64"
             elif system == "darwin" and machine in {"x86_64", "amd64"}:
@@ -226,9 +226,9 @@ class BdistWheel(_bdist_wheel):
         machine = platform.machine().lower()
         tag = None
         if system == "linux" and machine in {"x86_64", "amd64"}:
-            tag = "manylinux_2_5_x86_64.musllinux_1_0_x86_64"
+            tag = "manylinux_2_5_x86_64.musllinux_1_1_x86_64"
         elif system == "linux" and machine in {"aarch64", "arm64"}:
-            tag = "manylinux_2_5_aarch64.musllinux_1_0_aarch64"
+            tag = "manylinux_2_17_aarch64.musllinux_1_1_aarch64"
         if not tag:
             return None
         result = subprocess.run(

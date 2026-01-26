@@ -1,4 +1,19 @@
 {
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "tenzir-tenzir"
+  },
+  "hooks": {
+    "Setup": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git submodule update --init --recursive"
+          }
+        ]
+      }
+    ]
+  },
   "extraKnownMarketplaces": {
     "tenzir": {
       "source": {
@@ -9,13 +24,8 @@
   },
   "enabledPlugins": {
     "cpp@tenzir": true,
-    "docs@tenzir": true,
-    "formatter@tenzir": true,
-    "git@tenzir": true,
-    "ocsf@tenzir": true,
-    "prose@tenzir": true,
+    "dev@tenzir": true,
     "python@tenzir": true,
-    "ship@tenzir": true,
-    "tql@tenzir": true
+    "tenzir@tenzir": true
   }
 }

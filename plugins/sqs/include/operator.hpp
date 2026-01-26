@@ -8,8 +8,13 @@
 
 #pragma once
 
+#include <tenzir/aws_credentials.hpp>
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/env.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/series_builder.hpp>
 
 #include <aws/core/Aws.h>
@@ -30,7 +35,7 @@ namespace tenzir::plugins::sqs {
 namespace {
 
 /// The default poll time.
-static constexpr auto default_poll_time = 3s;
+constexpr auto default_poll_time = 3s;
 static_assert(default_poll_time >= 1s && default_poll_time <= 20s);
 
 auto to_aws_string(chunk_ptr chunk) -> Aws::String {
@@ -42,9 +47,17 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 /// A wrapper around SQS.
 class sqs_queue {
 public:
-  explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time)
+  explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time,
+                     std::optional<std::string> region,
+                     std::optional<tenzir::resolved_aws_credentials> creds
+                     = std::nullopt)
     : name_{std::move(name)} {
     auto config = Aws::Client::ClientConfiguration{};
+    // Set the region if provided.
+    if (region) {
+      config.region = *region;
+      TENZIR_VERBOSE("[sqs] using region {}", *region);
+    }
     // TODO: remove this after upgrading to Arrow 15, as it's no longer
     // necessary. This is just a bandaid fix to make an old version of the SDK
     // honer the AWS_ENDPOINT_URL variable.
@@ -68,9 +81,14 @@ public:
       = http_request_timeout + extra_time_for_retries_and_backoff;
     config.httpRequestTimeoutMs = long{http_request_timeout.count()};
     config.requestTimeoutMs = long{request_timeout.count()};
-    // Recreate the client, as the config is copied upon construction.
-    client_ = {config};
-    // Do the equivalent of `aws sqs list-queues`.
+    // Create the credentials provider using the shared helper.
+    auto credentials = tenzir::make_aws_credentials_provider(creds, region);
+    if (not credentials) {
+      diagnostic::error(credentials.error()).throw_();
+    }
+    // Create the client with the configuration and credentials provider.
+    client_ = Aws::SQS::SQSClient{*credentials, nullptr, config};
+    // Get the queue URL.
     url_ = queue_url();
   }
 
@@ -96,7 +114,7 @@ public:
     return outcome.GetResult().GetMessages();
   }
 
-  /// Deletes a message to the queue.
+  /// Sends a message to the queue.
   auto send_message(Aws::String data) -> void {
     TENZIR_DEBUG("sending {}-byte message to SQS queue '{}'", data.size(),
                  name_.inner);
@@ -138,9 +156,11 @@ private:
     request.SetQueueName(name_.inner);
     auto outcome = client_.GetQueueUrl(request);
     if (not outcome.IsSuccess()) {
+      const auto& err = outcome.GetError();
       diagnostic::error("failed to get URL for SQS queue")
         .primary(name_.source)
-        .note("{}", outcome.GetError().GetMessage())
+        .note("{}", err.GetMessage())
+        .note("error code: {}", err.GetExceptionName())
         .hint("ensure that $AWS_ENDPOINT_URL points to valid endpoint")
         .throw_();
     }
@@ -155,12 +175,15 @@ private:
 struct connector_args {
   located<std::string> queue;
   std::optional<located<std::chrono::seconds>> poll_time;
+  std::optional<located<std::string>> aws_region;
+  std::optional<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, connector_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.sqs.connector_args")
-      .fields(f.field("queue", x.queue), f.field("poll_time", x.poll_time));
+      .fields(f.field("queue", x.queue), f.field("poll_time", x.poll_time),
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
 
@@ -172,10 +195,24 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto& dh = ctrl.diagnostics();
+    // Resolve all secrets from aws_iam configuration.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
     try {
       auto poll_time
         = args_.poll_time ? args_.poll_time->inner : default_poll_time;
-      auto queue = sqs_queue{args_.queue, poll_time};
+      // Use top-level aws_region if provided, otherwise fall back to aws_iam
+      auto region = args_.aws_region
+                      ? std::optional{args_.aws_region->inner}
+                      : (resolved_creds and not resolved_creds->region.empty()
+                           ? std::optional{resolved_creds->region}
+                           : std::nullopt);
+      auto queue = sqs_queue{args_.queue, poll_time, region, resolved_creds};
       co_yield {};
       while (true) {
         constexpr auto num_messages = size_t{1};
@@ -196,7 +233,7 @@ public:
         }
       }
     } catch (diagnostic& d) {
-      ctrl.diagnostics().emit(std::move(d));
+      dh.emit(std::move(d));
     }
   }
 
@@ -233,23 +270,38 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    auto& dh = ctrl.diagnostics();
+    // Resolve all secrets from aws_iam configuration.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
     auto poll_time
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;
     auto queue = std::shared_ptr<sqs_queue>{};
     try {
-      queue = std::make_shared<sqs_queue>(args_.queue, poll_time);
+      // Use top-level aws_region if provided, otherwise fall back to aws_iam
+      auto region = args_.aws_region
+                      ? std::optional{args_.aws_region->inner}
+                      : (resolved_creds and not resolved_creds->region.empty()
+                           ? std::optional{resolved_creds->region}
+                           : std::nullopt);
+      queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
+                                          resolved_creds);
     } catch (diagnostic& d) {
-      ctrl.diagnostics().emit(std::move(d));
+      dh.emit(std::move(d));
     }
     for (auto chunk : input) {
-      if (!chunk || chunk->size() == 0) {
+      if (not chunk || chunk->size() == 0) {
         co_yield {};
         continue;
       }
       try {
         queue->send_message(to_aws_string(std::move(chunk)));
       } catch (diagnostic& d) {
-        ctrl.diagnostics().emit(std::move(d));
+        dh.emit(std::move(d));
       }
     }
   }

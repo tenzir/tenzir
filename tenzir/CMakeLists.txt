@@ -130,7 +130,7 @@ endif ()
 # to avoid complexity and potential circular reference issues
 
 set(plugins_default "plugins/*")
-if (EXISTS contrib/tenzir-plugins/.git)
+if (EXISTS ${PROJECT_SOURCE_DIR}/contrib/tenzir-plugins/.git)
   list(APPEND plugins_default "contrib/tenzir-plugins/*")
 endif ()
 
@@ -213,17 +213,15 @@ function (tenzir_build_test_command out_var)
   list(
     APPEND
     cmd
+    "TENZIR_BINARY=$<TARGET_FILE:tenzir::tenzir>"
+    "TENZIR_NODE_BINARY=$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
     "--"
     "${TENZIR_UV_PATH}"
     "tool"
     "run"
     "--python"
     ">=3.12"
-    "tenzir-test"
-    "--tenzir-binary"
-    "$<TARGET_FILE:tenzir::tenzir>"
-    "--tenzir-node-binary"
-    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node")
+    "tenzir-test")
 
   # Add extra arguments if provided
   if (ARG_EXTRA_ARGS)

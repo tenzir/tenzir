@@ -1,0 +1,3 @@
+// Zero-length message prefix (RFC 6587 requires NONZERO-DIGIT)
+from { x: "0 " }
+x = x.parse_syslog(octet_counting=true)

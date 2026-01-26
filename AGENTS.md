@@ -52,29 +52,27 @@ building modular pipelines that process structured event data.
 
 ## Key Tasks
 
-### Setup
-
 Make sure submodules are initialized and updated:
 
 ```sh
 git submodule update --init --recursive
 ```
 
-### Build
+### Build Tenzir
 
-Configure the build:
+Identify the right preset:
 
 ```sh
-cmake -B build -D CMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --list-presets
 ```
 
-Use `CMAKE_BUILD_TYPE=Debug` only when in need of advanced debugging.
+Configure the build, e.g.:
 
-Build the project as follows:
-
-```bash
-cmake --build build
+```sh
+cmake --preset macos-xcode-release
 ```
+
+Compile via /compile.
 
 ### Run pipelines
 
@@ -86,7 +84,7 @@ Use the `tenzir` binary to execute a TQL program:
 - The pipeline may read stdin as data, based on the first operator.
 - The pipeline may produce data on stdout, based on the last operator.
 
-### Integration Tests
+### Run Integration Tests
 
 Run integration tests from the repository root:
 
@@ -94,17 +92,16 @@ Run integration tests from the repository root:
 uvx tenzir-test --root test
 ```
 
-Or from within the `test/` directory:
+Make sure to prepend the following variables to ensure the tests run with the
+proper binaries:
 
-```sh
-cd test
-uvx tenzir-test
-```
+- `TENZIR_BINARY=/path/to/build-dir/../bin/tenzir`
+- `TENZIR_NODE_BINARY=/path/to/build-dir/../bin/tenzir-node`
 
 Common options:
 
-- `--update` or `-u`: Update reference outputs after validating changes
-- `--jobs N` or `-j N`: Control parallelism (default: number of CPUs)
+- `--passthrough`: Generate output in terminal instead (good on first run)
+- `--update`: Update reference outputs after validating changes
 - `--debug` or `-d`: Show detailed test information
 
-For more details, see the [Test Framework Reference](https://docs.tenzir.com/reference/test-framework) and [Writing Tests Guide](https://docs.tenzir.com/guides/testing/write-tests).
+Reference documentation: https://docs.tenzir.com/reference/test-framework.md

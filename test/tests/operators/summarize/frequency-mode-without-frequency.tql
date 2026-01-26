@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+summarize count=count(), options={mode: "cumulative"}

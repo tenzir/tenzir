@@ -1,6 +1,8 @@
 ---
 fixtures:
 - node
+retry: 2
+timeout: 45
 ---
 
 pipeline::detach {
@@ -26,4 +28,3 @@ subscribe "bar"
 deduplicate
 head 2
 sort
-

@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/location.hpp>
+#include <tenzir/secret.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/error.hpp>
@@ -30,36 +33,20 @@ class configuration {
   friend class consumer;
 
 public:
-  struct aws_iam_options {
-    std::string region;
-    std::optional<std::string> role;
-    std::optional<std::string> session_name;
-    std::optional<std::string> ext_id;
-    location loc;
-
-    friend auto inspect(auto& f, aws_iam_options& x) -> bool {
-      return f.object(x).fields(f.field("region", x.region),
-                                f.field("role", x.role),
-                                f.field("session_name", x.session_name),
-                                f.field("ext_id", x.ext_id),
-                                f.field("loc", x.loc));
-    }
-
-    static auto from_record(located<record> config, diagnostic_handler& dh)
-      -> failure_or<aws_iam_options>;
-  };
-
   class aws_iam_callback : public RdKafka::OAuthBearerTokenRefreshCb {
   public:
-    aws_iam_callback(aws_iam_options options, diagnostic_handler& dh)
-      : options_{std::move(options)}, dh_{dh} {
+    aws_iam_callback(tenzir::aws_iam_options options,
+                     std::optional<tenzir::resolved_aws_credentials> creds,
+                     diagnostic_handler& dh)
+      : options_{std::move(options)}, creds_{std::move(creds)}, dh_{dh} {
     }
 
     auto oauthbearer_token_refresh_cb(RdKafka::Handle*, const std::string&)
       -> void override;
 
   private:
-    aws_iam_options options_;
+    tenzir::aws_iam_options options_;
+    std::optional<tenzir::resolved_aws_credentials> creds_;
     diagnostic_handler& dh_;
   };
 
@@ -75,8 +62,10 @@ public:
   };
 
   /// Creates a configuration from a record.
-  static auto make(const record& options, std::optional<aws_iam_options> aws,
-                   diagnostic_handler& dh) -> caf::expected<configuration>;
+  static auto
+  make(const record& options, std::optional<tenzir::aws_iam_options> aws,
+       std::optional<tenzir::resolved_aws_credentials> creds,
+       diagnostic_handler& dh) -> caf::expected<configuration>;
 
   /// Gets a value for a given key.
   auto get(std::string_view key) const -> caf::expected<std::string>;

@@ -1,0 +1,6 @@
+error: `mode` requires `frequency` to be set
+ --> tests/operators/summarize/frequency-mode-without-frequency.tql:6:41
+  |
+6 | summarize count=count(), options={mode: "cumulative"}
+  |                                         ^^^^^^^^^^^^ 
+  |

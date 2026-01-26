@@ -306,10 +306,10 @@ struct rebuilder_state {
               "threads",
               *self, run->statistics.num_total, run->options.parallel);
           }
-          self
-            ->fan_out_request<caf::policy::select_all>(
-              std::vector<rebuilder_actor>(run->options.parallel, self),
-              caf::infinite, atom::internal_v, atom::rebuild_v)
+          self->mail(atom::internal_v, atom::rebuild_v)
+            .fan_out_request(std::vector<rebuilder_actor>(run->options.parallel,
+                                                          self),
+                             caf::infinite, caf::policy::select_all_tag)
             .then(
               [finish]() mutable {
                 finish({});

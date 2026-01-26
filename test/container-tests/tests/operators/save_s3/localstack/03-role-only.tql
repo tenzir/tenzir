@@ -1,0 +1,10 @@
+// Test save_s3 with role-only authentication.
+// Uses the default credential chain (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+// from environment) to assume a role, then saves to S3.
+from {data: "test content from save_s3 with role-only auth"}
+write_json
+save_s3 "s3://" + env("LOCALSTACK_S3_BUCKET") + "/output-role-only.json", aws_iam={
+  region: "us-east-1",
+  assume_role: env("LOCALSTACK_ROLE_ARN"),
+  external_id: env("LOCALSTACK_EXTERNAL_ID")
+}
