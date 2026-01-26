@@ -26,13 +26,11 @@ class NeoRunner(TqlRunner):
                     output_ext=self.output_ext,
                 ),
             )
-        # TODO: Demote to --console-verbosity=warning after migration once
-        # printf-style debugging at warning level is cleaned up.
         return bool(
             run_mod.run_simple_test(
                 test,
                 update=update,
-                args=("--neo"),
+                args=("--neo",),
                 output_ext=self.output_ext,
                 coverage=coverage,
             )
