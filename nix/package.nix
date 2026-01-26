@@ -10,14 +10,14 @@ rec {
   integration-test-tree =
     lib.fileset.difference
       (lib.fileset.unions [
-        ../test
+        ../test-legacy
       ])
       (
         lib.fileset.unions [
         # DNS lookup does not work in the nix sandbox.
-        (lib.fileset.maybeMissing ../test/tests/operators/dns_lookup)
+        ../test-legacy/tests/operators/dns_lookup
         # to_sentinelone_data_lake is not supported in the nix build.
-        (lib.fileset.maybeMissing ../test/tests/operators/to_sentinelone_data_lake)
+        ../test-legacy/tests/operators/to_sentinelone_data_lake
         ]
       );
   tenzir-tree = lib.fileset.unions [
