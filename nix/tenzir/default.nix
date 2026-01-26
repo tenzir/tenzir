@@ -290,7 +290,7 @@ let
             ++ lib.optionals stdenv.isLinux [
               liburing
             ]
-          ++ lib.optionals (!isStatic) [
+            ++ lib.optionals (!isStatic) [
               arrow-adbc-cpp
             ];
 
