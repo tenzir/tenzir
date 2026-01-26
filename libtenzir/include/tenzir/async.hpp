@@ -57,6 +57,8 @@
 #include <caf/binary_serializer.hpp>
 #include <caf/mailbox_element.hpp>
 #include <caf/response_type.hpp>
+#include <folly/CancellationToken.h>
+#include <folly/coro/Baton.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Mutex.h>
 #include <folly/coro/Sleep.h>
@@ -135,10 +137,19 @@ auto async_mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
     caf::make_message(std::forward<Ts>(xs)...)};
 }
 
-/// Returns a task that never completes but can be cancelled.
+/// Returns a task that never completes.
 inline auto wait_forever() -> Task<void> {
-  // TODO: There needs to be a better way.
-  return folly::coro::sleep(std::chrono::years{1});
+  // We want to stop this when cancellation occurs, but `Baton` is not
+  // cancelable by default.
+  auto baton = folly::coro::Baton{};
+  auto token = co_await folly::coro::co_current_cancellation_token;
+  auto callback = folly::CancellationCallback{token, [&]() noexcept {
+                                                baton.post();
+                                              }};
+  co_await baton;
+  if (token.isCancellationRequested()) {
+    co_yield folly::coro::co_cancelled;
+  }
 }
 
 #if 1
