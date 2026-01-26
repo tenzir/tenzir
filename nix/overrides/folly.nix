@@ -12,7 +12,7 @@ folly.overrideAttrs (orig: {
     owner = "tenzir";
     repo = "folly";
     rev = "8831f8cc8e38c4733facdcf20342338360eaf3a9";
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    hash = "sha256-WeHeWN+tIeI3no2+4hSafOdGXxhcL7AR7F+ScqMkHhY=";
   };
   propagatedBuildInputs = (orig.propagatedBuildInputs or []) ++ [
     glog
