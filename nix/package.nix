@@ -15,9 +15,9 @@ rec {
       (
         lib.fileset.unions [
         # DNS lookup does not work in the nix sandbox.
-        ../test/tests/operators/dns_lookup
+        (lib.fileset.maybeMissing ../test/tests/operators/dns_lookup)
         # to_sentinelone_data_lake is not supported in the nix build.
-        ../test/tests/operators/to_sentinelone_data_lake
+        (lib.fileset.maybeMissing ../test/tests/operators/to_sentinelone_data_lake)
         ]
       );
   tenzir-tree = lib.fileset.unions [
