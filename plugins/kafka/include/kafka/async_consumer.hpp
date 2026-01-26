@@ -11,23 +11,20 @@
 #include <tenzir/error.hpp>
 
 #include <caf/expected.hpp>
-
+#include <fmt/format.h>
 #include <folly/Unit.h>
-#include <folly/experimental/coro/Task.h>
 #include <folly/experimental/coro/SemiFutureAwaitable.h>
+#include <folly/experimental/coro/Task.h>
 #include <folly/futures/Promise.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
 #include <folly/portability/Fcntl.h>
 #include <folly/portability/Unistd.h>
-
-#include <fmt/format.h>
-
 #include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafkacpp.h>
 
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -57,23 +54,28 @@ inline caf::error posix_error(std::string_view operation, int err) {
 }
 
 inline caf::expected<wakeup_fd> make_wakeup_fd() {
-#if defined(__linux__)
+#  if defined(__linux__)
   const auto fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-  if (fd == -1)
+  if (fd == -1) {
     return posix_error("eventfd", errno);
+  }
   return wakeup_fd{fd, -1};
-#else
+#  else
   int fds[2] = {-1, -1};
-  if (::pipe(fds) == -1)
+  if (::pipe(fds) == -1) {
     return posix_error("pipe", errno);
+  }
   auto set_non_blocking = [](int fd) -> caf::error {
     auto flags = ::fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
+    if (flags == -1) {
       return posix_error("fcntl(F_GETFL)", errno);
-    if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    }
+    if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
       return posix_error("fcntl(F_SETFL)", errno);
-    if (::fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+    }
+    if (::fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) {
       return posix_error("fcntl(F_SETFD)", errno);
+    }
     return caf::error{};
   };
   if (auto err = set_non_blocking(fds[0])) {
@@ -87,28 +89,34 @@ inline caf::expected<wakeup_fd> make_wakeup_fd() {
     return err;
   }
   return wakeup_fd{fds[0], fds[1]};
-#endif
+#  endif
 }
 
 inline void close_wakeup_fd(const wakeup_fd& fd) {
-  if (fd.read != -1)
+  if (fd.read != -1) {
     ::close(fd.read);
-  if (fd.write != -1)
+  }
+  if (fd.write != -1) {
     ::close(fd.write);
+  }
 }
 
 inline void drain_fd(int fd) noexcept {
-  if (fd == -1)
+  if (fd == -1) {
     return;
+  }
   std::uint8_t buffer[64];
   for (;;) {
     const auto n = ::read(fd, buffer, sizeof(buffer));
-    if (n > 0)
+    if (n > 0) {
       continue;
-    if (n == 0)
+    }
+    if (n == 0) {
       break;
-    if (errno == EAGAIN || errno == EWOULDBLOCK)
+    }
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
       break;
+    }
     break;
   }
 }
@@ -138,7 +146,7 @@ public:
                              "failed to acquire consumer queue");
     }
     auto fds = detail::make_wakeup_fd();
-    if (!fds) {
+    if (! fds) {
       rd_kafka_queue_destroy(queue);
       return std::move(fds.error());
     }
@@ -152,8 +160,9 @@ public:
     unregisterHandler();
     disable_events();
     detail::close_wakeup_fd(wakeup_fd_);
-    if (queue_ != nullptr)
+    if (queue_ != nullptr) {
       rd_kafka_queue_destroy(queue_);
+    }
   }
 
   async_consumer_queue(const async_consumer_queue&) = delete;
@@ -164,22 +173,24 @@ public:
   /// Retrieves the next message without blocking the calling thread.
   ///
   /// When the queue is stopped or shut down this returns nullptr.
-  [[nodiscard]] folly::coro::Task<std::unique_ptr<RdKafka::Message>>
-  next() {
-    while (!stopped_) {
-      if (auto message = try_consume())
+  [[nodiscard]] folly::coro::Task<std::unique_ptr<RdKafka::Message>> next() {
+    while (! stopped_) {
+      if (auto message = try_consume()) {
         co_return message;
+      }
       co_await wait_for_notification();
-      if (stopped_)
+      if (stopped_) {
         break;
+      }
     }
     co_return nullptr;
   }
 
   /// Requests shutdown and releases outstanding waiters.
   void request_stop() {
-    if (stopped_)
+    if (stopped_) {
       return;
+    }
     stopped_ = true;
     if (waiter_) {
       auto promise = std::move(*waiter_);
@@ -191,10 +202,8 @@ public:
 
 private:
   async_consumer_queue(folly::EventBase& event_base,
-                       RdKafka::KafkaConsumer& consumer,
-                       rd_kafka_t* client,
-                       rd_kafka_queue_t* queue,
-                       detail::wakeup_fd wakeup_fd)
+                       RdKafka::KafkaConsumer& consumer, rd_kafka_t* client,
+                       rd_kafka_queue_t* queue, detail::wakeup_fd wakeup_fd)
     : folly::EventHandler(&event_base),
       consumer_{&consumer},
       client_{client},
@@ -207,12 +216,14 @@ private:
   }
 
   void handlerReady(uint16_t events) noexcept override {
-    if ((events & EventHandler::READ) == 0)
+    if ((events & EventHandler::READ) == 0) {
       return;
+    }
     detail::drain_fd(wakeup_fd_.read);
     rd_kafka_poll(client_, 0);
-    if (stopped_)
+    if (stopped_) {
       return;
+    }
     if (waiter_) {
       auto promise = std::move(*waiter_);
       waiter_.reset();
@@ -223,7 +234,7 @@ private:
   }
 
   folly::coro::Task<void> wait_for_notification() {
-    while (!stopped_) {
+    while (! stopped_) {
       if (pending_notifications_ > 0) {
         --pending_notifications_;
         co_return;
@@ -232,8 +243,9 @@ private:
       auto future = waiter_->getSemiFuture();
       co_await std::move(future);
       // The waiter may have been satisfied by a stop request.
-      if (!waiter_)
+      if (! waiter_) {
         co_return;
+      }
       waiter_.reset();
       co_return;
     }
@@ -242,8 +254,9 @@ private:
 
   [[nodiscard]] std::unique_ptr<RdKafka::Message> try_consume() {
     auto* message = consumer_->consume(0);
-    if (!message)
+    if (! message) {
       return nullptr;
+    }
     std::unique_ptr<RdKafka::Message> guard{message};
     if (message->err() == RdKafka::ERR__TIMED_OUT) {
       guard.reset();
@@ -253,8 +266,9 @@ private:
   }
 
   void disable_events() noexcept {
-    if (queue_ != nullptr)
+    if (queue_ != nullptr) {
       rd_kafka_queue_io_event_enable(queue_, -1, nullptr, 0);
+    }
   }
 
   RdKafka::KafkaConsumer* consumer_ = nullptr;
