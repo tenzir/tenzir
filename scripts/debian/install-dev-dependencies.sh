@@ -27,6 +27,7 @@ apt-get -y --no-install-recommends install \
   libc-ares-dev \
   libdouble-conversion-dev \
   libevent-dev \
+  libfast-float-dev \
   libflatbuffers-dev \
   libfmt-dev \
   libgoogle-glog-dev \

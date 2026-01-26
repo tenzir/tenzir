@@ -15,6 +15,7 @@ brew install --overwrite \
   coreutils \
   cppzmq \
   double-conversion \
+  fast_float \
   flatbuffers \
   fluent-bit \
   fmt \
