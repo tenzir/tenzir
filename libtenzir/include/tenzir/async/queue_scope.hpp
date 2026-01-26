@@ -9,10 +9,11 @@
 #pragma once
 
 #include "tenzir/async/scope.hpp"
-#include "tenzir/async/unbounded_queue.hpp"
 
 #include <folly/coro/AsyncGenerator.h>
 #include <folly/coro/BoundedQueue.h>
+
+#include <optional>
 
 namespace tenzir {
 
@@ -86,11 +87,10 @@ public:
             break;
           }
           remaining_ += 1;
-          co_await results_.enqueue(std::move(*next));
+          co_await results_.enqueue(AsyncResult<T>{std::move(*next)});
         }
         // We still need to enqueue something to give `next` a chance to resume.
-        co_await results_.enqueue(
-          folly::make_exception_wrapper<folly::OperationCancelled>());
+        co_await results_.enqueue(std::nullopt);
       });
   }
 
@@ -122,10 +122,10 @@ public:
       auto generator = std::invoke(f);
       while (auto next = co_await generator.next()) {
         remaining_ += 1;
-        co_await results_.enqueue(std::move(*next));
+        co_await results_.enqueue(AsyncResult<T>{std::move(*next)});
       }
       // We still need to enqueue something to give `next` a chance to resume.
-      co_await results_.enqueue(folly::exception_wrapper{});
+      co_await results_.enqueue(std::nullopt);
     });
   }
 
@@ -152,16 +152,22 @@ public:
     while (remaining_ > 0) {
       auto result = co_await results_.dequeue();
       remaining_ -= 1;
-      if (result.is_exception() and not result.exception()) {
-        // An empty exception object is used to signal that a task has completed
-        // that didn't produce a result.
+      if (not result) {
         continue;
       }
+      // I added this because I saw some empty exception object errors. The
+      // queue originally used those instead of the empty optional, but it
+      // turned out that this was not the actual problem. This check can
+      // probably be removed soon because it doesn't make too much sense to
+      // special-case this here.
+      if (result->is_exception() and not result->exception()) {
+        panic("got empty exception object in queue scope");
+      }
       if constexpr (std::same_as<T, void>) {
-        std::move(result).unwrap();
+        std::move(*result).unwrap();
         co_return std::monostate{};
       } else {
-        co_return std::move(result).unwrap();
+        co_return std::move(*result).unwrap();
       }
     }
     co_return std::nullopt;
@@ -174,7 +180,7 @@ public:
 
 private:
   std::atomic<size_t> remaining_ = 0;
-  folly::coro::BoundedQueue<AsyncResult<T>> results_{1};
+  folly::coro::BoundedQueue<std::optional<AsyncResult<T>>> results_{1};
   AsyncScope* scope_ = nullptr;
 };
 
