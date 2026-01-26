@@ -914,7 +914,12 @@ else ()
     string(APPEND CMAKE_CXX_FLAGS " -mavx2")
   endif ()
   message(STATUS "Folly CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+  # Force folly to build as static library to avoid exception handling issues
+  # across shared library boundaries.
+  set(_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
+  set(BUILD_SHARED_LIBS OFF)
   add_subdirectory(libtenzir/aux/folly SYSTEM)
+  set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
   set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
   if (NOT TARGET Folly::folly)
     add_library(Folly::folly ALIAS folly)
