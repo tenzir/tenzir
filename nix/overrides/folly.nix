@@ -7,12 +7,12 @@
   xz,
 }:
 folly.overrideAttrs (orig: {
-  version = "2026.01.19.00";
+  version = "2026.01.19.00-tenzir";
   src = fetchFromGitHub {
-    owner = "facebook";
+    owner = "tenzir";
     repo = "folly";
-    tag = "v2026.01.19.00";
-    hash = "sha256-gfmN/9LizPdacUd1eJxFx79I63SwqX0NaWFgbe6vbFk=";
+    rev = "8831f8cc8e38c4733facdcf20342338360eaf3a9";
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
   };
   propagatedBuildInputs = (orig.propagatedBuildInputs or []) ++ [
     glog
