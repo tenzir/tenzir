@@ -5,7 +5,7 @@
 /libtenzir/aux/*
 !/libtenzir/aux/caf/
 !/libtenzir/aux/facebook/
-!/libtenzir/aux/fast_float/
+!/libtenzir/aux/folly/
 !/libtenzir/aux/pfs/
 !/libtenzir/aux/robin-map/
 !/libtenzir/aux/simdjson/
@@ -17,3 +17,4 @@ nix/
 !README.md
 !VERSIONING.md
 cmake-build-*/
+
