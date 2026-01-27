@@ -238,20 +238,13 @@ function (tenzir_build_test_command out_var)
 
   if (ARG_TEST_ROOT)
     list(APPEND selection "${ARG_TEST_ROOT}")
-  elseif (ARG_SELECTION)
-    list(APPEND selection ${ARG_SELECTION})
   else ()
-    # Default: all projects (test root + contrib plugins)
+    # Default: all projects in the working directory
     list(APPEND cmd "--all-projects")
     list(APPEND selection "--root" "${ARG_WORKING_DIR}")
-
-    # Add contrib/tenzir-plugins/*/test directories if they exist
-    if (EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
-      file(GLOB plugin_test_dirs
-           "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
-      if (plugin_test_dirs)
-        list(APPEND selection ${plugin_test_dirs})
-      endif ()
+    # Append any extra selections (e.g., contrib plugin test dirs)
+    if (ARG_SELECTION)
+      list(APPEND selection ${ARG_SELECTION})
     endif ()
   endif ()
 
@@ -310,10 +303,18 @@ if (EXISTS "${_neo_tests_root}")
   endforeach ()
 endif ()
 
+# Discover contrib plugin test directories (associated with legacy tests)
+set(_contrib_test_dirs)
+if (EXISTS "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins")
+  file(GLOB _contrib_test_dirs
+       "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins/*/test")
+endif ()
+
 # Separate make targets for legacy and neo tests
 add_custom_target(integration-legacy DEPENDS tenzir)
 tenzir_build_test_command(_legacy_cmd EXTRA_ARGS "--jobs" "4" "--summary"
-                          WORKING_DIR "${CMAKE_SOURCE_DIR}/test-legacy")
+                          WORKING_DIR "${CMAKE_SOURCE_DIR}/test-legacy"
+                          SELECTION ${_contrib_test_dirs})
 add_custom_command(TARGET integration-legacy POST_BUILD
   COMMAND ${_legacy_cmd}
   USES_TERMINAL VERBATIM)
@@ -339,7 +340,8 @@ add_dependencies(integration integration-tests)
 
 add_custom_target(update-integration-legacy DEPENDS tenzir)
 tenzir_build_test_command(_update_legacy_cmd EXTRA_ARGS "--update"
-                          WORKING_DIR "${CMAKE_SOURCE_DIR}/test-legacy")
+                          WORKING_DIR "${CMAKE_SOURCE_DIR}/test-legacy"
+                          SELECTION ${_contrib_test_dirs})
 add_custom_command(
   TARGET update-integration-legacy
   POST_BUILD
