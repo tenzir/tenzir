@@ -9,7 +9,6 @@
 #include "tenzir/module.hpp"
 
 #include "tenzir/aliases.hpp"
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/test/test.hpp"
