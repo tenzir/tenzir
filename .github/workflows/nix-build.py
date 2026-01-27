@@ -194,8 +194,8 @@ def run_container_test(
         return False
     pkg_file = pkg_files[0].name
 
-    # Build the test image if it's a path
-    if "/" in image:
+    # Build the test image if it's a local path, otherwise pull from registry
+    if Path(image).is_dir():
         notice(f"Building test image from {image}")
         result = subprocess.run(
             ["docker", "build", image, "-t", container_name],
