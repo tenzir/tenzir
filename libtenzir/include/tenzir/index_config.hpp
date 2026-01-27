@@ -14,6 +14,8 @@
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/type.hpp"
 
+#include <caf/error.hpp>
+
 #include <string>
 #include <vector>
 
@@ -63,5 +65,13 @@ struct index_config {
 
 bool should_create_partition_index(const qualified_record_field& index_qf,
                                    const std::vector<index_config::rule>& rules);
+
+/// Converts data (record from YAML/config) to index_config.
+/// This is a targeted conversion that avoids the expensive generic match()
+/// in concept/convertible/data.hpp.
+/// @param src The source data, expected to be a record.
+/// @param dst The destination index_config to populate.
+/// @returns An error if conversion fails, or caf::none on success.
+caf::error convert(const data& src, index_config& dst);
 
 } // namespace tenzir

@@ -8,7 +8,6 @@
 
 #include "tenzir/index_config.hpp"
 
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/test/test.hpp"
