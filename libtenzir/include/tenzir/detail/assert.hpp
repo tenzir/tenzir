@@ -54,23 +54,64 @@ assertion_failure(std::string_view cond, std::source_location location) {
   }                                                                            \
   static_assert(true)
 
-#define TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, ...)                                 \
+#define TENZIR_ASSERT_RELATION_ALWAYS(OP, LHS, RHS, ...)                       \
   {                                                                            \
-    if (not static_cast<bool>(LHS == RHS)) [[unlikely]] {                      \
+    auto txt = std::string{};                                                  \
+    constexpr static bool formattable                                          \
+      = fmt::is_formattable<decltype(LHS)>::value                              \
+        and fmt::is_formattable<decltype(RHS)>::value;                         \
+    if constexpr (formattable) {                                               \
+      txt = fmt::format("{} (" #LHS ") " #OP " {} (" #RHS ")", LHS, RHS);      \
+    } else {                                                                   \
+      txt = #LHS " " #OP " " #RHS;                                             \
+    }                                                                          \
+    if (not static_cast<bool>(LHS OP RHS)) [[unlikely]] {                      \
       ::tenzir::detail::assertion_failure<true>(                               \
-        fmt::format("{} (" #LHS ") == {} (" #RHS ")", LHS, RHS),               \
-        std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);           \
+        txt, std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);      \
     }                                                                          \
   }                                                                            \
   static_assert(true)
+
+#define TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, ...)                                 \
+  TENZIR_ASSERT_RELATION_ALWAYS(==, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+#define TENZIR_ASSERT_NEQ_ALWAYS(LHS, RHS, ...)                                \
+  TENZIR_ASSERT_RELATION_ALWAYS(!=, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+#define TENZIR_ASSERT_LT_ALWAYS(LHS, RHS, ...)                                 \
+  TENZIR_ASSERT_RELATION_ALWAYS(<, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+#define TENZIR_ASSERT_LEQ_ALWAYS(LHS, RHS, ...)                                \
+  TENZIR_ASSERT_RELATION_ALWAYS(<=, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+#define TENZIR_ASSERT_GT_ALWAYS(LHS, RHS, ...)                                 \
+  TENZIR_ASSERT_RELATION_ALWAYS(>, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+#define TENZIR_ASSERT_GEQ_ALWAYS(LHS, RHS, ...)                                \
+  TENZIR_ASSERT_RELATION_ALWAYS(>=, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
 
 #if TENZIR_ENABLE_ASSERTIONS
 #  define TENZIR_ASSERT_EXPENSIVE(...) TENZIR_ASSERT_ALWAYS(__VA_ARGS__)
 #  define TENZIR_ASSERT_EQ_EXPENSIVE(LHS, RHS, ...)                            \
     TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_NEQ_EXPENSIVE(LHS, RHS, ...)                           \
+    TENZIR_ASSERT_NEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LT_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_ASSERT_LT_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LEQ_EXPENSIVE(LHS, RHS, ...)                           \
+    TENZIR_ASSERT_LEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GT_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_ASSERT_GT_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GEQ_EXPENSIVE(LHS, RHS, ...)                           \
+    TENZIR_ASSERT_GEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
 #else
 #  define TENZIR_ASSERT_EXPENSIVE(...) TENZIR_UNUSED(__VA_ARGS__)
 #  define TENZIR_ASSERT_EQ_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_NEQ_EXPENSIVE(LHS, RHS, ...)                           \
+    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LT_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LEQ_EXPENSIVE(LHS, RHS, ...)                           \
+    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GT_EXPENSIVE(LHS, RHS, ...)                            \
+    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GEQ_EXPENSIVE(LHS, RHS, ...)                           \
     TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
 #endif
 
@@ -78,14 +119,29 @@ assertion_failure(std::string_view cond, std::source_location location) {
 #  define TENZIR_ASSERT(...) TENZIR_ASSERT_ALWAYS(__VA_ARGS__)
 #  define TENZIR_ASSERT_EQ(LHS, RHS, ...)                                      \
     TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_NEQ(LHS, RHS, ...)                                     \
+    TENZIR_ASSERT_NEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LT(LHS, RHS, ...)                                      \
+    TENZIR_ASSERT_LT_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LEQ(LHS, RHS, ...)                                     \
+    TENZIR_ASSERT_LEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GT(LHS, RHS, ...)                                      \
+    TENZIR_ASSERT_GT_ALWAYS(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GEQ(LHS, RHS, ...)                                     \
+    TENZIR_ASSERT_GEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
 #else
 #  define TENZIR_ASSERT(...) TENZIR_UNUSED(__VA_ARGS__)
 #  define TENZIR_ASSERT_EQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_NEQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LT(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_LEQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GT(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_GEQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
 #endif
 
 /// Unlike `__builtin_unreachable()`, reaching this macro is not UB, it simply
 /// throws a panic.
-#define TENZIR_UNREACHABLE() ::tenzir::panic("unreachable");
+#define TENZIR_UNREACHABLE() ::tenzir::panic("unreachable")
 
 /// Used to mark code as unfinished. Reaching it throws a panic.
 #define TENZIR_TODO() ::tenzir::panic("todo")
