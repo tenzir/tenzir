@@ -49,12 +49,6 @@ set(BUILD_EXAMPLES
 set(FOLLY_HAVE_MALLOC_USABLE_SIZE
     OFF
     CACHE BOOL "")
-# Point folly to our bundled fast_float.
-if (TENZIR_ENABLE_BUNDLED_FASTFLOAT)
-  set(FASTFLOAT_INCLUDE_DIR
-      "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/libtenzir/aux/fast_float/include>"
-      CACHE PATH "")
-endif ()
 # Find blake3 if available - folly uses __has_include(<blake3.h>) to compile
 # blake3 support, so we must link against it when the header is found.
 find_package(blake3 CONFIG QUIET)
