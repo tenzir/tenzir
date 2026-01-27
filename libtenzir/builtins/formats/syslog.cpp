@@ -486,6 +486,14 @@ public:
       return false;
     }
     auto& latest = *last_message;
+    // Check size limit before appending to prevent unbounded accumulation.
+    auto current_size = latest.parsed.msg.value_or("").size();
+    if (raw_message_field_) {
+      current_size = std::max(current_size, latest.raw_message.size());
+    }
+    if (current_size + line.size() + 1 > max_syslog_message_size) {
+      return false;
+    }
     if (not latest.parsed.msg) {
       latest.parsed.msg.emplace(line);
     } else {
@@ -596,6 +604,14 @@ public:
       return false;
     }
     auto& latest = *last_message;
+    // Check size limit before appending to prevent unbounded accumulation.
+    auto current_size = latest.parsed.content.size();
+    if (raw_message_field_) {
+      current_size = std::max(current_size, latest.raw_message.size());
+    }
+    if (current_size + line.size() + 1 > max_syslog_message_size) {
+      return false;
+    }
     latest.parsed.content.push_back('\n');
     latest.parsed.content.append(line);
     if (raw_message_field_) {
@@ -746,16 +762,23 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         co_yield std::move(s);
       }
       last = builder_tag::syslog_builder;
-      auto raw = raw_message_field ? std::string{*line} : std::string{};
-      new_builder.add_new({std::move(msg), line_nr, std::move(raw)});
+      if (raw_message_field) {
+        new_builder.add_new({std::move(msg), line_nr, std::string{*line}});
+      } else {
+        new_builder.add_new({std::move(msg), line_nr});
+      }
     } else if (auto legacy_parser = legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
       for (auto&& s : maybe_flush(builder_tag::legacy_syslog_builder)) {
         co_yield std::move(s);
       }
       last = builder_tag::legacy_syslog_builder;
-      auto raw = raw_message_field ? std::string{*line} : std::string{};
-      legacy_builder.add_new({std::move(legacy_msg), line_nr, std::move(raw)});
+      if (raw_message_field) {
+        legacy_builder.add_new(
+          {std::move(legacy_msg), line_nr, std::string{*line}});
+      } else {
+        legacy_builder.add_new({std::move(legacy_msg), line_nr});
+      }
     } else if (last == builder_tag::syslog_builder
                and new_builder.add_line_to_latest(*line)) {
       continue;
