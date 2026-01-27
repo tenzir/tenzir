@@ -14,7 +14,7 @@
 #include "tenzir/allocator.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
-#include "tenzir/concept/convertible/data.hpp"
+#include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
