@@ -284,8 +284,9 @@ if (BUILD_SHARED_LIBS)
   target_link_libraries(libtenzir PUBLIC ${CMAKE_DL_LIBS})
 endif ()
 
-# Link against CAF.
+# Link against CAF, ignoring deprecation warnings for now.
 target_link_libraries(libtenzir PUBLIC CAF::core CAF::io CAF::net CAF::openssl)
+target_compile_definitions(libtenzir PUBLIC CAF_SUPPRESS_DEPRECATION_WARNINGS)
 
 # Link against libtenzir-fbs.
 target_link_libraries(libtenzir PUBLIC libtenzir-fbs)
