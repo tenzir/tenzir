@@ -466,11 +466,11 @@ public:
   using row_type = syslog_row<message_type>;
 
   syslog_builder(multi_series_builder::options opts, diagnostic_handler& dh,
-                 const std::optional<ast::field_path>& raw_message_field
+                 std::optional<ast::field_path> raw_message_field
                  = std::nullopt)
     : timeout{opts.settings.timeout},
       builder{std::move(opts), dh},
-      raw_message_field_{raw_message_field ? &*raw_message_field : nullptr} {
+      raw_message_field_{std::move(raw_message_field)} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -553,7 +553,7 @@ public:
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
-  const ast::field_path* raw_message_field_ = nullptr;
+  std::optional<ast::field_path> raw_message_field_;
 };
 
 struct legacy_syslog_builder {
@@ -563,11 +563,11 @@ public:
 
   legacy_syslog_builder(multi_series_builder::options opts,
                         diagnostic_handler& dh,
-                        const std::optional<ast::field_path>& raw_message_field
+                        std::optional<ast::field_path> raw_message_field
                         = std::nullopt)
     : timeout{opts.settings.timeout},
       builder{std::move(opts), dh},
-      raw_message_field_{raw_message_field ? &*raw_message_field : nullptr} {
+      raw_message_field_{std::move(raw_message_field)} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -643,7 +643,7 @@ public:
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
-  const ast::field_path* raw_message_field_ = nullptr;
+  std::optional<ast::field_path> raw_message_field_;
 };
 
 struct unknown_syslog_builder {
