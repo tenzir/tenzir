@@ -8,12 +8,10 @@
 
 #include "tenzir/module.hpp"
 
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/concept/parseable/parse.hpp"
 #include "tenzir/concept/parseable/tenzir/schema.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/data.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/filter_dir.hpp"
 #include "tenzir/detail/installdirs.hpp"
