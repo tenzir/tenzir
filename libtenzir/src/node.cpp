@@ -503,25 +503,37 @@ auto node(node_actor::stateful_pointer<node_state> self,
     });
   const auto interval = memory::trim_interval();
 #if TENZIR_SELECT_ALLOCATOR == TENZIR_SELECT_ALLOCATOR_NONE
-  detail::weak_run_delayed_loop(self, interval, []() {
-    memory::system::trim();
-  });
+  detail::weak_run_delayed_loop(
+    self, interval,
+    []() {
+      memory::system::trim();
+    },
+    false);
 #else
-  detail::weak_run_delayed_loop(self, interval, []() {
-    memory::cpp_allocator().trim();
-  });
+  detail::weak_run_delayed_loop(
+    self, interval,
+    []() {
+      memory::cpp_allocator().trim();
+    },
+    false);
   if (memory::arrow_allocator().backend()
       != memory::cpp_allocator().backend()) {
-    detail::weak_run_delayed_loop(self, interval, []() {
-      memory::arrow_allocator().trim();
-    });
+    detail::weak_run_delayed_loop(
+      self, interval,
+      []() {
+        memory::arrow_allocator().trim();
+      },
+      false);
   }
   if (memory::c_allocator().backend() != memory::arrow_allocator().backend()
       and memory::c_allocator().backend()
             != memory::cpp_allocator().backend()) {
-    detail::weak_run_delayed_loop(self, interval, []() {
-      memory::c_allocator().trim();
-    });
+    detail::weak_run_delayed_loop(
+      self, interval,
+      []() {
+        memory::c_allocator().trim();
+      },
+      false);
   }
 #endif
   return {

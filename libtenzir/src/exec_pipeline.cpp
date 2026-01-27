@@ -262,9 +262,11 @@ auto exec_pipeline(pipeline pipe, std::string definition,
             self->quit();
           });
       detail::weak_run_delayed_loop(
-        self, defaults::diagnostic_deduplication_interval, [&dedup] {
+        self, defaults::diagnostic_deduplication_interval,
+        [&dedup] {
           dedup.clear();
-        });
+        },
+        false);
       return {
         [&](diagnostic& d) {
           if (cfg.strict and d.severity >= severity::warning and result) {
