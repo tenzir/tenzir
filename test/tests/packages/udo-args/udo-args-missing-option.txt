@@ -1,0 +1,14 @@
+error: required argument `required_opt` was not provided
+ --> tests/packages/udo-args/udo-args-missing-option.tql:5:1
+  |
+5 | argspkg::require_option "A"
+  | ^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = usage: argspkg::require_option value:string, required_opt=string
+  = note: parameters:
+            positional:
+              name          type    default  description
+              value         string  -        -
+            named:
+              name          type    default  description
+              required_opt  string  -        -

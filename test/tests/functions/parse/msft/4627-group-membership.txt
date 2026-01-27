@@ -1,0 +1,42 @@
+{
+  System: {
+    Provider: {
+      Name: "Microsoft-Windows-Security-Auditing",
+      Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
+    },
+    EventID: 4627,
+    Version: 0,
+    Level: 0,
+    Task: 12554,
+    Opcode: 0,
+    Keywords: "0x8020000000000000",
+    TimeCreated: {
+      SystemTime: 2015-11-12T03:51:25.843673Z,
+    },
+    EventRecordID: 3081,
+    Correlation: {
+      ActivityID: "{913FBE70-1CE6-0000-67BF-3F91E61CD101}",
+    },
+    Execution: {
+      ProcessID: 736,
+      ThreadID: 808,
+    },
+    Channel: "Security",
+    Computer: "WIN-GG82ULGC9GO.contoso.local",
+    Security: null,
+  },
+  EventData: {
+    SubjectUserSid: "S-1-0-0",
+    SubjectUserName: "-",
+    SubjectDomainName: "-",
+    SubjectLogonId: "0x0",
+    TargetUserSid: "S-1-5-21-1377283216-344919071-3415362939-1104",
+    TargetUserName: "dadmin",
+    TargetDomainName: "CONTOSO",
+    TargetLogonId: "0x569860",
+    LogonType: 3,
+    EventIdx: 1,
+    EventCountTotal: 1,
+    GroupMembership: "%{S-1-5-21-1377283216-344919071-3415362939-513} %{S-1-1-0} %{S-1-5-32-544} %{S-1-5-32-545} %{S-1-5-32-554} %{S-1-5-2} %{S-1-5-11} %{S-1-5-15} %{S-1-5-21-1377283216-344919071-3415362939-512} %{S-1-5-21-1377283216-344919071-3415362939-572} %{S-1-5-64-10} %{S-1-16-12288}",
+  },
+}

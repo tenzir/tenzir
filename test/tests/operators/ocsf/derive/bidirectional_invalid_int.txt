@@ -1,11 +1,11 @@
 {
-  activity_id: 999,
-  activity_name: "Create",
-  class_name: "File System Activity",
-  class_uid: 1001,
   metadata: {
     version: "1.5.0",
   },
+  class_name: "File System Activity",
+  class_uid: 1001,
+  activity_id: 999,
+  activity_name: "Create",
 }
 warning: found invalid value for `activity_id`
   --> tests/operators/ocsf/derive/bidirectional_invalid_int.tql:13:1

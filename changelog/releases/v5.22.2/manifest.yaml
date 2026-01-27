@@ -1,0 +1,6 @@
+created: 2025-12-21
+title: Tenzir Node v5.22.2
+intro: >-
+  This release fixes a performance regression when parsing lists with mixed-type elements,
+  where batch processing was inadvertently broken. It also resolves an assertion failure
+  that could crash Tenzir when encountering events with duplicate keys.

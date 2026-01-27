@@ -136,7 +136,7 @@ private:
         done_ = true;
         update_multicaster_.push(cache_update{
           .approx_bytes = byte_size_,
-          .state = err ? cache_state::failed : cache_state::closed,
+          .state = err.valid() ? cache_state::failed : cache_state::closed,
         });
         update_multicaster_.close();
         reset_read_timeout();

@@ -1,4 +1,4 @@
-name: Labels
+name: Blocked
 on:
   pull_request:
     types:
@@ -8,15 +8,10 @@ on:
       - synchronize
 
 jobs:
-  check-labels:
-    name: Check Labels
+  check-blocked:
+    name: Check Blocked
     runs-on: ubuntu-latest
     steps:
-      - name: No Labels
-        run: |
-          # Fail if the PR has no labels.
-          echo '${{ toJson(github.event.pull_request.labels.*.name) }}' |
-            jq -re 'length > 0'
       - name: Blocked
         run: |
           # Fail if the PR has the 'blocked' label.

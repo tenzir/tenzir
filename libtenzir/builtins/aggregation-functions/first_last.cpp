@@ -83,7 +83,7 @@ public:
         .emit(ctx);
       return;
     }
-    if (auto err = unpack(*fb_result, result_)) {
+    if (auto err = unpack(*fb_result, result_); err.valid()) {
       diagnostic::warning("{}", err)
         .note("failed to restore `{}` aggregation instance",
               Mode == mode::first ? "first" : "last")

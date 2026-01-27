@@ -84,6 +84,10 @@ public:
     return true;
   }
 
+  auto pipeline_id() const noexcept -> std::string_view override {
+    return {};
+  }
+
   auto set_waiting(bool value) noexcept -> void override {
     (void)value;
     TENZIR_UNIMPLEMENTED();
@@ -438,37 +442,6 @@ auto pipeline::infer_type_impl(operator_type input) const
     current = *next;
   }
   return current;
-}
-
-auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
-  auto error = std::optional<caf::error>{};
-  try {
-    auto ctrl = local_control_plane{};
-    auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
-    if (not dynamic_gen) {
-      co_yield std::move(dynamic_gen.error());
-      co_return;
-    }
-    auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
-    if (not gen) {
-      co_yield caf::make_error(ec::logic_error,
-                               "right side of pipeline is not closed");
-      co_return;
-    }
-    for (auto monostate : *gen) {
-      (void)monostate;
-      co_yield {};
-    }
-  } catch (diagnostic& d) {
-    error = std::move(d).to_error();
-  } catch (std::exception& exc) {
-    error = diagnostic::error("unhandled exception: {}", exc.what()).to_error();
-  } catch (...) {
-    error = diagnostic::error("unhandled exception").to_error();
-  }
-  if (error) {
-    co_yield std::move(*error);
-  }
 }
 
 pipeline::pipeline(pipeline const& other) {

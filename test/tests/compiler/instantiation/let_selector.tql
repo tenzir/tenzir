@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+let $foo = "field"
+
+$foo = "test"

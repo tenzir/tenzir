@@ -1,0 +1,7 @@
+from {x: 1, y: "a"}, {x: 2, y: "b"}, {x: 3, y: "a"}, {x: 4, y: "b"}
+batch
+parallel 2, _split_at=2 {
+  z = x * 10
+  drop y
+}
+sort x

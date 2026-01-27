@@ -1,0 +1,88 @@
+{
+  System: {
+    Provider: {
+      Name: "Microsoft-Windows-Security-Auditing",
+      Guid: "{54849625-5478-4994-A5BA-3E3B0328C30D}",
+    },
+    EventID: 4624,
+    Version: 2,
+    Level: 0,
+    Task: 12544,
+    Opcode: 0,
+    Keywords: "0x8020000000000000",
+    TimeCreated: {
+      SystemTime: 2024-01-15T10:30:00Z,
+    },
+    EventRecordID: 12345,
+    Execution: {
+      ProcessID: 500,
+      ThreadID: 520,
+    },
+    Channel: "Security",
+    Computer: "WORKSTATION1",
+    Security: null,
+  },
+  EventData: {
+    SubjectUserSid: "S-1-5-18",
+    SubjectUserName: "SYSTEM",
+    LogonType: 3,
+  },
+}
+{
+  System: {
+    Provider: {
+      Name: "Application",
+    },
+    EventID: 1000,
+    Channel: "Application",
+    Computer: "SERVER1",
+  },
+}
+{
+  System: {
+    Provider: {
+      Name: "Application",
+    },
+    EventID: 1001,
+    Channel: "Application",
+    Computer: "SERVER1",
+  },
+  EventData: [
+    "MyApp.exe",
+    "1.0.0.0",
+  ],
+}
+{
+  System: {
+    Provider: {
+      Name: "Application",
+    },
+    EventID: 1002,
+    Channel: "Application",
+    Computer: "SERVER2",
+  },
+  UserData: {
+    EventXML: {
+      Details: {
+        Foo: "Bar",
+      },
+    },
+  },
+}
+{}
+warning: type mismatch between list elements
+ = note: field `EventData`
+
+warning: failed to parse XML: line 1:15: no element found
+  --> tests/functions/parse/parse_winlog.tql:72:8
+   |
+72 | this = x.parse_winlog()
+   |        ~~~~~~~~~~~~~~~~ 
+   |
+
+warning: assignment to `this` requires `record`, but got `null`
+  --> tests/functions/parse/parse_winlog.tql:72:1
+   |
+72 | this = x.parse_winlog()
+   | ~~~~ 
+   |

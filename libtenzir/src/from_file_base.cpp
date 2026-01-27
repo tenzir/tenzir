@@ -18,6 +18,18 @@
 #include <arrow/util/future.h>
 #include <caf/actor_from_state.hpp>
 
+#ifdef ARROW_S3
+#  include <arrow/filesystem/s3fs.h>
+#  include <aws/s3/S3Client.h>
+#  include <aws/s3/S3ClientConfiguration.h>
+#  include <aws/s3/model/DeleteObjectRequest.h>
+#endif
+
+#ifdef ARROW_AZURE
+#  include <arrow/filesystem/azurefs.h>
+#  include <azure/storage/blobs.hpp>
+#endif
+
 #include <utility>
 
 namespace tenzir {
@@ -38,7 +50,7 @@ void add_actor_callback(caf::scheduled_actor* self,
     = std::conditional_t<std::same_as<T, arrow::internal::Empty>, arrow::Status,
                          arrow::Result<T>>;
   future.AddCallback(
-    [self, weak = caf::weak_actor_ptr{self->ctrl()},
+    [self, weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref},
      f = std::forward<F>(f)](const result_type& result) mutable {
       if (auto strong = weak.lock()) {
         self->schedule_fn([f = std::move(f), result]() mutable -> void {
@@ -94,6 +106,78 @@ constexpr auto extract_root_path(const glob& glob_, const std::string& expanded)
   return "/";
 }
 
+#ifdef ARROW_S3
+/// Parse S3 path into bucket and key.
+/// Arrow paths look like "bucket/path/to/file.txt".
+auto parse_s3_path(std::string_view path)
+  -> std::pair<std::string, std::string> {
+  auto slash = path.find('/');
+  if (slash == std::string_view::npos) {
+    return {std::string{path}, ""};
+  }
+  return {std::string{path.substr(0, slash)},
+          std::string{path.substr(slash + 1)}};
+}
+
+/// Delete an S3 object directly using the AWS SDK, bypassing Arrow's DeleteFile
+/// which creates 0-sized directory markers.
+auto delete_file_s3(arrow::fs::S3FileSystem* fs, const std::string& path)
+  -> arrow::Status {
+  const auto& options = fs->options();
+  auto config = Aws::S3::S3ClientConfiguration{};
+  config.region = options.region;
+  if (not options.endpoint_override.empty()) {
+    config.endpointOverride = options.endpoint_override;
+    // Use path-style addressing for custom endpoints (e.g., Minio).
+    config.useVirtualAddressing = options.force_virtual_addressing;
+  }
+  config.scheme = options.scheme == "http" ? Aws::Http::Scheme::HTTP
+                                           : Aws::Http::Scheme::HTTPS;
+  // Get credentials from Arrow's credential provider.
+  auto creds_provider = options.credentials_provider;
+  auto [bucket, key] = parse_s3_path(path);
+  // Arrow initializes the AWS SDK, so we can rely on that.
+  auto client = Aws::S3::S3Client{creds_provider, nullptr, config};
+  auto request = Aws::S3::Model::DeleteObjectRequest{};
+  request.SetBucket(bucket);
+  request.SetKey(key);
+  auto outcome = client.DeleteObject(request);
+  if (not outcome.IsSuccess()) {
+    const auto& error = outcome.GetError();
+    return arrow::Status::IOError("failed to delete S3 object: ",
+                                  error.GetMessage());
+  }
+  return arrow::Status::OK();
+}
+#endif // ARROW_S3
+
+#ifdef ARROW_AZURE
+/// Delete an Azure blob directly using the Azure SDK, bypassing Arrow's
+/// DeleteFile which creates 0-sized directory markers.
+auto delete_file_azure(arrow::fs::AzureFileSystem* fs, const std::string& path)
+  -> arrow::Status {
+  const auto& options = fs->options();
+  // Parse path: "container/blob_path"
+  auto slash = path.find('/');
+  auto container = path.substr(0, slash);
+  auto blob_path = slash != std::string::npos ? path.substr(slash + 1) : "";
+  // Create blob client from Arrow options.
+  auto service_client_result = options.MakeBlobServiceClient();
+  if (not service_client_result.ok()) {
+    return service_client_result.status();
+  }
+  auto service_client = std::move(*service_client_result);
+  auto container_client = service_client->GetBlobContainerClient(container);
+  auto blob_client = container_client.GetBlobClient(blob_path);
+  try {
+    blob_client.Delete();
+  } catch (const Azure::Storage::StorageException& e) {
+    return arrow::Status::IOError("failed to delete Azure blob: ", e.what());
+  }
+  return arrow::Status::OK();
+}
+#endif // ARROW_AZURE
+
 } // namespace
 
 from_file_source::from_file_source() = default;
@@ -125,6 +209,7 @@ auto from_file_args::add_to(argument_parser2& p) -> void {
   p.named_optional("remove", remove);
   p.named("rename", rename, "string -> string");
   p.named("path_field", path_field);
+  p.named("max_age", max_age);
   p.positional("{ … }", pipe);
 }
 
@@ -157,6 +242,12 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
       .emit(ctx);
     return failure::promise();
   }
+  if (max_age and max_age->inner <= duration::zero()) {
+    diagnostic::error("`max_age` must be a positive duration")
+      .primary(max_age->source)
+      .emit(ctx);
+    return failure::promise();
+  }
   return result;
 }
 
@@ -164,7 +255,8 @@ from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
   std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
+  std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     args_{std::move(args)},
@@ -172,6 +264,7 @@ from_file_state::from_file_state(
     definition_{std::move(definition)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
+    pipeline_id_{std::move(pipeline_id)},
     operator_index_{operator_index},
     metrics_receiver_{std::move(metrics_receiver)} {
   TENZIR_ASSERT(dh_);
@@ -203,7 +296,8 @@ from_file_state::from_file_state(
   std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
   std::string definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index)
+  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
+  std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     fs_{std::move(fs)},
@@ -212,6 +306,7 @@ from_file_state::from_file_state(
     definition_{std::move(definition)},
     node_{std::move(node)},
     is_hidden_{is_hidden},
+    pipeline_id_{std::move(pipeline_id)},
     operator_index_{operator_index},
     metrics_receiver_{std::move(metrics_receiver)} {
   TENZIR_ASSERT(dh_);
@@ -341,7 +436,33 @@ auto from_file_state::query_files() -> void {
 }
 
 auto from_file_state::process_file(arrow::fs::FileInfo file) -> void {
+  // Clean up directory markers (S3/Azure only) when remove=true.
+  // Directory markers are 0-sized objects with keys ending in '/'.
+  if (args_.remove.inner && file.type() == arrow::fs::FileType::Directory) {
+    auto marker_path = file.path() + '/';
+#ifdef ARROW_S3
+    if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
+      std::ignore = delete_file_s3(s3_fs, marker_path);
+    }
+#endif
+#ifdef ARROW_AZURE
+    if (auto* azure_fs = dynamic_cast<arrow::fs::AzureFileSystem*>(fs_.get())) {
+      std::ignore = delete_file_azure(azure_fs, marker_path);
+    }
+#endif
+  }
   if (file.IsFile() and matches(file.path(), glob_)) {
+    if (args_.max_age) {
+      if (file.mtime() == arrow::fs::kNoTime) {
+        diagnostic::warning("could not get last modification time for "
+                            "file `{}`",
+                            root_path_)
+          .note("assuming file was recently modified")
+          .emit(*dh_);
+      } else if (time::clock::now() - file.mtime() >= args_.max_age->inner) {
+        return;
+      }
+    }
     add_job(std::move(file));
   }
 }
@@ -456,7 +577,7 @@ auto from_file_state::start_stream(
   }
   auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
                              std::move(*stream));
-  auto weak = caf::weak_actor_ptr{source->ctrl()};
+  auto weak = caf::weak_actor_ptr{source->ctrl(), caf::add_ref};
   pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
   if (not pipe.is_closed()) {
     pipe.append(std::make_unique<from_file_sink>(
@@ -465,8 +586,9 @@ auto from_file_state::start_stream(
                        : std::nullopt));
     pipe = pipe.optimize_if_closed();
   }
-  auto executor = self_->spawn(pipeline_executor, std::move(pipe), definition_,
-                               self_, self_, node_, false, is_hidden_);
+  auto executor
+    = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
+                   self_, node_, false, is_hidden_, pipeline_id_);
   self_->attach_functor([this, weak]() {
     if (auto strong = weak.lock()) {
       // FIXME: This should not be necessary to ensure that the actor is
@@ -484,7 +606,7 @@ auto from_file_state::start_stream(
       self_->send_exit(strong, caf::exit_reason::user_shutdown);
     }
     active_jobs_ -= 1;
-    if (error) {
+    if (error.valid()) {
       pipeline_failed(std::move(error))
         .note("coming from `{}`", path)
         .emit(*dh_);
@@ -536,22 +658,30 @@ auto from_file_state::start_stream(
         });
     }
     if (args_.remove.inner) {
-      // There is no async call available.
-      auto status = fs_->DeleteFile(path);
+      // Use SDK-based deletion for S3/Azure to avoid Arrow's directory marker
+      // creation. Arrow's DeleteFile() creates a 0-sized "directory marker"
+      // object in the parent directory after deletion, which is undesirable.
+      auto status = arrow::Status::OK();
+#ifdef ARROW_S3
+      if (auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())) {
+        status = delete_file_s3(s3_fs, path);
+      } else
+#endif
+#ifdef ARROW_AZURE
+        if (auto* azure_fs
+            = dynamic_cast<arrow::fs::AzureFileSystem*>(fs_.get())) {
+        status = delete_file_azure(azure_fs, path);
+      } else
+#endif
+      {
+        // Fall back to Arrow's DeleteFile for other filesystems.
+        status = fs_->DeleteFile(path);
+      }
       if (not status.ok()) {
-        auto message = status.ToStringWithoutContextLines();
-        if (dynamic_cast<arrow::fs::S3FileSystem*>(fs_.get())
-            and message.contains("ACCESS_DENIED during PutObject")) {
-          // When deleting the last file in an S3 directory, Arrow will try to
-          // add a zero-sized object to keep the directory around. This can fail
-          // if the necessary permissions were not granted. But because the
-          // actual delete goes through first, we can just ignore this error.
-        } else {
-          diagnostic::warning("failed to remove `{}`", path)
-            .primary(args_.url)
-            .note(std::move(message))
-            .emit(*dh_);
-        }
+        diagnostic::warning("failed to remove `{}`", path)
+          .primary(args_.url)
+          .note(status.ToStringWithoutContextLines())
+          .emit(*dh_);
       }
     }
     check_jobs_and_termination();

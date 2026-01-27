@@ -36,6 +36,7 @@ namespace {
 
 template <typename T>
 [[nodiscard]] constexpr auto take(std::optional<T>& x) -> T {
+  TENZIR_ASSERT(x);
   return std::exchange(x, std::nullopt).value();
 }
 
@@ -174,7 +175,7 @@ struct transceiver_state {
       [](const operator_metric&) {},
       [this](const caf::exit_msg& msg) {
         TENZIR_TRACE("[transceiver_actor] received exit: {}", msg.reason);
-        if (msg.reason) {
+        if (msg.reason.valid()) {
           self_->quit(msg.reason);
         }
       },
@@ -475,6 +476,7 @@ struct every_cron_operator final : public operator_base {
       = fmt::format("tenzir.every_cron_sink.{}.{}", args_.id, ctrl.run_id());
     const auto handle
       = ctrl.self().system().registry().get<transceiver_actor>(key);
+    ctrl.self().system().registry().erase(handle.id());
     TENZIR_ASSERT(handle);
     auto start = timepoint{};
     auto finish = timepoint{};
@@ -563,8 +565,14 @@ struct every_cron_operator final : public operator_base {
       const auto exec
         = ctrl.self().spawn(pipeline_executor, std::move(pipe),
                             std::string{ctrl.definition()}, hdl, hdl,
-                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden());
-      ctrl.self().monitor(exec, [&, exec](const caf::error&) {
+                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
+                            std::string{ctrl.pipeline_id()});
+      ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
+        if (err.valid()) {
+          diagnostic::error(err)
+            .compose(add_diagnostic_location())
+            .emit(ctrl.diagnostics());
+        }
         spawn_pipeline(ctrl, hdl, start, finish, cron);
       });
       TENZIR_TRACE("[every_cron] requesting subpipeline start");
@@ -596,9 +604,15 @@ struct every_cron_operator final : public operator_base {
       const auto exec
         = ctrl.self().spawn(pipeline_executor, std::move(pipe),
                             std::string{ctrl.definition()}, hdl, hdl,
-                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden());
-      ctrl.self().monitor(exec, [&, exec](const caf::error&) {
+                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
+                            std::string{ctrl.pipeline_id()});
+      ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
         TENZIR_TRACE("[every_cron] subpipeline shut down");
+        if (err.valid()) {
+          diagnostic::error(err)
+            .compose(add_diagnostic_location())
+            .emit(ctrl.diagnostics());
+        }
         ++state.count;
         if (state.input_consumed) {
           if (state.quit_when_done) {

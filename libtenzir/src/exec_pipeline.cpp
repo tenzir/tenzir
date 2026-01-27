@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/defaults.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/pipeline.hpp>
@@ -14,6 +16,7 @@
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/parser.hpp>
+#include <tenzir/uuid.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
@@ -238,10 +241,10 @@ auto exec_pipeline(pipeline pipe, std::string definition,
         = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
                       caf::actor_cast<receiver_actor<diagnostic>>(self),
                       caf::actor_cast<metrics_receiver_actor>(self),
-                      node_actor{}, true, true);
+                      node_actor{}, true, true, fmt::to_string(uuid::random()));
       self->monitor(self->state().executor, [&, self](caf::error err) {
         TENZIR_DEBUG("command received down message `{}`", err);
-        if (err) {
+        if (not err.empty()) {
           result = err == caf::exit_reason::user_shutdown or err == ec::silent
                      ? ec::silent
                      : diagnostic::error(std::move(err)).to_error();
@@ -258,6 +261,12 @@ auto exec_pipeline(pipeline pipe, std::string definition,
             result = diagnostic::error(std::move(err)).to_error();
             self->quit();
           });
+      detail::weak_run_delayed_loop(
+        self, defaults::diagnostic_deduplication_interval,
+        [&dedup] {
+          dedup.clear();
+        },
+        false);
       return {
         [&](diagnostic& d) {
           if (cfg.strict and d.severity >= severity::warning and result) {

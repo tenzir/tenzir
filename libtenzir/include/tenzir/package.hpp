@@ -29,7 +29,8 @@ struct package_source final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data) -> caf::expected<package_source>;
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package_source>;
 
   friend auto inspect(auto& f, package_source& x) -> bool {
     return f.object(x)
@@ -51,7 +52,8 @@ struct package_config final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data) -> caf::expected<package_config>;
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package_config>;
 
   friend auto inspect(auto& f, package_config& x) -> bool {
     return f.object(x)
@@ -71,7 +73,8 @@ struct package_input final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data) -> caf::expected<package_input>;
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package_input>;
 
   friend auto inspect(auto& f, package_input& x) -> bool {
     return f.object(x)
@@ -81,21 +84,54 @@ struct package_input final {
   }
 };
 
-struct package_operator final {
+struct package_operator_parameter final {
+  std::string name; // required to be non-empty
+  std::optional<std::string> type;
   std::optional<std::string> description;
-  std::string definition; // required to be non-empty
+  std::optional<std::string> default_;
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data)
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package_operator_parameter>;
+
+  friend auto inspect(auto& f, package_operator_parameter& x) -> bool {
+    return f.object(x)
+      .pretty_name("package_operator_parameter")
+      .fields(f.field("name", x.name), f.field("type", x.type),
+              f.field("description", x.description),
+              f.field("default", x.default_));
+  }
+};
+
+struct package_operator_arguments final {
+  std::vector<package_operator_parameter> positional;
+  std::vector<package_operator_parameter> named;
+
+  friend auto inspect(auto& f, package_operator_arguments& x) -> bool {
+    return f.object(x)
+      .pretty_name("package_operator_arguments")
+      .fields(f.field("positional", x.positional), f.field("named", x.named));
+  }
+};
+
+struct package_operator final {
+  std::optional<std::string> description;
+  std::string definition; // required to be non-empty
+  package_operator_arguments args;
+
+  auto to_record() const -> record;
+
+  static auto parse(const view<record>& data, std::string_view package_path)
     -> caf::expected<package_operator>;
-  static auto parse(std::string_view input) -> caf::expected<package_operator>;
+  static auto parse(std::string_view input, std::string_view package_path)
+    -> caf::expected<package_operator>;
 
   friend auto inspect(auto& f, package_operator& x) -> bool {
     return f.object(x)
       .pretty_name("package_pipeline")
       .fields(f.field("description", x.description),
-              f.field("definition", x.definition));
+              f.field("definition", x.definition), f.field("args", x.args));
   }
 };
 
@@ -109,10 +145,11 @@ struct package_pipeline final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data)
+  static auto parse(const view<record>& data, std::string_view package_path)
     -> caf::expected<package_pipeline>;
 
-  static auto parse(std::string_view input) -> caf::expected<package_pipeline>;
+  static auto parse(std::string_view input, std::string_view package_path)
+    -> caf::expected<package_pipeline>;
 
   friend auto inspect(auto& f, package_pipeline& x) -> bool {
     return f.object(x)
@@ -134,7 +171,8 @@ struct package_context final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data) -> caf::expected<package_context>;
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package_context>;
 
   friend auto inspect(auto& f, package_context& x) -> bool {
     return f.object(x)
@@ -152,8 +190,10 @@ struct package_example final {
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data) -> caf::expected<package_example>;
-  static auto parse(std::string_view input) -> caf::expected<package_example>;
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package_example>;
+  static auto parse(std::string_view input, std::string_view package_path)
+    -> caf::expected<package_example>;
 
   friend auto inspect(auto& f, package_example& x) -> bool {
     return f.object(x)
@@ -212,7 +252,8 @@ struct package final {
   // the input.
   std::optional<package_config> config;
 
-  static auto parse(const view<record>& data) -> caf::expected<package>;
+  static auto parse(const view<record>& data, std::string_view package_path)
+    -> caf::expected<package>;
 
   static auto load(const std::filesystem::path& dir, diagnostic_handler& dh,
                    bool only_entities) -> failure_or<package>;

@@ -1,0 +1,13 @@
+// Simple element extraction
+from {x: "<root><item>hello</item></root>"},
+     // Multiple elements -> list
+     {x: "<items><item>A</item><item>B</item><item>C</item></items>"},
+     // Attributes with @ prefix
+     {x: r#"<book id="1" lang="en">Title</book>"#},
+     // Nested elements
+     {x: "<catalog><book><title>XML</title><author>Jane</author></book></catalog>"},
+     // Empty element
+     {x: "<empty/>"},
+     // Malformed XML
+     {x: "<not-closed"}
+this = x.parse_xml(xpath="/*")[0]

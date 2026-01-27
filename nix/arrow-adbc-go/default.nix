@@ -7,20 +7,20 @@
 buildGoModule (
   {
     pname = "arrow-adbc-go";
-    version = "1.3.0";
+    version = "1.9.0";
 
     src = fetchFromGitHub {
       owner = "apache";
       repo = "arrow-adbc";
-      rev = "apache-arrow-adbc-15";
-      hash = "sha256-QRWVmUYNdMxQqe9dIBxcY8pY8aAbKIh3dhX3rzCGYI4=";
+      rev = "apache-arrow-adbc-21";
+      hash = "sha256-yC4Mn0K/bwUwu765cc6waq+xPbPdOoaKL9z9RtOm+9E=";
     };
 
     sourceRoot = "source/go/adbc";
 
     proxyVendor = true;
 
-    vendorHash = "sha256-+hUYaFvmySnz2rzDszejcwzoVoCe1lAoj8qNwfMEfp4=";
+    vendorHash = "sha256-uq8O/8B3X4f/ocKAmBX0NFVQ9q43DTCnFAkok0Dss9s=";
 
     postUnpack = ''
       rm -rf source/go/adbc/driver/flightsql/cmd
@@ -88,7 +88,7 @@ buildGoModule (
         export NIX_BUILD_CORES=1
       fi
       cd pkg/snowflake
-      go build -tags=driverlib -buildmode=c-shared -o snowflake.so -v -p $NIX_BUILD_CORES .
+      go build -tags=driverlib -buildmode=c-shared -o snowflake${stdenv.hostPlatform.extensions.sharedLibrary} -v -p $NIX_BUILD_CORES .
 
       runHook postBuild
     '';
@@ -103,7 +103,7 @@ buildGoModule (
       runHook preInstall
 
       mkdir -p $out/lib
-      cp snowflake.so $out/lib
+      cp snowflake${stdenv.hostPlatform.extensions.sharedLibrary} $out/lib
 
       runHook postInstall
     '';

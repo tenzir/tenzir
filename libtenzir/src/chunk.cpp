@@ -215,7 +215,7 @@ chunk_ptr chunk::make(const void* data, size_type size, deleter_type&& deleter,
 chunk_ptr chunk::make(view_type view, deleter_type&& deleter,
                       chunk_metadata metadata) noexcept {
   auto* ptr = new chunk{view, std::move(deleter), std::move(metadata)};
-  return chunk_ptr{{ptr, false}, view};
+  return chunk_ptr{{ptr, caf::adopt_ref}, view};
 }
 
 chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
@@ -441,7 +441,7 @@ caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
   }
   auto buffer = std::make_unique<chunk::value_type[]>(size);
   auto view = std::span{buffer.get(), size};
-  if (auto err = io::read(filename, view)) {
+  if (auto err = io::read(filename, view); err.valid()) {
     x = nullptr;
     return err;
   }

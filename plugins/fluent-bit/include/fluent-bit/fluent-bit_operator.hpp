@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/tls_options.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
@@ -219,6 +221,41 @@ inline auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
 
 namespace {
 
+[[maybe_unused]] auto
+tls_to_fluentbit(const tls_options& ssl, record& properties,
+                 operator_control_plane& ctrl) -> failure_or<void> {
+  const auto set = [&](std::string key, std::string tenzir_option_name,
+                       std::string value, location loc) -> failure_or<void> {
+    auto [it, inserted] = properties.try_emplace(key, std::move(value));
+    if (not inserted and it->second != value) {
+      diagnostic::error("conflicting values between tenzir option and "
+                        "fluent-bit option `{}`",
+                        key)
+        .primary(loc)
+        .note("tenzir option `{}` evaluates to `{}`, fluent-bit option is `{}`",
+              tenzir_option_name, value, it->second)
+        .emit(ctrl.diagnostics());
+      return failure::promise();
+    }
+    return {};
+  };
+  auto tls = ssl.get_tls(&ctrl);
+  TRY(set("tls", "tls", tls.inner ? "On" : "Off", tls.source));
+  if (auto x = ssl.get_skip_peer_verification(&ctrl); x.inner) {
+    TRY(set("tls.verify", "skip_peer_verification", "Off", x.source));
+  }
+  if (auto x = ssl.get_cacert(&ctrl)) {
+    TRY(set("tls.ca_file", "cacert", x->inner, x->source));
+  }
+  if (auto x = ssl.get_certfile(&ctrl)) {
+    TRY(set("tls.crt_file", "certfile", x->inner, x->source));
+  }
+  if (auto x = ssl.get_keyfile(&ctrl)) {
+    TRY(set("tls.key_file", "keyfile", x->inner, x->source));
+  }
+  return {};
+}
+
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
 using property_map = std::map<std::string, std::string>;
 
@@ -255,7 +292,8 @@ struct operator_args {
   located<std::string> plugin;                  ///< Fluent Bit plugin name.
   std::chrono::milliseconds poll_interval{250}; ///< Engine poll interval.
   located<record> service_properties;           ///< The global service options.
-  located<record> args;                         ///< The plugin arguments.
+  tls_options ssl{tls_options::options{.tls_default = false}};
+  located<record> args; ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
@@ -264,7 +302,7 @@ struct operator_args {
       .fields(f.field("plugin", x.plugin),
               f.field("poll_interval", x.poll_interval),
               f.field("service_properties", x.service_properties),
-              f.field("args", x.args));
+              f.field("ssl", x.ssl), f.field("args", x.args));
   }
 };
 
@@ -662,15 +700,20 @@ public:
     requires enable_source
   {
     co_yield {};
+    auto args = operator_args_;
+    args.ssl.update_from_config(ctrl);
+    if (not tls_to_fluentbit(args.ssl, args.args.inner, ctrl)) {
+      co_return;
+    }
     auto requests = std::vector<secret_request>{};
     auto fluent_bit_args = property_map{};
     auto plugin_args = property_map{};
-    to_property_map_or_request(operator_args_.service_properties,
-                               fluent_bit_args, requests, ctrl.diagnostics());
-    to_property_map_or_request(operator_args_.args, plugin_args, requests,
+    to_property_map_or_request(args.service_properties, fluent_bit_args,
+                               requests, ctrl.diagnostics());
+    to_property_map_or_request(args.args, plugin_args, requests,
                                ctrl.diagnostics());
     co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
-    auto engine = engine::make_source(operator_args_, config_, fluent_bit_args,
+    auto engine = engine::make_source(args, config_, fluent_bit_args,
                                       plugin_args, ctrl.diagnostics());
     if (not engine) {
       co_return;
@@ -817,16 +860,21 @@ public:
     requires enable_sink
   {
     co_yield {};
+    auto args = operator_args_;
+    args.ssl.update_from_config(ctrl);
+    if (not tls_to_fluentbit(args.ssl, args.args.inner, ctrl)) {
+      co_return;
+    }
     auto requests = std::vector<secret_request>{};
     auto fluent_bit_args = property_map{};
     auto plugin_args = property_map{};
-    to_property_map_or_request(operator_args_.service_properties,
-                               fluent_bit_args, requests, ctrl.diagnostics());
-    to_property_map_or_request(operator_args_.args, plugin_args, requests,
+    to_property_map_or_request(args.service_properties, fluent_bit_args,
+                               requests, ctrl.diagnostics());
+    to_property_map_or_request(args.args, plugin_args, requests,
                                ctrl.diagnostics());
     co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
-    auto engine = engine::make_sink(operator_args_, config_, fluent_bit_args,
-                                    plugin_args, ctrl.diagnostics());
+    auto engine = engine::make_sink(args, config_, fluent_bit_args, plugin_args,
+                                    ctrl.diagnostics());
     if (not engine) {
       co_return;
     }

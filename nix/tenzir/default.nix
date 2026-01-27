@@ -15,10 +15,12 @@ let
       boost,
       caf,
       curl,
+      cacert,
       libpcap,
       arrow-cpp,
       arrow-adbc-cpp,
       aws-sdk-cpp-tenzir,
+      azure-sdk-for-cpp,
       libbacktrace,
       clickhouse-cpp,
       empty-libgcc_eh,
@@ -43,6 +45,7 @@ let
       libmaxminddb,
       jemalloc-tenzir,
       mimalloc-tenzir,
+      iconv,
       re2,
       dpkg,
       lz4,
@@ -52,6 +55,7 @@ let
       llhttp,
       pfs,
       c-ares,
+      expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
       extraPlugins ? [ ],
@@ -60,6 +64,7 @@ let
       python3,
       uv,
       uv-bin,
+      pkgsBuildBuild,
       pkgsBuildHost,
       makeBinaryWrapper,
       isReleaseBuild ? false,
@@ -96,7 +101,7 @@ let
         ];
       py3 =
         let
-          p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildHost.python3 else python3;
+          p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
         in
         p.withPackages (
           ps: with ps; [
@@ -220,6 +225,7 @@ let
           buildInputs =
             [
               aws-sdk-cpp-tenzir
+              azure-sdk-for-cpp.storage-blobs
               libbacktrace
               clickhouse-cpp
               fast-float
@@ -236,6 +242,7 @@ let
               })
               llhttp
               c-ares
+              expat
             ]
             ++ lib.optionals stdenv.isLinux [
               pfs
@@ -278,6 +285,7 @@ let
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
             UV_PYTHON="${lib.getBin py3.python}/bin/python3";
+            NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv";
           };
           cmakeFlags =
             [
@@ -301,6 +309,9 @@ let
               "-DTENZIR_INSTALL_CMAKEDIR=${placeholder "dev"}/lib/cmake"
             ]
             ++ lib.optionals isStatic [
+              # Hint paths for FindEXPAT module (CMake uses MODULE mode)
+              "-DEXPAT_LIBRARY=${expat}/lib/libexpat.a"
+              "-DEXPAT_INCLUDE_DIR=${lib.getDev expat}/include"
               "-UCMAKE_INSTALL_BINDIR"
               "-UCMAKE_INSTALL_SBINDIR"
               "-UCMAKE_INSTALL_INCLUDEDIR"
@@ -317,6 +328,9 @@ let
               "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
               "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
               "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
+            ]
+            ++ lib.optionals (isStatic && stdenv.hostPlatform.isDarwin) [
+              "-DTENZIR_CACERT=${cacert}/etc/ssl/certs/ca-bundle.crt"
             ]
             ++ lib.optionals stdenv.cc.isClang [
               "-DCMAKE_C_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"

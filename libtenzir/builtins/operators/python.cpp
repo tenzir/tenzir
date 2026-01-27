@@ -272,7 +272,7 @@ public:
       auto code = std::string{};
       if (const auto* path = try_as<std::filesystem::path>(code_.inner)) {
         auto code_chunk = chunk::make_empty();
-        if (auto err = read(*path, code_chunk)) {
+        if (auto err = read(*path, code_chunk); err.valid()) {
           diagnostic::error(err)
             .note("failed to read code from file")
             .emit(ctrl.diagnostics());
@@ -378,7 +378,11 @@ public:
           }
           auto invocation = std::vector<std::string>{
             uv_executable.string(), "pip", "install", "--python",
-            venv_python.string(),   "-vv",
+            venv_python.string(),
+            // FIXME: Debug logging clogs the error pipe and deadlocks uv.
+            // We should use bp::child instead of bp::system and read from the
+            // pipe while the process is running.
+            //"-vv",
           };
           invocation.insert(invocation.end(), std::make_move_iterator(first),
                             std::make_move_iterator(last));

@@ -1,0 +1,7 @@
+// Sibling KEY elements become record fields
+from {xml: r#"<root>
+  <KEY name="QID">10001</KEY>
+  <KEY name="TITLE">SQL Injection</KEY>
+  <KEY name="SEVERITY">High</KEY>
+</root>"#}
+this = xml.parse_xml(xpath="/root", key_attr="name")

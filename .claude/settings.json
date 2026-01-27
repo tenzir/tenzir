@@ -1,15 +1,31 @@
 {
+  "env": {
+    "CLAUDE_CODE_TASK_LIST_ID": "tenzir-tenzir"
+  },
   "hooks": {
-    "PostToolUse": [
+    "Setup": [
       {
-        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/format-hook.sh"
+            "command": "git submodule update --init --recursive"
           }
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "tenzir": {
+      "source": {
+        "source": "github",
+        "repo": "tenzir/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "cpp@tenzir": true,
+    "dev@tenzir": true,
+    "python@tenzir": true,
+    "tenzir@tenzir": true
   }
 }

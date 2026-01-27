@@ -1,0 +1,7 @@
+
+from \
+  { line: r#"{"x":0, "x": 1, "x": "2", "x": "3"}"# },
+  { line: r#"{"x":0}"# },
+  { line: r#"{"x":"0.0.0.0"}"# }
+write_lines
+read_ndjson

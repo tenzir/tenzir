@@ -17,23 +17,14 @@
 
 #include "tenzir/fwd.hpp"
 
+#include <coroutine>
 #include <exception>
 #include <functional>
 #include <iterator>
 #include <type_traits>
 #include <utility>
 
-#if __has_include(<coroutine>)
-
-#  include <coroutine>
 namespace stdcoro = std;
-
-#else
-
-#  include <experimental/coroutine>
-namespace stdcoro = std::experimental;
-
-#endif
 
 namespace tenzir {
 
@@ -60,6 +51,30 @@ class generator;
 
 namespace internal {
 
+/// An awaiter that stores a copy of a yielded lvalue and sets the promise's
+/// value pointer during await_suspend. This follows the C++23 standard pattern
+/// (P2502/libstdc++) where the pointer is set in await_suspend rather than
+/// before suspension, ensuring the awaiter is fully constructed and its address
+/// is stable. This avoids compiler bugs in some implementations (e.g., Apple
+/// Clang) that incorrectly destroy temporaries before await_resume returns.
+template <typename T, typename Pointer>
+struct copy_awaiter {
+  T value;
+  Pointer& out;
+
+  constexpr bool await_ready() const noexcept {
+    return false;
+  }
+
+  template <typename Promise>
+  constexpr void await_suspend(stdcoro::coroutine_handle<Promise>) noexcept {
+    out = std::addressof(value);
+  }
+
+  constexpr void await_resume() const noexcept {
+  }
+};
+
 template <typename T>
 class generator_promise {
 public:
@@ -78,20 +93,14 @@ public:
     return {};
   }
 
-  // This overload copies v to a temporary, then yields a pointer to that.
-  // This allows passing an lvalue to co_yield for a generator<NotReference>.
-  // Looks crazy, but taken from the reference implementation in P2529R0.
+  // This overload handles yielding lvalues by creating a copy. Following the
+  // C++23 standard pattern (P2502/libstdc++), we return a copy_awaiter that
+  // stores the copy and sets the value pointer in await_suspend, ensuring the
+  // awaiter's address is stable before storing the pointer.
   auto yield_value(const T& v)
-    requires(!std::is_reference_v<T> && std::copy_constructible<T>)
+    requires(! std::is_reference_v<T> && std::copy_constructible<T>)
   {
-    struct Owner : stdcoro::suspend_always {
-      Owner(const T& val, pointer_type& out) : v(val) {
-        out = &v;
-      }
-      Owner(Owner&&) = delete;
-      T v;
-    };
-    return Owner(v, m_value);
+    return copy_awaiter<value_type, pointer_type>{value_type(v), m_value};
   }
 
   stdcoro::suspend_always
@@ -151,12 +160,12 @@ public:
 
   friend bool
   operator==(const generator_iterator& it, generator_sentinel) noexcept {
-    return !it.m_coroutine || it.m_coroutine.done();
+    return ! it.m_coroutine || it.m_coroutine.done();
   }
 
   friend bool
   operator!=(const generator_iterator& it, generator_sentinel s) noexcept {
-    return !(it == s);
+    return ! (it == s);
   }
 
   friend bool
@@ -218,8 +227,9 @@ public:
   generator& operator=(const generator& other) = delete;
 
   generator& operator=(generator&& other) noexcept {
-    if (m_coroutine)
+    if (m_coroutine) {
       m_coroutine.destroy();
+    }
     m_coroutine = other.m_coroutine;
     other.m_coroutine = nullptr;
     return *this;

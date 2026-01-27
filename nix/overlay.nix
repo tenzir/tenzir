@@ -1,12 +1,12 @@
 finalPkgs: prevPkgs:
 let
   inherit (prevPkgs) lib;
+  inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
   callFunction = callFunctionWith finalPkgs;
 
   pytestOverlay = python-finalPkgs: python-prevPkgs: {
-    #dynaconf = python-finalPkgs.callPackage ./dynaconf { };
     pyarrow = python-prevPkgs.pyarrow.overridePythonAttrs (baseAttrs: {
       disabledTestPaths = baseAttrs.disabledTestPaths ++ [
         "pyarrow/tests/test_memory.py::test_env_var"
@@ -17,7 +17,11 @@ let
   };
 in
 {
-  protobuf = finalPkgs.protobuf_31;
+  curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
+    # Brings in a conflicting libiconv via libunistring.
+    idnSupport = false;
+    pslSupport = false;
+  });
 
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
@@ -42,6 +46,7 @@ in
     inherit (prevPkgs) aws-sdk-cpp;
   };
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
+  cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };

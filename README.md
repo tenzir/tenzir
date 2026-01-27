@@ -1,17 +1,18 @@
-<a target="_blank" href="https://docs.tenzir.com">
-<p align="center">
+<div align="center">
+
+<a href="https://docs.tenzir.com">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/tenzir-white.svg">
   <source media="(prefers-color-scheme: light)" srcset="./assets/tenzir-black.svg">
-  <img alt="Tenzir" src="./assets/tenzir-white.svg">
+  <img alt="Tenzir" src="./assets/tenzir-white.svg" width="400">
 </picture>
-</p>
 </a>
 
-<h3 align="center">
-Data Pipelines for Security Teams
-</h3>
-</p>
+<h3>Data Pipelines for Security Teams</h3>
+
+<p>Collect, transform, enrich, and route your telemetry—all in one place.</p>
+
+</div>
 
 ## What is Tenzir?
 

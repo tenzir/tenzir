@@ -9,6 +9,7 @@
 #include "tenzir/application.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
@@ -34,11 +35,13 @@
 #include <caf/detail/actor_system_access.hpp>
 #include <caf/fwd.hpp>
 #include <caf/telemetry/metric_family_impl.hpp>
+#include <caf/telemetry/metric_registry.hpp>
 #include <caf/thread_owner.hpp>
 #include <sys/resource.h>
 
 #include <csignal>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <ranges>
 #include <string_view>
@@ -55,119 +58,178 @@ auto is_server_from_app_path(std::string_view app_path) {
   return app_name == "tenzir-node";
 }
 
-/// A faster alternative to the built-in actor clock.
-class actor_clock final : public caf::actor_clock {
+/// Checks if running on an EC2 instance by examining DMI system information.
+/// This avoids the ~1.5 minute timeout that occurs when the AWS SDK tries to
+/// reach the EC2 Instance Metadata Service (IMDS) on non-EC2 machines.
+auto is_ec2_instance() -> bool {
+#if __linux__
+  // On Linux, check /sys/devices/virtual/dmi/id/sys_vendor which contains
+  // "Amazon EC2" on EC2 instances.
+  if (auto file = std::ifstream{"/sys/devices/virtual/dmi/id/sys_vendor"}) {
+    auto line = std::string{};
+    if (std::getline(file, line)) {
+      if (line.find("Amazon") != std::string::npos) {
+        return true;
+      }
+    }
+  }
+#endif
+  return false;
+}
+
+class cleaning_actor_clock : public caf::actor_clock {
 public:
-  // We currently just use a single thread for our actor clock. If it ever turns
-  // out that the clock is saturated (which could still happen if there are
-  // incredibly many cores), then the number of threads can be increased.
-  static constexpr auto threads = 1;
-
-  explicit actor_clock(caf::actor_system& sys) {
-    for (auto i = 0; i < threads; ++i) {
-      threads_.push_back(
-        sys.launch_thread("tnz.clock", caf::thread_owner::system, [this] {
-          thread();
-        }));
-    }
+  explicit cleaning_actor_clock(caf::actor_system& sys) {
+    worker_ = sys.launch_thread("caf.clock", caf::thread_owner::system, [this] {
+      run();
+    });
+    queue_.push_back(make_cleanup_entry());
   }
 
-  auto operator=(actor_clock&&) -> actor_clock& = delete;
-  auto operator=(const actor_clock&) -> actor_clock& = delete;
-  actor_clock(actor_clock&&) = delete;
-  actor_clock(const actor_clock&) = delete;
-
-  ~actor_clock() override {
-    auto lock = std::unique_lock{mutex_};
-    push(entry{time_point::min(), caf::action{}});
-    lock.unlock();
-    cv_.notify_all();
-    for (auto& thread : threads_) {
-      thread.join();
+  ~cleaning_actor_clock() override {
+    {
+      std::unique_lock guard{mutex_};
+      push({time_point::min(), caf::action{}});
     }
+    cv_.notify_one();
+    worker_.join();
   }
 
-  auto schedule(time_point t, caf::action f) -> caf::disposable override {
-    TENZIR_ASSERT(f);
-    auto lock = std::unique_lock{mutex_};
-    // We only need to notify threads if they are waiting without a timeout, or
-    // if the new timeout would be smaller than the old one.
-    auto notify = true;
-    if (not queue_.empty()) {
-      notify = t < queue_.front().time;
+  caf::disposable schedule(time_point timeout, caf::action callback) override {
+    if (! callback) {
+      return {};
     }
-    push(entry{t, f});
-    lock.unlock();
-    if (notify) {
+    // Only wake up the dispatcher if the new timeout is smaller than the
+    // current timeout.
+    auto do_wakeup = false;
+    {
+      std::unique_lock guard{mutex_};
+      do_wakeup = queue_.empty() || timeout < queue_.front().timeout;
+      push({timeout, callback});
+    }
+    if (do_wakeup) {
       cv_.notify_one();
     }
-    return std::move(f).as_disposable();
+    return std::move(callback).as_disposable();
   }
 
 private:
   struct entry {
-    entry(time_point t, caf::action f) : time{t}, fn{std::move(f)} {
-    }
+    time_point timeout;
+    caf::action callback;
+  };
 
-    auto operator<(const entry& other) const -> bool {
-      // Greatest entry comes first.
-      return time > other.time;
-    }
-
-    time_point time;
-    caf::action fn;
+  static constexpr auto entry_cmp = [](const entry& lhs, const entry& rhs) {
+    // We want the smallest entry to be at the front of the queue. Since
+    // std::push_heap will put the largest element at the front, we need to
+    // invert the comparison.
+    return lhs.timeout > rhs.timeout;
   };
 
   void push(entry e) {
     queue_.push_back(std::move(e));
-    std::push_heap(queue_.begin(), queue_.end());
+    std::push_heap(queue_.begin(), queue_.end(), entry_cmp);
   }
 
   void pop() {
-    std::pop_heap(queue_.begin(), queue_.end());
+    std::pop_heap(queue_.begin(), queue_.end(), entry_cmp);
     queue_.pop_back();
   }
 
-  void thread() {
-    while (true) {
-      auto lock = std::unique_lock{mutex_};
-      // We wait up until the timeout would expire. If more than one clock
-      // thread is used, this means that some threads wake up but will not get
-      // the job. If load is low, this does not matter, and if load is high,
-      // then they will likely just get another job instead.
-      while (true) {
-        auto timeout = std::optional<time_point>{};
-        auto now = this->now();
-        if (not queue_.empty()) {
-          if (now >= queue_.front().time) {
-            // Found something to execute!
-            break;
-          }
-          timeout = queue_.front().time;
-        }
-        // Do not simplify this into using `time_point::max()` as the default.
-        // On some systems, this does not work correctly.
-        if (timeout) {
-          cv_.wait_until(lock, *timeout);
-        } else {
-          cv_.wait(lock);
-        }
+  void sift_up(size_t i) {
+    while (i > 0) {
+      auto parent = (i - 1) / 2;
+      if (not entry_cmp(queue_[parent], queue_[i])) {
+        break;
       }
+      std::swap(queue_[i], queue_[parent]);
+      i = parent;
+    }
+  }
+
+  void sift_down(size_t i) {
+    while (true) {
+      auto smallest = i;
+      auto left = (2 * i) + 1;
+      auto right = (2 * i) + 2;
+      if (left < queue_.size() && entry_cmp(queue_[smallest], queue_[left])) {
+        smallest = left;
+      }
+      if (right < queue_.size() && entry_cmp(queue_[smallest], queue_[right])) {
+        smallest = right;
+      }
+      if (smallest == i) {
+        break;
+      }
+      std::swap(queue_[i], queue_[smallest]);
+      i = smallest;
+    }
+  }
+
+  auto make_cleanup_entry() -> entry {
+    constexpr static auto cleanup_interval = std::chrono::minutes{10};
+    return {
+      now() + cleanup_interval,
+      caf::make_single_shot_action([this]() {
+        this->do_cleanup();
+      }),
+    };
+  }
+
+  void do_cleanup() {
+    const auto guard = std::scoped_lock{mutex_};
+    for (size_t i = queue_.size(); i-- > 0;) {
+      if (not queue_[i].callback.disposed()) {
+        continue;
+      }
+      // Swap disposed element with last and remove
+      if (i != queue_.size() - 1) {
+        std::swap(queue_[i], queue_.back());
+      }
+      queue_.pop_back();
+      // Fix heap at position i
+      if (i < queue_.size()) {
+        // Check if element needs to move up or down
+        if (i > 0) {
+          auto parent = (i - 1) / 2;
+          if (entry_cmp(queue_[parent], queue_[i])) {
+            sift_up(i);
+            continue;
+          }
+        }
+        sift_down(i);
+      }
+    }
+    push(make_cleanup_entry());
+  }
+
+  void run() {
+    std::unique_lock guard{mutex_};
+    while (queue_.empty()) {
+      cv_.wait(guard);
+    }
+    for (;;) {
       auto& job = queue_.front();
-      if (not job.fn) {
-        // Our signal to exit.
-        TENZIR_ASSERT(job.time == time_point::min());
+      if (! job.callback) {
         return;
       }
-      auto fn = std::move(job.fn);
-      pop();
-      lock.unlock();
-      TENZIR_ASSERT(fn);
-      fn.run();
+      auto timeout = job.timeout;
+      if (now() >= timeout) {
+        auto fn = std::move(job.callback);
+        pop();
+        guard.unlock();
+        fn.run();
+        guard.lock();
+        while (queue_.empty()) {
+          cv_.wait(guard);
+        }
+      } else {
+        cv_.wait_until(guard, timeout);
+      }
     }
-  };
+  }
 
-  std::vector<std::thread> threads_;
+  std::thread worker_;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::vector<entry> queue_;
@@ -177,6 +239,8 @@ private:
 
 auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
+  // Ensure the signal handler object file is linked (needed for static builds).
+  signal_handlers_anchor();
   arrow::util::InitializeUTF8();
 #if ARROW_VERSION_MAJOR >= 21
   if (auto status = arrow::compute::Initialize(); not status.ok()) {
@@ -185,16 +249,6 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
 #endif
-  // Set a signal handler for fatal conditions. Prints a backtrace if support
-  // for that is enabled.
-  if (SIG_ERR == std::signal(SIGSEGV, fatal_handler)) [[unlikely]] {
-    fmt::print(stderr, "failed to set signal handler for SIGSEGV\n");
-    return EXIT_FAILURE;
-  }
-  if (SIG_ERR == std::signal(SIGABRT, fatal_handler)) [[unlikely]] {
-    fmt::print(stderr, "failed to set signal handler for SIGABRT\n");
-    return EXIT_FAILURE;
-  }
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
@@ -204,9 +258,17 @@ auto main(int argc, char** argv) -> int try {
   }
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
-  if (auto err = cfg.parse(argc, argv)) {
+  if (auto err = cfg.parse(argc, argv); err.valid()) {
     fmt::print(stderr, "failed to parse configuration: {}\n", err);
     return EXIT_FAILURE;
+  }
+  // Disable EC2 Instance Metadata Service (IMDS) lookups when not running on
+  // EC2. This prevents a ~1.5 minute timeout when the AWS SDK tries to reach
+  // the metadata service at 169.254.169.254. Only set the variable if the user
+  // hasn't already configured it.
+  if (not detail::getenv("AWS_EC2_METADATA_DISABLED")
+      and not is_ec2_instance()) {
+    (void)detail::setenv("AWS_EC2_METADATA_DISABLED", "true");
   }
   auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
   if (not loaded_plugin_paths) {
@@ -229,7 +291,7 @@ auto main(int argc, char** argv) -> int try {
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (not invocation) {
-    if (invocation.error()) {
+    if (invocation.error().valid()) {
       render_error(*root, invocation.error(), std::cerr);
       return EXIT_FAILURE;
     }
@@ -294,7 +356,7 @@ auto main(int argc, char** argv) -> int try {
     TENZIR_DEBUG("loaded plugin: {}", file);
   }
   // Initialize successfully loaded plugins.
-  if (auto err = plugins::initialize(cfg)) {
+  if (auto err = plugins::initialize(cfg); err.valid()) {
     render_error(
       *root,
       diagnostic::error(err).note("failed to initialize plugins").to_error(),
@@ -441,7 +503,7 @@ auto main(int argc, char** argv) -> int try {
         auto next = base->clone();
         for (auto& [name, def] : to_add) {
           next->add(std::string{entity_pkg_cfg}, name,
-                    user_defined_operator{std::move(def)});
+                    user_defined_operator{std::move(def), {}, {}});
         }
         guard.publish(std::shared_ptr<const registry>{std::move(next)});
       }
@@ -454,7 +516,7 @@ auto main(int argc, char** argv) -> int try {
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
   cfg.set_clock_factory([](caf::actor_system& sys) {
-    return std::make_unique<actor_clock>(sys);
+    return std::make_unique<cleaning_actor_clock>(sys);
   });
   auto sys = caf::actor_system{cfg};
   auto run_error = caf::error{};
@@ -473,7 +535,7 @@ auto main(int argc, char** argv) -> int try {
         {
           int signum = 0;
           sigwait(&sigset, &signum);
-          TENZIR_DEBUG("received signal {}", signum);
+          TENZIR_WARN("received signal {}", signum);
           if (!stop) {
             caf::anon_mail(atom::internal_v, atom::signal_v, signum)
               .urgent().send(reflector.get());
@@ -500,26 +562,39 @@ auto main(int argc, char** argv) -> int try {
     sys.registry().erase("signal-reflector");
     pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
     sys.await_actors_before_shutdown(false);
-    sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+    if (sys.running_actors_count() > 0) {
+      std::this_thread::sleep_for(std::chrono::seconds{1});
+    }
     std::unordered_map<std::string, int64_t> zombies = {};
-    auto collector = [&](const caf::telemetry::metric_family* /*family*/,
-                         const caf::telemetry::metric* instance,
-                         const caf::telemetry::int_gauge* wrapped) {
-      if (wrapped->value() != 0) {
-        zombies[std::string{instance->labels()[0].value()}] = wrapped->value();
-      }
-    };
-    for (int cnt = 10; cnt > 0 and sys.registry().running() > 0; cnt--) {
+    auto collector
+      = [&]<typename T>(const caf::telemetry::metric_family* family,
+                        const caf::telemetry::metric* instance,
+                        const T* wrapped) {
+          if constexpr (std::same_as<T, caf::telemetry::int_gauge>) {
+            if (family->prefix() != "caf.system"
+                or family->name() != "running-actors") {
+              return;
+            }
+            if (wrapped->value() != 0) {
+              const auto it = std::ranges::find(instance->labels(),
+                                                std::string_view{"name"},
+                                                &caf::telemetry::label::name);
+              TENZIR_ASSERT(it != instance->labels().end());
+              zombies[std::string{it->value()}] += wrapped->value();
+            }
+          }
+        };
+    for (int cnt = 10; cnt > 0 and sys.running_actors_count() > 0; cnt--) {
       zombies.clear();
-      sys.running_actors_metric_family()->collect(collector);
+      sys.metrics().collect(collector);
       TENZIR_INFO("waiting {} more seconds for leftover components to "
                   "terminate: {}",
                   cnt, zombies);
-      sys.registry().await_running_count_equal(0, std::chrono::seconds{1});
+      std::this_thread::sleep_for(std::chrono::seconds{1});
     }
-    if (sys.registry().running() > 0) {
+    if (sys.running_actors_count() > 0) {
       zombies.clear();
-      sys.running_actors_metric_family()->collect(collector);
+      sys.metrics().collect(collector);
       TENZIR_WARN("Unclean shutdown, leftover components: {}", zombies);
     }
   } else {
@@ -531,7 +606,7 @@ auto main(int argc, char** argv) -> int try {
       }}(*result);
     }
   }
-  if (run_error) {
+  if (not run_error.empty()) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
   }

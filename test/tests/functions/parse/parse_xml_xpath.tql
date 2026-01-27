@@ -1,0 +1,3 @@
+// Test XPath selection with //
+from {x: "<catalog><book>A</book><magazine>B</magazine><book>C</book></catalog>"}
+this = x.parse_xml(xpath="//book")[0]

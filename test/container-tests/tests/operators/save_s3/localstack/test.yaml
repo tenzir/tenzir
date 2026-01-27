@@ -1,0 +1,3 @@
+suite: localstack-save-s3
+fixtures: [localstack]
+timeout: 120

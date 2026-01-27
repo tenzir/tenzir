@@ -157,7 +157,8 @@ namespace {
 bool test_file_identifier(std::filesystem::path file, const char* identifier) {
   std::byte buffer[8];
   if (auto err
-      = tenzir::io::read(file, std::span<std::byte>{buffer, sizeof(buffer)})) {
+      = tenzir::io::read(file, std::span<std::byte>{buffer, sizeof(buffer)});
+      err.valid()) {
     return false;
   }
   return std::memcmp(buffer + 4, identifier, 4) == 0;
@@ -207,7 +208,7 @@ caf::error extract_partition_synopsis(
   const auto* partition_legacy = partition->partition_as_legacy();
   TENZIR_ASSERT(partition_legacy);
   partition_synopsis ps;
-  if (auto error = unpack(*partition_legacy, ps)) {
+  if (auto error = unpack(*partition_legacy, ps); error.valid()) {
     return error;
   }
   flatbuffers::FlatBufferBuilder builder;
@@ -472,7 +473,7 @@ caf::error index_state::load_from_disk() {
       std::filesystem::remove_all(markersdir);
       return caf::none;
     }();
-    if (error) {
+    if (error.valid()) {
       TENZIR_WARN("{} failed to finish leftover transforms: {}", *self, error);
     }
   }
@@ -557,7 +558,8 @@ caf::error index_state::load_from_disk() {
       // Generate external partition synopsis file if it doesn't exist.
       auto synopsis_path = partition_synopsis_path(partition_uuid);
       if (not exists(synopsis_path)) {
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path)) {
+        if (auto error = extract_partition_synopsis(part_path, synopsis_path);
+            error.valid()) {
           return error;
         }
       }
@@ -573,7 +575,7 @@ caf::error index_state::load_from_disk() {
       TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
       const auto& synopsis_legacy
         = *ps_flatbuffer->partition_synopsis_as_legacy();
-      if (auto error = unpack(synopsis_legacy, ps.unshared())) {
+      if (auto error = unpack(synopsis_legacy, ps.unshared()); error.valid()) {
         return error;
       }
       // Add partition file sizes.
@@ -630,7 +632,7 @@ caf::error index_state::load_from_disk() {
       synopses.emplace_back(partition_uuid, std::move(ps));
       return caf::none;
     }();
-    if (error) {
+    if (error.valid()) {
       TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
                      partition_uuid, error);
     }
@@ -792,7 +794,7 @@ index_state::create_active_partition(const type& schema) {
                  schema, data{active_partition_timeout});
     decommission_active_partition(schema, [this, schema,
                                            id](const caf::error& err) mutable {
-      if (err) {
+      if (err.valid()) {
         TENZIR_WARN("{} failed to flush active partition {} ({}) after {} "
                     "timeout: {}",
                     *self, id, schema, data{active_partition_timeout}, err);
@@ -903,7 +905,7 @@ auto index_state::flush() -> caf::typed_response_promise<void> {
   for (const auto& schema : schemas) {
     decommission_active_partition(schema,
                                   [counter](const caf::error& err) mutable {
-                                    if (err) {
+                                    if (err.valid()) {
                                       counter->receive_error(err);
                                     } else {
                                       counter->receive_success();
@@ -1146,7 +1148,7 @@ index(index_actor::stateful_pointer<index_state> self,
     = self->state().filesystem;
   self->state().inmem_partitions.resize(max_inmem_partitions);
   // Read persistent state.
-  if (auto err = self->state().load_from_disk()) {
+  if (auto err = self->state().load_from_disk(); err.valid()) {
     TENZIR_ERROR("{} failed to load index state from disk: {}", *self,
                  render(err));
     self->quit(err);
@@ -1313,7 +1315,8 @@ index(index_actor::stateful_pointer<index_state> self,
                          "query results",
                          *self, ids_string);
             for (const auto& id : ids) {
-              if (auto err = self->state().pending_queries.remove_query(id)) {
+              if (auto err = self->state().pending_queries.remove_query(id);
+                  err.valid()) {
                 TENZIR_DEBUG("{} did not remove {} from the query queue. It "
                              "was "
                              "presumably already removed upon completion ({})",
@@ -1400,7 +1403,8 @@ index(index_actor::stateful_pointer<index_state> self,
                               .client = client,
                               .candidate_partitions = num_candidates,
                               .requested_partitions = scheduled},
-                  std::move(lookup_result))) {
+                  std::move(lookup_result));
+                err.valid()) {
               rp.deliver(err);
             }
             rp.deliver(query_cursor{query_id, num_candidates, scheduled});
@@ -1424,7 +1428,8 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
       if (auto err
-          = self->state().pending_queries.activate(query_id, num_partitions)) {
+          = self->state().pending_queries.activate(query_id, num_partitions);
+          err.valid()) {
         TENZIR_WARN("{} can't activate unknown query: {}", *self, err);
       }
       const auto num_scheduled = self->state().schedule_lookups();

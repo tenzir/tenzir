@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "tenzir-common"
-version = "5.21.1"
+version = "5.25.0"
 description = "Shared Python utilities for the Tenzir data pipeline"
 requires-python = ">=3.9"
 license = "BSD-3-Clause"
@@ -19,8 +19,6 @@ classifiers = [
 ]
 dependencies = [
   "pyarrow>=11",
-  "dynaconf>=3.2,<4.0",
+  "dynaconf>=3.2",
+  "pandas>=2.1.3",
 ]
-
-[project.optional-dependencies]
-pandas = ["pandas>=2.1.3,<3.0"]

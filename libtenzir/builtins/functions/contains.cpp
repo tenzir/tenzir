@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/plugin.hpp"

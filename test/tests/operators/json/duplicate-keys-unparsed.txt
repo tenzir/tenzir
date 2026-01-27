@@ -1,0 +1,16 @@
+{
+  x: [
+    "0",
+    "1",
+    "2",
+    "3",
+  ],
+}
+{
+  x: 0,
+}
+{
+  x: 0.0.0.0,
+}
+warning: ndjson parser: type mismatch between list elements
+ = note: field `x`

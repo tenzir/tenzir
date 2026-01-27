@@ -56,6 +56,7 @@ struct load_balancer_state {
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> writes;
   bool finished = false;
   uint64_t operator_index{};
+  std::string pipeline_id;
   detail::stable_map<std::pair<uint64_t, uuid>, uuid> metrics_id_map;
 
   auto write(table_slice events) -> caf::result<void> {
@@ -179,8 +180,8 @@ auto make_load_balancer(
   load_balancer_actor::stateful_pointer<load_balancer_state> self,
   std::vector<pipeline> pipes, std::string definition,
   shared_diagnostic_handler diagnostics, metrics_receiver_actor metrics,
-  uint64_t operator_index, bool is_hidden, const node_actor& node)
-  -> load_balancer_actor::behavior_type {
+  uint64_t operator_index, bool is_hidden, const node_actor& node,
+  std::string pipeline_id) -> load_balancer_actor::behavior_type {
   TENZIR_DEBUG("spawning load balancer");
   self->attach_functor([] {
     TENZIR_DEBUG("destroyed load balancer");
@@ -189,27 +190,29 @@ auto make_load_balancer(
   self->state().diagnostics = std::move(diagnostics);
   self->state().metrics = std::move(metrics);
   self->state().operator_index = operator_index;
+  self->state().pipeline_id = std::move(pipeline_id);
   self->state().executors.reserve(pipes.size());
   for (auto& pipe : pipes) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
-    auto executor = self->spawn(pipeline_executor, pipe, definition, self, self,
-                                node, has_terminal, is_hidden);
-    self->monitor(executor, [self, source = executor->address()](
-                              const caf::error& err) {
-      if (err) {
-        diagnostic::error(err).emit(self->state().diagnostics);
-      }
-      auto it = std::ranges::find(self->state().executors, source,
-                                  &pipeline_executor_actor::address);
-      TENZIR_ASSERT(it != self->state().executors.end());
-      self->state().executors.erase(it);
-      if (self->state().executors.empty()) {
-        // We are done, even if `not self->state().finished`.
-        self->quit();
-      }
-    });
+    auto executor
+      = self->spawn(pipeline_executor, pipe, definition, self, self, node,
+                    has_terminal, is_hidden, self->state().pipeline_id);
+    self->monitor(
+      executor, [self, source = executor->address()](const caf::error& err) {
+        if (err.valid()) {
+          diagnostic::error(err).emit(self->state().diagnostics);
+        }
+        auto it = std::ranges::find(self->state().executors, source,
+                                    &pipeline_executor_actor::address);
+        TENZIR_ASSERT(it != self->state().executors.end());
+        self->state().executors.erase(it);
+        if (self->state().executors.empty()) {
+          // We are done, even if `not self->state().finished`.
+          self->quit();
+        }
+      });
     executor->attach_functor([] {
       TENZIR_DEBUG("inner executor terminated");
     });
@@ -308,7 +311,7 @@ public:
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
       make_load_balancer, pipes_, std::string{ctrl.definition()},
       ctrl.shared_diagnostics(), ctrl.metrics_receiver(), ctrl.operator_index(),
-      ctrl.is_hidden(), ctrl.node())};
+      ctrl.is_hidden(), ctrl.node(), std::string{ctrl.pipeline_id()})};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

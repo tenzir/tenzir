@@ -833,10 +833,6 @@ public:
   }
 };
 
-/// Returns a generator that, when advanced, incrementally executes the given
-/// pipeline on the current thread.
-auto make_local_executor(pipeline p) -> generator<caf::expected<void>>;
-
 template <class T>
   requires(std::is_base_of_v<tenzir::operator_base, T>)
 inline constexpr auto enable_default_formatter<T> = true;

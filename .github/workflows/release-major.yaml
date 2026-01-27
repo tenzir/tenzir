@@ -1,0 +1,22 @@
+name: Release (Major)
+
+on:
+  workflow_dispatch:
+    inputs:
+      intro:
+        description: |
+          Intro of the release
+
+          The intro should be 1-2 sentences long, must be written in active
+          voice, and should clearly communicate the theme of the release to the
+          user. Use full sentences and avoid abbreviations.
+        required: true
+        type: string
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yaml
+    with:
+      bump: major
+      intro: ${{ inputs.intro }}
+    secrets: inherit

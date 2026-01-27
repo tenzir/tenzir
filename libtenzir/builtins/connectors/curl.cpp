@@ -129,7 +129,7 @@ auto make_request(const connector_args& args, std::string_view url,
   if (args.http_opts.chunked) {
     result.headers.emplace_back("Transfer-Encoding", "chunked");
   }
-  if (auto err = apply(items, result)) {
+  if (auto err = apply(items, result); err.valid()) {
     return err;
   }
   return result;
@@ -186,7 +186,7 @@ public:
     if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
       co_return;
     }
-    args.transfer_opts.ssl.update_cacert(ctrl);
+    args.transfer_opts.ssl.update_from_config(ctrl);
     auto tx = transfer{args.transfer_opts};
     auto req = make_request(args_, url, items);
     if (not req) {
@@ -195,7 +195,7 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    if (auto err = tx.prepare(*req)) {
+    if (auto err = tx.prepare(*req); err.valid()) {
       diagnostic::error("failed to prepare HTTP request")
         .note("{}", err)
         .emit(ctrl.diagnostics());
@@ -298,7 +298,7 @@ public:
     if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
       co_return;
     }
-    args.transfer_opts.ssl.update_cacert(ctrl);
+    args.transfer_opts.ssl.update_from_config(ctrl);
     auto tx = transfer{args.transfer_opts};
     auto req = make_request(args_, url, items);
     if (not req) {
@@ -318,7 +318,7 @@ public:
         .hint("remove arguments that create a request body")
         .emit(ctrl.diagnostics());
     }
-    if (auto err = tx.prepare(std::move(*req))) {
+    if (auto err = tx.prepare(std::move(*req)); err.valid()) {
       diagnostic::error("failed to prepare HTTP request")
         .note("{}", err)
         .emit(ctrl.diagnostics());
@@ -328,13 +328,13 @@ public:
         co_yield {};
         continue;
       }
-      if (auto err = tx.prepare(chunk)) {
+      if (auto err = tx.prepare(chunk); err.valid()) {
         diagnostic::error("failed to prepare transfer")
           .note("chunk size: {}", chunk->size())
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
-      if (auto err = tx.perform()) {
+      if (auto err = tx.perform(); err.valid()) {
         diagnostic::error("failed to upload chunk")
           .primary(args_.url.source)
           .note("{}", err)

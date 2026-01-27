@@ -23,6 +23,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/subnet.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/compute/expression.h>
@@ -44,12 +45,16 @@ namespace {
 constexpr std::size_t structured_element_limit = 20'000;
 }
 
-data_builder::data_builder(data_parsing_function parser, diagnostic_handler* dh,
-                           bool schema_only, bool parse_schema_fields_only)
-  : dh_{dh},
-    parser_{std::move(parser)},
-    schema_only_{schema_only},
-    parse_schema_fields_only_{parse_schema_fields_only} {
+data_builder::data_builder(data_parsing_function parser, diagnostic_handler* dh)
+  : data_builder{{}, parser, dh} {
+}
+
+data_builder::data_builder(settings s, data_parsing_function parser,
+                           diagnostic_handler* dh)
+  : root_{s.building_settings},
+    dh_{dh},
+    settings_{s},
+    parser_{std::move(parser)} {
   root_.mark_this_dead();
 }
 
@@ -408,7 +413,7 @@ auto node_record::try_field(std::string_view name) -> node_object* {
   if (not inserted) {
     return &data_[it->second].value;
   }
-  return &data_.emplace_back(it->first).value;
+  return &data_.emplace_back(it->first, settings_).value;
 }
 
 auto node_record::reserve(size_t N) -> void {
@@ -419,8 +424,32 @@ auto node_record::reserve(size_t N) -> void {
 auto node_record::field(std::string_view name) -> node_object* {
   mark_this_alive();
   auto* f = try_field(name);
+  switch (settings_.duplicate_keys) {
+    using enum duplicate_keys;
+    case overwrite: {
+      break;
+    }
+    case to_list:
+    case merge_structural: {
+      if (f->is_alive()
+          and f->value_state_ == node_object::value_state_type::has_value) {
+        f->is_repeat_key_list = true;
+      }
+    }
+  };
   f->mark_this_alive();
   return f;
+}
+
+auto node_record::field(const ast::field_path& path) -> node_object* {
+  const auto segments = path.path();
+  TENZIR_ASSERT(not segments.empty());
+  node_object* result = nullptr;
+  for (auto& s : segments) {
+    result
+      = result ? result->record()->field(s.id.name) : this->field(s.id.name);
+  }
+  return result;
 }
 
 auto node_record::at(std::string_view key) -> node_object* {
@@ -465,7 +494,7 @@ auto node_record::append_to_signature(signature_type& sig,
       TENZIR_ASSERT(seed_map);
       const auto field_it = seed_map->find(k);
       if (field_it == seed_map->end()) {
-        if (rb.schema_only_) {
+        if (rb.settings_.schema_only) {
           field.mark_this_dead();
           continue;
         }
@@ -517,7 +546,7 @@ auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
         continue;
       }
       // If the field was not in the seed, but we are on schema-only
-      if (rb.schema_only_) {
+      if (rb.settings_.schema_only) {
         if (mark_dead) {
           // Explicitly call `node_object::clear` here, in order to also affect
           // nested structural types. Calling just `v.mark_this_dead()` would
@@ -554,7 +583,7 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
         continue;
       }
       // If the field was not in the seed, but we are on schema-only
-      if (rb.schema_only_) {
+      if (rb.settings_.schema_only) {
         if (mark_dead) {
           // Explicitly call `node_object::clear` here, in order to also affect
           // nested structural types. Calling just `v.mark_this_dead()` would
@@ -574,14 +603,18 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
 
 auto node_record::prune() -> void {
   if (data_.size() > structured_element_limit) {
-    data_.resize(structured_element_limit);
+    /// We prune to half the limit fields, in order to not stay in a prune loop.
+    constexpr static auto pruned_size = structured_element_limit / 2;
+    /// First, resize the actual entries.
+    data_.resize(pruned_size);
     data_.shrink_to_fit();
-    for (auto it = lookup_.begin(); it != lookup_.end(); ++it) {
-      const auto& [k, idx] = *it;
-      if (idx > structured_element_limit) {
-        it = lookup_.erase(it);
-      }
-    }
+    /// Next, drop all elements from the lookup that refer to dropped entries.
+    const auto it
+      = std::remove_if(lookup_.begin(), lookup_.end(), [](const auto& kvp) {
+          return kvp.second >= pruned_size;
+        });
+    lookup_.erase(it, lookup_.end());
+    TENZIR_ASSERT(data_.size() == lookup_.size());
   }
 }
 
@@ -592,29 +625,45 @@ auto node_record::clear() -> void {
   }
 }
 
-auto node_object::null() -> void {
-  mark_this_alive();
-  value_state_ = value_state_type::has_value;
-  data_ = caf::none;
+auto node_object::null(bool overwrite) -> void {
+  if (overwrite or settings_.duplicate_keys == duplicate_keys::overwrite
+      or not is_repeat_key_list) {
+    mark_this_alive();
+    value_state_ = value_state_type::has_value;
+    data_ = caf::none;
+    return;
+  }
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  /// The node could already have been upgraded to a list.If it is, we can
+  /// just append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    return l->null();
+  }
+  /// If the node isnt already upgraded ot a list, we need to do it
+  auto previous_value = std::move(data_);
+  auto* l = list();
+  l->data(std::move(previous_value));
+  return l->null();
 }
 
-auto node_object::data(tenzir::data d) -> void {
-  mark_this_alive();
-  value_state_ = value_state_type::has_value;
+auto node_object::data(tenzir::data d, bool overwrite) -> void {
   const auto visitor = detail::overload{
-    [this](non_structured_data_type auto& x) {
-      data(std::move(x));
+    [this, overwrite](non_structured_data_type auto& x) {
+      data(std::move(x), overwrite);
     },
-    [this](tenzir::list& x) {
-      auto* l = list();
+    [this, overwrite](tenzir::list& x) {
+      auto* l = list(overwrite);
       for (auto& e : x) {
         l->data(std::move(e));
       }
     },
-    [this](tenzir::record& x) {
-      auto* r = record();
+    [this, overwrite](tenzir::record& x) {
+      auto* r = record(overwrite);
       for (auto& [k, v] : x) {
-        r->field(k)->data(std::move(v));
+        r->field(k)->data(std::move(v), overwrite);
       }
     },
     []<unsupported_type T>(T&) {
@@ -624,33 +673,110 @@ auto node_object::data(tenzir::data d) -> void {
     },
   };
 
-  return match(d, visitor);
-}
-
-auto node_object::data_unparsed(std::string text) -> void {
-  mark_this_alive();
-  value_state_ = value_state_type::unparsed;
-  data_.emplace<std::string>(std::move(text));
-}
-
-auto node_object::record() -> node_record* {
+  match(d, visitor);
   mark_this_alive();
   value_state_ = value_state_type::has_value;
-  if (auto* p = get_if<node_record>()) {
-    p->mark_this_alive();
-    return p;
-  }
-  return &data_.emplace<node_record>();
 }
 
-auto node_object::list() -> node_list* {
+auto node_object::data(object_variant_type&& v) -> void {
   mark_this_alive();
+  data_ = std::move(v);
   value_state_ = value_state_type::has_value;
-  if (auto* p = get_if<node_list>()) {
-    p->mark_this_alive();
-    return p;
+}
+
+auto node_object::data_unparsed(std::string text, bool overwrite) -> void {
+  const auto direct = overwrite
+                      or settings_.duplicate_keys == duplicate_keys::overwrite
+                      or not is_repeat_key_list;
+  if (direct) {
+    mark_this_alive();
+    value_state_ = value_state_type::unparsed;
+    data_.emplace<std::string>(std::move(text));
+    return;
   }
-  return &data_.emplace<node_list>();
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  /// The node could already have been upgraded to a list. If it is, we can
+  /// just append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    l->data_unparsed(std::move(text));
+    return;
+  }
+  /// If the node isn't already upgraded to a list, we need to do it
+  auto* l = list();
+  l->data_unparsed(std::move(text));
+}
+
+auto node_object::record(bool overwrite) -> node_record* {
+  const auto direct
+    = overwrite or settings_.duplicate_keys == duplicate_keys::overwrite
+      or not is_repeat_key_list
+      or (get_if<node_record>()
+          and settings_.duplicate_keys == duplicate_keys::merge_structural);
+  if (direct) {
+    mark_this_alive();
+    value_state_ = value_state_type::has_value;
+    if (auto* p = get_if<node_record>()) {
+      p->mark_this_alive();
+      return p;
+    }
+    return &data_.emplace<node_record>(settings_);
+  }
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  /// Special case handling to turn data + record -> record
+  if (settings_.duplicate_keys == duplicate_keys::merge_structural
+      and not is_structural(data_.index())) {
+    auto previous_value = std::move(data_);
+    is_repeat_key_list = false;
+    auto& r = data_.emplace<node_record>(settings_);
+    r.reserve(2);
+    r.field(settings_.top_key_name_for_records)->data(std::move(previous_value));
+    return &r;
+  }
+  /// The node could already have been upgraded to a list.If it is, we can just
+  /// append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    return l->record();
+  }
+  /// If the node isnt already upgraded ot a list, we need to do it
+  auto* l = list();
+  return l->record();
+}
+
+auto node_object::list(bool overwrite) -> node_list* {
+  const auto direct
+    = overwrite or settings_.duplicate_keys == duplicate_keys::overwrite
+      or not is_repeat_key_list
+      or (get_if<node_list>()
+          and settings_.duplicate_keys == duplicate_keys::merge_structural);
+  if (direct) {
+    mark_this_alive();
+    value_state_ = value_state_type::has_value;
+    if (auto* p = get_if<node_list>()) {
+      p->mark_this_alive();
+      return p;
+    }
+    return &data_.emplace<node_list>(settings_);
+  }
+  TENZIR_ASSERT(is_alive());
+  TENZIR_ASSERT(is_repeat_key_list);
+  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  /// The node could already have been upgraded to a list.If it is, we can just
+  /// append to it
+  if (auto* l = try_as<node_list>(data_)) {
+    value_state_ = value_state_type::has_value;
+    return l->list();
+  }
+  /// If the node isnt already upgraded ot a list, we need to do it
+  auto previous_value = std::move(data_);
+  auto& l = data_.emplace<node_list>(settings_);
+  l.data(std::move(previous_value));
+  return &l;
 }
 
 auto node_object::parse(class data_builder& rb, const tenzir::type* seed,
@@ -661,8 +787,7 @@ auto node_object::parse(class data_builder& rb, const tenzir::type* seed,
   if (not is_alive()) {
     return;
   }
-  value_state_ = value_state_type::has_value;
-  if (not seed and rb.parse_schema_fields_only_) {
+  if (not seed and rb.settings_.parse_schema_fields_only) {
     return;
   }
   TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
@@ -796,7 +921,6 @@ auto node_object::append_to_signature(signature_type& sig,
     if (not is_structural(seed_idx)) {
       sig.push_back(static_cast<std::byte>(seed_idx));
       return;
-      ;
     }
     // Sentinel structural types get handled by the regular visit below
   }
@@ -812,8 +936,10 @@ auto node_object::append_to_signature(signature_type& sig,
       const auto* ls = try_as<list_type>(seed);
       if (seed and not ls) {
         rb.emit_mismatch_warning(tag_v<list_type>, *seed, path);
-        null();
-        return false;
+        if (rb.settings_.schema_only) {
+          null(true);
+          return false;
+        }
       }
       if (v.affects_signature() or ls) {
         v.append_to_signature(sig, rb, ls, path);
@@ -824,8 +950,10 @@ auto node_object::append_to_signature(signature_type& sig,
       const auto* rs = try_as<record_type>(seed);
       if (seed and not rs) {
         rb.emit_mismatch_warning(tag_v<record_type>, *seed, path);
-        null();
-        return false;
+        if (rb.settings_.schema_only) {
+          null(true);
+          return false;
+        }
       }
       if (v.affects_signature() or rs) {
         v.append_to_signature(sig, rb, rs, path);
@@ -838,14 +966,14 @@ auto node_object::append_to_signature(signature_type& sig,
       // doing seeding if we have a seed
       if (seed) {
         if (auto sr = try_as<tenzir::record_type>(seed)) {
-          auto r = record();
+          auto r = record(true);
           r->append_to_signature(sig, rb, sr, path);
           r->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
           return true;
         }
         if (auto sl = try_as<tenzir::list_type>(seed)) {
-          auto* l = list();
+          auto* l = list(true);
           l->append_to_signature(sig, rb, sl, path);
           l->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
@@ -866,7 +994,7 @@ auto node_object::append_to_signature(signature_type& sig,
       if (seed) {
         const auto seed_idx = seed->type_index();
         if (seed_idx != type_idx) {
-          null();
+          null(true);
           return false;
         }
       }
@@ -889,7 +1017,10 @@ auto node_object::append_to_signature(signature_type& sig,
 auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
                             const tenzir::type* seed, value_path path,
                             bool mark_dead) -> void {
-  if (rb.schema_only_ and not seed) {
+  if (mark_dead) {
+    is_repeat_key_list = false;
+  }
+  if (rb.settings_.schema_only and not seed) {
     if (mark_dead) {
       mark_this_dead();
       value_state_ = value_state_type::null;
@@ -966,7 +1097,10 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
 auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
                             const tenzir::type* seed, value_path path,
                             bool mark_dead) -> void {
-  if (rb.schema_only_ and not seed) {
+  if (mark_dead) {
+    is_repeat_key_list = false;
+  }
+  if (rb.settings_.schema_only and not seed) {
     if (mark_dead) {
       mark_this_dead();
       value_state_ = value_state_type::null;
@@ -1030,6 +1164,8 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
 }
 
 auto node_object::clear() -> void {
+  is_repeat_key_list = false;
+  value_state_ = value_state_type::null;
   node_base::mark_this_dead();
   const auto visitor = detail::overload{
     [](node_list& v) {
@@ -1041,6 +1177,43 @@ auto node_object::clear() -> void {
     [](auto&) { /* no-op */ },
   };
   std::visit(visitor, data_);
+}
+
+auto node_object::stringify_or_null(class data_builder& rb,
+                                    const tenzir::type* seed) -> void {
+  const auto visitor = detail::overload{
+    [&](const caf::none_t&) {
+      /* noop */
+    },
+    [&]<typename T>(const T& v) {
+      if (seed and not seed->kind().is<data_to_type_t<T>>()) {
+        this->null(true);
+        return;
+      }
+      this->data(fmt::format("{}", v));
+    },
+    [&](node_record& r) {
+      auto v = tenzir::record{};
+      if (seed and not seed->kind().is<record_type>()) {
+        this->null(true);
+        return;
+      }
+      r.commit_to(v, rb, nullptr, value_path{}, false);
+      this->data(fmt::format("{}", v));
+    },
+    [&](node_list& l) {
+      auto v = tenzir::list{};
+      if (seed and not seed->kind().is<list_type>()) {
+        this->null(true);
+        return;
+      }
+      l.commit_to(v, rb, nullptr, value_path{}, false);
+      this->data(fmt::format("{}", v));
+    },
+    [](concepts::one_of<enriched_dummy, pattern_dummy, map_dummy> auto&) {
+      TENZIR_UNREACHABLE();
+    }};
+  match(data_, visitor);
 }
 
 auto node_list::push_back_node() -> node_object* {
@@ -1055,7 +1228,7 @@ auto node_list::push_back_node() -> node_object* {
     return o.state_ == state::alive;
   }));
   ++first_dead_idx_;
-  return &data_.emplace_back();
+  return &data_.emplace_back(settings_);
 }
 
 auto node_list::reserve(size_t N) -> void {
@@ -1085,6 +1258,12 @@ auto node_list::data(tenzir::data d) -> void {
     },
   };
   return match(d, visitor);
+}
+
+auto node_list::data(object_variant_type&& v) -> void {
+  mark_this_alive();
+  push_back_node()->data(std::move(v));
+  update_type_index(type_index_, data_.back().current_index());
 }
 
 auto node_list::data_unparsed(std::string text) -> void {
@@ -1127,7 +1306,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     sig.push_back(static_cast<std::byte>(type_index_));
   } // This also isn't pretty, but aligns with the `series_builder` very well
   else if (seed) {
-    node_object sentinel;
+    node_object sentinel{settings_};
     sentinel.state_ = state::sentinel;
     sentinel.append_to_signature(sig, rb, seed_type_ptr, path.list());
   } else if (not is_structural(type_index_)
@@ -1183,12 +1362,18 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
         },
         [&]<numeric_data_type T>(const T& value) {
           switch (final_index) {
-            case idx_int:
-              return e.data(static_cast<int64_t>(value));
-            case idx_uint:
-              return e.data(static_cast<uint64_t>(value));
-            case idx_double:
-              return e.data(static_cast<double>(value));
+            case idx_int: {
+              e.data_.emplace<int64_t>(static_cast<int64_t>(value));
+              break;
+            }
+            case idx_uint: {
+              e.data_.emplace<uint64_t>(static_cast<uint64_t>(value));
+              break;
+            }
+            case idx_double: {
+              e.data_.emplace<double>(static_cast<double>(value));
+              break;
+            }
           }
         },
       };
@@ -1214,7 +1399,8 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     /// will have the same signature, causing events that dont formally have the
     /// same schema to be merged. However, that seems acceptable for now.
     ///////////
-    auto initial_sig_size = sig.size();
+    type_index_ = type_index_empty;
+    const auto initial_sig_size = sig.size();
     auto last_sig_start_index = std::size_t{0};
     auto non_matching_signatures = false;
     auto has_list = false;
@@ -1222,15 +1408,18 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     for (auto [i, v] : detail::enumerate(alive_elements())) {
       auto curr_sig_start_index = sig.size();
       if (v.current_index() == type_index_list) {
+        update_type_index(type_index_, type_index_list);
         sig.push_back(list_start_marker);
         sig.push_back(list_end_marker);
       } else if (v.current_index() == type_index_record) {
+        update_type_index(type_index_, type_index_record);
         sig.push_back(record_start_marker);
         sig.push_back(record_end_marker);
       } else if (v.current_index() == type_index_null) {
         continue;
       } else {
         v.append_to_signature(sig, rb, seed_type_ptr, path.index(i));
+        update_type_index(type_index_, v.current_index());
       }
       if (last_sig_start_index == 0) {
         last_sig_start_index = curr_sig_start_index;
@@ -1263,6 +1452,11 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
         diagnostic::warning("type mismatch between list elements")
           .note("field `{}`", path));
     }
+    if (type_index_ == type_index_generic_mismatch) {
+      sig.resize(initial_sig_size);
+      sig.push_back(static_cast<std::byte>(type_index_string));
+      type_index_ = type_index_must_stringify;
+    }
   }
   sig.push_back(list_end_marker);
 }
@@ -1271,8 +1465,27 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
                           const tenzir::list_type* seed, value_path path,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto [i, v] : detail::enumerate(alive_elements())) {
-    v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i), mark_dead);
+  if (type_index_ == type_index_generic_mismatch) {
+    type_index_ = type_index_empty;
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.parse(rb, seed ? &field_seed : nullptr, path.index(i));
+      update_type_index(type_index_, v.current_index());
+    }
+    if (type_index_ == type_index_generic_mismatch) {
+      type_index_ = type_index_must_stringify;
+    }
+  }
+  if (type_index_ == type_index_must_stringify) {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.stringify_or_null(rb, seed ? &field_seed : nullptr);
+      v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
+  } else {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.commit_to(r, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
   }
   TENZIR_ASSERT_EXPENSIVE(
     not mark_dead
@@ -1292,9 +1505,29 @@ auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
                           const tenzir::list_type* seed, value_path path,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto [i, v] : detail::enumerate(alive_elements())) {
-    auto& d = l.emplace_back();
-    v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i), mark_dead);
+  if (type_index_ == type_index_generic_mismatch) {
+    type_index_ = type_index_empty;
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.parse(rb, seed ? &field_seed : nullptr, path.index(i));
+      update_type_index(type_index_, v.current_index());
+    }
+    if (type_index_ == type_index_generic_mismatch) {
+      type_index_ = type_index_must_stringify;
+    }
+  }
+  if (type_index_ == type_index_must_stringify) {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      v.stringify_or_null(rb, seed ? &field_seed : nullptr);
+      auto& d = l.emplace_back();
+      v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
+  } else {
+    for (auto [i, v] : detail::enumerate(alive_elements())) {
+      auto& d = l.emplace_back();
+      v.commit_to(d, rb, seed ? &field_seed : nullptr, path.index(i),
+                  mark_dead);
+    }
   }
   TENZIR_ASSERT_EXPENSIVE(
     not mark_dead
@@ -1316,7 +1549,7 @@ auto node_list::alive_elements() -> std::span<node_object> {
 
 auto node_list::prune() -> void {
   if (data_.size() > structured_element_limit) {
-    data_.resize(structured_element_limit);
+    data_.resize(structured_element_limit, {{settings_}});
     data_.shrink_to_fit();
   }
 }

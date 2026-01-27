@@ -19,6 +19,7 @@
 	path = libtenzir/aux/caf
 	url = https://github.com/tenzir/actor-framework
 	shallow = true
+	branch = topic/actor-clock-configuration
 [submodule "libtenzir/aux/pfs"]
 	path = libtenzir/aux/pfs
 	url = https://github.com/tenzir/pfs.git

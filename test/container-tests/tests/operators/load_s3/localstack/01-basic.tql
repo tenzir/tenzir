@@ -1,0 +1,9 @@
+// Test loading a file from S3 using LocalStack.
+// The fixture creates a test bucket with test.json containing:
+// {"message": "Hello from LocalStack test!"}
+load_s3 env("LOCALSTACK_S3_TEST_URI"), aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+}
+read_json

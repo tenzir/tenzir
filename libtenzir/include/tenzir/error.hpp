@@ -113,7 +113,7 @@ auto inspect(Inspector& f, ec& x) {
 
 inline void check(const caf::error& err, std::source_location location
                                          = std::source_location::current()) {
-  if (err) [[unlikely]] {
+  if (err.valid()) [[unlikely]] {
     panic_at(location, "{}", render(err, true));
   }
 }

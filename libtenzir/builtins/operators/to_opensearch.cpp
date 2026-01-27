@@ -13,7 +13,7 @@
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/ssl_options.hpp>
+#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 
 #include <arrow/util/compression.h>
@@ -31,7 +31,7 @@ struct opensearch_args {
   std::optional<ast::expression> id;
   std::optional<located<secret>> user;
   std::optional<located<secret>> passwd;
-  ssl_options ssl;
+  tls_options ssl;
   std::optional<location> include_nulls;
   std::optional<located<uint64_t>> max_content_length
     = located{5'000'000, location::unknown};
@@ -173,7 +173,7 @@ public:
     return std::nullopt;
   }
 
-  auto create_doc(std::string_view action, view<record> doc) {
+  auto create_doc(std::string_view action, view3<record> doc) {
     if (action == "delete") {
       return;
     }
@@ -397,7 +397,7 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (auto e = args_.ssl.apply_to(req, final_url, ctrl)) {
+    if (auto e = args_.ssl.apply_to(req, final_url, &ctrl); e.valid()) {
       diagnostic::error(e).emit(dh);
       co_return;
     }
@@ -438,8 +438,8 @@ public:
       auto id = ids ? values(ty, as<arrow::StringArray>(*ids->array)) : ng();
       auto idx = idxs ? values(ty, as<arrow::StringArray>(*idxs->array)) : ng();
       auto act = acts ? values(ty, as<arrow::StringArray>(*acts->array)) : ng();
-      for (auto&& doc : docs.values()) {
-        const auto ptr = try_as<view<record>>(doc);
+      for (auto&& doc : docs.values3()) {
+        const auto ptr = try_as<view3<record>>(doc);
         const auto action = act.next();
         const auto actual_id = id.next();
         const auto actual_idx = idx.next();

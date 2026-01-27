@@ -11,6 +11,10 @@
     connection_timeout: "5s" @ 0..0,
     max_retry_count: 0 @ 0..0,
     retry_delay: "1s" @ 0..0,
-    tls: false @ 0..0
+    ssl: {
+      uses_curl_http: false,
+      is_server: true,
+      tls: bool false @ 0..0
+    }
   }
 ]

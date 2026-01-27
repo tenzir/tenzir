@@ -68,17 +68,21 @@ public:
       make_secret_request("password", args_.password, args.password, dh),
     });
     co_yield std::move(x);
-    args.ssl.update_cacert(ctrl);
-    auto client = easy_client::make(args, ctrl.diagnostics());
+    args.ssl.update_from_config(ctrl);
+    auto client = easy_client::make(args, ctrl);
     if (not client) {
       co_return;
     }
-    detail::weak_run_delayed_loop(
+    auto disp = detail::weak_run_delayed_loop(
       &ctrl.self(), std::chrono::minutes{10},
       [&client]() {
         client->ping();
       },
       false);
+    const auto guard
+      = detail::scope_guard([disp = std::move(disp)]() mutable noexcept {
+          disp.dispose();
+        });
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

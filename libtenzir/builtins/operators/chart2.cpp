@@ -12,13 +12,14 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/resolve.hpp"
+
+#include <ranges>
 
 namespace tenzir::plugins::chart {
 
@@ -443,7 +444,8 @@ public:
         }
       }
       for (const auto& [name, bucket] : groups) {
-        for (const auto& [y, instance] : detail::zip_equal(args_.y, bucket)) {
+        TENZIR_ASSERT(args_.y.size() == bucket.size());
+        for (const auto& [y, instance] : std::views::zip(args_.y, bucket)) {
           auto value = to_double(instance->get());
           if (args_.fill and is<caf::none_t>(value)) {
             continue;
@@ -727,7 +729,7 @@ public:
     auto names = std::views::filter(ynames, [](auto&& x) {
       return x.second;
     });
-    for (const auto& [num, field] : detail::zip(ynums, names)) {
+    for (const auto& [num, field] : std::views::zip(ynums, names)) {
       attrs.emplace_back(num, field.first);
     }
     return attrs;

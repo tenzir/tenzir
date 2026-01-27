@@ -5,7 +5,9 @@
 }:
 (aws-sdk-cpp.overrideAttrs (previousAttrs: {
   cmakeFlags =
-    previousAttrs.cmakeFlags
+    previousAttrs.cmakeFlags ++ [
+       "-DDISABLE_INTERNAL_IMDSV1_CALLS=ON"
+    ]
     ++ lib.optionals stdenv.hostPlatform.isDarwin [
       "-DENABLE_TESTING=OFF"
     ];

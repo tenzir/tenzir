@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <google/cloud/pubsub/publisher.h>
@@ -105,6 +106,10 @@ class save_plugin final : public operator_plugin2<save_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    diagnostic::warning("`save_google_cloud_pubsub` is deprecated; use "
+                        "`to_google_cloud_pubsub` instead")
+      .primary(inv.self)
+      .emit(ctx);
     auto args = saver_args{};
     auto parser = argument_parser2::operator_("save_google_cloud_pubsub");
     args.add_to(parser);
@@ -112,14 +117,14 @@ public:
     return std::make_unique<save_operator>(std::move(args));
   }
 
-  virtual auto save_properties() const -> save_properties_t override {
-    return {
-      .schemes = {"gcps"},
-      .accepts_pipeline = false,
-      .strip_scheme = true,
-      .transform_uri = make_uri_transform("topic_id"),
-    };
-  }
+  // virtual auto save_properties() const -> save_properties_t override {
+  //   return {
+  //     .schemes = {"gcps"},
+  //     .accepts_pipeline = false,
+  //     .strip_scheme = true,
+  //     .transform_uri = make_uri_transform("topic_id"),
+  //   };
+  // }
 };
 
 } // namespace tenzir::plugins::google_cloud_pubsub

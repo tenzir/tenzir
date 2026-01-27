@@ -1,0 +1,9 @@
+{
+  x: null,
+}
+warning: expected valid octet-counted input
+ --> tests/functions/parse_syslog/octet_counting_missing.tql:3:5
+  |
+3 | x = x.parse_syslog(octet_counting=true)
+  |     ~ 
+  |

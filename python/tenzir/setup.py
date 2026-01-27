@@ -27,6 +27,7 @@ ENV_SKIP = "TENZIR_SKIP_NIX_BUILD"
 ENV_ATTR = "TENZIR_NIX_ATTR"
 ENV_CMD = "TENZIR_NIX_BUILD_CMD"
 ENV_PLAT = "TENZIR_WHEEL_PLATFORM"
+ENV_SIGNED_TARBALL = "TENZIR_SIGNED_TARBALL_PATH"
 PACKAGE_NAME = "tenzir"
 ASSET_DIRS = ("bin", "libexec", "share")
 REPO_DIR = Path(__file__).resolve().parent
@@ -38,9 +39,35 @@ def _assets_present() -> bool:
     return all((PACKAGE_ROOT / entry).exists() for entry in ASSET_DIRS)
 
 
+def _extract_tarball(tarball: Path) -> None:
+    """Extract a tenzir tarball and stage its contents into the source tree."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with tarfile.open(tarball) as archive:
+            archive.extractall(tmp_dir, filter=tarfile.tar_filter)
+
+        extracted_root = Path(tmp_dir) / "opt" / "tenzir"
+        for child in (extracted_root / "bin").iterdir():
+            if child.is_symlink():
+                child.unlink()
+
+        shutil.rmtree(PACKAGE_ROOT / "bundled", ignore_errors=True)
+        _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
+
+
 def _run_nix() -> list[Path]:
     """Run nix build and stage artefacts into the source tree."""
     if os.environ.get(ENV_SKIP):
+        return []
+
+    # Check for pre-built signed tarball (used in CI for macOS)
+    signed_tarball_path = os.environ.get(ENV_SIGNED_TARBALL)
+    if signed_tarball_path:
+        tarball = Path(signed_tarball_path)
+        if not tarball.exists():
+            msg = f"Signed tarball not found at {tarball}"
+            raise RuntimeError(msg)
+        log.info(f"Using pre-built signed tarball: {tarball}")
+        _extract_tarball(tarball)
         return []
 
     repo_root_env = os.environ.get("TENZIR_REPO_ROOT")
@@ -63,7 +90,8 @@ def _run_nix() -> list[Path]:
     else:
         args = [
             "nix",
-            "-L",
+            "--accept-flake-config",
+            "--print-build-logs",
             "build",
             "--no-link",
             "--print-out-paths",
@@ -90,8 +118,6 @@ def _run_nix() -> list[Path]:
             msg,
         )
 
-    staged: list[Path] = []
-
     tarballs = list(result_path.glob("tenzir-*-static.tar.gz"))
     if not tarballs:
         msg = f"nix build output at {result_path} does not contain a tarball"
@@ -104,20 +130,8 @@ def _run_nix() -> list[Path]:
             msg,
         )
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tarball = tarballs[0]
-        with tarfile.open(tarball) as archive:
-            archive.extractall(tmp_dir, filter=tarfile.tar_filter)
-
-        extracted_root = Path(tmp_dir) / "opt" / "tenzir"
-        for child in (extracted_root / "bin").iterdir():
-            if child.is_symlink():
-                child.unlink()
-
-        shutil.rmtree(PACKAGE_ROOT / "bundled", ignore_errors=True)
-        _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
-
-    return staged
+    _extract_tarball(tarballs[0])
+    return []
 
 
 def _cleanup(staged: list[Path]) -> None:
@@ -173,7 +187,7 @@ class BdistWheel(_bdist_wheel):
             if system == "linux" and machine in {"x86_64", "amd64"}:
                 self.plat_name = "manylinux_2_5_x86_64"
             elif system == "linux" and machine in {"aarch64", "arm64"}:
-                self.plat_name = "manylinux_2_5_aarch64"
+                self.plat_name = "manylinux_2_17_aarch64"
             elif system == "darwin" and machine in {"arm64", "aarch64"}:
                 self.plat_name = "macosx_11_0_arm64"
             elif system == "darwin" and machine in {"x86_64", "amd64"}:
@@ -212,9 +226,9 @@ class BdistWheel(_bdist_wheel):
         machine = platform.machine().lower()
         tag = None
         if system == "linux" and machine in {"x86_64", "amd64"}:
-            tag = "manylinux_2_5_x86_64.musllinux_1_0_x86_64"
+            tag = "manylinux_2_5_x86_64.musllinux_1_1_x86_64"
         elif system == "linux" and machine in {"aarch64", "arm64"}:
-            tag = "manylinux_2_5_aarch64.musllinux_1_0_aarch64"
+            tag = "manylinux_2_17_aarch64.musllinux_1_1_aarch64"
         if not tag:
             return None
         result = subprocess.run(

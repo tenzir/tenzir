@@ -91,7 +91,7 @@ auto to_string(ec x) -> const char* {
 }
 
 auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
-  if (!err) {
+  if (err.empty()) {
     return "";
   }
   std::ostringstream oss;

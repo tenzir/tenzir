@@ -1,0 +1,6 @@
+from {items: [1, 2, 3]}, {items: [4, 5]}, {items: [6]}, {items: [7, 8, 9, 10]}
+batch
+parallel 2, _split_at=2 {
+  count = items.length()
+}
+sort count

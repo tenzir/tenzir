@@ -139,7 +139,7 @@ auto evaluator::eval(const ast::unary_expr& x) -> multi_series {
                               x.op.inner, v.type.kind())
             .primary(x)
             .emit(ctx_);
-          return null();
+          return series::null(null_type{}, v.length());
         }
       });
     });

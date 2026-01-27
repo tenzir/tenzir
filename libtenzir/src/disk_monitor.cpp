@@ -80,7 +80,7 @@ caf::error validate(const disk_monitor_config& config) {
                              "scan binary path must be "
                              "an absolute");
     }
-    if (!std::filesystem::exists(*config.scan_binary)) {
+    if (! std::filesystem::exists(*config.scan_binary)) {
       return caf::make_error(ec::invalid_configuration, "scan binary doesn't "
                                                         "exist");
     }
@@ -91,7 +91,7 @@ caf::error validate(const disk_monitor_config& config) {
 caf::expected<size_t> compute_dbdir_size(std::filesystem::path state_directory,
                                          const disk_monitor_config& config) {
   caf::expected<size_t> result = 0;
-  if (!config.scan_binary) {
+  if (! config.scan_binary) {
     return detail::recursive_size(state_directory);
   }
   const auto& command
@@ -99,13 +99,13 @@ caf::expected<size_t> compute_dbdir_size(std::filesystem::path state_directory,
   TENZIR_VERBOSE("executing command '{}' to determine size of state_directory",
                  command);
   auto cmd_output = detail::execute_blocking(command);
-  if (!cmd_output) {
+  if (! cmd_output) {
     return cmd_output.error();
   }
   if (cmd_output->back() == '\n') {
     cmd_output->pop_back();
   }
-  if (!parsers::count(*cmd_output, result.value())) {
+  if (! parsers::count(*cmd_output, result.value())) {
     result = caf::make_error(ec::parse_error,
                              fmt::format("failed to interpret output "
                                          "'{}' of command '{}'",
@@ -126,7 +126,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                TENZIR_ARG(config.high_water_mark),
                TENZIR_ARG(config.low_water_mark), TENZIR_ARG(db_dir));
   using namespace std::string_literals;
-  if (auto error = validate(config)) {
+  if (auto error = validate(config); error.valid()) {
     self->quit(error);
     return disk_monitor_actor::behavior_type::make_empty_behavior();
   }
@@ -152,7 +152,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // `inotify()` or similar to do real-time tracking of the db size.
       auto size = compute_dbdir_size(self->state().state_directory,
                                      self->state().config);
-      if (!size) {
+      if (! size) {
         TENZIR_WARN("{} failed to calculate recursive size of {}: {}", *self,
                     self->state().state_directory, size.error());
         return;
@@ -192,7 +192,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           continue;
         }
         uuid id = {};
-        if (!parsers::uuid(partition, id)) {
+        if (! parsers::uuid(partition, id)) {
           TENZIR_VERBOSE("{} failed to find partition {}", *self, partition);
           continue;
         }
@@ -200,7 +200,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           std::error_code err{};
           const auto file_size = entry.file_size(err);
           const auto mtime = entry.last_write_time(err);
-          if (!err && file_size != static_cast<std::uintmax_t>(-1)) {
+          if (! err && file_size != static_cast<std::uintmax_t>(-1)) {
             partitions.push_back({id, file_size, mtime});
           } else {
             TENZIR_WARN("{} failed to get file size and last write time for "
@@ -215,7 +215,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       }
       TENZIR_DEBUG("{} found {} partitions on disk", *self, partitions.size());
       auto& blacklist = self->state().blacklist;
-      if (!blacklist.empty()) {
+      if (! blacklist.empty()) {
         // Sort partitions so they're usable for `std::set_difference`.
         std::sort(partitions.begin(), partitions.end(),
                   [](const auto& lhs, const auto& rhs) {
@@ -246,7 +246,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         if (--self->state().pending_partitions == 0) {
           if (const auto size = compute_dbdir_size(
                 self->state().state_directory, self->state().config);
-              !size) {
+              ! size) {
             TENZIR_WARN("{} failed to calculate size of {}: {}", *self,
                         self->state().state_directory, size.error());
           } else {

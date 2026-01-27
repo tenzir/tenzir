@@ -31,13 +31,16 @@ auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
     = decltype(convert(from, std::declval<To&>(), std::forward<Opts>(opts)...));
   if constexpr (std::is_same_v<return_type, bool>) {
     caf::expected<To> result{To()};
-    if (convert(from, *result, std::forward<Opts>(opts)...))
+    if (convert(from, *result, std::forward<Opts>(opts)...)) {
       return result;
+    }
     return caf::make_error(ec::convert_error);
   } else if constexpr (std::is_same_v<return_type, caf::error>) {
     To result;
-    if (auto err = convert(from, result, std::forward<Opts>(opts)...))
+    if (auto err = convert(from, result, std::forward<Opts>(opts)...);
+        err.valid()) {
       return err;
+    }
     return result;
   } else {
     static_assert(detail::always_false_v<return_type>, "invalid return type");
@@ -45,11 +48,12 @@ auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
 }
 
 template <class To, class From, class... Opts>
-  requires(std::same_as<To, std::string>&& convertible<std::decay_t<From>, To>)
+  requires(std::same_as<To, std::string> && convertible<std::decay_t<From>, To>)
 auto to_string(From&& from, Opts&&... opts) -> To {
   std::string str;
-  if (convert(from, str, std::forward<Opts>(opts)...))
+  if (convert(from, str, std::forward<Opts>(opts)...)) {
     return str;
+  }
   return {}; // TODO: throw?
 }
 

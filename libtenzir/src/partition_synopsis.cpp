@@ -270,11 +270,12 @@ caf::error unpack_(
     }
     qualified_record_field qf;
     if (auto error
-        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf)) {
+        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf);
+        error.valid()) {
       return error;
     }
     synopsis_ptr ptr;
-    if (auto error = unpack(*synopsis, ptr)) {
+    if (auto error = unpack(*synopsis, ptr); error.valid()) {
       return error;
     }
     // We mark type-level synopses by using an empty string as name.

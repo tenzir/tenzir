@@ -21,6 +21,12 @@ namespace tenzir {
 /// multi_series_builder's settings and policy
 struct multi_series_builder_argument_parser {
 public:
+  enum class merge_option {
+    no,
+    hidden,
+    yes,
+  };
+
   multi_series_builder_argument_parser() = default;
   multi_series_builder_argument_parser(
     multi_series_builder::settings_type settings,
@@ -37,7 +43,8 @@ public:
   auto add_all_to_parser(argument_parser& parser) -> void;
   auto add_settings_to_parser(argument_parser2& parser,
                               bool add_unflatten_option = true,
-                              bool add_merge_option = true) -> void;
+                              merge_option add_merge_option = merge_option::yes)
+    -> void;
   auto add_policy_to_parser(argument_parser2& parser) -> void;
   auto add_all_to_parser(argument_parser2& parser) -> void;
 

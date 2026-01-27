@@ -146,7 +146,7 @@ template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 caf::expected<T> unwrap(std::span<const std::byte, Extent> xs) {
   T result;
-  if (auto err = unwrap(xs, result)) {
+  if (auto err = unwrap(xs, result); err.valid()) {
     return err;
   }
   return result;

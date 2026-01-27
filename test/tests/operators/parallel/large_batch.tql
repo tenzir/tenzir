@@ -1,0 +1,12 @@
+---
+retry: 2
+timeout: 45
+---
+
+from {x: 1},{y: "Hello"}
+repeat 100k
+batch
+parallel 4, _split_at=10 {
+  y = x? else 1 + 1
+}
+summarize count=count(y)

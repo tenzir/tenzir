@@ -25,7 +25,7 @@
 /// hence the expression is allowed to have side-effects.
 #define TENZIR_DIAG_ASSERT(x)                                                  \
   do {                                                                         \
-    if (!(x)) {                                                                \
+    if (! (x)) {                                                               \
       ::tenzir::diagnostic::error("internal error: assertion `{}` failed at "  \
                                   "{}:{}",                                     \
                                   #x, __FILE__, __LINE__)                      \
@@ -357,7 +357,7 @@ auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
 
 inline auto diagnostic::error(caf::error err, std::source_location location)
   -> diagnostic_builder {
-  if (not err) {
+  if (err.empty()) {
     return error("logic error: cannot create an error without error code")
       .note("file: {}:{}", location.file_name(), location.line());
   }
@@ -542,8 +542,11 @@ public:
     return ec::diagnostic;
   }
 
-  auto operator->()
-    -> T* requires(not std::same_as<T, void>) { return &**this; }
+  auto operator->() -> T*
+    requires(not std::same_as<T, void>)
+  {
+    return &**this;
+  }
 
   friend auto inspect(auto& f, failure_or& x) -> bool {
     return f.apply(static_cast<super&>(x));
@@ -558,6 +561,7 @@ struct tryable<failure_or<T>>
 class diagnostic_deduplicator {
 public:
   auto insert(const diagnostic& d) -> bool;
+  void clear();
 
 private:
   using seen_t = std::pair<std::string, std::vector<location>>;

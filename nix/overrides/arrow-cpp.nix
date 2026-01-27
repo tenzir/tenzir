@@ -3,11 +3,14 @@
   stdenv,
   pkgsBuildBuild,
   arrow-cpp,
+  iconv,
   sqlite,
+  tzdata,
 }:
 arrow-cpp.overrideAttrs (orig: {
   patches = [
     ./arrow-cpp-fields-race.patch
+    ./arrow-cpp-nixos-zoneinfo.patch
   ];
   nativeBuildInputs =
     orig.nativeBuildInputs
@@ -21,7 +24,7 @@ arrow-cpp.overrideAttrs (orig: {
           echo "Apple Inc. version cctools-1010.6"
           exit 0
         fi
-        exec ${lib.getBin pkgsBuildBuild.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
+        exec ${lib.getBin pkgsBuildBuild.darwin.cctools}/bin/libtool $@
       '')
     ];
 
@@ -29,7 +32,18 @@ arrow-cpp.overrideAttrs (orig: {
     orig.buildInputs
     ++ lib.optionals stdenv.hostPlatform.isStatic [
       sqlite
+    ] ++ lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic ) [
+      iconv
     ];
+
+  # We replace the proConfigure phase of the upstream package with one that supports zoneinfo
+  # lookups in arrow's default paths again, because we don't want to ship zoneinfo with the
+  # packages built from the static binary.
+  preConfigure = if stdenv.hostPlatform.isStatic then ''
+    patchShebangs build-support/
+    substituteInPlace "src/arrow/vendored/datetime/tz.cpp" \
+      --replace-fail "NIX_STORE_ZONEINFO" "${tzdata}/share/zoneinfo"
+  '' else orig.preConfigure;
 
   cmakeFlags =
     orig.cmakeFlags
@@ -48,10 +62,10 @@ arrow-cpp.overrideAttrs (orig: {
   doInstallCheck = !stdenv.hostPlatform.isStatic;
 
   env =
-    (orig.env or { })
-    // lib.optionalAttrs stdenv.hostPlatform.isStatic {
-      NIX_LDFLAGS = lib.optionalString stdenv.hostPlatform.isDarwin "-framework SystemConfiguration";
-    };
+    ((orig.env or { })
+    // {
+      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
+    });
 
   installCheckPhase =
     let

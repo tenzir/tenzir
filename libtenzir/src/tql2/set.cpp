@@ -13,7 +13,6 @@
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -22,8 +21,8 @@
 
 #include <arrow/compute/api_scalar.h>
 #include <caf/detail/is_complete.hpp>
-#include <caf/detail/is_one_of.hpp>
 
+#include <ranges>
 #include <type_traits>
 
 namespace tenzir {
@@ -302,6 +301,9 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
       auto result = std::vector<table_slice>{};
       result.push_back(assign(left, std::move(right), input, dh, position));
       return result;
+    },
+    [&](const ast::dollar_var&) -> std::vector<table_slice> {
+      TENZIR_UNREACHABLE();
     });
 }
 
@@ -452,8 +454,9 @@ auto set_operator::operator()(generator<table_slice> input,
       state.push_back(subslice(slice, begin, end));
       begin = end;
       auto new_state = std::vector<table_slice>{};
+      TENZIR_ASSERT(assignments_.size() == values_slice.size());
       for (auto [assignment, value] :
-           detail::zip_equal(assignments_, values_slice)) {
+           std::views::zip(assignments_, values_slice)) {
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());

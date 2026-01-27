@@ -1,0 +1,9 @@
+// Slices should have balanced distributed after split
+from {}
+repeat 48713
+batch
+parallel 4 {
+  measure
+  select rows=events
+}
+sort rows

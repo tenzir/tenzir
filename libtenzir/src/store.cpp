@@ -169,7 +169,7 @@ default_passive_store_actor::behavior_type default_passive_store(
     .await(
       [self](chunk_ptr& chunk) {
         auto load_error = self->state().store->load(std::move(chunk));
-        if (load_error) {
+        if (load_error.valid()) {
           self->quit(std::move(load_error));
         }
       },
@@ -273,8 +273,8 @@ default_active_store_actor::behavior_type default_active_store(
         return;
       }
       // TODO: Get rid of the vector.
-      if (auto error
-          = self->state().store->add(std::vector{std::move(slice)})) {
+      if (auto error = self->state().store->add(std::vector{std::move(slice)});
+          error.valid()) {
         self->quit(std::move(error));
       }
     },

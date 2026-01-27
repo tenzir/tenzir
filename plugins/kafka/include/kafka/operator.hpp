@@ -13,6 +13,7 @@
 #include "kafka/producer.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/aws_iam.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/string.hpp>
@@ -135,7 +136,7 @@ inline auto offset_parser() {
 inline void
 set_or_fail(const std::string& key, const std::string& value, location loc,
             kafka::configuration& cfg, diagnostic_handler& dh) {
-  if (auto e = cfg.set(key, value)) {
+  if (auto e = cfg.set(key, value); e.valid()) {
     diagnostic::error("failed to set librdkafka option {}={}: {}", key, value,
                       e)
       .primary(loc)
@@ -183,7 +184,8 @@ struct loader_args {
   std::uint64_t commit_batch_size = 1000;
   duration commit_timeout = 10s;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<located<std::string>> aws_region;
+  std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
 
   template <class Inspector>
@@ -194,7 +196,8 @@ struct loader_args {
               f.field("exit", x.exit), f.field("offset", x.offset),
               f.field("commit_batch_size", x.commit_batch_size),
               f.field("commit_timeout", x.commit_timeout),
-              f.field("options", x.options), f.field("aws", x.aws),
+              f.field("options", x.options),
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws),
               f.field("operator_location", x.operator_location));
   }
 };
@@ -212,8 +215,23 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
+    // Resolve secrets if explicit credentials or role are provided.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
+    }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, dh);
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (! cfg) {
       diagnostic::error("failed to create configuration: {}", cfg.error())
         .primary(args_.operator_location)
@@ -223,7 +241,7 @@ public:
     // If we want to exit when we're done, we need to tell Kafka to emit a
     // signal so that we know when to terminate.
     if (args_.exit) {
-      if (auto err = cfg->set("enable.partition.eof", "true")) {
+      if (auto err = cfg->set("enable.partition.eof", "true"); err.valid()) {
         diagnostic::error("failed to enable partition EOF: {}", err)
           .primary(args_.operator_location)
           .emit(dh);
@@ -231,7 +249,7 @@ public:
       }
     }
     // Disable auto-commit to use manual commit for precise message counting
-    if (auto err = cfg->set("enable.auto.commit", "false")) {
+    if (auto err = cfg->set("enable.auto.commit", "false"); err.valid()) {
       diagnostic::error("failed to disable auto-commit: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -245,7 +263,7 @@ public:
       TENZIR_INFO("kafka adjusts offset to {} ({})", args_.offset->inner,
                   offset);
     }
-    if (auto err = cfg->set_rebalance_cb(offset)) {
+    if (auto err = cfg->set_rebalance_cb(offset); err.valid()) {
       diagnostic::error("failed to set rebalance callback: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -267,7 +285,7 @@ public:
         .emit(dh);
     };
     TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
-    if (auto err = client->subscribe({args_.topic})) {
+    if (auto err = client->subscribe({args_.topic}); err.valid()) {
       diagnostic::error("failed to subscribe to topic: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
@@ -283,6 +301,7 @@ public:
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
       TENZIR_ASSERT(raw_msg);
+      const auto now = time::clock::now();
       switch (raw_msg->err()) {
         case RdKafka::ERR_NO_ERROR: {
           last_good_message = std::move(raw_msg);
@@ -294,10 +313,9 @@ public:
           co_yield std::move(chunk);
           // Manually commit this specific message after processing
           ++num_messages;
-          const auto now = time::clock::now();
           if (last_good_message
               and (num_messages % args_.commit_batch_size == 0
-                   or last_commit_time - now >= args_.commit_timeout)) {
+                   or now - last_commit_time >= args_.commit_timeout)) {
             last_commit_time = now;
             if (not client->commit(last_good_message.get(), dh,
                                    args_.operator_location)) {
@@ -314,9 +332,9 @@ public:
           continue;
         }
         case RdKafka::ERR__TIMED_OUT: {
-          const auto now = time::clock::now();
           if (last_good_message
-              and last_commit_time - now >= args_.commit_timeout) {
+              and now - last_commit_time >= args_.commit_timeout) {
+            last_commit_time = now;
             if (not client->commit(last_good_message.get(), dh,
                                    args_.operator_location)) {
               co_return;
@@ -357,6 +375,7 @@ public:
             }
             if (*pc == *partition_count) {
               if (last_good_message) {
+                last_commit_time = now;
                 std::ignore = client->commit(last_good_message.get(), dh,
                                              args_.operator_location);
               }
@@ -379,6 +398,7 @@ public:
                   .done();
               },
             };
+            last_commit_time = now;
             std::ignore = client->commit(last_good_message.get(), ndh,
                                          args_.operator_location);
           }
@@ -421,7 +441,8 @@ struct saver_args {
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<record> options;
-  std::optional<configuration::aws_iam_options> aws;
+  std::optional<located<std::string>> aws_region;
+  std::optional<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -429,7 +450,7 @@ struct saver_args {
       .pretty_name("saver_args")
       .fields(f.field("topic", x.topic), f.field("key", x.key),
               f.field("timestamp", x.timestamp), f.field("options", x.options),
-              f.field("aws", x.aws));
+              f.field("aws_region", x.aws_region), f.field("aws", x.aws));
   }
 };
 
@@ -444,16 +465,31 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    auto& dh = ctrl.diagnostics();
+    // Resolve secrets if explicit credentials or role are provided.
+    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    if (args_.aws
+        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+      resolved_creds.emplace();
+      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+    }
+    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    if (args_.aws_region) {
+      if (not resolved_creds) {
+        resolved_creds.emplace();
+      }
+      resolved_creds->region = args_.aws_region->inner;
+    }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
+    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
     if (not cfg) {
-      diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
+      diagnostic::error(cfg.error()).emit(dh);
       co_return;
     };
     // Override configuration with arguments.
     {
-      auto secrets
-        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      auto secrets = configure_or_request(args_.options, *cfg, dh);
       co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
     }
     if (auto value = cfg->get("bootstrap.servers")) {
@@ -462,11 +498,11 @@ public:
     auto client = producer::make(*cfg);
     if (! client) {
       TENZIR_ERROR(client.error());
-      diagnostic::error(client.error()).emit(ctrl.diagnostics());
+      diagnostic::error(client.error()).emit(dh);
     };
     auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
-      if (auto err = client.flush(10s)) {
+      if (auto err = client.flush(10s); err.valid()) {
         TENZIR_WARN(err);
       }
       auto num_messages = client.queue_size();
@@ -492,8 +528,9 @@ public:
       for (const auto& topic : topics) {
         TENZIR_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
         if (auto error
-            = client->produce(topic, as_bytes(chunk), key, timestamp)) {
-          diagnostic::error(error).emit(ctrl.diagnostics());
+            = client->produce(topic, as_bytes(chunk), key, timestamp);
+            error.valid()) {
+          diagnostic::error(error).emit(dh);
         }
       }
       // It's advised to call poll periodically to tell Kafka "you can flush

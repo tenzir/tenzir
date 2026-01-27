@@ -1,0 +1,10 @@
+// Test loading messages from SQS using LocalStack with explicit credentials.
+// Each test uses its own queue to avoid message consumption conflicts.
+load_sqs env("LOCALSTACK_SQS_QUEUE_BASIC"), aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+}
+read_json
+head 3
+sort id

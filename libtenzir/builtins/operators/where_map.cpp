@@ -504,7 +504,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
         diagnostic::warning("expected `list`, but got `{}`", field.type.kind())
           .primary(args.field)
           .emit(ctx);
-        return series::null(null_type{}, eval.length());
+        return series::null(null_type{}, field.length());
       }
       auto list_values
         = series{field_list->type.value_type(), field_list->array->values()};

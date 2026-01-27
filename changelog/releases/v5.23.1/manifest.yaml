@@ -1,0 +1,6 @@
+created: 2026-01-02
+title: Tenzir Node v5.23.1
+intro: >-
+  This release fixes internal errors in expression evaluation for heterogeneous data,
+  resolves a crash in the  operator when using , and ensures the  connector shuts
+  down gracefully.

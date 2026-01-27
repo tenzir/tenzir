@@ -1,5 +1,7 @@
 add_executable(tenzir tenzir.cpp operator_new.cpp malloc.cpp)
-if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none")
+# Static binaries are not fully static on macOS, they still need to link to the
+# apple system libraries dynamically.
+if (TENZIR_ENABLE_STATIC_EXECUTABLE AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none" AND NOT APPLE)
   target_link_options(
     tenzir
     BEFORE
@@ -128,7 +130,7 @@ endif ()
 # to avoid complexity and potential circular reference issues
 
 set(plugins_default "plugins/*")
-if (EXISTS contrib/tenzir-plugins/.git)
+if (EXISTS ${PROJECT_SOURCE_DIR}/contrib/tenzir-plugins/.git)
   list(APPEND plugins_default "contrib/tenzir-plugins/*")
 endif ()
 
@@ -174,6 +176,17 @@ if (TENZIR_PLUGINS)
   endforeach ()
 endif ()
 
+# -- ca-certificates -----------------------------------------------------------
+
+# On macOS there is no system install ca-certificate bundle by default, so we
+# make it possbile to bundle one (usually curl's).
+if (TENZIR_CACERT)
+  install(
+    FILES "${TENZIR_CACERT}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/ca-bundle.crt"
+    COMPONENT Runtime)
+endif ()
+
 # -- integration tests ---------------------------------------------------------
 
 # Helper function to build tenzir-test command invocations
@@ -200,17 +213,15 @@ function (tenzir_build_test_command out_var)
   list(
     APPEND
     cmd
+    "TENZIR_BINARY=$<TARGET_FILE:tenzir::tenzir>"
+    "TENZIR_NODE_BINARY=$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node"
     "--"
     "${TENZIR_UV_PATH}"
     "tool"
     "run"
     "--python"
     ">=3.12"
-    "tenzir-test"
-    "--tenzir-binary"
-    "$<TARGET_FILE:tenzir::tenzir>"
-    "--tenzir-node-binary"
-    "$<TARGET_FILE_DIR:tenzir::tenzir>/tenzir-node")
+    "tenzir-test")
 
   # Add extra arguments if provided
   if (ARG_EXTRA_ARGS)

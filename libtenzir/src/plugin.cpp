@@ -382,7 +382,8 @@ auto initialize(caf::actor_system_config& cfg) -> caf::error {
       TENZIR_VERBOSE("initializing the {} plugin with options: {}",
                      plugin->name(), merged_config);
     }
-    if (auto err = plugin->initialize(merged_config, global_config)) {
+    if (auto err = plugin->initialize(merged_config, global_config);
+        err.valid()) {
       return diagnostic::error(err)
         .note("failed to initialize the `{}` plugin", plugin->name())
         .to_error();
@@ -421,34 +422,42 @@ auto initialize(caf::actor_system_config& cfg) -> caf::error {
     const auto decompress_prop = l->decompress_properties();
     const auto read_prop = l->read_properties();
     const auto write_prop = l->write_properties();
-    if (auto e = check("load scheme", name, load_prop.schemes, load_schemes)) {
+    if (auto e = check("load scheme", name, load_prop.schemes, load_schemes);
+        e.valid()) {
       return e;
     }
-    if (auto e = check("save scheme", name, save_prop.schemes, save_schemes)) {
+    if (auto e = check("save scheme", name, save_prop.schemes, save_schemes);
+        e.valid()) {
       return e;
     }
     if (auto e = check("compress extension", name, compress_prop.extensions,
-                       compress_extensions)) {
+                       compress_extensions);
+        e.valid()) {
       return e;
     }
     if (auto e = check("decompress extension", name, decompress_prop.extensions,
-                       decompress_extensions)) {
+                       decompress_extensions);
+        e.valid()) {
       return e;
     }
-    if (auto e = check("read extension", name, read_prop.extensions,
-                       read_extensions)) {
+    if (auto e
+        = check("read extension", name, read_prop.extensions, read_extensions);
+        e.valid()) {
       return e;
     }
-    if (auto e = check("read mime-type", name, read_prop.mime_types,
-                       read_mime_types)) {
+    if (auto e
+        = check("read mime-type", name, read_prop.mime_types, read_mime_types);
+        e.valid()) {
       return e;
     }
     if (auto e = check("write extension", name, write_prop.extensions,
-                       write_extensions)) {
+                       write_extensions);
+        e.valid()) {
       return e;
     }
     if (auto e = check("write mime-type", name, write_prop.mime_types,
-                       write_mime_types)) {
+                       write_mime_types);
+        e.valid()) {
       return e;
     }
   }

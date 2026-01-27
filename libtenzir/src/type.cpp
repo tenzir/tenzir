@@ -16,7 +16,6 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/type_list.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/type.hpp"
 #include "tenzir/legacy_type.hpp"
@@ -29,6 +28,7 @@
 #include <arrow/util/key_value_metadata.h>
 #include <fmt/format.h>
 
+#include <ranges>
 #include <simdjson.h>
 #include <string_view>
 
@@ -260,7 +260,7 @@ type enrich_type_with_arrow_metadata(class type type,
   auto attribute_parser
     = prefix_parser >> "attributes:" >> parsers::u32 >> parsers::eoi;
   for (const auto& [key, value] :
-       detail::zip(metadata.keys(), metadata.values())) {
+       std::views::zip(metadata.keys(), metadata.values())) {
     if (uint32_t index{}; name_parser(key, index)) {
       if (index >= names_and_attributes.size()) {
         names_and_attributes.resize(index + 1);
@@ -1579,6 +1579,9 @@ bool type_check(const type& x, const data& y) noexcept {
           return false;
         }
       }
+      return true;
+    },
+    [](const string_type&, const secret&) {
       return true;
     },
     [&]<basic_type T, class U>(const T&, const U&) {
@@ -3651,7 +3654,7 @@ merge(const record_type& lhs, const record_type& rhs,
     }
   }
   auto result = lhs.transform(std::move(transformations));
-  if (err) {
+  if (err.valid()) {
     return err;
   }
   TENZIR_ASSERT(result);

@@ -1,0 +1,8 @@
+{
+  "@xmlns:ns": "http://example.com",
+  "ns:item": "A",
+}
+{
+  "@xmlns:ns": "http://example.com",
+  "ns:item": "B",
+}

@@ -277,12 +277,13 @@ public:
     }
     TENZIR_DEBUG("closing AMQP connection");
     auto reply = amqp_connection_close(conn_, AMQP_REPLY_SUCCESS);
-    if (auto err = to_error(reply)) {
+    if (auto err = to_error(reply); err.valid()) {
       TENZIR_DEBUG(err);
     }
     TENZIR_DEBUG("destroying AMQP connection");
     auto status = amqp_destroy_connection(conn_);
-    if (auto err = to_error(status, "failed to destroy AMQP connection")) {
+    if (auto err = to_error(status, "failed to destroy AMQP connection");
+        err.valid()) {
       TENZIR_WARN(err);
     }
   }
@@ -304,7 +305,7 @@ public:
 
   /// Connects to the server by opening a socket and logging in.
   auto connect() -> caf::error {
-    if (auto err = open_socket()) {
+    if (auto err = open_socket(); err.valid()) {
       return err;
     }
     return login();
@@ -375,7 +376,7 @@ public:
     TENZIR_DEBUG("got queue '{}' with {} messages and {} consumers",
                  as_string_view(declare->queue), declare->message_count,
                  declare->consumer_count);
-    if (auto err = to_error(amqp_get_rpc_reply(conn_))) {
+    if (auto err = to_error(amqp_get_rpc_reply(conn_)); err.valid()) {
       return err;
     }
     auto declared_queue = std::string{as_string_view(declare->queue)};
@@ -384,7 +385,7 @@ public:
     amqp_queue_bind(conn_, amqp_channel_t{opts.channel},
                     as_amqp_bytes(declared_queue), as_amqp_bytes(opts.exchange),
                     as_amqp_bytes(opts.routing_key), arguments);
-    if (auto err = to_error(amqp_get_rpc_reply(conn_))) {
+    if (auto err = to_error(amqp_get_rpc_reply(conn_)); err.valid()) {
       return err;
     }
     TENZIR_DEBUG("setting up consume");
@@ -446,7 +447,8 @@ public:
       TENZIR_DEBUG("waiting for frame");
       auto frame = amqp_frame_t{};
       auto status = amqp_simple_wait_frame(conn_, &frame);
-      if (auto err = to_error(status, "failed to wait for frame")) {
+      if (auto err = to_error(status, "failed to wait for frame");
+          err.valid()) {
         return err;
       }
       if (frame.frame_type == AMQP_FRAME_METHOD) {
@@ -465,7 +467,7 @@ public:
             TENZIR_DEBUG("got mandatory message that couldn't be routed");
             auto message = amqp_message_t{};
             auto ret = amqp_read_message(conn_, frame.channel, &message, 0);
-            if (auto err = to_error(ret)) {
+            if (auto err = to_error(ret); err.valid()) {
               return err;
             }
             auto chunk = move_into_chunk(message.body);
@@ -509,7 +511,7 @@ private:
                    detail::narrow_cast<int>(config_.max_channels),
                    config_.frame_size, config_.heartbeat, config_.sasl_method,
                    config_.username.c_str(), config_.password.c_str());
-    if (auto err = to_error(reply)) {
+    if (auto err = to_error(reply); err.valid()) {
       return err;
     }
     return {};
@@ -663,7 +665,7 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    if (auto err = engine->connect()) {
+    if (auto err = engine->connect(); err.valid()) {
       diagnostic::error("failed to connect to AMQP server")
         .primary(args_.op)
         .note("{}", err)
@@ -671,7 +673,7 @@ public:
       co_return;
     }
     auto channel = args_.channel ? args_.channel->inner : default_channel;
-    if (auto err = engine->open(channel)) {
+    if (auto err = engine->open(channel); err.valid()) {
       diagnostic::error("failed to open AMQP channel {}", channel)
         .primary(args_.op)
         .note("{}", err)
@@ -693,7 +695,7 @@ public:
       .no_local = args_.no_local,
       .no_ack = not args_.ack,
     });
-    if (err) {
+    if (err.valid()) {
       diagnostic::error("failed to start AMQP consumer")
         .primary(args_.op)
         .hint("{}", err)
@@ -813,11 +815,11 @@ public:
     } else {
       diagnostic::error(eng.error()).emit(ctrl.diagnostics());
     }
-    if (auto err = engine->connect()) {
+    if (auto err = engine->connect(); err.valid()) {
       diagnostic::error(err).emit(ctrl.diagnostics());
     }
     auto channel = args_.channel ? args_.channel->inner : default_channel;
-    if (auto err = engine->open(channel)) {
+    if (auto err = engine->open(channel); err.valid()) {
       diagnostic::error(err).emit(ctrl.diagnostics());
     }
     auto opts = amqp_engine::publish_options{
@@ -848,7 +850,7 @@ public:
         co_yield {};
         continue;
       }
-      if (auto err = engine->publish(chunk, opts)) {
+      if (auto err = engine->publish(chunk, opts); err.valid()) {
         diagnostic::error("failed to publish amqp message")
           .primary(args_.op)
           .note("size: {}", chunk->size())

@@ -197,7 +197,7 @@ public:
   static auto load(const std::string& filename) -> caf::expected<rules> {
     auto result = rules{};
     auto status = yr_rules_load(filename.c_str(), &result.rules_);
-    if (auto err = to_error(status)) {
+    if (auto err = to_error(status); err.valid()) {
       return err;
     }
     return result;
@@ -276,7 +276,7 @@ public:
     auto builder = series_builder{};
     yr_scanner_set_callback(scanner_, callback, &builder);
     auto status = yr_scanner_scan_mem(scanner_, buffer, buffer_size);
-    if (auto err = to_error(status)) {
+    if (auto err = to_error(status); err.valid()) {
       return err;
     }
     return builder.finish_as_table_slice("yara.match");
@@ -288,7 +288,7 @@ public:
     auto builder = series_builder{};
     yr_scanner_set_callback(scanner_, callback, &builder);
     auto status = yr_scanner_scan_mem_blocks(scanner_, blocks.iterator());
-    if (auto err = to_error(status)) {
+    if (auto err = to_error(status); err.valid()) {
       return err;
     }
     return builder.finish_as_table_slice("yara.match");
@@ -430,7 +430,7 @@ public:
     if (std::filesystem::is_directory(path)) {
       for (const std::filesystem::directory_entry& entry :
            std::filesystem::recursive_directory_iterator(path)) {
-        if (auto err = add(entry.path())) {
+        if (auto err = add(entry.path()); err.valid()) {
           return err;
         }
       }
@@ -522,7 +522,8 @@ public:
       }
     } else {
       for (const auto& rule : args_.rules) {
-        if (auto err = compiler->add(std::filesystem::path{rule})) {
+        if (auto err = compiler->add(std::filesystem::path{rule});
+            err.valid()) {
           diagnostic::error("failed to add YARA rule to compiler")
             .note("rule: {}", rule)
             .note("error: {}", err)

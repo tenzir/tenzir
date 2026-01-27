@@ -224,7 +224,6 @@ public:
             return x;
           },
           [](const pattern&) -> ast::constant::kind {
-            // TODO
             TENZIR_UNREACHABLE();
           });
       } else {
@@ -242,8 +241,32 @@ public:
     failure_ = failure::promise();
   }
 
+  void visit(ast::selector& x) {
+    auto* dollar_var = std::get_if<ast::dollar_var>(&x);
+    if (not dollar_var) {
+      enter(x);
+      return;
+    }
+    auto it = map_.find(std::string{dollar_var->name_without_dollar()});
+    if (it == map_.end()) {
+      emit_not_found(*dollar_var);
+      return;
+    }
+    if (not it->second) {
+      // Variable exists but there was an error during evaluation.
+      return;
+    }
+    // let bound variables cannot be on the lhs for now, because a let can only
+    // bind a name to a value, but field_paths are not values yet.
+    diagnostic::error("cannot assign to `{}` constant value",
+                      dollar_var->id.name)
+      .primary(*dollar_var)
+      .emit(ctx_);
+    failure_ = failure::promise();
+  }
+
   void visit(ast::expression& x) {
-    auto dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
+    const auto* dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
     if (not dollar_var) {
       enter(x);
       return;
@@ -267,8 +290,8 @@ public:
     // this, but putting everything here was easy to do. We should reconsider
     // this strategy when introducing a second operator that can modify the
     // constant environment.
-    auto docs = "https://docs.tenzir.com/tql2/operators/load_balance";
-    auto usage = "load_balance over:list { … }";
+    const auto* docs = "https://docs.tenzir.com/tql2/operators/load_balance";
+    const auto* usage = "load_balance over:list { … }";
     auto emit = [&](diagnostic_builder d) {
       if (d.inner().severity == severity::error) {
         failure_ = failure::promise();

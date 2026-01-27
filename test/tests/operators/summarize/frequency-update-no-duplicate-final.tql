@@ -1,0 +1,5 @@
+// Ensure update mode skips final emission when nothing changed since last flush.
+from {ts: 0ms.from_epoch(), x: 1},
+     {ts: 150ms.from_epoch(), x: 1}
+delay ts
+summarize sum=sum(x), options={frequency: 100ms, mode: "update"}

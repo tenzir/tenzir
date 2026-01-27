@@ -1,0 +1,3 @@
+from {x: 1}, {x: 2}, {x: 3}
+batch
+throttle rate=100, window=1h

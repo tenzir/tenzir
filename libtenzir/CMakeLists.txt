@@ -107,6 +107,25 @@ if (ARROW_VERSION VERSION_GREATER_EQUAL "21.0.0")
   endif ()
 endif ()
 
+# -- aws sdk (for direct S3 object deletion) -----------------------------------
+
+if (ARROW_S3)
+  find_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)")
+  dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
+endif ()
+
+# -- azure sdk (for direct Azure blob deletion) --------------------------------
+
+if (ARROW_AZURE)
+  find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(azure-storage-blobs-cpp CONFIG REQUIRED)")
+  dependency_summary("Azure Storage Blobs" Azure::azure-storage-blobs
+                     "Dependencies")
+endif ()
+
 # -- boost ---------------------------------------------------------------------
 
 find_package(Boost REQUIRED COMPONENTS headers filesystem url)
@@ -130,27 +149,31 @@ provide_find_module(libmaxminddb)
 find_package(c-ares REQUIRED)
 provide_find_module(c-ares)
 
+# -- expat (XML parsing) -------------------------------------------------------
+# Use MODULE mode to avoid broken CMake config in static Nix builds
+
+find_package(EXPAT REQUIRED MODULE)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED MODULE)")
+dependency_summary("expat" EXPAT::EXPAT "Dependencies")
+
 # -- jemalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC OFF)
-if (TENZIR_ALLOCATOR STREQUAL "jemalloc"
-    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+if (TENZIR_ALLOCATOR STREQUAL "jemalloc" OR TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC ON)
 endif ()
 
 if (TENZIR_ALLOCATOR_NEEDS_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-         "\nfind_package(jemalloc REQUIRED)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
 # -- mimalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC OFF)
-if (TENZIR_ALLOCATOR STREQUAL "mimalloc"
-    OR TENZIR_ALLOCATOR STREQUAL "runtime")
+if (TENZIR_ALLOCATOR STREQUAL "mimalloc" OR TENZIR_ALLOCATOR STREQUAL "runtime")
   set(TENZIR_ALLOCATOR_NEEDS_MIMALLOC ON)
 endif ()
 
@@ -293,6 +316,9 @@ endif ()
 target_link_libraries(libtenzir_builtins PRIVATE c-ares::cares)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(c-ares REQUIRED)")
 dependency_summary("c-ares" c-ares::cares "Dependencies")
+
+# Link against expat.
+target_link_libraries(libtenzir_builtins PRIVATE EXPAT::EXPAT)
 
 # Link against jemalloc.
 if (TENZIR_ALLOCATOR_NEEDS_JEMALLOC)
@@ -437,6 +463,16 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY}
                                        ${ARROW_COMPUTE_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
+# Link against AWS SDK (for direct S3 deletion without Arrow directory markers).
+if (ARROW_S3)
+  target_link_libraries(libtenzir PRIVATE ${AWSSDK_LINK_LIBRARIES})
+endif ()
+
+# Link against Azure SDK (for direct Azure blob deletion without directory markers).
+if (ARROW_AZURE)
+  target_link_libraries(libtenzir PRIVATE Azure::azure-storage-blobs)
+endif ()
+
 # Link against Boost.
 target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
                                        Boost::url)
@@ -501,6 +537,11 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   target_link_libraries(libtenzir PRIVATE pfs)
 endif ()
 
+find_package(libbacktrace)
+if (TARGET libbacktrace::libbacktrace)
+  target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace)
+endif ()
+
 if (LINUX)
   find_package(Boost COMPONENTS stacktrace_backtrace)
   # Use a compiled stacktrace_backtrace if available, otherwise use header only
@@ -509,10 +550,8 @@ if (LINUX)
     target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
     target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
   else ()
-    find_path(libbacktrace_INCLUDE_DIR NAMES backtrace.h)
-    find_library(libbacktrace_LIBRARY NAMES backtrace)
-    target_include_directories(libtenzir PRIVATE "${libbacktrace_INCLUDE_DIR}")
-    target_link_libraries(libtenzir PRIVATE "${libbacktrace_LIBRARY}" dl)
+    find_package(libbacktrace REQUIRED)
+    target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace dl)
     target_compile_definitions(libtenzir
                                PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
   endif ()

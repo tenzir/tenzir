@@ -1,0 +1,54 @@
+# Configuration for actions/labeler
+# https://github.com/actions/labeler
+
+# Infrastructure
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+          - cmake/**
+          - CMakeLists.txt
+          - CMakePresets.json
+          - nix/**
+          - flake.nix
+          - flake.lock
+          - Dockerfile
+          - ansible/**
+          - docker-compose.yaml
+          - scripts/**
+          - .clang-format
+          - .clang-tidy
+          - .clangd
+          - .cmake-format
+          - .editorconfig
+          - .dockerignore
+          - .yamllint.yaml
+          - .markdownlint.json
+          - shell.nix
+
+# Core engine
+engine:
+  - changed-files:
+      - any-glob-to-any-file:
+          - libtenzir/aux/**
+          - libtenzir/include/**
+          - libtenzir/src/**
+          - libtenzir/test/**
+          - libtenzir/fbs/**
+          - libtenzir_test/**
+          - test/**
+          - tenzir/**
+
+# Plugins and builtins
+plugin:
+  - changed-files:
+      - any-glob-to-any-file:
+          - libtenzir/builtins/**
+          - plugins/**
+          - contrib/**
+
+# Python
+python:
+  - changed-files:
+      - any-glob-to-any-file:
+          - python/**

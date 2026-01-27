@@ -13,6 +13,7 @@
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/time.hpp"
 
 namespace tenzir {
 
@@ -25,9 +26,9 @@ struct retention_policy {
     auto failed = false;
     const auto try_parse = [&](auto& out, const auto key) -> void {
       if (const auto* opt_duration = get_if<duration>(&cfg, key)) {
-        out.emplace(*opt_duration);
+        out = *opt_duration;
       } else if (const auto* opt_string = get_if<std::string>(&cfg, key)) {
-        if (not parsers::duration(*opt_string, out.emplace())) {
+        if (not parsers::duration(*opt_string, out)) {
           diagnostic::error("expected type `duration` for option `{}`", key)
             .hint("got `{}`", *opt_string)
             .emit(ctx);
@@ -35,15 +36,17 @@ struct retention_policy {
           return;
         }
       }
-      if (out and *out < duration::zero()) {
+      if (out < duration::zero()) {
         diagnostic::warning("expected positive value for option `{}`", key)
-          .hint("got `{}`", *out)
+          .hint("got `{}`", out)
           .emit(ctx);
         failed = true;
       }
     };
     try_parse(result.metrics_period, "tenzir.retention.metrics");
     try_parse(result.diagnostics_period, "tenzir.retention.diagnostics");
+    try_parse(result.operator_metrics_period,
+              "tenzir.retention.operator-metrics");
     if (failed) {
       return failure::promise();
     }
@@ -66,10 +69,13 @@ struct retention_policy {
       return true;
     }
     if (schema.name() == "tenzir.diagnostic") {
-      return not diagnostics_period or * diagnostics_period > duration::zero();
+      return diagnostics_period > duration::zero();
+    }
+    if (schema.name() == "tenzir.metrics.operator") {
+      return operator_metrics_period > duration::zero();
     }
     if (schema.name().starts_with("tenzir.metrics.")) {
-      return not metrics_period or * metrics_period > duration::zero();
+      return metrics_period > duration::zero();
     }
     return true;
   }
@@ -78,11 +84,13 @@ struct retention_policy {
     return f.object(x)
       .pretty_name("tenzir.retention_policy")
       .fields(f.field("metrics_period", x.metrics_period),
-              f.field("diagnostics_period", x.diagnostics_period));
+              f.field("diagnostics_period", x.diagnostics_period),
+              f.field("operator_metrics_period", x.operator_metrics_period));
   }
 
-  std::optional<duration> metrics_period = {};
-  std::optional<duration> diagnostics_period = {};
+  duration metrics_period = days{16};
+  duration diagnostics_period = days{30};
+  duration operator_metrics_period = duration::zero();
 };
 
 } // namespace tenzir

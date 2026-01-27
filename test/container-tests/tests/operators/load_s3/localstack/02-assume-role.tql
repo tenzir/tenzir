@@ -1,0 +1,10 @@
+// Test loading from S3 with role assumption.
+// Uses explicit credentials to assume a role, then accesses S3.
+load_s3 env("LOCALSTACK_S3_TEST_URI"), aws_iam={
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1",
+  assume_role: env("LOCALSTACK_ROLE_ARN"),
+  external_id: env("LOCALSTACK_EXTERNAL_ID")
+}
+read_json

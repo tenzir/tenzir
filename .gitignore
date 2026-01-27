@@ -11,6 +11,7 @@
 
 # Build artifacts
 *.egg-info/
+*.sqlite
 .cache/
 .clangd/
 .mypy_cache/
@@ -44,7 +45,10 @@ venv/
 
 # Claude
 CLAUDE.local.md
+.claude/settings.local.json
 CLAUDE-TODOS.md
+.docs/
 
 # SBOM artifacts
 /tenzir.spdx.json
+.reviews/

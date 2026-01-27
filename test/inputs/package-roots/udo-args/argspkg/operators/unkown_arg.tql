@@ -1,0 +1,7 @@
+---
+description: "Using an argument that does not exist"
+args:
+  positional:
+    - name: foo
+---
+result = $bar

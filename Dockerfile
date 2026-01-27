@@ -25,12 +25,20 @@ FROM build-base AS google-cloud-cpp-package
 COPY scripts/debian/build-google-cloud-cpp-package.sh .
 RUN ./build-google-cloud-cpp-package.sh
 
+# -- azure-sdk-cpp-package -----------------------------------------------------
+
+FROM build-base AS azure-sdk-cpp-package
+
+COPY scripts/debian/build-azure-sdk-cpp-package.sh .
+RUN ./build-azure-sdk-cpp-package.sh
+
 # -- arrow-package -------------------------------------------------------------
 
 FROM build-base AS arrow-package
 
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=azure-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY scripts/debian/build-arrow-package.sh .
 COPY nix/overrides/arrow-cpp-fields-race.patch /patches/
 RUN apt-get update && \
@@ -70,6 +78,7 @@ WORKDIR /tmp/tenzir
 
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=azure-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
@@ -172,6 +181,7 @@ COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=azure-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
@@ -399,11 +409,12 @@ USER tenzir:tenzir
 FROM tenzir-ce-untested AS tenzir-ce-integration
 
 COPY test/ ./test
-RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp "${PREFIX}/libexec/uv" tool run \
+RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
+    TENZIR_BINARY="$PREFIX/bin/tenzir" \
+    TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \
+    "${PREFIX}/libexec/uv" tool run \
     --python ">=3.12" \
     tenzir-test \
-    --tenzir-binary "$PREFIX/bin/tenzir" \
-    --tenzir-node-binary "$PREFIX/bin/tenzir-node" \
     --root test \
     -j $(nproc) && \
     echo "success" > /tmp/tenzir-integration-result

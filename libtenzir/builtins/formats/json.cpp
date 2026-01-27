@@ -37,7 +37,6 @@
 #include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
-#include <caf/detail/is_one_of.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
@@ -1225,7 +1224,8 @@ public:
         .naming_prefix = std::string{Prefix.str()},
       },
     };
-    msb_parser.add_settings_to_parser(parser, false, false);
+    msb_parser.add_settings_to_parser(
+      parser, false, multi_series_builder_argument_parser::merge_option::no);
     parser.named_optional("_jobs", args.jobs);
     TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
@@ -1257,7 +1257,8 @@ public:
     parser.positional("x", expr, "string");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
-    msb_parser.add_settings_to_parser(parser, true, false);
+    msb_parser.add_settings_to_parser(
+      parser, true, multi_series_builder_argument_parser::merge_option::hidden);
     TRY(parser.parse(inv, ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     return function_use::make(

@@ -30,7 +30,7 @@ jobs:
       - name: Prevent pushing protected editions to public repos
         run: |
           # Create 'name registry' pairs
-          jq -r '.editions[] | select(.registries | length > 0) | .name as $name | .registries[]? // .registries | [ $name, . ] | join(" ")' \
+          jq -r '.editions[] | select(."image-registries" | length > 0) | .name as $name | ."image-registries"[]? // ."image-registries" | [ $name, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name registry; do
             # Explicitly allow tenzir, demo and dev images.
             [[ "${name}" =~ ^tenzir(|-dev|-deps|-node|-de|-node-de|-demo)$ ]] && continue
@@ -56,24 +56,6 @@ jobs:
           tags: tag:ci
           version: 1.66.4
           args: --ssh
-      - name: Configure
-        id: cfg
-        run: |
-          # Configure
-          echo '::notice inputs = ${{ toJSON(fromJSON(inputs.config)) }}'
-          echo "::notice checking registries..."
-          echo "needs-docker-hub=false" >> "$GITHUB_OUTPUT"
-          echo "needs-ecr=false" >> "$GITHUB_OUTPUT"
-          jq -r '.editions | map( .registries[]) | unique | .[]
-                 | if . == "docker.io" then
-                     "needs-docker-hub=true"
-                   elif . == "622024652768.dkr.ecr.eu-west-1.amazonaws.com" then
-                     "needs-ecr=true"
-                   else
-                     empty
-                   end
-                 | @sh' \
-                 <<< '${{ inputs.config }}' >> "${GITHUB_OUTPUT}"
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -81,15 +63,18 @@ jobs:
       - name: Update submodules
         run: |
           git submodule update --init --recursive contrib/tenzir-plugins
-      - name: Configure AWS Credentials
-        if: steps.cfg.outputs.needs-ecr
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801  # v31.8.0
         with:
-          role-to-assume: arn:aws:iam::622024652768:role/ecr-tenzir-ce-github-access
-          aws-region: eu-west-1
-      - name: Login to AWS ECR
-        if: steps.cfg.outputs.needs-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/0d70460758949966e91d9ecb823b821f963cefbb.tar.gz
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to registries
+        uses: ./.github/actions/registry-login
+        with:
+          config: ${{ inputs.config }}
+          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: actions/cache buildah
         id: buildah-cache
         if: ${{ ! startsWith(matrix.build.runner, 'ubicloud') }}
@@ -116,13 +101,6 @@ jobs:
           sudo cp -r /home/runner/work/buildah/* /usr/local/
           echo "BUILDAH_RUNTIME=/usr/local/bin/crun" >> $GITHUB_ENV
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: Login to registries
-        env:
-          TENZIR_BOT_GITHUB_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-        run: |
-          buildah login ghcr.io -u tenzir-bot -p "$TENZIR_BOT_GITHUB_TOKEN"
-          buildah login docker.io -u "${{ vars.DOCKERHUB_USER }}" -p "$DOCKERHUB_PASSWORD"
       - name: Setup actions/cache
         if: ${{ ! startsWith(matrix.build.runner, 'ubicloud') }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -149,7 +127,7 @@ jobs:
           CACHE_PATH=/home/runner/work/cache
           mkdir -p $CACHE_PATH
           cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
-          jq -r '.editions[] | .name as $name | .target as $target | .registries[]? | [ $name, $target, . ] | join(" ")' \
+          jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
             buildah build \
               --layers \
@@ -170,54 +148,25 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    outputs:
+      images: ${{ steps.collect-images.outputs.images }}
     steps:
-      - name: Configure
-        id: cfg
-        run: |
-          # Configure
-          echo '::notice inputs = ${{ toJSON(fromJSON(inputs.config)) }}'
-          echo "::notice checking registries..."
-          echo "needs-docker-hub=false" >> "$GITHUB_OUTPUT"
-          echo "needs-ecr=false" >> "$GITHUB_OUTPUT"
-          jq -r '.editions | map( .registries[]) | unique | .[]
-                 | if . == "docker.io" then
-                     "needs-docker-hub=true"
-                   elif . == "622024652768.dkr.ecr.eu-west-1.amazonaws.com" then
-                     "needs-ecr=true"
-                   else
-                     empty
-                   end
-                 | @sh' \
-                 <<< '${{ inputs.config }}' >> "${GITHUB_OUTPUT}"
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Login to registries
+        uses: ./.github/actions/registry-login
         with:
-          registry: ghcr.io
-          username: tenzir-bot
-          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          config: ${{ inputs.config }}
+          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Login to Docker Hub
-        if: steps.cfg.outputs.needs-docker-hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Configure AWS Credentials
-        if: steps.cfg.outputs.needs-ecr
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::622024652768:role/ecr-tenzir-ce-github-access
-          aws-region: eu-west-1
-      - name: Login to AWS ECR
-        if: steps.cfg.outputs.needs-ecr
-        uses: aws-actions/amazon-ecr-login@v2
       - name: Create and push manifest
         env:
           BUILDX_GIT_LABELS: full
         run: |
-          cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
-          jq -r '.editions[] | .name as $name | .target as $target | .registries[]? | [ $name, $target, . ] | join(" ")' \
+          jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
               echo "::notice Creating manifest for ${registry}/tenzir/${name}:${tag}"
@@ -227,3 +176,65 @@ jobs:
                 "${registry}/tenzir/${name}:arm64-${tag}"
             done
           done
+      - name: Collect images for signing
+        id: collect-images
+        run: |
+          # Generate list of all manifest images (without arch suffix)
+          jq -r '.editions[] | .name as $name | ."image-registries"[]? | [ $name, . ] | join(" ")' \
+            <<< '${{ inputs.config }}' > /tmp/editions.txt
+          images=()
+          while read -r name registry; do
+            for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
+              images+=("${registry}/tenzir/${name}:${tag}")
+            done
+          done < /tmp/editions.txt
+          printf '%s\n' "${images[@]}" | jq -R . | jq -sc '.' > /tmp/images.json
+          echo "images=$(cat /tmp/images.json)" >> "$GITHUB_OUTPUT"
+
+  sign-images:
+    name: Sign Images
+    runs-on: ubuntu-latest
+    needs:
+      - push-manifest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Login to registries
+        uses: ./.github/actions/registry-login
+        with:
+          config: ${{ inputs.config }}
+          ghcr-token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          dockerhub-user: ${{ vars.DOCKERHUB_USER }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      # --- Cosign Signing (for general use with `cosign verify`) ---
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign images with Cosign (keyless OIDC)
+        # Keyless signing uses GitHub Actions OIDC identity.
+        # Verify with:
+        #   cosign verify \
+        #     --certificate-identity-regexp="https://github.com/tenzir/tenzir/.*" \
+        #     --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+        #     <image>
+        run: |
+          for image in $(echo '${{ needs.push-manifest.outputs.images }}' | jq -r '.[]'); do
+            echo "::notice Signing ${image} with Cosign (keyless)"
+            cosign sign --yes "${image}"
+          done
+
+      # --- Sigstore-format Signing (for Podman automatic verification) ---
+      # This creates sigstore-format signatures stored directly in the registry.
+      # No lookaside server needed - signatures are stored as OCI artifacts.
+      # Users configure /etc/containers/policy.json with the public key
+      # and set use-sigstore-attachments: true in registries.d.
+      - name: Sign images with sigstore format (Podman-compatible)
+        env:
+          COSIGN_PASSWORD: ${{ secrets.CONTAINER_SIGNING_KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.CONTAINER_SIGNING_KEY }}" > /tmp/signing-key.pem
+          for image in $(echo '${{ needs.push-manifest.outputs.images }}' | jq -r '.[]'); do
+            echo "::notice Signing ${image} with sigstore format for Podman"
+            cosign sign --yes --key /tmp/signing-key.pem "${image}"
+          done
+          rm -f /tmp/signing-key.pem

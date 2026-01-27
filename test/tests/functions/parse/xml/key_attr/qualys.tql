@@ -1,0 +1,21 @@
+// Qualys-style vulnerability report with KEY[@name] pattern
+from {xml: r#"<DATALIST>
+  <HEADER>
+    <NAME>Report</NAME>
+  </HEADER>
+  <LIST>
+    <RECORD>
+      <KEY name="QID">10001</KEY>
+      <KEY name="CVE">CVE-2024-1234</KEY>
+      <KEY name="SEVERITY">Critical</KEY>
+    </RECORD>
+    <RECORD>
+      <KEY name="QID">10002</KEY>
+      <KEY name="CVE">CVE-2024-5678</KEY>
+      <KEY name="SEVERITY">Medium</KEY>
+    </RECORD>
+  </LIST>
+</DATALIST>"#}
+first = xml.parse_xml(xpath="//RECORD[1]", key_attr="name")
+all = xml.parse_xml(xpath="//RECORD", key_attr="name")
+select first, all

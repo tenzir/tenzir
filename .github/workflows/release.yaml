@@ -3,26 +3,30 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      version:
+      bump:
+        description: Version bump type
+        required: true
+        type: choice
+        options:
+          - minor
+          - patch
+      intro:
         description: |
-          Version identifier for the release (e.g., v5.3.0)
+          Intro of the release
+
+          The intro should be 1-2 sentences long, must be written in active
+          voice, and should clearly communicate the theme of the release to the
+          user. Use full sentences and avoid abbreviations.
         required: true
         type: string
-      title:
-        description: |
-          Title of the release (e.g., "Tenzir Node v5.3.0")
-
-          The title of the release should be at most three words long, must be
-          title-cased.
+  workflow_call:
+    inputs:
+      bump:
+        description: Version bump type (minor, patch, or major)
         required: true
         type: string
-      description:
-        description: |
-          Description of the release
-
-          The description of the release should be 1-2 sentences long, must be
-          written in active voice, and should clearly communicate the theme of
-          the release to the user. Use full sentences and avoid abbreviations.
+      intro:
+        description: Intro of the release
         required: true
         type: string
 
@@ -74,13 +78,8 @@ jobs:
         run: |
           git config --global user.name "tenzir-bot"
           git config --global user.email "engineering@tenzir.com"
-
-      - name: Validate version format
-        run: |
-          if [[ ! "${{ github.event.inputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
-            echo "Error: Version must follow semver format (e.g., v1.2.3 or v1.2.3-beta1)"
-            exit 1
-          fi
+          # Embed token in remote URL for push authentication (checkout uses persist-credentials: false)
+          git remote set-url origin https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/${{ github.repository }}.git
 
       - name: Determine release type based on branch
         id: release_type
@@ -94,30 +93,31 @@ jobs:
             echo "Running on $CURRENT_BRANCH branch - this will be a non-latest release"
           fi
 
-      - name: Check if release already exists
+      - name: Check for unreleased entries
         run: |
-          if [ -f "changelog/releases/${{ github.event.inputs.version }}.yaml" ]; then
-            echo "Error: Release file for ${{ github.event.inputs.version }} already exists"
+          if [ ! -d "changelog/unreleased" ] || [ -z "$(ls -A changelog/unreleased 2>/dev/null)" ]; then
+            echo "Error: No unreleased changelog entries found in changelog/unreleased/"
+            echo "Add changelog entries before creating a release."
             exit 1
           fi
-          if git tag -l | grep -q "^${{ github.event.inputs.version }}$"; then
-            echo "Error: Tag ${{ github.event.inputs.version }} already exists"
-            exit 1
-          fi
+          echo "Found $(ls changelog/unreleased | wc -l | tr -d ' ') unreleased entries"
 
-      - name: Run release script
+      - name: Create release
+        id: release
         env:
-          RELEASE_TITLE: ${{ github.event.inputs.title }}
-          RELEASE_DESCRIPTION: ${{ github.event.inputs.description }}
+          RELEASE_INTRO: ${{ inputs.intro }}
         run: |
-          ./changelog/release.py "${{ github.event.inputs.version }}" \
-            --title "$RELEASE_TITLE" \
-            --description "$RELEASE_DESCRIPTION"
+          VERSION=$(uvx tenzir-ship release create \
+            --${{ inputs.bump }} \
+            --intro "$RELEASE_INTRO" \
+            --yes)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Created release ${VERSION}"
 
       - name: Update version.json and Python package versions
         run: |
           # Extract version without 'v' prefix
-          VERSION_NUMBER=$(echo "${{ github.event.inputs.version }}" | sed 's/^v//')
+          VERSION_NUMBER=$(uvx tenzir-ship release version --bare)
 
           # Update tenzir-version in version.json using jq
           jq --arg version "${VERSION_NUMBER}" '.["tenzir-version"] = $version' version.json > version.json.tmp
@@ -130,92 +130,48 @@ jobs:
 
           # Keep dependency constraints in sync with the new version
           UPPER_BOUND=$(uvx --from semver pysemver bump minor "${VERSION_NUMBER}")
-
           uv --directory python add --package tenzir --frozen "tenzir-common>=${VERSION_NUMBER},<${UPPER_BOUND}"
           uv --directory python add --package tenzir-operator --frozen "tenzir-common>=${VERSION_NUMBER},<${UPPER_BOUND}"
+          uv --directory python lock
 
           echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
           echo "Updated Python package versions to: ${VERSION_NUMBER}"
 
-      - name: Verify release file was created
-        run: |
-          if [ ! -f "changelog/releases/${{ github.event.inputs.version }}.yaml" ]; then
-            echo "Error: Release file was not created"
-            exit 1
-          fi
-          echo "Release file created successfully:"
-          cat "changelog/releases/${{ github.event.inputs.version }}.yaml"
-
-          echo "Updated version.json:"
-          cat "version.json"
-
-      - name: Commit release file
-        env:
-          GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: |
-          # Setup git
-          git config --global user.name 'tenzir-bot'
-          git config --global user.email 'engineering@tenzir.com'
-          git remote set-url origin https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${{ github.repository }}.git
-
-          # Commit changes
-          git add --all
-          git commit -s -m "Release Tenzir Node ${{ github.event.inputs.version }}"
-
-      - name: Create signed annotated tag
-        env:
-          TAG_TITLE: ${{ github.event.inputs.title }}
-        run: |
-          git tag -a -s "${{ github.event.inputs.version }}" \
-            -m "Tenzir Node ${{ github.event.inputs.version }}: $TAG_TITLE"
-
-      - name: Push changes and tag
-        run: |
-          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          git push origin "$CURRENT_BRANCH"
-          git push origin "${{ github.event.inputs.version }}"
-
       - name: Generate SBOM artifact
         run: nix run .#generate-sbom -- /tmp/tenzir.spdx.json
 
-      - name: Copy release file to main branch (non-latest release)
-        if: steps.release_type.outputs.is_latest == 'false'
+      - name: Publish release
         env:
-          GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          # Store the release file content
-          cp "changelog/releases/${{ github.event.inputs.version }}.yaml" "/tmp/release.yaml"
+          # Stage changes safely: -u for tracked files, explicit path for new release dir
+          git add -u
+          git add changelog/releases/
+          # The --commit flag commits staged changes, --tag creates and pushes
+          # a signed tag (via git config), and --no-latest prevents backports
+          # from becoming the "Latest" release on GitHub.
+          uvx tenzir-ship release publish \
+            --commit \
+            --tag \
+            ${{ steps.release_type.outputs.is_latest == 'false' && '--no-latest' || '' }} \
+            --yes
 
-          # Extract changelog entry IDs from the release file
-          CHANGE_IDS=$(yq eval '.changes[]' "changelog/releases/${{ github.event.inputs.version }}.yaml")
+      - name: Attach SBOM to release
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: gh release upload "${{ steps.release.outputs.version }}" /tmp/tenzir.spdx.json --clobber
 
-          # Copy referenced changelog entries to temp directory
-          mkdir -p "/tmp/changes"
-          for CHANGE_ID in $CHANGE_IDS; do
-            if [ -f "changelog/changes/${CHANGE_ID}.md" ]; then
-              cp "changelog/changes/${CHANGE_ID}.md" "/tmp/changes/"
-            fi
-          done
-
-          # Switch to main branch
+      - name: Copy release to main branch (non-latest release)
+        if: steps.release_type.outputs.is_latest == 'false'
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          cp -r "changelog/releases/${{ steps.release.outputs.version }}" "/tmp/release-dir"
           git fetch origin main
           git checkout main
-
-          # Copy the release file
-          cp "/tmp/release.yaml" "changelog/releases/${{ github.event.inputs.version }}.yaml"
-
-          # Copy the referenced changelog entries
-          for CHANGE_ID in $CHANGE_IDS; do
-            if [ -f "/tmp/changes/${CHANGE_ID}.md" ]; then
-              cp "/tmp/changes/${CHANGE_ID}.md" "changelog/changes/"
-            fi
-          done
-
-          # Commit to main
-          git add "changelog/releases/${{ github.event.inputs.version }}.yaml" changelog/changes/
-          git commit -s -m "Add backport release Tenzir Node ${{ github.event.inputs.version }}"
+          cp -r "/tmp/release-dir" "changelog/releases/${{ steps.release.outputs.version }}"
+          git add "changelog/releases/${{ steps.release.outputs.version }}"
+          git commit -s -m "Add backport release Tenzir Node ${{ steps.release.outputs.version }}"
           git push origin main
 
       - name: Update latest branch
@@ -224,49 +180,18 @@ jobs:
           git checkout -B latest
           git push origin latest --force
 
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-          RELEASE_TITLE: ${{ github.event.inputs.title }}
-          RELEASE_DESCRIPTION: ${{ github.event.inputs.description }}
-        run: |
-          # Format version for changelog URL (replace dots with dashes, remove 'v' prefix)
-          VERSION_FOR_URL=$(echo "${{ github.event.inputs.version }}" | sed 's/^v//' | sed 's/\./-/g')
-          CHANGELOG_URL="https://docs.tenzir.com/changelog/node/v${VERSION_FOR_URL}/"
-
-          # Create release notes file to handle special characters properly
-          cat > /tmp/release-notes.md << 'EOF'
-          ${{ github.event.inputs.description }}
-
-          For a detailed list of all changes, view [the changelog](CHANGELOG_URL_PLACEHOLDER).
-          EOF
-
-          # Replace the placeholder with the actual URL
-          sed -i "s|CHANGELOG_URL_PLACEHOLDER|${CHANGELOG_URL}|g" /tmp/release-notes.md
-
-          # Create the release using the notes file
-          gh release create "${{ github.event.inputs.version }}" \
-            --title "$RELEASE_TITLE" \
-            --notes-file /tmp/release-notes.md \
-            ${{ steps.release_type.outputs.is_latest == 'true' && '--latest' || '--latest=false' }}
-
-      - name: Attach SBOM to release
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: gh release upload "${{ github.event.inputs.version }}" /tmp/tenzir.spdx.json --clobber
-
       - name: Output success message (latest release)
         if: steps.release_type.outputs.is_latest == 'true'
         run: |
-          echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
-          echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
-          echo "🏷️ Tag: ${{ github.event.inputs.version }}"
+          echo "🎉 Release ${{ steps.release.outputs.version }} created successfully!"
+          echo "📁 Release directory: changelog/releases/${{ steps.release.outputs.version }}/"
+          echo "🏷️ Tag: ${{ steps.release.outputs.version }}"
           echo "🌿 Latest branch updated"
-          echo "📋 GitHub release: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.version }}"
+          echo "📋 GitHub release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.version }}"
 
       - name: Output success message (non-latest release)
         if: steps.release_type.outputs.is_latest == 'false'
         run: |
-          echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
-          echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
-          echo "📋 Release file copied to main branch"
+          echo "🎉 Release ${{ steps.release.outputs.version }} created successfully!"
+          echo "📁 Release directory: changelog/releases/${{ steps.release.outputs.version }}/"
+          echo "📋 Release copied to main branch"

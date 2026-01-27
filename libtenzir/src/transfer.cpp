@@ -22,33 +22,33 @@ transfer::transfer(transfer_options opts) : options{std::move(opts)} {
 
 auto transfer::prepare(http::request req) -> caf::error {
   TENZIR_DEBUG("preparing HTTP request");
-  if (auto err = reset()) {
+  if (auto err = reset(); err.valid()) {
     return err;
   }
   auto& easy = handle();
   // Enable all supported built-in compressions by setting the empty string.
   // This can always be overriden by manually setting the Accept-Encoding
   // header.
-  if (auto err = to_error(easy.set(CURLOPT_ACCEPT_ENCODING, ""))) {
+  if (auto err = to_error(easy.set(CURLOPT_ACCEPT_ENCODING, "")); err.valid()) {
     return err;
   }
   // Ensure to follow HTTP redirects.
-  if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1))) {
+  if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1)); err.valid()) {
     return err;
   }
-  TRY(options.ssl.apply_to(easy, req.uri));
+  TRY(options.ssl.apply_to(easy, req.uri, nullptr));
   // Set method.
   TENZIR_DEBUG("setting method: {}", req.method);
   if (req.method == "GET") {
-    if (auto err = to_error(easy.set(CURLOPT_HTTPGET, 1))) {
+    if (auto err = to_error(easy.set(CURLOPT_HTTPGET, 1)); err.valid()) {
       return err;
     }
   } else if (req.method == "HEAD") {
-    if (auto err = to_error(easy.set(CURLOPT_NOBODY, 1))) {
+    if (auto err = to_error(easy.set(CURLOPT_NOBODY, 1)); err.valid()) {
       return err;
     }
   } else if (req.method == "POST") {
-    if (auto err = to_error(easy.set(CURLOPT_POST, 1))) {
+    if (auto err = to_error(easy.set(CURLOPT_POST, 1)); err.valid()) {
       return err;
     }
     // We set the POST body size here, even if the request body is empty, i.e.,
@@ -56,16 +56,17 @@ auto transfer::prepare(http::request req) -> caf::error {
     // is actually a valid scenario.
     auto size = detail::narrow_cast<long>(req.body.size());
     TENZIR_DEBUG("setting {}-byte POST body", size);
-    if (auto err = to_error(easy.set_postfieldsize(size))) {
+    if (auto err = to_error(easy.set_postfieldsize(size)); err.valid()) {
       return err;
     }
   } else if (req.method == "PUT") {
-    if (auto err = to_error(easy.set(CURLOPT_UPLOAD, 1))) {
+    if (auto err = to_error(easy.set(CURLOPT_UPLOAD, 1)); err.valid()) {
       return err;
     }
   } else if (not req.method.empty()) {
     const auto* method = req.method.c_str();
-    if (auto err = to_error(easy.set(CURLOPT_CUSTOMREQUEST, method))) {
+    if (auto err = to_error(easy.set(CURLOPT_CUSTOMREQUEST, method));
+        err.valid()) {
       return err;
     }
   }
@@ -78,11 +79,12 @@ auto transfer::prepare(http::request req) -> caf::error {
       // TODO: Figure out a way to avoid the extra copy here, but this requires
       // moving the request in some fashion and tying its lifetime to the
       // handle.
-      if (auto err = to_error(easy.set(CURLOPT_COPYPOSTFIELDS, req.body))) {
+      if (auto err = to_error(easy.set(CURLOPT_COPYPOSTFIELDS, req.body));
+          err.valid()) {
         return err;
       }
     } else if (req.method == "PUT") {
-      if (auto err = set(easy, chunk::make(std::move(req.body)))) {
+      if (auto err = set(easy, chunk::make(std::move(req.body))); err.valid()) {
         return err;
       }
     } else {
@@ -111,7 +113,7 @@ auto transfer::prepare(http::request req) -> caf::error {
 
 auto transfer::prepare(std::string url) -> caf::error {
   TENZIR_DEBUG("setting URL: {}", url);
-  if (auto err = reset()) {
+  if (auto err = reset(); err.valid()) {
     return err;
   }
   return to_error(easy_.set(CURLOPT_URL, url.c_str()));
@@ -150,10 +152,10 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
   // depdens on the transfer type what libcurl will use (which we don't know in
   // this context), we are going to set both here.
   auto chunk_size = detail::narrow_cast<long>(chunk->size());
-  if (auto err = to_error(easy_.set_infilesize(chunk_size))) {
+  if (auto err = to_error(easy_.set_infilesize(chunk_size)); err.valid()) {
     return err;
   }
-  if (auto err = to_error(easy_.set_postfieldsize(chunk_size))) {
+  if (auto err = to_error(easy_.set_postfieldsize(chunk_size)); err.valid()) {
     return err;
   }
   auto on_read =
@@ -259,14 +261,15 @@ auto transfer::reset() -> caf::error {
   }
   if (not options.default_protocol.empty()) {
     if (auto err = to_error(
-          easy_.set(CURLOPT_DEFAULT_PROTOCOL, options.default_protocol))) {
+          easy_.set(CURLOPT_DEFAULT_PROTOCOL, options.default_protocol));
+        err.valid()) {
       return diagnostic::error("invalid default protocol: {}",
                                options.default_protocol)
         .note("{}", err)
         .to_error();
     }
   }
-  if (options.ssl.skip_peer_verification) {
+  if (options.ssl.get_skip_peer_verification(nullptr).inner) {
     auto code = easy_.set(CURLOPT_SSL_VERIFYPEER, 0);
     TENZIR_ASSERT(code == curl::easy::code::ok);
     code = easy_.set(CURLOPT_SSL_VERIFYHOST, 0);

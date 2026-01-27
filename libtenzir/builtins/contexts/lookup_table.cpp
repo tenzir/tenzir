@@ -760,7 +760,7 @@ struct v1_loader : public context_loader {
         TENZIR_ASSERT(field->name());
         TENZIR_ASSERT(field->data());
         if (field->name()->string_view() == "key") {
-          if (auto err = unpack(*field->data(), key)) {
+          if (auto err = unpack(*field->data(), key); err.valid()) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid key: {}",
@@ -769,7 +769,7 @@ struct v1_loader : public context_loader {
           continue;
         }
         if (field->name()->string_view() == "value") {
-          if (auto err = unpack(*field->data(), value.raw_data)) {
+          if (auto err = unpack(*field->data(), value.raw_data); err.valid()) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid value: "
@@ -780,7 +780,7 @@ struct v1_loader : public context_loader {
         }
         if (field->name()->string_view() == "create-timeout") {
           auto create_timeout = data{};
-          if (auto err = unpack(*field->data(), create_timeout)) {
+          if (auto err = unpack(*field->data(), create_timeout); err.valid()) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
@@ -800,7 +800,7 @@ struct v1_loader : public context_loader {
         }
         if (field->name()->string_view() == "write-timeout") {
           auto write_timeout = data{};
-          if (auto err = unpack(*field->data(), write_timeout)) {
+          if (auto err = unpack(*field->data(), write_timeout); err.valid()) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
@@ -820,7 +820,7 @@ struct v1_loader : public context_loader {
         if (field->name()->string_view() == "read-timeout"
             or field->name()->string_view() == "update-timeout") {
           auto read_timeout = data{};
-          if (auto err = unpack(*field->data(), read_timeout)) {
+          if (auto err = unpack(*field->data(), read_timeout); err.valid()) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
@@ -840,7 +840,8 @@ struct v1_loader : public context_loader {
         if (field->name()->string_view() == "read-timeout-duration"
             or field->name()->string_view() == "update-duration") {
           auto read_timeout_duration = data{};
-          if (auto err = unpack(*field->data(), read_timeout_duration)) {
+          if (auto err = unpack(*field->data(), read_timeout_duration);
+              err.valid()) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
