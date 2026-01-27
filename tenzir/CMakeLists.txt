@@ -312,7 +312,7 @@ endif ()
 
 # Separate make targets for legacy and neo tests
 add_custom_target(integration-legacy DEPENDS tenzir)
-tenzir_build_test_command(_legacy_cmd EXTRA_ARGS "--jobs" "4" "--summary"
+tenzir_build_test_command(_legacy_cmd EXTRA_ARGS "--jobs" "4"
                           WORKING_DIR "${CMAKE_SOURCE_DIR}/test-legacy"
                           SELECTION ${_contrib_test_dirs})
 add_custom_command(TARGET integration-legacy POST_BUILD
@@ -320,7 +320,7 @@ add_custom_command(TARGET integration-legacy POST_BUILD
   USES_TERMINAL VERBATIM)
 
 add_custom_target(integration-neo DEPENDS tenzir)
-tenzir_build_test_command(_neo_cmd EXTRA_ARGS "--jobs" "4" "--summary"
+tenzir_build_test_command(_neo_cmd EXTRA_ARGS "--jobs" "4"
                           WORKING_DIR "${CMAKE_SOURCE_DIR}/test")
 add_custom_command(TARGET integration-neo POST_BUILD
   COMMAND ${_neo_cmd}
