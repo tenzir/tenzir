@@ -69,8 +69,6 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.dump_inst_ir
     = caf::get_or(inv.options, "tenzir.exec.dump-inst-ir", false);
   cfg.dump_opt_ir = caf::get_or(inv.options, "tenzir.exec.dump-opt-ir", false);
-  cfg.dump_finalized
-    = caf::get_or(inv.options, "tenzir.exec.dump-finalized", false);
   cfg.dump_pipeline
     = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
   cfg.dump_diagnostics

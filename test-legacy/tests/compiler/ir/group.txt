@@ -17,24 +17,25 @@
           
         ],
         operators: [
-          legacy_ir partial {
-            plugin: "tql2.head",
-            inv: {
-              op: {
-                path: [
-                  `head` @ 30..34
-                ],
-                ref: std::head/op
-              },
-              args: [
-                field_access {
-                  left: dollar_var `$group` -> 2 @ 35..41,
-                  dot: 41..42,
-                  has_question_mark: false,
-                  name: `count` @ 42..47
-                }
-              ]
-            }
+          GenericIr {
+            op: {
+              path: [
+                `head` @ 30..34
+              ],
+              ref: std::head/op
+            },
+            desc: "head",
+            args: [
+              Incomplete field_access {
+                left: dollar_var `$group` -> 2 @ 35..41,
+                dot: 41..42,
+                has_question_mark: false,
+                name: `count` @ 42..47
+              }
+            ],
+            named_args: [
+              
+            ]
           }
         ]
       },

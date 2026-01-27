@@ -372,7 +372,7 @@ public:
   }
 
   explicit(false) operator base_ctx() {
-    return base_ctx{dh_, *reg_, sys_};
+    return base_ctx{dh_, *reg_};
   }
 
   auto actor_system() -> caf::actor_system& {

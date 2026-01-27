@@ -109,7 +109,7 @@ public:
     auto copy = ir_;
     // FIXME: Don't do this.
     auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg, ctx.actor_system()};
+    auto b_ctx = base_ctx{ctx, *reg};
     CO_TRY(copy.substitute(substitute_ctx{b_ctx, nullptr}, true));
     auto id = next_;
     next_ += 1;

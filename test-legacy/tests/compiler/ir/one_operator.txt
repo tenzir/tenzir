@@ -3,8 +3,8 @@
     
   ],
   operators: [
-    legacy_ir unique_ptr version {
-      
+    version_ir {
+      self: 0..7
     }
   ]
 }

@@ -3,54 +3,50 @@
      
    ],
    operators: [
-     legacy_ir unique_ptr export {
-       expression: {
--        node: predicate {
--          lhs: meta_extractor {
--            kind: 3
--          },
--          op: 4,
--          rhs: data bool false
-+        node: conjunction {
-+          conjunction: [
-+            {
-+              node: predicate {
-+                lhs: meta_extractor {
-+                  kind: 3
-+                },
-+                op: 4,
-+                rhs: data bool false
-+              }
-+            },
-+            {
-+              node: predicate {
-+                lhs: field_extractor {
-+                  field: "foo"
-+                },
-+                op: 4,
-+                rhs: data int64 42
-+              }
-+            }
-+          ]
-         }
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 15..21
+         ],
+         ref: std::export/op
        },
-       mode: {
-         retro: true,
-         live: false,
-         internal: false,
-         parallel: 3
-       }
--    },
--    where_ir {
+       desc: "export",
+       args: [
+         
+       ],
+       named_args: [
+         
+       ]
+     },
+     where_ir {
 -      self: 22..27,
--      predicate: binary_expr {
--        left: root_field {
--          id: `foo` @ 28..31,
--          has_question_mark: false
--        },
--        op: "eq" @ 32..34,
--        right: constant int64 42 @ 35..39
--      }
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `foo` @ 28..31,
+           has_question_mark: false
+         },
+         op: "eq" @ 32..34,
+         right: constant int64 42 @ 35..39
+       }
++    },
++    GenericIr {
++      op: {
++        path: [
++          `write_tql` @ 0..0
++        ],
++        ref: std::write_tql/op
++      },
++      desc: "write_tql",
++      args: [
++        
++      ],
++      named_args: [
++        
++      ]
++    },
++    SaveStdoutIr {
++      
      }
    ]
  }

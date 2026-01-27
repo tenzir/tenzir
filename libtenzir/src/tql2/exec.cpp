@@ -555,7 +555,7 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
-  auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), sys};
+  auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   // (void)b_ctx.system();
   auto c_ctx = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(c_ctx));
@@ -625,11 +625,6 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Spawn operators from the IR.
   auto spawned = std::move(ir).spawn(tag_v<void>);
-  if (cfg.dump_finalized) {
-    // TODO: Should we have a different flag for this?
-    fmt::print("spawned {} operators\n", spawned.size());
-    return not ctx.has_failure();
-  }
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;
@@ -658,8 +653,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if (cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir
-        or cfg.dump_finalized) {
+    if (cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir) {
       // This new code path will eventually supersede the current one.
       return exec_with_ir(std::move(parsed), cfg, ctx, sys);
     }

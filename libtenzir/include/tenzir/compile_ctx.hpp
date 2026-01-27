@@ -95,10 +95,6 @@ public:
     return root_.ctx_;
   }
 
-  explicit(false) operator caf::actor_system&() const {
-    return root_.ctx_;
-  }
-
 private:
   compile_ctx(root& root, const env_t* env);
 

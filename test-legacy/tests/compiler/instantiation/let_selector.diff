@@ -1,6 +1,21 @@
- error: assignment is not implemented yet
-  --> tests/compiler/instantiation/let_selector.tql:7:1
-   |
- 7 | $foo = "test"
-   | ^^^^^^^^^^^^^ 
-   |
+ {
+   lets: [
+-    {
+-      ident: `$foo` @ 25..29,
+-      expr: constant string "field" @ 32..39,
+-      id: 1
+-    }
++    
+   ],
+   operators: [
+     set_ir {
+       assignments: [
+         {
+           left: dollar_var `$foo` -> free @ 41..45,
+           equals: 46..47,
+           right: constant string "test" @ 48..54
+         }
+       ]
+     }
+   ]
+ }
