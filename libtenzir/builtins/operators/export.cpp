@@ -66,8 +66,10 @@ private:
 };
 
 struct ExportArgs {
-  expression expr = trivially_true_expression();
-  export_mode mode;
+  bool live = false;
+  bool retro = false;
+  bool internal = false;
+  uint64_t parallel = 3;
 };
 
 auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
@@ -106,7 +108,15 @@ auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
 class Export final : public Operator<void, table_slice> {
 public:
   explicit Export(ExportArgs args)
-    : expr_{std::move(args.expr)}, mode_{args.mode} {
+    : expr_{expression{
+        predicate{
+          meta_extractor{meta_extractor::internal},
+          relational_operator::equal,
+          data{args.internal},
+        },
+      }},
+      mode_{args.live ? args.retro : true, args.live, args.internal,
+            args.parallel} {
   }
 
   Export(const Export&) = delete;
@@ -284,8 +294,20 @@ public:
   }
 
   auto describe() const -> Description override {
-    // TODO: Add arguments for live, retro, internal, parallel
     auto d = Describer<ExportArgs, Export>{};
+    d.named("live", &ExportArgs::live);
+    d.named("retro", &ExportArgs::retro);
+    d.named("internal", &ExportArgs::internal);
+    auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(parallel));
+      if (value == 0) {
+        diagnostic::error("parallel level must be greater than zero")
+          .primary(ctx.get_location(parallel).value())
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 
