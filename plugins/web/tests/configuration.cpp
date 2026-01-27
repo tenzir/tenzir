@@ -8,7 +8,6 @@
 
 #include "web/configuration.hpp"
 
-#include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
