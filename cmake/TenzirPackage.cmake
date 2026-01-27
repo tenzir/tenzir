@@ -129,9 +129,6 @@ cpack_add_component(
   DISPLAY_NAME "Runtime"
   DESCRIPTION "Runtime files for Tenzir"
   REQUIRED)
-# TODO: Remove all Unspecified install components. The vendored fast_float
-# library always installs itself; once fastfloat/fast_float#142 is merged we can
-# update the vendored library and reconsider this.
 cpack_add_component(
   Unspecified
   DISPLAY_NAME "Unspecified"

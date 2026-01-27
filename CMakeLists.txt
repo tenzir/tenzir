@@ -188,6 +188,47 @@ install(
 # Require standard C++26.
 target_compile_features(libtenzir_internal INTERFACE cxx_std_23)
 
+# -- feature checks ------------------------------------------------------------
+
+# Check whether std::from_chars supports floating-point overloads.
+set(_TENZIR_CXX_STANDARD_BACKUP "${CMAKE_CXX_STANDARD}")
+set(_TENZIR_CXX_STANDARD_REQUIRED_BACKUP "${CMAKE_CXX_STANDARD_REQUIRED}")
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+check_cxx_source_compiles(
+  "
+  #include <charconv>
+  int main() {
+    double value = 0;
+    auto res = std::from_chars(\"0.0\", \"0.0\" + 3, value);
+    (void)res;
+    return 0;
+  }
+  "
+  TENZIR_HAS_FLOAT_FROM_CHARS)
+# Restore CMAKE_CXX_STANDARD. Must use unset() if it was previously unset,
+# otherwise plugins that use target_compile_features will fail with "CXX_STANDARD
+# property contained an invalid value: ''".
+if (_TENZIR_CXX_STANDARD_BACKUP)
+  set(CMAKE_CXX_STANDARD "${_TENZIR_CXX_STANDARD_BACKUP}")
+else ()
+  unset(CMAKE_CXX_STANDARD)
+endif ()
+if (_TENZIR_CXX_STANDARD_REQUIRED_BACKUP)
+  set(CMAKE_CXX_STANDARD_REQUIRED "${_TENZIR_CXX_STANDARD_REQUIRED_BACKUP}")
+else ()
+  unset(CMAKE_CXX_STANDARD_REQUIRED)
+endif ()
+unset(_TENZIR_CXX_STANDARD_BACKUP)
+unset(_TENZIR_CXX_STANDARD_REQUIRED_BACKUP)
+if (TENZIR_HAS_FLOAT_FROM_CHARS)
+  target_compile_definitions(libtenzir_internal
+                             INTERFACE TENZIR_HAS_FLOAT_FROM_CHARS=1)
+else ()
+  target_compile_definitions(libtenzir_internal
+                             INTERFACE TENZIR_HAS_FLOAT_FROM_CHARS=0)
+endif ()
+
 # Enable coroutines for GCC < 11.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                              VERSION_LESS 11)

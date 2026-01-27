@@ -1,0 +1,45 @@
+// Edge case tests for float() function after fastfloat removal
+// Note: float() uses parsers::number which has specific behavior:
+// - Tries integer first, then real
+// - Scientific notation requires decimal point (1.0e10 works, 1e10 doesn't)
+// - inf/nan are not supported (returns null)
+
+from {
+  // Basic parsing
+  x: "123.456",
+}, {
+  x: "-123.456",
+}, {
+  x: "+123.456",
+}, {
+  // Partial numbers
+  x: ".456",
+}, {
+  x: "-.456",
+}, {
+  x: "+.456",
+}, {
+  // Scientific notation (with decimal)
+  x: "1.5e5",
+}, {
+  x: "1.5E5",
+}, {
+  x: "1.5e+5",
+}, {
+  x: "1.5e-5",
+}, {
+  x: ".5e5",
+}, {
+  // Negative zero
+  x: "-0",
+}, {
+  x: "-0.0",
+}, {
+  // Near DBL_MAX
+  x: "1.7e308",
+}, {
+  // Integers (handled by integer parser)
+  x: "12345",
+}
+
+x = x.float()

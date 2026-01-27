@@ -491,28 +491,6 @@ target_link_libraries(libtenzir PUBLIC reproc++)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
 dependency_summary("reproc++" reproc+++ "Dependencies")
 
-# Link against fast_float
-option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
-if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
-  find_package(FastFloat CONFIG)
-endif ()
-if (NOT FastFloat_FOUND)
-  # Use bundled fast_float.
-  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/CMakeLists.txt")
-    message(
-      FATAL_ERROR
-        "fast_float library not found, either use -DFastFloat_DIR=... or"
-        " initialize the libtenzir/aux/fast_float submodule")
-  endif ()
-  add_subdirectory(aux/fast_float)
-  TenzirSystemizeTarget(fast_float)
-  dependency_summary("fast_float" "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float"
-                     "Dependencies")
-else ()
-  dependency_summary("fast_float" FastFloat::fast_float "Dependencies")
-endif ()
-target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
-
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)

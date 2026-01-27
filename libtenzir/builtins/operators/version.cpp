@@ -100,7 +100,6 @@ public:
                          BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100));
     X(caf, fmt::format("{}.{}.{}", CAF_MAJOR_VERSION, CAF_MINOR_VERSION,
                        CAF_PATCH_VERSION));
-    X(fast_float, "");
     X(flatbuffers,
       fmt::format("{}.{}.{}", FLATBUFFERS_VERSION_MAJOR,
                   FLATBUFFERS_VERSION_MINOR, FLATBUFFERS_VERSION_REVISION));
