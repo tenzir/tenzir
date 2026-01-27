@@ -124,6 +124,8 @@ jobs:
       # =========================================================================
       - name: Build
         id: build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           release_flag=""
           if [[ "${{ github.event_name }}" == "release" ]]; then
