@@ -8,6 +8,8 @@
 
 #include "tenzir/index_config.hpp"
 
+#include "tenzir/data.hpp"
+#include "tenzir/error.hpp"
 #include "tenzir/qualified_record_field.hpp"
 
 #include <fmt/format.h>
@@ -66,6 +68,48 @@ bool should_create_partition_index(
     }
   }
   return true;
+}
+
+namespace {
+
+auto convert_rule(const data& src, index_config::rule& dst) -> caf::error {
+  const auto* rec = try_as<record>(&src);
+  if (! rec) {
+    return caf::make_error(ec::convert_error, "expected record for rule");
+  }
+  if (const auto* targets = get_if<list>(rec, "targets")) {
+    for (const auto& elem : *targets) {
+      if (const auto* str = try_as<std::string>(&elem)) {
+        dst.targets.push_back(*str);
+      }
+    }
+  }
+  dst.fp_rate = get_or(*rec, "fp-rate", dst.fp_rate);
+  dst.create_partition_index
+    = get_or(*rec, "partition-index", dst.create_partition_index);
+  return caf::none;
+}
+
+} // namespace
+
+caf::error convert(const data& src, index_config& dst) {
+  const auto* rec = try_as<record>(&src);
+  if (! rec) {
+    return caf::make_error(ec::convert_error,
+                           "expected record for index_config conversion");
+  }
+  dst.default_fp_rate = get_or(*rec, "default-fp-rate", dst.default_fp_rate);
+  if (const auto* rules_list = get_if<list>(rec, "rules")) {
+    dst.rules.clear();
+    for (const auto& rule_data : *rules_list) {
+      index_config::rule rule;
+      if (auto err = convert_rule(rule_data, rule); err) {
+        return err;
+      }
+      dst.rules.push_back(std::move(rule));
+    }
+  }
+  return caf::none;
 }
 
 } // namespace tenzir
