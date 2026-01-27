@@ -138,7 +138,7 @@ jobs:
       # =========================================================================
       # Test Phase
       # =========================================================================
-      - name: Test Installation
+      - name: Run integration tests
         if: runner.os == 'Linux' && inputs.run-tests
         run: |
           python3 .github/workflows/nix-build.py test \
