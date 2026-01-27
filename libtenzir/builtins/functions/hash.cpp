@@ -11,7 +11,6 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/cast.hpp>
-#include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
