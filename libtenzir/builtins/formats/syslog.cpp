@@ -435,8 +435,10 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
 
 template <typename Message>
 struct syslog_row {
-  syslog_row(Message msg, size_t line_no)
-    : parsed(std::move(msg)), starting_line_no(line_no) {
+  syslog_row(Message msg, size_t line_no, std::string raw = {})
+    : parsed(std::move(msg)),
+      starting_line_no(line_no),
+      raw_message(std::move(raw)) {
   }
 
   void emit_diag(std::string_view parser_name, diagnostic_handler& diag) const {
@@ -455,6 +457,7 @@ struct syslog_row {
   Message parsed;
   size_t starting_line_no;
   size_t line_count{1};
+  std::string raw_message;
 };
 
 struct syslog_builder {
@@ -462,8 +465,12 @@ public:
   using message_type = message;
   using row_type = syslog_row<message_type>;
 
-  syslog_builder(multi_series_builder::options opts, diagnostic_handler& dh)
-    : timeout{opts.settings.timeout}, builder{std::move(opts), dh} {
+  syslog_builder(multi_series_builder::options opts, diagnostic_handler& dh,
+                 const std::optional<ast::field_path>& raw_message_field
+                 = std::nullopt)
+    : timeout{opts.settings.timeout},
+      builder{std::move(opts), dh},
+      raw_message_field_{raw_message_field ? &*raw_message_field : nullptr} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -484,6 +491,10 @@ public:
     } else {
       latest.parsed.msg->push_back('\n');
       latest.parsed.msg->append(line);
+    }
+    if (raw_message_field_) {
+      latest.raw_message.push_back('\n');
+      latest.raw_message.append(line);
     }
     ++latest.line_count;
     return true;
@@ -524,6 +535,9 @@ public:
     r.exact_field("message_id").data(std::move(row.hdr.msg_id));
     r.exact_field("structured_data").data(std::move(row.data));
     r.exact_field("message").data(std::move(row.msg));
+    if (raw_message_field_) {
+      r.field(*raw_message_field_).data(std::move(last_message->raw_message));
+    }
     last_message.reset();
   }
 
@@ -531,6 +545,7 @@ public:
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
+  const ast::field_path* raw_message_field_ = nullptr;
 };
 
 struct legacy_syslog_builder {
@@ -539,8 +554,12 @@ public:
   using row_type = syslog_row<message_type>;
 
   legacy_syslog_builder(multi_series_builder::options opts,
-                        diagnostic_handler& dh)
-    : timeout{opts.settings.timeout}, builder{std::move(opts), dh} {
+                        diagnostic_handler& dh,
+                        const std::optional<ast::field_path>& raw_message_field
+                        = std::nullopt)
+    : timeout{opts.settings.timeout},
+      builder{std::move(opts), dh},
+      raw_message_field_{raw_message_field ? &*raw_message_field : nullptr} {
   }
 
   auto add_new(row_type&& row) -> void {
@@ -579,6 +598,10 @@ public:
     auto& latest = *last_message;
     latest.parsed.content.push_back('\n');
     latest.parsed.content.append(line);
+    if (raw_message_field_) {
+      latest.raw_message.push_back('\n');
+      latest.raw_message.append(line);
+    }
     ++latest.line_count;
     return true;
   }
@@ -594,6 +617,9 @@ public:
     r.exact_field("app_name").data(std::move(msg.tag));
     r.exact_field("process_id").data(std::move(msg.process_id));
     r.exact_field("content").data(msg.content);
+    if (raw_message_field_) {
+      r.field(*raw_message_field_).data(std::move(last_message->raw_message));
+    }
     last_message.reset();
   }
 
@@ -601,6 +627,7 @@ public:
   multi_series_builder builder;
   time last_message_time;
   std::optional<row_type> last_message{};
+  const ast::field_path* raw_message_field_ = nullptr;
 };
 
 struct unknown_syslog_builder {
@@ -656,15 +683,19 @@ auto infuse_legacy_schema(multi_series_builder::options o)
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
-                multi_series_builder::options opts) -> generator<table_slice> {
+                multi_series_builder::options opts,
+                const std::optional<ast::field_path>& raw_message_field
+                = std::nullopt) -> generator<table_slice> {
   auto dh = transforming_diagnostic_handler{
     ctrl.diagnostics(), [](auto diag) {
       diag.message = fmt::format("syslog parser: {}", diag.message);
       return diag;
     }};
   const auto ordered = opts.settings.ordered;
-  auto new_builder = syslog_builder{infuse_new_schema(opts), dh};
-  auto legacy_builder = legacy_syslog_builder{infuse_legacy_schema(opts), dh};
+  auto new_builder
+    = syslog_builder{infuse_new_schema(opts), dh, raw_message_field};
+  auto legacy_builder
+    = legacy_syslog_builder{infuse_legacy_schema(opts), dh, raw_message_field};
   auto unknown_builder = unknown_syslog_builder{opts, dh};
   auto last = builder_tag::unknown_syslog_builder;
   const auto maybe_flush
@@ -715,14 +746,16 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         co_yield std::move(s);
       }
       last = builder_tag::syslog_builder;
-      new_builder.add_new({std::move(msg), line_nr});
+      auto raw = raw_message_field ? std::string{*line} : std::string{};
+      new_builder.add_new({std::move(msg), line_nr, std::move(raw)});
     } else if (auto legacy_parser = legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
       for (auto&& s : maybe_flush(builder_tag::legacy_syslog_builder)) {
         co_yield std::move(s);
       }
       last = builder_tag::legacy_syslog_builder;
-      legacy_builder.add_new({std::move(legacy_msg), line_nr});
+      auto raw = raw_message_field ? std::string{*line} : std::string{};
+      legacy_builder.add_new({std::move(legacy_msg), line_nr, std::move(raw)});
     } else if (last == builder_tag::syslog_builder
                and new_builder.add_line_to_latest(*line)) {
       continue;
@@ -816,8 +849,11 @@ class syslog_parser final : public plugin_parser {
 public:
   syslog_parser() = default;
 
-  syslog_parser(multi_series_builder::options opts, bool octet_counting)
-    : opts_{std::move(opts)}, octet_counting_{octet_counting} {
+  syslog_parser(multi_series_builder::options opts, bool octet_counting,
+                std::optional<ast::field_path> raw_message_field = std::nullopt)
+    : opts_{std::move(opts)},
+      octet_counting_{octet_counting},
+      raw_message_field_{std::move(raw_message_field)} {
   }
 
   auto name() const -> std::string override {
@@ -829,20 +865,22 @@ public:
     -> std::optional<generator<table_slice>> override {
     if (octet_counting_) {
       return parse_loop(split_octet(std::move(input), ctrl.diagnostics()), ctrl,
-                        opts_);
-    } else {
-      return parse_loop(to_lines(std::move(input)), ctrl, opts_);
+                        opts_, raw_message_field_);
     }
+    return parse_loop(to_lines(std::move(input)), ctrl, opts_,
+                      raw_message_field_);
   }
 
   friend auto inspect(auto& f, syslog_parser& x) -> bool {
-    return f.object(x).fields(f.field("octet", x.octet_counting_),
-                              f.field("opts", x.opts_));
+    return f.object(x).fields(
+      f.field("octet", x.octet_counting_), f.field("opts", x.opts_),
+      f.field("raw_message_field", x.raw_message_field_));
   }
 
 private:
   multi_series_builder::options opts_;
   bool octet_counting_ = false;
+  std::optional<ast::field_path> raw_message_field_;
 };
 
 auto make_root_field(std::string field) -> ast::root_field {
@@ -1193,13 +1231,15 @@ class read_syslog final
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
     bool octet_counting = false;
+    std::optional<ast::field_path> raw_message_field;
     parser.named_optional("octet_counting", octet_counting);
+    parser.named("raw_message", raw_message_field);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
-    return std::make_unique<parser_adapter<syslog_parser>>(
-      syslog_parser{std::move(opts), octet_counting});
+    return std::make_unique<parser_adapter<syslog_parser>>(syslog_parser{
+      std::move(opts), octet_counting, std::move(raw_message_field)});
   }
 };
 
