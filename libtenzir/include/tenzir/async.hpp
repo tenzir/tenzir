@@ -694,9 +694,9 @@ auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>>;
 
 struct PostCommit {};
 struct Shutdown {};
-struct StopOutput {};
+struct Stop {};
 
-using FromControl = variant<PostCommit, Shutdown, StopOutput>;
+using FromControl = variant<PostCommit, Shutdown, Stop>;
 
 TENZIR_ENUM(
   /// A message sent from an operator to the controller.

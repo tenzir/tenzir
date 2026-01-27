@@ -70,6 +70,7 @@ struct ExportArgs {
   bool retro = false;
   bool internal = false;
   uint64_t parallel = 3;
+  ir::optimize_filter filter;
 };
 
 auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
@@ -107,16 +108,7 @@ auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
 
 class Export final : public Operator<void, table_slice> {
 public:
-  explicit Export(ExportArgs args)
-    : expr_{expression{
-        predicate{
-          meta_extractor{meta_extractor::internal},
-          relational_operator::equal,
-          data{args.internal},
-        },
-      }},
-      mode_{args.live ? args.retro : true, args.live, args.internal,
-            args.parallel} {
+  explicit Export(ExportArgs args) : args_{std::move(args)} {
   }
 
   Export(const Export&) = delete;
@@ -128,8 +120,24 @@ public:
     co_await OperatorBase::start(ctx);
     auto node = co_await connect_to_node(ctx.actor_system());
     diag_queue_ = std::make_shared<UnboundedQueue<diagnostic>>();
+    // TODO: Figure out whether this makes sense.
+    auto legacy_conjunction = conjunction{};
+    auto rest = ir::optimize_filter{};
+    for (auto& filter : args_.filter) {
+      auto [legacy, remainder] = split_legacy_expression(args_.filter[0]);
+    }
+
+    auto expr = expression{
+      predicate{
+        meta_extractor{meta_extractor::internal},
+        relational_operator::equal,
+        data{args_.internal},
+      },
+    };
+    auto mode = export_mode{args_.live ? args_.retro : true, args_.live,
+                            args_.internal, args_.parallel};
     auto result
-      = co_await async_mail(atom::spawn_v, expr_, mode_).request(node);
+      = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(node);
     if (not result) {
       throw std::runtime_error(
         fmt::format("failed to spawn export bridge: {}", result.error()));
@@ -181,8 +189,7 @@ public:
   }
 
 private:
-  expression expr_;
-  export_mode mode_;
+  ExportArgs args_;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   bool done_ = false;
@@ -308,7 +315,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize_filter(&ExportArgs::filter);
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

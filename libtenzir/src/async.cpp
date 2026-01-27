@@ -468,7 +468,7 @@ private:
         got_shutdown_request_ = true;
         co_return;
       },
-      [&](StopOutput) -> Task<void> {
+      [&](Stop) -> Task<void> {
         co_await handle_done();
       }};
     co_await match(std::move(message), overloads);
@@ -665,7 +665,8 @@ private:
                 sender.send(Shutdown{});
               }
             },
-            [&](StopOutput) {
+            [&](Stop) {
+              // TODO: Is this correct?
               for (auto& ctrl : operator_ctrl_) {
                 ctrl.send(Shutdown{});
               }
@@ -704,7 +705,7 @@ private:
                   // TODO: Inform the preceding operator that we don't need any
                   // more input.
                   if (index > 0) {
-                    operator_ctrl_[index - 1].send(StopOutput{});
+                    operator_ctrl_[index - 1].send(Stop{});
                   } else {
                     // TODO: What if we don't host the preceding operator? Then
                     // we need to notify OUR input!

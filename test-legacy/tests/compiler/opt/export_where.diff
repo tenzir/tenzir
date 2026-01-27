@@ -14,21 +14,19 @@
        args: [
          
        ],
-       named_args: [
-         
-       ]
-     },
-     where_ir {
--      self: 22..27,
-+      self: 0..0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `foo` @ 28..31,
-           has_question_mark: false
-         },
-         op: "eq" @ 32..34,
-         right: constant int64 42 @ 35..39
-       }
+       filter: [
++        binary_expr {
++          left: root_field {
++            id: `foo` @ 28..31,
++            has_question_mark: false
++          },
++          op: "eq" @ 32..34,
++          right: constant int64 42 @ 35..39
++        }
++      ],
++      named_args: [
++        
++      ]
 +    },
 +    GenericIr {
 +      op: {
@@ -41,10 +39,23 @@
 +      args: [
 +        
 +      ],
-+      named_args: [
-+        
-+      ]
-+    },
++      filter: [
+         
+       ],
+       named_args: [
+         
+       ]
+     },
+-    where_ir {
+-      self: 22..27,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `foo` @ 28..31,
+-          has_question_mark: false
+-        },
+-        op: "eq" @ 32..34,
+-        right: constant int64 42 @ 35..39
+-      }
 +    SaveStdoutIr {
 +      
      }

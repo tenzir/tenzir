@@ -14,29 +14,27 @@
        args: [
          
        ],
-       named_args: [
-         
-       ]
-     },
-     where_ir {
--      self: 7..12,
-+      self: 0..0,
-       predicate: binary_expr {
-         left: root_field {
-           id: `foo` @ 13..16,
-           has_question_mark: false
-         },
-         op: "in" @ 17..19,
-         right: list {
-           begin: 20..21,
-           items: [
-             expression constant int64 1 @ 21..22,
-             expression constant int64 2 @ 24..25,
-             expression constant int64 3 @ 27..28
-           ],
-           end: 28..29
-         }
-       }
+       filter: [
++        binary_expr {
++          left: root_field {
++            id: `foo` @ 13..16,
++            has_question_mark: false
++          },
++          op: "in" @ 17..19,
++          right: list {
++            begin: 20..21,
++            items: [
++              expression constant int64 1 @ 21..22,
++              expression constant int64 2 @ 24..25,
++              expression constant int64 3 @ 27..28
++            ],
++            end: 28..29
++          }
++        }
++      ],
++      named_args: [
++        
++      ]
 +    },
 +    GenericIr {
 +      op: {
@@ -49,10 +47,31 @@
 +      args: [
 +        
 +      ],
-+      named_args: [
-+        
-+      ]
-+    },
++      filter: [
+         
+       ],
+       named_args: [
+         
+       ]
+     },
+-    where_ir {
+-      self: 7..12,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `foo` @ 13..16,
+-          has_question_mark: false
+-        },
+-        op: "in" @ 17..19,
+-        right: list {
+-          begin: 20..21,
+-          items: [
+-            expression constant int64 1 @ 21..22,
+-            expression constant int64 2 @ 24..25,
+-            expression constant int64 3 @ 27..28
+-          ],
+-          end: 28..29
+-        }
+-      }
 +    SaveStdoutIr {
 +      
      }

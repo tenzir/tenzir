@@ -130,6 +130,8 @@ struct pipeline {
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>>;
 
+  // TODO: How do we take care that we don't propagate $-vars past the point
+  // where they will be defined?
   /// @see Operator
   auto
   optimize(optimize_filter filter, event_order order) && -> optimize_result;

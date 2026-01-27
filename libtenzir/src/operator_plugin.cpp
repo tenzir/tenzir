@@ -293,6 +293,11 @@ public:
           TENZIR_UNREACHABLE();
         });
     }
+    if (desc_->set_filter) {
+      (*desc_->set_filter)(args, std::move(filter_));
+    } else {
+      TENZIR_ASSERT(filter_.empty());
+    }
     for (auto& spawn : desc_->spawns) {
       auto result = match(
         spawn,
@@ -408,7 +413,22 @@ public:
       auto validate_ctx = ValidateCtx{args_, named_args_, *desc_, ctx};
       (*desc_->validator)(validate_ctx);
     }
+    for (auto& expr : filter_) {
+      TRY(expr.substitute(ctx));
+    }
     return {};
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    if (desc_->set_filter) {
+      filter_.append_range(filter | std::views::as_rvalue);
+      auto replacement = std::vector<Box<Operator>>{};
+      replacement.emplace_back(std::move(*this));
+      return {ir::optimize_filter{}, event_order::ordered,
+              ir::pipeline{{}, std::move(replacement)}};
+    }
+    return std::move(*this).Operator::optimize(std::move(filter), order);
   }
 
   auto main_location() const -> location override {
@@ -419,6 +439,7 @@ private:
   friend auto inspect(auto& f, GenericIr& x) -> bool {
     return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
                               f.field("args", x.args_),
+                              f.field("filter", x.filter_),
                               f.field("named_args", x.named_args_));
   }
 
@@ -430,6 +451,9 @@ private:
 
   /// Contains named arguments with their indices.
   std::vector<NamedArg> named_args_;
+
+  /// The filter passed to `optimize` (only if the operator wants to consume it).
+  ir::optimize_filter filter_;
 
   /// The object describing the available parameters.
   SharedDescription desc_;

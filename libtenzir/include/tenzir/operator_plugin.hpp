@@ -37,10 +37,10 @@ using ArgTypes = detail::tl_concat_t<LocatedTypes, BareTypes>;
 template <class T>
 concept ArgType = detail::tl_contains_v<ArgTypes, T>;
 
-template <LocatedType T>
+template <class T>
 using Setter = std::function<void(std::any&, T)>;
 
-template <LocatedType T>
+template <class T>
 struct AsSetter : std::type_identity<Setter<T>> {};
 
 using Setters = detail::tl_map_t<LocatedTypes, AsSetter>;
@@ -106,6 +106,7 @@ public:
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
+  std::optional<Setter<ir::optimize_filter>> set_filter;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -477,6 +478,11 @@ public:
 
   auto without_optimize() -> Description {
     // TODO
+    return std::move(desc_);
+  }
+
+  auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
+    desc_.set_filter = make_setter(ptr);
     return std::move(desc_);
   }
 
