@@ -914,10 +914,21 @@ else ()
     string(APPEND CMAKE_CXX_FLAGS " -mavx2")
   endif ()
   message(STATUS "Folly CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-  # Force folly to build as static library to avoid exception handling issues
-  # across shared library boundaries.
+  # Force folly to build as a static library for two reasons:
+  # 1. On macOS, std::current_exception() returns nullptr in coroutine
+  #    unhandled_exception() handlers when folly crosses shared library
+  #    boundaries.
+  # 2. On Linux aarch64, folly's CMake has duplicate aor (Arm Optimized
+  #    Routines) object targets that cause multiple definition errors when
+  #    building as a shared library.
   set(_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
   set(BUILD_SHARED_LIBS OFF)
+  # When the main build uses shared libraries, folly must be compiled with
+  # -fPIC even though it's built as a static library, because it will be
+  # linked into a shared library.
+  if (_saved_build_shared_libs)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  endif ()
   add_subdirectory(libtenzir/aux/folly SYSTEM)
   set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
   set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")

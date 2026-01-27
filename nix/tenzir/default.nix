@@ -271,7 +271,6 @@ let
               folly
               double-conversion
               libevent
-              liburing
               libsodium
               snappy
               google-cloud-cpp-tenzir
@@ -287,6 +286,9 @@ let
               spdlog
               yaml-cpp
               xxHash
+            ]
+            ++ lib.optionals stdenv.isLinux [
+              liburing
             ]
             ++ lib.optionals (!isStatic) [
               arrow-adbc-cpp

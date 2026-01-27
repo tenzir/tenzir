@@ -31,6 +31,7 @@
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
@@ -1330,14 +1331,20 @@ public:
   }
 };
 
+struct WriteJsonArgs {
+  bool color = false;
+};
+
 class WriteJson final : public Operator<table_slice, chunk_ptr> {
 public:
+  explicit WriteJson(WriteJsonArgs args) : args_{args} {
+  }
+
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> {
-    TENZIR_WARN("got table slice in JsonImpl");
     auto opts = json_printer_options{};
     opts.tql = true;
-    opts.style = tql_style();
+    opts.style = args_.color ? tql_style() : no_style();
     auto printer = tenzir::json_printer{opts};
     // TODO: Since this printer is per-schema we can write an optimized
     // version of it that gets the schema ahead of time and only expects
@@ -1361,37 +1368,13 @@ public:
     auto chunk = chunk::make(std::move(buffer));
     co_await push(std::move(chunk));
   }
-};
 
-class JsonIr final : public ir::Operator {
-public:
-  auto name() const -> std::string override {
-    return "json_ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    return {};
-  }
-
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return WriteJson{};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    // TODO
-    return tag_v<chunk_ptr>;
-  }
-
-  friend auto inspect(auto& f, JsonIr& x) -> bool {
-    return f.object(x).fields();
-  }
+private:
+  WriteJsonArgs args_;
 };
 
 class write_json_plugin final : public virtual operator_plugin2<write_json>,
-                                public virtual operator_compiler_plugin {
+                                public virtual OperatorPlugin {
 public:
   explicit write_json_plugin(bool tql) : tql_{tql} {
   }
@@ -1400,9 +1383,10 @@ public:
     return tql_ ? "write_tql" : "tql2.write_json";
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
-    return JsonIr{};
+  auto describe() const -> Description override {
+    auto d = Describer<WriteJsonArgs, WriteJson>{};
+    d.named("color", &WriteJsonArgs::color);
+    return d.without_optimize();
   }
 
   auto make(invocation inv, session ctx) const
@@ -1561,5 +1545,3 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{true})
-TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<
-                       tenzir::ir::Operator, tenzir::plugins::json::JsonIr>);

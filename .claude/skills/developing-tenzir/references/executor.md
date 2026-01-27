@@ -111,3 +111,21 @@ public:
   }
 };
 ```
+
+## Args Pattern
+
+Store the entire args struct as a member rather than individual fields:
+
+```cpp
+struct MyArgs {
+  uint64_t count = 10;
+};
+
+class MyOperator final : public Operator<table_slice, table_slice> {
+public:
+  explicit MyOperator(MyArgs args) : args_{args} {}
+
+private:
+  MyArgs args_;  // Store entire struct, not individual members
+};
+```

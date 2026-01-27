@@ -594,6 +594,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   .unwrap()
                   .compile(c_ctx)
                   .unwrap();
+    // Instantiate the sink (same as the main pipeline).
+    TRY(sink.substitute(sub_ctx, true));
     ir.lets.insert(ir.lets.end(), std::move_iterator{sink.lets.begin()},
                    std::move_iterator{sink.lets.end()});
     ir.operators.insert(ir.operators.end(),
