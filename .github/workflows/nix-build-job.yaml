@@ -126,6 +126,7 @@ jobs:
         id: build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
         run: |
           release_flag=""
           if [[ "${{ github.event_name }}" == "release" ]]; then
