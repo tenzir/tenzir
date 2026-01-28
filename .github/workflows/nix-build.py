@@ -152,7 +152,11 @@ def cmd_build(args: argparse.Namespace) -> int:
     local_pkg_dir = Path("./packages")
     local_pkg_dir.mkdir(exist_ok=True)
     for pkg_file in pkg_dir.iterdir():
-        shutil.copy2(pkg_file, local_pkg_dir / pkg_file.name)
+        dest_file = local_pkg_dir / pkg_file.name
+        # Remove existing files first - they may be read-only from previous Nix copy
+        if dest_file.exists():
+            dest_file.unlink()
+        shutil.copy2(pkg_file, dest_file)
     notice(f"Copied packages to {local_pkg_dir}")
 
     set_output("package-dir", str(local_pkg_dir.resolve()))
