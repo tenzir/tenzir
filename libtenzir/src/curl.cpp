@@ -163,9 +163,8 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
 auto easy::headers()
   -> generator<std::pair<std::string_view, std::string_view>> {
   for (auto str : http_headers_.items()) {
-    auto split = detail::split(str, ": ");
-    TENZIR_ASSERT(split.size() == 2);
-    co_yield std::pair{split[0], split[1]};
+    auto [name, value] = detail::split_once(str, ":");
+    co_yield std::pair{name, detail::lstrip(value)};
   }
 }
 

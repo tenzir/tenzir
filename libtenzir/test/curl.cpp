@@ -26,6 +26,16 @@ TEST("overwriting HTTP headers") {
   CHECK_EQUAL(value, "Bar");
 }
 
+TEST("HTTP header values can contain colons") {
+  auto easy = curl::easy{};
+  easy.set_http_header("Authorization", "Bearer abc: def");
+  auto headers = collect(easy.headers());
+  REQUIRE_EQUAL(headers.size(), 1ull);
+  auto [name, value] = headers[0];
+  CHECK_EQUAL(name, "Authorization");
+  CHECK_EQUAL(value, "Bearer abc: def");
+}
+
 TEST("valid URL") {
   auto url = curl::url{};
   // Set URL.
