@@ -1029,6 +1029,24 @@ struct exec_node_state {
         return;
       }
       const auto output_size = size(*output);
+#if TENZIR_ENABLE_ASSERTIONS
+      if constexpr (std::same_as<Output, table_slice>) {
+        if (output->rows() > 0) {
+          const auto ttype = output->schema().to_arrow_type();
+          TENZIR_ASSERT(ttype);
+          const auto rb = to_record_batch(*output);
+          TENZIR_ASSERT(rb);
+          const auto sa = check(rb->ToStructArray());
+          TENZIR_ASSERT(sa);
+          const auto st = sa->type();
+          TENZIR_ASSERT(st);
+          TENZIR_ASSERT(*ttype == *st);
+          const auto status = rb->ValidateFull();
+          TENZIR_ASSERT(status.ok(), "failed result validation in {}: {}",
+                        op->name(), status.ToString());
+        }
+      }
+#endif
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
       }
