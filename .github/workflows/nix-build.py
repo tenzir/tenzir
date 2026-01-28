@@ -16,7 +16,7 @@ Examples:
 
     # Full pipeline for CI
     ./nix-build.py build --attribute tenzir-static
-    ./nix-build.py test --package-dir ./packages --arch x86_64
+    ./nix-build.py package-test --package-dir ./packages --arch x86_64
     ./nix-build.py sign --package-dir ./packages
     ./nix-build.py upload --package-dir ./packages --package-store gcs:bucket/path
     ./nix-build.py push --attribute tenzir-static --arch x86_64 --container-tag main --image-registry ghcr.io
@@ -773,9 +773,9 @@ def main() -> int:
     )
     build_parser.set_defaults(func=cmd_build)
 
-    # --- test subcommand ---
+    # --- package-test subcommand ---
     test_parser = subparsers.add_parser(
-        "test", help="Test installation in containers (Linux only)"
+        "package-test", help="Test package installation in containers (Linux only)"
     )
     _ = test_parser.add_argument(
         "--package-dir",

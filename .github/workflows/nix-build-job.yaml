@@ -152,7 +152,7 @@ jobs:
       - name: Run integration tests
         if: runner.os == 'Linux' && inputs.run-tests
         run: |
-          python3 .github/workflows/nix-build.py test \
+          python3 .github/workflows/nix-build.py package-test \
             --package-dir ${{ steps.build.outputs.package-dir }} \
             --arch ${{ inputs.arch }} \
             --test-root test \
