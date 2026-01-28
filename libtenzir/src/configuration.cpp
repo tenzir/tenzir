@@ -505,7 +505,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       }
       return std::nullopt;
     };
-#ifdef TENZIR_MACOS
+#if TENZIR_MACOS
 #  define HOME_CACHE_PATH "Library", "Caches", "tenzir"
 #else
 #  define HOME_CACHE_PATH ".cache", "tenzir"

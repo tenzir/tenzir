@@ -41,7 +41,7 @@ inline auto write_error(const char* txt) noexcept {
 #define TENZIR_STRINGIZE(x) TENZIR_STRINGIZE2(x)
 #define TENZIR_STRINGIZE2(x) #x
 
-#ifdef TENZIR_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
 #  define TENZIR_ALLOCATOR_ASSERT(COND)                                        \
     if (not static_cast<bool>(COND)) {                                         \
       write_error("assertion '" #COND "' failed" __FILE__                      \
