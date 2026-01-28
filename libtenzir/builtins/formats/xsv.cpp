@@ -152,6 +152,18 @@ struct xsv_parser_options {
   }
 };
 
+auto warn_on_duplicate_fields(std::vector<std::string> fields, location loc,
+                              diagnostic_handler& dh) -> void {
+  std::ranges::sort(fields);
+  for (auto it = std::ranges::adjacent_find(fields); it != fields.end();
+       it = std::ranges::adjacent_find(std::next(it), fields.end())) {
+    diagnostic::warning("duplicate field name `{}` in header", *it)
+      .primary(loc)
+      .note("later values will overwrite earlier ones")
+      .emit(dh);
+  }
+}
+
 auto parse_header(std::string_view line, location loc,
                   const xsv_parser_options& args,
                   const detail::quoting_escaping_policy& quoting,
@@ -168,6 +180,7 @@ auto parse_header(std::string_view line, location loc,
     diagnostic::error("failed to parse header").primary(loc).emit(dh);
     return failure::promise();
   }
+  warn_on_duplicate_fields(fields, loc, dh);
   return fields;
 }
 
@@ -211,6 +224,7 @@ auto extract_header(ast::expression& header_expr,
           return failure::promise();
         }
       }
+      warn_on_duplicate_fields(fields, header_expr.get_location(), ctx);
       return fields;
     },
     [&](const auto&) -> ret_t {
