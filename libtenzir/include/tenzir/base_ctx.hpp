@@ -30,11 +30,11 @@ public:
   explicit(false) base_ctx(T&& x) : base_ctx{x, x} {
   }
 
-  explicit(false) operator diagnostic_handler&() {
+  explicit(false) operator diagnostic_handler&() const {
     return dh_;
   }
 
-  explicit(false) operator const registry&() {
+  explicit(false) operator const registry&() const {
     return reg_;
   }
 

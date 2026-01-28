@@ -1,6 +1,0 @@
- error: assignment is not implemented yet
-  --> tests/compiler/instantiation/let_selector.tql:7:1
-   |
- 7 | $foo = "test"
-   | ^^^^^^^^^^^^^ 
-   |

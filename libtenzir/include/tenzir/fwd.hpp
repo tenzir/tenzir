@@ -169,8 +169,9 @@ class plugin_ptr;
 class plugin;
 class port;
 class record_type;
-class segment;
+class report;
 class secret_type;
+class segment;
 class shared_diagnostic_handler;
 class string_type;
 class subnet_type;
@@ -189,19 +190,11 @@ class finalize_ctx;
 
 namespace ir {
 
-class operator_base;
-class operator_ptr;
+class Operator;
 struct optimize_result;
 struct pipeline;
 
 } // namespace ir
-
-namespace exec {
-
-class operator_base;
-class pipeline;
-
-} // namespace exec
 
 struct active_partition_state;
 struct attribute;
@@ -490,6 +483,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::query_context))
   TENZIR_ADD_TYPE_ID((tenzir::query_options))
   TENZIR_ADD_TYPE_ID((tenzir::relational_operator))
+  TENZIR_ADD_TYPE_ID((tenzir::report))
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
   TENZIR_ADD_TYPE_ID((tenzir::series))

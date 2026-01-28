@@ -38,6 +38,7 @@ let
       rabbitmq-c,
       yaml-cpp,
       yara,
+      jansson,
       rdkafka,
       cyrus_sasl,
       reproc,
@@ -55,6 +56,12 @@ let
       llhttp,
       pfs,
       c-ares,
+      folly,
+      double-conversion,
+      libevent,
+      liburing,
+      libsodium,
+      snappy,
       expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
@@ -252,6 +259,7 @@ let
             ]
             ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
               yara
+              jansson
             ];
           propagatedBuildInputs =
             [
@@ -260,6 +268,11 @@ let
               caf
               curl
               flatbuffers
+              folly
+              double-conversion
+              libevent
+              libsodium
+              snappy
               google-cloud-cpp-tenzir
               grpc
               libmaxminddb
@@ -273,6 +286,9 @@ let
               spdlog
               yaml-cpp
               xxHash
+            ]
+            ++ lib.optionals stdenv.isLinux [
+              liburing
             ]
             ++ lib.optionals (!isStatic) [
               arrow-adbc-cpp
@@ -295,6 +311,7 @@ let
               "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+              "-DTENZIR_ENABLE_BUNDLED_FOLLY=OFF"
               "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
               "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"

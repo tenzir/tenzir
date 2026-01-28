@@ -1,0 +1,63 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 329..335
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
++        binary_expr {
++          left: root_field {
++            id: `bar` @ 342..345,
++            has_question_mark: false
++          },
++          op: "eq" @ 346..348,
++          right: constant bool true @ 349..353
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `write_tql` @ 0..0
++        ],
++        ref: std::write_tql/op
++      },
++      desc: "write_tql",
++      args: [
++        
++      ],
++      filter: [
+         
+       ],
+       named_args: [
+         
+       ]
+     },
+-    where_ir {
+-      self: 336..341,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `bar` @ 342..345,
+-          has_question_mark: false
+-        },
+-        op: "eq" @ 346..348,
+-        right: constant bool true @ 349..353
+-      }
++    SaveStdoutIr {
++      
+     }
+   ]
+ }

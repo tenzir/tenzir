@@ -1,0 +1,19 @@
+diff --git i/folly/debugging/exception_tracer/Compatibility.h w/folly/debugging/exception_tracer/Compatibility.h
+index 746925d70..ee4cad5f2 100644
+--- i/folly/debugging/exception_tracer/Compatibility.h
++++ w/folly/debugging/exception_tracer/Compatibility.h
+@@ -18,6 +18,8 @@
+ 
+ #include <version>
+ 
++#ifndef FOLLY_HAS_EXCEPTION_TRACER
++
+ #if (defined(__GLIBCXX__) || defined(_LIBCPP_VERSION))
+ #define FOLLY_DETAIL_EXN_TRACER_CXX_STDLIB_COMPATIBLE 1
+ #else
+@@ -36,3 +38,5 @@
+ #else
+ #define FOLLY_HAS_EXCEPTION_TRACER 0
+ #endif // CXX_STDLIB_COMPATIBLE && OS_CXX_ABI_COMPATIBLE
++
++#endif // FOLLY_HAS_EXCEPTION_TRACER

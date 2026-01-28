@@ -128,7 +128,7 @@ endif ()
 
 # -- boost ---------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers filesystem url)
+find_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)
 
 # -- re2 -----------------------------------------------------------------------
 
@@ -476,15 +476,23 @@ endif ()
 
 # Link against Boost.
 target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
-                                       Boost::url)
+                                       Boost::url Boost::context
+                                       Boost::program_options Boost::regex
+                                       Boost::thread)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url)")
+       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
 target_link_libraries(libtenzir PUBLIC re2::re2)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
+
+# Link against folly.
+target_link_libraries(libtenzir PUBLIC Folly::folly)
+if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
+endif ()
 
 # Link against reproc.
 target_link_libraries(libtenzir PUBLIC reproc++)
@@ -651,7 +659,7 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
-          ${_tenzir_bundled_pfs}
+          ${_tenzir_bundled_pfs} ${_tenzir_bundled_folly}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime

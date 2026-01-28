@@ -384,4 +384,13 @@ auto spawn_and_link_export_bridge(
                                    std::move(diagnostics_handler));
 }
 
+auto spawn_export_bridge(caf::actor_system& sys, expression expr,
+                         export_mode mode, filesystem_actor filesystem,
+                         std::unique_ptr<diagnostic_handler> diagnostics_handler)
+  -> export_bridge_actor {
+  // Skip metrics for now (empty metric_handler does nothing)
+  return sys.spawn(make_bridge, std::move(expr), mode, std::move(filesystem),
+                   metric_handler{}, std::move(diagnostics_handler));
+}
+
 } // namespace tenzir

@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/report.hpp"
 
 #include <caf/deep_to_string.hpp>
 #include <caf/exit_reason.hpp>
@@ -62,6 +63,7 @@ const char* descriptions[] = {
   "breaking_change",
   "serialization_error",
   "diagnostic",
+  "report",
 };
 
 static_assert(ec{std::size(descriptions)} == ec::ec_count,
@@ -96,6 +98,21 @@ auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
   }
   std::ostringstream oss;
   auto category = err.category();
+  if (category == caf::type_id_v<tenzir::ec>
+      && tenzir::ec{err.code()} == ec::report) {
+    auto& rep = err.context().get_as<report>(0);
+    auto result = render(rep.error, true);
+    auto first = true;
+    for (const auto& loc : rep.backtrace) {
+      if (first) {
+        result += '\n';
+        first = false;
+      }
+      fmt::format_to(std::back_inserter(result), "\n- {}\n  at {}:{}",
+                     loc.function(), loc.file(), loc.line());
+    }
+    return result;
+  }
   if (category == caf::type_id_v<tenzir::ec>
       && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
     const auto color = (isatty(STDERR_FILENO) == 1

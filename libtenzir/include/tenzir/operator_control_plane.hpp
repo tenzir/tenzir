@@ -126,7 +126,7 @@ struct operator_control_plane {
   /// error via the shared diagnostic handler does not shut down the operator
   /// immediately.
   inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
-    return shared_diagnostic_handler{exec_node_actor{&(self())}};
+    return shared_diagnostic_handler{receiver_actor<diagnostic>{&self()}};
   }
 };
 

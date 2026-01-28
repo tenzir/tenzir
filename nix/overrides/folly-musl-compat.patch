@@ -1,0 +1,16 @@
+diff --git i/folly/debugging/symbolizer/Elf.cpp w/folly/debugging/symbolizer/Elf.cpp
+index 9cc06f859..104126786 100644
+--- i/folly/debugging/symbolizer/Elf.cpp
++++ w/folly/debugging/symbolizer/Elf.cpp
+@@ -36,6 +36,11 @@
+ #define STT_GNU_IFUNC 10
+ #endif
+ 
++#ifndef __ELF_NATIVE_CLASS
++#include "sys/reg.h"
++#define __ELF_NATIVE_CLASS __WORDSIZE
++#endif
++
+ #if defined(__ELF_NATIVE_CLASS)
+ #define FOLLY_ELF_NATIVE_CLASS __ELF_NATIVE_CLASS
+ #elif defined(__FreeBSD__)

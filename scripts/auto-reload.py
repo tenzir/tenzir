@@ -7,6 +7,12 @@ import shutil
 import sys
 import subprocess
 
+
+def clear():
+    print("\n" * 100)
+    os.system("clear")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="+")
@@ -58,21 +64,21 @@ def main():
         first = True
         for c in iter(lambda: p.stdout.read(1) or p.stderr.read(1), b""):
             if first:
-                os.system("clear")
+                clear()
                 first = False
             sys.stdout.buffer.write(c)
             sys.stdout.flush()
             if check():
-                os.system("clear")
+
                 return
         if first:
-            os.system("clear")
+            clear()
         while True:
             if check():
                 return
             time.sleep(0.1)
 
-    os.system("clear")
+    clear()
     while True:
         run()
 

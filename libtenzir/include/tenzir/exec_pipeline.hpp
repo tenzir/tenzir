@@ -32,11 +32,11 @@ struct exec_config {
   bool dump_ir = false;
   bool dump_inst_ir = false;
   bool dump_opt_ir = false;
-  bool dump_finalized = false;
 
   bool multi = false;
   bool legacy = false;
   bool strict = false;
+  bool neo = false;
 };
 
 auto exec_pipeline(std::string content, diagnostic_handler& dh,

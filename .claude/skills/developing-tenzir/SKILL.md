@@ -1,6 +1,6 @@
 ---
 name: developing-tenzir
-description: Tenzir C++ idioms, APIs, and coding conventions. Use when implementing TQL functions, operators, working with series/table_slice, Arrow arrays, view3 abstractions, or asking about Tenzir code style.
+description: Tenzir C++ idioms, APIs, and coding conventions. Use when implementing TQL functions, operators, working with the executor, series/table_slice, Arrow arrays, view3 abstractions, or asking about Tenzir code style.
 ---
 
 # Developing Tenzir
@@ -23,6 +23,7 @@ row-wise access is needed.
 - [error-handling.md](./references/error-handling.md) — TRY, check, and expected patterns
 - [functions.md](./references/functions.md) — Implementing TQL functions
 - [operators.md](./references/operators.md) — Implementing TQL operators (incl. secrets)
+- [executor.md](./references/executor.md) — Executor for operators and pipeline execution
 
 **Tooling and Conventions:**
 

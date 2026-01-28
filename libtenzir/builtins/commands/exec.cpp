@@ -69,8 +69,6 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.dump_inst_ir
     = caf::get_or(inv.options, "tenzir.exec.dump-inst-ir", false);
   cfg.dump_opt_ir = caf::get_or(inv.options, "tenzir.exec.dump-opt-ir", false);
-  cfg.dump_finalized
-    = caf::get_or(inv.options, "tenzir.exec.dump-finalized", false);
   cfg.dump_pipeline
     = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
   cfg.dump_diagnostics
@@ -94,6 +92,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
   cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
+  cfg.neo = caf::get_or(inv.options, "tenzir.neo", cfg.neo);
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
