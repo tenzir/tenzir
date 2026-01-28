@@ -17,6 +17,10 @@ let
   };
 in
 {
+  # Use LLVM 20 for Darwin to get floating-point std::from_chars support in libc++.
+  # libc++ 19 doesn't have this feature, but libc++ 20 does.
+  llvmPackages = if isDarwin then prevPkgs.llvmPackages_20 else prevPkgs.llvmPackages;
+
   curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
     # Brings in a conflicting libiconv via libunistring.
     idnSupport = false;
