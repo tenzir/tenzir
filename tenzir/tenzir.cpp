@@ -411,12 +411,20 @@ auto main(int argc, char** argv) -> int try {
     TENZIR_ERROR("failed to read schema dirs: {}", symbols.error());
     return EXIT_FAILURE;
   }
+  auto symbols2 = load_symbols2(get_module_dirs(cfg));
+  if (not symbols2) {
+    if (symbols2 != ec::silent) {
+      TENZIR_ERROR("failed to read schema dirs: {}", symbols2.error());
+    }
+    return EXIT_FAILURE;
+  }
   auto taxonomies = load_taxonomies(cfg);
   if (not taxonomies) {
     TENZIR_ERROR("failed to load concepts: {}", taxonomies.error());
     return EXIT_FAILURE;
   }
-  modules::init(std::move(*symbols), std::move(taxonomies->concepts));
+  modules::init(std::move(*symbols), std::move(*symbols2),
+                std::move(taxonomies->concepts));
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};

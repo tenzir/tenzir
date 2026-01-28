@@ -9,8 +9,10 @@
 #pragma once
 
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/stable_set.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/expected.hpp>
@@ -95,6 +97,14 @@ caf::expected<symbol_map>
 load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
              size_t max_recursion = defaults::max_recursion);
 
+using symbol_map2 = std::unordered_map<std::string, ast::type_def,
+                                       detail::heterogeneous_string_hash,
+                                       detail::heterogeneous_string_equal>;
+
+caf::expected<symbol_map2>
+load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
+              size_t max_recursion = defaults::max_recursion);
+
 /// Loads modules according to the configuration. This is a convenience wrapper
 /// around *get_module_dirs* and *load_module*.
 caf::expected<symbol_map> load_symbols(const caf::actor_system_config& cfg);
@@ -105,6 +115,8 @@ caf::expected<symbol_map> load_symbols(const caf::actor_system_config& cfg);
 /// @returns The loaded taxonomies.
 auto load_taxonomies(const caf::actor_system_config& cfg)
   -> caf::expected<taxonomies>;
+
+auto translate_builtin_type(std::string_view name) -> std::optional<type>;
 
 } // namespace tenzir
 
