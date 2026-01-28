@@ -20,6 +20,8 @@
 namespace tenzir {
 
 struct connector_state {
+  static constexpr auto name = "connector";
+
   // Actor responsible for TCP connection with a remote node.
   caf::io::middleman_actor middleman;
 };

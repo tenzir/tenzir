@@ -65,6 +65,8 @@ struct transceiver_actor_traits final {
 using transceiver_actor = caf::typed_actor<transceiver_actor_traits>;
 
 struct transceiver_state {
+  [[maybe_unused]] static constexpr auto name = "schedule-transceiver";
+
   transceiver_state(transceiver_actor::pointer self,
                     shared_diagnostic_handler dh,
                     metrics_receiver_actor metrics, uint64_t operator_index,

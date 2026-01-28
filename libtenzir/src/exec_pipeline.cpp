@@ -212,6 +212,11 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
   return pipe;
 }
 
+struct exec_pipeline_handler_state {
+  [[maybe_unused]] static constexpr auto name = "exec-pipeline-handler";
+  pipeline_executor_actor executor = {};
+};
+
 } // namespace
 
 auto exec_pipeline(pipeline pipe, std::string definition,
@@ -231,12 +236,10 @@ auto exec_pipeline(pipeline pipe, std::string definition,
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
-  struct handler_state {
-    pipeline_executor_actor executor = {};
-  };
   auto dedup = diagnostic_deduplicator{};
   auto handler = self->spawn(
-    [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
+    [&](
+      caf::stateful_actor<exec_pipeline_handler_state>* self) -> caf::behavior {
       self->state().executor
         = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
                       caf::actor_cast<receiver_actor<diagnostic>>(self),

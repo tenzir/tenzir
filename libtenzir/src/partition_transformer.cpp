@@ -16,6 +16,7 @@
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
 
+#include <caf/actor_from_state.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
@@ -144,33 +145,42 @@ private:
   std::shared_ptr<std::vector<table_slice>> result_;
 };
 
-auto make_diagnostics_receiver() -> receiver_actor<diagnostic>::behavior_type {
-  return {
-    [](diagnostic diag) -> caf::result<void> {
-      if (diag.severity == severity::error) {
-        TENZIR_ERROR("transformer diagnostic: {:?}", diag);
-      } else {
-        TENZIR_WARN("transformer diagnostic: {:?}", diag);
-      }
-      return {};
-    },
-  };
-}
+struct transformer_diagnostics_receiver_state {
+  [[maybe_unused]] static constexpr auto name
+    = "transformer-diagnostics-receiver";
 
-auto make_metrics_receiver() -> metrics_receiver_actor::behavior_type {
+  auto make_behavior() -> receiver_actor<diagnostic>::behavior_type {
+    return {
+      [](diagnostic diag) -> caf::result<void> {
+        if (diag.severity == severity::error) {
+          TENZIR_ERROR("transformer diagnostic: {:?}", diag);
+        } else {
+          TENZIR_WARN("transformer diagnostic: {:?}", diag);
+        }
+        return {};
+      },
+    };
+  }
+};
+
+struct transformer_metrics_receiver_state {
+  [[maybe_unused]] static constexpr auto name = "transformer-metrics-receiver";
+
   // We just ignore all metrics for the partition transformer.
-  return {
-    [](uint64_t, uuid, type) -> caf::result<void> {
-      return {};
-    },
-    [](uint64_t, uuid, record) -> caf::result<void> {
-      return {};
-    },
-    [](operator_metric) -> caf::result<void> {
-      return {};
-    },
-  };
-}
+  auto make_behavior() -> metrics_receiver_actor::behavior_type {
+    return {
+      [](uint64_t, uuid, type) -> caf::result<void> {
+        return {};
+      },
+      [](uint64_t, uuid, record) -> caf::result<void> {
+        return {};
+      },
+      [](operator_metric) -> caf::result<void> {
+        return {};
+      },
+    };
+  }
+};
 
 } // namespace
 
@@ -355,8 +365,10 @@ auto partition_transformer(
                                closed.error());
       }
       // Spawn diagnostics and metrics receivers.
-      auto diagnostics_receiver = self->spawn(make_diagnostics_receiver);
-      auto metrics_receiver = self->spawn(make_metrics_receiver);
+      auto diagnostics_receiver = self->spawn(
+        caf::actor_from_state<transformer_diagnostics_receiver_state>);
+      auto metrics_receiver = self->spawn(
+        caf::actor_from_state<transformer_metrics_receiver_state>);
       // Spawn the pipeline executor actor.
       auto executor
         = self->spawn(pipeline_executor, std::move(pipe), std::string{},
