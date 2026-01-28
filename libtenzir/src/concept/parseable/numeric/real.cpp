@@ -8,11 +8,14 @@
 
 #include "tenzir/concept/parseable/numeric/real.hpp"
 
+#include "tenzir/detail/narrow.hpp"
+
 #include <array>
 #include <charconv>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <string_view>
 
 namespace tenzir {
 
@@ -24,10 +27,11 @@ namespace {
 constexpr size_t max_double_chars = 64;
 
 // Case-insensitive prefix match.
-auto matches_prefix(const char* str, const char* end, const char* prefix)
-  -> size_t {
-  size_t i = 0;
-  while (str + i < end && prefix[i] != '\0') {
+auto matches_prefix(std::string_view str, std::string_view prefix) -> size_t {
+  if (str.size() < prefix.size()) {
+    return 0;
+  }
+  for (size_t i = 0; i < prefix.size(); ++i) {
     char c = str[i];
     char p = prefix[i];
     // Convert to lowercase for comparison.
@@ -40,9 +44,8 @@ auto matches_prefix(const char* str, const char* end, const char* prefix)
     if (c != p) {
       return 0;
     }
-    ++i;
   }
-  return prefix[i] == '\0' ? i : 0;
+  return prefix.size();
 }
 
 // -----------------------------------------------------------------------------
@@ -143,11 +146,13 @@ auto parse_double_from_chars(const char* first, const char* last, double& value,
   }
   // Check for special values: inf, infinity, nan (case-insensitive).
   // std::from_chars handles these directly, so we just need to find the extent.
-  if (auto n = matches_prefix(scan, last, "infinity"); n > 0) {
+  const auto remaining
+    = std::string_view{scan, detail::narrow_cast<size_t>(last - scan)};
+  if (auto n = matches_prefix(remaining, "infinity"); n > 0) {
     scan += n;
-  } else if (auto n = matches_prefix(scan, last, "inf"); n > 0) {
+  } else if (auto n = matches_prefix(remaining, "inf"); n > 0) {
     scan += n;
-  } else if (auto n = matches_prefix(scan, last, "nan"); n > 0) {
+  } else if (auto n = matches_prefix(remaining, "nan"); n > 0) {
     scan += n;
   } else {
     // Scan mantissa and exponent for regular numbers.
@@ -296,17 +301,19 @@ auto parse_double_fallback(const char* first, const char* last, double& value,
     }
   }
   // Check for special values: inf, infinity, nan (case-insensitive).
-  if (auto n = matches_prefix(p, last, "infinity"); n > 0) {
+  const auto remaining
+    = std::string_view{p, detail::narrow_cast<size_t>(last - p)};
+  if (auto n = matches_prefix(remaining, "infinity"); n > 0) {
     value = negative ? -std::numeric_limits<double>::infinity()
                      : std::numeric_limits<double>::infinity();
     return {p + n, std::errc{}};
   }
-  if (auto n = matches_prefix(p, last, "inf"); n > 0) {
+  if (auto n = matches_prefix(remaining, "inf"); n > 0) {
     value = negative ? -std::numeric_limits<double>::infinity()
                      : std::numeric_limits<double>::infinity();
     return {p + n, std::errc{}};
   }
-  if (auto n = matches_prefix(p, last, "nan"); n > 0) {
+  if (auto n = matches_prefix(remaining, "nan"); n > 0) {
     const auto nan = std::numeric_limits<double>::quiet_NaN();
     value = negative ? -nan : nan;
     return {p + n, std::errc{}};
