@@ -864,6 +864,11 @@ else ()
   set(FOLLY_HAVE_LIBGFLAGS
       OFF
       CACHE BOOL "")
+  # Prevent Folly's FindGflags.cmake from finding gflags, because folly-deps.cmake
+  # would override the FOLLY_HAVE_LIBGFLAGS cache variable with a regular variable
+  # set to ${LIBGFLAGS_FOUND}. This causes duplicate gflags flag registrations at
+  # runtime when libgflags.so is also loaded via libglog.so.
+  set(CMAKE_DISABLE_FIND_PACKAGE_Gflags TRUE)
   add_definitions(-DGLOG_USE_GLOG_EXPORT)
   # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
   set(FOLLY_HAVE_MALLOC_USABLE_SIZE
@@ -930,6 +935,7 @@ else ()
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   endif ()
   add_subdirectory(libtenzir/aux/folly SYSTEM)
+  unset(CMAKE_DISABLE_FIND_PACKAGE_Gflags)
   set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
   set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
   if (NOT TARGET Folly::folly)

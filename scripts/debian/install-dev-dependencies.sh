@@ -28,6 +28,7 @@ apt-get -y --no-install-recommends install \
   libfast-float-dev \
   libflatbuffers-dev \
   libfmt-dev \
+  libgflags-dev \
   libgoogle-glog-dev \
   libgrpc-dev \
   libgrpc++-dev \
