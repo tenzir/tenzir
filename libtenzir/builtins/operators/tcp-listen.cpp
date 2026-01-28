@@ -507,6 +507,8 @@ auto make_connection_manager(
 }
 
 struct bridge_state {
+  [[maybe_unused]] static constexpr auto name = "tcp-listen-bridge";
+
   std::queue<table_slice> buffer;
   caf::typed_response_promise<table_slice> buffer_rp;
 
