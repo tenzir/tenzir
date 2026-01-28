@@ -254,10 +254,15 @@ constexpr auto co_match_tuple_impl(std::tuple<Vs...>&& vs, FsTuple&& fs_tuple,
         // Create wrappers with constraints using the original Fs for
         // disambiguation. Each wrapper is only enabled when its corresponding
         // handler is the best match according to index_for_multi.
-        [&]<class... Xs>(Xs&&... xs) -> decltype(auto)
-          requires(
-            is_best_handler_for<FsTypeList, std::tuple<X, Xs...>, Is>::check())
-        {
+        // Note: We use SFINAE via enable_if_t on the return type instead of
+        // a requires clause to work around GCC 15 issues with evaluating
+        // requires clauses that reference template parameters from enclosing
+        // scopes during template substitution.
+        [&]<class... Xs>(Xs&&... xs)
+          -> std::enable_if_t<
+            is_best_handler_for<FsTypeList, std::tuple<X, Xs...>, Is>::check(),
+            decltype(std::invoke(std::get<Is>(fs_tuple), std::forward<X>(x),
+                                 std::forward<Xs>(xs)...))> {
           return std::invoke(std::get<Is>(fs_tuple), std::forward<X>(x),
                              std::forward<Xs>(xs)...);
         }...);

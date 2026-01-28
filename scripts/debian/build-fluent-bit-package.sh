@@ -1,14 +1,12 @@
 #! /usr/bin/env bash
 
-: "${FLUENT_BIT_TAG=v3.2.9}"
+: "${FLUENT_BIT_TAG=v4.2.2}"
 
 set -euo pipefail
 
 apt-get -qq update
 apt-get install --no-install-recommends -y \
   bison \
-  g++-14 \
-  gcc-14 \
   ca-certificates \
   ccache \
   cmake \

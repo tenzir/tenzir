@@ -12,8 +12,6 @@ apt-get -y --no-install-recommends install \
   cppzmq-dev \
   curl \
   flatbuffers-compiler-dev \
-  g++-14 \
-  gcc-14 \
   git-core \
   gnupg2 gnupg-agent jq \
   libboost-context-dev \
@@ -30,6 +28,7 @@ apt-get -y --no-install-recommends install \
   libfast-float-dev \
   libflatbuffers-dev \
   libfmt-dev \
+  libgflags-dev \
   libgoogle-glog-dev \
   libgrpc-dev \
   libgrpc++-dev \
