@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/allocator_config.hpp"
+#include "tenzir/execution_node_name_guard.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/abstract_actor.hpp>
@@ -221,6 +222,12 @@ public:
 #ifndef __clang__
 #  pragma GCC diagnostic pop
 #endif
+    constexpr static auto exec_node_name = std::string_view{"exec-node"};
+    if (std::memcmp(storage_.data(), exec_node_name.data(),
+                    exec_node_name.size())
+        == 0) {
+      storage_ = exec_node_name_guard::operator_name;
+    }
   }
 
   auto alignment() const noexcept -> alignment_t {

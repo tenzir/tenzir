@@ -22,6 +22,7 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ecc.hpp"
+#include "tenzir/execution_node_name_guard.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline_buffer_stats.hpp"
@@ -596,6 +597,10 @@ struct exec_node_state {
     // The node actor must be set when the operator is not a source.
     TENZIR_ASSERT(node or (this->op->location() != operator_location::remote));
     weak_node = node;
+    // Setup op_name
+    const auto name = this->op->name();
+    std::copy_n(name.begin(), std::min(name.size(), op_name.size()),
+                op_name.begin());
   }
 
   auto make_behavior() -> exec_node_actor::behavior_type {
@@ -665,6 +670,7 @@ struct exec_node_state {
       },
       [this](atom::push, table_slice& events) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        auto name_guard = exec_node_name_guard(op_name);
         if constexpr (std::is_same_v<Input, table_slice>) {
           return push(std::move(events));
         } else {
@@ -675,6 +681,7 @@ struct exec_node_state {
       },
       [this](atom::push, chunk_ptr& bytes) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        auto name_guard = exec_node_name_guard(op_name);
         if constexpr (std::is_same_v<Input, chunk_ptr>) {
           return push(std::move(bytes));
         } else {
@@ -686,6 +693,7 @@ struct exec_node_state {
       [this](atom::pull, exec_node_sink_actor& sink, uint64_t elements,
              uint64_t batches) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        auto name_guard = exec_node_name_guard(op_name);
         if constexpr (not std::is_same_v<Output, std::monostate>) {
           return pull(std::move(sink), elements, batches);
         } else {
@@ -726,6 +734,10 @@ struct exec_node_state {
 
   /// The operator owned by this execution node.
   operator_ptr op = {};
+
+  /// The shortend name of the operator use for allocation tracking. We get this
+  /// once on startup for efficiency.
+  exec_node_name_guard::name_type op_name;
 
   /// The instance created by the operator. Must be created at most once.
   std::optional<generator<Output>> instance = {};
@@ -1412,5 +1424,14 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
     *output_type,
   };
 };
+
+exec_node_name_guard::exec_node_name_guard(const name_type& name) {
+  operator_name = name;
+}
+
+exec_node_name_guard::~exec_node_name_guard() {
+  // Currently a noop as we dont really care about resetting this. We know the
+  // metrics are the only user, and they only use this
+}
 
 } // namespace tenzir
