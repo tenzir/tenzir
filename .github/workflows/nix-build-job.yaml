@@ -134,7 +134,7 @@ jobs:
           fi
           nix-shell -p git \
             --run "python3 .github/workflows/nix-build.py build --attribute ${{ inputs.attribute }}.unchecked $release_flag"
-      - name: Test
+      - name: Run package tests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
