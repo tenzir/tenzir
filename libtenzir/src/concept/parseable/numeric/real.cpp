@@ -175,50 +175,28 @@ auto parse_double_from_chars(const char* first, const char* last, double& value,
       }
     }
   }
-  const auto len = static_cast<size_t>(scan - first);
+  const auto len = detail::narrow_cast<size_t>(scan - first);
   if (len == 0) {
     return {first, std::errc::invalid_argument};
   }
   // Determine the parsing range, skipping leading '+' which from_chars rejects.
   const char* parse_start = has_leading_plus ? first + 1 : first;
   const auto parse_len = has_leading_plus ? len - 1 : len;
-  // If no separator was found, parse directly without copying.
-  if (! separator_pos) {
-    const auto [ptr, ec]
-      = std::from_chars(parse_start, parse_start + parse_len, value);
-    if (ec == std::errc::result_out_of_range) {
-      // Per C++ standard, value is unmodified on result_out_of_range.
-      bool is_negative = false;
-      const auto range_type
-        = determine_out_of_range_type(first, first + len, is_negative);
-      if (range_type > 0) {
-        value = is_negative ? -std::numeric_limits<double>::infinity()
-                            : std::numeric_limits<double>::infinity();
-      } else {
-        value = is_negative ? -0.0 : 0.0;
-      }
-    } else if (ec != std::errc{}) {
-      return {first, ec};
-    }
-    // Adjust pointer back to account for skipped '+'.
-    const auto consumed
-      = static_cast<size_t>(ptr - parse_start) + (has_leading_plus ? 1 : 0);
-    return {first + consumed, std::errc{}};
-  }
-  // Copy to buffer and replace separator.
+  // Copy to buffer (and replace separator if present).
   if (parse_len > max_double_chars) {
     return {first, std::errc::invalid_argument};
   }
   std::array<char, max_double_chars> buffer;
   std::copy(parse_start, parse_start + parse_len, buffer.begin());
-  // Calculate separator index in the buffer (adjusted for skipped '+').
-  const auto separator_index
-    = static_cast<size_t>(separator_pos - first) - (has_leading_plus ? 1 : 0);
-  // Bounds check to prevent buffer overflow with malformed input.
-  if (separator_index >= parse_len) {
-    return {first, std::errc::invalid_argument};
+  if (separator_pos) {
+    const auto separator_index
+      = detail::narrow_cast<size_t>(separator_pos - first)
+        - (has_leading_plus ? 1 : 0);
+    if (separator_index >= parse_len) {
+      return {first, std::errc::invalid_argument};
+    }
+    buffer[separator_index] = '.';
   }
-  buffer[separator_index] = '.';
   const auto [ptr, ec]
     = std::from_chars(buffer.data(), buffer.data() + parse_len, value);
   if (ec == std::errc::result_out_of_range) {
@@ -236,8 +214,8 @@ auto parse_double_from_chars(const char* first, const char* last, double& value,
     return {first, ec};
   }
   // Translate buffer position back to original input.
-  const auto consumed
-    = static_cast<size_t>(ptr - buffer.data()) + (has_leading_plus ? 1 : 0);
+  const auto consumed = detail::narrow_cast<size_t>(ptr - buffer.data())
+                        + (has_leading_plus ? 1 : 0);
   return {first + consumed, std::errc{}};
 }
 
