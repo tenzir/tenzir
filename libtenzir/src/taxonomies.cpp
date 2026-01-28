@@ -9,6 +9,7 @@
 #include "tenzir/taxonomies.hpp"
 
 #include "tenzir/concept/printable/tenzir/data.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
@@ -56,6 +57,61 @@ const type concepts_data_schema = type{map_type{
     {"concept", concept_::schema()},
   },
 }};
+
+namespace {
+
+auto extract_string_list(const record& rec, std::string_view key,
+                         std::vector<std::string>& out) -> void {
+  if (const auto* lst = get_if<list>(&rec, key)) {
+    for (const auto& elem : *lst) {
+      if (const auto* str = try_as<std::string>(&elem)) {
+        out.push_back(*str);
+      }
+    }
+  }
+}
+
+} // namespace
+
+caf::error convert(const data& src, concepts_map& dst, const type& /*schema*/) {
+  // The data is expected to be a list of records, where each record has a
+  // "concept" field containing {name, description, fields, concepts}.
+  const auto* src_list = try_as<list>(&src);
+  if (! src_list) {
+    return caf::make_error(ec::convert_error,
+                           "expected a list for concepts_map conversion");
+  }
+  for (const auto& item : *src_list) {
+    const auto* item_rec = try_as<record>(&item);
+    if (! item_rec) {
+      return caf::make_error(ec::convert_error,
+                             "expected record in concepts list");
+    }
+    // Extract the "concept" sub-record
+    const auto* concept_rec = get_if<record>(item_rec, "concept");
+    if (! concept_rec) {
+      return caf::make_error(ec::convert_error,
+                             "missing or invalid 'concept' field in record");
+    }
+    // Extract fields from concept record
+    const auto* name = get_if<std::string>(concept_rec, "name");
+    if (! name) {
+      return caf::make_error(ec::convert_error,
+                             "missing or invalid 'name' in concept");
+    }
+    concept_ c;
+    c.description = get_or(*concept_rec, "description", c.description);
+    extract_string_list(*concept_rec, "fields", c.fields);
+    extract_string_list(*concept_rec, "concepts", c.concepts);
+    // Insert into map, merging if key exists
+    if (auto entry = dst.find(*name); entry != dst.end()) {
+      entry->second = mappend(std::move(entry->second), std::move(c));
+    } else {
+      dst.emplace(std::string{*name}, std::move(c));
+    }
+  }
+  return caf::none;
+}
 
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts;

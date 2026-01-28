@@ -8,7 +8,6 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
-#include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>

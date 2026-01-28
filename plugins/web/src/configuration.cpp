@@ -6,7 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/data.hpp>
 #include <tenzir/detail/installdirs.hpp>
+#include <tenzir/error.hpp>
 #include <tenzir/optional.hpp>
 
 #include <fmt/std.h>
@@ -92,6 +94,25 @@ caf::expected<server_config> convert_and_validate(configuration config) {
         fmt::format("can only bind to localhost in {} mode", config.mode));
   result.port = config.port;
   return result;
+}
+
+caf::error convert(const tenzir::data& src, configuration& dst) {
+  const auto* rec = try_as<tenzir::record>(&src);
+  if (! rec) {
+    return caf::make_error(ec::convert_error,
+                           "expected record for web::configuration conversion");
+  }
+  dst.bind_address = get_or(*rec, "bind", dst.bind_address);
+  if (const auto* port = get_if<int64_t>(rec, "port")) {
+    dst.port = static_cast<int>(*port);
+  }
+  dst.mode = get_or(*rec, "mode", dst.mode);
+  dst.certfile = get_or(*rec, "certfile", dst.certfile);
+  dst.keyfile = get_or(*rec, "keyfile", dst.keyfile);
+  dst.web_root = get_or(*rec, "web-root", dst.web_root);
+  dst.cors_allowed_origin
+    = get_or(*rec, "cors-allowed-origin", dst.cors_allowed_origin);
+  return caf::none;
 }
 
 } // namespace tenzir::plugins::web

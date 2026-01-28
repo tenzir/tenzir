@@ -11,10 +11,10 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
-#include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/string.hpp>
+#include <tenzir/concept/parseable/tenzir/ip.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/data.hpp>
+#include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/plugin.hpp>
@@ -37,6 +37,7 @@
 #include <memory>
 #include <netdb.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tenzir::plugins::dns_lookup {
@@ -214,7 +215,7 @@ private:
         auto* addr = reinterpret_cast<struct sockaddr_in*>(node->ai_addr);
         auto ip_str = std::array<char, INET_ADDRSTRLEN>{};
         if (inet_ntop(AF_INET, &addr->sin_addr, ip_str.data(), ip_str.size())) {
-          auto ip = to<tenzir::ip>(ip_str.data());
+          auto ip = to<tenzir::ip>(std::string_view{ip_str.data()});
           TENZIR_ASSERT(ip);
           res->parts.emplace_back(*ip, "A", std::chrono::seconds{node->ai_ttl});
         }
@@ -223,7 +224,7 @@ private:
         auto ip_str = std::array<char, INET6_ADDRSTRLEN>{};
         if (inet_ntop(AF_INET6, &addr->sin6_addr, ip_str.data(),
                       ip_str.size())) {
-          auto ip = to<tenzir::ip>(ip_str.data());
+          auto ip = to<tenzir::ip>(std::string_view{ip_str.data()});
           TENZIR_ASSERT(ip);
           res->parts.emplace_back(*ip, "AAAA",
                                   std::chrono::seconds{node->ai_ttl});

@@ -12,7 +12,6 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
-#include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>

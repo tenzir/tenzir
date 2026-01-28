@@ -12,6 +12,7 @@
 
 #include "tenzir/type.hpp"
 
+#include <caf/error.hpp>
 #include <fmt/format.h>
 
 #include <string>
@@ -59,6 +60,16 @@ using concepts_map = detail::stable_map<std::string, concept_>;
 /// Describes the schema of a tenzir::list of concepts for automatic conversion
 /// to a `concepts_map`.
 extern const type concepts_data_schema;
+
+/// Converts data (list of concept records) to a concepts_map.
+/// This is a targeted conversion that avoids the expensive generic match()
+/// in concept/convertible/data.hpp.
+/// @param src The source data, expected to be a list of records.
+/// @param dst The destination concepts_map to populate.
+/// @param schema The schema describing the data structure
+/// (concepts_data_schema).
+/// @returns An error if conversion fails, or caf::none on success.
+caf::error convert(const data& src, concepts_map& dst, const type& schema);
 
 /// A taxonomy is a combination of concepts and models. Tenzir stores all
 /// configured taxonomies in memory together, hence the plural naming.
