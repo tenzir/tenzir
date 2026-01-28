@@ -216,13 +216,13 @@ auto to_field_extractor(const ast::expression& x)
   auto p = (parsers::alpha | '_') >> *(parsers::alnum | '_');
   return x.match(
     [&](const ast::root_field& x) -> std::optional<field_extractor> {
-      if (not p(x.id.name)) {
+      if (x.has_question_mark or not p(x.id.name)) {
         return std::nullopt;
       }
       return x.id.name;
     },
     [&](const ast::field_access& x) -> std::optional<field_extractor> {
-      if (not p(x.name.name)) {
+      if (x.has_question_mark or not p(x.name.name)) {
         return std::nullopt;
       }
       if (std::holds_alternative<ast::this_>(*x.left.kind)) {
@@ -235,6 +235,9 @@ auto to_field_extractor(const ast::expression& x)
       // Legacy expressions do not differentiate between `this["a.b"]` and
       // `a.b`. We are thus slightly changing the semantics, but this seems fine
       // considering the current alternative of not optimizing such queries.
+      if (x.has_question_mark) {
+        return std::nullopt;
+      }
       auto index = try_as<ast::constant>(x.index);
       if (not index) {
         return std::nullopt;
