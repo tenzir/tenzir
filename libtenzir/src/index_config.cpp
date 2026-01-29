@@ -96,7 +96,13 @@ auto convert_rule(const data& src, index_config::rule& dst) -> caf::error {
   } else {
     return std::move(targets_entry.error());
   }
-  dst.fp_rate = get_or(*rec, "fp-rate", dst.fp_rate);
+  if (auto fp_rate = try_get<double>(*rec, "fp-rate")) {
+    if (*fp_rate) {
+      dst.fp_rate = **fp_rate;
+    }
+  } else {
+    return std::move(fp_rate.error());
+  }
   dst.create_partition_index
     = get_or(*rec, "partition-index", dst.create_partition_index);
   return caf::none;
@@ -110,7 +116,13 @@ caf::error convert(const data& src, index_config& dst) {
     return caf::make_error(ec::convert_error,
                            "expected record for index_config conversion");
   }
-  dst.default_fp_rate = get_or(*rec, "default-fp-rate", dst.default_fp_rate);
+  if (auto default_fp_rate = try_get<double>(*rec, "default-fp-rate")) {
+    if (*default_fp_rate) {
+      dst.default_fp_rate = **default_fp_rate;
+    }
+  } else {
+    return std::move(default_fp_rate.error());
+  }
   if (const auto* rules_list = get_if<list>(rec, "rules")) {
     dst.rules.clear();
     for (const auto& rule_data : *rules_list) {
