@@ -17,12 +17,23 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tenzir {
 
 class OpCtx;
 
+/// Resolved web identity token configuration.
+struct resolved_web_identity {
+  std::string token_endpoint;
+  std::string token_file;
+  std::string token;
+  std::vector<std::pair<std::string, std::string>> headers;
+  /// JSON path to extract the token from the endpoint response.
+  /// nullopt means the response is plain text (no JSON parsing).
+  std::optional<std::string> token_path;
+};
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
   std::string region;
@@ -33,6 +44,51 @@ struct resolved_aws_credentials {
   std::string session_token;
   std::string role;
   std::string external_id;
+  std::optional<resolved_web_identity> web_identity;
+};
+
+/// Web identity token configuration for OIDC-based authentication.
+///
+/// Supports fetching OIDC tokens from:
+/// - HTTP endpoint (e.g., Azure IMDS, GCP metadata server)
+/// - File path (e.g., Kubernetes service account token)
+/// - Direct token value
+struct web_identity_options {
+  /// HTTP endpoint to fetch the token from.
+  std::optional<secret> token_endpoint;
+  /// File path containing the token.
+  std::optional<secret> token_file;
+  /// Direct token value.
+  std::optional<secret> token;
+  /// HTTP headers for the token endpoint request.
+  std::optional<record> headers;
+  /// JSON path to extract the token from endpoint response.
+  /// Defaults to ".access_token". Set to null for plain text responses.
+  std::optional<std::string> token_path;
+  /// True if token_path was explicitly set to null (plain text response).
+  bool token_path_is_null = false;
+  /// Source location for diagnostics.
+  location loc;
+
+  friend auto inspect(auto& f, web_identity_options& x) -> bool {
+    return f.object(x).fields(
+      f.field("token_endpoint", x.token_endpoint),
+      f.field("token_file", x.token_file), f.field("token", x.token),
+      f.field("headers", x.headers), f.field("token_path", x.token_path),
+      f.field("token_path_is_null", x.token_path_is_null),
+      f.field("loc", x.loc));
+  }
+
+  /// Parses web identity options from a TQL record.
+  ///
+  /// Recognized keys:
+  /// - `token_endpoint`: HTTP endpoint URL to fetch the token
+  /// - `token_file`: File path containing the token
+  /// - `token`: Direct token value
+  /// - `headers`: HTTP headers for endpoint requests
+  /// - `token_path`: JSON path to extract token (default: ".access_token")
+  static auto from_record(located<record> config, diagnostic_handler& dh)
+    -> failure_or<web_identity_options>;
 };
 
 /// AWS IAM authentication options.
@@ -56,6 +112,8 @@ struct aws_iam_options {
   std::optional<secret> secret_access_key;
   /// AWS session token for temporary credentials.
   std::optional<secret> session_token;
+  /// Web identity configuration for OIDC-based authentication.
+  std::optional<web_identity_options> web_identity;
   /// Source location for diagnostics.
   location loc;
 
@@ -66,7 +124,8 @@ struct aws_iam_options {
       f.field("external_id", x.external_id),
       f.field("access_key_id", x.access_key_id),
       f.field("secret_access_key", x.secret_access_key),
-      f.field("session_token", x.session_token), f.field("loc", x.loc));
+      f.field("session_token", x.session_token),
+      f.field("web_identity", x.web_identity), f.field("loc", x.loc));
   }
 
   /// Parses AWS IAM options from a TQL record.
@@ -80,6 +139,7 @@ struct aws_iam_options {
   /// - `assume_role`: IAM role ARN to assume
   /// - `session_name`: Session name for role assumption
   /// - `external_id`: External ID for role assumption
+  /// - `web_identity`: Web identity configuration for OIDC authentication
   static auto from_record(located<record> config, diagnostic_handler& dh)
     -> failure_or<aws_iam_options>;
 
