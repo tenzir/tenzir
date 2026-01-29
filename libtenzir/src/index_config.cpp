@@ -74,18 +74,27 @@ namespace {
 
 auto convert_rule(const data& src, index_config::rule& dst) -> caf::error {
   const auto* rec = try_as<record>(&src);
-  if (! rec) {
+  if (not rec) {
     return caf::make_error(ec::convert_error, "expected record for rule");
   }
-  if (const auto* targets = get_if<list>(rec, "targets")) {
-    for (const auto& elem : *targets) {
-      if (const auto* str = try_as<std::string>(&elem)) {
-        dst.targets.push_back(*str);
-      } else {
+  if (auto targets_entry = descend(rec, "targets")) {
+    if (*targets_entry) {
+      const auto* targets = try_as<list>(*targets_entry);
+      if (not targets) {
         return caf::make_error(ec::convert_error,
-                               "expected string in 'targets' list");
+                               "expected 'targets' to be a list");
+      }
+      for (const auto& elem : *targets) {
+        if (const auto* str = try_as<std::string>(&elem)) {
+          dst.targets.push_back(*str);
+        } else {
+          return caf::make_error(ec::convert_error,
+                                 "expected string in 'targets' list");
+        }
       }
     }
+  } else {
+    return std::move(targets_entry.error());
   }
   dst.fp_rate = get_or(*rec, "fp-rate", dst.fp_rate);
   dst.create_partition_index
