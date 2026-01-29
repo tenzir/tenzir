@@ -46,15 +46,47 @@ auto load_profile_credentials(const std::string& profile)
 auto make_default_aws_credentials_provider_chain()
   -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider>;
 
+/// Fetches a web identity token from the configured source.
+///
+/// Supports three token sources:
+/// - HTTP endpoint: Fetches token via HTTP GET, optionally parsing JSON
+/// - File: Reads token from a file path
+/// - Direct: Returns the token value directly
+///
+/// @param web_identity The resolved web identity configuration
+/// @return The token string or an error
+auto fetch_web_identity_token(const resolved_web_identity& web_identity)
+  -> caf::expected<std::string>;
+
+/// Calls STS AssumeRoleWithWebIdentity and returns temporary credentials.
+///
+/// This function assumes a role using an OIDC web identity token instead of
+/// existing AWS credentials. This is useful for authentication from:
+/// - Kubernetes pods with IRSA (IAM Roles for Service Accounts)
+/// - Azure VMs with managed identities
+/// - GCP instances with service accounts
+/// - Any OIDC-compatible identity provider
+///
+/// @param role_arn The ARN of the role to assume
+/// @param session_name The name for the assumed role session
+/// @param web_identity_token The OIDC token from the identity provider
+/// @param region Optional AWS region for the STS endpoint
+/// @return Temporary AWS credentials or an error
+auto assume_role_with_web_identity(const std::string& role_arn,
+                                   const std::string& session_name,
+                                   const std::string& web_identity_token,
+                                   const std::optional<std::string>& region)
+  -> caf::expected<sts_credentials>;
 /// Creates an AWS credentials provider based on the resolved credentials.
 ///
 /// This function implements the common credential resolution logic:
-/// 1. If explicit credentials + role: assume role using explicit credentials
-/// 2. If explicit credentials only: use them directly
-/// 3. If profile + role: load profile credentials, then assume role
-/// 4. If profile only: load profile credentials
-/// 5. If role only: use STSAssumeRoleCredentialsProvider with default chain
-/// 6. Otherwise: use default credential chain
+/// 1. If web_identity + role: fetch token and call AssumeRoleWithWebIdentity
+/// 2. If explicit credentials + role: assume role using explicit credentials
+/// 3. If explicit credentials only: use them directly
+/// 4. If profile + role: load profile credentials, then assume role
+/// 5. If profile only: load profile credentials
+/// 6. If role only: use STSAssumeRoleCredentialsProvider with default chain
+/// 7. Otherwise: use default credential chain
 ///
 /// @param creds Resolved AWS credentials (may be empty)
 /// @param region Optional region for STS calls
