@@ -1,31 +1,30 @@
-# Data Conversion
+# Type Conversion
 
-Converting from `data` (parsed YAML/JSON) to C++ structs.
+Converting between types using the `convert(src, dst)` pattern.
 
 ## Overview
 
-Tenzir configuration files are parsed into `tenzir::data` values (records,
-lists, primitives). These must be converted to typed C++ structs for use in the
-codebase.
+Tenzir uses explicit `convert()` functions for type-to-type conversion. This
+pattern provides a uniform interface for transforming values between different
+representations, such as parsing configuration data into typed structs.
 
 ## Conversion Pattern
 
-Use explicit `convert()` functions for data-to-struct conversion:
+Use explicit `convert()` functions with source and destination parameters:
 
 ```cpp
-// In header (e.g., index_config.hpp)
-caf::error convert(const data& src, index_config& dst);
+// In header (e.g., my_config.hpp)
+auto convert(const data& src, my_config& dst) -> bool;
 
-// In source file (e.g., index_config.cpp)
-caf::error convert(const data& src, index_config& dst) {
+// In source file (e.g., my_config.cpp)
+auto convert(const data& src, my_config& dst) -> bool {
   const auto* rec = try_as<record>(&src);
   if (! rec) {
-    return caf::make_error(ec::convert_error,
-                           "expected record for index_config conversion");
+    return false;
   }
-  dst.default_fp_rate = get_or(*rec, "default-fp-rate", dst.default_fp_rate);
+  dst.some_field = get_or(*rec, "some-field", dst.some_field);
   // ... convert remaining fields
-  return caf::none;
+  return true;
 }
 ```
 
@@ -33,45 +32,24 @@ caf::error convert(const data& src, index_config& dst) {
 
 1. Declare the function in the header alongside the struct
 2. Implement in the corresponding source file
-3. Use `try_as<record>()` to validate the input type
+3. Validate input types before accessing fields
 4. Use `get_or()` for optional fields with defaults
 5. Use `get_if<T>()` for optional fields without defaults
-6. Return `caf::none` on success, `caf::make_error()` on failure
+6. Return success/failure indicator appropriate for your error type
 
 For nested structures, create helper functions:
 
 ```cpp
 namespace {
 
-auto convert_rule(const data& src, index_config::rule& dst) -> caf::error {
+auto convert_rule(const data& src, my_config::rule& dst) -> bool {
   const auto* rec = try_as<record>(&src);
   if (! rec) {
-    return caf::make_error(ec::convert_error, "expected record for rule");
+    return false;
   }
   // ... convert fields
-  return caf::none;
+  return true;
 }
 
 } // namespace
 ```
-
-## Testing Requirements
-
-Error path tests are mandatory. Verify that malformed input produces appropriate
-errors:
-
-```cpp
-TEST(index_config conversion rejects non-record) {
-  index_config cfg;
-  auto err = convert(data{42}, cfg);
-  CHECK(err);
-}
-```
-
-## Examples
-
-Existing implementations to reference:
-
-- `libtenzir/src/index_config.cpp` - Nested rules with lists
-- `libtenzir/src/taxonomies.cpp` - Map-based configuration
-- `plugins/web/src/configuration.cpp` - Plugin configuration
