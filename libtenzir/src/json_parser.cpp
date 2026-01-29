@@ -12,6 +12,34 @@
 
 namespace tenzir::json {
 
+namespace {
+
+// Returns the number of bytes at the end of the view that are part of an
+// incomplete UTF-8 sequence. This mirrors simdjson's trim_partial_utf8().
+auto count_trailing_partial_utf8(std::string_view view) -> size_t {
+  if (view.empty()) {
+    return 0;
+  }
+  const auto* buf = reinterpret_cast<const uint8_t*>(view.data());
+  const auto len = view.size();
+  // Check for incomplete multi-byte sequences at the end:
+  // - 0xC0-0xFF at end: lead byte of 2-4 byte sequence with only 1 byte
+  // - 0xE0-0xFF at len-2: lead byte of 3-4 byte sequence with only 2 bytes
+  // - 0xF0-0xFF at len-3: lead byte of 4 byte sequence with only 3 bytes
+  if (buf[len - 1] >= 0xC0) {
+    return 1;
+  }
+  if (len >= 2 && buf[len - 2] >= 0xE0) {
+    return 2;
+  }
+  if (len >= 3 && buf[len - 3] >= 0xF0) {
+    return 3;
+  }
+  return 0;
+}
+
+} // namespace
+
 auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
   ++lines_processed_;
   simdjson::ondemand::document_stream stream;
@@ -207,17 +235,25 @@ auto default_parser::validate_completion() -> void {
 
 auto default_parser::handle_truncated_bytes() -> void {
   auto truncated_bytes = stream_.truncated_bytes();
-  if (truncated_bytes == 0) {
-    buffer_.reset();
-    return;
-  }
+  auto view = buffer_.view();
   // Likely not needed, but should be harmless. Needs additional
   // investigation in the future.
-  if (truncated_bytes > buffer_.view().size()) {
+  if (truncated_bytes > view.size()) {
     abort_requested = true;
     diagnostic::error("detected malformed JSON").emit(*dh);
     return;
   }
-  buffer_.truncate(truncated_bytes);
+  // simdjson's truncated_bytes() is calculated after trimming partial UTF-8
+  // sequences from the end of the input. We need to add those bytes back to
+  // avoid losing them, which would cause UTF-8 validation errors when the
+  // continuation bytes arrive in the next chunk.
+  auto partial_utf8_bytes = count_trailing_partial_utf8(view);
+  auto bytes_to_keep
+    = std::min(truncated_bytes + partial_utf8_bytes, view.size());
+  if (bytes_to_keep == 0) {
+    buffer_.reset();
+    return;
+  }
+  buffer_.truncate(bytes_to_keep);
 }
 } // namespace tenzir::json
