@@ -1,0 +1,6 @@
+// Test replace on sliced arrays (arrays with non-zero offsets).
+// This validates that null bitmap mutation works correctly when
+// the underlying array has been sliced (e.g., via tail/head).
+from {x: null, y: "a"}, {x: "b", y: "a"}, {x: "a", y: "c"}
+tail 2
+replace what="a", with=null

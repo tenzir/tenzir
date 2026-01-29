@@ -1,0 +1,12 @@
+{
+  x: null,
+  y: "keep",
+}
+{
+  x: null,
+  y: "remove",
+}
+{
+  x: null,
+  y: null,
+}

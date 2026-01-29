@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/argument_parser2.hpp"
+#include "tenzir/arrow_memory_pool.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/collect.hpp"
@@ -202,9 +203,17 @@ auto replace_series_with_null(const basic_series<record_type>& input,
     const auto& array_data = array->data();
     const auto offset = array_data->offset;
     const auto total_count = array_data->length + offset;
-    auto null_bitmap = array->null_bitmap();
-    if (not null_bitmap) {
+    auto null_bitmap = std::shared_ptr<arrow::Buffer>{};
+    if (array->null_bitmap_data()) {
+      // Copy the existing bitmap to ensure mutability.
+      // Copy from position 0 to total_count to preserve offset-based indexing.
+      null_bitmap = check(arrow::internal::CopyBitmap(
+        arrow_memory_pool(), array->null_bitmap_data(), 0, total_count));
+    } else {
+      // No existing bitmap - allocate a fresh one and set all bits to valid.
       null_bitmap = check(arrow::AllocateEmptyBitmap(total_count));
+      arrow::bit_util::SetBitsTo(null_bitmap->mutable_data(), 0, total_count,
+                                 true);
     }
     TENZIR_ASSERT(null_bitmap->size()
                   >= arrow::bit_util::BytesForBits(total_count));
