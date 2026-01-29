@@ -1,0 +1,3 @@
+// The `where` optimization should not apply to optional field access.
+export
+where foo? == 42
