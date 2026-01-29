@@ -1,0 +1,8 @@
+{
+  metadata: {
+    product: {
+      name: null,
+      vendor_name: null,
+    },
+  },
+}
