@@ -26,6 +26,9 @@
 #include <aws/sts/model/AssumeRoleWithWebIdentityRequest.h>
 #include <simdjson.h>
 
+#include <chrono>
+#include <mutex>
+
 namespace tenzir {
 
 auto make_default_aws_credentials_provider_chain()
@@ -42,6 +45,106 @@ auto make_default_aws_credentials_provider_chain()
     config);
 }
 
+namespace {
+
+/// Custom credentials provider that automatically refreshes credentials
+/// obtained via AssumeRoleWithWebIdentity. This is necessary for long-running
+/// pipelines where the initial STS credentials would otherwise expire.
+class web_identity_credentials_provider final
+  : public Aws::Auth::AWSCredentialsProvider {
+public:
+  web_identity_credentials_provider(resolved_web_identity web_identity,
+                                    std::string role_arn,
+                                    std::string session_name,
+                                    std::optional<std::string> region,
+                                    std::chrono::seconds refresh_buffer
+                                    = std::chrono::minutes{5})
+    : web_identity_{std::move(web_identity)},
+      role_arn_{std::move(role_arn)},
+      session_name_{std::move(session_name)},
+      region_{std::move(region)},
+      refresh_buffer_{refresh_buffer} {
+  }
+
+  auto GetAWSCredentials() -> Aws::Auth::AWSCredentials override {
+    auto lock = std::unique_lock{mutex_};
+    // Check if we need to refresh credentials.
+    auto now = std::chrono::system_clock::now();
+    if (credentials_.IsEmpty() or now >= expiration_ - refresh_buffer_) {
+      refresh_credentials();
+    }
+    return credentials_;
+  }
+
+private:
+  auto refresh_credentials() -> void {
+    TENZIR_VERBOSE("refreshing web identity credentials for role: {}",
+                   role_arn_);
+    // Fetch the web identity token.
+    auto token = fetch_web_identity_token(web_identity_);
+    if (not token) {
+      TENZIR_WARN("failed to fetch web identity token: {}", token.error());
+      credentials_ = {};
+      return;
+    }
+    // Create STS client configuration.
+    auto config = Aws::Client::ClientConfiguration{};
+    if (region_) {
+      config.region = *region_;
+    }
+    config.allowSystemProxy = true;
+    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
+      config.endpointOverride = *endpoint_url;
+    }
+    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
+      config.endpointOverride = *endpoint_url;
+    }
+    // Create anonymous STS client.
+    auto anonymous_credentials
+      = std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>();
+    auto sts_client
+      = Aws::STS::STSClient{anonymous_credentials, nullptr, config};
+    // Build and execute AssumeRoleWithWebIdentity request.
+    auto request = Aws::STS::Model::AssumeRoleWithWebIdentityRequest{};
+    request.SetRoleArn(role_arn_);
+    request.SetRoleSessionName(session_name_.empty() ? "tenzir-session"
+                                                     : session_name_);
+    request.SetWebIdentityToken(*token);
+    auto outcome = sts_client.AssumeRoleWithWebIdentity(request);
+    if (not outcome.IsSuccess()) {
+      TENZIR_WARN("failed to assume role with web identity: {}",
+                  outcome.GetError().GetMessage());
+      credentials_ = {};
+      return;
+    }
+    // Update cached credentials and expiration.
+    const auto& result = outcome.GetResult();
+    const auto& creds = result.GetCredentials();
+    credentials_ = Aws::Auth::AWSCredentials{
+      creds.GetAccessKeyId(),
+      creds.GetSecretAccessKey(),
+      creds.GetSessionToken(),
+    };
+    // Convert AWS DateTime to std::chrono::system_clock::time_point.
+    expiration_ = std::chrono::system_clock::from_time_t(
+      creds.GetExpiration().SecondsWithMSPrecision());
+    TENZIR_VERBOSE("web identity credentials refreshed, expires at: {}",
+                   creds.GetExpiration().ToGmtString(
+                     Aws::Utils::DateFormat::ISO_8601));
+  }
+
+  resolved_web_identity web_identity_;
+  std::string role_arn_;
+  std::string session_name_;
+  std::optional<std::string> region_;
+  std::chrono::seconds refresh_buffer_;
+
+  mutable std::mutex mutex_;
+  Aws::Auth::AWSCredentials credentials_;
+  std::chrono::system_clock::time_point expiration_;
+};
+
+} // namespace
 auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::string& role_arn,
                                   const std::string& session_name,
@@ -273,20 +376,10 @@ auto make_aws_credentials_provider(
   const auto session_name
     = creds->session_name.empty() ? std::string{} : creds->session_name;
 
-  // Web identity + role: fetch token and call AssumeRoleWithWebIdentity.
+  // Web identity + role: use auto-refreshing credentials provider.
   if (has_web_identity and has_role) {
-    auto token = fetch_web_identity_token(*creds->web_identity);
-    if (not token) {
-      return token.error();
-    }
-    auto sts_creds = assume_role_with_web_identity(creds->role, session_name,
-                                                   *token, region);
-    if (not sts_creds) {
-      return sts_creds.error();
-    }
-    return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-      sts_creds->access_key_id, sts_creds->secret_access_key,
-      sts_creds->session_token);
+    return std::make_shared<web_identity_credentials_provider>(
+      *creds->web_identity, creds->role, session_name, region);
   }
   if (has_explicit_creds and has_role) {
     // Explicit credentials + role: use STS to assume role.
