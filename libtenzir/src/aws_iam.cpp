@@ -19,9 +19,8 @@ namespace tenzir {
 auto web_identity_options::from_record(located<record> config,
                                        diagnostic_handler& dh)
   -> failure_or<web_identity_options> {
-  constexpr auto known
-    = std::array{"token_endpoint", "token_file", "token", "headers",
-                 "token_path"};
+  constexpr auto known = std::array{"token_endpoint", "token_file", "token",
+                                    "headers", "token_path"};
   const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
   });
@@ -59,14 +58,55 @@ auto web_identity_options::from_record(located<record> config,
   TRY(assign_secret("token_endpoint", opts.token_endpoint));
   TRY(assign_secret("token_file", opts.token_file));
   TRY(assign_secret("token", opts.token));
-  // Parse headers as a record (not a secret).
+  // Parse headers as a record where values can be strings or secrets.
+  // Validate header names and string values for CRLF injection.
+  const auto contains_crlf = [](std::string_view s) {
+    return s.find('\r') != std::string_view::npos
+           or s.find('\n') != std::string_view::npos;
+  };
   if (auto it = config.inner.find("headers"); it != config.inner.end()) {
     if (auto* r = try_as<record>(it->second.get_data())) {
-      opts.headers = std::move(*r);
+      opts.headers = std::vector<std::pair<std::string, secret>>{};
+      for (auto& [key, value] : *r) {
+        // Validate header name for CRLF injection.
+        if (contains_crlf(key)) {
+          diagnostic::error("header name '{}' contains invalid characters "
+                            "(newline/carriage return)",
+                            key)
+            .primary(config)
+            .emit(dh);
+          return failure::promise();
+        }
+        if (auto* s = try_as<secret>(value.get_data())) {
+          opts.headers->emplace_back(key, std::move(*s));
+        } else if (auto* str = try_as<std::string>(value.get_data())) {
+          if (str->empty()) {
+            diagnostic::error("header '{}' value must not be empty", key)
+              .primary(config)
+              .emit(dh);
+            return failure::promise();
+          }
+          // Validate header value for CRLF injection.
+          if (contains_crlf(*str)) {
+            diagnostic::error("header '{}' value contains invalid characters "
+                              "(newline/carriage return)",
+                              key)
+              .primary(config)
+              .emit(dh);
+            return failure::promise();
+          }
+          opts.headers->emplace_back(key,
+                                     secret::make_literal(std::move(*str)));
+        } else {
+          diagnostic::error("header '{}' value must be a `string` or `secret`",
+                            key)
+            .primary(config)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
     } else {
-      diagnostic::error("`headers` must be a record")
-        .primary(config)
-        .emit(dh);
+      diagnostic::error("`headers` must be a record").primary(config).emit(dh);
       return failure::promise();
     }
   }
@@ -130,9 +170,9 @@ auto aws_iam_options::from_record(located<record> config,
                                   diagnostic_handler& dh)
   -> failure_or<aws_iam_options> {
   constexpr auto known = std::array{
-    "region",       "profile",           "assume_role", "session_name",
-    "external_id",  "access_key_id",     "secret_access_key",
-    "session_token", "web_identity",
+    "region",       "profile",       "assume_role",       "session_name",
+    "external_id",  "access_key_id", "secret_access_key", "session_token",
+    "web_identity",
   };
   const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
@@ -180,8 +220,8 @@ auto aws_iam_options::from_record(located<record> config,
   if (auto it = config.inner.find("web_identity"); it != config.inner.end()) {
     if (auto* r = try_as<record>(it->second.get_data())) {
       auto web_identity_config = located{std::move(*r), config.source};
-      TRY(opts.web_identity,
-          web_identity_options::from_record(std::move(web_identity_config), dh));
+      TRY(opts.web_identity, web_identity_options::from_record(
+                               std::move(web_identity_config), dh));
     } else {
       diagnostic::error("`web_identity` must be a record")
         .primary(config)
@@ -300,14 +340,16 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
       requests.emplace_back(make_secret_request(
         "token", *web_identity->token, web_identity->loc, wi.token, dh));
     }
-    // Copy headers directly (not secrets, just string values).
+    // Resolve header secrets.
     if (web_identity->headers) {
+      // Pre-allocate space for resolved headers.
+      wi.headers.reserve(web_identity->headers->size());
       for (const auto& [key, value] : *web_identity->headers) {
-        if (auto* str = try_as<std::string>(value.get_data())) {
-          wi.headers.emplace_back(key, *str);
-        }
-        // Silently ignore non-string header values (validation should have
-        // caught this, but be defensive).
+        // Add a placeholder that will be filled by secret resolution.
+        wi.headers.emplace_back(key, std::string{});
+        requests.emplace_back(
+          make_secret_request(fmt::format("header '{}'", key), value,
+                              web_identity->loc, wi.headers.back().second, dh));
       }
     }
     // Handle token_path: explicit value, explicit null, or default.

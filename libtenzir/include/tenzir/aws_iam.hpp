@@ -61,7 +61,8 @@ struct web_identity_options {
   /// Direct token value.
   std::optional<secret> token;
   /// HTTP headers for the token endpoint request.
-  std::optional<record> headers;
+  /// Each value can be a string or secret.
+  std::optional<std::vector<std::pair<std::string, secret>>> headers;
   /// JSON path to extract the token from endpoint response.
   /// Defaults to ".access_token". Set to null for plain text responses.
   std::optional<std::string> token_path;
