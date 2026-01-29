@@ -27,22 +27,25 @@
 namespace tenzir {
 
 concept_ mappend(concept_ lhs, concept_ rhs) {
-  if (lhs.description.empty())
+  if (lhs.description.empty()) {
     lhs.description = std::move(rhs.description);
-  else if (!rhs.description.empty() && lhs.description != rhs.description)
+  } else if (! rhs.description.empty() && lhs.description != rhs.description) {
     TENZIR_WARN("encountered conflicting descriptions: \"{}\" and \"{}\"",
                 lhs.description, rhs.description);
+  }
   for (auto& field : rhs.fields) {
-    if (std::count(lhs.fields.begin(), lhs.fields.end(), field) > 0)
+    if (std::count(lhs.fields.begin(), lhs.fields.end(), field) > 0) {
       TENZIR_WARN("ignoring duplicate field {}", field);
-    else
+    } else {
       lhs.fields.push_back(std::move(field));
+    }
   }
   for (auto& c : rhs.concepts) {
-    if (std::count(lhs.concepts.begin(), lhs.concepts.end(), c) > 0)
+    if (std::count(lhs.concepts.begin(), lhs.concepts.end(), c) > 0) {
       TENZIR_WARN("ignoring duplicate field {}", c);
-    else
+    } else {
       lhs.concepts.push_back(std::move(c));
+    }
   }
   return lhs;
 }
@@ -61,19 +64,23 @@ const type concepts_data_schema = type{map_type{
 namespace {
 
 auto extract_string_list(const record& rec, std::string_view key,
-                         std::vector<std::string>& out) -> void {
+                         std::vector<std::string>& out) -> caf::error {
   if (const auto* lst = get_if<list>(&rec, key)) {
     for (const auto& elem : *lst) {
       if (const auto* str = try_as<std::string>(&elem)) {
         out.push_back(*str);
+      } else {
+        return caf::make_error(
+          ec::convert_error, fmt::format("expected string in '{}' list", key));
       }
     }
   }
+  return caf::none;
 }
 
 } // namespace
 
-caf::error convert(const data& src, concepts_map& dst, const type& /*schema*/) {
+caf::error convert(const data& src, concepts_map& dst) {
   // The data is expected to be a list of records, where each record has a
   // "concept" field containing {name, description, fields, concepts}.
   const auto* src_list = try_as<list>(&src);
@@ -101,8 +108,13 @@ caf::error convert(const data& src, concepts_map& dst, const type& /*schema*/) {
     }
     concept_ c;
     c.description = get_or(*concept_rec, "description", c.description);
-    extract_string_list(*concept_rec, "fields", c.fields);
-    extract_string_list(*concept_rec, "concepts", c.concepts);
+    if (auto err = extract_string_list(*concept_rec, "fields", c.fields); err) {
+      return err;
+    }
+    if (auto err = extract_string_list(*concept_rec, "concepts", c.concepts);
+        err) {
+      return err;
+    }
     // Insert into map, merging if key exists
     if (auto entry = dst.find(*name); entry != dst.end()) {
       entry->second = mappend(std::move(entry->second), std::move(c));
@@ -136,8 +148,9 @@ resolve_concepts(const concepts_map& concepts,
         fields_or_concepts.insert(fields_or_concepts.end(),
                                   concept_.fields.begin(),
                                   concept_.fields.end());
-        for (const auto& nested_concept : concept_.concepts)
+        for (const auto& nested_concept : concept_.concepts) {
           self(self, nested_concept, recursion_limit - 1);
+        }
       }
     } else {
       // The field is not a concept, so we just add it back to the vector.
@@ -145,8 +158,9 @@ resolve_concepts(const concepts_map& concepts,
         std::forward<decltype(field_or_concept)>(field_or_concept));
     }
   };
-  for (auto&& field_or_concept : std::exchange(fields_or_concepts, {}))
+  for (auto&& field_or_concept : std::exchange(fields_or_concepts, {})) {
     try_resolve_concept(try_resolve_concept, std::move(field_or_concept));
+  }
   return fields_or_concepts;
 }
 
@@ -155,8 +169,9 @@ static bool contains(const type& schema, const std::string& x,
   const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
   for (const auto& offset : rt->resolve_key_suffix(x, schema.name())) {
-    if (compatible(rt->field(offset).type, op, data))
+    if (compatible(rt->field(offset).type, op, data)) {
       return true;
+    }
   }
   return false;
 }
@@ -174,8 +189,9 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
         // generates a predicate for every discovered name that is not a concept
         // itself.
         auto c = ts.concepts.find(field_name);
-        if (c == ts.concepts.end())
+        if (c == ts.concepts.end()) {
           return expression{std::move(pred)};
+        }
         // The log of all referenced concepts that we tried to resolve already.
         // This is a deque instead of a stable_set because we don't want
         // push_back to invalidate the `current` iterator.
@@ -189,22 +205,27 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
           // Insert only those concepts into the queue that aren't in there yet,
           // this prevents infinite loops through circular references between
           // concepts.
-          for (auto& x : def.concepts)
-            if (std::find(log.begin(), log.end(), x) == log.end())
+          for (auto& x : def.concepts) {
+            if (std::find(log.begin(), log.end(), x) == log.end()) {
               log.push_back(x);
+            }
+          }
         };
         load_definition(c->second);
         // We iterate through the log while appending referenced concepts in
         // load_definition.
-        for (auto current : log)
-          if (auto ref = ts.concepts.find(current); ref != ts.concepts.end())
+        for (auto current : log) {
+          if (auto ref = ts.concepts.find(current); ref != ts.concepts.end()) {
             load_definition(ref->second);
+          }
+        }
         // Transform the target_fields into new predicates.
         disjunction d;
         auto make_pred = make_predicate(op, data);
         for (auto& x : target_fields) {
-          if (!schema || contains(schema, x, op, data))
+          if (! schema || contains(schema, x, op, data)) {
             d.emplace_back(make_pred(std::move(x)));
+          }
         }
         switch (d.size()) {
           case 0:

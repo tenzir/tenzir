@@ -107,8 +107,7 @@ public:
 caf::expected<server_config> convert_and_validate(configuration);
 
 /// Converts data (record from YAML/config) to web::configuration.
-/// This is a targeted conversion that avoids the expensive generic match()
-/// in concept/convertible/data.hpp.
+/// Uses explicit field extraction for efficient deserialization.
 /// @param src The source data, expected to be a record.
 /// @param dst The destination configuration to populate.
 /// @returns An error if conversion fails, or caf::none on success.

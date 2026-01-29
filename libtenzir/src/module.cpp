@@ -233,8 +233,7 @@ auto load_taxonomies(const caf::actor_system_config& cfg)
     }
     for (auto& [file, yaml] : *yamls) {
       TENZIR_DEBUG("extracting taxonomies from {}", file.string());
-      if (auto err = convert(yaml, concepts, concepts_data_schema);
-          err.valid()) {
+      if (auto err = convert(yaml, concepts); err.valid()) {
         return caf::make_error(ec::parse_error,
                                "failed to extract concepts from file",
                                file.string(), err.context());

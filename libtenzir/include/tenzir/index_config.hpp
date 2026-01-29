@@ -67,8 +67,7 @@ bool should_create_partition_index(const qualified_record_field& index_qf,
                                    const std::vector<index_config::rule>& rules);
 
 /// Converts data (record from YAML/config) to index_config.
-/// This is a targeted conversion that avoids the expensive generic match()
-/// in concept/convertible/data.hpp.
+/// Uses explicit field extraction for efficient deserialization.
 /// @param src The source data, expected to be a record.
 /// @param dst The destination index_config to populate.
 /// @returns An error if conversion fails, or caf::none on success.

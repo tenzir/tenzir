@@ -28,7 +28,7 @@ bool is_target_applicable(const qualified_record_field& index_qf,
   // This is unnecessarily complicated for now, but we don't currently have a
   // better API for it.
   const auto is_type_extractor = extractor.starts_with(':');
-  if (!is_type_extractor) {
+  if (! is_type_extractor) {
     return index_qf.name() == extractor;
   }
   const auto type_name = extractor.substr(1);
@@ -81,6 +81,9 @@ auto convert_rule(const data& src, index_config::rule& dst) -> caf::error {
     for (const auto& elem : *targets) {
       if (const auto* str = try_as<std::string>(&elem)) {
         dst.targets.push_back(*str);
+      } else {
+        return caf::make_error(ec::convert_error,
+                               "expected string in 'targets' list");
       }
     }
   }

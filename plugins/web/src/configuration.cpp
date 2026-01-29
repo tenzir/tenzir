@@ -18,22 +18,24 @@ namespace tenzir::plugins::web {
 
 static caf::expected<enum configuration::server_mode>
 to_server_mode(const std::string& str) {
-  if (str == "dev")
+  if (str == "dev") {
     return configuration::server_mode::dev;
-  else if (str == "upstream")
+  } else if (str == "upstream") {
     return configuration::server_mode::upstream;
-  else if (str == "server")
+  } else if (str == "server") {
     return configuration::server_mode::server;
-  else if (str == "mtls")
+  } else if (str == "mtls") {
     return configuration::server_mode::mtls;
+  }
   return caf::make_error(ec::invalid_argument, "unknown mode");
 }
 
 caf::expected<server_config> convert_and_validate(configuration config) {
   auto result = server_config{};
   auto mode = to_server_mode(config.mode);
-  if (!mode)
+  if (! mode) {
     return mode.error();
+  }
   switch (*mode) {
     case configuration::server_mode::dev:
       result.require_tls = false;
@@ -64,34 +66,41 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   result.certfile = config.certfile;
   result.keyfile = config.keyfile;
   auto ec = std::error_code{};
-  if (!config.web_root.empty()) {
+  if (! config.web_root.empty()) {
     result.webroot = config.web_root;
     // This doesn't help against TOCTOU errors, but at least it
     // catches obvious ones.
-    if (!is_directory(*result.webroot, ec))
+    if (! is_directory(*result.webroot, ec)) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("directory not found: {}",
                                          result.webroot));
+    }
   } else {
     result.webroot = std::nullopt;
   }
-  if (!result.certfile.empty() && !exists(result.certfile))
+  if (! result.certfile.empty() && ! exists(result.certfile)) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.certfile));
-  if (!result.keyfile.empty() && !exists(result.keyfile))
+  }
+  if (! result.keyfile.empty() && ! exists(result.keyfile)) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.keyfile));
-  if (result.require_tls)
-    if (result.keyfile.empty() || result.certfile.empty())
+  }
+  if (result.require_tls) {
+    if (result.keyfile.empty() || result.certfile.empty()) {
       return caf::make_error(ec::invalid_argument, "either keyfile or certfile "
                                                    "argument is missing");
+    }
+  }
   result.bind_address = config.bind_address;
-  if (result.require_localhost)
+  if (result.require_localhost) {
     if (result.bind_address != "localhost" && result.bind_address != "127.0.0.1"
-        && result.bind_address != "::1")
+        && result.bind_address != "::1") {
       return caf::make_error(
         ec::invalid_argument,
         fmt::format("can only bind to localhost in {} mode", config.mode));
+    }
+  }
   result.port = config.port;
   return result;
 }
@@ -104,6 +113,10 @@ caf::error convert(const tenzir::data& src, configuration& dst) {
   }
   dst.bind_address = get_or(*rec, "bind", dst.bind_address);
   if (const auto* port = get_if<int64_t>(rec, "port")) {
+    if (*port < 0 || *port > 65535) {
+      return caf::make_error(ec::convert_error,
+                             "port must be in range 0-65535");
+    }
     dst.port = static_cast<int>(*port);
   }
   dst.mode = get_or(*rec, "mode", dst.mode);
