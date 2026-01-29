@@ -1,0 +1,5 @@
+from \
+  {x: "", y: "foo"},
+  {x: "bar", y: ""},
+  {x: "", y: ""}
+replace what="", with=null
