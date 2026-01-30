@@ -28,6 +28,8 @@ using chunk_source_actor = caf::typed_actor<chunk_source_traits>;
 
 class arrow_chunk_source {
 public:
+  static constexpr auto name = "arrow-chunk-source";
+
   explicit arrow_chunk_source(std::shared_ptr<arrow::io::InputStream> stream)
     : stream_{std::move(stream)} {
   }
@@ -95,6 +97,8 @@ using from_file_actor = caf::typed_actor<from_file_actor_traits>;
 
 class from_file_state {
 public:
+  static constexpr auto name = "from-file";
+
   from_file_state(from_file_actor::pointer self, from_file_args args,
                   std::string plaintext_url, event_order order,
                   std::unique_ptr<diagnostic_handler> dh,

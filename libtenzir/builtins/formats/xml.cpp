@@ -681,7 +681,8 @@ public:
     parser.named("namespaces", namespaces);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
-    msb_parser.add_settings_to_parser(parser, true, false);
+    msb_parser.add_settings_to_parser(
+      parser, true, multi_series_builder_argument_parser::merge_option::hidden);
     TRY(parser.parse(inv, ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     // Build options
@@ -947,7 +948,8 @@ public:
     parser.positional("input", expr, "string");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
-    msb_parser.add_settings_to_parser(parser, true, false);
+    msb_parser.add_settings_to_parser(
+      parser, true, multi_series_builder_argument_parser::merge_option::hidden);
     TRY(parser.parse(inv, ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     // Fixed options for Windows Event Log

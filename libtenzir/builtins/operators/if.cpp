@@ -223,6 +223,8 @@ private:
 /// An actor managing the nested pipelines of an `if` statement.
 class branch {
 public:
+  [[maybe_unused]] static constexpr auto name = "branch";
+
   branch(branch_actor::pointer self, std::string definition, node_actor node,
          shared_diagnostic_handler dh, metrics_receiver_actor metrics_receiver,
          bool is_hidden, uint64_t operator_index, std::string pipeline_id,

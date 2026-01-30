@@ -791,7 +791,8 @@ public:
     parser.named("include_unnamed", include_unnamed);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
-    msb_parser.add_settings_to_parser(parser, true, false);
+    msb_parser.add_settings_to_parser(
+      parser, true, multi_series_builder_argument_parser::merge_option::hidden);
     TRY(parser.parse(inv, ctx));
     TRY(auto pattern_definitions,
         extract_pattern_definitions(std::move(pattern_definitions_expression),

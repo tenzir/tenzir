@@ -1,0 +1,5 @@
+// Test raw_message with RFC 3164 (legacy) format
+from {x: "<34>Oct 11 22:14:15 mymachine su: failed login"}
+write_lines
+read_syslog raw_message=raw
+select content, raw

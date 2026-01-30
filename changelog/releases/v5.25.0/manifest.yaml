@@ -1,0 +1,7 @@
+created: 2026-01-27
+title: Tenzir Node v5.25.0
+intro: >-
+  This release adds periodic emission to the summarize operator, enabling real-time
+  streaming analytics with configurable intervals and accumulation modes. It also
+  introduces AWS IAM authentication across SQS, S3, and Kafka operators, and fixes
+  memory instability in from_http when used with slow downstream consumers.

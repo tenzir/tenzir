@@ -73,12 +73,16 @@ public:
     if (not client) {
       co_return;
     }
-    detail::weak_run_delayed_loop(
+    auto disp = detail::weak_run_delayed_loop(
       &ctrl.self(), std::chrono::minutes{10},
       [&client]() {
         client->ping();
       },
       false);
+    const auto guard
+      = detail::scope_guard([disp = std::move(disp)]() mutable noexcept {
+          disp.dispose();
+        });
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

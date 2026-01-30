@@ -1,0 +1,12 @@
+{
+  x: null,
+  y: "foo",
+}
+{
+  x: "bar",
+  y: null,
+}
+{
+  x: null,
+  y: null,
+}

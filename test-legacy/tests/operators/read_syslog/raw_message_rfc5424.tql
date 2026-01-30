@@ -1,0 +1,5 @@
+// Test raw_message with RFC 5424 format
+from {x: r#"<165>1 2023-01-01T00:00:00Z host app 123 - - Test message"#}
+write_lines
+read_syslog raw_message=raw
+select message, raw

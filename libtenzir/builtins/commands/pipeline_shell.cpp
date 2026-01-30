@@ -22,6 +22,8 @@ namespace {
 
 class pipeline_shell {
 public:
+  [[maybe_unused]] static constexpr auto name = "pipeline-shell";
+
   pipeline_shell(pipeline_shell_actor::pointer self, node_actor node)
     : self_{self}, node_{std::move(node)} {
   }

@@ -1,0 +1,14 @@
+{
+  input: "1,2,3",
+  output: {
+    a: 3,
+    b: 2,
+  },
+}
+warning: duplicate field name `a` in header
+ --> tests/functions/parse/parse_csv_duplicate_header.tql:2:33
+  |
+2 | output = input.parse_csv(header=["a","b","a"])
+  |                                 ~~~~~~~~~~~~~ 
+  |
+  = note: later values will overwrite earlier ones

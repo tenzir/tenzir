@@ -254,6 +254,8 @@ private:
 };
 
 struct http_state {
+  [[maybe_unused]] static constexpr auto name = "http";
+
   http_state(http_actor::pointer self, shared_diagnostic_handler dh,
              metrics_receiver_actor metrics, uint64_t operator_index,
              exec_node_actor spawner)

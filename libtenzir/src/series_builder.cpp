@@ -720,7 +720,7 @@ public:
     auto result_elements = elements_.finish(ending_offset);
     auto result = check(arrow::ListArray::FromArrays(
       *result_offsets, *result_elements.array, arrow_memory_pool()));
-#ifdef TENZIR_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
     const auto v = result->Validate();
     TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
 #endif
@@ -825,7 +825,7 @@ public:
     }
     auto result = std::make_shared<arrow::StructArray>(
       ty.to_arrow_type(), count, field_arrays, std::move(null_bitmap));
-#ifdef TENZIR_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
     const auto v = result->Validate();
     TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
 #endif
@@ -1406,7 +1406,7 @@ auto series_builder::finish_as_table_slice(std::string_view name)
     auto batch = arrow::RecordBatch::Make(std::move(arrow_schema),
                                           cast->length(), cast->fields());
     TENZIR_ASSERT(batch);
-#ifdef TENZIR_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
     const auto v = batch->Validate();
     TENZIR_ASSERT_EXPENSIVE(v.ok(), "{}", v.ToString());
 #endif

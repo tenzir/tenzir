@@ -1,0 +1,4 @@
+{
+  content: "failed login",
+  raw: "<34>Oct 11 22:14:15 mymachine su: failed login",
+}

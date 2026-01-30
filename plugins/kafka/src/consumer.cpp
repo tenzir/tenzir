@@ -53,6 +53,27 @@ auto consumer::commit(RdKafka::Message* message, diagnostic_handler& dh,
   return {};
 }
 
+auto consumer::get_assignment(const std::string& topic, diagnostic_handler& dh,
+                              location loc)
+  -> failure_or<std::unordered_set<int32_t>> {
+  std::vector<RdKafka::TopicPartition*> partitions;
+  auto err = consumer_->assignment(partitions);
+  if (err != RdKafka::ERR_NO_ERROR) {
+    diagnostic::error("failed to get assignment: {}", RdKafka::err2str(err))
+      .primary(loc)
+      .emit(dh);
+    return failure::promise();
+  }
+  std::unordered_set<int32_t> result;
+  for (auto* partition : partitions) {
+    if (partition && partition->topic() == topic) {
+      result.insert(partition->partition());
+    }
+  }
+  RdKafka::TopicPartition::destroy(partitions);
+  return result;
+}
+
 auto consumer::get_partition_count(const std::string& topic)
   -> caf::expected<size_t> {
   RdKafka::Metadata* metadata = nullptr;

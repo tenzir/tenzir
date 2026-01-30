@@ -34,6 +34,8 @@ using side_channel_actor = caf::typed_actor<side_channel_actor_traits>;
 
 class side_channel {
 public:
+  [[maybe_unused]] static constexpr auto name = "side-channel";
+
   side_channel(side_channel_actor::pointer self,
                shared_diagnostic_handler diagnostics_handler,
                metrics_receiver_actor metrics_receiver,

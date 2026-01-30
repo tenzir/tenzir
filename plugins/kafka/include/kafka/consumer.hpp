@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace tenzir::plugins::kafka {
@@ -38,6 +39,10 @@ public:
   /// Commits offset for a specific message synchronously.
   auto commit(RdKafka::Message* message, diagnostic_handler& dh, location loc)
     -> failure_or<void>;
+
+  /// Gets the current assignment for a specific topic.
+  auto get_assignment(const std::string& topic, diagnostic_handler& dh,
+                      location loc) -> failure_or<std::unordered_set<int32_t>>;
 
   /// Gets the partition count for a given topic.
   auto get_partition_count(const std::string& topic) -> caf::expected<size_t>;

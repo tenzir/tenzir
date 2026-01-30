@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/allocator_config.hpp"
+#include "tenzir/execution_node_name_guard.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/abstract_actor.hpp>
@@ -40,7 +41,7 @@ inline auto write_error(const char* txt) noexcept {
 #define TENZIR_STRINGIZE(x) TENZIR_STRINGIZE2(x)
 #define TENZIR_STRINGIZE2(x) #x
 
-#ifdef TENZIR_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
 #  define TENZIR_ALLOCATOR_ASSERT(COND)                                        \
     if (not static_cast<bool>(COND)) {                                         \
       write_error("assertion '" #COND "' failed" __FILE__                      \
@@ -221,6 +222,12 @@ public:
 #ifndef __clang__
 #  pragma GCC diagnostic pop
 #endif
+    constexpr static auto exec_node_name = std::string_view{"exec-node"};
+    if (std::memcmp(storage_.data(), exec_node_name.data(),
+                    exec_node_name.size())
+        == 0) {
+      storage_ = exec_node_name_guard::operator_name;
+    }
   }
 
   auto alignment() const noexcept -> alignment_t {

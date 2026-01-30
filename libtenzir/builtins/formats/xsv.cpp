@@ -152,6 +152,18 @@ struct xsv_parser_options {
   }
 };
 
+auto warn_on_duplicate_fields(std::vector<std::string> fields, location loc,
+                              diagnostic_handler& dh) -> void {
+  std::ranges::sort(fields);
+  for (auto it = std::ranges::adjacent_find(fields); it != fields.end();
+       it = std::ranges::adjacent_find(std::next(it), fields.end())) {
+    diagnostic::warning("duplicate field name `{}` in header", *it)
+      .primary(loc)
+      .note("later values will overwrite earlier ones")
+      .emit(dh);
+  }
+}
+
 auto parse_header(std::string_view line, location loc,
                   const xsv_parser_options& args,
                   const detail::quoting_escaping_policy& quoting,
@@ -168,6 +180,7 @@ auto parse_header(std::string_view line, location loc,
     diagnostic::error("failed to parse header").primary(loc).emit(dh);
     return failure::promise();
   }
+  warn_on_duplicate_fields(fields, loc, dh);
   return fields;
 }
 
@@ -211,6 +224,7 @@ auto extract_header(ast::expression& header_expr,
           return failure::promise();
         }
       }
+      warn_on_duplicate_fields(fields, header_expr.get_location(), ctx);
       return fields;
     },
     [&](const auto&) -> ret_t {
@@ -261,7 +275,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
                                                                  false);
   }
 
-  auto add_to_parser(argument_parser2& parser, bool add_merge_option,
+  auto add_to_parser(argument_parser2& parser, merge_option add_merge_option,
                      bool header_required) -> void {
     if (mode_ == mode::special_optional) {
       TENZIR_ASSERT(list_separator_);
@@ -915,7 +929,8 @@ public:
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto opt_parser = xsv_common_parser_options_parser{name()};
-    opt_parser.add_to_parser(parser, true, false);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::yes, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     TRY(auto opts, opt_parser.get_options(ctx));
@@ -943,7 +958,8 @@ public:
       std::string{ListSep},
       std::string{Null.str()},
     };
-    opt_parser.add_to_parser(parser, true, false);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::yes, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     TRY(auto opts, opt_parser.get_options(ctx));
@@ -1047,7 +1063,8 @@ class parse_xsv : public function_plugin {
     auto parser = argument_parser2::function(name());
     parser.positional("input", input, "string");
     auto opt_parser = xsv_common_parser_options_parser{name()};
-    opt_parser.add_to_parser(parser, false, true);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::hidden, true);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, opt_parser.get_options(ctx));
     opts.name = "xsv";
@@ -1084,7 +1101,8 @@ public:
       std::string{ListSep},
       std::string{Null.str()},
     };
-    opt_parser.add_to_parser(parser, false, true);
+    opt_parser.add_to_parser(
+      parser, multi_series_builder_argument_parser::merge_option::hidden, true);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, opt_parser.get_options(ctx));
     opts.name = Name.str();

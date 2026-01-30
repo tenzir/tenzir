@@ -21,6 +21,9 @@
 #include <arrow/record_batch.h>
 #include <arrow/type_fwd.h>
 
+#include <unordered_map>
+#include <unordered_set>
+
 namespace tenzir::plugins::kafka {
 namespace {
 
@@ -140,12 +143,13 @@ public:
     }
     auto num_messages = size_t{0};
     auto last_commit_time = time::clock::now();
-    auto last_good_message = std::shared_ptr<RdKafka::Message>{};
-
-    // Track EOF status per partition for proper multi-partition handling
-    auto partition_count = std::optional<size_t>{};
-    auto eof_partition_count = size_t{0};
-
+    auto pending_messages
+      = std::unordered_map<int32_t, std::shared_ptr<RdKafka::Message>>{};
+    // Optional distinguishes "no assignment fetched yet" from a legitimate
+    // empty assignment (e.g., rebalancing or no partitions), which must not
+    // reset EOF tracking.
+    auto assigned_partitions = std::optional<std::unordered_set<int32_t>>{};
+    auto eof_partitions = std::unordered_set<int32_t>{};
     const auto schema = type{
       "tenzir.kafka",
       record_type{
@@ -155,104 +159,103 @@ public:
     const auto arrow_schema = schema.to_arrow_schema();
     auto b = string_type::make_arrow_builder(arrow_memory_pool());
     const auto finish_as_slice = [&] -> table_slice {
-      const auto l = b->length();
+      const auto length = b->length();
       return table_slice{
-        arrow::RecordBatch::Make(arrow_schema, l, {finish(*b)}),
+        arrow::RecordBatch::Make(arrow_schema, length, {finish(*b)}),
       };
     };
     while (true) {
       auto raw_msg = client->consume_raw(500ms);
       TENZIR_ASSERT(raw_msg);
       const auto now = time::clock::now();
+      const auto timed_out = now - last_commit_time >= commit_timeout;
       switch (raw_msg->err()) {
         case RdKafka::ERR_NO_ERROR: {
-          last_good_message = std::move(raw_msg);
-          check(b->Append(
-            reinterpret_cast<const char*>(last_good_message->payload()),
-            detail::narrow<int32_t>(last_good_message->len())));
-          // Manually commit this specific message after processing
+          auto partition = raw_msg->partition();
+          pending_messages[partition] = std::move(raw_msg);
+          auto& message = pending_messages[partition];
+          check(b->Append(reinterpret_cast<const char*>(message->payload()),
+                          detail::narrow<int32_t>(message->len())));
           ++num_messages;
-          if (last_good_message and args_.count
-              and args_.count->inner == num_messages) {
-            co_yield finish_as_slice();
-            std::ignore = client->commit(last_good_message.get(), dh,
-                                         args_.operator_location);
-            co_return;
-          }
-          if (last_good_message
-              and (num_messages % args_.commit_batch_size == 0
-                   or now - last_commit_time >= commit_timeout)) {
+          const auto reached_count
+            = args_.count && args_.count->inner == num_messages;
+          const auto full_batch = num_messages % args_.commit_batch_size == 0;
+          if (full_batch or timed_out or reached_count) {
             last_commit_time = now;
             co_yield finish_as_slice();
-            if (not client->commit(last_good_message.get(), dh,
-                                   args_.operator_location)) {
+            for (const auto& [_, msg] : pending_messages) {
+              if (not client->commit(msg.get(), dh, args_.operator_location)) {
+                co_return;
+              }
+            }
+            pending_messages.clear();
+            if (reached_count) {
               co_return;
             }
-            last_good_message.reset();
-            continue;
+          } else {
+            co_yield {};
           }
-          co_yield {};
           continue;
         }
         case RdKafka::ERR__TIMED_OUT: {
-          if (last_good_message and now - last_commit_time >= commit_timeout) {
+          if (not pending_messages.empty() and timed_out) {
             last_commit_time = now;
             co_yield finish_as_slice();
-            if (not client->commit(last_good_message.get(), dh,
-                                   args_.operator_location)) {
-              co_return;
+            for (const auto& [_, msg] : pending_messages) {
+              if (not client->commit(msg.get(), dh, args_.operator_location)) {
+                co_return;
+              }
             }
-            last_good_message.reset();
+            pending_messages.clear();
           } else {
             co_yield {};
           }
           continue;
         }
         case RdKafka::ERR__PARTITION_EOF: {
-          // Get partition count if not already retrieved
-          if (not partition_count) {
-            auto pc = client->get_partition_count(args_.topic);
-            if (not pc) {
-              diagnostic::error("failed to get partition count: {}", pc.error())
-                .primary(args_.operator_location)
-                .emit(dh);
-              co_return;
-            }
-            partition_count = *pc;
-            TENZIR_DEBUG("kafka topic {} has {} partitions", args_.topic,
-                         *partition_count);
+          auto assignment
+            = client->get_assignment(args_.topic, dh, args_.operator_location);
+          if (not assignment) {
+            co_return;
           }
-          ++eof_partition_count;
+          if (assignment->empty()) {
+            TENZIR_DEBUG("kafka partition {} reached EOF with no assignment",
+                         raw_msg->partition());
+            co_yield {};
+            continue;
+          }
+          if (not assigned_partitions or *assigned_partitions != *assignment) {
+            assigned_partitions = std::move(*assignment);
+            eof_partitions.clear();
+          }
+          if (not assigned_partitions->contains(raw_msg->partition())) {
+            TENZIR_DEBUG("kafka partition {} EOF not in assignment",
+                         raw_msg->partition());
+            co_yield {};
+            continue;
+          }
+          eof_partitions.insert(raw_msg->partition());
           TENZIR_DEBUG("kafka partition {} reached EOF ({}/{} partitions EOF)",
-                       raw_msg->partition(), eof_partition_count,
-                       *partition_count);
-          // Only exit if all partitions have reached EOF
-          if (eof_partition_count == *partition_count) {
-            // Kafka allows the number of partitions to increase, so we need
-            // to re-check here.
-            auto pc = client->get_partition_count(args_.topic);
-            if (not pc) {
-              diagnostic::error("failed to get partition count: {}", pc.error())
-                .primary(args_.operator_location)
-                .emit(dh);
-              co_return;
-            }
-            if (*pc == *partition_count) {
-              if (last_good_message) {
-                co_yield finish_as_slice();
-                last_commit_time = now;
-                std::ignore = client->commit(last_good_message.get(), dh,
-                                             args_.operator_location);
+                       raw_msg->partition(), eof_partitions.size(),
+                       assigned_partitions->size());
+          if (eof_partitions.size() == assigned_partitions->size()) {
+            if (not pending_messages.empty()) {
+              co_yield finish_as_slice();
+              last_commit_time = now;
+              for (const auto& [_, msg] : pending_messages) {
+                std::ignore
+                  = client->commit(msg.get(), dh, args_.operator_location);
               }
-              co_yield {};
-              co_return;
+              pending_messages.clear();
             }
+            co_yield {};
+            co_return;
           }
           co_yield {};
           continue;
         }
         default: {
-          if (last_good_message) {
+          if (not pending_messages.empty()) {
             auto ndh = transforming_diagnostic_handler{
               dh,
               [](auto&& diag) {
@@ -264,8 +267,11 @@ public:
             };
             co_yield finish_as_slice();
             last_commit_time = now;
-            std::ignore = client->commit(last_good_message.get(), ndh,
-                                         args_.operator_location);
+            for (const auto& [_, msg] : pending_messages) {
+              std::ignore
+                = client->commit(msg.get(), ndh, args_.operator_location);
+            }
+            pending_messages.clear();
           }
           diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
             .primary(args_.operator_location)
@@ -353,6 +359,12 @@ public:
           .named("aws_iam", iam_opts)
           .named_optional("commit_batch_size", args.commit_batch_size)
           .parse(inv, ctx));
+    if (args.commit_batch_size == 0) {
+      diagnostic::error("`commit_batch_size` must be greater than 0")
+        .primary(args.operator_location)
+        .emit(ctx);
+      return failure::promise();
+    }
     if (iam_opts) {
       TRY(check_sasl_mechanism(args.options, ctx));
       TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));

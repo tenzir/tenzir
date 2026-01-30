@@ -19,8 +19,10 @@
 #include "tenzir/detail/hex_encode.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
+#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ecc.hpp"
+#include "tenzir/execution_node_name_guard.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline_buffer_stats.hpp"
@@ -44,21 +46,6 @@
 namespace tenzir {
 
 namespace {
-
-template <class F>
-void loop_at(caf::scheduled_actor* self, caf::actor_clock::time_point start,
-             caf::timespan delay, F&& f) {
-  auto run = [self, start, delay, f = std::forward<F>(f)]() mutable {
-    std::invoke(f);
-    loop_at(self, start + delay, delay, std::move(f));
-  };
-  self->delay_until_fn(start + delay, std::move(run));
-}
-
-template <class F>
-void loop(caf::scheduled_actor* self, caf::timespan delay, F&& f) {
-  loop_at(self, self->clock().now() + delay, delay, std::forward<F>(f));
-}
 
 using namespace std::chrono_literals;
 using namespace si_literals;
@@ -130,11 +117,14 @@ template <class Input, class Output>
 struct exec_node_diagnostic_handler final : public diagnostic_handler {
   exec_node_diagnostic_handler(exec_node_state<Input, Output>& state,
                                receiver_actor<diagnostic> handle)
-    : state{state}, handle{std::move(handle)} {
-    loop_at(state.self, state.self->clock().now(),
-            defaults::diagnostic_deduplication_interval, [this] {
-              deduplicator_.clear();
-            });
+    : state{state},
+      handle{std::move(handle)},
+      deduplicator_disposable_{detail::weak_run_delayed_loop(
+        state.self, defaults::diagnostic_deduplication_interval,
+        [this] {
+          deduplicator_.clear();
+        },
+        false)} {
   }
 
   void emit(diagnostic diag) override {
@@ -170,10 +160,28 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     censor.secrets.emplace(std::move(v));
   }
 
+  exec_node_diagnostic_handler(const exec_node_diagnostic_handler&) = delete;
+  exec_node_diagnostic_handler& operator=(const exec_node_diagnostic_handler&)
+    = delete;
+  exec_node_diagnostic_handler& operator=(exec_node_diagnostic_handler&&)
+    = delete;
+  exec_node_diagnostic_handler(exec_node_diagnostic_handler&& other)
+    : state{other.state},
+      handle{std::move(other.handle)},
+      deduplicator_{std::move(other.deduplicator_)},
+      deduplicator_disposable_{std::move(other.deduplicator_disposable_)},
+      censor{std::move(other.censor)} {
+  }
+
+  ~exec_node_diagnostic_handler() {
+    deduplicator_disposable_.dispose();
+  }
+
 private:
   exec_node_state<Input, Output>& state;
   receiver_actor<diagnostic> handle = {};
   diagnostic_deduplicator deduplicator_;
+  caf::disposable deduplicator_disposable_;
   secret_censor censor;
 };
 
@@ -589,6 +597,10 @@ struct exec_node_state {
     // The node actor must be set when the operator is not a source.
     TENZIR_ASSERT(node or (this->op->location() != operator_location::remote));
     weak_node = node;
+    // Setup op_name
+    const auto name = this->op->name();
+    std::copy_n(name.begin(), std::min(name.size(), op_name.size()),
+                op_name.begin());
   }
 
   auto make_behavior() -> exec_node_actor::behavior_type {
@@ -658,6 +670,7 @@ struct exec_node_state {
       },
       [this](atom::push, table_slice& events) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        auto name_guard = exec_node_name_guard(op_name);
         if constexpr (std::is_same_v<Input, table_slice>) {
           return push(std::move(events));
         } else {
@@ -668,6 +681,7 @@ struct exec_node_state {
       },
       [this](atom::push, chunk_ptr& bytes) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        auto name_guard = exec_node_name_guard(op_name);
         if constexpr (std::is_same_v<Input, chunk_ptr>) {
           return push(std::move(bytes));
         } else {
@@ -679,6 +693,7 @@ struct exec_node_state {
       [this](atom::pull, exec_node_sink_actor& sink, uint64_t elements,
              uint64_t batches) -> caf::result<void> {
         auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        auto name_guard = exec_node_name_guard(op_name);
         if constexpr (not std::is_same_v<Output, std::monostate>) {
           return pull(std::move(sink), elements, batches);
         } else {
@@ -719,6 +734,10 @@ struct exec_node_state {
 
   /// The operator owned by this execution node.
   operator_ptr op = {};
+
+  /// The shortend name of the operator use for allocation tracking. We get this
+  /// once on startup for efficiency.
+  exec_node_name_guard::name_type op_name;
 
   /// The instance created by the operator. Must be created at most once.
   std::optional<generator<Output>> instance = {};
@@ -843,7 +862,7 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    loop(self, defaults::metrics_interval, [this] {
+    detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
       emit_generic_op_metrics();
     });
@@ -1405,5 +1424,14 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
     *output_type,
   };
 };
+
+exec_node_name_guard::exec_node_name_guard(const name_type& name) {
+  operator_name = name;
+}
+
+exec_node_name_guard::~exec_node_name_guard() {
+  // Currently a noop as we dont really care about resetting this. We know the
+  // metrics are the only user, and they only use this
+}
 
 } // namespace tenzir
