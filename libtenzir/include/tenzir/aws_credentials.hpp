@@ -58,25 +58,6 @@ auto make_default_aws_credentials_provider_chain()
 auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   -> caf::expected<std::string>;
 
-/// Calls STS AssumeRoleWithWebIdentity and returns temporary credentials.
-///
-/// This function assumes a role using an OIDC web identity token instead of
-/// existing AWS credentials. This is useful for authentication from:
-/// - Kubernetes pods with IRSA (IAM Roles for Service Accounts)
-/// - Azure VMs with managed identities
-/// - GCP instances with service accounts
-/// - Any OIDC-compatible identity provider
-///
-/// @param role_arn The ARN of the role to assume
-/// @param session_name The name for the assumed role session
-/// @param web_identity_token The OIDC token from the identity provider
-/// @param region Optional AWS region for the STS endpoint
-/// @return Temporary AWS credentials or an error
-auto assume_role_with_web_identity(const std::string& role_arn,
-                                   const std::string& session_name,
-                                   const std::string& web_identity_token,
-                                   const std::optional<std::string>& region)
-  -> caf::expected<sts_credentials>;
 /// Creates an AWS credentials provider based on the resolved credentials.
 ///
 /// This function implements the common credential resolution logic:
