@@ -1,0 +1,6 @@
+created: 2026-01-30
+title: Tenzir Node v5.25.1
+intro: >-
+  This release includes several bug fixes for the JSON parser, `where`, `replace`,
+  and `if` operators, along with Kafka decompression support and a new `raw_message`
+  option for the `read_syslog` operator.
