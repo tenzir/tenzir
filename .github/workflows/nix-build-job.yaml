@@ -155,7 +155,7 @@ jobs:
           python3 .github/workflows/nix-build.py package-test \
             --package-dir ${{ steps.build.outputs.package-dir }} \
             --arch ${{ inputs.arch }} \
-            --test-root test \
+            --test-root test-legacy \
             --test-pattern "tests/functions/time"
 
       # =========================================================================
