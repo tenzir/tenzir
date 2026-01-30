@@ -25,6 +25,9 @@
 #include <aws/sts/model/AssumeRoleRequest.h>
 #include <aws/sts/model/AssumeRoleWithWebIdentityRequest.h>
 
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <mutex>
@@ -47,6 +50,127 @@ auto make_default_aws_credentials_provider_chain()
 }
 
 namespace {
+
+/// Parses an IPv4 address from a string.
+/// Returns the four octets if successful, or nullopt if not a valid IPv4.
+auto parse_ipv4(std::string_view host)
+  -> std::optional<std::array<uint8_t, 4>> {
+  auto octets = std::array<uint8_t, 4>{};
+  auto octet_index = size_t{0};
+  auto current_value = 0;
+  auto digit_count = 0;
+  for (auto c : host) {
+    if (c == '.') {
+      if (digit_count == 0 or octet_index >= 3) {
+        return std::nullopt;
+      }
+      if (current_value > 255) {
+        return std::nullopt;
+      }
+      octets[octet_index++] = static_cast<uint8_t>(current_value);
+      current_value = 0;
+      digit_count = 0;
+    } else if (c >= '0' and c <= '9') {
+      current_value = current_value * 10 + (c - '0');
+      digit_count++;
+      if (digit_count > 3 or current_value > 255) {
+        return std::nullopt;
+      }
+    } else {
+      return std::nullopt;
+    }
+  }
+  if (digit_count == 0 or octet_index != 3 or current_value > 255) {
+    return std::nullopt;
+  }
+  octets[3] = static_cast<uint8_t>(current_value);
+  return octets;
+}
+
+/// Checks if an IP address is in a private/reserved range.
+/// Returns true if the IP should be blocked for SSRF protection.
+auto is_private_ip(std::string_view host) -> bool {
+  auto parsed = parse_ipv4(host);
+  if (not parsed) {
+    // Not an IPv4 address (might be hostname), allow it.
+    // Note: This doesn't protect against DNS rebinding, but that's a
+    // separate concern.
+    return false;
+  }
+  const auto& octets = *parsed;
+  // Check private/reserved ranges:
+  // 127.0.0.0/8 - loopback
+  if (octets[0] == 127) {
+    return true;
+  }
+  // 10.0.0.0/8 - private
+  if (octets[0] == 10) {
+    return true;
+  }
+  // 172.16.0.0/12 - private (172.16.0.0 - 172.31.255.255)
+  if (octets[0] == 172 and octets[1] >= 16 and octets[1] <= 31) {
+    return true;
+  }
+  // 192.168.0.0/16 - private
+  if (octets[0] == 192 and octets[1] == 168) {
+    return true;
+  }
+  // 169.254.0.0/16 - link-local (includes cloud metadata services)
+  if (octets[0] == 169 and octets[1] == 254) {
+    return true;
+  }
+  // 0.0.0.0/8 - current network
+  if (octets[0] == 0) {
+    return true;
+  }
+  return false;
+}
+
+/// Creates an STS client configuration with proper endpoint and proxy settings.
+/// Caches environment variable lookups for efficiency.
+auto make_sts_client_config(const std::optional<std::string>& region)
+  -> Aws::Client::ClientConfiguration {
+  // Cache environment variables to avoid repeated lookups.
+  static const auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL");
+  static const auto endpoint_url_sts = detail::getenv("AWS_ENDPOINT_URL_STS");
+  auto config = Aws::Client::ClientConfiguration{};
+  if (region) {
+    config.region = *region;
+  }
+  config.allowSystemProxy = true;
+  // STS-specific endpoint takes precedence.
+  if (endpoint_url_sts) {
+    config.endpointOverride = *endpoint_url_sts;
+  } else if (endpoint_url) {
+    config.endpointOverride = *endpoint_url;
+  }
+  return config;
+}
+
+/// Extracts the host from a URL for SSRF validation.
+auto extract_host_from_url(std::string_view url) -> std::string_view {
+  // Skip scheme (http:// or https://)
+  auto pos = url.find("://");
+  if (pos != std::string_view::npos) {
+    url = url.substr(pos + 3);
+  }
+  // Remove path, query, and fragment.
+  pos = url.find_first_of("/?#");
+  if (pos != std::string_view::npos) {
+    url = url.substr(0, pos);
+  }
+  // Remove userinfo (user:pass@).
+  pos = url.find('@');
+  if (pos != std::string_view::npos) {
+    url = url.substr(pos + 1);
+  }
+  // Remove port.
+  pos = url.find(':');
+  if (pos != std::string_view::npos) {
+    url = url.substr(0, pos);
+  }
+  return url;
+}
 
 /// Custom credentials provider that automatically refreshes credentials
 /// obtained via AssumeRoleWithWebIdentity. This is necessary for long-running
@@ -105,19 +229,8 @@ private:
         fmt::format("failed to fetch web identity token: {}", token.error()));
       return;
     }
-    // Create STS client configuration.
-    auto config = Aws::Client::ClientConfiguration{};
-    if (region_) {
-      config.region = *region_;
-    }
-    config.allowSystemProxy = true;
-    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
-      config.endpointOverride = *endpoint_url;
-    }
-    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-      config.endpointOverride = *endpoint_url;
-    }
-    // Create anonymous STS client.
+    // Create anonymous STS client with cached configuration.
+    auto config = make_sts_client_config(region_);
     auto anonymous_credentials
       = std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>();
     auto sts_client
@@ -196,19 +309,8 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::string& external_id,
                                   const std::optional<std::string>& region)
   -> caf::expected<sts_credentials> {
-  // Create STS client configuration.
-  auto config = Aws::Client::ClientConfiguration{};
-  if (region) {
-    config.region = *region;
-  }
-  // Honor proxy settings and endpoint overrides.
-  config.allowSystemProxy = true;
-  if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
-    config.endpointOverride = *endpoint_url;
-  }
-  if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-    config.endpointOverride = *endpoint_url;
-  }
+  // Create STS client configuration with cached endpoint settings.
+  auto config = make_sts_client_config(region);
   // Create credentials provider from base credentials.
   auto base_credentials
     = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
@@ -307,8 +409,18 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   }
   // Case 3: Token from HTTP endpoint.
   if (not web_identity.token_endpoint.empty()) {
-    TENZIR_VERBOSE("fetching web identity token from endpoint: {}",
-                   web_identity.token_endpoint);
+    TENZIR_VERBOSE("fetching web identity token from endpoint");
+    // Validate URL to prevent SSRF attacks against private networks.
+    // Note: This blocks direct IP addresses in private ranges but allows
+    // hostnames (which could resolve to private IPs via DNS rebinding).
+    auto host = extract_host_from_url(web_identity.token_endpoint);
+    if (is_private_ip(host)) {
+      return diagnostic::error("token endpoint URL points to a private IP "
+                               "address")
+        .note("host: {}", host)
+        .note("private IP ranges are blocked for security reasons")
+        .to_error();
+    }
     auto xfer = transfer{};
     auto req = http::request{};
     req.uri = web_identity.token_endpoint;
@@ -367,11 +479,30 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
     // JSON response: extract token using JSON path.
     TENZIR_VERBOSE("extracting web identity token from JSON path: {}",
                    *web_identity.token_path);
-    // Simple JSON path extraction. For now, support only single-level paths
-    // like ".access_token" or ".token".
+    // Simple JSON path extraction. Only single-level paths like ".access_token"
+    // or ".token" are supported. Nested paths like ".data.token" are not
+    // supported.
     auto path = *web_identity.token_path;
     if (path.starts_with('.')) {
       path = path.substr(1);
+    }
+    // Validate path characters to prevent simdjson operator injection.
+    // Only allow alphanumeric characters, underscores, and hyphens.
+    const auto is_valid_path_char = [](char c) {
+      return std::isalnum(static_cast<unsigned char>(c)) or c == '_'
+             or c == '-';
+    };
+    if (not std::ranges::all_of(path, is_valid_path_char)) {
+      return diagnostic::error("invalid JSON path for web identity token")
+        .note("path: {}", *web_identity.token_path)
+        .note("only alphanumeric characters, underscores, and hyphens are "
+              "allowed")
+        .to_error();
+    }
+    if (path.empty()) {
+      return diagnostic::error("invalid JSON path for web identity token")
+        .note("path cannot be empty")
+        .to_error();
     }
     auto parser = simdjson::ondemand::parser{};
     auto padded = simdjson::padded_string{body};
@@ -399,56 +530,6 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   }
   // Should not reach here if validation was correct.
   return diagnostic::error("no web identity token source configured").to_error();
-}
-
-auto assume_role_with_web_identity(const std::string& role_arn,
-                                   const std::string& session_name,
-                                   const std::string& web_identity_token,
-                                   const std::optional<std::string>& region)
-  -> caf::expected<sts_credentials> {
-  TENZIR_VERBOSE("assuming role with web identity: {}", role_arn);
-  // Create STS client configuration.
-  auto config = Aws::Client::ClientConfiguration{};
-  if (region) {
-    config.region = *region;
-  }
-  // Honor proxy settings and endpoint overrides.
-  config.allowSystemProxy = true;
-  if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
-    config.endpointOverride = *endpoint_url;
-  }
-  if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-    config.endpointOverride = *endpoint_url;
-  }
-  // Create an anonymous credentials provider since AssumeRoleWithWebIdentity
-  // doesn't require base credentials - the web identity token is the
-  // authentication.
-  auto anonymous_credentials
-    = std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>();
-  // Create STS client with anonymous credentials.
-  auto sts_client = Aws::STS::STSClient{anonymous_credentials, nullptr, config};
-  // Build AssumeRoleWithWebIdentity request.
-  auto request = Aws::STS::Model::AssumeRoleWithWebIdentityRequest{};
-  request.SetRoleArn(role_arn);
-  request.SetRoleSessionName(session_name.empty() ? "tenzir-session"
-                                                  : session_name);
-  request.SetWebIdentityToken(web_identity_token);
-  // Perform the AssumeRoleWithWebIdentity call.
-  auto outcome = sts_client.AssumeRoleWithWebIdentity(request);
-  if (not outcome.IsSuccess()) {
-    return diagnostic::error("failed to assume role with web identity")
-      .note("role ARN: {}", role_arn)
-      .note("{}", outcome.GetError().GetMessage())
-      .to_error();
-  }
-  // Extract temporary credentials.
-  const auto& creds = outcome.GetResult().GetCredentials();
-  TENZIR_VERBOSE("successfully assumed role with web identity");
-  return sts_credentials{
-    .access_key_id = creds.GetAccessKeyId(),
-    .secret_access_key = creds.GetSecretAccessKey(),
-    .session_token = creds.GetSessionToken(),
-  };
 }
 
 auto make_aws_credentials_provider(
@@ -525,17 +606,7 @@ auto make_aws_credentials_provider(
   }
   if (has_role) {
     // Role assumption with default credentials - use auto-refreshing provider.
-    auto sts_config = Aws::Client::ClientConfiguration{};
-    if (region) {
-      sts_config.region = *region;
-    }
-    sts_config.allowSystemProxy = true;
-    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
-      sts_config.endpointOverride = *endpoint_url;
-    }
-    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
-      sts_config.endpointOverride = *endpoint_url;
-    }
+    auto sts_config = make_sts_client_config(region);
     auto base_credentials = make_default_aws_credentials_provider_chain();
     auto sts_client = std::make_shared<Aws::STS::STSClient>(
       base_credentials, nullptr, sts_config);
