@@ -276,7 +276,7 @@ struct rebuilder_state {
                                });
               result.partition_infos.erase(
                 result.partition_infos.begin()
-                  + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
+                  + detail::narrow<ptrdiff_t>(run->options.max_partitions),
                 result.partition_infos.end());
               if (result.partition_infos.size() == 1
                   && result.partition_infos.front().version

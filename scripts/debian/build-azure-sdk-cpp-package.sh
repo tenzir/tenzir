@@ -33,6 +33,11 @@ export AZURE_SDK_DISABLE_AUTO_VCPKG=TRUE
 # ICU 75.1+ requires C++17 but Azure SDK uses C++14, disable ICU C++ API
 export CXXFLAGS="${CXXFLAGS:-} -DU_SHOW_CPLUSPLUS_API=0"
 
+# GCC 15 requires explicit #include <cstdint> for uint8_t
+# Patch the crypto.hpp header to add the missing include
+sed -i '/#include <vector>/a #include <cstdint>' \
+  sdk/attestation/azure-security-attestation/src/private/crypto/openssl/../inc/crypto.hpp
+
 cmake -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \

@@ -9,6 +9,7 @@
 #include "tenzir/view3.hpp"
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/series_builder.hpp"
 
@@ -176,3 +177,28 @@ auto weak_order(const list_view3 l, const list_view3 r) -> std::weak_ordering {
 }
 
 } // namespace tenzir
+
+namespace fmt {
+
+#define X(view)                                                                \
+  auto formatter<tenzir::view>::format(const tenzir::view& value,              \
+                                       format_context& ctx) const              \
+    -> format_context::iterator {                                              \
+    auto printer = tenzir::json_printer{{                                      \
+      .tql = true,                                                             \
+      .oneline = true,                                                         \
+    }};                                                                        \
+    auto it = ctx.out();                                                       \
+    const auto ok = printer.print(it, value);                                  \
+    TENZIR_ASSERT(ok);                                                         \
+    return it;                                                                 \
+  }                                                                            \
+  static_assert(true)
+
+X(data_view3);
+X(record_view3);
+X(list_view3);
+
+#undef X
+
+} // namespace fmt

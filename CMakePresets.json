@@ -155,7 +155,6 @@
         "BUILD_TESTING": "OFF",
         "CMAKE_C_COMPILER": "x86_64-unknown-linux-musl-gcc",
         "CMAKE_CXX_COMPILER": "x86_64-unknown-linux-musl-g++",
-        "CMAKE_SYSTEM_NAME": "Linux",
         "TENZIR_ENABLE_MANPAGES": "OFF",
         "TENZIR_ENABLE_UNIT_TESTS": "OFF",
         "TENZIR_ENABLE_STATIC_EXECUTABLE": "ON"

@@ -489,6 +489,14 @@ public:
 
   using super::super;
 
+  template <class U>
+    requires std::is_convertible_v<U, T>
+  failure_or(failure_or<U>&& other)
+    : super{match(std::move(other), [](auto x) -> super {
+        return x;
+      })} {
+  }
+
   void ignore() const {
     // no-op
   }

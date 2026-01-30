@@ -552,9 +552,10 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
       []() noexcept {
         TENZIR_UNREACHABLE();
       },
-      [&](const auto& encoded) noexcept {
+      [&](const tenzir::fbs::table_slice::arrow::v2& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
-        auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
+        auto state = std::make_unique<
+          std::decay_t<arrow_table_slice<tenzir::fbs::table_slice::arrow::v2>>>(
           encoded, chunk_, batch, std::move(schema));
         state_ptr = state.get();
         const auto bytes = as_bytes(chunk_);
@@ -733,9 +734,10 @@ void table_slice::import_time(time import_time) noexcept {
   if (import_time == this->import_time()) {
     return;
   }
-  modify_state([&](auto& state) {
-    state.import_time(import_time);
-  });
+  modify_state(
+    [&](arrow_table_slice<tenzir::fbs::table_slice::arrow::v2>& state) {
+      state.import_time(import_time);
+    });
 }
 
 template <class F>
@@ -751,7 +753,7 @@ void table_slice::modify_state(F&& f) {
     []() noexcept {
       TENZIR_UNREACHABLE();
     },
-    [&](const auto& encoded) noexcept {
+    [&](const tenzir::fbs::table_slice::arrow::v2& encoded) noexcept {
       auto& mutable_state
         = const_cast<std::add_lvalue_reference_t<std::remove_const_t<
           std::remove_reference_t<decltype(*state(encoded, state_))>>>>(

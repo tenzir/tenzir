@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/chunk.hpp"
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/json_parser.hpp"
+#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -24,10 +26,12 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/generator.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_control_plane.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
@@ -1329,13 +1333,62 @@ public:
   }
 };
 
-class write_json_plugin final : public virtual operator_plugin2<write_json> {
+struct WriteJsonArgs {
+  bool color = false;
+};
+
+class WriteJson final : public Operator<table_slice, chunk_ptr> {
+public:
+  explicit WriteJson(WriteJsonArgs args) : args_{args} {
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> {
+    auto opts = json_printer_options{};
+    opts.tql = true;
+    opts.style = args_.color ? tql_style() : no_style();
+    auto printer = tenzir::json_printer{opts};
+    // TODO: Since this printer is per-schema we can write an optimized
+    // version of it that gets the schema ahead of time and only expects
+    // data corresponding to exactly that schema.
+    auto buffer = std::vector<char>{};
+    auto resolved_slice = resolve_enumerations(input);
+    auto out_iter = std::back_inserter(buffer);
+    auto rows = values3(resolved_slice);
+    auto row = rows.begin();
+    if (row != rows.end()) {
+      const auto ok = printer.print(out_iter, *row);
+      TENZIR_ASSERT(ok);
+      ++row;
+    }
+    for (; row != rows.end(); ++row) {
+      out_iter = fmt::format_to(out_iter, "\n");
+      const auto ok = printer.print(out_iter, *row);
+      TENZIR_ASSERT(ok);
+    }
+    *out_iter++ = '\n';
+    auto chunk = chunk::make(std::move(buffer));
+    co_await push(std::move(chunk));
+  }
+
+private:
+  WriteJsonArgs args_;
+};
+
+class write_json_plugin final : public virtual operator_plugin2<write_json>,
+                                public virtual OperatorPlugin {
 public:
   explicit write_json_plugin(bool tql) : tql_{tql} {
   }
 
   auto name() const -> std::string override {
     return tql_ ? "write_tql" : "tql2.write_json";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<WriteJsonArgs, WriteJson>{};
+    d.named("color", &WriteJsonArgs::color);
+    return d.without_optimize();
   }
 
   auto make(invocation inv, session ctx) const

@@ -1,0 +1,10 @@
+{
+  lets: [
+    
+  ],
+  operators: [
+    version_ir {
+      self: 0..7
+    }
+  ]
+}

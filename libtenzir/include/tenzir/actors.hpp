@@ -352,6 +352,38 @@ struct pipeline_shell_actor_traits {
 };
 using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;
 
+/// Configuration for export operations.
+struct export_mode {
+  bool retro = true;
+  bool live = false;
+  bool internal = false;
+  uint64_t parallel = 3;
+
+  export_mode() = default;
+
+  export_mode(bool retro_, bool live_, bool internal_, uint64_t parallel_)
+    : retro{retro_}, live{live_}, internal{internal_}, parallel{parallel_} {
+    TENZIR_ASSERT(live or retro);
+  }
+
+  friend auto inspect(auto& f, export_mode& x) -> bool {
+    return f.object(x).fields(f.field("retro", x.retro),
+                              f.field("live", x.live),
+                              f.field("internal", x.internal),
+                              f.field("parallel", x.parallel));
+  }
+};
+
+/// The EXPORT BRIDGE actor interface.
+struct export_bridge_actor_traits {
+  using signatures = caf::type_list<
+    // Returns when a new table slice is available.
+    auto(atom::get)->caf::result<table_slice>,
+    // Insert a new table slice.
+    auto(table_slice slice)->caf::result<void>>;
+};
+using export_bridge_actor = caf::typed_actor<export_bridge_actor_traits>;
+
 /// The interface of the NODE actor.
 struct node_actor_traits {
   using signatures = caf::type_list<
@@ -370,6 +402,8 @@ struct node_actor_traits {
     auto(atom::set, endpoint)->caf::result<void>,
     // Spawn a pipeline_shell subprocess.
     auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
+    // Spawn an export bridge for querying stored data.
+    auto(atom::spawn, expression, export_mode)->caf::result<export_bridge_actor>,
     // Callback from subprocess when shell actor is ready.
     auto(atom::connect, atom::shell, uint32_t child_id, pipeline_shell_actor)
       ->caf::result<void>>
@@ -437,6 +471,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_sink_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::export_bridge_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::export_mode))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
   TENZIR_ADD_TYPE_ID((tenzir::flush_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::importer_actor))

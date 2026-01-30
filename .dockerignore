@@ -5,6 +5,7 @@
 /libtenzir/aux/*
 !/libtenzir/aux/caf/
 !/libtenzir/aux/fast_float/
+!/libtenzir/aux/folly/
 !/libtenzir/aux/pfs/
 !/libtenzir/aux/simdjson/
 CMakeUserPresets.json

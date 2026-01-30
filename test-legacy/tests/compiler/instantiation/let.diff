@@ -1,0 +1,42 @@
+ {
+   lets: [
+-    {
+-      ident: `$foo` @ 57..61,
+-      expr: constant int64 42 @ 64..66,
+-      id: 1
+-    }
++    
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 68..74
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       named_args: [
+         
+       ]
+     },
+     where_ir {
+       self: 75..80,
+       predicate: binary_expr {
+         left: root_field {
+           id: `foo` @ 81..84,
+           has_question_mark: false
+         },
+         op: "eq" @ 85..87,
+-        right: dollar_var `$foo` -> 1 @ 88..92
++        right: constant int64 42 @ 88..92
+       }
+     }
+   ]
+ }

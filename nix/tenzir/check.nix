@@ -27,12 +27,12 @@ stdenvNoCC.mkDerivation {
         ps.trustme
       ]);
       template = path: ''
-        if [ -d "${path}/test/tests" ]; then
+        if [ -d "${path}/test-legacy/tests" ]; then
           echo "running ${path} integration tests"
           tenzir-test \
-            --root "${src}/test" \
+            --root "${src}/test-legacy" \
             -j $NIX_BUILD_CORES \
-            ${path}/test
+            ${path}/test-legacy
         fi
       '';
     in

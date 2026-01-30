@@ -37,6 +37,7 @@
 #include "tenzir/query_cursor.hpp"
 #include "tenzir/query_options.hpp"
 #include "tenzir/query_status.hpp"
+#include "tenzir/report.hpp"
 #include "tenzir/resource.hpp"
 #include "tenzir/secret_store.hpp"
 #include "tenzir/series.hpp"

@@ -12,17 +12,24 @@ apt-get -y --no-install-recommends install \
   cppzmq-dev \
   curl \
   flatbuffers-compiler-dev \
-  g++-14 \
-  gcc-14 \
   git-core \
   gnupg2 gnupg-agent jq \
+  libboost-context-dev \
   libboost-dev \
   libboost-filesystem-dev \
-  libboost-url-dev \
+  libboost-program-options-dev \
+  libboost-regex-dev \
   libboost-stacktrace-dev \
+  libboost-thread-dev \
+  libboost-url-dev \
   libc-ares-dev \
+  libdouble-conversion-dev \
+  libevent-dev \
+  libfast-float-dev \
   libflatbuffers-dev \
   libfmt-dev \
+  libgflags-dev \
+  libgoogle-glog-dev \
   libgrpc-dev \
   libgrpc++-dev \
   libmaxminddb-dev \
@@ -60,12 +67,13 @@ apt-get -y --no-install-recommends install \
   wget \
   yara
 
-# yarn
+# yarn (via npm, since the yarn apt repo has an expired GPG key)
 mkdir -p /etc/apt/keyrings
-wget -O /etc/apt/keyrings/nodesource.asc https://dl.yarnpkg.com/debian/pubkey.gpg
-echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://dl.yarnpkg.com/debian/ stable main nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
 apt-get update
-apt-get -y install yarn
+apt-get -y --no-install-recommends install nodejs
+npm install -g yarn
 
 # uv
 curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
