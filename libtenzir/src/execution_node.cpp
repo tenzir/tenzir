@@ -737,7 +737,7 @@ struct exec_node_state {
 
   /// The shortend name of the operator use for allocation tracking. We get this
   /// once on startup for efficiency.
-  exec_node_name_guard::name_type op_name;
+  exec_node_name_guard::name_type op_name = {};
 
   /// The instance created by the operator. Must be created at most once.
   std::optional<generator<Output>> instance = {};
