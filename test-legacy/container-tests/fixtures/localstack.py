@@ -20,6 +20,13 @@ Usage overview:
 - **LOCALSTACK_SQS_QUEUE_SAVE_URL** – Full URL of the save_sqs queue.
 - **LOCALSTACK_ROLE_ARN** – ARN of a test IAM role for assume role tests.
 - **LOCALSTACK_EXTERNAL_ID** – External ID for assume role tests.
+- **LOCALSTACK_SQS_QUEUE_WI_FILE** – SQS queue name for web identity token_file tests.
+- **LOCALSTACK_SQS_QUEUE_WI_FILE_URL** – Full URL of the web identity token_file queue.
+- **LOCALSTACK_SQS_QUEUE_WI_TOKEN** – SQS queue name for web identity direct token tests.
+- **LOCALSTACK_SQS_QUEUE_WI_TOKEN_URL** – Full URL of the web identity direct token queue.
+- **LOCALSTACK_WEB_IDENTITY_ROLE_ARN** – ARN of a test IAM role for web identity tests.
+- **LOCALSTACK_WEB_IDENTITY_TOKEN_FILE** – Path to a file containing a test JWT token.
+- **LOCALSTACK_WEB_IDENTITY_TOKEN** – The test JWT token value (for direct token tests).
 
 The fixture uses Podman or Docker to run LocalStack and creates test resources
 automatically. It requires either Podman or Docker to be available in the
@@ -205,10 +212,17 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     queue_basic_name = f"tenzir-test-queue-basic-{suffix}"
     queue_role_name = f"tenzir-test-queue-role-{suffix}"
     queue_save_name = f"tenzir-test-queue-save-{suffix}"
+    queue_wi_file_name = f"tenzir-test-queue-wi-file-{suffix}"
+    queue_wi_token_name = f"tenzir-test-queue-wi-token-{suffix}"
 
     queues = {}
-    for name, key in [(queue_basic_name, "basic"), (queue_role_name, "role"),
-                      (queue_save_name, "save")]:
+    for name, key in [
+        (queue_basic_name, "basic"),
+        (queue_role_name, "role"),
+        (queue_save_name, "save"),
+        (queue_wi_file_name, "wi_file"),
+        (queue_wi_token_name, "wi_token"),
+    ]:
         logger.info("Creating SQS queue: %s", name)
         response = sqs.create_queue(QueueName=name)
         queue_url = response["QueueUrl"]
@@ -227,19 +241,19 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
         aws_secret_access_key=TEST_SECRET_KEY,
         config=config,
     )
-    assume_role_policy = json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Principal": {"AWS": "arn:aws:iam::000000000000:root"},
-            "Action": "sts:AssumeRole",
-            "Condition": {
-                "StringEquals": {
-                    "sts:ExternalId": TEST_EXTERNAL_ID
+    assume_role_policy = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": "arn:aws:iam::000000000000:root"},
+                    "Action": "sts:AssumeRole",
+                    "Condition": {"StringEquals": {"sts:ExternalId": TEST_EXTERNAL_ID}},
                 }
-            }
-        }]
-    })
+            ],
+        }
+    )
     logger.info("Creating IAM role: %s", role_name)
     response = iam.create_role(
         RoleName=role_name,
@@ -260,10 +274,49 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     )
     logger.info("Attached S3 and SQS policies to role")
 
+    # Create a role for web identity (AssumeRoleWithWebIdentity) tests.
+    # LocalStack is permissive and accepts any token, so we create a role
+    # that trusts a fictional OIDC provider.
+    web_identity_role_name = f"tenzir-test-web-identity-role-{suffix}"
+    web_identity_assume_role_policy = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Federated": "arn:aws:iam::000000000000:oidc-provider/test.example.com"
+                    },
+                    "Action": "sts:AssumeRoleWithWebIdentity",
+                }
+            ],
+        }
+    )
+    logger.info("Creating web identity IAM role: %s", web_identity_role_name)
+    response = iam.create_role(
+        RoleName=web_identity_role_name,
+        AssumeRolePolicyDocument=web_identity_assume_role_policy,
+        Description="Test role for Tenzir LocalStack web identity tests",
+    )
+    web_identity_role_arn = response["Role"]["Arn"]
+    logger.info("Created web identity IAM role: %s", web_identity_role_arn)
+
+    # Attach policies to the web identity role
+    iam.attach_role_policy(
+        RoleName=web_identity_role_name,
+        PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess",
+    )
+    iam.attach_role_policy(
+        RoleName=web_identity_role_name,
+        PolicyArn="arn:aws:iam::aws:policy/AmazonSQSFullAccess",
+    )
+    logger.info("Attached S3 and SQS policies to web identity role")
+
     return {
         "bucket_name": bucket_name,
         "queues": queues,
         "role_arn": role_arn,
+        "web_identity_role_arn": web_identity_role_arn,
     }
 
 
@@ -281,6 +334,7 @@ def run() -> Iterator[dict[str, str]]:
     port = _find_free_port()
     endpoint = f"http://127.0.0.1:{port}"
     container_id = None
+    temp_dir = None
 
     try:
         container_id = _start_localstack(runtime, port)
@@ -291,6 +345,20 @@ def run() -> Iterator[dict[str, str]]:
             )
 
         resources = _create_test_resources(endpoint, TEST_REGION)
+
+        # Create a temporary directory for the web identity token file.
+        # LocalStack accepts any token for AssumeRoleWithWebIdentity, so we
+        # use a simple test token that looks like a JWT but isn't validated.
+        import tempfile
+        import os
+
+        temp_dir = tempfile.mkdtemp(prefix="tenzir-localstack-")
+        token_file = os.path.join(temp_dir, "web-identity-token")
+        # This is a dummy JWT token. LocalStack doesn't validate it.
+        test_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpc3MiOiJ0ZXN0LmV4YW1wbGUuY29tIiwiYXVkIjoic3RzLmFtYXpvbmF3cy5jb20iLCJleHAiOjk5OTk5OTk5OTl9.test-signature"
+        with open(token_file, "w") as f:
+            f.write(test_token)
+        logger.info("Created web identity token file: %s", token_file)
 
         yield {
             # Standard AWS environment variables
@@ -314,10 +382,20 @@ def run() -> Iterator[dict[str, str]]:
             "LOCALSTACK_SQS_QUEUE_ROLE_URL": resources["queues"]["role"]["url"],
             "LOCALSTACK_SQS_QUEUE_SAVE": resources["queues"]["save"]["name"],
             "LOCALSTACK_SQS_QUEUE_SAVE_URL": resources["queues"]["save"]["url"],
+            "LOCALSTACK_SQS_QUEUE_WI_FILE": resources["queues"]["wi_file"]["name"],
+            "LOCALSTACK_SQS_QUEUE_WI_FILE_URL": resources["queues"]["wi_file"]["url"],
+            "LOCALSTACK_SQS_QUEUE_WI_TOKEN": resources["queues"]["wi_token"]["name"],
+            "LOCALSTACK_SQS_QUEUE_WI_TOKEN_URL": resources["queues"]["wi_token"]["url"],
             # IAM role for assume role tests
             "LOCALSTACK_ROLE_ARN": resources["role_arn"],
             "LOCALSTACK_EXTERNAL_ID": TEST_EXTERNAL_ID,
+            # Web identity (AssumeRoleWithWebIdentity) test resources
+            "LOCALSTACK_WEB_IDENTITY_ROLE_ARN": resources["web_identity_role_arn"],
+            "LOCALSTACK_WEB_IDENTITY_TOKEN_FILE": token_file,
+            "LOCALSTACK_WEB_IDENTITY_TOKEN": test_token,
         }
     finally:
         if container_id:
             _stop_localstack(runtime, container_id)
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
