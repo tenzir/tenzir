@@ -1,5 +1,5 @@
 ---
-title: Fix const-eval for runtime-dependent expressions
+title: Fix overzealous constant evaluation in `if` statements
 type: bugfix
 authors:
   - jachris
@@ -7,5 +7,5 @@ pr: 5701
 created: 2026-01-30T12:47:26.000000Z
 ---
 
-Expressions containing the `in` operator combined with `map` and lambdas that
-reference runtime fields are no longer incorrectly const-evaluated.
+The condition of `if` statements is no longer erroneously evaluated early when
+it contains a lambda expression that references runtime fields.
