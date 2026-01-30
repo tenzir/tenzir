@@ -4,6 +4,7 @@ type: bugfix
 authors:
   - jachris
   - claude
+pr: 5698
 created: 2026-01-29T15:32:43.155359Z
 ---
 
