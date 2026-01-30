@@ -1,0 +1,9 @@
+// Test that `if` expressions with runtime-dependent conditions are not
+// incorrectly const-evaluated.
+let $l = [["a", "b"], ["c", "d"]]
+from {b: "b"}, {b: "x"}
+if true in $l.map(e => b in e) {
+  result = "yes"
+} else {
+  discard
+}
