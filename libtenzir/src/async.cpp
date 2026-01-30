@@ -176,7 +176,8 @@ struct SubPipeline {
   Sender<FromControl> from_control;
 };
 
-using AnySubpipeline = variant<SubPipeline<void>, SubPipeline<table_slice>>;
+using AnySubpipeline
+  = variant<SubPipeline<void>, SubPipeline<chunk_ptr>, SubPipeline<table_slice>>;
 
 template <class Input, class Output>
 class Runner final : private OpCtxImpl {
@@ -223,22 +224,16 @@ private:
     TENZIR_INFO("spawning subpipeline");
     auto spawned = std::move(pipe).spawn(input);
     // TODO: Run chain in async scope?
-    auto chain
-      = std::invoke([&] -> variant<OperatorChain<void, table_slice>,
-                                   OperatorChain<table_slice, table_slice>> {
-          // TODO: This can't be it.
-          auto chain = OperatorChain<table_slice, table_slice>::try_from(
-            std::move(spawned));
-          if (chain) {
-            return std::move(*chain);
-          }
-          auto chain2
-            = OperatorChain<void, table_slice>::try_from(std::move(spawned));
-          if (chain2) {
-            return std::move(*chain2);
-          }
-          TENZIR_TODO();
-        });
+    auto chain = match(
+      input,
+      [&]<class In>(tag<In>) -> variant<OperatorChain<void, table_slice>,
+                                        OperatorChain<table_slice, table_slice>,
+                                        OperatorChain<chunk_ptr, table_slice>> {
+        auto result
+          = OperatorChain<In, table_slice>::try_from(std::move(spawned));
+        TENZIR_ASSERT(result);
+        return std::move(*result);
+      });
     auto [push_downstream, pull_downstream]
       = make_op_channel<table_slice>(1000);
     auto [from_control_sender, from_control_receiver]
@@ -249,7 +244,8 @@ private:
       std::move(chain),
       [&]<class In>(OperatorChain<In, table_slice> chain)
         -> variant<Box<Push<OperatorMsg<void>>>,
-                   Box<Push<OperatorMsg<table_slice>>>> {
+                   Box<Push<OperatorMsg<table_slice>>>,
+                   Box<Push<OperatorMsg<chunk_ptr>>>> {
         auto [push_upstream, pull_upstream] = make_op_channel<In>(1000);
         auto runner = run_chain(std::move(chain), std::move(pull_upstream),
                                 std::move(push_downstream),
@@ -261,8 +257,9 @@ private:
         return std::move(push_upstream);
       });
     // co_await handle.join();
-    queue_.scope().spawn([this, pull_downstream = std::move(
-                                  pull_downstream)] mutable -> Task<void> {
+    queue_.scope().spawn([this, key,
+                          pull_downstream
+                          = std::move(pull_downstream)] mutable -> Task<void> {
       // Pulling from the subpipeline needs to happen independently from the
       // main operator logic. This is because we might block when pushing to the
       // subpipeline due to backpressure, but in order to alleviate the
@@ -273,18 +270,27 @@ private:
           std::move(output),
           [&](table_slice output) -> Task<void> {
             if constexpr (std::same_as<Output, void>) {
-              co_await op_->process_sub(SubKeyView{}, std::move(output), ctx_);
+              co_await op_->process_sub(make_view(key), std::move(output),
+                                        ctx_);
             } else {
               auto push = OpPushWrapper{push_downstream_};
-              co_await op_->process_sub(SubKeyView{}, std::move(output), push,
+              co_await op_->process_sub(make_view(key), std::move(output), push,
                                         ctx_);
             }
           },
           [&](Signal output) -> Task<void> {
-            // TODO
             switch (output) {
-              case Signal::end_of_data:
+              case Signal::end_of_data: {
+                if constexpr (std::same_as<Output, void>) {
+                  co_await op_->finish_sub(make_view(key), ctx_);
+                } else {
+                  auto push = OpPushWrapper{push_downstream_};
+                  co_await op_->finish_sub(make_view(key), push, ctx_);
+                }
+                // TODO(tobim): Too early?
+                subpipelines_.erase(key);
                 co_return;
+              }
               case Signal::checkpoint:
                 TENZIR_TODO();
             }
@@ -315,8 +321,7 @@ private:
     co_return co_match(push_upstream,
                        [&]<class In>(Box<Push<OperatorMsg<In>>>& push_upstream)
                          -> AnyOpenPipeline {
-                         auto& push = *push_upstream;
-                         auto [_, inserted] = subpipelines_.try_emplace(
+                         auto [it, inserted] = subpipelines_.try_emplace(
                            std::move(key), SubPipeline{
                                              std::move(push_upstream),
                                              std::move(from_control_sender),
@@ -324,7 +329,8 @@ private:
                          if (not inserted) {
                            panic("already have a subpipeline for that key");
                          }
-                         return OpenPipeline<In>{push};
+                         auto& subpipe = as<SubPipeline<In>>(it->second);
+                         return OpenPipeline<In>{*subpipe.push};
                        });
   }
 
