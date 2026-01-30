@@ -16,6 +16,7 @@
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/abstract_actor.hpp>
 #include <caf/logger.hpp>
+#include <folly/SharedMutex.h>
 #include <tsl/robin_map.h>
 
 #include <atomic>
@@ -474,7 +475,7 @@ public:
 
 private:
   static inline basic_pmr_resource<InternalTrait> resource_;
-  std::shared_mutex mut_;
+  folly::SharedMutex mut_;
   actor_stats_map allocations_by_entity_{actor_stats_allocator{&resource_}};
 };
 
