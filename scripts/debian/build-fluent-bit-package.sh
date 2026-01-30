@@ -32,8 +32,10 @@ apt-get install -y --reinstall \
 mkdir -p source
 pushd source
 curl -L "https://github.com/fluent/fluent-bit/archive/refs/tags/${FLUENT_BIT_TAG}.tar.gz" | tar -xz --strip-components=1
+# In Docker builds, install the custom rdkafka .deb package before running this script.
 cmake -B build \
   -DFLB_RELEASE=ON \
+  -DFLB_PREFER_SYSTEM_LIB_KAFKA=ON \
   "${EXTRA_CMAKE_ARGS[@]}"
 
 cmake --build build --parallel "$(nproc --all)"

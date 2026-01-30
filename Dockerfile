@@ -52,10 +52,20 @@ FROM build-base AS jemalloc-package
 COPY scripts/debian/build-jemalloc-package.sh .
 RUN ./build-jemalloc-package.sh
 
+# -- rdkafka-package -----------------------------------------------------------
+
+FROM build-base AS rdkafka-package
+
+COPY scripts/debian/build-rdkafka-package.sh .
+RUN ./build-rdkafka-package.sh
+
 # -- fluent-bit-package --------------------------------------------------------
 
 FROM build-base AS fluent-bit-package
 
+COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb
 COPY scripts/debian/build-fluent-bit-package.sh .
 RUN ./build-fluent-bit-package.sh
 
@@ -83,6 +93,7 @@ COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
 
 COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
@@ -186,6 +197,7 @@ COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -207,7 +219,6 @@ RUN apt-get update && \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
-      librdkafka++1 \
       libre2-11 \
       libreproc++14 \
       libspdlog1.15 \
