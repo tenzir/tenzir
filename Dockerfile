@@ -1,9 +1,9 @@
 FROM public.ecr.aws/docker/library/debian:trixie-slim AS runtime-base
 
-FROM runtime-base AS build-base
+FROM gcc:15-trixie AS build-base
 
-ENV CC="gcc-14" \
-    CXX="g++-14" \
+ENV CC="gcc" \
+    CXX="g++" \
     CMAKE_C_COMPILER_LAUNCHER=ccache \
     CCACHE_DIR=/ccache \
     CMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -109,8 +109,8 @@ FROM dependencies AS development
 
 ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:/opt/tenzir/libexec:${PATH}" \
-    CC="gcc-14" \
-    CXX="g++-14"
+    CC="gcc" \
+    CXX="g++"
 
 # When changing these, make sure to also update the corresponding entries in the
 # flake.nix file.

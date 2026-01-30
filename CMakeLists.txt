@@ -822,27 +822,24 @@ else ()
                      "Dependencies")
 endif ()
 
-# -- gflags (transitive dependency via folly) ---------------------------------
-
-# folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
-# We need to find gflags first and fix its target configuration, because
-# Homebrew gflags only exports IMPORTED_LOCATION_RELEASE.
-find_package(gflags QUIET)
-if (TARGET gflags_shared)
-  get_target_property(_gflags_loc gflags_shared IMPORTED_LOCATION_RELEASE)
-  if (_gflags_loc)
-    set_target_properties(
-      gflags_shared
-      PROPERTIES IMPORTED_LOCATION_RELWITHDEBINFO "${_gflags_loc}"
-                 IMPORTED_LOCATION_DEBUG "${_gflags_loc}"
-                 IMPORTED_LOCATION_MINSIZEREL "${_gflags_loc}")
-  endif ()
-endif ()
-
 # -- folly ---------------------------------------------------------------------
 
 option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" ON)
 if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  # folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
+  # We need to find gflags first and fix its target configuration, because
+  # Homebrew gflags only exports IMPORTED_LOCATION_RELEASE.
+  find_package(gflags QUIET)
+  if (TARGET gflags_shared)
+    get_target_property(_gflags_loc gflags_shared IMPORTED_LOCATION_RELEASE)
+    if (_gflags_loc)
+      set_target_properties(
+        gflags_shared
+        PROPERTIES IMPORTED_LOCATION_RELWITHDEBINFO "${_gflags_loc}"
+                   IMPORTED_LOCATION_DEBUG "${_gflags_loc}"
+                   IMPORTED_LOCATION_MINSIZEREL "${_gflags_loc}")
+    endif ()
+  endif ()
   find_package(folly REQUIRED)
   find_package(glog REQUIRED)
   dependency_summary("folly" Folly::folly "Dependencies")
@@ -864,6 +861,11 @@ else ()
   set(FOLLY_HAVE_LIBGFLAGS
       OFF
       CACHE BOOL "")
+  # Prevent Folly's FindGflags.cmake from finding gflags, because folly-deps.cmake
+  # would override the FOLLY_HAVE_LIBGFLAGS cache variable with a regular variable
+  # set to ${LIBGFLAGS_FOUND}. This causes duplicate gflags flag registrations at
+  # runtime when libgflags.so is also loaded via libglog.so.
+  set(CMAKE_DISABLE_FIND_PACKAGE_Gflags TRUE)
   add_definitions(-DGLOG_USE_GLOG_EXPORT)
   # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
   set(FOLLY_HAVE_MALLOC_USABLE_SIZE
@@ -930,6 +932,7 @@ else ()
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   endif ()
   add_subdirectory(libtenzir/aux/folly SYSTEM)
+  unset(CMAKE_DISABLE_FIND_PACKAGE_Gflags)
   set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
   set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
   if (NOT TARGET Folly::folly)

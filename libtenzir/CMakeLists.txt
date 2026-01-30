@@ -492,6 +492,10 @@ target_link_libraries(libtenzir PUBLIC Folly::folly)
 if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
 endif ()
+# gflags is a transitive dependency of glog (used by folly). We must re-export
+# find_package(gflags) so that plugins can resolve the gflags_shared cmake
+# target that appears in the exported transitive link libraries.
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(gflags QUIET)")
 
 # Link against reproc.
 target_link_libraries(libtenzir PUBLIC reproc++)
