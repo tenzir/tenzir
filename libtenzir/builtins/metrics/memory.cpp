@@ -541,6 +541,7 @@ auto update_entity_stats(component_stats actor_stats::* which,
   }
 }
 
+#if TENZIR_SELECT_ALLOCATOR != TENZIR_SELECT_ALLOCATOR_NONE
 auto make_actor_stats() -> list {
   static stats_map stats;
   update_entity_stats(&actor_stats::arrow, memory::arrow_allocator(), stats);
@@ -562,6 +563,7 @@ auto make_actor_stats() -> list {
   }
   return result;
 }
+#endif
 
 auto get_raminfo() -> caf::expected<record> {
   auto result = record{};
