@@ -1161,10 +1161,6 @@ struct dummy_allocator {
   static auto stats() noexcept -> const stats& {
     return detail::zero_stats;
   }
-
-  static auto actor_stats() noexcept -> actor_stats_map {
-    return {};
-  }
 };
 
 #  define TENZIR_MAKE_ALLOCATOR(NAME, ENV_SUFFIX)                              \
