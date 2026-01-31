@@ -1,0 +1,4 @@
+{
+  empty_list: [],
+  empty_rec: {},
+}
