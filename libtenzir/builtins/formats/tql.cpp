@@ -30,6 +30,9 @@ namespace {
 // Maximum buffer size to prevent DoS from malformed input (64 MiB).
 constexpr auto max_record_size = size_t{64} * 1024 * 1024;
 
+// Maximum nesting depth to prevent stack overflow from deeply nested structures.
+constexpr auto max_nesting_depth = size_t{256};
+
 /// Parser for JSON-escaped strings that produces unescaped output.
 /// This handles the standard JSON escape sequences: \\, \", \/, \b, \f, \n,
 /// \r, \t, and \uXXXX.
@@ -47,6 +50,10 @@ struct json_string_parser : parser_base<json_string_parser> {
       return false;
     }
     ++f; // Skip opening quote
+    // Reserve capacity to minimize reallocations (escaped strings are shorter)
+    if constexpr (not skip_result) {
+      result.reserve(static_cast<size_t>(std::distance(f, l)));
+    }
     while (f != l && *f != '"') {
       if (*f == '\\') {
         // Handle escape sequence
@@ -218,35 +225,31 @@ auto find_record_end(std::string_view input) -> std::optional<size_t> {
   if (input.size() > max_record_size) {
     return std::nullopt; // Too large
   }
-
-  int depth = 0;
+  size_t depth = 0;
   bool in_string = false;
   bool escape = false;
-
   for (size_t i = 0; i < input.size(); ++i) {
     char c = input[i];
-
     if (escape) {
       escape = false;
       continue;
     }
-
     if (c == '\\' && in_string) {
       escape = true;
       continue;
     }
-
     if (c == '"') {
       in_string = not in_string;
       continue;
     }
-
     if (in_string) {
       continue;
     }
-
     if (c == '{' || c == '[') {
       ++depth;
+      if (depth > max_nesting_depth) {
+        return std::nullopt; // Too deeply nested
+      }
     } else if (c == '}' || c == ']') {
       --depth;
       if (depth == 0) {
@@ -254,7 +257,6 @@ auto find_record_end(std::string_view input) -> std::optional<size_t> {
       }
     }
   }
-
   return std::nullopt; // Incomplete record
 }
 
@@ -265,32 +267,36 @@ auto parse_tql_record(std::string_view input, diagnostic_handler& dh)
   const auto* f = input.begin();
   const auto* l = input.end();
   data result;
-
   // Skip leading whitespace
   while (f != l && std::isspace(static_cast<unsigned char>(*f)) != 0) {
     ++f;
   }
-
   if (f == l) {
     return std::nullopt;
   }
-
   if (not parser.parse(f, l, result)) {
     diagnostic::warning("failed to parse TQL record").emit(dh);
     return std::nullopt;
   }
-
   return result;
 }
 
 /// Recursively adds data to a multi_series_builder.
+/// The depth parameter tracks recursion depth to prevent stack overflow.
 void add_data_to_object(const data& d,
-                        detail::multi_series_builder::object_generator& obj);
+                        detail::multi_series_builder::object_generator& obj,
+                        size_t depth = 0);
 void add_data_to_list(const data& d,
-                      detail::multi_series_builder::list_generator& list_gen);
+                      detail::multi_series_builder::list_generator& list_gen,
+                      size_t depth = 0);
 
 void add_data_to_object(const data& d,
-                        detail::multi_series_builder::object_generator& obj) {
+                        detail::multi_series_builder::object_generator& obj,
+                        size_t depth) {
+  if (depth > max_nesting_depth) {
+    obj.null();
+    return;
+  }
   auto f = detail::overload{
     [&](caf::none_t) {
       obj.null();
@@ -331,14 +337,14 @@ void add_data_to_object(const data& d,
     [&](const list& x) {
       auto list_gen = obj.list();
       for (const auto& elem : x) {
-        add_data_to_list(elem, list_gen);
+        add_data_to_list(elem, list_gen, depth + 1);
       }
     },
     [&](const record& x) {
       auto rec = obj.record();
       for (const auto& [key, value] : x) {
         auto field = rec.exact_field(key);
-        add_data_to_object(value, field);
+        add_data_to_object(value, field, depth + 1);
       }
     },
     [&](const auto&) {
@@ -350,7 +356,12 @@ void add_data_to_object(const data& d,
 }
 
 void add_data_to_list(const data& d,
-                      detail::multi_series_builder::list_generator& list_gen) {
+                      detail::multi_series_builder::list_generator& list_gen,
+                      size_t depth) {
+  if (depth > max_nesting_depth) {
+    list_gen.null();
+    return;
+  }
   auto f = detail::overload{
     [&](caf::none_t) {
       list_gen.null();
@@ -391,14 +402,14 @@ void add_data_to_list(const data& d,
     [&](const list& x) {
       auto nested = list_gen.list();
       for (const auto& elem : x) {
-        add_data_to_list(elem, nested);
+        add_data_to_list(elem, nested, depth + 1);
       }
     },
     [&](const record& x) {
       auto rec = list_gen.record();
       for (const auto& [key, value] : x) {
         auto field = rec.exact_field(key);
-        add_data_to_object(value, field);
+        add_data_to_object(value, field, depth + 1);
       }
     },
     [&](const auto&) {
@@ -429,49 +440,95 @@ public:
     if (not input || input->size() == 0) {
       co_return;
     }
-
     // Lazily construct the builder on first use (it needs diagnostic_handler)
     if (not builder_) {
       builder_.emplace(multi_series_builder::options{}, ctx);
     }
-
     // Append new data to buffer
     buffer_.append(reinterpret_cast<const char*>(input->data()), input->size());
-
     // Check buffer size limit
-    if (buffer_.size() > max_record_size) {
+    if (buffer_.size() - buffer_offset_ > max_record_size) {
       diagnostic::error("input buffer exceeds maximum size of 64 MiB").emit(ctx);
       co_return;
     }
-
     // Process complete records from buffer
-    while (not buffer_.empty()) {
+    co_await process_buffer(push, ctx, false);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    // Ensure builder exists even if no data was processed
+    if (not builder_) {
+      builder_.emplace(multi_series_builder::options{}, ctx);
+    }
+    // Process any remaining complete records in buffer
+    co_await process_buffer(push, ctx, true);
+    // Finalize and yield remaining slices
+    for (auto& slice : builder_->finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    // Note: The multi_series_builder state is not serialized. Records that
+    // have been parsed but not yet yielded (via yield_ready_as_table_slice)
+    // may be lost on restore. This is acceptable because yield_ready is called
+    // after each parsed record, so any pending state is minimal.
+    // Before serializing, compact the buffer to remove already-processed data.
+    compact_buffer();
+    serde("buffer", buffer_);
+  }
+
+private:
+  /// Compacts the buffer by removing already-processed data at the front.
+  void compact_buffer() {
+    if (buffer_offset_ > 0) {
+      buffer_.erase(0, buffer_offset_);
+      buffer_offset_ = 0;
+    }
+  }
+
+  /// Returns a view of the unprocessed portion of the buffer.
+  auto buffer_view() const -> std::string_view {
+    return std::string_view{buffer_}.substr(buffer_offset_);
+  }
+
+  /// Advances the buffer offset, compacting periodically to avoid unbounded
+  /// memory growth. The compaction threshold is set at half the buffer size.
+  void advance_buffer(size_t n) {
+    buffer_offset_ += n;
+    // Compact when offset exceeds half the buffer size
+    if (buffer_offset_ > buffer_.size() / 2) {
+      compact_buffer();
+    }
+  }
+
+  /// Processes complete records from the buffer.
+  /// If is_final is true, emits a warning for incomplete trailing records.
+  auto process_buffer(Push<table_slice>& push, OpCtx& ctx, bool is_final)
+    -> Task<void> {
+    while (buffer_offset_ < buffer_.size()) {
       // Skip leading whitespace
-      size_t start = 0;
-      while (start < buffer_.size()
-             && std::isspace(static_cast<unsigned char>(buffer_[start])) != 0) {
-        ++start;
+      while (
+        buffer_offset_ < buffer_.size()
+        && std::isspace(static_cast<unsigned char>(buffer_[buffer_offset_]))
+             != 0) {
+        ++buffer_offset_;
       }
-
-      if (start > 0) {
-        buffer_.erase(0, start);
-      }
-
-      if (buffer_.empty()) {
+      auto view = buffer_view();
+      if (view.empty()) {
         break;
       }
-
       // Find end of record
-      auto end = find_record_end(buffer_);
+      auto end = find_record_end(view);
       if (not end) {
-        // Incomplete record, wait for more data
+        if (is_final && not view.empty()) {
+          diagnostic::warning("incomplete record at end of input").emit(ctx);
+        }
         break;
       }
-
       // Parse the complete record
-      auto record_str = std::string_view{buffer_.data(), *end};
+      auto record_str = view.substr(0, *end);
       auto parsed = parse_tql_record(record_str, ctx);
-
       if (parsed) {
         if (const auto* r = try_as<record>(*parsed)) {
           add_record_to_builder(*r, *builder_);
@@ -480,10 +537,8 @@ public:
             .emit(ctx);
         }
       }
-
-      // Remove processed record from buffer
-      buffer_.erase(0, *end);
-
+      // Advance past the processed record
+      advance_buffer(*end);
       // Yield any ready slices
       for (auto& slice : builder_->yield_ready_as_table_slice()) {
         co_await push(std::move(slice));
@@ -491,60 +546,8 @@ public:
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
-    // Ensure builder exists even if no data was processed
-    if (not builder_) {
-      builder_.emplace(multi_series_builder::options{}, ctx);
-    }
-
-    // Process any remaining complete records in buffer
-    while (not buffer_.empty()) {
-      size_t start = 0;
-      while (start < buffer_.size()
-             && std::isspace(static_cast<unsigned char>(buffer_[start])) != 0) {
-        ++start;
-      }
-
-      if (start > 0) {
-        buffer_.erase(0, start);
-      }
-
-      if (buffer_.empty()) {
-        break;
-      }
-
-      auto end = find_record_end(buffer_);
-      if (not end) {
-        if (not buffer_.empty()) {
-          diagnostic::warning("incomplete record at end of input").emit(ctx);
-        }
-        break;
-      }
-
-      auto record_str = std::string_view{buffer_.data(), *end};
-      auto parsed = parse_tql_record(record_str, ctx);
-
-      if (parsed) {
-        if (const auto* r = try_as<record>(*parsed)) {
-          add_record_to_builder(*r, *builder_);
-        }
-      }
-
-      buffer_.erase(0, *end);
-    }
-
-    // Finalize and yield remaining slices
-    for (auto& slice : builder_->finalize_as_table_slice()) {
-      co_await push(std::move(slice));
-    }
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    serde("buffer", buffer_);
-  }
-
-private:
   std::string buffer_;
+  size_t buffer_offset_ = 0;
   std::optional<multi_series_builder> builder_;
 };
 

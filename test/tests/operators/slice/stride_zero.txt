@@ -1,0 +1,6 @@
+error: stride must not be zero
+ --> tests/operators/slice/stride_zero.tql:5:14
+  |
+5 | slice stride=0
+  |              ^ 
+  |
