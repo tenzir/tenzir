@@ -3,18 +3,24 @@
 ## Tooling
 
 Use clang-format for formatting and clang-tidy for linting. The `.clang-format`
-and `.clang-tidy` files in the repository root are authoritative—run the tools
-and trust the output.
+and `.clang-tidy` files in the repository root (alongside `CMakeLists.txt`) are
+authoritative—run the tools and trust the output.
 
 ## Style Conventions
 
 These are not enforced by tooling:
 
-- **West const**: `const T&` not `T const&`
-- **Prefer `auto`**: Use almost-always-auto, make conversions explicit (e.g., `auto x = int64_t{0}`)
+- **Const placement (west const)**: Place `const` before the type (`const T&`),
+  not after (`T const&`). This aids readability by making the const modifier
+  prominent at the start of the type declaration. Template contexts may use
+  east const for STL consistency.
+- **Prefer `auto`**: Use `auto` to avoid type repetition and let the compiler
+  infer types. Make conversions explicit when needed (e.g.,
+  `auto x = int64_t{0}`). Avoid `auto` for function return types in public APIs
+  where the type should be explicit to users.
 - **Vertical whitespace**: Avoid blank lines within functions. Use comments
   to separate logical blocks instead.
-- **Naming**: See [naming-conventions.md](./naming-conventions.md)
+- **Naming**: See [Naming Conventions](./naming-conventions.md)
 
 ## File Organization
 
@@ -45,5 +51,6 @@ These are not enforced by tooling:
 
 ## Comments
 
-- `FIXME:` for bugs, `TODO:` for improvements (colon required)
-- Doxygen: `///` with Markdown—do not use `@param`, `@returns`, `@pre`, `@post`
+- `FIXME:` for bugs, `TODO:` for improvements (colon preferred)
+- Doxygen: `///` with Markdown—do not use `@param`, `@returns`, `@pre`, `@post`.
+  These tags are legacy patterns that should not be used in new code.

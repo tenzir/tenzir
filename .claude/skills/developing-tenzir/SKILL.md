@@ -1,6 +1,6 @@
 ---
 name: developing-tenzir
-description: Tenzir C++ idioms, APIs, and coding conventions. Use when implementing TQL functions, operators, working with the executor, series/table_slice, Arrow arrays, view3 abstractions, editing .cpp/.hpp files, or asking about C++ style.
+description: Tenzir C++ idioms, APIs, and coding conventions. Use when implementing TQL functions, operators, working with the executor, series/table_slice, Arrow arrays, view3 abstractions, editing .cpp/.hpp files, or asking about Tenzir's C++ style.
 ---
 
 # Developing Tenzir

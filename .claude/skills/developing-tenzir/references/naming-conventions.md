@@ -44,16 +44,35 @@ template <class Actor, class... Handlers>
 auto request(Actor& self, Handlers&&... handlers);
 ```
 
-For generic unconstrained parameters, use `T` (or `Ts` for packs):
+For generic unconstrained parameters, use single-letter names (`T` for types,
+`x`/`xs` for values):
 
 ```cpp
 template <class T, class... Ts>
 auto f(T x, Ts... xs);
 ```
 
+For semantically specific parameters, use descriptive names even in generic
+code:
+
+```cpp
+template <class Actor>
+void handle(Actor& actor);
+
+template <class Handler, class ErrorHandler>
+auto with_retry(Handler on_success, ErrorHandler on_error);
+```
+
 ### Member Variables
 
-Suffix with underscore. Getters/setters use the same name without suffix:
+Member variable naming depends on whether the type is an encapsulated class or a
+public data aggregate.
+
+#### Encapsulated Classes
+
+Private members use an underscore suffix. Getters and setters use the same name
+without suffix. For setters, prefer descriptive parameter names that avoid
+shadowing:
 
 ```cpp
 class connection {
@@ -62,8 +81,12 @@ public:
     return timeout_;
   }
 
-  void timeout(duration d) {
-    timeout_ = d;
+  void timeout(duration new_timeout) {
+    timeout_ = new_timeout;
+  }
+
+  void name(std::string_view new_name) {
+    name_ = new_name;
   }
 
 private:
@@ -72,12 +95,15 @@ private:
 };
 ```
 
-Exception: Public members that constitute the struct's API don't need the
-suffix:
+#### Public Data Aggregates
+
+Structs with all-public members that serve as transparent data containers do not
+use the underscore suffix. These types expose their members directly as part of
+their API:
 
 ```cpp
 struct config {
-  std::string name;   // Public API, no suffix
+  std::string name;
   int timeout;
 };
 ```
