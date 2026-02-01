@@ -14,6 +14,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/split_at_regex.hpp>
 #include <tenzir/split_at_string.hpp>
@@ -82,22 +83,23 @@ public:
       TENZIR_UNUSED(ctrl);
       auto builder = series_builder{};
       auto last_finish = std::chrono::steady_clock::now();
-      auto cutter = [&]()
-        -> std::function<auto(generator<chunk_ptr>)
-                           -> generator<std::optional<std::string_view>>> {
-        if (nulls) {
-          return split_nulls;
-        }
-        if (split_at_regex) {
-          return tenzir::split_at_regex(split_at_regex->inner,
-                                        include_separator);
-        }
-        if (split_at_string) {
-          return tenzir::split_at_string(split_at_string->inner,
-                                         include_separator);
-        }
-        return to_lines;
-      }();
+      auto cutter
+        = [&]()
+            ->std::function<auto(generator<chunk_ptr>)
+                              -> generator<std::optional<std::string_view>>> {
+              if (nulls) {
+                return split_nulls;
+              }
+              if (split_at_regex) {
+                return tenzir::split_at_regex(split_at_regex->inner,
+                                              include_separator);
+              }
+              if (split_at_string) {
+                return tenzir::split_at_string(split_at_string->inner,
+                                               include_separator);
+              }
+              return to_lines;
+            }();
       for (auto line : cutter(std::move(input))) {
         if (not line) {
           co_yield {};
@@ -298,12 +300,137 @@ public:
   }
 };
 
+/// Arguments for the read_lines operator (new async API).
+struct ReadLinesArgs {
+  bool binary = false;
+  bool skip_empty = false;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, ReadLinesArgs& x) -> bool {
+    return f.object(x)
+      .pretty_name("ReadLinesArgs")
+      .fields(f.field("binary", x.binary), f.field("skip_empty", x.skip_empty));
+  }
+};
+
+/// The read_lines operator using the new async execution API.
+/// Transforms chunk_ptr input into table_slice output by splitting on newlines.
+class ReadLinesOperator final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadLinesOperator(ReadLinesArgs args) : args_{args} {
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    const auto* begin = reinterpret_cast<const char*>(input->data());
+    const auto* const end = begin + input->size();
+    // Handle case where previous chunk ended on carriage return.
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (const auto* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      // Found a line ending.
+      auto line = std::string_view{};
+      if (buffer_.empty()) {
+        line = std::string_view{begin, current};
+      } else {
+        buffer_.append(begin, current);
+        line = buffer_;
+      }
+      emit_line(line, ctx);
+      if (not buffer_.empty()) {
+        buffer_.clear();
+      }
+      // Handle \r\n sequence.
+      if (*current == '\r') {
+        const auto* next = current + 1;
+        if (next == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*next == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    // Buffer remaining data for the next chunk.
+    buffer_.append(begin, end);
+    // Flush if we've accumulated enough data.
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    // Emit any remaining buffered data as the final line.
+    if (not buffer_.empty()) {
+      emit_line(buffer_, ctx);
+      buffer_.clear();
+    }
+    // Flush any remaining events.
+    if (builder_.length() > 0) {
+      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("buffer", buffer_);
+    serde("ended_on_carriage_return", ended_on_carriage_return_);
+  }
+
+private:
+  auto emit_line(std::string_view line, OpCtx& ctx) -> void {
+    if (line.empty() and args_.skip_empty) {
+      return;
+    }
+    if (args_.binary) {
+      builder_.record().field("line", as_bytes(line));
+    } else {
+      if (not arrow::util::ValidateUTF8(line)) {
+        diagnostic::warning("got invalid UTF-8")
+          .hint("use `binary=true` if you are reading binary data")
+          .emit(ctx);
+        return;
+      }
+      builder_.record().field("line", line);
+    }
+  }
+
+  ReadLinesArgs args_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+  series_builder builder_;
+};
+
 } // namespace
 
-class read_lines final
-  : public virtual operator_plugin2<parser_adapter<lines_parser>> {
+class read_lines_plugin final : public virtual operator_parser_plugin,
+                                public virtual operator_factory_plugin,
+                                public virtual OperatorPlugin {
+public:
   auto name() const -> std::string override {
     return "read_lines";
+  }
+
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"read_lines", "https://docs.tenzir.com/"
+                                                "operators/read_lines"};
+    auto args = ReadLinesArgs{};
+    parser.add("-b,--binary", args.binary);
+    parser.add("-s,--skip-empty", args.skip_empty);
+    parser.parse(p);
+    return std::make_unique<parser_adapter<lines_parser>>(
+      lines_parser{parser_args{}});
   }
 
   auto make(invocation inv, session ctx) const
@@ -338,6 +465,13 @@ class read_lines final
     }
     return std::make_unique<parser_adapter<lines_parser>>(
       lines_parser{std::move(args)});
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadLinesArgs, ReadLinesOperator>{};
+    d.named("binary", &ReadLinesArgs::binary);
+    d.named("skip_empty", &ReadLinesArgs::skip_empty);
+    return d.without_optimize();
   }
 };
 
@@ -484,7 +618,7 @@ public:
 } // namespace tenzir::plugins::lines
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::write_lines)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_delimited_regex)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_delimited)
