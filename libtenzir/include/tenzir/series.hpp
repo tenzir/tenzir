@@ -56,8 +56,8 @@ struct basic_series {
   basic_series(Type type, std::shared_ptr<type_to_arrow_array_t<Type>> array)
     : type{std::move(type)}, array{std::move(array)} {
     TENZIR_ASSERT(this->array);
-    TENZIR_ASSERT_EXPENSIVE(this->type.to_arrow_type()->id()
-                            == this->array->type_id());
+    TENZIR_ASSERT_EQ_EXPENSIVE(this->type.to_arrow_type()->id(),
+                               this->array->type_id());
   }
 
   /// concrete type + concrete array -> erased series
@@ -66,8 +66,8 @@ struct basic_series {
   basic_series(Other type, std::shared_ptr<type_to_arrow_array_t<Other>> array)
     : type{tenzir::type{std::move(type)}}, array{std::move(array)} {
     TENZIR_ASSERT(this->array);
-    TENZIR_ASSERT_EXPENSIVE(this->type.to_arrow_type()->id()
-                            == this->array->type_id());
+    TENZIR_ASSERT_EQ_EXPENSIVE(this->type.to_arrow_type()->id(),
+                               this->array->type_id());
   }
 
   /// concrete type + erased array -> erased series
@@ -76,8 +76,8 @@ struct basic_series {
   basic_series(Other type, std::shared_ptr<arrow::Array> array)
     : type{tenzir::type{std::move(type)}}, array{std::move(array)} {
     TENZIR_ASSERT(this->array);
-    TENZIR_ASSERT_EXPENSIVE(this->type.to_arrow_type()->id()
-                            == this->array->type_id());
+    TENZIR_ASSERT_EQ_EXPENSIVE(this->type.to_arrow_type()->id(),
+                               this->array->type_id());
   }
 
   explicit(false)
@@ -100,7 +100,7 @@ struct basic_series {
       }
       // TODO: This could also be a `dynamic_cast`, but that is sometimes broken
       // when calling this from plugins (due to duplicated RTTI information).
-      TENZIR_ASSERT(typeid(*array) == typeid(type_to_arrow_array_t<Other>));
+      TENZIR_ASSERT_EQ(typeid(*array), typeid(type_to_arrow_array_t<Other>));
       auto other_array
         = std::static_pointer_cast<type_to_arrow_array_t<Other>>(array);
       return basic_series<Other>{*other_type, std::move(other_array)};

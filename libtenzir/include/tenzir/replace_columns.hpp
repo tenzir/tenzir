@@ -135,12 +135,11 @@ struct replace_visitor {
                             });
         ++i;
       }
-      TENZIR_ASSERT(i == fields.size());
+      TENZIR_ASSERT_EQ(i, fields.size());
     }
-    TENZIR_ASSERT(static_cast<size_t>(r.type.num_fields()) == fields.size(),
-                  "{} != {}", r.type.num_fields(), fields.size());
-    TENZIR_ASSERT(r.type.num_fields()
-                  == static_cast<size_t>(r.array->num_fields()));
+    TENZIR_ASSERT_EQ(static_cast<size_t>(r.type.num_fields()), fields.size());
+    TENZIR_ASSERT_EQ(r.type.num_fields(),
+                     static_cast<size_t>(r.array->num_fields()));
     auto any_replacement = false;
     for (auto& field : fields) {
       auto nested_replacement = (*this)(field.data);

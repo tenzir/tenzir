@@ -1044,7 +1044,7 @@ struct exec_node_state {
           TENZIR_ASSERT(sa);
           const auto st = sa->type();
           TENZIR_ASSERT(st);
-          TENZIR_ASSERT(*ttype == *st);
+          TENZIR_ASSERT_EQ(*ttype, *st);
           const auto status = rb->ValidateFull();
           TENZIR_ASSERT(status.ok(), "failed result validation in {}: {}",
                         op->name(), status.ToString());
