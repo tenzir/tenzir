@@ -1,14 +1,6 @@
 # C++ Coding Conventions
 
-## Tooling
-
-Use clang-format for formatting and clang-tidy for linting. The `.clang-format`
-and `.clang-tidy` files in the repository root (alongside `CMakeLists.txt`) are
-authoritative—run the tools and trust the output.
-
 ## Style Conventions
-
-These are not enforced by tooling:
 
 - **Const placement (west const)**: Place `const` before the type (`const T&`),
   not after (`T const&`). This aids readability by making the const modifier
