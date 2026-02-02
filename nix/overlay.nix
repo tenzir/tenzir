@@ -21,6 +21,15 @@ in
   # libc++ 19 doesn't have this feature, but libc++ 20 does.
   llvmPackages = if isDarwin then prevPkgs.llvmPackages_20 else prevPkgs.llvmPackages;
 
+  # crc32c (transitive dependency via Arrow) uses -Werror=character-conversion, which is a
+  # GCC-specific warning flag that clang doesn't recognize. With -Werror, the unknown warning
+  # becomes a fatal error. Suppress this by adding -Wno-unknown-warning-option.
+  crc32c = prevPkgs.crc32c.overrideAttrs (old: lib.optionalAttrs isDarwin {
+    env = (old.env or { }) // {
+      NIX_CFLAGS_COMPILE = toString (old.env.NIX_CFLAGS_COMPILE or "") + " -Wno-unknown-warning-option";
+    };
+  });
+
   curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
     # Brings in a conflicting libiconv via libunistring.
     idnSupport = false;
