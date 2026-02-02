@@ -16,10 +16,13 @@ These are not enforced by tooling:
   east const for STL consistency.
 - **Prefer `auto`**: Use `auto` to avoid type repetition and let the compiler
   infer types. Make conversions explicit when needed (e.g.,
-  `auto x = int64_t{0}`). Avoid `auto` for function return types in public APIs
-  where the type should be explicit to users.
+  `auto x = int64_t{0}`). For functions, use `auto` with a trailing return type.
+  Avoid `auto` for function return types in public APIs where the type should be
+  explicit to users.
 - **Vertical whitespace**: Avoid blank lines within functions. Use comments
   to separate logical blocks instead.
+- **Logical operators**: Use the word form `not`, `and`, `or` instead of `!`,
+  `&&`, `||`.
 - **Naming**: See [Naming Conventions](./naming-conventions.md)
 
 ## File Organization
