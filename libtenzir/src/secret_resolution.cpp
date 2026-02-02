@@ -8,6 +8,11 @@
 
 #include "tenzir/secret_resolution.hpp"
 
+#include "tenzir/curl.hpp"
+#include "tenzir/detail/base58.hpp"
+#include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/hex_encode.hpp"
+
 #include <arrow/util/utf8.h>
 
 namespace tenzir {
@@ -132,6 +137,19 @@ auto secret_censor::censor(const arrow::Status& status) const -> std::string {
   return censor(status.ToStringWithoutContextLines());
 }
 
+auto secret_censor::censor(diagnostic diag) const -> diagnostic {
+  if (not is_noop()) {
+    diag.message = censor(std::move(diag.message));
+    for (auto& annotation : diag.annotations) {
+      annotation.text = censor(std::move(annotation.text));
+    }
+    for (auto& note : diag.notes) {
+      note.message = censor(std::move(note.message));
+    }
+  }
+  return diag;
+}
+
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
                          std::string& out, diagnostic_handler& dh)
   -> secret_request {
@@ -159,4 +177,108 @@ auto make_secret_request(std::string name, const located<secret>& s,
   return secret_request{s, detail::secret_string_setter_callback(
                              std::move(name), s.source, out, dh)};
 }
+
+namespace {
+
+auto apply_transformation(ecc::cleansing_blob blob,
+                          fbs::data::SecretTransformations operation,
+                          diagnostic_handler& dh, location loc)
+  -> failure_or<ecc::cleansing_blob> {
+#define X_ENCODE(OPERATION, FUNCTION)                                          \
+  case OPERATION: {                                                            \
+    const auto encoded = FUNCTION(std::string_view{                            \
+      reinterpret_cast<const char*>(blob.data()),                              \
+      reinterpret_cast<const char*>(blob.data() + blob.size()),                \
+    });                                                                        \
+    const auto enc_bytes = as_bytes(encoded);                                  \
+    blob.assign(enc_bytes.begin(), enc_bytes.end());                           \
+    return blob;                                                               \
+  }
+
+#define X_DECODE(OPERATION, FUNCTION)                                          \
+  case OPERATION: {                                                            \
+    const auto decoded = FUNCTION(std::string_view{                            \
+      reinterpret_cast<const char*>(blob.data()),                              \
+      reinterpret_cast<const char*>(blob.data() + blob.size()),                \
+    });                                                                        \
+    if (not decoded) {                                                         \
+      diagnostic::error("failed to `" #OPERATION "` secret value")             \
+        .primary(loc)                                                          \
+        .emit(dh);                                                             \
+      return failure::promise();                                               \
+    }                                                                          \
+    const auto dec_bytes = as_bytes(*decoded);                                 \
+    blob.assign(dec_bytes.begin(), dec_bytes.end());                           \
+    return blob;                                                               \
+  }
+  switch (operation) {
+    using enum fbs::data::SecretTransformations;
+    X_ENCODE(encode_base64, detail::base64::encode)
+    X_DECODE(decode_base64, detail::base64::try_decode)
+    X_ENCODE(encode_url, curl::escape)
+    X_DECODE(decode_url, curl::try_unescape)
+    X_ENCODE(encode_base58, detail::base58::encode)
+    X_DECODE(decode_base58, detail::base58::decode)
+    X_ENCODE(encode_hex, detail::hex::encode)
+    X_DECODE(decode_hex, detail::hex::decode)
+  }
+#undef X_ENCODE
+#undef X_DECODE
+  TENZIR_UNREACHABLE();
+}
+
+// Helper struct to work around GCC 15 ICE in lambda_expr_this_capture
+// when using explicit object parameters with captures.
+struct secret_resolver {
+  const request_map_t& requested;
+  secret_censor& censor;
+  diagnostic_handler& dh;
+  location loc;
+
+  using ret_t = failure_or<resolved_secret_value>;
+
+  auto operator()(const fbs::data::SecretLiteral& l) -> ret_t {
+    const auto& v = detail::secrets::deref(l.value());
+    const auto v_bytes = as_bytes(v);
+    return resolved_secret_value{
+      ecc::cleansing_blob{v_bytes.begin(), v_bytes.end()}, true};
+  }
+
+  auto operator()(const fbs::data::SecretName& l) -> ret_t {
+    const auto it = requested.find(detail::secrets::deref(l.value()).str());
+    TENZIR_ASSERT(it != requested.end());
+    censor.add(it->second.value);
+    return resolved_secret_value{it->second.value, false};
+  }
+
+  auto operator()(const fbs::data::SecretConcatenation& concat) -> ret_t {
+    auto res = ecc::cleansing_blob{};
+    auto all_literal = true;
+    for (auto* p : detail::secrets::deref(concat.secrets())) {
+      TRY(auto part, match(detail::secrets::deref(p), *this));
+      all_literal = all_literal && part.all_literal();
+      res.insert(res.end(), part.blob().begin(), part.blob().end());
+    }
+    return resolved_secret_value{std::move(res), all_literal};
+  }
+
+  auto operator()(const fbs::data::SecretTransformed& trafo) -> ret_t {
+    TRY(auto nested, match(detail::secrets::deref(trafo.secret()), *this));
+    auto blob = ecc::cleansing_blob{nested.blob().begin(), nested.blob().end()};
+    TRY(auto transformed,
+        apply_transformation(std::move(blob), trafo.transformation(), dh, loc));
+    censor.add(transformed);
+    return resolved_secret_value{std::move(transformed), nested.all_literal()};
+  }
+};
+} // namespace
+
+auto secret_finisher::finish(const request_map_t& requested,
+                             secret_censor& censor,
+                             diagnostic_handler& dh) const -> failure_or<void> {
+  auto f = secret_resolver{requested, censor, dh, this->loc};
+  TRY(auto res, match(secret, f));
+  return callback(std::move(res));
+}
+
 } // namespace tenzir

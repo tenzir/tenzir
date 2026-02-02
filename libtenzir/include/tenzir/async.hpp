@@ -56,6 +56,8 @@
 #include "tenzir/try.hpp"
 
 #include <caf/actor_cast.hpp>
+#include <caf/actor_companion.hpp>
+#include <caf/actor_registry.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/mailbox_element.hpp>
@@ -409,32 +411,49 @@ public:
   // TODO: Change `void` to `Any`.
   virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
 
+  virtual auto dh() -> diagnostic_handler& = 0;
+
+  virtual auto resolve_secrets(std::vector<secret_request>)
+    -> Task<failure_or<void>>
+    = 0;
+
+  virtual auto fetch_node() -> Task<failure_or<node_actor>> = 0;
+
 protected:
   ~OpCtxImpl() = default;
 };
 
 class OpCtx {
 public:
-  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, OpCtxImpl& impl)
-    : sys_{sys}, dh_{dh}, reg_{global_registry()}, impl_{impl} {
+  OpCtx(caf::actor_system& sys, OpCtxImpl& impl)
+    : sys_{sys}, reg_{global_registry()}, impl_{impl} {
   }
 
   virtual ~OpCtx() = default;
 
   explicit(false) operator diagnostic_handler&() {
-    return dh_;
+    return dh();
   }
 
   explicit(false) operator base_ctx() {
-    return base_ctx{dh_, *reg_};
+    return base_ctx{dh(), *reg_};
   }
 
   auto actor_system() -> caf::actor_system& {
     return sys_;
   }
 
+  auto fetch_node() -> Task<failure_or<node_actor>> {
+    return impl_.fetch_node();
+  }
+
+  auto resolve_secrets(std::vector<secret_request> requests)
+    -> Task<failure_or<void>> {
+    return impl_.resolve_secrets(std::move(requests));
+  }
+
   auto dh() -> diagnostic_handler& {
-    return dh_;
+    return impl_.dh();
   }
 
   template <class... Ts>
@@ -444,14 +463,17 @@ public:
   }
 
   auto save(chunk_ptr chunk) -> Task<void> {
+    TENZIR_UNUSED(chunk, impl_);
     co_return;
   }
 
   auto load() -> Task<chunk_ptr> {
+    TENZIR_UNUSED(impl_);
     co_return {};
   }
 
   auto flush() -> Task<void> {
+    TENZIR_UNUSED(impl_);
     co_return;
   }
 
@@ -482,7 +504,6 @@ public:
 
 private:
   caf::actor_system& sys_;
-  diagnostic_handler& dh_;
   std::shared_ptr<const registry> reg_;
   OpCtxImpl& impl_;
 };
@@ -573,6 +594,7 @@ public:
   }
 
   virtual auto finalize(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
     co_return;
   }
 

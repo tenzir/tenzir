@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/async.hpp"
+
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -14,6 +17,61 @@
 namespace tenzir::plugins::secret {
 
 namespace {
+
+struct AssertSecretArgs {
+  located<class secret> secret;
+  located<data> expected;
+};
+
+class AssertSecret final : public Operator<table_slice, table_slice> {
+public:
+  explicit AssertSecret(AssertSecretArgs args)
+    : secret_{std::move(args.secret)}, expected_{std::move(args.expected)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await OperatorBase::start(ctx);
+    // Resolve the secret using the new async API
+    auto result = resolved_secret_value{};
+    auto requests = std::vector<secret_request>{};
+    requests.emplace_back(secret_, result);
+    auto res = co_await ctx.resolve_secrets(std::move(requests));
+    if (not res) {
+      co_return;
+    }
+    // Compare secret to expected value
+    const auto s = result.blob();
+    auto e = std::span<const std::byte>{};
+    if (const auto* b = try_as<blob>(expected_.inner)) {
+      e = std::span{*b};
+    } else if (const auto* str = try_as<std::string>(expected_.inner)) {
+      e = std::span{
+        reinterpret_cast<const std::byte*>(str->data()),
+        reinterpret_cast<const std::byte*>(str->data() + str->size()),
+      };
+    }
+    if (not std::ranges::equal(s, e)) {
+      diagnostic::error("secret does not match expected value")
+        .primary(secret_, "['{}']", fmt::join(s, "', '"))
+        .primary(expected_, "['{}']", fmt::join(e, "', '"))
+        .emit(ctx.dh());
+    }
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    // Pass through data (should not be called since we return done)
+    co_await push(std::move(input));
+  }
+
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+
+private:
+  located<class secret> secret_;
+  located<data> expected_;
+};
 
 class assert_secret_operator final
   : public crtp_operator<assert_secret_operator> {
@@ -75,7 +133,8 @@ private:
 };
 
 class testing_operator_plugin final
-  : public virtual operator_plugin2<assert_secret_operator> {
+  : public virtual operator_plugin2<assert_secret_operator>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return assert_secret_operator{}.name();
@@ -111,6 +170,22 @@ public:
       .ignore();
     return std::make_unique<assert_secret_operator>(std::move(secret),
                                                     std::move(expected));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<AssertSecretArgs, AssertSecret>{};
+    auto arg = d.named("secret", &AssertSecretArgs::secret);
+    d.named("expected", &AssertSecretArgs::expected);
+    d.validate(
+      [enabled = enabled_, name = name(), arg](ValidateCtx& ctx) -> Empty {
+        if (not enabled) {
+          diagnostic::error("the `{}` operator is disabled ", name)
+            .primary(*ctx.get_location(arg))
+            .emit(ctx);
+        }
+        return {};
+      });
+    return d.without_optimize();
   }
 
 private:

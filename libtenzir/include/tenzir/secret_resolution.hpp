@@ -71,10 +71,16 @@ struct secret_censor {
 public:
   auto censor(std::string text) const -> std::string;
   auto censor(const arrow::Status& status) const -> std::string;
+  auto censor(diagnostic d) const -> diagnostic;
   template <typename T>
   auto censor(const arrow::Result<T>& r) const -> std::string {
     return censor(r.status());
   }
+
+  auto add(ecc::cleansing_blob s) -> void {
+    secrets.emplace(std::move(s));
+  }
+
   auto is_noop() const -> bool {
     return secrets.empty();
   }
@@ -170,4 +176,26 @@ auto make_secret_request(std::string name, const located<secret>& s,
 auto make_secret_request(std::string name, const located<secret>& s,
                          std::string& out, diagnostic_handler& dh)
   -> secret_request;
+
+struct located_resolved_secret {
+  location loc;
+  ecc::cleansing_blob value;
+
+  located_resolved_secret(location loc) : loc{loc} {
+  }
+};
+
+using request_map_t = detail::stable_map<std::string, located_resolved_secret>;
+
+struct secret_finisher {
+  class secret secret;
+  secret_request_callback callback;
+  location loc;
+
+  /// "Finishes" a secret request by applying all its transformations and
+  /// invoking the callback.
+  auto finish(const request_map_t& requested, secret_censor& censor,
+              diagnostic_handler& dh) const -> failure_or<void>;
+};
+
 } // namespace tenzir
