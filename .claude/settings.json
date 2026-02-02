@@ -23,7 +23,6 @@
     }
   },
   "enabledPlugins": {
-    "cpp@tenzir": true,
     "dev@tenzir": true,
     "python@tenzir": true,
     "tenzir@tenzir": true

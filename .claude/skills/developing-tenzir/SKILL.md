@@ -1,6 +1,6 @@
 ---
 name: developing-tenzir
-description: Tenzir C++ idioms, APIs, and coding conventions. Use when implementing TQL functions, operators, working with the executor, series/table_slice, Arrow arrays, view3 abstractions, or asking about Tenzir code style.
+description: Tenzir C++ idioms, APIs, and coding conventions. Use when implementing TQL functions, operators, working with the executor, series/table_slice, Arrow arrays, view3 abstractions, editing .cpp/.hpp files, or asking about Tenzir's C++ style.
 ---
 
 # Developing Tenzir
@@ -32,3 +32,8 @@ row-wise access is needed.
 - [hashing.md](./references/hashing.md) — Hashing infrastructure
 - [parser-combinators.md](./references/parser-combinators.md) — Parser combinator framework
 - [common-types.md](./references/common-types.md) — Reusable common types
+
+**C++ Style:**
+
+- [coding-conventions.md](./references/coding-conventions.md) — Formatting, style, and structure
+- [naming-conventions.md](./references/naming-conventions.md) — Naming patterns and conventions
