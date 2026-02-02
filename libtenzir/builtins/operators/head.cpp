@@ -83,8 +83,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<HeadArgs, Head>{"https://docs.tenzir.com/operators/head"};
+    auto d = Describer<HeadArgs, Head>{};
     d.optional_positional("count", &HeadArgs::count);
     return d.without_optimize();
   }

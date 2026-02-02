@@ -6,10 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/operator_plugin.hpp>
-#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 
@@ -140,13 +138,7 @@ private:
       return {};
     }
     auto batch = to_record_batch(input);
-    auto take_result = arrow::compute::Take(batch, stride_index);
-    if (not take_result.ok()) {
-      diagnostic::error("{}", take_result.status().ToString())
-        .note("failed to apply stride")
-        .throw_();
-    }
-    const auto datum = take_result.MoveValueUnsafe();
+    const auto datum = check(arrow::compute::Take(batch, stride_index));
     TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
     return table_slice{datum.record_batch(), input.schema()};
   }
@@ -221,13 +213,7 @@ private:
       return {};
     }
     auto batch = to_record_batch(input);
-    auto take_result = arrow::compute::Take(batch, stride_index);
-    if (not take_result.ok()) {
-      diagnostic::error("{}", take_result.status().ToString())
-        .note("failed to apply stride")
-        .throw_();
-    }
-    const auto datum = take_result.MoveValueUnsafe();
+    const auto datum = check(arrow::compute::Take(batch, stride_index));
     TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
     return table_slice{datum.record_batch(), input.schema()};
   }
@@ -245,60 +231,10 @@ private:
   bool done_ = false;
 };
 
-class Plugin final : public virtual operator_parser_plugin,
-                     public virtual OperatorPlugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "slice";
-  }
-
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto begin = std::optional<int64_t>{};
-    auto end = std::optional<int64_t>{};
-    auto stride = std::optional<int64_t>{};
-    const auto parse_int
-      = [&](bool must_have_prefix) -> std::optional<int64_t> {
-      if (p.at_end()) {
-        return {};
-      }
-      if (must_have_prefix) {
-        if (not p.accept_char(':')) {
-          diagnostic::error("expected `:`")
-            .primary(p.current_span())
-            .hint("syntax: slice [<begin>]:[<end>][:<stride>]")
-            .docs("https://docs.tenzir.com/operators/slice")
-            .throw_();
-        }
-      }
-      if (p.at_end() or p.peek_char(':')) {
-        return {};
-      }
-      auto data = p.parse_int();
-      return data.inner;
-    };
-    begin = parse_int(false);
-    end = parse_int(true);
-    stride = parse_int(true);
-    auto args = std::string{"slice"};
-    if (begin) {
-      args += fmt::format(" begin={}", *begin);
-    }
-    if (end) {
-      args += fmt::format(" end={}", *end);
-    }
-    if (stride) {
-      args += fmt::format(" stride={}", *stride);
-    }
-    auto result = pipeline::internal_parse_as_operator(args);
-    if (not result) {
-      diagnostic::error("failed to parse slice operator: {}", result.error())
-        .throw_();
-    }
-    return std::move(*result);
   }
 
   auto describe() const -> Description override {
@@ -320,28 +256,10 @@ public:
   }
 };
 
-class ReversePlugin final : public virtual operator_parser_plugin,
-                            public virtual OperatorPlugin {
+class ReversePlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "reverse";
-  }
-
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"reverse", "https://docs.tenzir.com/"
-                                             "operators/reverse"};
-    parser.parse(p);
-    auto result = pipeline::internal_parse_as_operator("slice ::-1");
-    if (not result) {
-      diagnostic::error("failed to transform `reverse` into `slice`: {}",
-                        result.error())
-        .throw_();
-    }
-    return std::move(*result);
   }
 
   auto describe() const -> Description override {
