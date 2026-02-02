@@ -225,11 +225,10 @@ def _emit_entity(
         if "enum" in attr_def:
             sibling = attr_def.get("sibling")
             if sibling is None:
-                log(
-                    f"Warning: Enum {attr_name} of {entity_name} doesn't have sibling"
-                )
+                log(f"Warning: Enum {attr_name} of {entity_name} doesn't have sibling")
             else:
-                attributes += f" #enum={hash_enum(attr_def["enum"])}"
+                enum = hash_enum(attr_def["enum"])
+                attributes += f" #enum={enum}"
                 attributes += f" #sibling={sibling}"
         writer.print(f"{attr_name}: {resolved}{attributes},")
     attributes = ""
@@ -397,13 +396,21 @@ def write_versions(schemas: list[Schema]) -> None:
             f.write(f'X("{version}", {mangle_version(version)})\n')
 
 
+def exclude_version(version: str) -> bool:
+    return (
+        version in EXCLUDE_VERSIONS
+        or version.endswith("-server-beta")
+        or version.endswith("-legacy")
+    )
+
+
 def fetch_versions() -> list[str]:
     log(f"Fetching available versions from {SERVER}")
     body = requests.get(SERVER).content.decode()
     return sorted(
         version
         for version in re.findall("<option value=[^>]*>v([^<]*)</option>", body)
-        if version not in EXCLUDE_VERSIONS and not version.endswith("-server-beta")
+        if not exclude_version(version)
     )
 
 
