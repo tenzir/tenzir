@@ -87,45 +87,6 @@ auto parse_ipv4(std::string_view host)
   return octets;
 }
 
-/// Checks if an IP address is in a private/reserved range.
-/// Returns true if the IP should be blocked for SSRF protection.
-auto is_private_ip(std::string_view host) -> bool {
-  auto parsed = parse_ipv4(host);
-  if (not parsed) {
-    // Not an IPv4 address (might be hostname), allow it.
-    // Note: This doesn't protect against DNS rebinding, but that's a
-    // separate concern.
-    return false;
-  }
-  const auto& octets = *parsed;
-  // Check private/reserved ranges:
-  // 127.0.0.0/8 - loopback
-  if (octets[0] == 127) {
-    return true;
-  }
-  // 10.0.0.0/8 - private
-  if (octets[0] == 10) {
-    return true;
-  }
-  // 172.16.0.0/12 - private (172.16.0.0 - 172.31.255.255)
-  if (octets[0] == 172 and octets[1] >= 16 and octets[1] <= 31) {
-    return true;
-  }
-  // 192.168.0.0/16 - private
-  if (octets[0] == 192 and octets[1] == 168) {
-    return true;
-  }
-  // 169.254.0.0/16 - link-local (includes cloud metadata services)
-  if (octets[0] == 169 and octets[1] == 254) {
-    return true;
-  }
-  // 0.0.0.0/8 - current network
-  if (octets[0] == 0) {
-    return true;
-  }
-  return false;
-}
-
 /// Creates an STS client configuration with proper endpoint and proxy settings.
 /// Caches environment variable lookups for efficiency.
 auto make_sts_client_config(const std::optional<std::string>& region)
@@ -410,17 +371,6 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   // Case 3: Token from HTTP endpoint.
   if (not web_identity.token_endpoint.empty()) {
     TENZIR_VERBOSE("fetching web identity token from endpoint");
-    // Validate URL to prevent SSRF attacks against private networks.
-    // Note: This blocks direct IP addresses in private ranges but allows
-    // hostnames (which could resolve to private IPs via DNS rebinding).
-    auto host = extract_host_from_url(web_identity.token_endpoint);
-    if (is_private_ip(host)) {
-      return diagnostic::error("token endpoint URL points to a private IP "
-                               "address")
-        .note("host: {}", host)
-        .note("private IP ranges are blocked for security reasons")
-        .to_error();
-    }
     auto xfer = transfer{};
     auto req = http::request{};
     req.uri = web_identity.token_endpoint;
