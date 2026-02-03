@@ -598,7 +598,11 @@ struct exec_node_state {
     TENZIR_ASSERT(node or (this->op->location() != operator_location::remote));
     weak_node = node;
     // Setup op_name
-    const auto name = this->op->name();
+    auto name = this->op->name();
+    constexpr static auto prefix = std::string_view{"tql2."};
+    if (name.starts_with(prefix)) {
+      name = name.substr(prefix.size());
+    }
     std::copy_n(name.begin(), std::min(name.size(), op_name.size()),
                 op_name.begin());
   }
