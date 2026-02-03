@@ -228,8 +228,24 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
         // Technically LDAP will also yield a response code, but we currently
         // dont support LDAP.
         if (response_code < 200 or response_code > 299) {
-          co_yield diagnostic::error("HTTP response code: {}", response_code)
-            .to_error();
+          // Include response body in error for debugging (truncated to 1KB).
+          auto body = std::string{};
+          for (const auto& chunk : chunks) {
+            if (chunk) {
+              body.append(reinterpret_cast<const char*>(chunk->data()),
+                          chunk->size());
+              if (body.size() > 1024) {
+                body.resize(1024);
+                body += "...";
+                break;
+              }
+            }
+          }
+          auto err = diagnostic::error("HTTP response code: {}", response_code);
+          if (not body.empty()) {
+            err = std::move(err).note("response: {}", body);
+          }
+          co_yield std::move(err).to_error();
           co_return;
         }
       }

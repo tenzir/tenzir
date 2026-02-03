@@ -226,8 +226,9 @@ private:
       creds.GetExpiration().ToGmtString(Aws::Utils::DateFormat::ISO_8601));
   }
 
-  auto handle_refresh_failure(std::string_view message) -> void {
+  auto handle_refresh_failure(std::string message) -> void {
     ++consecutive_failures_;
+    last_error_ = std::move(message);
     // Calculate exponential backoff delay.
     auto delay = initial_retry_delay
                  * (1 << std::min(consecutive_failures_ - 1,
@@ -237,14 +238,14 @@ private:
     }
     next_retry_time_ = std::chrono::system_clock::now() + delay;
     if (consecutive_failures_ >= max_consecutive_failures) {
-      TENZIR_ERROR("{} (attempt {}/{}, max retries reached)", message,
+      TENZIR_ERROR("{} (attempt {}/{}, max retries reached)", last_error_,
                    consecutive_failures_, max_consecutive_failures);
       // Clear credentials only after max retries exceeded.
       credentials_ = {};
     } else {
       TENZIR_WARN(
-        "{} (attempt {}/{}, retrying in {}s)", message, consecutive_failures_,
-        max_consecutive_failures,
+        "{} (attempt {}/{}, retrying in {}s)", last_error_,
+        consecutive_failures_, max_consecutive_failures,
         std::chrono::duration_cast<std::chrono::seconds>(delay).count());
       // Keep existing credentials - they may still be valid.
     }
@@ -261,6 +262,14 @@ private:
   std::chrono::system_clock::time_point expiration_;
   int consecutive_failures_ = 0;
   std::chrono::system_clock::time_point next_retry_time_;
+  std::string last_error_;
+
+public:
+  /// Returns the last error message from a failed credential refresh.
+  auto last_error() const -> std::string {
+    auto lock = std::unique_lock{mutex_};
+    return last_error_;
+  }
 };
 
 } // namespace
@@ -415,9 +424,15 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
         .to_error();
     }
     if (status < 200 or status >= 300) {
+      // Truncate response body for error message (max 1KB to avoid huge logs).
+      constexpr auto max_error_body_size = size_t{1024};
+      auto error_body = body.size() > max_error_body_size
+                          ? body.substr(0, max_error_body_size) + "..."
+                          : body;
       return diagnostic::error("HTTP request failed")
         .note("status code: {}", status)
         .note("endpoint: {}", web_identity.token_endpoint)
+        .note("response: {}", error_body)
         .to_error();
     }
     // Check if token_path is set (JSON response) or nullopt (plain text).
@@ -499,8 +514,28 @@ auto make_aws_credentials_provider(
 
   // Web identity + role: use auto-refreshing credentials provider.
   if (has_web_identity and has_role) {
-    return std::make_shared<web_identity_credentials_provider>(
+    // Do an eager initial credential fetch so errors are returned through
+    // the normal error path (which goes to the diagnostic handler) rather
+    // than being logged to stderr during lazy refresh.
+    auto provider = std::make_shared<web_identity_credentials_provider>(
       *creds->web_identity, creds->role, session_name, region);
+    // Trigger initial credential fetch to surface any errors early.
+    auto initial_creds = provider->GetAWSCredentials();
+    if (initial_creds.IsEmpty()) {
+      // Include the actual error message from the failed refresh.
+      auto error = provider->last_error();
+      auto diag = diagnostic::error("failed to obtain AWS credentials via web "
+                                    "identity")
+                    .note("role: {}", creds->role);
+      if (not error.empty()) {
+        diag = std::move(diag).note("{}", error);
+      }
+      return std::move(diag)
+        .hint("check that the token endpoint is accessible and the role trust "
+              "policy allows web identity federation")
+        .to_error();
+    }
+    return provider;
   }
   if (has_explicit_creds and has_role) {
     // Explicit credentials + role: use STS to assume role.
