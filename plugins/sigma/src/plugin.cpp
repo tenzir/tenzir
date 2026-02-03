@@ -47,9 +47,27 @@ public:
     auto update(const std::filesystem::path& path, operator_control_plane& ctrl)
       -> void {
       auto old_rules = std::exchange(rules, {});
+      load_rules(path, ctrl);
+      for (const auto& [rule_path, rule] : rules) {
+        const auto old_rule = old_rules.find(rule_path);
+        if (old_rule == old_rules.end()) {
+          TENZIR_VERBOSE("added Sigma rule {}", rule_path);
+        } else if (old_rule->second != rule) {
+          TENZIR_VERBOSE("updated Sigma rule {}", rule_path);
+        }
+      }
+      for (const auto& [rule_path, _] : old_rules) {
+        if (not rules.contains(rule_path)) {
+          TENZIR_VERBOSE("removed Sigma rule {}", rule_path);
+        }
+      }
+    }
+
+    auto load_rules(const std::filesystem::path& path,
+                    operator_control_plane& ctrl) -> void {
       if (std::filesystem::is_directory(path)) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
-          update(entry.path(), ctrl);
+          load_rules(entry.path(), ctrl);
         }
         return;
       }
@@ -88,19 +106,6 @@ public:
         return;
       }
       rules[path.string()] = {std::move(*yaml), std::move(*rule)};
-      for (const auto& [path, rule] : rules) {
-        const auto old_rule = old_rules.find(path);
-        if (old_rule == old_rules.end()) {
-          TENZIR_VERBOSE("added Sigma rule {}", path);
-        } else if (old_rule->second != rule) {
-          TENZIR_VERBOSE("updated Sigma rule {}", path);
-        }
-      }
-      for (const auto& [path, _] : old_rules) {
-        if (not rules.contains(path)) {
-          TENZIR_VERBOSE("removed Sigma rule {}", path);
-        }
-      }
     }
 
     std::filesystem::path path;
