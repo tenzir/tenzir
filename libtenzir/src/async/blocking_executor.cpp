@@ -1,23 +1,12 @@
 #include "tenzir/async/blocking_executor.hpp"
 
-#include <folly/Singleton.h>
 #include <folly/executors/thread_factory/NamedThreadFactory.h>
 
 namespace tenzir {
 
-struct BlockingExecutorSingletonTag {
-  static auto create() -> BlockingExecutor* {
-    return new BlockingExecutor{};
-  }
-};
-
-namespace {
-folly::Singleton<BlockingExecutor>
-  gBlockingExecutor(BlockingExecutorSingletonTag::create);
-} // namespace
-
 auto BlockingExecutor::get() -> BlockingExecutor& {
-  return *gBlockingExecutor.try_get();
+  static BlockingExecutor instance;
+  return instance;
 }
 
 BlockingExecutor::BlockingExecutor(BlockingExecutorConfig config)

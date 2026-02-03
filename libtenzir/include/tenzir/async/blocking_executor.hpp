@@ -39,8 +39,6 @@ public:
   BlockingExecutor& operator=(const BlockingExecutor&) = delete;
 
 private:
-  friend struct BlockingExecutorSingletonTag;
-
   explicit BlockingExecutor(BlockingExecutorConfig config = {});
 
   std::unique_ptr<folly::CPUThreadPoolExecutor> pool_;
