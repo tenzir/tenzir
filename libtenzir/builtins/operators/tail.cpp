@@ -6,14 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
-#include <tenzir/compile_ctx.hpp>
-#include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
-#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql2/eval.hpp>
 
 namespace tenzir::plugins::tail {
 
@@ -74,38 +68,15 @@ private:
   uint64_t buffered_rows_ = 0;
 };
 
-class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_compiler_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tail";
   };
 
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"tail", "https://docs.tenzir.com/"
-                                          "operators/tail"};
-    auto count = std::optional<uint64_t>{};
-    parser.add(count, "<limit>");
-    parser.parse(p);
-    auto result = pipeline::internal_parse_as_operator(
-      fmt::format("slice -{}:", count.value_or(10)));
-    if (not result) {
-      diagnostic::error("failed to transform `tail` into `slice` operator: {}",
-                        result.error())
-        .throw_();
-    }
-    return std::move(*result);
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<TailArgs, Tail>{};
-    auto count = d.optional_positional("count", &TailArgs::count);
-    TENZIR_UNUSED(count);
+    d.optional_positional("count", &TailArgs::count);
     return d.without_optimize();
   }
 };
