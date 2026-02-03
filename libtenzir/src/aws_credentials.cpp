@@ -26,7 +26,6 @@
 #include <aws/sts/model/AssumeRoleWithWebIdentityRequest.h>
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
@@ -51,42 +50,6 @@ auto make_default_aws_credentials_provider_chain()
 
 namespace {
 
-/// Parses an IPv4 address from a string.
-/// Returns the four octets if successful, or nullopt if not a valid IPv4.
-auto parse_ipv4(std::string_view host)
-  -> std::optional<std::array<uint8_t, 4>> {
-  auto octets = std::array<uint8_t, 4>{};
-  auto octet_index = size_t{0};
-  auto current_value = 0;
-  auto digit_count = 0;
-  for (auto c : host) {
-    if (c == '.') {
-      if (digit_count == 0 or octet_index >= 3) {
-        return std::nullopt;
-      }
-      if (current_value > 255) {
-        return std::nullopt;
-      }
-      octets[octet_index++] = static_cast<uint8_t>(current_value);
-      current_value = 0;
-      digit_count = 0;
-    } else if (c >= '0' and c <= '9') {
-      current_value = current_value * 10 + (c - '0');
-      digit_count++;
-      if (digit_count > 3 or current_value > 255) {
-        return std::nullopt;
-      }
-    } else {
-      return std::nullopt;
-    }
-  }
-  if (digit_count == 0 or octet_index != 3 or current_value > 255) {
-    return std::nullopt;
-  }
-  octets[3] = static_cast<uint8_t>(current_value);
-  return octets;
-}
-
 /// Creates an STS client configuration with proper endpoint and proxy settings.
 /// Caches environment variable lookups for efficiency.
 auto make_sts_client_config(const std::optional<std::string>& region)
@@ -106,31 +69,6 @@ auto make_sts_client_config(const std::optional<std::string>& region)
     config.endpointOverride = *endpoint_url;
   }
   return config;
-}
-
-/// Extracts the host from a URL for SSRF validation.
-auto extract_host_from_url(std::string_view url) -> std::string_view {
-  // Skip scheme (http:// or https://)
-  auto pos = url.find("://");
-  if (pos != std::string_view::npos) {
-    url = url.substr(pos + 3);
-  }
-  // Remove path, query, and fragment.
-  pos = url.find_first_of("/?#");
-  if (pos != std::string_view::npos) {
-    url = url.substr(0, pos);
-  }
-  // Remove userinfo (user:pass@).
-  pos = url.find('@');
-  if (pos != std::string_view::npos) {
-    url = url.substr(pos + 1);
-  }
-  // Remove port.
-  pos = url.find(':');
-  if (pos != std::string_view::npos) {
-    url = url.substr(0, pos);
-  }
-  return url;
 }
 
 /// Custom credentials provider that automatically refreshes credentials
