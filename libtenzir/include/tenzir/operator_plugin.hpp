@@ -22,7 +22,7 @@ namespace _::operator_plugin {
 using LocatedTypes = detail::tl_concat_t<
   detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
                    as_located>,
-  caf::type_list<located<pipeline>, ast::expression, ast::field_path,
+  caf::type_list<ir::pipeline, ast::expression, ast::field_path,
                  ast::lambda_expr, located<data>>>;
 
 template <class T>
@@ -354,6 +354,16 @@ public:
     desc_.docs = std::move(url);
   }
 
+  template <class F>
+  auto positional(std::string name,
+                  F&& f) {
+
+  using traits = caf::detail::get_callable_trait<F>;
+  using first_arg_type =
+    std::remove_reference_t<detail::tl_head_t<typename traits::arg_types>>;
+    using ValueType = typename caf::detail::callable_trait<std::decay_t<F>>::first_arg;
+  }
+
   template <ArgType T>
   auto positional(std::string name, T Args::* ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
@@ -399,6 +409,30 @@ public:
       make_setter(ptr),
     });
     return Argument<Args, T>{false, index};
+  }
+
+  auto pipeline(ir::pipeline Args::* ptr)
+    -> Argument<Args, ir::pipeline> {
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.positional.push_back(Positional{
+      make_setter(ptr),
+    });
+    return Argument<Args, ir::pipeline>{false, index};
+  }
+
+  auto pipeline(std::optional<ir::pipeline> Args::* ptr)
+    -> Argument<Args, ir::pipeline> {
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.positional.push_back(Positional{
+      make_setter(ptr),
+    });
+    return Argument<Args, ir::pipeline>{false, index};
   }
 
   // TODO
