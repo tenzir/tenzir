@@ -145,7 +145,7 @@ public:
     bridge_ = std::move(*result);
   }
 
-  auto await_task() const -> Task<std::any> override {
+  auto await_task() const -> Task<Any> override {
     if (done_) {
       // TODO: Properly suspend.
       co_await wait_forever();
@@ -154,14 +154,13 @@ public:
     co_return co_await async_mail(atom::get_v).request(bridge_);
   }
 
-  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     // Drain any buffered diagnostics from the bridge
     while (auto diag = diag_queue_->try_dequeue()) {
       ctx.dh().emit(std::move(*diag));
     }
-    auto expected
-      = std::any_cast<caf::expected<table_slice>>(std::move(result));
+    auto expected = std::move(result).as<caf::expected<table_slice>>();
     if (not expected) {
       diagnostic::error(expected.error()).note("from export-bridge").emit(ctx);
       done_ = true;

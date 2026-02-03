@@ -11,6 +11,7 @@
 #include "tenzir/concepts.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/type_traits.hpp"
 
 #include <caf/detail/is_complete.hpp>
 #include <caf/detail/pretty_type_name.hpp>
@@ -21,10 +22,6 @@
 #include <variant>
 
 namespace tenzir {
-
-/// The return type of `std::forward_like<T>(u)`.
-template <class T, class U>
-using forward_like_t = decltype(std::forward_like<T>(std::declval<U>()));
 
 /// The opposite of `std::as_const`, removing `const` qualifiers.
 template <class T>
@@ -382,7 +379,7 @@ auto is(const V& v) -> bool {
 
 /// Extracts a `T` from the given variant, asserting success.
 template <concepts::unqualified T, has_variant_traits V>
-auto as(V&& v) -> forward_like_t<V, T> {
+auto as(V&& v) -> ForwardLike<V, T> {
   using bare = std::remove_cvref_t<V>;
   using traits = variant_traits<std::remove_cvref_t<V>>;
   [[maybe_unused]] const auto current_index = traits::index(v);
@@ -400,7 +397,7 @@ auto as(V&& v) -> forward_like_t<V, T> {
 
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
-auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
+auto try_as(V& v) -> std::remove_reference_t<ForwardLike<V, T>>* {
   using bare = std::remove_cvref_t<V>;
   constexpr auto alternative_index = detail::variant_index<bare, T>;
   // TODO: Otherwise, this should probably return `std::optional`.
@@ -418,7 +415,7 @@ auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
 
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
-auto try_as(V* v) -> std::remove_reference_t<forward_like_t<V, T>>* {
+auto try_as(V* v) -> std::remove_reference_t<ForwardLike<V, T>>* {
   if (not v) {
     return nullptr;
   }

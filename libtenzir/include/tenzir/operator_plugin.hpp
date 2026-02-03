@@ -6,12 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/any.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/ir.hpp"
 
-#include <any>
 #include <mutex>
 #include <span>
 
@@ -38,7 +38,7 @@ template <class T>
 concept ArgType = detail::tl_contains_v<ArgTypes, T>;
 
 template <class T>
-using Setter = std::function<void(std::any&, T)>;
+using Setter = std::function<void(Any&, T)>;
 
 template <class T>
 struct AsSetter : std::type_identity<Setter<T>> {};
@@ -72,7 +72,7 @@ struct Named {
 };
 
 template <class Input, class Output>
-using Spawn = std::function<auto(std::any)->Box<Operator<Input, Output>>>;
+using Spawn = std::function<auto(Any)->Box<Operator<Input, Output>>>;
 
 // Variant for different operator spawn functions (matches AnyOperator).
 using AnySpawn
@@ -100,7 +100,7 @@ public:
 
   std::string name;
   std::string docs;
-  std::any args;
+  Any args;
   std::vector<Positional> positional;
   std::optional<size_t> first_optional;
   std::vector<Named> named;
@@ -158,24 +158,24 @@ auto make_setter(T Args::* ptr) -> auto {
     }
   }))::type;
   if constexpr (std::same_as<T, std::optional<location>>) {
-    return Setter<located<bool>>{[ptr](std::any& args, located<bool> value) {
+    return Setter<located<bool>>{[ptr](Any& args, located<bool> value) {
       if (value.inner) {
-        (&std::any_cast<Args&>(args))->*ptr = value.source;
+        (&args.as<Args>())->*ptr = value.source;
       } else {
-        (&std::any_cast<Args&>(args))->*ptr = std::nullopt;
+        (&args.as<Args>())->*ptr = std::nullopt;
       }
     }};
   } else if constexpr (std::same_as<T, bool>) {
-    return Setter<located<bool>>{[ptr](std::any& args, located<bool> value) {
-      (&std::any_cast<Args&>(args))->*ptr = value.inner;
+    return Setter<located<bool>>{[ptr](Any& args, located<bool> value) {
+      (&args.as<Args>())->*ptr = value.inner;
     }};
   } else if constexpr (argument_parser_bare_type<Value>) {
-    return Setter<located<Value>>{[ptr](std::any& args, located<Value> value) {
-      (&std::any_cast<Args&>(args))->*ptr = std::move(value.inner);
+    return Setter<located<Value>>{[ptr](Any& args, located<Value> value) {
+      (&args.as<Args>())->*ptr = std::move(value.inner);
     }};
   } else {
-    return Setter<Value>{[ptr](std::any& args, Value value) {
-      (&std::any_cast<Args&>(args))->*ptr = std::move(value);
+    return Setter<Value>{[ptr](Any& args, Value value) {
+      (&args.as<Args>())->*ptr = std::move(value);
     }};
   }
 }
@@ -338,9 +338,9 @@ public:
   auto impl() -> void {
     std::invoke(
       [&]<class Input, class Output>(Operator<Input, Output>*) {
-        desc_.spawns.push_back(Spawn<Input, Output>{
-          [](std::any args) -> Box<Operator<Input, Output>> {
-            return Impl{std::any_cast<Args>(std::move(args))};
+        desc_.spawns.push_back(
+          Spawn<Input, Output>{[](Any args) -> Box<Operator<Input, Output>> {
+            return Impl{std::move(args).as<Args>()};
           }});
       },
       static_cast<Impl*>(nullptr));
