@@ -20,10 +20,10 @@ Usage overview:
 - **LOCALSTACK_SQS_QUEUE_SAVE_URL** – Full URL of the save_sqs queue.
 - **LOCALSTACK_ROLE_ARN** – ARN of a test IAM role for assume role tests.
 - **LOCALSTACK_EXTERNAL_ID** – External ID for assume role tests.
-- **LOCALSTACK_SQS_QUEUE_WI_FILE** – SQS queue name for web identity token_file tests.
-- **LOCALSTACK_SQS_QUEUE_WI_FILE_URL** – Full URL of the web identity token_file queue.
-- **LOCALSTACK_SQS_QUEUE_WI_TOKEN** – SQS queue name for web identity direct token tests.
-- **LOCALSTACK_SQS_QUEUE_WI_TOKEN_URL** – Full URL of the web identity direct token queue.
+- **LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE** – SQS queue name for web identity token_file tests.
+- **LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE_URL** – Full URL of the web identity token_file queue.
+- **LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_TOKEN** – SQS queue name for web identity direct token tests.
+- **LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_TOKEN_URL** – Full URL of the web identity direct token queue.
 - **LOCALSTACK_WEB_IDENTITY_ROLE_ARN** – ARN of a test IAM role for web identity tests.
 - **LOCALSTACK_WEB_IDENTITY_TOKEN_FILE** – Path to a file containing a test JWT token.
 - **LOCALSTACK_WEB_IDENTITY_TOKEN** – The test JWT token value (for direct token tests).
@@ -382,10 +382,18 @@ def run() -> Iterator[dict[str, str]]:
             "LOCALSTACK_SQS_QUEUE_ROLE_URL": resources["queues"]["role"]["url"],
             "LOCALSTACK_SQS_QUEUE_SAVE": resources["queues"]["save"]["name"],
             "LOCALSTACK_SQS_QUEUE_SAVE_URL": resources["queues"]["save"]["url"],
-            "LOCALSTACK_SQS_QUEUE_WI_FILE": resources["queues"]["wi_file"]["name"],
-            "LOCALSTACK_SQS_QUEUE_WI_FILE_URL": resources["queues"]["wi_file"]["url"],
-            "LOCALSTACK_SQS_QUEUE_WI_TOKEN": resources["queues"]["wi_token"]["name"],
-            "LOCALSTACK_SQS_QUEUE_WI_TOKEN_URL": resources["queues"]["wi_token"]["url"],
+            "LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE": resources["queues"]["wi_file"][
+                "name"
+            ],
+            "LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE_URL": resources["queues"][
+                "wi_file"
+            ]["url"],
+            "LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_TOKEN": resources["queues"]["wi_token"][
+                "name"
+            ],
+            "LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_TOKEN_URL": resources["queues"][
+                "wi_token"
+            ]["url"],
             # IAM role for assume role tests
             "LOCALSTACK_ROLE_ARN": resources["role_arn"],
             "LOCALSTACK_EXTERNAL_ID": TEST_EXTERNAL_ID,
