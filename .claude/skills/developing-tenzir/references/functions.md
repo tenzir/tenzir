@@ -53,12 +53,12 @@ return function_use::make([expr = std::move(expr)](
       *arg.array,
       [&](const arrow::StringArray& array) -> series {
         auto b = string_type::make_arrow_builder(arrow_memory_pool());
-        for (auto v : values(string_type{}, array)) {
-          if (not v) {
+        for (auto row : values3(array)) {
+          if (not row) {
             check(b->AppendNull());
             continue;
           }
-          check(b->Append(process(*v)));
+          check(b->Append(process(*row)));
         }
         return series{string_type{}, finish(*b)};
       },
@@ -75,7 +75,7 @@ return function_use::make([expr = std::move(expr)](
 ## Key Points
 
 - Use `map_series` with `match` on the array to handle different types
-- Iterate values with `values(type{}, array)` free function
-- Handle nulls explicitly with `if (not v) { check(b->AppendNull()); continue; }`
+- Iterate values with `values3(array)` free function (see [data-access.md](./data-access.md))
+- Handle nulls explicitly with `if (not row) { check(b->AppendNull()); continue; }`
 - Build output using Arrow builders with `check()`
 - Return `series{type, finish(builder)}`

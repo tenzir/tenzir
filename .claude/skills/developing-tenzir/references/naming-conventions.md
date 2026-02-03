@@ -2,34 +2,134 @@
 
 ## Summary Table
 
-| Element          | Convention   | Example                      |
-| ---------------- | ------------ | ---------------------------- |
-| Classes          | `snake_case` | `table_slice`, `record_type` |
-| Structs          | `snake_case` | `actor_state`                |
-| Functions        | `snake_case` | `make_table_slice()`         |
-| Variables        | `snake_case` | `row_count`                  |
-| Constants        | `snake_case` | `default_timeout`            |
-| Template params  | `CamelCase`  | `typename T`, `class Actor`  |
-| Macros           | `UPPER_CASE` | `PROJECT_ERROR`              |
-| Member variables | `name_`      | `buffer_`, `state_`          |
-| Namespaces       | `snake_case` | `namespace project`          |
+| Element              | Convention   | Example                        |
+| -------------------- | ------------ | ------------------------------ |
+| Classes              | `PascalCase` | `TableSlice`, `RecordType`     |
+| Structs              | `PascalCase` | `ActorState`                   |
+| Type aliases         | `PascalCase` | `ValueType`, `Iterator`        |
+| Type traits          | `PascalCase` | `RemoveConst`, `IsHashable`    |
+| Concepts             | `PascalCase` | `Hashable`, `Serializable`     |
+| Functions            | `snake_case` | `make_table_slice()`           |
+| Variables            | `snake_case` | `row_count`                    |
+| Constants            | `snake_case` | `default_timeout`              |
+| Enum members         | `snake_case` | `Color::red`, `Status::ok`     |
+| Template params      | `CamelCase`  | `typename T`, `class Actor`    |
+| Macros               | `UPPER_CASE` | `PROJECT_ERROR`                |
+| Member variables     | `name_`      | `buffer_`, `state_`            |
+| Namespaces           | `snake_case` | `namespace project`            |
+| STL type aliases     | `snake_case` | `value_type`, `iterator`       |
 
-## General Naming
+## Types
 
-All types, functions, and variables use lowercase with underscores:
+All types use PascalCase:
 
 ```cpp
-class table_slice {
+class TableSlice {
   // ...
 };
 
-struct plugin_state {
+struct PluginState {
   // ...
 };
 
-auto make_table_slice(const record& r) -> table_slice;
+using RecordBatch = arrow::RecordBatch;
+```
+
+For multi-letter abbreviations, only capitalize the first letter: `Abc`.
+Consecutive upper letters are allowed if they are not part of the same
+abbreviation: `VTable`.
+
+### Type Aliases
+
+Member type aliases use PascalCase:
+
+```cpp
+class Container {
+public:
+  using ValueType = int;
+  using Pointer = ValueType*;
+  using Reference = ValueType&;
+};
+```
+
+**Exception**: STL-required type aliases use `snake_case` to maintain
+compatibility with standard library algorithms and concepts:
+
+```cpp
+class MyIterator {
+public:
+  // STL-required aliases stay snake_case
+  using value_type = int;
+  using difference_type = std::ptrdiff_t;
+  using pointer = value_type*;
+  using reference = value_type&;
+  using iterator_category = std::forward_iterator_tag;
+
+  // Non-STL aliases use PascalCase
+  using UnderlyingContainer = std::vector<int>;
+};
+```
+
+### Type Traits and Metafunctions
+
+Type traits and metafunctions use PascalCase:
+
+```cpp
+template <class T>
+struct RemoveConstImpl {
+  using Type = T;
+};
+
+template <class T>
+struct RemoveConstImpl<const T> {
+  using Type = T;
+};
+
+template <class T>
+using RemoveConst = typename RemoveConstImpl<T>::Type;
+
+template <class T>
+struct IsHashable : std::false_type {};
+```
+
+### Concepts
+
+Concepts use PascalCase:
+
+```cpp
+template <class T>
+concept Hashable = requires(T x) {
+  { std::hash<T>{}(x) } -> std::convertible_to<std::size_t>;
+};
+
+template <class T>
+concept Serializable = requires(T x, Serializer& s) {
+  { x.serialize(s) } -> std::same_as<void>;
+};
+```
+
+## Functions and Variables
+
+Functions and variables use lowercase with underscores:
+
+```cpp
+auto make_table_slice(const Record& r) -> TableSlice;
 
 auto row_count = slice.rows();
+```
+
+### Enum Members
+
+Enum members use `snake_case`:
+
+```cpp
+enum class Color {
+  red,
+  green,
+  blue,
+};
+
+auto c = Color::red;
 ```
 
 ### Template Parameters
@@ -38,7 +138,7 @@ Use CamelCase:
 
 ```cpp
 template <class T>
-struct my_trait;
+struct MyTrait;
 
 template <class Actor, class... Handlers>
 auto request(Actor& self, Handlers&&... handlers);
@@ -75,13 +175,13 @@ without suffix. For setters, prefer descriptive parameter names that avoid
 shadowing:
 
 ```cpp
-class connection {
+class Connection {
 public:
-  auto timeout() const -> duration {
+  auto timeout() const -> Duration {
     return timeout_;
   }
 
-  void timeout(duration new_timeout) {
+  void timeout(Duration new_timeout) {
     timeout_ = new_timeout;
   }
 
@@ -90,7 +190,7 @@ public:
   }
 
 private:
-  duration timeout_;
+  Duration timeout_;
   std::string name_;
 };
 ```
@@ -102,7 +202,7 @@ use the underscore suffix. These types expose their members directly as part of
 their API:
 
 ```cpp
-struct config {
+struct Config {
   std::string name;
   int timeout;
 };
@@ -112,14 +212,13 @@ struct config {
 
 ### Verbs vs Nouns
 
-- **Types and variables**: Nouns (`table_slice`, `row_count`)
+- **Types and variables**: Nouns (`TableSlice`, `row_count`)
 - **Action functions**: Verbs (`parse()`, `serialize()`, `connect()`)
 - **Getters/setters**: Nouns without `get_`/`set_` prefix (`name()`, `timeout()`)
-- **Metafunctions**: Verbs (`remove_const`, `decay`)
 
 ```cpp
 // Good: verb for action
-void serialize(const table_slice& slice);
+void serialize(const TableSlice& slice);
 
 // Good: noun for getter, no get_ prefix
 auto name() const -> std::string_view;
@@ -148,7 +247,7 @@ for (auto& x : xs) {
 Name return values `result`:
 
 ```cpp
-auto compute_hash(const data& d) -> size_t {
+auto compute_hash(const Data& d) -> size_t {
   auto result = size_t{0};
   // ... computation ...
   return result;
@@ -164,7 +263,7 @@ All code lives in a project namespace:
 ```cpp
 namespace myproject {
 
-class table_slice {
+class TableSlice {
   // ...
 };
 
@@ -179,7 +278,7 @@ Put non-public implementation in `namespace detail`:
 namespace myproject::detail {
 
 // Internal helper, not part of public API
-auto parse_impl(std::string_view input) -> result;
+auto parse_impl(std::string_view input) -> Result;
 
 } // namespace myproject::detail
 ```
@@ -217,7 +316,7 @@ When declaring variables and functions, order specifiers as follows:
 ```cpp
 // Good
 static inline constexpr auto max_size = 1024;
-friend constexpr auto operator<=>(const foo&, const foo&) = default;
+friend constexpr auto operator<=>(const Foo&, const Foo&) = default;
 
 // Bad: wrong order
 constexpr static inline auto max_size = 1024;
