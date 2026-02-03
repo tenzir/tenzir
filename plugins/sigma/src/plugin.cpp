@@ -48,17 +48,17 @@ public:
       -> void {
       auto old_rules = std::exchange(rules, {});
       load_rules(path, ctrl);
-      for (const auto& [path, rule] : rules) {
-        const auto old_rule = old_rules.find(path);
+      for (const auto& [rule_path, rule] : rules) {
+        const auto old_rule = old_rules.find(rule_path);
         if (old_rule == old_rules.end()) {
-          TENZIR_VERBOSE("added Sigma rule {}", path);
+          TENZIR_VERBOSE("added Sigma rule {}", rule_path);
         } else if (old_rule->second != rule) {
-          TENZIR_VERBOSE("updated Sigma rule {}", path);
+          TENZIR_VERBOSE("updated Sigma rule {}", rule_path);
         }
       }
-      for (const auto& [path, _] : old_rules) {
-        if (not rules.contains(path)) {
-          TENZIR_VERBOSE("removed Sigma rule {}", path);
+      for (const auto& [rule_path, _] : old_rules) {
+        if (not rules.contains(rule_path)) {
+          TENZIR_VERBOSE("removed Sigma rule {}", rule_path);
         }
       }
     }
