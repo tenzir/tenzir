@@ -52,3 +52,6 @@ CLAUDE-TODOS.md
 # SBOM artifacts
 /tenzir.spdx.json
 .reviews/
+
+# Files created by the workaround of the Claude plugins bug
+.claude/*/dev:*
