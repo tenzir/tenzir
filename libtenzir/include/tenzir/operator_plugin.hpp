@@ -100,7 +100,7 @@ public:
 
   std::string name;
   std::string docs;
-  Any args;
+  std::function<Any()> make_args;
   std::vector<Positional> positional;
   std::optional<size_t> first_optional;
   std::vector<Named> named;
@@ -323,13 +323,17 @@ class Describer {
 public:
   explicit Describer(std::string docs = "") {
     desc_.docs = std::move(docs);
-    desc_.args = Args{};
+    desc_.make_args = []() -> Any {
+      return Args{};
+    };
     (impl<Impls>(), ...);
   }
 
   explicit Describer(Args initial, std::string docs = "") {
     desc_.docs = std::move(docs);
-    desc_.args = std::move(initial);
+    desc_.make_args = [initial = std::move(initial)]() -> Any {
+      return initial;
+    };
     (impl<Impls>(), ...);
   }
 

@@ -269,7 +269,7 @@ public:
   }
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
-    auto args = desc_->args;
+    auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
         std::move(arg),
