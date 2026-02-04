@@ -13,6 +13,8 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <map>
+
 namespace tenzir::_::operator_plugin {
 
 /// Wraps a diagnostic_handler to track whether any errors were emitted.
@@ -182,17 +184,51 @@ public:
   static auto make(SharedDescription desc, ast::entity op,
                    std::vector<ast::expression> args, compile_ctx ctx)
     -> failure_or<GenericIr> {
+    auto result = GenericIr{};
+    result.op_ = std::move(op);
+    // First pass: identify and compile pipeline args with let bindings.
+    // This also creates the let_ids that the operator will use.
+    {
+      auto positional_idx = size_t{0};
+      for (auto& arg : args) {
+        if (not is<ast::assignment>(arg)) {
+          if (positional_idx < desc->positional.size()) {
+            const auto& pos = desc->positional[positional_idx];
+            if (not pos.let_bindings.empty()) {
+              // Pipeline argument with let bindings.
+              auto* pipe_expr = try_as<ast::pipeline_expr>(arg);
+              if (pipe_expr) {
+                // Open a scope and create let bindings.
+                auto scope = ctx.open_scope();
+                for (const auto& binding : pos.let_bindings) {
+                  auto id = scope.let(binding.name);
+                  // Capture the setter and id to apply later during spawn.
+                  result.let_id_setters_.push_back(
+                    [setter = binding.setter, id](std::any& args_ref) {
+                      setter(args_ref, id);
+                    });
+                }
+                // Compile the pipeline with the scope.
+                TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+                result.compiled_pipelines_[positional_idx] = std::move(pipe_ir);
+              }
+            }
+          }
+          ++positional_idx;
+        }
+      }
+    }
+    // Bind non-pipeline arguments.
     for (auto& arg : args) {
-      // TODO: This assumes that there are no subpipelines...
-      TRY(arg.bind(ctx));
+      if (is<ast::assignment>(arg) or not is<ast::pipeline_expr>(arg)) {
+        TRY(arg.bind(ctx));
+      }
     }
     auto failed = false;
     auto emit = [&](diagnostic_builder d) {
       failed = true;
       std::move(d).usage(get_usage(*desc)).docs(desc->docs).emit(ctx);
     };
-    auto result = GenericIr{};
-    result.op_ = std::move(op);
     // Track which named arguments have been found.
     auto named_found = std::vector<std::optional<location>>(desc->named.size());
     // Parse arguments, separating positional from named.
@@ -236,7 +272,16 @@ public:
           emit(diagnostic::error("too many positional arguments").primary(arg));
           continue;
         }
-        result.args_.push_back(Incomplete{std::move(arg)});
+        // Check if this positional was pre-compiled (pipeline with let bindings).
+        if (auto it = result.compiled_pipelines_.find(positional_idx);
+            it != result.compiled_pipelines_.end()) {
+          // Store the pre-compiled pipeline directly.
+          result.args_.push_back(
+            located{std::move(it->second), arg.get_location()});
+          result.compiled_pipelines_.erase(it);
+        } else {
+          result.args_.push_back(Incomplete{std::move(arg)});
+        }
         ++positional_idx;
       }
     }
@@ -292,6 +337,11 @@ public:
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
     auto args = desc_->make_args();
+    // Apply let_id setters from pre-compiled pipelines.
+    // TODO: already done in make_args()?
+    for (auto& setter : let_id_setters_) {
+      setter(args);
+    }
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
         std::move(arg),
@@ -485,6 +535,12 @@ private:
 
   /// The object describing the available parameters.
   SharedDescription desc_;
+
+  /// Pre-compiled pipelines (used during make() before moving to args_).
+  std::map<size_t, ir::pipeline> compiled_pipelines_;
+
+  /// Let ID setters to apply during spawn().
+  std::vector<std::function<void(std::any&)>> let_id_setters_;
 };
 
 auto OperatorPlugin::compile(ast::invocation inv, compile_ctx ctx) const

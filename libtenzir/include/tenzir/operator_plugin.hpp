@@ -11,6 +11,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/let_id.hpp"
 
 #include <mutex>
 #include <span>
@@ -47,14 +48,29 @@ using Setters = detail::tl_map_t<LocatedTypes, AsSetter>;
 
 using AnySetter = detail::tl_apply_t<Setters, variant>;
 
+/// Specification for a let binding to inject into a subpipeline.
+struct LetBinding {
+  std::string name;
+  std::function<void(std::any&, let_id)> setter;
+};
+
 struct Positional {
   Positional(std::string name, std::string type, AnySetter setter)
     : name{std::move(name)}, type{std::move(type)}, setter{std::move(setter)} {
   }
 
+  Positional(std::string name, std::string type, AnySetter setter,
+             std::vector<LetBinding> let_bindings)
+    : name{std::move(name)},
+      type{std::move(type)},
+      setter{std::move(setter)},
+      let_bindings{std::move(let_bindings)} {
+  }
+
   std::string name;
   std::string type;
   AnySetter setter;
+  std::vector<LetBinding> let_bindings;
 };
 
 struct Named {
@@ -421,6 +437,33 @@ public:
       "body",
       "{ … }",
       make_setter(ptr),
+    });
+    return Argument<Args, located<ir::pipeline>>{false, index};
+  }
+
+  /// Pipeline with let bindings that are injected into the subpipeline.
+  ///
+  /// Usage: `d.pipeline(&Args::pipe, {{"var_name", &Args::var_let_id}, ...})`
+  auto pipeline(
+    ir::pipeline Args::* ptr,
+    std::initializer_list<std::pair<const char*, let_id Args::*>> bindings)
+    -> Argument<Args, located<ir::pipeline>> {
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    auto let_bindings = std::vector<LetBinding>{};
+    for (const auto& [name, member_ptr] : bindings) {
+      let_bindings.push_back(
+        {std::string{name}, [member_ptr](std::any& args, let_id id) {
+           (&std::any_cast<Args&>(args))->*member_ptr = id;
+         }});
+    }
+    desc_.positional.push_back(Positional{
+      "body",
+      "{ … }",
+      make_setter(ptr),
+      std::move(let_bindings),
     });
     return Argument<Args, located<ir::pipeline>>{false, index};
   }

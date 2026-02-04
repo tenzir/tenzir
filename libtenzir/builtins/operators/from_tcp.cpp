@@ -37,6 +37,7 @@ constexpr auto kListenBacklog = uint32_t{128};
 struct FromTcpArgs {
   located<std::string> endpoint;
   ir::pipeline user_pipeline;
+  let_id peer_info;
 };
 
 class FromTcpListener final : public Operator<void, table_slice> {
@@ -132,14 +133,12 @@ private:
             OpenPipeline<chunk_ptr> pipeline, diagnostic_handler& dh)
     -> Task<void> {
     auto io_executor = folly::getGlobalIOExecutor();
-    TENZIR_DEBUG("from_tcp[{}]: starting read loop", conn_id);
     while (true) {
       // Read with timeout - allows periodic cancellation checks
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
       try {
         // TODO: check if we really need the timeout.
-        // TODO: check whether read support cancellation.
         bytes = co_await transport->read(
           buf, 1, kBufferSize,
           std::chrono::duration_cast<std::chrono::milliseconds>(kReadTimeout));
@@ -148,15 +147,12 @@ private:
           // Timeout is expected - continue to check cancellation
           continue;
         }
-        // TODO: demote or convert to diagnostic.
         diagnostic::warning("{}", e).emit(dh);
         co_return;
       }
       if (bytes == 0) {
-        TENZIR_DEBUG("from_tcp[{}]: EOF, client closed connection", conn_id);
         break;
       }
-      TENZIR_DEBUG("from_tcp[{}]: read {} bytes", conn_id, bytes);
       // Convert IOBuf to chunk
       auto iobuf = buf.move();
       auto data = std::vector<std::byte>{};
@@ -190,9 +186,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<FromTcpArgs, FromTcpListener>{};
     auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
-    // TODO: Add peer_info binding once pipeline variable bindings are supported.
-    d.pipeline(&FromTcpArgs::user_pipeline);
-
+    d.pipeline(&FromTcpArgs::user_pipeline,
+               {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
       if (auto ep_str = ctx.get(endpoint_arg)) {
         auto ep = to<struct endpoint>(ep_str->inner);
