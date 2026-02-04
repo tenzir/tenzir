@@ -143,28 +143,10 @@ using variant_alternative = std::remove_cvref_t<
   decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(
     std::declval<V>()))>;
 
-template <typename T>
-consteval static std::string_view type_name_of() {
-#if defined _WIN32
-  constexpr std::string_view s = __FUNCTION__;
-  const auto begin_search = s.find_first_of("<");
-  const auto space = s.find(' ', begin_search);
-  const auto begin_type = space != s.npos ? space + 1 : begin_search + 1;
-  const auto end_type = s.find_last_of(">");
-  return s.substr(begin_type, end_type - begin_type);
-#elif defined __GNUC__
-  constexpr std::string_view s = __PRETTY_FUNCTION__;
-  constexpr std::string_view t_equals = "T = ";
-  const auto begin_type = s.find(t_equals) + t_equals.size();
-  const auto end_type = s.find_first_of(";]", begin_type);
-  return s.substr(begin_type, end_type - begin_type);
-#endif
-}
-
 template <has_variant_traits V, size_t... Is>
 consteval auto make_name_table(std::index_sequence<Is...>)
   -> std::array<std::string_view, sizeof...(Is)> {
-  return std::array{type_name_of<variant_alternative<V, Is>>()...};
+  return std::array{type_name<variant_alternative<V, Is>>()...};
 }
 
 /// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.

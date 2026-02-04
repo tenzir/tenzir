@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -13,7 +13,6 @@
 
 #include <memory>
 #include <type_traits>
-#include <typeinfo>
 #include <utility>
 
 namespace tenzir {
@@ -51,10 +50,9 @@ public:
       return std::forward_like<Self>(holder->value);
     }
     if (not self.ptr_) {
-      panic("as<{}>() called on empty Any", typeid(T).name());
+      panic("as<{}>() called on empty Any", type_name<T>());
     }
-    panic("as<{}>() called but Any contains {}", typeid(T).name(),
-          typeid(*self.ptr_).name());
+    panic("as<{}>() called on Any with different type", type_name<T>());
   }
 
   /// Returns a pointer to the contained value, or nullptr if empty or type

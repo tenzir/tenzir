@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/any.hpp"
@@ -58,9 +58,8 @@ TEST("self-move assignment") {
   Any a{42};
   auto* ptr = &a;
   *ptr = std::move(a);
-  // After self-move, behavior is implementation-defined but should not crash.
-  // unique_ptr self-move leaves the pointer valid.
-  CHECK(true);
+  // unique_ptr self-move is well-defined: target.reset(source.release())
+  CHECK_EQUAL(a.as<int>(), 42);
 }
 
 TEST("reset via move assignment from empty") {
@@ -118,32 +117,32 @@ TEST("move value out via rvalue as") {
   CHECK(a.try_as<std::string>() != nullptr);
 }
 
-namespace {
-
-int destruction_count = 0;
-
-struct destruction_tracker {
-  ~destruction_tracker() {
-    ++destruction_count;
-  }
-};
-
-} // namespace
-
 TEST("destruction tracking") {
-  destruction_count = 0;
+  int count = 0;
+  struct Tracker {
+    int* count;
+    ~Tracker() {
+      ++(*count);
+    }
+  };
   {
-    Any a{destruction_tracker{}};
+    Any a{Tracker{&count}};
     // One destruction from the temporary
   }
   // One destruction when Any goes out of scope
-  CHECK_EQUAL(destruction_count, 2);
+  CHECK_EQUAL(count, 2);
 }
 
 TEST("destruction on reassignment") {
-  destruction_count = 0;
-  Any a{destruction_tracker{}};
-  auto count_after_construction = destruction_count;
+  int count = 0;
+  struct Tracker {
+    int* count;
+    ~Tracker() {
+      ++(*count);
+    }
+  };
+  Any a{Tracker{&count}};
+  auto count_after_construction = count;
   a = Any{42};
-  CHECK_EQUAL(destruction_count, count_after_construction + 1);
+  CHECK_EQUAL(count, count_after_construction + 1);
 }
