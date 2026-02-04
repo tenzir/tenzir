@@ -23,4 +23,5 @@ fi
 target=${1:-tenzir}
 shift 2>/dev/null || true
 
-exec cmake --build "$build_dir" --target "$target" "$@"
+cmake --build "$build_dir" --target "$target" "$@"
+echo "=== BUILD SUCCESS ==="
