@@ -55,9 +55,9 @@ public:
   explicit Sample(SampleArgs args)
     : args_{std::move(args)}, last_{std::chrono::steady_clock::now()} {
     if (args_.mode_str) {
-      // TODO: Validation in describe() emits a diagnostic but doesn't prevent
-      // construction. Use value_or() defensively until that's fixed.
-      fn_ = from_string<mode>(*args_.mode_str).value_or(mode::ln);
+      auto parsed = from_string<mode>(*args_.mode_str);
+      TENZIR_ASSERT(parsed);
+      fn_ = *parsed;
     }
   }
 
