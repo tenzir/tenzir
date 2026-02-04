@@ -64,6 +64,8 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
+      run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
+      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -151,6 +153,7 @@ jobs:
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
@@ -158,6 +161,7 @@ jobs:
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
+            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir=true" >> $GITHUB_OUTPUT;'
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
@@ -207,6 +211,11 @@ jobs:
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
+          run_if_changed tenzir-nix \
+            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
+            ".github/workflows/nix.nu" \
+            ".github/workflows/nix.yaml" \
+            ".github/workflows/nix-config-base.json"
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-tenzir == 'true'
@@ -355,6 +364,7 @@ jobs:
 
   tenzir-static-aarch64-linux:
     name: Nix
+    if: needs.configure.outputs.run-tenzir-nix == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubicloud-standard-4-arm
@@ -365,6 +375,7 @@ jobs:
 
   tenzir-static-x86_64-linux:
     name: Nix
+    if: needs.configure.outputs.run-tenzir-nix == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubuntu-latest
@@ -375,6 +386,7 @@ jobs:
 
   tenzir-static-arm64-darwin:
     name: Nix
+    if: needs.configure.outputs.run-tenzir-nix == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: macos-15
