@@ -179,7 +179,7 @@ struct SubPipeline {
 using AnySubpipeline = variant<SubPipeline<void>, SubPipeline<table_slice>>;
 
 template <class Input, class Output>
-class Runner final : private SubManager {
+class Runner final : private OpCtxImpl {
 public:
   Runner(Box<Operator<Input, Output>> op,
          Box<Pull<OperatorMsg<Input>>> pull_upstream,
@@ -204,7 +204,17 @@ public:
     auto guard = detail::scope_guard{[] noexcept {
       TENZIR_WARN("returning from operator runner");
     }};
-    co_await queue_.activate(run());
+    co_await queue_.activate([&] -> Task<void> {
+      // TODO: Figure out where exactly the operator scope is and move this.
+      co_await async_scope([&](AsyncScope& operator_scope) -> Task<void> {
+        TENZIR_ASSERT(not operator_scope_);
+        operator_scope_ = &operator_scope;
+        auto guard = detail::scope_guard{[&] noexcept {
+          operator_scope_ = nullptr;
+        }};
+        co_await run();
+      });
+    });
   }
 
 private:
@@ -329,6 +339,11 @@ private:
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
         return OpenPipeline<In>{*subpipeline.push};
       });
+  }
+
+  auto spawn_task(Task<void> task) -> AsyncHandle<void> override {
+    TENZIR_ASSERT(operator_scope_);
+    return operator_scope_->spawn(std::move(task));
   }
 
   auto run() -> Task<void> {
@@ -523,6 +538,12 @@ private:
 
   // TODO: Better map type.
   std::unordered_map<data, AnySubpipeline> subpipelines_;
+
+  /// Scope used for tasks spawned by the inner operator implementation.
+  ///
+  /// This scope can be smaller than the `queue_` scope because the outer
+  /// framing is even kept alive after the operator itself finished.
+  AsyncScope* operator_scope_ = nullptr;
 
   QueueScope<variant<AnyWrapper, OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
@@ -783,11 +804,11 @@ auto run_open_pipeline(OperatorChain<void, Output> pipeline,
 
 auto OpCtx::spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
   -> Task<AnyOpenPipeline> {
-  return sub_manager_.spawn_sub(std::move(key), std::move(pipe), input);
+  return impl_.spawn_sub(std::move(key), std::move(pipe), input);
 }
 
 auto OpCtx::get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> {
-  return sub_manager_.get_sub(key);
+  return impl_.get_sub(key);
 }
 
 template <class T>

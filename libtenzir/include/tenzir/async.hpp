@@ -44,6 +44,7 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/push_pull.hpp"
+#include "tenzir/async/scope.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/box.hpp"
@@ -347,7 +348,7 @@ private:
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<table_slice>>;
 
-class SubManager {
+class OpCtxImpl {
 public:
   virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline>
@@ -355,14 +356,17 @@ public:
 
   virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
 
+  // TODO: Change `void` to `Any`.
+  virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
+
 protected:
-  ~SubManager() = default;
+  ~OpCtxImpl() = default;
 };
 
 class OpCtx {
 public:
-  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, SubManager& sub_manager)
-    : sys_{sys}, dh_{dh}, reg_{global_registry()}, sub_manager_{sub_manager} {
+  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, OpCtxImpl& impl)
+    : sys_{sys}, dh_{dh}, reg_{global_registry()}, impl_{impl} {
   }
 
   virtual ~OpCtx() = default;
@@ -406,11 +410,31 @@ public:
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline>;
 
+  auto spawn_task(Task<void> task) -> AsyncHandle<void> {
+    return impl_.spawn_task(std::move(task));
+  }
+
+  template <class Awaitable>
+    requires std::is_void_v<folly::coro::semi_await_result_t<Awaitable>>
+  auto spawn_task(Awaitable&& awaitable) -> AsyncHandle<void> {
+    return spawn_task(
+      [awaitable = std::forward<Awaitable>(awaitable)] mutable -> Task<void> {
+        co_await std::move(awaitable);
+      });
+  }
+
+  template <class F>
+    requires std::is_void_v<
+      folly::coro::semi_await_result_t<std::invoke_result_t<F>>>
+  auto spawn_task(F f) -> AsyncHandle<void> {
+    return spawn_task(folly::coro::co_invoke(std::move(f)));
+  }
+
 private:
   caf::actor_system& sys_;
   diagnostic_handler& dh_;
   std::shared_ptr<const registry> reg_;
-  SubManager& sub_manager_;
+  OpCtxImpl& impl_;
 };
 
 enum class OperatorState {
