@@ -1,0 +1,6 @@
+error: `period` must be a positive duration
+ --> tests/operators/sample/negative_period.tql:6:8
+  |
+6 | sample -1s
+  |        ^^^ 
+  |

@@ -15,6 +15,28 @@
 
 namespace tenzir::_::operator_plugin {
 
+/// Wraps a diagnostic_handler to track whether any errors were emitted.
+class error_tracking_handler : public diagnostic_handler {
+public:
+  explicit error_tracking_handler(diagnostic_handler& inner) : inner_{&inner} {
+  }
+
+  void emit(diagnostic d) override {
+    if (d.severity == severity::error) {
+      had_error_ = true;
+    }
+    inner_->emit(std::move(d));
+  }
+
+  auto had_error() const -> bool {
+    return had_error_;
+  }
+
+private:
+  diagnostic_handler* inner_;
+  bool had_error_ = false;
+};
+
 /// A shared handle to a `Description` object that is also inspectable.
 class SharedDescription {
 public:
@@ -410,8 +432,13 @@ public:
     }
     // Run custom validation if provided.
     if (desc_->validator) {
-      auto validate_ctx = ValidateCtx{args_, named_args_, *desc_, ctx};
+      auto error_tracker = error_tracking_handler{ctx};
+      auto validate_ctx
+        = ValidateCtx{args_, named_args_, *desc_, error_tracker};
       (*desc_->validator)(validate_ctx);
+      if (error_tracker.had_error()) {
+        return failure::promise();
+      }
     }
     for (auto& expr : filter_) {
       TRY(expr.substitute(ctx));
