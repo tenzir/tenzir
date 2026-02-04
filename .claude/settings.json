@@ -3,8 +3,9 @@
     "allow": [
       "Skill(compile)",
       "Bash(ls:*)",
-      "Bash(*/bin/tenzir-test)",
-      "Bash(*/bin/tenzir-test *)",
+      "Bash(tenzir:*)",
+      "Bash(tenzir-node:*)",
+      "Bash(tenzir-test:*)",
       "Bash(uvx tenzir-test:*)"
     ]
   },

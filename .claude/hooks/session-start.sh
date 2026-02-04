@@ -12,8 +12,9 @@ if [ -n "$BUILD_DIR" ]; then
 export BUILD_DIR="$ABS_BUILD_DIR"
 export TENZIR_BINARY="$ABS_BUILD_DIR/bin/tenzir"
 export TENZIR_NODE_BINARY="$ABS_BUILD_DIR/bin/tenzir-node"
+export PATH="$ABS_BUILD_DIR/bin:\$PATH"
 EOF
   fi
 
-  echo "Build directory: $BUILD_DIR"
+  echo "Added build directory to PATH ($BUILD_DIR)"
 fi
