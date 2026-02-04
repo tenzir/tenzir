@@ -88,7 +88,7 @@ auto setter_to_type_string(const AnySetter& setter) -> std::string {
         return "number";
       } else if constexpr (std::same_as<T, bool>) {
         return "bool";
-      } else if constexpr (std::same_as<T, tenzir::pipeline>) {
+      } else if constexpr (std::same_as<T, ir::pipeline>) {
         return "{ … }";
       } else if constexpr (std::same_as<T, data>) {
         return "any";
@@ -401,7 +401,7 @@ public:
             [&](const Setter<located<data>>&) -> failure_or<Arg> {
               TENZIR_TODO();
             },
-            [&](const Setter<located<tenzir::pipeline>>&) -> failure_or<Arg> {
+            [&](const Setter<located<ir::pipeline>>&) -> failure_or<Arg> {
               TENZIR_TODO();
             },
             [&]<class T>(const Setter<T>&) -> failure_or<Arg> {

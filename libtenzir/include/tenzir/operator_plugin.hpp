@@ -22,7 +22,7 @@ namespace _::operator_plugin {
 using LocatedTypes = detail::tl_concat_t<
   detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
                    as_located>,
-  caf::type_list<ir::pipeline, ast::expression, ast::field_path,
+  caf::type_list<located<ir::pipeline>, ast::expression, ast::field_path,
                  ast::lambda_expr, located<data>>>;
 
 template <class T>
@@ -173,6 +173,12 @@ auto make_setter(T Args::* ptr) -> auto {
     return Setter<located<Value>>{[ptr](Any& args, located<Value> value) {
       (&args.as<Args>())->*ptr = std::move(value.inner);
     }};
+  } else if constexpr (std::same_as<Value, ir::pipeline>) {
+    // Pipeline arguments come as located<ir::pipeline>, extract the inner value.
+    return Setter<located<ir::pipeline>>{
+      [ptr](std::any& args, located<ir::pipeline> value) {
+        (&std::any_cast<Args&>(args))->*ptr = std::move(value.inner);
+      }};
   } else {
     return Setter<Value>{[ptr](Any& args, Value value) {
       (&args.as<Args>())->*ptr = std::move(value);
@@ -405,27 +411,32 @@ public:
     return Argument<Args, T>{false, index};
   }
 
-  auto pipeline(ir::pipeline Args::* ptr) -> Argument<Args, ir::pipeline> {
+  auto pipeline(ir::pipeline Args::* ptr)
+    -> Argument<Args, located<ir::pipeline>> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
     auto index = desc_.positional.size();
     desc_.positional.push_back(Positional{
+      "body",
+      "{ … }",
       make_setter(ptr),
     });
-    return Argument<Args, ir::pipeline>{false, index};
+    return Argument<Args, located<ir::pipeline>>{false, index};
   }
 
   auto pipeline(std::optional<ir::pipeline> Args::* ptr)
-    -> Argument<Args, ir::pipeline> {
+    -> Argument<Args, located<ir::pipeline>> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
     auto index = desc_.positional.size();
     desc_.positional.push_back(Positional{
+      "body",
+      "{ … }",
       make_setter(ptr),
     });
-    return Argument<Args, ir::pipeline>{false, index};
+    return Argument<Args, located<ir::pipeline>>{false, index};
   }
 
   // TODO
