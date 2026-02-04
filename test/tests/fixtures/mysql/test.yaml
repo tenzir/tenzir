@@ -1,0 +1,3 @@
+suite: mysql-fixture
+fixtures: [mysql]
+timeout: 180
