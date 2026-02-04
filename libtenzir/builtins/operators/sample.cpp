@@ -21,6 +21,9 @@ TENZIR_ENUM(mode, ln, log2, log10, sqrt);
 
 namespace {
 
+constexpr auto default_period = std::chrono::seconds(30);
+constexpr uint64_t default_min_events = 30;
+
 struct operator_args {
   mode fn{};
   std::optional<located<duration>> period{
@@ -41,9 +44,8 @@ struct operator_args {
 
 struct SampleArgs {
   std::optional<std::string> mode_str;
-  mode fn = mode::ln;
-  duration period = std::chrono::seconds(30);
-  std::optional<uint64_t> min_events = 30;
+  duration period = default_period;
+  std::optional<uint64_t> min_events;
   std::optional<uint64_t> max_rate;
   std::optional<uint64_t> max_samples;
 };
@@ -55,14 +57,14 @@ public:
     if (args_.mode_str) {
       // TODO: Validation in describe() emits a diagnostic but doesn't prevent
       // construction. Use value_or() defensively until that's fixed.
-      args_.fn = from_string<mode>(*args_.mode_str).value_or(mode::ln);
+      fn_ = from_string<mode>(*args_.mode_str).value_or(mode::ln);
     }
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    const auto min_events = args_.min_events.value_or(30);
+    const auto min_events = args_.min_events.value_or(default_min_events);
     if (auto now = std::chrono::steady_clock::now();
         now - last_ > args_.period) {
       if (count_ > 1 && count_ > min_events) {
@@ -100,7 +102,7 @@ public:
 
 private:
   auto compute_rate() const -> double {
-    switch (args_.fn) {
+    switch (fn_) {
       case mode::ln:
         return std::log(count_);
       case mode::log2:
@@ -124,10 +126,9 @@ private:
     return finish(*b);
   }
 
-  // Immutable (from args)
   SampleArgs args_;
+  mode fn_ = mode::ln;
 
-  // Mutable state (for snapshot)
   std::chrono::steady_clock::time_point last_;
   uint64_t count_ = 0;
   int64_t offset_ = 0;
@@ -317,25 +318,27 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<SampleArgs, Sample>{};
-    auto period_arg = d.positional("period", &SampleArgs::period);
+    auto period_arg = d.optional_positional("period", &SampleArgs::period);
     auto mode_arg = d.named("mode", &SampleArgs::mode_str);
     d.named("min_events", &SampleArgs::min_events);
     d.named("max_rate", &SampleArgs::max_rate);
     d.named("max_samples", &SampleArgs::max_samples);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      TRY(auto period, ctx.get(period_arg));
-      if (period <= duration::zero()) {
-        diagnostic::error("`period` must be a positive duration")
-          .primary(ctx.get_location(period_arg).value())
-          .emit(ctx);
+      if (auto period = ctx.get(period_arg)) {
+        if (*period <= duration::zero()) {
+          diagnostic::error("`period` must be a positive duration")
+            .primary(ctx.get_location(period_arg).value())
+            .emit(ctx);
+        }
       }
-      TRY(auto mode_value, ctx.get(mode_arg));
-      if (not from_string<mode>(mode_value)) {
-        diagnostic::error("unsupported `mode`: {}", mode_value)
-          .hint(
-            R"(`mode` must be one of `"ln"`, `"log2"`, `"log10"` or `"sqrt"`)")
-          .primary(ctx.get_location(mode_arg).value())
-          .emit(ctx);
+      if (auto mode_value = ctx.get(mode_arg)) {
+        if (not from_string<mode>(*mode_value)) {
+          diagnostic::error("unsupported `mode`: {}", *mode_value)
+            .hint(
+              R"(`mode` must be one of `"ln"`, `"log2"`, `"log10"` or `"sqrt"`)")
+            .primary(ctx.get_location(mode_arg).value())
+            .emit(ctx);
+        }
       }
       return {};
     });
