@@ -341,7 +341,7 @@ private:
       });
   }
 
-  auto spawn_task(Task<std::any> task) -> AsyncHandle<std::any> override {
+  auto spawn_task(Task<void> task) -> AsyncHandle<void> override {
     TENZIR_ASSERT(operator_scope_);
     return operator_scope_->spawn(std::move(task));
   }

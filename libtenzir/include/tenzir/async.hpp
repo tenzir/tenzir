@@ -356,7 +356,8 @@ public:
 
   virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
 
-  virtual auto spawn_task(Task<std::any> task) -> AsyncHandle<std::any> = 0;
+  // TODO: Change `void` to `Any`.
+  virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
 
 protected:
   ~OpCtxImpl() = default;
@@ -409,26 +410,24 @@ public:
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline>;
 
-  // TODO: AsyncHandle?
-  auto spawn_task(Task<std::any> task) -> void {
-    impl_.spawn_task(std::move(task));
+  auto spawn_task(Task<void> task) -> AsyncHandle<void> {
+    return impl_.spawn_task(std::move(task));
   }
 
-  template <class T>
-  auto spawn_task(Task<T> task) -> void {
-    spawn_task([task = std::move(task)] mutable -> Task<std::any> {
-      if constexpr (std::same_as<T, void>) {
-        co_await std::move(task);
-        co_return std::monostate{};
-      } else {
-        co_return co_await std::move(task);
-      }
-    });
+  template <class Awaitable>
+    requires std::is_void_v<folly::coro::semi_await_result_t<Awaitable>>
+  auto spawn_task(Awaitable&& awaitable) -> AsyncHandle<void> {
+    return spawn_task(
+      [awaitable = std::forward<Awaitable>(awaitable)] mutable -> Task<void> {
+        co_await std::move(awaitable);
+      });
   }
 
   template <class F>
-  auto spawn_task(F f) -> void {
-    spawn_task(folly::coro::co_invoke(std::move(f)));
+    requires std::is_void_v<
+      folly::coro::semi_await_result_t<std::invoke_result_t<F>>>
+  auto spawn_task(F f) -> AsyncHandle<void> {
+    return spawn_task(folly::coro::co_invoke(std::move(f)));
   }
 
 private:
