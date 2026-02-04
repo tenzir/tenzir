@@ -430,6 +430,7 @@ public:
       TRY(substitute_arg(named_arg.value, desc_->named[named_arg.index].setter,
                          true));
     }
+    // TODO: Substitute subpipeline IR.
     // Run custom validation if provided.
     if (desc_->validator) {
       auto error_tracker = error_tracking_handler{ctx};

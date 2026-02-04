@@ -354,15 +354,9 @@ public:
     desc_.docs = std::move(url);
   }
 
-  template <class F>
-  auto positional(std::string name,
-                  F&& f) {
-
-  using traits = caf::detail::get_callable_trait<F>;
-  using first_arg_type =
-    std::remove_reference_t<detail::tl_head_t<typename traits::arg_types>>;
-    using ValueType = typename caf::detail::callable_trait<std::decay_t<F>>::first_arg;
-  }
+  // TODO: Implement callable-based positional for custom type transformations.
+  // template <class F>
+  // auto positional(std::string name, F&& f);
 
   template <ArgType T>
   auto positional(std::string name, T Args::* ptr,
@@ -411,8 +405,7 @@ public:
     return Argument<Args, T>{false, index};
   }
 
-  auto pipeline(ir::pipeline Args::* ptr)
-    -> Argument<Args, ir::pipeline> {
+  auto pipeline(ir::pipeline Args::* ptr) -> Argument<Args, ir::pipeline> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }

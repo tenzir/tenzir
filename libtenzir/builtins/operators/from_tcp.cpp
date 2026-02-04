@@ -34,18 +34,33 @@ constexpr auto kReadTimeout = std::chrono::seconds{1};
 constexpr auto kBufferSize = size_t{65536};
 constexpr auto kListenBacklog = uint32_t{128};
 
+struct FromTcpArgs {
+  located<std::string> endpoint;
+  ir::pipeline user_pipeline;
+};
+
 class FromTcpListener final : public Operator<void, table_slice> {
 public:
   struct Connection {
     std::shared_ptr<folly::coro::Transport> transport;
   };
 
-  FromTcpListener(folly::SocketAddress address, ir::pipeline user_pipeline)
-    : address_{std::move(address)}, user_pipeline_{std::move(user_pipeline)} {
+  FromTcpListener(FromTcpArgs args)
+    : user_pipeline_{std::move(args.user_pipeline)} {
+    // Parse endpoint string to SocketAddress (validation already done in
+    // describe)
+    auto ep = to<struct endpoint>(args.endpoint.inner);
+    TENZIR_ASSERT(ep);
+    TENZIR_ASSERT(ep->port);
+    if (ep->host.empty()) {
+      address_.setFromLocalPort(ep->port->number());
+    } else {
+      address_.setFromHostPort(ep->host, ep->port->number());
+    }
   }
 
   FromTcpListener(FromTcpListener&&) = default;
-  FromTcpListener& operator=(FromTcpListener&&)  noexcept = default;
+  FromTcpListener& operator=(FromTcpListener&&) noexcept = default;
   ~FromTcpListener() override = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -61,8 +76,7 @@ public:
   auto await_task() const -> Task<std::any> override {
     TENZIR_VERBOSE("from_tcp: waiting for connection");
     auto transport = co_await folly::coro::co_withExecutor(
-      folly::getGlobalIOExecutor(),
-      server_->accept());
+      folly::getGlobalIOExecutor(), server_->accept());
     TENZIR_INFO("from_tcp: accepted connection from {}",
                 transport->getPeerAddress().describe());
     // Wrap in shared_ptr because std::any requires copyable types
@@ -127,8 +141,7 @@ private:
         // TODO: check whether read support cancellation.
         bytes = co_await transport->read(
           buf, 1, kBufferSize,
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-            kReadTimeout));
+          std::chrono::duration_cast<std::chrono::milliseconds>(kReadTimeout));
       } catch (const folly::AsyncSocketException& e) {
         if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
           // Timeout is expected - continue to check cancellation
@@ -139,8 +152,7 @@ private:
         co_return;
       }
       if (bytes == 0) {
-        TENZIR_DEBUG("from_tcp[{}]: EOF, client closed connection",
-                       conn_id);
+        TENZIR_DEBUG("from_tcp[{}]: EOF, client closed connection", conn_id);
         break;
       }
       TENZIR_DEBUG("from_tcp[{}]: read {} bytes", conn_id, bytes);
@@ -168,12 +180,6 @@ private:
   mutable uint64_t next_conn_id_{0};
 };
 
-struct FromTcpArgs {
-  folly::SocketAddress address;
-  ir::pipeline user_pipeline;
-  let_id peer_info;
-};
-
 class from_tcp_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -182,29 +188,24 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromTcpArgs, FromTcpListener>{};
-    // CLAUDE: implement this API function in Describer.
-    d.positional("endpoint", [](std::string endpoint, FromTcpArgs& args,
-                                diagnostic_handler& dh) {
-      auto ep = to<struct endpoint>(endpoint);
-      // TODO: Add locations.
-      // TODO: Move validation into validate? Probably not?
-      if (not ep) {
-        diagnostic::error("failed to parse endpoint").emit(dh);
-        return failure::promise();
+    auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
+    // TODO: Add peer_info binding once pipeline variable bindings are supported.
+    d.pipeline(&FromTcpArgs::user_pipeline);
+
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      if (auto ep_str = ctx.get(endpoint_arg)) {
+        auto ep = to<struct endpoint>(ep_str->inner);
+        auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
+        if (not ep) {
+          diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);
+        } else if (not ep->port) {
+          diagnostic::error("port number is required").primary(loc).emit(ctx);
+        }
       }
-      if (not ep->port) {
-        diagnostic::error("port number is required").emit(dh);
-        return failure::promise();
-      }
-      if (ep->host.empty()) {
-        // Just a port number
-        args.address.setFromLocalPort(ep->port->number());
-      } else {
-        args.address.setFromHostPort(ep->host, ep->port->number());
-      }
+      return std::nullopt;
     });
-    // CLAUDE: end of call.
-    d.pipeline(&FromTcpArgs::user_pipeline, {"peer", &FromTcpArgs::peer_info});
+
+    return d.without_optimize();
   }
 };
 
