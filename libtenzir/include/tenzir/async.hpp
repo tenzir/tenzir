@@ -622,6 +622,12 @@ public:
     return OperatorState::unspecified;
   }
 
+  /// Called to signal that a source should stop producing data.
+  virtual auto stop(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
+    co_return;
+  }
+
 protected:
   ~OperatorBase() = default;
 };

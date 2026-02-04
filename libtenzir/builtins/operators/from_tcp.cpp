@@ -116,12 +116,13 @@ public:
       read_loop(conn_id, transport_ptr, open_pipeline, ctx.dh())));
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
+  auto stop(OpCtx& /*ctx*/) -> Task<void> override {
     TENZIR_VERBOSE("from_tcp: finalizing, closing server");
     // Stop accepting new connections
     if (server_) {
       server_->close();
     }
+    co_return;
   }
 
 private:
