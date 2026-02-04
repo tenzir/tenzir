@@ -1,0 +1,7 @@
+error: unsupported `mode`: invalid
+ --> tests/operators/sample/invalid_mode.tql:6:17
+  |
+6 | sample 1s, mode="invalid"
+  |                 ^^^^^^^^^ 
+  |
+  = hint: `mode` must be one of `"ln"`, `"log2"`, `"log10"` or `"sqrt"`
