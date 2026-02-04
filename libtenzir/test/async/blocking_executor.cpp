@@ -13,6 +13,8 @@
 #include <folly/coro/BlockingWait.h>
 
 #include <atomic>
+#include <latch>
+#include <set>
 #include <thread>
 
 namespace tenzir {
@@ -82,6 +84,39 @@ TEST("multiple sequential spawn_blocking calls") {
   check_eq(result0, 0);
   check_eq(result1, 1);
   check_eq(result2, 2);
+}
+
+TEST("100 concurrent tasks run on different threads") {
+  constexpr auto num_tasks = size_t{100};
+
+  auto thread_ids = std::vector<std::thread::id>(num_tasks);
+  auto started = std::latch{static_cast<ptrdiff_t>(num_tasks)};
+  auto release = std::latch{1};
+
+  // Spawn all tasks
+  auto tasks = std::vector<Task<void>>{};
+  tasks.reserve(num_tasks);
+  for (auto i = size_t{0}; i < num_tasks; ++i) {
+    tasks.push_back(spawn_blocking([&, i] {
+      thread_ids[i] = std::this_thread::get_id();
+      started.count_down();
+      release.wait();
+    }));
+  }
+
+  // Wait until all tasks are running
+  started.wait();
+
+  // All 100 tasks are now running concurrently - verify different thread IDs
+  auto unique_ids
+    = std::set<std::thread::id>(thread_ids.begin(), thread_ids.end());
+  check_eq(unique_ids.size(), num_tasks);
+
+  // Release all tasks and wait for completion
+  release.count_down();
+  for (auto& task : tasks) {
+    folly::coro::blockingWait(std::move(task));
+  }
 }
 
 } // namespace tenzir
