@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async/blocking_executor.hpp"
@@ -25,12 +25,21 @@ TEST("spawn_blocking returns result") {
   check_eq(result, 42);
 }
 
-TEST("spawn_blocking handles void return") {
-  static auto called = std::atomic<bool>{false};
-  called.store(false);
-  auto task = spawn_blocking([] {
+TEST("spawn_blocking handles void return - direct") {
+  auto called = std::atomic<bool>{false};
+  auto task = spawn_blocking([&called] {
     called.store(true);
   });
+  folly::coro::blockingWait(std::move(task));
+  check(called.load());
+}
+
+TEST("spawn_blocking handles void return - named") {
+  auto called = std::atomic<bool>{false};
+  auto fn = [&called] {
+    called.store(true);
+  };
+  auto task = spawn_blocking(std::move(fn));
   folly::coro::blockingWait(std::move(task));
   check(called.load());
 }
@@ -58,8 +67,8 @@ TEST("spawn_blocking runs on different thread") {
   check(main_thread_id != blocking_thread_id);
 }
 
-TEST("concurrent spawn_blocking grows pool") {
-  // Test that multiple blocking tasks can run
+TEST("multiple sequential spawn_blocking calls") {
+  // Test that multiple sequential calls work correctly
   auto result0 = folly::coro::blockingWait(spawn_blocking([] {
     return 0;
   }));
@@ -69,14 +78,10 @@ TEST("concurrent spawn_blocking grows pool") {
   auto result2 = folly::coro::blockingWait(spawn_blocking([] {
     return 2;
   }));
-  auto result3 = folly::coro::blockingWait(spawn_blocking([] {
-    return 3;
-  }));
 
   check_eq(result0, 0);
   check_eq(result1, 1);
   check_eq(result2, 2);
-  check_eq(result3, 3);
 }
 
 } // namespace tenzir

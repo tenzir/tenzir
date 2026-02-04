@@ -1,3 +1,11 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #pragma once
 
 #include "tenzir/async/task.hpp"
@@ -8,7 +16,6 @@
 #include <folly/futures/Promise.h>
 
 #include <chrono>
-#include <memory>
 
 namespace tenzir {
 
@@ -30,9 +37,6 @@ public:
   template <class F>
   auto spawn(F&& f) -> Task<std::invoke_result_t<F>>;
 
-  /// Shutdown (for tests/cleanup).
-  auto shutdown() -> void;
-
   ~BlockingExecutor();
 
   BlockingExecutor(const BlockingExecutor&) = delete;
@@ -41,7 +45,7 @@ public:
 private:
   explicit BlockingExecutor(BlockingExecutorConfig config = {});
 
-  std::unique_ptr<folly::CPUThreadPoolExecutor> pool_;
+  folly::CPUThreadPoolExecutor pool_;
 };
 
 /// Execute a blocking callable on the global blocking thread pool.
@@ -59,30 +63,33 @@ auto spawn_blocking(F&& f) -> Task<std::invoke_result_t<F>> {
 // Template implementation
 template <class F>
 auto BlockingExecutor::spawn(F&& f) -> Task<std::invoke_result_t<F>> {
+  // This function is NOT a coroutine - it eagerly captures the callable into
+  // the thread pool task before any suspension can occur. It then returns an
+  // immediately-invoked lambda coroutine that just waits on the future.
   using R = std::invoke_result_t<F>;
-  // Folly futures don't support void directly, use Unit instead.
   using FutureType = std::conditional_t<std::is_void_v<R>, folly::Unit, R>;
   auto [promise, future] = folly::makePromiseContract<FutureType>();
 
-  pool_->add([func = std::forward<F>(f), p = std::move(promise)]() mutable {
+  pool_.add([f = std::forward<F>(f), p = std::move(promise)]() mutable {
     try {
       if constexpr (std::is_void_v<R>) {
-        std::invoke(std::move(func));
+        std::invoke(std::move(f));
         p.setValue(folly::Unit{});
       } else {
-        p.setValue(std::invoke(std::move(func)));
+        p.setValue(std::invoke(std::move(f)));
       }
     } catch (...) {
       p.setException(folly::exception_wrapper{std::current_exception()});
     }
   });
 
-  // co_await on SemiFuture returns the value
-  if constexpr (std::is_void_v<R>) {
-    co_await std::move(future);
-  } else {
-    co_return co_await std::move(future);
-  }
+  return [](folly::SemiFuture<FutureType> fut) -> Task<R> {
+    if constexpr (std::is_void_v<R>) {
+      co_await std::move(fut);
+    } else {
+      co_return co_await std::move(fut);
+    }
+  }(std::move(future));
 }
 
 } // namespace tenzir
