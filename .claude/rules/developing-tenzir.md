@@ -7,4 +7,4 @@ paths:
   - "plugins/**/*"
 ---
 
-Invoke the `cpp:following-conventions` and `developing-tenzir` skills.
+Invoke the `developing-tenzir` skill and strictly follow the contained conventions.

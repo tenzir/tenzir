@@ -1,21 +1,22 @@
 # C++ Coding Conventions
 
+Older code may deviate from these conventions. When doing minor edits, use the
+style that is most consistent with the surrounding code. However, substantial new
+code should follow the new conventions.
+
 ## Style Conventions
 
-- **Const placement (west const)**: Place `const` before the type (`const T&`),
-  not after (`T const&`). This aids readability by making the const modifier
-  prominent at the start of the type declaration. Template contexts may use
-  east const for STL consistency.
+- **Const placement (east const)**: Place `const` after the type (`T const&`),
+  not before (`const T&`).
 - **Prefer `auto`**: Use `auto` to avoid type repetition and let the compiler
   infer types. Make conversions explicit when needed (e.g.,
-  `auto x = int64_t{0}`). For functions, use `auto` with a trailing return type.
-  Avoid `auto` for function return types in public APIs where the type should be
-  explicit to users.
-- **Vertical whitespace**: Avoid blank lines within functions. Use comments
-  to separate logical blocks instead.
+  `auto x = int64_t{0}`). Always provide a trailing return type for functions,
+  unless the function requires type deduction from the `return` statement. Use
+  `auto` or `decltype(auto)` in that case.
+- **Vertical whitespace**: You must not insert blank lines between statements
+  inside a function. Use comments to separate logical blocks instead.
 - **Logical operators**: Use the word form `not`, `and`, `or` instead of `!`,
   `&&`, `||`.
-- **Naming**: See [Naming Conventions](./naming-conventions.md)
 
 ## File Organization
 
@@ -38,14 +39,25 @@
 - Declare move operations `noexcept`
 - Use `struct` for simple data aggregates where the public members are the API
 
-## Template Metaprogramming
-
-- Use `class` for template parameters; `typename` only for dependent types
-- Name parameters `T`, packs `Ts`, arguments `x`, packs `xs`
-- Provide `*_t` and `*_v` helpers for traits
-
 ## Comments
 
 - `FIXME:` for bugs, `TODO:` for improvements (colon preferred)
-- Doxygen: `///` with Markdown—do not use `@param`, `@returns`, `@pre`, `@post`.
+- Doxygen: `///` with Markdown. Do not use `@param`, `@returns`, `@pre`, `@post`.
   These tags are legacy patterns that should not be used in new code.
+- Comments must either explain a non-obvious property or act as a heading
+
+## Errors
+
+- For logic errors, use `TENZIR_ASSERT`, `panic` or other functions that panic
+- For user errors, use `failure_or<T>`, `Result<T, U>` or other types if needed
+- Do not use exceptions, but catch library exceptions caused by user errors
+- Program defensively with `TENZIR_ASSERT` whenever it's not obvious
+- `TENZIR_ASSERT` is enabled in release builds, but don't put side effects there
+
+## Other
+
+- Use `class` for template parameters; `typename` only for dependent types
+- Use `Box<T>` for a `std::unique_ptr<T>` that cannot be null
+- Use `std::optional<Box<T>>` for a `std::unique_ptr<T>` that may be null
+- Use the current year in the copyright notice when creating new files. Do not
+  update the copyright notice on existing files.

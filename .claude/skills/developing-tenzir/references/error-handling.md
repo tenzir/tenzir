@@ -62,7 +62,8 @@ provably safe.
 
 ## Return Types
 
-- `failure_or<T>` — For functions that emit diagnostics
+- `failure_or<T>` — For functions that emit diagnostic errors and signal when an error occurred
+- `Result<T, E>` — Generic result type for functions with custom error types
 - `caf::expected<T>` — Legacy type for functions returning errors
 - Use `[[nodiscard]]` on functions where ignoring errors is a bug
 
