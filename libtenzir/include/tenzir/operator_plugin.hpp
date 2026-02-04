@@ -215,22 +215,11 @@ struct NamedArg {
   }
 };
 
-class ValidateCtx : public diagnostic_handler {
+class ValidateCtx {
 public:
   ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               const Description& /*desc*/, diagnostic_handler& dh)
     : args_{args}, named_args_{named_args}, dh_{&dh} {
-  }
-
-  void emit(diagnostic d) override {
-    if (d.severity == severity::error) {
-      had_error_ = true;
-    }
-    dh_->emit(std::move(d));
-  }
-
-  auto had_error() const -> bool {
-    return had_error_;
   }
 
   template <class Args, class T>
@@ -313,14 +302,13 @@ public:
   }
 
   explicit(false) operator diagnostic_handler&() {
-    return *this;
+    return *dh_;
   }
 
 private:
   std::span<const Arg> args_;
   std::span<const NamedArg> named_args_;
   diagnostic_handler* dh_;
-  bool had_error_ = false;
 };
 
 /// For some types, we do not want to implicitly default to a generic string.
