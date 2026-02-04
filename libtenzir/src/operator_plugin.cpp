@@ -412,6 +412,9 @@ public:
     if (desc_->validator) {
       auto validate_ctx = ValidateCtx{args_, named_args_, *desc_, ctx};
       (*desc_->validator)(validate_ctx);
+      if (validate_ctx.had_error()) {
+        return failure::promise();
+      }
     }
     for (auto& expr : filter_) {
       TRY(expr.substitute(ctx));
