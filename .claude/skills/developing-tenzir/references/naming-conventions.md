@@ -13,7 +13,7 @@
 | Variables            | `snake_case` | `row_count`                    |
 | Constants            | `snake_case` | `default_timeout`              |
 | Enum members         | `snake_case` | `Color::red`, `Status::ok`     |
-| Template params      | `CamelCase`  | `typename T`, `class Actor`    |
+| Template params      | `PascalCase` | `typename T`, `class Actor`    |
 | Macros               | `UPPER_CASE` | `PROJECT_ERROR`                |
 | Member variables     | `name_`      | `buffer_`, `state_`            |
 | Namespaces           | `snake_case` | `namespace project`            |
@@ -134,7 +134,7 @@ auto c = Color::red;
 
 ### Template Parameters
 
-Use CamelCase:
+Use PascalCase:
 
 ```cpp
 template <class T>

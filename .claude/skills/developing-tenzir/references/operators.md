@@ -2,7 +2,7 @@
 
 Implementing TQL operators in Tenzir.
 
-> **Note:** For new operators, prefer the executor API documented in
+> **Note:** For new operators, only use the executor API documented in
 > [executor.md](./executor.md). The `crtp_operator` pattern below is legacy and
 > used by existing operators, but new code should use `Operator<Input, Output>`.
 

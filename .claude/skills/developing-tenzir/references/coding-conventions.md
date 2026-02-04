@@ -10,9 +10,9 @@ code should follow the new conventions.
   not before (`const T&`).
 - **Prefer `auto`**: Use `auto` to avoid type repetition and let the compiler
   infer types. Make conversions explicit when needed (e.g.,
-  `auto x = int64_t{0}`). For functions, use `auto` with a trailing return type.
-  Avoid `auto` without a trailing return type for functions in public APIs where
-  the type should be explicit to users.
+  `auto x = int64_t{0}`). Always provide a trailing return type for functions,
+  unless the function requires type deduction from the `return` statement. Use
+  `auto` or `decltype(auto)` in that case.
 - **Vertical whitespace**: You must not insert blank lines between statements
   inside a function. Use comments to separate logical blocks instead.
 - **Logical operators**: Use the word form `not`, `and`, `or` instead of `!`,
@@ -57,6 +57,7 @@ code should follow the new conventions.
 ## Other
 
 - Use `class` for template parameters; `typename` only for dependent types
-- Use `Box<T>` for a `std::unique_ptr<T>` should not be null
+- Use `Box<T>` for a `std::unique_ptr<T>` that cannot be null
 - Use `std::optional<Box<T>>` for a `std::unique_ptr<T>` that may be null
-- Use the current year in the copyright notice when creating new files
+- Use the current year in the copyright notice when creating new files. Do not
+  update the copyright notice on existing files.
