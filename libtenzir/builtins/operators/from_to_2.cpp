@@ -98,11 +98,11 @@ public:
     : events_{std::move(events)} {
   }
 
-  auto await_task() const -> Task<std::any> override {
+  auto await_task() const -> Task<Any> override {
     co_return {};
   }
 
-  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(next_ < events_.size());
     auto sp = session_provider::make(ctx);

@@ -74,18 +74,18 @@ auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
 
 Source operators use `await_task()` + `process_task()` instead of `process()`.
 The `await_task()` method awaits an external task (network I/O, timer, etc.)
-and returns its result via `std::any`. This is heavily implementation-specific:
+and returns its result via `Any`. This is heavily implementation-specific:
 
 ```cpp
-auto await_task() const -> Task<std::any> override {
+auto await_task() const -> Task<Any> override {
   // Await external work: network read, timer, file I/O, etc.
   auto data = co_await fetch_from_network();
   co_return data;
 }
 
-auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
   -> Task<void> override {
-  auto data = std::any_cast<MyData>(std::move(result));
+  auto data = std::move(result).as<MyData>();
   co_await push(to_table_slice(data));
   count_ += 1;
 }

@@ -159,10 +159,10 @@ OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
 // Wrapper type to prevent implicit conversions.
 struct AnyWrapper {
-  explicit AnyWrapper(std::any value) : value{std::move(value)} {
+  explicit AnyWrapper(Any value) : value{std::move(value)} {
   }
 
-  std::any value;
+  Any value;
 };
 
 template <class Input>

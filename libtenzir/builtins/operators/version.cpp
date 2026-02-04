@@ -168,7 +168,7 @@ public:
     co_return;
   }
 
-  auto await_task() const -> Task<std::any> override {
+  auto await_task() const -> Task<Any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
     if (count_ == total) {
@@ -181,7 +181,7 @@ public:
     co_return {};
   }
 
-  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     // throw std::runtime_error{"oh no"};
     // auto fs = ctx.actor_system().spawn(posix_filesystem, "/");

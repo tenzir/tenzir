@@ -22,7 +22,7 @@
 ///
 /// ## Common Methods (all operator types)
 ///
-/// - `await_task()` - Returns Task<std::any> the executor awaits. Sources use
+/// - `await_task()` - Returns Task<Any> the executor awaits. Sources use
 ///   this to produce data; non-sources typically sleep forever (the default).
 /// - `process_task(result, push, ctx)` - Called when `await_task()` completes.
 /// - `finalize(push, ctx)` - Called exactly once when upstream signals
@@ -41,6 +41,7 @@
 
 #pragma once
 
+#include "tenzir/any.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/push_pull.hpp"
@@ -67,8 +68,6 @@
 #include <folly/coro/Task.h>
 #include <folly/coro/Traits.h>
 #include <folly/futures/Future.h>
-
-#include <any>
 
 namespace tenzir {
 
@@ -474,7 +473,7 @@ template <class Output>
 class OperatorOutputBase {
 public:
   /// Process result of `await_task()` for sources. See file-level docs.
-  virtual auto process_task(std::any result, Push<Output>& push, OpCtx& ctx)
+  virtual auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> {
     TENZIR_UNUSED(result, push, ctx);
     TENZIR_ERROR("ignoring task result in {}", typeid(*this).name());
@@ -516,7 +515,7 @@ protected:
 template <>
 class OperatorOutputBase<void> {
 public:
-  virtual auto process_task(std::any result, OpCtx& ctx) -> Task<void> {
+  virtual auto process_task(Any result, OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(result, ctx);
     TENZIR_ERROR("ignoring task result in {}", typeid(*this).name());
     co_return;
@@ -593,7 +592,7 @@ public:
   }
 
   /// Return task for sources to await. See file-level docs.
-  virtual auto await_task() const -> Task<std::any> {
+  virtual auto await_task() const -> Task<Any> {
     co_await wait_forever();
     TENZIR_UNREACHABLE();
   }
