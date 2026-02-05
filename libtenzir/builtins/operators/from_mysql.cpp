@@ -14,13 +14,77 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <folly/io/async/ScopedEventBaseThread.h>
+#include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 #include <openssl/sha.h>
 
 namespace tenzir::plugins::mysql {
 
 namespace {
+
+// -- MySQL Wire Protocol Overview --------------------------------------------
+//
+//   Client                                Server
+//     |                                     |
+//     |          TCP Connect                |
+//     |------------------------------------>|
+//     |                                     |
+//     |        Handshake (v10)              |
+//     |<------------------------------------|
+//     |  protocol version, server version,  |
+//     |  auth plugin data (scramble),       |
+//     |  capabilities, auth plugin name     |
+//     |                                     |
+//     |        Auth Response                |
+//     |------------------------------------>|
+//     |  capabilities, user, auth data,     |
+//     |  database, auth plugin name         |
+//     |                                     |
+//     |  +--- OK ----------------------------+ auth succeeded
+//     |  |                                  |
+//     |  +--- ERR ---------------------------+ auth failed
+//     |  |                                  |
+//     |  +--- AuthMoreData (0x01) ----------+ caching_sha2_password
+//     |  |    0x03: fast auth (cached)      |
+//     |  |      +--- OK --------------------|   done
+//     |  |    0x04: full auth required      |
+//     |  |      |   Cleartext Password      |
+//     |  |      |-------------------------->|
+//     |  |      +--- OK / ERR --------------|   done
+//     |  |                                  |
+//     |  +--- AuthSwitch (0xFE) ------------+ (not implemented)
+//     |                                     |
+//     |        COM_QUERY (0x03)             |
+//     |------------------------------------>|
+//     |  SQL query string                   |
+//     |                                     |
+//     |        Column Count                 |
+//     |<------------------------------------|
+//     |  length-encoded integer             |
+//     |                                     |
+//     |        Column Definition * N        |
+//     |<------------------------------------|
+//     |  catalog, schema, table, name,      |
+//     |  charset, length, type, flags       |
+//     |                                     |
+//     |        EOF                          |
+//     |<------------------------------------|
+//     |                                     |
+//     |        Row Data * M                 |
+//     |<------------------------------------|
+//     |  length-encoded strings per column  |
+//     |  (0xFB = NULL)                      |
+//     |                                     |
+//     |        EOF                          |
+//     |<------------------------------------|
+//     |                                     |
+//
+// Packet framing: every packet has a 4-byte header (3 bytes payload length +
+// 1 byte sequence id) followed by the payload.
+//
+// References:
+//   https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basics.html
+//   https://mariadb.com/kb/en/clientserver-protocol/
 
 // -- Protocol Types ----------------------------------------------------------
 
@@ -404,6 +468,20 @@ auto compute_caching_sha2_password(std::string_view password,
   return result;
 }
 
+/// Wraps an identifier with backticks, escaping embedded backticks.
+auto quote_identifier(std::string_view name) -> std::string {
+  auto result = std::string{"`"};
+  for (auto c : name) {
+    if (c == '`') {
+      result += "``";
+    } else {
+      result += c;
+    }
+  }
+  result += '`';
+  return result;
+}
+
 /// Parses an error packet into a mysql_error.
 auto parse_error_from_packet(std::span<std::byte const> data) -> mysql_error {
   TENZIR_ASSERT(not data.empty() and data[0] == packet::error);
@@ -434,39 +512,21 @@ auto parse_column_definition(std::span<std::byte const> data)
   -> MysqlResult<column_info> {
   auto col = column_info{};
   auto reader = packet_reader{data};
-  auto read_str = [&]() -> MysqlResult<std::string> {
-    return reader.read_lenenc_string();
+  auto read_into = [&](std::string& target) -> MysqlResult<void> {
+    auto s = reader.read_lenenc_string();
+    if (s.is_err()) {
+      return Err{std::move(s).unwrap_err()};
+    }
+    target = std::move(s).value();
+    return {};
   };
-  auto s = read_str();
-  if (s.is_err()) {
-    return Err{std::move(s).unwrap_err()};
+  for (auto* field : {&col.catalog, &col.schema, &col.table, &col.org_table,
+                      &col.name, &col.org_name}) {
+    auto r = read_into(*field);
+    if (r.is_err()) {
+      return Err{std::move(r).unwrap_err()};
+    }
   }
-  col.catalog = std::move(s).value();
-  s = read_str();
-  if (s.is_err()) {
-    return Err{std::move(s).unwrap_err()};
-  }
-  col.schema = std::move(s).value();
-  s = read_str();
-  if (s.is_err()) {
-    return Err{std::move(s).unwrap_err()};
-  }
-  col.table = std::move(s).value();
-  s = read_str();
-  if (s.is_err()) {
-    return Err{std::move(s).unwrap_err()};
-  }
-  col.org_table = std::move(s).value();
-  s = read_str();
-  if (s.is_err()) {
-    return Err{std::move(s).unwrap_err()};
-  }
-  col.name = std::move(s).value();
-  s = read_str();
-  if (s.is_err()) {
-    return Err{std::move(s).unwrap_err()};
-  }
-  col.org_name = std::move(s).value();
   // Fixed-length fields after 0x0c length marker.
   if (reader.remaining() < 1) {
     return Err{mysql_error::protocol("column definition truncated")};
@@ -1007,6 +1067,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    co_await OperatorBase::start(ctx);
+    if (done_) {
+      co_return;
+    }
     // Build client configuration.
     auto config = client_config{};
     if (args_.host) {
@@ -1037,7 +1101,8 @@ public:
           done_ = true;
           co_return;
         }
-        query_ = fmt::format("SHOW COLUMNS FROM {}", args_.table->inner);
+        query_ = fmt::format("SHOW COLUMNS FROM {}",
+                             quote_identifier(args_.table->inner));
         schema_name_ = fmt::format("mysql.columns.{}", args_.table->inner);
       } else {
         diagnostic::error("invalid show mode `{}`", args_.show->inner)
@@ -1051,7 +1116,8 @@ public:
       query_ = args_.sql->inner;
       schema_name_ = "mysql.query";
     } else if (args_.table) {
-      query_ = fmt::format("SELECT * FROM {}", args_.table->inner);
+      query_
+        = fmt::format("SELECT * FROM {}", quote_identifier(args_.table->inner));
       schema_name_ = fmt::format("mysql.{}", args_.table->inner);
     } else {
       diagnostic::error("no query specified")
@@ -1060,9 +1126,8 @@ public:
       done_ = true;
       co_return;
     }
-    // Create a dedicated EventBase thread for async I/O.
-    evb_thread_ = std::make_unique<folly::ScopedEventBaseThread>("mysql_io");
-    auto* evb = evb_thread_->getEventBase();
+    // Use the global IO executor's EventBase for async socket I/O.
+    auto* evb = folly::getGlobalIOExecutor()->getEventBase();
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config));
     if (result.is_err()) {
@@ -1083,17 +1148,17 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    co_return Any{query_};
+    co_return {};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    TENZIR_UNUSED(result);
     if (done_) {
       co_return;
     }
-    auto query = std::move(result).as<std::string>();
     auto slice_stream = client_->query({
-      .sql = query,
+      .sql = query_,
       .schema_name = schema_name_,
     });
     while (auto slice_result = co_await slice_stream.next()) {
@@ -1124,7 +1189,6 @@ public:
 
 private:
   FromMySQLArgs args_;
-  std::unique_ptr<folly::ScopedEventBaseThread> evb_thread_;
   std::unique_ptr<async_client> client_;
   std::string query_;
   std::string schema_name_;
