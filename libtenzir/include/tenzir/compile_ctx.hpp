@@ -45,19 +45,33 @@ public:
   [[nodiscard]] auto without_env() const -> compile_ctx;
 
   /// A scope object owns the environment from which the context reads.
+  ///
+  /// When the scope is destroyed, the context's environment pointer is restored
+  /// to its original value.
   class scope {
   public:
+    ~scope();
+
+    scope(scope&& other) noexcept;
+    auto operator=(scope&& other) noexcept -> scope&;
+
+    scope(const scope&) = delete;
+    auto operator=(const scope&) -> scope& = delete;
+
     /// Provide a new binding with the given name, returning its `let_id`.
     auto let(std::string name) & -> let_id;
 
   private:
     friend class compile_ctx;
 
-    scope(std::unique_ptr<env_t> env, root& root);
+    scope(std::unique_ptr<env_t> env, compile_ctx* ctx,
+          const env_t* original_env, root& root);
 
     // The environment stored in a `unique_ptr` because we remember its address
     // in the context when opening a new scope.
     std::unique_ptr<env_t> env_;
+    compile_ctx* ctx_; // The context we modified (nullptr if moved-from)
+    const env_t* original_env_; // The env_ pointer to restore on destruction
     root& root_;
   };
 
