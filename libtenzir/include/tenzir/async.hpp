@@ -304,6 +304,18 @@ public:
     return is<Err<Error>>(value_);
   }
 
+  auto value() & -> ValueRef {
+    return std::get<VoidToUnit<Value>>(value_);
+  }
+
+  auto value() && -> Value {
+    return std::move(std::get<VoidToUnit<Value>>(value_));
+  }
+
+  auto unwrap_err() && -> Error {
+    return std::move(std::get<Err<Error>>(value_)).unwrap();
+  }
+
 private:
   variant<VoidToUnit<Value>, Err<Error>> value_;
 };
