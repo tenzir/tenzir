@@ -1,4 +1,3 @@
 suite: from-mysql
 fixtures: [mysql]
 timeout: 180
-skip: "from_mysql operator not yet implemented"

@@ -5,4 +5,3 @@ from_mysql "users",
            user=env("MYSQL_USER"),
            password=env("MYSQL_PASSWORD"),
            database=env("MYSQL_DATABASE")
-sort name

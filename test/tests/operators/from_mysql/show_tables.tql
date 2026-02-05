@@ -5,4 +5,3 @@ from_mysql show="tables",
            user=env("MYSQL_USER"),
            password=env("MYSQL_PASSWORD"),
            database=env("MYSQL_DATABASE")
-sort table
