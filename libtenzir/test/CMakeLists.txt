@@ -19,26 +19,26 @@ file(GLOB_RECURSE test_headers CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 list(SORT test_headers)
 
-# Add tenzir-test executable.
-add_executable(tenzir-test ${test_sources} ${test_headers})
-TenzirTargetEnableTooling(tenzir-test)
+# Add tenzir-unit-test executable.
+add_executable(tenzir-unit-test ${test_sources} ${test_headers})
+TenzirTargetEnableTooling(tenzir-unit-test)
 target_link_libraries(
-  tenzir-test PRIVATE tenzir::test tenzir::libtenzir tenzir::internal
-                      ${CMAKE_THREAD_LIBS_INIT})
-TenzirTargetLinkWholeArchive(tenzir-test PRIVATE tenzir::libtenzir_builtins)
+  tenzir-unit-test PRIVATE tenzir::test tenzir::libtenzir tenzir::internal
+                           ${CMAKE_THREAD_LIBS_INIT})
+TenzirTargetLinkWholeArchive(tenzir-unit-test PRIVATE tenzir::libtenzir_builtins)
 
-add_test(NAME build-tenzir-test
+add_test(NAME build-tenzir-unit-test
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
-                 "$<CONFIG>" --target tenzir-test)
+                 "$<CONFIG>" --target tenzir-unit-test)
 set_tests_properties(
-  build-tenzir-test PROPERTIES FIXTURES_SETUP tenzir_unit_test_fixture LABELS
-                               unit)
+  build-tenzir-unit-test PROPERTIES FIXTURES_SETUP tenzir_unit_test_fixture
+                                    LABELS unit)
 
 # Enable unit testing via CMake/CTest and add all test suites.
 foreach (suite IN LISTS suites)
   string(REPLACE " " "_" test_name ${suite})
   add_test(NAME "libtenzir/${test_name}"
-           COMMAND tenzir-test -v 4 -r "${TENZIR_UNIT_TEST_TIMEOUT}" -s
+           COMMAND tenzir-unit-test -v 4 -r "${TENZIR_UNIT_TEST_TIMEOUT}" -s
                    "^${suite}$" ${ARGN})
   set_tests_properties(
     "libtenzir/${test_name}" PROPERTIES FIXTURES_REQUIRED

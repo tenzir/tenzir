@@ -83,8 +83,8 @@ Reference documentation: https://docs.tenzir.com/reference/test-framework.md
 
 ### Run Unit Tests
 
-Run unit tests using the `tenzir-test` binary:
+Run unit tests using the `tenzir-unit-test` binary:
 
 ```sh
-tenzir-test
+tenzir-unit-test
 ```
