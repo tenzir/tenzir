@@ -1,0 +1,20 @@
+{
+  deep: {
+    x: {
+      y: {
+        z: 99,
+        w: 2,
+        v: 3,
+      },
+    },
+  },
+  conflict: {
+    key: {
+      nested: 1,
+    },
+  },
+  disjoint: {
+    foo: 1,
+    bar: 2,
+  },
+}

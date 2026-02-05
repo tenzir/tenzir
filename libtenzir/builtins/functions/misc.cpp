@@ -6,11 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/view.hpp>
 
 #include <arrow/compute/api_scalar.h>
 #include <boost/process/v2/environment.hpp>
@@ -688,24 +691,41 @@ public:
           .positional("x", record1, "record")
           .positional("y", record2, "record")
           .parse(inv, ctx));
-    return function_use::make(
-      [record1 = std::move(record1),
-       record2 = std::move(record2)](evaluator eval, session) {
-        return eval(ast::record{
-          location::unknown,
-          {
-            ast::spread{
-              location::unknown,
-              record1,
-            },
-            ast::spread{
-              location::unknown,
-              record2,
-            },
-          },
-          location::unknown,
+    return function_use::make([record1 = std::move(record1),
+                               record2 = std::move(record2)](evaluator eval,
+                                                             session ctx) {
+      return map_series(
+        eval(record1), eval(record2),
+        [&](series left, series right) -> multi_series {
+          auto builder = series_builder{};
+          for (auto i = int64_t{0}; i < left.length(); ++i) {
+            auto left_null = is<null_type>(left.type) or left.array->IsNull(i);
+            auto right_null
+              = is<null_type>(right.type) or right.array->IsNull(i);
+            if (left_null and right_null) {
+              builder.null();
+            } else if (left_null) {
+              builder.data(value_at(right.type, *right.array, i));
+            } else if (right_null) {
+              builder.data(value_at(left.type, *left.array, i));
+            } else {
+              // Materialize both sides, then deep-merge records.
+              auto dst = materialize(value_at(left.type, *left.array, i));
+              auto src = materialize(value_at(right.type, *right.array, i));
+              auto* dst_rec = try_as<record>(&dst);
+              auto* src_rec = try_as<record>(&src);
+              if (dst_rec and src_rec) {
+                tenzir::merge(*src_rec, *dst_rec, policy::merge_lists::no);
+                builder.data(dst);
+              } else {
+                // Right side wins when not both records.
+                builder.data(src);
+              }
+            }
+          }
+          return builder.finish_assert_one_array();
         });
-      });
+    });
   }
 };
 

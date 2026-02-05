@@ -1,0 +1,12 @@
+from {
+  a: {x: {y: {z: 1, w: 2}}},
+  b: {x: {y: {z: 99, v: 3}}},
+  c: {key: "string_value"},
+  d: {key: {nested: 1}},
+  e: {foo: 1},
+  f: {bar: 2},
+}
+deep = merge(a, b)
+conflict = merge(c, d)
+disjoint = merge(e, f)
+this = {deep: deep, conflict: conflict, disjoint: disjoint}
