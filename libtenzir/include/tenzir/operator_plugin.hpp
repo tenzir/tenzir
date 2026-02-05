@@ -48,29 +48,14 @@ using Setters = detail::tl_map_t<LocatedTypes, AsSetter>;
 
 using AnySetter = detail::tl_apply_t<Setters, variant>;
 
-/// Specification for a let binding to inject into a subpipeline.
-struct LetBinding {
-  std::string name;
-  std::function<void(Any&, let_id)> setter;
-};
-
 struct Positional {
   Positional(std::string name, std::string type, AnySetter setter)
     : name{std::move(name)}, type{std::move(type)}, setter{std::move(setter)} {
   }
 
-  Positional(std::string name, std::string type, AnySetter setter,
-             std::vector<LetBinding> let_bindings)
-    : name{std::move(name)},
-      type{std::move(type)},
-      setter{std::move(setter)},
-      let_bindings{std::move(let_bindings)} {
-  }
-
   std::string name;
   std::string type;
   AnySetter setter;
-  std::vector<LetBinding> let_bindings;
 };
 
 struct Named {
@@ -84,6 +69,25 @@ struct Named {
   std::string name;
   std::string type;
   AnySetter setter;
+  bool required = false;
+};
+
+/// Specification for a let binding to inject into a subpipeline.
+struct LetBinding {
+  std::string name;
+  Setter<let_id> setter;
+};
+
+struct Pipeline {
+  Pipeline(Setter<located<ir::pipeline>> setter,
+           std::vector<LetBinding> let_bindings, bool required)
+    : setter{std::move(setter)},
+      let_bindings{std::move(let_bindings)},
+      required{required} {
+  }
+
+  Setter<located<ir::pipeline>> setter;
+  std::vector<LetBinding> let_bindings;
   bool required = false;
 };
 
@@ -118,6 +122,7 @@ public:
   std::string docs;
   std::function<Any()> make_args;
   std::vector<Positional> positional;
+  std::optional<Pipeline> pipeline;
   std::optional<size_t> first_optional;
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
@@ -234,6 +239,18 @@ struct NamedArg {
   friend auto inspect(auto& f, NamedArg& x) -> bool {
     return f.object(x).fields(f.field("index", x.index),
                               f.field("value", x.value));
+  }
+};
+
+struct PipelineArg {
+  located<ir::pipeline> pipeline;
+  // Index by the id position in the description, so we can pass it to the
+  // correct setter.
+  std::map<size_t, let_id> let_ids;
+
+  friend auto inspect(auto& f, PipelineArg& x) -> bool {
+    return f.object(x).fields(f.field("pipeline", x.pipeline),
+                              f.field("let_ids", x.let_ids));
   }
 };
 
@@ -427,31 +444,31 @@ public:
     return Argument<Args, T>{false, index};
   }
 
-  auto pipeline(ir::pipeline Args::* ptr)
-    -> Argument<Args, located<ir::pipeline>> {
-    if (not desc_.first_optional) {
-      desc_.first_optional = desc_.positional.size();
-    }
-    auto index = desc_.positional.size();
-    desc_.positional.push_back(Positional{
-      "body",
-      "{ … }",
+  auto pipeline(located<ir::pipeline> Args::* ptr) -> void {
+    TENZIR_ASSERT(not desc_.pipeline);
+    desc_.pipeline = Pipeline{
       make_setter(ptr),
-    });
-    return Argument<Args, located<ir::pipeline>>{false, index};
+      {},
+      true,
+    };
+  }
+
+  auto pipeline(std::optional<located<ir::pipeline>> Args::* ptr) -> void {
+    TENZIR_ASSERT(not desc_.pipeline);
+    desc_.pipeline = Pipeline{
+      make_setter(ptr),
+      {},
+      false,
+    };
   }
 
   /// Pipeline with let bindings that are injected into the subpipeline.
-  ///
   /// Usage: `d.pipeline(&Args::pipe, {{"var_name", &Args::var_let_id}, ...})`
   auto pipeline(
-    ir::pipeline Args::* ptr,
+    located<ir::pipeline> Args::* ptr,
     std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
-    -> Argument<Args, located<ir::pipeline>> {
-    if (not desc_.first_optional) {
-      desc_.first_optional = desc_.positional.size();
-    }
-    auto index = desc_.positional.size();
+    -> void {
+    TENZIR_ASSERT(not desc_.pipeline);
     auto let_bindings = std::vector<LetBinding>{};
     for (const auto& [name, member_ptr] : bindings) {
       let_bindings.push_back(
@@ -459,28 +476,30 @@ public:
            (&args.as<Args>())->*member_ptr = id;
          }});
     }
-    desc_.positional.push_back(Positional{
-      "body",
-      // TODO: Better type?
-      "{ … }",
+    desc_.pipeline = Pipeline{
       make_setter(ptr),
       std::move(let_bindings),
-    });
-    return Argument<Args, located<ir::pipeline>>{false, index};
+      true,
+    };
   }
 
-  auto pipeline(std::optional<ir::pipeline> Args::* ptr)
-    -> Argument<Args, located<ir::pipeline>> {
-    if (not desc_.first_optional) {
-      desc_.first_optional = desc_.positional.size();
+  auto pipeline(
+    std::optional<located<ir::pipeline>> Args::* ptr,
+    std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
+    -> void {
+    TENZIR_ASSERT(not desc_.pipeline);
+    auto let_bindings = std::vector<LetBinding>{};
+    for (const auto& [name, member_ptr] : bindings) {
+      let_bindings.push_back(
+        {std::string{name}, [member_ptr](Any& args, let_id id) {
+           (&args.as<Args>())->*member_ptr = id;
+         }});
     }
-    auto index = desc_.positional.size();
-    desc_.positional.push_back(Positional{
-      "body",
-      "{ … }",
+    desc_.pipeline = Pipeline{
       make_setter(ptr),
-    });
-    return Argument<Args, located<ir::pipeline>>{false, index};
+      std::move(let_bindings),
+      false,
+    };
   }
 
   // TODO

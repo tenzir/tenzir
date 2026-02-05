@@ -186,41 +186,6 @@ public:
     -> failure_or<GenericIr> {
     auto result = GenericIr{};
     result.op_ = std::move(op);
-    // First pass: compile pipeline arguments.
-    // For pipelines with let bindings, we also create the let_ids.
-    {
-      auto positional_idx = size_t{0};
-      for (auto& arg : args) {
-        if (not is<ast::assignment>(arg)) {
-          if (positional_idx < desc->positional.size()) {
-            const auto& pos = desc->positional[positional_idx];
-            // Check if this positional expects a pipeline.
-            if (is<Setter<located<ir::pipeline>>>(pos.setter)) {
-              auto* pipe_expr = try_as<ast::pipeline_expr>(arg);
-              if (pipe_expr) {
-                // Open a scope if there are let bindings.
-                auto scope = pos.let_bindings.empty()
-                               ? std::optional<compile_ctx::scope>{}
-                               : ctx.open_scope();
-                for (auto [binding_idx, binding] :
-                     detail::enumerate(pos.let_bindings)) {
-                  auto id = scope->let(binding.name);
-                  // Store let_id for later application during spawn().
-                  result.let_ids_.push_back(
-                    LetIdEntry{positional_idx, binding_idx, id});
-                }
-                // Compile the pipeline (with the scope if present).
-                auto pipe_loc = pipe_expr->get_location();
-                TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
-                result.compiled_pipelines_[positional_idx]
-                  = located{std::move(pipe_ir), pipe_loc};
-              }
-            }
-          }
-          ++positional_idx;
-        }
-      }
-    }
     // Bind non-pipeline arguments.
     for (auto& arg : args) {
       if (is<ast::assignment>(arg) or not is<ast::pipeline_expr>(arg)) {
@@ -269,21 +234,33 @@ public:
         // Store the named argument for later processing.
         result.named_args_.push_back(
           NamedArg{idx, Incomplete{assignment->right}});
+      } else if (auto* pipe_expr = try_as<ast::pipeline_expr>(arg)) {
+        if (not desc->pipeline) {
+          emit(diagnostic::error("no pipeline argument expected").primary(arg));
+          continue;
+        }
+        result.pipeline_ = PipelineArg{};
+        const auto& pipe = desc->pipeline;
+        // Open a scope if there are let bindings.
+        auto scope = ctx.open_scope();
+        for (auto [binding_idx, binding] :
+             detail::enumerate(pipe->let_bindings)) {
+          auto id = scope.let(binding.name);
+          // Store let_id for later application during spawn().
+          auto [_, inserted] = result.pipeline_->let_ids.emplace(binding_idx, id);
+          TENZIR_ASSERT(inserted);
+        }
+        // Compile the pipeline (with the scope if present).
+        auto pipe_loc = pipe_expr->get_location();
+        TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+        result.pipeline_->pipeline = located{std::move(pipe_ir), pipe_loc};
       } else {
         // Positional argument.
         if (positional_idx >= max_positional) {
           emit(diagnostic::error("too many positional arguments").primary(arg));
           continue;
         }
-        // Check if this positional was pre-compiled (pipeline with let bindings).
-        if (auto it = result.compiled_pipelines_.find(positional_idx);
-            it != result.compiled_pipelines_.end()) {
-          // Store the pre-compiled pipeline directly (already has location).
-          result.args_.push_back(std::move(it->second));
-          result.compiled_pipelines_.erase(it);
-        } else {
-          result.args_.push_back(Incomplete{std::move(arg)});
-        }
+        result.args_.push_back(Incomplete{std::move(arg)});
         ++positional_idx;
       }
     }
@@ -340,24 +317,14 @@ public:
   auto spawn(element_type_tag input) && -> AnyOperator override {
     auto args = desc_->make_args();
     // Apply let_id setters from pre-compiled pipelines.
-    // TODO: already done in make_args()?
-    for (const auto& entry : let_ids_) {
-      TENZIR_ASSERT(entry.positional_idx < desc_->positional.size());
-      const auto& pos = desc_->positional[entry.positional_idx];
-      TENZIR_ASSERT(entry.binding_idx < pos.let_bindings.size());
-      const auto& binding = pos.let_bindings[entry.binding_idx];
-      binding.setter(args, entry.id);
-    }
+    //for (const auto& entry : let_ids_) {
+    //  TENZIR_ASSERT(entry.positional_idx < desc_->positional.size());
+    //  const auto& pos = desc_->positional[entry.positional_idx];
+    //  TENZIR_ASSERT(entry.binding_idx < pos.let_bindings.size());
+    //  const auto& binding = pos.let_bindings[entry.binding_idx];
+    //  binding.setter(args, entry.id);
+    //}
     for (auto [idx, arg] : detail::enumerate(args_)) {
-      // Check if we have a pre-compiled pipeline for this positional.
-      if (auto it = compiled_pipelines_.find(idx);
-          it != compiled_pipelines_.end()) {
-        // Use the pre-compiled pipeline with let bindings (already has location).
-        TENZIR_ASSERT(idx < desc_->positional.size());
-        as<Setter<located<ir::pipeline>>>(
-          desc_->positional[idx].setter)(args, std::move(it->second));
-        continue;
-      }
       match(
         std::move(arg),
         [&]<class T>(T x) {
@@ -379,6 +346,15 @@ public:
         [](Incomplete) {
           TENZIR_UNREACHABLE();
         });
+    }
+    if (pipeline_) {
+      // This is already checked in make().
+      TENZIR_ASSERT(desc_->pipeline);
+      desc_->pipeline->setter(args, std::move(pipeline_->pipeline));
+      for (const auto& [binding_idx, id] : pipeline_->let_ids) {
+        auto& binding = desc_->pipeline->let_bindings[binding_idx];
+        binding.setter(args, id);
+      }
     }
     if (desc_->set_filter) {
       (*desc_->set_filter)(args, std::move(filter_));
@@ -496,7 +472,6 @@ public:
       TRY(substitute_arg(named_arg.value, desc_->named[named_arg.index].setter,
                          true));
     }
-    // TODO: Substitute subpipeline IR.
     // Run custom validation if provided.
     if (desc_->validator) {
       auto error_tracker = error_tracking_handler{ctx};
@@ -534,8 +509,7 @@ private:
     return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
                               f.field("args", x.args_),
                               f.field("filter", x.filter_),
-                              f.field("named_args", x.named_args_),
-                              f.field("let_ids", x.let_ids_));
+                              f.field("named_args", x.named_args_));
   }
 
   /// The entity that this operator was created for.
@@ -547,30 +521,14 @@ private:
   /// Contains named arguments with their indices.
   std::vector<NamedArg> named_args_;
 
+  /// Pre-compiled pipeline with source location and let_ids.
+  std::optional<PipelineArg> pipeline_;
+
   /// The filter passed to `optimize` (only if the operator wants to consume it).
   ir::optimize_filter filter_;
 
   /// The object describing the available parameters.
   SharedDescription desc_;
-
-  /// Pre-compiled pipelines with their source locations.
-  std::map<size_t, located<ir::pipeline>> compiled_pipelines_;
-
-  /// Entry for a let_id that needs to be applied during spawn().
-  struct LetIdEntry {
-    size_t positional_idx;
-    size_t binding_idx;
-    let_id id;
-
-    friend auto inspect(auto& f, LetIdEntry& x) -> bool {
-      return f.object(x).fields(f.field("positional_idx", x.positional_idx),
-                                f.field("binding_idx", x.binding_idx),
-                                f.field("id", x.id));
-    }
-  };
-
-  /// Let IDs to apply during spawn() (serializable, unlike lambdas).
-  std::vector<LetIdEntry> let_ids_;
 };
 
 auto OperatorPlugin::compile(ast::invocation inv, compile_ctx ctx) const

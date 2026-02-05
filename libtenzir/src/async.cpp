@@ -223,6 +223,15 @@ private:
     -> Task<AnyOpenPipeline> override {
     TENZIR_INFO("spawning subpipeline");
     auto spawned = std::move(pipe).spawn(input);
+    // Add debug output:
+    TENZIR_WARN("spawned {} operators", spawned.size());
+    for (size_t i = 0; i < spawned.size(); ++i) {
+      match(spawned[i], [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
+        TENZIR_WARN("  operator[{}]: {} -> {}", i,
+                    element_type_tag{tag_v<In>},
+                    element_type_tag{tag_v<Out>});
+      });
+    }
     // TODO: Run chain in async scope?
     auto chain = match(
       input,

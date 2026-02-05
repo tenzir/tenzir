@@ -36,7 +36,7 @@ constexpr auto kListenBacklog = uint32_t{128};
 
 struct FromTcpArgs {
   located<std::string> endpoint;
-  ir::pipeline user_pipeline;
+  located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
 
@@ -98,7 +98,7 @@ public:
     };
     // Spawn subpipeline for this connection
     auto conn_id = next_conn_id_++;
-    auto pipeline_copy = user_pipeline_;
+    auto pipeline_copy = user_pipeline_.inner;
     // Substitute the pipeline copy with peer info in the environment
     auto env = substitute_ctx::env_t{};
     env[peer_let_id_] = std::move(peer_record);
@@ -108,8 +108,6 @@ public:
     auto sub_result
       = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
     if (not sub_result) {
-      diagnostic::error("failed to substitute pipeline for connection")
-        .emit(ctx);
       co_return;
     }
     auto sub = co_await ctx.spawn_sub(
@@ -138,21 +136,18 @@ private:
     -> Task<void> {
     auto io_executor = folly::getGlobalIOExecutor();
     while (true) {
-      // Read with timeout - allows periodic cancellation checks
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
       try {
-        // TODO: check if we really need the timeout.
         bytes = co_await transport->read(
           buf, 1, kBufferSize,
           std::chrono::duration_cast<std::chrono::milliseconds>(kReadTimeout));
       } catch (const folly::AsyncSocketException& e) {
-        if (e.getType() == folly::AsyncSocketException::TIMED_OUT) {
+        if (e.getType() != folly::AsyncSocketException::TIMED_OUT) {
           // Timeout is expected - continue to check cancellation
-          continue;
+          diagnostic::warning("{}", e).emit(dh);
+          co_return;
         }
-        diagnostic::warning("{}", e).emit(dh);
-        co_return;
       }
       if (bytes == 0) {
         break;
@@ -175,7 +170,7 @@ private:
   }
 
   folly::SocketAddress address_;
-  ir::pipeline user_pipeline_;
+  located<ir::pipeline> user_pipeline_;
   let_id peer_let_id_;
   std::unique_ptr<folly::coro::ServerSocket> server_;
   mutable uint64_t next_conn_id_{0};
@@ -193,6 +188,7 @@ public:
     d.pipeline(&FromTcpArgs::user_pipeline,
                {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
+      // TODO: use TRY
       if (auto ep_str = ctx.get(endpoint_arg)) {
         auto ep = to<struct endpoint>(ep_str->inner);
         auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
@@ -202,7 +198,7 @@ public:
           diagnostic::error("port number is required").primary(loc).emit(ctx);
         }
       }
-      return std::nullopt;
+      return {};
     });
 
     return d.without_optimize();
