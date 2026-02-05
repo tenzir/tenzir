@@ -364,6 +364,7 @@ jobs:
 
   tenzir-static-aarch64-linux:
     name: Nix
+    needs: [configure]
     if: needs.configure.outputs.run-tenzir-nix == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
@@ -375,6 +376,7 @@ jobs:
 
   tenzir-static-x86_64-linux:
     name: Nix
+    needs: [configure]
     if: needs.configure.outputs.run-tenzir-nix == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
@@ -386,6 +388,7 @@ jobs:
 
   tenzir-static-arm64-darwin:
     name: Nix
+    needs: [configure]
     if: needs.configure.outputs.run-tenzir-nix == 'true'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
