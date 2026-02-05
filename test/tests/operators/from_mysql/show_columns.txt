@@ -1,0 +1,64 @@
+{
+  Field: "id",
+  Type: b"int",
+  Null: "NO",
+  Key: "PRI",
+  Default: null,
+  Extra: "auto_increment",
+}
+{
+  Field: "name",
+  Type: b"varchar(100)",
+  Null: "NO",
+  Key: "",
+  Default: null,
+  Extra: "",
+}
+{
+  Field: "email",
+  Type: b"varchar(255)",
+  Null: "YES",
+  Key: "",
+  Default: null,
+  Extra: "",
+}
+{
+  Field: "age",
+  Type: b"int",
+  Null: "YES",
+  Key: "",
+  Default: null,
+  Extra: "",
+}
+{
+  Field: "balance",
+  Type: b"decimal(10,2)",
+  Null: "YES",
+  Key: "",
+  Default: null,
+  Extra: "",
+}
+{
+  Field: "is_active",
+  Type: b"tinyint(1)",
+  Null: "YES",
+  Key: "",
+  Default: b"1",
+  Extra: "",
+}
+{
+  Field: "created_at",
+  Type: b"datetime",
+  Null: "YES",
+  Key: "",
+  Default: b"CURRENT_TIMESTAMP",
+  Extra: "DEFAULT_GENERATED",
+}
+{
+  Field: "metadata",
+  Type: b"json",
+  Null: "YES",
+  Key: "",
+  Default: null,
+  Extra: "",
+}

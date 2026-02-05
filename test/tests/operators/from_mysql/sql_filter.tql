@@ -1,5 +1,5 @@
-// Read all rows from the users table
-from_mysql sql="SELECT id, name, email, age, balance, is_active, metadata FROM users ORDER BY id",
+// SQL query with WHERE filter and ORDER BY
+from_mysql sql="SELECT name, email, balance FROM users WHERE age >= 30 ORDER BY balance DESC",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),
            user=env("MYSQL_USER"),

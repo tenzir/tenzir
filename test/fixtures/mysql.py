@@ -179,6 +179,29 @@ def _create_test_data(runtime: str, container_id: str) -> None:
     INSERT INTO numbers VALUES
         (127, 32767, 2147483647, 9223372036854775807, 18446744073709551615,
          3.14, 3.141592653589793, 12345.67890);
+    CREATE TABLE IF NOT EXISTS types (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tiny_val TINYINT,
+        ubig_val BIGINT UNSIGNED,
+        float_val DOUBLE,
+        decimal_val DECIMAL(10,2),
+        str_val VARCHAR(100),
+        text_val TEXT,
+        blob_val BLOB,
+        date_val DATE,
+        datetime_val DATETIME,
+        json_val JSON,
+        enum_val ENUM('a','b','c'),
+        nullable_val VARCHAR(50)
+    );
+    INSERT INTO types (id, tiny_val, ubig_val, float_val, decimal_val, str_val,
+                       text_val, blob_val, date_val, datetime_val, json_val,
+                       enum_val, nullable_val) VALUES
+        (1, -128, 18446744073709551615, 3.14, 99.99, 'hello', 'text',
+         X'DEADBEEF', '2025-01-15', '2025-01-15 14:30:00',
+         '{{"key":"value"}}', 'b', 'not null'),
+        (2, 127, 0, 0.0, 0.00, '', '', X'',
+         '1970-01-01', '1970-01-01 00:00:00', '[]', 'a', NULL);
     """
     logger.info("Creating test tables and data")
     # Use root to create tables and grant privileges

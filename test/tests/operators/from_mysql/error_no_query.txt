@@ -1,0 +1,2 @@
+error: no query specified
+ = hint: specify `table`, `sql`, or `show`

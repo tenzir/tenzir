@@ -1,0 +1,12 @@
+{
+  Tables_in_tenzir_test: "events",
+}
+{
+  Tables_in_tenzir_test: "numbers",
+}
+{
+  Tables_in_tenzir_test: "types",
+}
+{
+  Tables_in_tenzir_test: "users",
+}
