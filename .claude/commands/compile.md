@@ -1,12 +1,12 @@
 ---
-description: Compile the project or target
+description: Compile the whole project or a specific target (e.g. `/compile tenzir`)
 argument-hint: "[target] [cmake-options...]"
 context: fork
 model: haiku
-allowed-tools: Bash(./scripts/build.sh)
+allowed-tools: Bash(./scripts/build.sh:*)
 ---
 
-Run `./scripts/build.sh`.
+Run `./scripts/build.sh $ARGUMENTS`.
 
 - On success: answer briefly, report only directly relevant warnings, stop
 - On failure: report the first error, stop
