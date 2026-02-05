@@ -47,7 +47,8 @@ public:
   };
 
   FromTcpListener(FromTcpArgs args)
-    : user_pipeline_{std::move(args.user_pipeline)} {
+    : user_pipeline_{std::move(args.user_pipeline)},
+      peer_let_id_{args.peer_info} {
     // Parse endpoint string to SocketAddress (validation already done in
     // describe)
     auto ep = to<struct endpoint>(args.endpoint.inner);
@@ -91,14 +92,25 @@ public:
     auto transport_ptr = std::any_cast<std::shared_ptr<folly::coro::Transport>>(
       std::move(result));
 
+    // Create peer info record from the connection
+    auto peer_addr = transport_ptr->getPeerAddress();
+    auto peer_record = record{
+      {"ip", peer_addr.getAddressStr()},
+      {"port", int64_t{peer_addr.getPort()}},
+    };
+
     // Spawn subpipeline for this connection
     auto conn_id = next_conn_id_++;
     auto pipeline_copy = user_pipeline_;
-    // Substitute the pipeline copy
+
+    // Substitute the pipeline copy with peer info in the environment
+    auto env = substitute_ctx::env_t{};
+    env[peer_let_id_] = std::move(peer_record);
+    TENZIR_DEBUG("from_tcp: using peer_let_id_ = {}", peer_let_id_.id);
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg};
     auto sub_result
-      = pipeline_copy.substitute(substitute_ctx{b_ctx, nullptr}, true);
+      = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
     if (not sub_result) {
       diagnostic::error("failed to substitute pipeline for connection")
         .emit(ctx);
@@ -172,6 +184,7 @@ private:
 
   folly::SocketAddress address_;
   ir::pipeline user_pipeline_;
+  let_id peer_let_id_;
   std::unique_ptr<folly::coro::ServerSocket> server_;
   mutable std::vector<Connection> connections_;
   mutable uint64_t next_conn_id_{0};
