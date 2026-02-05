@@ -73,17 +73,17 @@ assertion_failure(std::string_view cond, std::source_location location) {
   static_assert(true)
 
 #define TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, ...)                                 \
-  TENZIR_ASSERT_RELATION_ALWAYS(==, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+  TENZIR_ASSERT_RELATION_ALWAYS(==, LHS, RHS, __VA_ARGS__)
 #define TENZIR_ASSERT_NEQ_ALWAYS(LHS, RHS, ...)                                \
-  TENZIR_ASSERT_RELATION_ALWAYS(!=, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+  TENZIR_ASSERT_RELATION_ALWAYS(!=, LHS, RHS, __VA_ARGS__)
 #define TENZIR_ASSERT_LT_ALWAYS(LHS, RHS, ...)                                 \
-  TENZIR_ASSERT_RELATION_ALWAYS(<, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+  TENZIR_ASSERT_RELATION_ALWAYS(<, LHS, RHS, __VA_ARGS__)
 #define TENZIR_ASSERT_LEQ_ALWAYS(LHS, RHS, ...)                                \
-  TENZIR_ASSERT_RELATION_ALWAYS(<=, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+  TENZIR_ASSERT_RELATION_ALWAYS(<=, LHS, RHS, __VA_ARGS__)
 #define TENZIR_ASSERT_GT_ALWAYS(LHS, RHS, ...)                                 \
-  TENZIR_ASSERT_RELATION_ALWAYS(>, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+  TENZIR_ASSERT_RELATION_ALWAYS(>, LHS, RHS, __VA_ARGS__)
 #define TENZIR_ASSERT_GEQ_ALWAYS(LHS, RHS, ...)                                \
-  TENZIR_ASSERT_RELATION_ALWAYS(>=, LHS, RHS __VA_OPT__(, ) __VA_ARGS__)
+  TENZIR_ASSERT_RELATION_ALWAYS(>=, LHS, RHS, __VA_ARGS__)
 
 #if TENZIR_ENABLE_ASSERTIONS
 #  define TENZIR_ASSERT_EXPENSIVE(...) TENZIR_ASSERT_ALWAYS(__VA_ARGS__)
@@ -100,19 +100,14 @@ assertion_failure(std::string_view cond, std::source_location location) {
 #  define TENZIR_ASSERT_GEQ_EXPENSIVE(LHS, RHS, ...)                           \
     TENZIR_ASSERT_GEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
 #else
-#  define TENZIR_ASSERT_EXPENSIVE(...) TENZIR_UNUSED(__VA_ARGS__)
-#  define TENZIR_ASSERT_EQ_EXPENSIVE(LHS, RHS, ...)                            \
-    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_NEQ_EXPENSIVE(LHS, RHS, ...)                           \
-    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_LT_EXPENSIVE(LHS, RHS, ...)                            \
-    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_LEQ_EXPENSIVE(LHS, RHS, ...)                           \
-    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_GT_EXPENSIVE(LHS, RHS, ...)                            \
-    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_GEQ_EXPENSIVE(LHS, RHS, ...)                           \
-    TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT_EXPENSIVE(...)
+#  define TENZIR_ASSERT_EQ_EXPENSIVE(LHS, RHS, ...)
+#  define TENZIR_ASSERT_NEQ_EXPENSIVE(LHS, RHS, ...)
+#  define TENZIR_ASSERT_LT_EXPENSIVE(LHS, RHS, ...)
+#  define TENZIR_ASSERT_LEQ_EXPENSIVE(LHS, RHS, ...)
+#  define TENZIR_ASSERT_GT_EXPENSIVE(LHS, RHS, ...)
+#  define TENZIR_ASSERT_GEQ_EXPENSIVE(LHS, RHS, ...)
+
 #endif
 
 #if TENZIR_ENABLE_ASSERTIONS_CHEAP
@@ -130,13 +125,13 @@ assertion_failure(std::string_view cond, std::source_location location) {
 #  define TENZIR_ASSERT_GEQ(LHS, RHS, ...)                                     \
     TENZIR_ASSERT_GEQ_ALWAYS(LHS, RHS, __VA_ARGS__)
 #else
-#  define TENZIR_ASSERT(...) TENZIR_UNUSED(__VA_ARGS__)
-#  define TENZIR_ASSERT_EQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_NEQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_LT(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_LEQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_GT(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
-#  define TENZIR_ASSERT_GEQ(LHS, RHS, ...) TENZIR_UNUSED(LHS, RHS, __VA_ARGS__)
+#  define TENZIR_ASSERT(...)
+#  define TENZIR_ASSERT_EQ(LHS, RHS, ...)
+#  define TENZIR_ASSERT_NEQ(LHS, RHS, ...)
+#  define TENZIR_ASSERT_LT(LHS, RHS, ...)
+#  define TENZIR_ASSERT_LEQ(LHS, RHS, ...)
+#  define TENZIR_ASSERT_GT(LHS, RHS, ...)
+#  define TENZIR_ASSERT_GEQ(LHS, RHS, ...)
 #endif
 
 /// Unlike `__builtin_unreachable()`, reaching this macro is not UB, it simply
