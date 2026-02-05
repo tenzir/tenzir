@@ -51,7 +51,7 @@ using AnySetter = detail::tl_apply_t<Setters, variant>;
 /// Specification for a let binding to inject into a subpipeline.
 struct LetBinding {
   std::string name;
-  std::function<void(std::any&, let_id)> setter;
+  std::function<void(Any&, let_id)> setter;
 };
 
 struct Positional {
@@ -192,8 +192,8 @@ auto make_setter(T Args::* ptr) -> auto {
   } else if constexpr (std::same_as<Value, ir::pipeline>) {
     // Pipeline arguments come as located<ir::pipeline>, extract the inner value.
     return Setter<located<ir::pipeline>>{
-      [ptr](std::any& args, located<ir::pipeline> value) {
-        (&std::any_cast<Args&>(args))->*ptr = std::move(value.inner);
+      [ptr](Any& args, located<ir::pipeline> value) {
+        (&args.as<Args>())->*ptr = std::move(value.inner);
       }};
   } else {
     return Setter<Value>{[ptr](Any& args, Value value) {
@@ -446,7 +446,7 @@ public:
   /// Usage: `d.pipeline(&Args::pipe, {{"var_name", &Args::var_let_id}, ...})`
   auto pipeline(
     ir::pipeline Args::* ptr,
-    std::initializer_list<std::pair<const char*, let_id Args::*>> bindings)
+    std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
     -> Argument<Args, located<ir::pipeline>> {
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
@@ -455,12 +455,13 @@ public:
     auto let_bindings = std::vector<LetBinding>{};
     for (const auto& [name, member_ptr] : bindings) {
       let_bindings.push_back(
-        {std::string{name}, [member_ptr](std::any& args, let_id id) {
-           (&std::any_cast<Args&>(args))->*member_ptr = id;
+        {std::string{name}, [member_ptr](Any& args, let_id id) {
+           (&args.as<Args>())->*member_ptr = id;
          }});
     }
     desc_.positional.push_back(Positional{
       "body",
+      // TODO: Better type?
       "{ … }",
       make_setter(ptr),
       std::move(let_bindings),

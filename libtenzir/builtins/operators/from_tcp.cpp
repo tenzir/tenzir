@@ -61,6 +61,8 @@ public:
     }
   }
 
+  FromTcpListener(const FromTcpListener&) = delete;
+  FromTcpListener& operator=(const FromTcpListener&) = delete;
   FromTcpListener(FromTcpListener&&) = default;
   FromTcpListener& operator=(FromTcpListener&&) noexcept = default;
   ~FromTcpListener() override = default;
@@ -75,34 +77,28 @@ public:
     co_return;
   }
 
-  auto await_task() const -> Task<std::any> override {
+  auto await_task() const -> Task<Any> override {
     TENZIR_VERBOSE("from_tcp: waiting for connection");
     auto transport = co_await folly::coro::co_withExecutor(
       folly::getGlobalIOExecutor(), server_->accept());
     TENZIR_INFO("from_tcp: accepted connection from {}",
                 transport->getPeerAddress().describe());
-    // Wrap in shared_ptr because std::any requires copyable types
-    auto transport_ptr
-      = std::make_shared<folly::coro::Transport>(std::move(*transport));
-    co_return transport_ptr;
+    co_return Box<folly::coro::Transport>::from_unique_ptr(
+      std::move(transport));
   }
 
-  auto process_task(std::any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto transport_ptr = std::any_cast<std::shared_ptr<folly::coro::Transport>>(
-      std::move(result));
-
+    auto transport = std::move(result).as<Box<folly::coro::Transport>>();
     // Create peer info record from the connection
-    auto peer_addr = transport_ptr->getPeerAddress();
+    auto peer_addr = transport->getPeerAddress();
     auto peer_record = record{
       {"ip", peer_addr.getAddressStr()},
       {"port", int64_t{peer_addr.getPort()}},
     };
-
     // Spawn subpipeline for this connection
     auto conn_id = next_conn_id_++;
     auto pipeline_copy = user_pipeline_;
-
     // Substitute the pipeline copy with peer info in the environment
     auto env = substitute_ctx::env_t{};
     env[peer_let_id_] = std::move(peer_record);
@@ -119,14 +115,10 @@ public:
     auto sub = co_await ctx.spawn_sub(
       data{int64_t(conn_id)}, std::move(pipeline_copy), tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
-
-    // Store connection for tracking
-    connections_.push_back({transport_ptr});
-
     // Spawn read loop on IO executor
     ctx.spawn_task(folly::coro::co_withExecutor(
       folly::getGlobalIOExecutor(),
-      read_loop(conn_id, transport_ptr, open_pipeline, ctx.dh())));
+      read_loop(conn_id, std::move(transport), open_pipeline, ctx.dh())));
   }
 
   auto stop(OpCtx& /*ctx*/) -> Task<void> override {
@@ -141,7 +133,7 @@ public:
 private:
   // TODO: Make OpenPipeline thread safe.
   static auto
-  read_loop(uint64_t conn_id, std::shared_ptr<folly::coro::Transport> transport,
+  read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
             OpenPipeline<chunk_ptr> pipeline, diagnostic_handler& dh)
     -> Task<void> {
     auto io_executor = folly::getGlobalIOExecutor();
@@ -186,7 +178,6 @@ private:
   ir::pipeline user_pipeline_;
   let_id peer_let_id_;
   std::unique_ptr<folly::coro::ServerSocket> server_;
-  mutable std::vector<Connection> connections_;
   mutable uint64_t next_conn_id_{0};
 };
 
