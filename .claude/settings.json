@@ -5,7 +5,7 @@
       "Bash(ls:*)",
       "Bash(tenzir:*)",
       "Bash(tenzir-node:*)",
-      "Bash(tenzir-test:*)",
+      "Bash(tenzir-unit-test:*)",
       "Bash(uvx tenzir-test:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
