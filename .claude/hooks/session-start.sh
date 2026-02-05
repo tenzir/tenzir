@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Find the build directory by locating CMakeCache.txt
-BUILD_DIR=$(find . -maxdepth 3 -name CMakeCache.txt -type f 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+BUILD_DIR=$(find . -name CMakeCache.txt -type f 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
 
 if [ -n "$BUILD_DIR" ]; then
   ABS_BUILD_DIR=$(cd "$BUILD_DIR" && pwd)
