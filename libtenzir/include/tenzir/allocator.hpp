@@ -201,34 +201,37 @@ public:
   }
 
   auto make_this_current() noexcept -> void {
-    const auto aptr = caf::abstract_actor::current();
-    if (not aptr) {
-      const auto thread = pthread_self();
-      // We want to handle the case where thread names use all characters.
-      // Unfortunately, the API insists on its null terminator, so we need to
-      // use a temporary buffer that can accommodate it and then simply drop it
-      // when copying into the actual storage
-      constexpr static auto storage_size = 16;
-      char storage[storage_size] = {};
-      pthread_getname_np(thread, storage, storage_size);
-      std::memcpy(storage_.data(), storage, storage_.size());
-      return;
-    }
-    const char* const name = aptr->name();
-#ifndef __clang__
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wstringop-truncation"
-#endif
-    std::strncpy(storage_.data(), name, storage_.size());
-#ifndef __clang__
-#  pragma GCC diagnostic pop
-#endif
-    constexpr static auto exec_node_name = std::string_view{"exec-node"};
-    if (std::memcmp(storage_.data(), exec_node_name.data(),
-                    exec_node_name.size())
-        == 0) {
-      storage_ = exec_node_name_guard::operator_name;
-    }
+    //     const auto aptr = caf::abstract_actor::current();
+    //     if (not aptr) {
+    //       const auto thread = pthread_self();
+    //       // We want to handle the case where thread names use all
+    //       characters.
+    //       // Unfortunately, the API insists on its null terminator, so we
+    //       need to
+    //       // use a temporary buffer that can accommodate it and then simply
+    //       drop it
+    //       // when copying into the actual storage
+    //       constexpr static auto storage_size = 16;
+    //       char storage[storage_size] = {};
+    //       pthread_getname_np(thread, storage, storage_size);
+    //       std::memcpy(storage_.data(), storage, storage_.size());
+    //       return;
+    //     }
+    //     const char* const name = aptr->name();
+    // #ifndef __clang__
+    // #  pragma GCC diagnostic push
+    // #  pragma GCC diagnostic ignored "-Wstringop-truncation"
+    // #endif
+    //     std::strncpy(storage_.data(), name, storage_.size());
+    // #ifndef __clang__
+    // #  pragma GCC diagnostic pop
+    // #endif
+    //     constexpr static auto exec_node_name = std::string_view{"exec-node"};
+    //     if (std::memcmp(storage_.data(), exec_node_name.data(),
+    //                     exec_node_name.size())
+    //         == 0) {
+    //       storage_ = exec_node_name_guard::operator_name;
+    //     }
   }
 
   auto alignment() const noexcept -> alignment_t {

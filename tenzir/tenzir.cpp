@@ -514,9 +514,9 @@ auto main(int argc, char** argv) -> int try {
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
-  cfg.set_clock_factory([](caf::actor_system& sys) {
-    return std::make_unique<cleaning_actor_clock>(sys);
-  });
+  // cfg.set_clock_factory([](caf::actor_system& sys) {
+  //   return std::make_unique<cleaning_actor_clock>(sys);
+  // });
   auto sys = caf::actor_system{cfg};
   auto run_error = caf::error{};
   if (is_server) {
