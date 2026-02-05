@@ -92,14 +92,6 @@ public:
     co_await push(table_slice{datum.record_batch(), input.schema()});
   }
 
-  auto snapshot(Serde& serde) -> void override {
-    // Note: last_ uses steady_clock which isn't serializable across restarts.
-    // On restore, reset timing state (acceptable for sampling operator).
-    serde("count", count_);
-    serde("offset", offset_);
-    serde("stride", stride_);
-  }
-
 private:
   auto compute_rate() const -> double {
     switch (fn_) {
