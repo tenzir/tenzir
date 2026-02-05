@@ -247,7 +247,8 @@ public:
              detail::enumerate(pipe->let_bindings)) {
           auto id = scope.let(binding.name);
           // Store let_id for later application during spawn().
-          auto [_, inserted] = result.pipeline_->let_ids.emplace(binding_idx, id);
+          auto [_, inserted]
+            = result.pipeline_->let_ids.emplace(binding_idx, id);
           TENZIR_ASSERT(inserted);
         }
         // Compile the pipeline (with the scope if present).
@@ -279,6 +280,11 @@ public:
                                named.name)
                .primary(result.op_));
       }
+    }
+    // Check for missing required subpipeline.
+    if (desc->pipeline and desc->pipeline->required and not result.pipeline_) {
+      emit(diagnostic::error("required subpipeline was not provided")
+             .primary(result.op_));
     }
     if (failed) {
       return failure::promise();
@@ -316,14 +322,6 @@ public:
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
     auto args = desc_->make_args();
-    // Apply let_id setters from pre-compiled pipelines.
-    //for (const auto& entry : let_ids_) {
-    //  TENZIR_ASSERT(entry.positional_idx < desc_->positional.size());
-    //  const auto& pos = desc_->positional[entry.positional_idx];
-    //  TENZIR_ASSERT(entry.binding_idx < pos.let_bindings.size());
-    //  const auto& binding = pos.let_bindings[entry.binding_idx];
-    //  binding.setter(args, entry.id);
-    //}
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
         std::move(arg),
@@ -509,7 +507,8 @@ private:
     return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
                               f.field("args", x.args_),
                               f.field("filter", x.filter_),
-                              f.field("named_args", x.named_args_));
+                              f.field("named_args", x.named_args_),
+                              f.field("pipeline", x.pipeline_));
   }
 
   /// The entity that this operator was created for.

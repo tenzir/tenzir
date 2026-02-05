@@ -221,17 +221,7 @@ public:
 private:
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
-    TENZIR_INFO("spawning subpipeline");
     auto spawned = std::move(pipe).spawn(input);
-    // Add debug output:
-    TENZIR_WARN("spawned {} operators", spawned.size());
-    for (size_t i = 0; i < spawned.size(); ++i) {
-      match(spawned[i], [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
-        TENZIR_WARN("  operator[{}]: {} -> {}", i,
-                    element_type_tag{tag_v<In>},
-                    element_type_tag{tag_v<Out>});
-      });
-    }
     // TODO: Run chain in async scope?
     auto chain = match(
       input,
@@ -266,47 +256,47 @@ private:
         return std::move(push_upstream);
       });
     // co_await handle.join();
-    queue_.scope().spawn([this, key,
-                          pull_downstream
-                          = std::move(pull_downstream)] mutable -> Task<void> {
-      // Pulling from the subpipeline needs to happen independently from the
-      // main operator logic. This is because we might block when pushing to the
-      // subpipeline due to backpressure, but in order to alleviate the
-      // backpressure, we need to pull from it.
-      while (true) {
-        auto output = co_await pull_downstream();
-        co_await co_match(
-          std::move(output),
-          [&](table_slice output) -> Task<void> {
-            if constexpr (std::same_as<Output, void>) {
-              co_await op_->process_sub(make_view(key), std::move(output),
-                                        ctx_);
-            } else {
-              auto push = OpPushWrapper{push_downstream_};
-              co_await op_->process_sub(make_view(key), std::move(output), push,
-                                        ctx_);
-            }
-          },
-          [&](Signal output) -> Task<void> {
-            switch (output) {
-              case Signal::end_of_data: {
-                if constexpr (std::same_as<Output, void>) {
-                  co_await op_->finish_sub(make_view(key), ctx_);
-                } else {
-                  auto push = OpPushWrapper{push_downstream_};
-                  co_await op_->finish_sub(make_view(key), push, ctx_);
-                }
-                // TODO(tobim): Too early?
-                subpipelines_.erase(key);
-                co_return;
+    queue_.scope().spawn(
+      [this, key,
+       pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
+        // Pulling from the subpipeline needs to happen independently from the
+        // main operator logic. This is because we might block when pushing to
+        // the subpipeline due to backpressure, but in order to alleviate the
+        // backpressure, we need to pull from it.
+        while (true) {
+          auto output = co_await pull_downstream();
+          co_await co_match(
+            std::move(output),
+            [&](table_slice output) -> Task<void> {
+              if constexpr (std::same_as<Output, void>) {
+                co_await op_->process_sub(make_view(key), std::move(output),
+                                          ctx_);
+              } else {
+                auto push = OpPushWrapper{push_downstream_};
+                co_await op_->process_sub(make_view(key), std::move(output),
+                                          push, ctx_);
               }
-              case Signal::checkpoint:
-                TENZIR_TODO();
-            }
-            TENZIR_UNREACHABLE();
-          });
-      }
-    });
+            },
+            [&](Signal output) -> Task<void> {
+              switch (output) {
+                case Signal::end_of_data: {
+                  if constexpr (std::same_as<Output, void>) {
+                    co_await op_->finish_sub(make_view(key), ctx_);
+                  } else {
+                    auto push = OpPushWrapper{push_downstream_};
+                    co_await op_->finish_sub(make_view(key), push, ctx_);
+                  }
+                  // TODO(tobim): Too early?
+                  subpipelines_.erase(key);
+                  co_return;
+                }
+                case Signal::checkpoint:
+                  TENZIR_TODO();
+              }
+              TENZIR_UNREACHABLE();
+            });
+        }
+      });
     queue_.scope().spawn([to_control_receiver = std::move(
                             to_control_receiver)] mutable -> Task<void> {
       while (true) {

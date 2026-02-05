@@ -130,10 +130,9 @@ public:
 
 private:
   // TODO: Make OpenPipeline thread safe.
-  static auto
-  read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
-            OpenPipeline<chunk_ptr> pipeline, diagnostic_handler& dh)
-    -> Task<void> {
+  static auto read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
+                        OpenPipeline<chunk_ptr> pipeline,
+                        diagnostic_handler& dh) -> Task<void> {
     auto io_executor = folly::getGlobalIOExecutor();
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
@@ -188,15 +187,13 @@ public:
     d.pipeline(&FromTcpArgs::user_pipeline,
                {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      // TODO: use TRY
-      if (auto ep_str = ctx.get(endpoint_arg)) {
-        auto ep = to<struct endpoint>(ep_str->inner);
-        auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
-        if (not ep) {
-          diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);
-        } else if (not ep->port) {
-          diagnostic::error("port number is required").primary(loc).emit(ctx);
-        }
+      TRY(auto ep_str, ctx.get(endpoint_arg));
+      auto ep = to<struct endpoint>(ep_str.inner);
+      auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
+      if (not ep) {
+        diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);
+      } else if (not ep->port) {
+        diagnostic::error("port number is required").primary(loc).emit(ctx);
       }
       return {};
     });

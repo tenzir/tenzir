@@ -382,17 +382,7 @@ public:
       load_balance(x);
       return;
     }
-    // Visit the operator entity but NOT the arguments.
-    // Pipeline arguments may contain let bindings that will be introduced
-    // by the operator during its compile() phase. Non-pipeline arguments
-    // are visited below.
-    visit(x.op);
-    for (auto& arg : x.args) {
-      // Skip pipeline_expr arguments - operators handle their own bindings.
-      if (not std::holds_alternative<ast::pipeline_expr>(*arg.kind)) {
-        visit(arg);
-      }
-    }
+    enter(x);
   }
 
   template <class T>
