@@ -186,31 +186,34 @@ public:
     -> failure_or<GenericIr> {
     auto result = GenericIr{};
     result.op_ = std::move(op);
-    // First pass: identify and compile pipeline args with let bindings.
-    // This also creates the let_ids that the operator will use.
+    // First pass: compile pipeline arguments.
+    // For pipelines with let bindings, we also create the let_ids.
     {
       auto positional_idx = size_t{0};
       for (auto& arg : args) {
         if (not is<ast::assignment>(arg)) {
           if (positional_idx < desc->positional.size()) {
             const auto& pos = desc->positional[positional_idx];
-            if (not pos.let_bindings.empty()) {
-              // Pipeline argument with let bindings.
+            // Check if this positional expects a pipeline.
+            if (is<Setter<located<ir::pipeline>>>(pos.setter)) {
               auto* pipe_expr = try_as<ast::pipeline_expr>(arg);
               if (pipe_expr) {
-                // Open a scope and create let bindings.
-                auto scope = ctx.open_scope();
-                for (const auto& binding : pos.let_bindings) {
-                  auto id = scope.let(binding.name);
-                  // Capture the setter and id to apply later during spawn.
-                  result.let_id_setters_.push_back(
-                    [setter = binding.setter, id](std::any& args_ref) {
-                      setter(args_ref, id);
-                    });
+                // Open a scope if there are let bindings.
+                auto scope = pos.let_bindings.empty()
+                               ? std::optional<compile_ctx::scope>{}
+                               : ctx.open_scope();
+                for (auto [binding_idx, binding] :
+                     detail::enumerate(pos.let_bindings)) {
+                  auto id = scope->let(binding.name);
+                  // Store let_id for later application during spawn().
+                  result.let_ids_.push_back(
+                    LetIdEntry{positional_idx, binding_idx, id});
                 }
-                // Compile the pipeline with the scope.
+                // Compile the pipeline (with the scope if present).
+                auto pipe_loc = pipe_expr->get_location();
                 TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
-                result.compiled_pipelines_[positional_idx] = std::move(pipe_ir);
+                result.compiled_pipelines_[positional_idx]
+                  = located{std::move(pipe_ir), pipe_loc};
               }
             }
           }
@@ -275,9 +278,8 @@ public:
         // Check if this positional was pre-compiled (pipeline with let bindings).
         if (auto it = result.compiled_pipelines_.find(positional_idx);
             it != result.compiled_pipelines_.end()) {
-          // Store the pre-compiled pipeline directly.
-          result.args_.push_back(
-            located{std::move(it->second), arg.get_location()});
+          // Store the pre-compiled pipeline directly (already has location).
+          result.args_.push_back(std::move(it->second));
           result.compiled_pipelines_.erase(it);
         } else {
           result.args_.push_back(Incomplete{std::move(arg)});
@@ -339,10 +341,23 @@ public:
     auto args = desc_->make_args();
     // Apply let_id setters from pre-compiled pipelines.
     // TODO: already done in make_args()?
-    for (auto& setter : let_id_setters_) {
-      setter(args);
+    for (const auto& entry : let_ids_) {
+      TENZIR_ASSERT(entry.positional_idx < desc_->positional.size());
+      const auto& pos = desc_->positional[entry.positional_idx];
+      TENZIR_ASSERT(entry.binding_idx < pos.let_bindings.size());
+      const auto& binding = pos.let_bindings[entry.binding_idx];
+      binding.setter(args, entry.id);
     }
     for (auto [idx, arg] : detail::enumerate(args_)) {
+      // Check if we have a pre-compiled pipeline for this positional.
+      if (auto it = compiled_pipelines_.find(idx);
+          it != compiled_pipelines_.end()) {
+        // Use the pre-compiled pipeline with let bindings (already has location).
+        TENZIR_ASSERT(idx < desc_->positional.size());
+        as<Setter<located<ir::pipeline>>>(
+          desc_->positional[idx].setter)(args, std::move(it->second));
+        continue;
+      }
       match(
         std::move(arg),
         [&]<class T>(T x) {
@@ -452,7 +467,8 @@ public:
               TENZIR_TODO();
             },
             [&](const Setter<located<ir::pipeline>>&) -> failure_or<Arg> {
-              TENZIR_TODO();
+              // Pipelines are compiled in make(), not during substitute.
+              TENZIR_UNREACHABLE();
             },
             [&]<class T>(const Setter<T>&) -> failure_or<Arg> {
               TENZIR_TODO();
@@ -518,7 +534,8 @@ private:
     return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
                               f.field("args", x.args_),
                               f.field("filter", x.filter_),
-                              f.field("named_args", x.named_args_));
+                              f.field("named_args", x.named_args_),
+                              f.field("let_ids", x.let_ids_));
   }
 
   /// The entity that this operator was created for.
@@ -536,11 +553,24 @@ private:
   /// The object describing the available parameters.
   SharedDescription desc_;
 
-  /// Pre-compiled pipelines (used during make() before moving to args_).
-  std::map<size_t, ir::pipeline> compiled_pipelines_;
+  /// Pre-compiled pipelines with their source locations.
+  std::map<size_t, located<ir::pipeline>> compiled_pipelines_;
 
-  /// Let ID setters to apply during spawn().
-  std::vector<std::function<void(std::any&)>> let_id_setters_;
+  /// Entry for a let_id that needs to be applied during spawn().
+  struct LetIdEntry {
+    size_t positional_idx;
+    size_t binding_idx;
+    let_id id;
+
+    friend auto inspect(auto& f, LetIdEntry& x) -> bool {
+      return f.object(x).fields(f.field("positional_idx", x.positional_idx),
+                                f.field("binding_idx", x.binding_idx),
+                                f.field("id", x.id));
+    }
+  };
+
+  /// Let IDs to apply during spawn() (serializable, unlike lambdas).
+  std::vector<LetIdEntry> let_ids_;
 };
 
 auto OperatorPlugin::compile(ast::invocation inv, compile_ctx ctx) const
