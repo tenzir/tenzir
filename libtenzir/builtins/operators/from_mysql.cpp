@@ -11,13 +11,12 @@
 #include <tenzir/any.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/ScopedEventBaseThread.h>
 #include <folly/io/coro/Transport.h>
 #include <openssl/sha.h>
 
@@ -417,6 +416,9 @@ auto parse_error_from_packet(std::span<uint8_t const> data) -> mysql_error {
 // -- Section 4: Async Connection ---------------------------------------------
 
 /// Async MySQL connection using folly::coro::Transport.
+///
+/// All Transport operations are scheduled on the EventBase thread via
+/// scheduleOn() to ensure AsyncSocket callbacks fire correctly.
 class async_connection {
 public:
   async_connection() = default;
@@ -427,15 +429,23 @@ public:
     -> Task<async_connection> {
     auto addr = folly::SocketAddress{host, port};
     auto transport
-      = co_await folly::coro::Transport::newConnectedSocket(evb, addr, timeout);
-    co_return async_connection{std::move(transport)};
+      = co_await folly::coro::co_invoke(
+          [&]() -> folly::coro::Task<folly::coro::Transport> {
+            co_return co_await folly::coro::Transport::newConnectedSocket(
+              evb, addr, timeout);
+          })
+          .scheduleOn(evb);
+    co_return async_connection{std::move(transport), evb};
   }
   /// Read a MySQL packet asynchronously.
   auto read_packet() -> Task<MysqlResult<std::vector<uint8_t>>> {
     // Read 4-byte header: 3 bytes length + 1 byte sequence.
     auto header = std::array<uint8_t, 4>{};
-    auto n = co_await transport_->read(
-      folly::MutableByteRange{header.data(), 4}, read_timeout_);
+    auto n
+      = co_await folly::coro::co_invoke([&]() -> folly::coro::Task<size_t> {
+          co_return co_await transport_->read(
+            folly::MutableByteRange{header.data(), 4}, read_timeout_);
+        }).scheduleOn(evb_);
     if (n != 4) {
       co_return Err{mysql_error::protocol("short header read")};
     }
@@ -444,8 +454,11 @@ public:
     sequence_id_ = header[3];
     // Read payload.
     auto payload = std::vector<uint8_t>(len);
-    auto read = co_await transport_->read(
-      folly::MutableByteRange{payload.data(), len}, read_timeout_);
+    auto read
+      = co_await folly::coro::co_invoke([&]() -> folly::coro::Task<size_t> {
+          co_return co_await transport_->read(
+            folly::MutableByteRange{payload.data(), len}, read_timeout_);
+        }).scheduleOn(evb_);
     if (read != len) {
       co_return Err{mysql_error::protocol("short payload read")};
     }
@@ -460,7 +473,10 @@ public:
     packet[2] = static_cast<uint8_t>((payload.size() >> 16) & 0xFF);
     packet[3] = seq;
     std::copy(payload.begin(), payload.end(), packet.begin() + 4);
-    co_await transport_->write(folly::ByteRange{packet.data(), packet.size()});
+    co_await folly::coro::co_invoke([&]() -> folly::coro::Task<void> {
+      co_await transport_->write(
+        folly::ByteRange{packet.data(), packet.size()});
+    }).scheduleOn(evb_);
     co_return {};
   }
   /// Perform the initial handshake with the server.
@@ -616,29 +632,56 @@ public:
       co_return Err{
         mysql_error::protocol("auth switch request not implemented")};
     }
-    // caching_sha2_password fast auth success.
-    if (resp_data[0] == 0x01 and resp_data.size() > 1
-        and resp_data[1] == 0x04) {
-      auto final_response = co_await read_packet();
-      if (final_response.is_err()) {
-        co_return Err{std::move(final_response).unwrap_err()};
+    // caching_sha2_password more-data response.
+    if (resp_data[0] == 0x01 and resp_data.size() > 1) {
+      // 0x03 = fast auth success (cached), read the final OK.
+      if (resp_data[1] == 0x03) {
+        auto final_response = co_await read_packet();
+        if (final_response.is_err()) {
+          co_return Err{std::move(final_response).unwrap_err()};
+        }
+        if (final_response.value()[0] == 0x00) {
+          co_return {};
+        }
+        co_return Err{
+          mysql_error::protocol("unexpected response after fast auth")};
       }
-      if (final_response.value()[0] == 0x00) {
-        co_return {};
+      // 0x04 = full auth required. Send password as null-terminated cleartext.
+      if (resp_data[1] == 0x04) {
+        auto pw_packet = std::vector<uint8_t>{};
+        pw_packet.insert(pw_packet.end(), password.begin(), password.end());
+        pw_packet.push_back(0);
+        auto pw_write = co_await write_packet(pw_packet, sequence_id_ + 1);
+        if (pw_write.is_err()) {
+          co_return Err{std::move(pw_write).unwrap_err()};
+        }
+        auto final_response = co_await read_packet();
+        if (final_response.is_err()) {
+          co_return Err{std::move(final_response).unwrap_err()};
+        }
+        if (final_response.value()[0] == 0x00) {
+          co_return {};
+        }
+        if (final_response.value()[0] == 0xff) {
+          co_return Err{parse_error_from_packet(final_response.value())};
+        }
+        co_return Err{
+          mysql_error::protocol("unexpected response after full auth")};
       }
-      co_return Err{
-        mysql_error::protocol("unexpected response after fast auth")};
     }
     co_return Err{mysql_error::protocol(
       fmt::format("unexpected auth response: 0x{:02x}", resp_data[0]))};
   }
 
 private:
-  explicit async_connection(folly::coro::Transport transport)
-    : transport_{
-        std::make_unique<folly::coro::Transport>(std::move(transport))} {
+  explicit async_connection(folly::coro::Transport transport,
+                            folly::EventBase* evb)
+    : transport_{std::make_unique<folly::coro::Transport>(
+        std::move(transport))},
+      evb_{evb} {
   }
   std::unique_ptr<folly::coro::Transport> transport_;
+  folly::EventBase* evb_ = nullptr;
   std::chrono::milliseconds read_timeout_{std::chrono::seconds{30}};
   uint8_t sequence_id_ = 0;
 };
@@ -815,8 +858,6 @@ public:
   /// Connect to MySQL server asynchronously.
   static auto make(folly::EventBase* evb, client_config config)
     -> Task<MysqlResult<std::unique_ptr<async_client>>> {
-    TENZIR_ERROR("from_mysql: async_client::make() connecting to {}:{}",
-                 config.host, config.port);
     auto conn = async_connection{};
     try {
       conn = co_await async_connection::connect(evb, config.host, config.port);
@@ -824,61 +865,47 @@ public:
       co_return Err{
         mysql_error{0, fmt::format("connect failed: {}", e.what())}};
     }
-    TENZIR_ERROR("from_mysql: async_client::make() TCP connected, handshaking");
     auto handshake = co_await conn.perform_handshake();
     if (handshake.is_err()) {
       co_return Err{std::move(handshake).unwrap_err()};
     }
-    TENZIR_ERROR("from_mysql: async_client::make() handshake done, "
-                 "authenticating as '{}' db='{}'",
-                 config.user, config.database);
     auto auth = co_await conn.send_auth_response(
       handshake.value(), config.user, config.password, config.database);
     if (auth.is_err()) {
       co_return Err{std::move(auth).unwrap_err()};
     }
-    TENZIR_ERROR("from_mysql: async_client::make() authenticated successfully");
     co_return std::unique_ptr<async_client>{new async_client{std::move(conn)}};
   }
 
   /// Execute query and stream results as table_slices.
   auto query(query_config cfg) -> AsyncGenerator<MysqlResult<table_slice>> {
-    TENZIR_ERROR("from_mysql: query() sending COM_QUERY: {}", cfg.sql);
     // Send COM_QUERY.
     auto packet = make_query_packet(cfg.sql);
     auto write_result = co_await conn_.write_packet(packet, 0);
     if (write_result.is_err()) {
-      TENZIR_ERROR("from_mysql: query() write_packet failed");
       co_yield Err{std::move(write_result).unwrap_err()};
       co_return;
     }
-    TENZIR_ERROR("from_mysql: query() COM_QUERY sent, reading metadata");
     // Read result set metadata.
     auto meta = co_await read_result_set_meta(conn_);
     if (meta.is_err()) {
-      TENZIR_ERROR("from_mysql: query() read_result_set_meta failed");
       co_yield Err{std::move(meta).unwrap_err()};
       co_return;
     }
     auto columns = std::move(meta).value().columns;
-    TENZIR_ERROR("from_mysql: query() got {} columns, reading rows",
-                 columns.size());
     // Stream rows, building table_slices.
     auto builder = series_builder{};
     auto row_count = int64_t{0};
     while (true) {
       auto row_packet = co_await conn_.read_packet();
       if (row_packet.is_err()) {
-        TENZIR_ERROR("from_mysql: query() row read failed");
         co_yield Err{std::move(row_packet).unwrap_err()};
         co_return;
       }
       if (is_eof_packet(row_packet.value())) {
-        TENZIR_ERROR("from_mysql: query() got EOF after {} rows", row_count);
         break;
       }
       if (auto err = check_error_packet(row_packet.value())) {
-        TENZIR_ERROR("from_mysql: query() got error packet");
         co_yield Err{std::move(*err)};
         co_return;
       }
@@ -892,8 +919,6 @@ public:
       }
     }
     if (row_count > 0) {
-      TENZIR_ERROR("from_mysql: query() yielding final slice with {} rows",
-                   row_count);
       co_yield builder.finish_assert_one_slice(cfg.schema_name);
     }
   }
@@ -927,7 +952,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    TENZIR_ERROR("from_mysql: start() begin");
     // Build client configuration.
     auto config = client_config{};
     if (args_.host) {
@@ -946,13 +970,7 @@ public:
       config.database = args_.database->inner;
     }
     // Build the SQL query.
-    if (args_.table) {
-      query_ = fmt::format("SELECT * FROM {}", args_.table->inner);
-      schema_name_ = fmt::format("mysql.{}", args_.table->inner);
-    } else if (args_.sql) {
-      query_ = args_.sql->inner;
-      schema_name_ = "mysql.query";
-    } else if (args_.show) {
+    if (args_.show) {
       if (args_.show->inner == "tables") {
         query_ = "SHOW TABLES";
         schema_name_ = "mysql.tables";
@@ -974,6 +992,12 @@ public:
         done_ = true;
         co_return;
       }
+    } else if (args_.sql) {
+      query_ = args_.sql->inner;
+      schema_name_ = "mysql.query";
+    } else if (args_.table) {
+      query_ = fmt::format("SELECT * FROM {}", args_.table->inner);
+      schema_name_ = fmt::format("mysql.{}", args_.table->inner);
     } else {
       diagnostic::error("no query specified")
         .hint("specify `table`, `sql`, or `show`")
@@ -981,11 +1005,9 @@ public:
       done_ = true;
       co_return;
     }
-    TENZIR_ERROR("from_mysql: start() query={}, connecting to {}:{}", query_,
-                 config.host, config.port);
-    // Get EventBase from global IO executor.
-    auto* evb = folly::getGlobalIOExecutor()->getEventBase();
-    TENZIR_ERROR("from_mysql: start() got EventBase={}", fmt::ptr(evb));
+    // Create a dedicated EventBase thread for async I/O.
+    evb_thread_ = std::make_unique<folly::ScopedEventBaseThread>("mysql_io");
+    auto* evb = evb_thread_->getEventBase();
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config));
     if (result.is_err()) {
@@ -999,11 +1021,9 @@ public:
       co_return;
     }
     client_ = std::move(result).value();
-    TENZIR_ERROR("from_mysql: start() connected successfully");
   }
 
   auto await_task() const -> Task<Any> override {
-    TENZIR_ERROR("from_mysql: await_task() done_={}", done_);
     if (done_) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
@@ -1013,19 +1033,15 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_ERROR("from_mysql: process_task() begin, done_={}", done_);
     if (done_) {
       co_return;
     }
     auto query = std::move(result).as<std::string>();
-    TENZIR_ERROR("from_mysql: process_task() sending query: {}", query);
     auto slice_stream = client_->query({
       .sql = query,
       .schema_name = schema_name_,
     });
-    TENZIR_ERROR("from_mysql: process_task() query stream created, iterating");
     while (auto slice_result = co_await slice_stream.next()) {
-      TENZIR_ERROR("from_mysql: process_task() got slice result");
       if (slice_result->is_err()) {
         auto err = std::move(*slice_result).unwrap_err();
         if (err.code != 0) {
@@ -1036,10 +1052,8 @@ public:
         }
         break;
       }
-      TENZIR_ERROR("from_mysql: process_task() pushing slice");
       co_await push(std::move(*slice_result).value());
     }
-    TENZIR_ERROR("from_mysql: process_task() done");
     done_ = true;
   }
 
@@ -1055,6 +1069,7 @@ public:
 
 private:
   FromMySQLArgs args_;
+  std::unique_ptr<folly::ScopedEventBaseThread> evb_thread_;
   std::unique_ptr<async_client> client_;
   std::string query_;
   std::string schema_name_;
