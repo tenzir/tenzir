@@ -1,5 +1,6 @@
 ---
 description: Cut a non-major release by analyzing changelog entries and triggering the GitHub workflow
+disable-model-invocation: true
 ---
 
 # Release

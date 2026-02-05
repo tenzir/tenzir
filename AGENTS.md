@@ -47,32 +47,13 @@ building modular pipelines that process structured event data.
 - `tenzir/` - Main executable
   - `tenzir.cpp` - Main entry point
   - `services/` - System service configurations
-- `tenzir-unit-test/` - Unit test executable
 - `test/` - TQL integration test scenarios and expected outputs
 
 ## Key Tasks
 
-Make sure submodules are initialized and updated:
-
-```sh
-git submodule update --init --recursive
-```
-
 ### Build Tenzir
 
-Identify the right preset:
-
-```sh
-cmake --list-presets
-```
-
-Configure the build, e.g.:
-
-```sh
-cmake --preset macos-xcode-release
-```
-
-Compile via /compile.
+Compile via `/compile`. If this fails due to a missing build directory, run `cmake --list-presets`, and give the user the option to select a preset. Then run `cmake --preset <preset>` and try `/compile` again.
 
 ### Run pipelines
 
@@ -92,16 +73,18 @@ Run integration tests from the repository root:
 uvx tenzir-test --root test
 ```
 
-Make sure to prepend the following variables to ensure the tests run with the
-proper binaries:
-
-- `TENZIR_BINARY=/path/to/build-dir/../bin/tenzir`
-- `TENZIR_NODE_BINARY=/path/to/build-dir/../bin/tenzir-node`
-
 Common options:
 
 - `--passthrough`: Generate output in terminal instead (good on first run)
 - `--update`: Update reference outputs after validating changes
-- `--debug` or `-d`: Show detailed test information
+- `--debug`: Show detailed test information
 
 Reference documentation: https://docs.tenzir.com/reference/test-framework.md
+
+### Run Unit Tests
+
+Run unit tests using the `tenzir-test` binary:
+
+```sh
+tenzir-test
+```
