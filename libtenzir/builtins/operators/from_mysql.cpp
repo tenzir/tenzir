@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/any.hpp>
+#include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/detail/byteswap.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -17,6 +19,10 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 #include <openssl/sha.h>
+
+#include <charconv>
+#include <cstring>
+#include <utility>
 
 namespace tenzir::plugins::mysql {
 
@@ -171,11 +177,11 @@ template <class T>
 using MysqlResult = Result<T, mysql_error>;
 
 auto is_unsigned(column_info const& col) -> bool {
-  return (col.flags & static_cast<uint16_t>(column_flag::unsigned_)) != 0;
+  return (col.flags & std::to_underlying(column_flag::unsigned_)) != 0;
 }
 
 auto is_binary(column_info const& col) -> bool {
-  return (col.flags & static_cast<uint16_t>(column_flag::binary)) != 0;
+  return (col.flags & std::to_underlying(column_flag::binary)) != 0;
 }
 
 /// MySQL capability flags.
@@ -208,7 +214,7 @@ enum class capability : uint32_t {
 };
 
 auto has_cap(uint32_t caps, capability c) -> bool {
-  return (caps & static_cast<uint32_t>(c)) != 0;
+  return (caps & std::to_underlying(c)) != 0;
 }
 
 /// MySQL server handshake information.
@@ -262,25 +268,23 @@ inline constexpr size_t handshake_reserved = 10;
 /// Reads a little-endian integer from a byte buffer.
 template <class T>
 auto read_int_le(std::span<std::byte const> data) -> T {
-  auto result = T{0};
-  for (auto i = size_t{0}; i < sizeof(T) and i < data.size(); ++i) {
-    result |= static_cast<T>(std::to_integer<uint8_t>(data[i])) << (8 * i);
-  }
-  return result;
+  auto value = T{};
+  std::memcpy(&value, data.data(), sizeof(T));
+  return detail::swap<std::endian::little, std::endian::native>(value);
 }
 
 /// Writes a little-endian integer to a byte buffer.
 template <class T>
 void write_int_le(std::vector<std::byte>& buffer, T value) {
-  for (auto i = size_t{0}; i < sizeof(T); ++i) {
-    buffer.push_back(static_cast<std::byte>(value >> (8 * i)));
-  }
+  value = detail::swap<std::endian::native, std::endian::little>(value);
+  auto bytes = as_bytes(value);
+  buffer.insert(buffer.end(), bytes.begin(), bytes.end());
 }
 
 /// Writes a null-terminated string to a byte buffer.
 void write_null_string(std::vector<std::byte>& buffer, std::string_view str) {
-  auto ptr = reinterpret_cast<std::byte const*>(str.data());
-  buffer.insert(buffer.end(), ptr, ptr + str.size());
+  auto bytes = as_bytes(str);
+  buffer.insert(buffer.end(), bytes.begin(), bytes.end());
   buffer.push_back(std::byte{0});
 }
 
@@ -357,11 +361,7 @@ public:
     return uint64_t{0};
   }
   auto read_lenenc_string() -> MysqlResult<std::string> {
-    auto li = read_lenenc_int();
-    if (li.is_err()) {
-      return Err{std::move(li).unwrap_err()};
-    }
-    auto length = li.value();
+    TRY(auto length, read_lenenc_int());
     if (data_.size() < offset_ + length) {
       return Err{mysql_error::protocol("truncated lenenc string")};
     }
@@ -370,15 +370,14 @@ public:
     return std::string(reinterpret_cast<char const*>(str_data.data()), length);
   }
   auto read_null_string() -> std::string {
-    auto begin = data_.begin() + offset_;
-    auto end = data_.end();
-    auto it = std::find(begin, end, std::byte{0});
-    if (it == end) {
+    auto remaining = data_.subspan(offset_);
+    auto it = std::ranges::find(remaining, std::byte{0});
+    if (it == remaining.end()) {
       return "";
     }
-    auto length = static_cast<size_t>(std::distance(begin, it));
-    auto result = std::string(
-      reinterpret_cast<char const*>(data_.data() + offset_), length);
+    auto length = static_cast<size_t>(std::distance(remaining.begin(), it));
+    auto result
+      = std::string(reinterpret_cast<char const*>(remaining.data()), length);
     offset_ += length + 1;
     return result;
   }
@@ -408,64 +407,66 @@ private:
   size_t offset_ = 0;
 };
 
+/// Combine order for the auth hash computation.
+enum class auth_combine_order {
+  scramble_first, // mysql_native_password: hash(scramble + hash2)
+  hash_first,     // caching_sha2_password: hash(hash2 + scramble)
+};
+
+/// Computes a MySQL auth hash: hash(password) XOR hash(combined).
+/// The combine order differs between mysql_native_password and
+/// caching_sha2_password.
+template <size_t DigestLen, class HashFn>
+auto compute_auth_hash(HashFn hash_fn, std::string_view password,
+                       std::span<std::byte const> scramble,
+                       auth_combine_order order) -> std::vector<std::byte> {
+  if (password.empty()) {
+    return {};
+  }
+  auto pw_bytes = as_bytes(password);
+  // hash(password).
+  auto hash1 = std::array<uint8_t, DigestLen>{};
+  hash_fn(reinterpret_cast<uint8_t const*>(pw_bytes.data()), pw_bytes.size(),
+          hash1.data());
+  // hash(hash(password)).
+  auto hash2 = std::array<uint8_t, DigestLen>{};
+  hash_fn(hash1.data(), hash1.size(), hash2.data());
+  // Combine scramble and hash2 in the appropriate order.
+  auto combined = std::vector<uint8_t>{};
+  combined.reserve(scramble.size() + hash2.size());
+  auto scramble_u8 = std::span{
+    reinterpret_cast<uint8_t const*>(scramble.data()), scramble.size()};
+  if (order == auth_combine_order::scramble_first) {
+    combined.insert(combined.end(), scramble_u8.begin(), scramble_u8.end());
+    combined.insert(combined.end(), hash2.begin(), hash2.end());
+  } else {
+    combined.insert(combined.end(), hash2.begin(), hash2.end());
+    combined.insert(combined.end(), scramble_u8.begin(), scramble_u8.end());
+  }
+  auto hash3 = std::array<uint8_t, DigestLen>{};
+  hash_fn(combined.data(), combined.size(), hash3.data());
+  // XOR hash(password) with result.
+  auto result = std::vector<std::byte>(DigestLen);
+  for (auto i = size_t{0}; i < DigestLen; ++i) {
+    result[i] = static_cast<std::byte>(hash1[i] ^ hash3[i]);
+  }
+  return result;
+}
+
 /// Computes the MySQL native password authentication response.
 auto compute_native_password(std::string_view password,
                              std::span<std::byte const> scramble)
   -> std::vector<std::byte> {
-  if (password.empty()) {
-    return {};
-  }
-  // SHA1(password).
-  auto hash1 = std::array<uint8_t, SHA_DIGEST_LENGTH>{};
-  SHA1(reinterpret_cast<uint8_t const*>(password.data()), password.size(),
-       hash1.data());
-  // SHA1(SHA1(password)).
-  auto hash2 = std::array<uint8_t, SHA_DIGEST_LENGTH>{};
-  SHA1(hash1.data(), hash1.size(), hash2.data());
-  // SHA1(scramble + SHA1(SHA1(password))).
-  auto combined = std::vector<uint8_t>{};
-  combined.insert(
-    combined.end(), reinterpret_cast<uint8_t const*>(scramble.data()),
-    reinterpret_cast<uint8_t const*>(scramble.data()) + scramble.size());
-  combined.insert(combined.end(), hash2.begin(), hash2.end());
-  auto hash3 = std::array<uint8_t, SHA_DIGEST_LENGTH>{};
-  SHA1(combined.data(), combined.size(), hash3.data());
-  // XOR SHA1(password) with result.
-  auto result = std::vector<std::byte>(SHA_DIGEST_LENGTH);
-  for (auto i = size_t{0}; i < SHA_DIGEST_LENGTH; ++i) {
-    result[i] = static_cast<std::byte>(hash1[i] ^ hash3[i]);
-  }
-  return result;
+  return compute_auth_hash<SHA_DIGEST_LENGTH>(
+    SHA1, password, scramble, auth_combine_order::scramble_first);
 }
 
 /// Computes the MySQL caching_sha2_password authentication response.
 auto compute_caching_sha2_password(std::string_view password,
                                    std::span<std::byte const> scramble)
   -> std::vector<std::byte> {
-  if (password.empty()) {
-    return {};
-  }
-  // SHA256(password).
-  auto hash1 = std::array<uint8_t, SHA256_DIGEST_LENGTH>{};
-  SHA256(reinterpret_cast<uint8_t const*>(password.data()), password.size(),
-         hash1.data());
-  // SHA256(SHA256(password)).
-  auto hash2 = std::array<uint8_t, SHA256_DIGEST_LENGTH>{};
-  SHA256(hash1.data(), hash1.size(), hash2.data());
-  // SHA256(SHA256(SHA256(password)) + scramble).
-  auto combined = std::vector<uint8_t>{};
-  combined.insert(combined.end(), hash2.begin(), hash2.end());
-  combined.insert(
-    combined.end(), reinterpret_cast<uint8_t const*>(scramble.data()),
-    reinterpret_cast<uint8_t const*>(scramble.data()) + scramble.size());
-  auto hash3 = std::array<uint8_t, SHA256_DIGEST_LENGTH>{};
-  SHA256(combined.data(), combined.size(), hash3.data());
-  // XOR SHA256(password) with result.
-  auto result = std::vector<std::byte>(SHA256_DIGEST_LENGTH);
-  for (auto i = size_t{0}; i < SHA256_DIGEST_LENGTH; ++i) {
-    result[i] = static_cast<std::byte>(hash1[i] ^ hash3[i]);
-  }
-  return result;
+  return compute_auth_hash<SHA256_DIGEST_LENGTH>(
+    SHA256, password, scramble, auth_combine_order::hash_first);
 }
 
 /// Wraps an identifier with backticks, escaping embedded backticks.
@@ -507,34 +508,32 @@ auto parse_error_from_packet(std::span<std::byte const> data) -> mysql_error {
   return {code, std::move(msg)};
 }
 
+/// Emits a mysql_error as a diagnostic.
+void emit_mysql_error(mysql_error const& err, diagnostic_handler& dh) {
+  if (err.code != 0) {
+    diagnostic::error("MySQL error {}: {}", err.code, err.message).emit(dh);
+  } else {
+    diagnostic::error("MySQL error: {}", err.message).emit(dh);
+  }
+}
+
 /// Parses a column definition packet.
 auto parse_column_definition(std::span<std::byte const> data)
   -> MysqlResult<column_info> {
   auto col = column_info{};
   auto reader = packet_reader{data};
-  auto read_into = [&](std::string& target) -> MysqlResult<void> {
-    auto s = reader.read_lenenc_string();
-    if (s.is_err()) {
-      return Err{std::move(s).unwrap_err()};
-    }
-    target = std::move(s).value();
-    return {};
-  };
-  for (auto* field : {&col.catalog, &col.schema, &col.table, &col.org_table,
-                      &col.name, &col.org_name}) {
-    auto r = read_into(*field);
-    if (r.is_err()) {
-      return Err{std::move(r).unwrap_err()};
-    }
-  }
+  TRY(col.catalog, reader.read_lenenc_string());
+  TRY(col.schema, reader.read_lenenc_string());
+  TRY(col.table, reader.read_lenenc_string());
+  TRY(col.org_table, reader.read_lenenc_string());
+  TRY(col.name, reader.read_lenenc_string());
+  TRY(col.org_name, reader.read_lenenc_string());
   // Fixed-length fields after 0x0c length marker.
   if (reader.remaining() < 1) {
     return Err{mysql_error::protocol("column definition truncated")};
   }
-  auto filler = reader.read_lenenc_int();
-  if (filler.is_err()) {
-    return Err{std::move(filler).unwrap_err()};
-  }
+  TRY(auto filler, reader.read_lenenc_int());
+  TENZIR_UNUSED(filler);
   if (reader.remaining() < 12) {
     return Err{mysql_error::protocol("column definition truncated")};
   }
@@ -552,8 +551,8 @@ auto make_query_packet(std::string_view sql) -> std::vector<std::byte> {
   auto pkt = std::vector<std::byte>{};
   pkt.reserve(1 + sql.size());
   pkt.push_back(packet::com_query);
-  auto ptr = reinterpret_cast<std::byte const*>(sql.data());
-  pkt.insert(pkt.end(), ptr, ptr + sql.size());
+  auto bytes = as_bytes(sql);
+  pkt.insert(pkt.end(), bytes.begin(), bytes.end());
   return pkt;
 }
 
@@ -719,13 +718,13 @@ public:
     auto buf = std::vector<std::byte>{};
     // Client capabilities.
     auto caps
-      = static_cast<uint32_t>(capability::long_password)
-        | static_cast<uint32_t>(capability::protocol_41)
-        | static_cast<uint32_t>(capability::secure_connection)
-        | static_cast<uint32_t>(capability::plugin_auth)
-        | static_cast<uint32_t>(capability::plugin_auth_lenenc_client_data);
+      = std::to_underlying(capability::long_password)
+        | std::to_underlying(capability::protocol_41)
+        | std::to_underlying(capability::secure_connection)
+        | std::to_underlying(capability::plugin_auth)
+        | std::to_underlying(capability::plugin_auth_lenenc_client_data);
     if (not database.empty()) {
-      caps |= static_cast<uint32_t>(capability::connect_with_db);
+      caps |= std::to_underlying(capability::connect_with_db);
     }
     write_int_le<uint32_t>(buf, caps);
     // Max packet size.
@@ -797,8 +796,8 @@ public:
       // 0x04 = full auth required. Send password as null-terminated cleartext.
       if (resp_data[1] == caching_sha2::full_auth_required) {
         auto pw_packet = std::vector<std::byte>{};
-        auto ptr = reinterpret_cast<std::byte const*>(password.data());
-        pw_packet.insert(pw_packet.end(), ptr, ptr + password.size());
+        auto pw_bytes = as_bytes(password);
+        pw_packet.insert(pw_packet.end(), pw_bytes.begin(), pw_bytes.end());
         pw_packet.push_back(std::byte{0});
         auto pw_write = co_await write_packet(pw_packet, sequence_id_ + 1);
         if (pw_write.is_err()) {
@@ -902,21 +901,28 @@ void parse_row_into_builder(std::span<std::byte const> data,
   auto event = builder.record();
   auto reader = packet_reader{data};
   auto try_int = [](std::string const& s, bool is_uint) -> data_view2 {
-    try {
-      if (is_uint) {
-        return static_cast<uint64_t>(std::stoull(s));
+    if (is_uint) {
+      auto value = uint64_t{};
+      auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+      if (ec == std::errc{} and ptr == s.data() + s.size()) {
+        return value;
       }
-      return static_cast<int64_t>(std::stoll(s));
-    } catch (...) {
-      return std::string_view{s};
+    } else {
+      auto value = int64_t{};
+      auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+      if (ec == std::errc{} and ptr == s.data() + s.size()) {
+        return value;
+      }
     }
+    return std::string_view{s};
   };
   auto try_double = [](std::string const& s) -> data_view2 {
-    try {
-      return std::stod(s);
-    } catch (...) {
-      return std::string_view{s};
+    auto value = double{};
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+    if (ec == std::errc{} and ptr == s.data() + s.size()) {
+      return value;
     }
+    return std::string_view{s};
   };
   for (auto const& col : cols) {
     auto field = event.field(col.name);
@@ -1131,12 +1137,7 @@ public:
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config));
     if (result.is_err()) {
-      auto err = std::move(result).unwrap_err();
-      if (err.code != 0) {
-        diagnostic::error("MySQL error {}: {}", err.code, err.message).emit(ctx);
-      } else {
-        diagnostic::error("MySQL connection failed: {}", err.message).emit(ctx);
-      }
+      emit_mysql_error(std::move(result).unwrap_err(), ctx);
       done_ = true;
       co_return;
     }
@@ -1163,13 +1164,7 @@ public:
     });
     while (auto slice_result = co_await slice_stream.next()) {
       if (slice_result->is_err()) {
-        auto err = std::move(*slice_result).unwrap_err();
-        if (err.code != 0) {
-          diagnostic::error("MySQL error {}: {}", err.code, err.message)
-            .emit(ctx);
-        } else {
-          diagnostic::error("MySQL error: {}", err.message).emit(ctx);
-        }
+        emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         break;
       }
       co_await push(std::move(*slice_result).value());
@@ -1183,8 +1178,6 @@ public:
 
   auto snapshot(Serde& serde) -> void override {
     serde("done", done_);
-    serde("query", query_);
-    serde("schema_name", schema_name_);
   }
 
 private:

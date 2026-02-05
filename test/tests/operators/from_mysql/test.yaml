@@ -1,3 +1,5 @@
+# We're using a suite not because the tests require sequential processing, but
+# to minimize the container startup overhead that we want to pay only once.
 suite: from-mysql
 fixtures: [mysql]
 timeout: 180

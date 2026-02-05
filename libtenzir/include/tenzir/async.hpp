@@ -53,6 +53,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/try.hpp"
 
 #include <caf/actor_cast.hpp>
 #include <caf/binary_deserializer.hpp>
@@ -319,6 +320,29 @@ public:
 private:
   variant<VoidToUnit<Value>, Err<Error>> value_;
 };
+
+} // namespace tenzir
+
+template <class V, class E>
+struct tenzir::tryable<tenzir::Result<V, E>> {
+  static auto is_success(tenzir::Result<V, E> const& x) -> bool {
+    return not x.is_err();
+  }
+
+  static auto get_success(tenzir::Result<V, E>&& x) -> tenzir::VoidToUnit<V> {
+    if constexpr (std::is_void_v<V>) {
+      return {};
+    } else {
+      return std::move(x).value();
+    }
+  }
+
+  static auto get_error(tenzir::Result<V, E>&& x) -> tenzir::Err<E> {
+    return tenzir::Err{std::move(x).unwrap_err()};
+  }
+};
+
+namespace tenzir {
 
 TENZIR_ENUM(
   /// A non-data message sent to an operator by its upstream.
