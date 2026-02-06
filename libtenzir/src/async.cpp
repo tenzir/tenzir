@@ -214,6 +214,9 @@ public:
           operator_scope_ = nullptr;
         }};
         co_await run();
+        // Cancel operator-spawned tasks (e.g., background IO coroutines) so
+        // the scope join does not block on them.
+        operator_scope.cancel();
       });
     });
   }
