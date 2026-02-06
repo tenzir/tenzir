@@ -16,6 +16,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try.hpp>
 
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncSSLSocket.h>
@@ -28,35 +29,6 @@
 #include <charconv>
 #include <cstring>
 #include <utility>
-
-// TODO: Consider moving these into a common place.
-#define TENZIR_TRY_COMMON_(var, expr, ret)                                     \
-  auto var = (expr);                                                           \
-  if (not tenzir::tryable<decltype(var)>::is_success(var)) [[unlikely]] {      \
-    ret tenzir::tryable<decltype(var)>::get_error(std::move(var));             \
-  }
-
-#define TENZIR_TRY_EXTRACT_(decl, var, expr, ret)                              \
-  TENZIR_TRY_COMMON_(var, expr, ret);                                          \
-  decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
-
-#define TENZIR_TRY_DISCARD_(var, expr, ret)                                    \
-  TENZIR_TRY_COMMON_(var, expr, ret)                                           \
-  if (false) {                                                                 \
-    /* trigger [[nodiscard]] */                                                \
-    tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
-  }
-
-#define TENZIR_TRY_X_1(expr, ret)                                              \
-  TENZIR_TRY_DISCARD_(TENZIR_PP_PASTE2(_try, __COUNTER__), expr, ret)
-
-#define TENZIR_TRY_X_2(decl, expr, ret)                                        \
-  TENZIR_TRY_EXTRACT_(decl, TENZIR_PP_PASTE2(_try, __COUNTER__), expr, ret)
-
-#define TENZIR_CO_TRY(...)                                                     \
-  TENZIR_PP_OVERLOAD(TENZIR_TRY_X_, __VA_ARGS__)(__VA_ARGS__, co_return)
-
-#define CO_TRY TENZIR_CO_TRY
 
 namespace tenzir::plugins::mysql {
 

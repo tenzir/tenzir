@@ -157,3 +157,33 @@ struct tenzir::tryable<tenzir::variant<V, E>> {
   TENZIR_PP_OVERLOAD(TENZIR_TRY_, __VA_ARGS__)(__VA_ARGS__)
 
 #define TRY TENZIR_TRY
+
+// -- Coroutine variants (use `co_return` instead of `return`) -----------------
+
+#define TENZIR_CO_TRY_COMMON(var, expr)                                        \
+  auto var = (expr);                                                           \
+  if (not tenzir::tryable<decltype(var)>::is_success(var)) [[unlikely]] {      \
+    co_return tenzir::tryable<decltype(var)>::get_error(std::move(var));       \
+  }
+
+#define TENZIR_CO_TRY_EXTRACT(decl, var, expr)                                 \
+  TENZIR_CO_TRY_COMMON(var, expr);                                             \
+  decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
+
+#define TENZIR_CO_TRY_DISCARD(var, expr)                                       \
+  TENZIR_CO_TRY_COMMON(var, expr)                                              \
+  if (false) {                                                                 \
+    /* trigger [[nodiscard]] */                                                \
+    tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
+  }
+
+#define TENZIR_CO_TRY_1(expr)                                                  \
+  TENZIR_CO_TRY_DISCARD(TENZIR_PP_PASTE2(_co_try, __COUNTER__), expr)
+
+#define TENZIR_CO_TRY_2(decl, expr)                                            \
+  TENZIR_CO_TRY_EXTRACT(decl, TENZIR_PP_PASTE2(_co_try, __COUNTER__), expr)
+
+#define TENZIR_CO_TRY(...)                                                     \
+  TENZIR_PP_OVERLOAD(TENZIR_CO_TRY_, __VA_ARGS__)(__VA_ARGS__)
+
+#define CO_TRY TENZIR_CO_TRY
