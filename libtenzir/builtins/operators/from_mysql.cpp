@@ -311,12 +311,14 @@ class packet_reader {
 public:
   explicit packet_reader(std::span<std::byte const> data) : data_{data} {
   }
+
   template <class T>
   auto read_int() -> T {
     auto result = read_int_le<T>(data_.subspan(offset_));
     offset_ += sizeof(T);
     return result;
   }
+
   auto read_lenenc_int() -> MysqlResult<uint64_t> {
     if (offset_ >= data_.size()) {
       return Err{mysql_error::protocol("empty data for lenenc int")};
@@ -360,6 +362,7 @@ public:
     offset_ += 1;
     return uint64_t{0};
   }
+
   auto read_lenenc_string() -> MysqlResult<std::string> {
     TRY(auto length, read_lenenc_int());
     if (data_.size() < offset_ + length) {
@@ -369,6 +372,7 @@ public:
     offset_ += length;
     return std::string(reinterpret_cast<char const*>(str_data.data()), length);
   }
+
   auto read_null_string() -> std::string {
     auto remaining = data_.subspan(offset_);
     auto it = std::ranges::find(remaining, std::byte{0});
@@ -381,23 +385,29 @@ public:
     offset_ += length + 1;
     return result;
   }
+
   auto read_bytes(size_t n) -> std::span<std::byte const> {
     auto result = data_.subspan(offset_, n);
     offset_ += n;
     return result;
   }
+
   void skip(size_t n) {
     offset_ += n;
   }
+
   auto remaining() const -> size_t {
     return offset_ < data_.size() ? data_.size() - offset_ : 0;
   }
+
   auto at_end() const -> bool {
     return offset_ >= data_.size();
   }
+
   auto current_byte() const -> std::byte {
     return data_[offset_];
   }
+
   auto data() const -> std::span<std::byte const> {
     return data_.subspan(offset_);
   }
@@ -578,6 +588,7 @@ auto as_error(std::span<std::byte const> data) -> std::optional<mysql_error> {
 class async_connection {
 public:
   async_connection() = default;
+
   /// Connect to MySQL server asynchronously.
   static auto
   connect(folly::EventBase* evb, std::string const& host, uint16_t port,
@@ -593,6 +604,7 @@ public:
           .scheduleOn(evb);
     co_return async_connection{std::move(transport), evb};
   }
+
   /// Read a MySQL packet asynchronously.
   auto read_packet() -> Task<MysqlResult<std::vector<std::byte>>> {
     // Read 4-byte header: 3 bytes length + 1 byte sequence.
@@ -622,6 +634,7 @@ public:
     }
     co_return payload;
   }
+
   /// Write a MySQL packet asynchronously.
   auto write_packet(std::span<std::byte const> payload, uint8_t seq)
     -> Task<MysqlResult<void>> {
@@ -636,6 +649,7 @@ public:
     }).scheduleOn(evb_);
     co_return {};
   }
+
   /// Perform the initial handshake with the server.
   auto perform_handshake() -> Task<MysqlResult<handshake_info>> {
     auto pkt = co_await read_packet();
@@ -710,6 +724,7 @@ public:
     }
     co_return info;
   }
+
   /// Send the authentication response.
   auto
   send_auth_response(handshake_info const& handshake, std::string const& user,
@@ -829,6 +844,7 @@ private:
         std::move(transport))},
       evb_{evb} {
   }
+
   std::unique_ptr<folly::coro::Transport> transport_;
   folly::EventBase* evb_ = nullptr;
   std::chrono::milliseconds read_timeout_{std::chrono::seconds{30}};
@@ -999,6 +1015,7 @@ public:
     }
     co_return std::unique_ptr<async_client>{new async_client{std::move(conn)}};
   }
+
   /// Execute query and stream results as table_slices.
   auto query(query_config cfg) -> AsyncGenerator<MysqlResult<table_slice>> {
     // Send COM_QUERY.
@@ -1048,6 +1065,7 @@ public:
 private:
   explicit async_client(async_connection conn) : conn_{std::move(conn)} {
   }
+
   async_connection conn_;
 };
 
