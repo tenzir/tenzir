@@ -9,6 +9,7 @@
 #include <tenzir/any.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -1068,30 +1069,6 @@ void parse_row_into_builder(std::span<std::byte const> data,
                             series_builder& builder) {
   auto event = builder.record();
   auto reader = packet_reader{data};
-  auto try_int = [](std::string const& s, bool is_uint) -> data_view2 {
-    if (is_uint) {
-      auto value = uint64_t{};
-      auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
-      if (ec == std::errc{} and ptr == s.data() + s.size()) {
-        return value;
-      }
-    } else {
-      auto value = int64_t{};
-      auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
-      if (ec == std::errc{} and ptr == s.data() + s.size()) {
-        return value;
-      }
-    }
-    return std::string_view{s};
-  };
-  auto try_double = [](std::string const& s) -> data_view2 {
-    auto value = double{};
-    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
-    if (ec == std::errc{} and ptr == s.data() + s.size()) {
-      return value;
-    }
-    return std::string_view{s};
-  };
   for (auto const& col : cols) {
     auto field = event.field(col.name);
     if (reader.at_end()) {
@@ -1117,15 +1094,40 @@ void parse_row_into_builder(std::span<std::byte const> data,
       case mysql_type::long_:
       case mysql_type::longlong:
       case mysql_type::int24:
-      case mysql_type::year:
-        field.data(try_int(str, is_unsigned(col)));
+      case mysql_type::year: {
+        if (is_unsigned(col)) {
+          auto value = uint64_t{};
+          auto [ptr, ec]
+            = std::from_chars(str.data(), str.data() + str.size(), value);
+          if (ec == std::errc{} and ptr == str.data() + str.size()) {
+            field.data(value);
+          } else {
+            field.data(std::string_view{str});
+          }
+        } else {
+          auto value = int64_t{};
+          auto [ptr, ec]
+            = std::from_chars(str.data(), str.data() + str.size(), value);
+          if (ec == std::errc{} and ptr == str.data() + str.size()) {
+            field.data(value);
+          } else {
+            field.data(std::string_view{str});
+          }
+        }
         break;
+      }
       case mysql_type::float_:
       case mysql_type::double_:
       case mysql_type::decimal:
-      case mysql_type::newdecimal:
-        field.data(try_double(str));
+      case mysql_type::newdecimal: {
+        auto value = double{};
+        if (parsers::real(str, value)) {
+          field.data(value);
+        } else {
+          field.data(std::string_view{str});
+        }
         break;
+      }
       case mysql_type::tiny_blob:
       case mysql_type::medium_blob:
       case mysql_type::long_blob:
