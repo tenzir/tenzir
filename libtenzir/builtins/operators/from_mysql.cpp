@@ -674,13 +674,8 @@ public:
           std::chrono::milliseconds timeout = std::chrono::seconds{30})
     -> Task<async_connection> {
     auto addr = folly::SocketAddress{host, port};
-    auto transport
-      = co_await folly::coro::co_invoke(
-          [&]() -> folly::coro::Task<folly::coro::Transport> {
-            co_return co_await folly::coro::Transport::newConnectedSocket(
-              evb, addr, timeout);
-          })
-          .scheduleOn(evb);
+    auto transport = co_await co_withExecutor(
+      evb, folly::coro::Transport::newConnectedSocket(evb, addr, timeout));
     co_return async_connection{std::move(transport), evb};
   }
 
@@ -688,11 +683,9 @@ public:
   auto read_packet() -> Task<MysqlResult<std::vector<std::byte>>> {
     // Read 4-byte header: 3 bytes length + 1 byte sequence.
     auto header = std::array<unsigned char, 4>{};
-    auto n
-      = co_await folly::coro::co_invoke([&]() -> folly::coro::Task<size_t> {
-          co_return co_await transport_->read(
-            folly::MutableByteRange{header.data(), 4}, read_timeout_);
-        }).scheduleOn(evb_);
+    auto n = co_await co_withExecutor(
+      evb_, transport_->read(folly::MutableByteRange{header.data(), 4},
+                             read_timeout_));
     if (n != 4) {
       co_return Err{mysql_error::protocol("short header read")};
     }
@@ -701,13 +694,11 @@ public:
     sequence_id_ = header[3];
     // Read payload.
     auto payload = std::vector<std::byte>(len);
-    auto read
-      = co_await folly::coro::co_invoke([&]() -> folly::coro::Task<size_t> {
-          co_return co_await transport_->read(
-            folly::MutableByteRange{
-              reinterpret_cast<unsigned char*>(payload.data()), len},
-            read_timeout_);
-        }).scheduleOn(evb_);
+    auto read = co_await co_withExecutor(
+      evb_, transport_->read(
+              folly::MutableByteRange{
+                reinterpret_cast<unsigned char*>(payload.data()), len},
+              read_timeout_));
     if (read != len) {
       co_return Err{mysql_error::protocol("short payload read")};
     }
@@ -723,9 +714,8 @@ public:
     pkt[2] = static_cast<unsigned char>((payload.size() >> 16) & 0xFF);
     pkt[3] = seq;
     std::memcpy(pkt.data() + 4, payload.data(), payload.size());
-    co_await folly::coro::co_invoke([&]() -> folly::coro::Task<void> {
-      co_await transport_->write(folly::ByteRange{pkt.data(), pkt.size()});
-    }).scheduleOn(evb_);
+    co_await co_withExecutor(
+      evb_, transport_->write(folly::ByteRange{pkt.data(), pkt.size()}));
     sequence_id_ = seq;
     co_return {};
   }
@@ -839,16 +829,17 @@ public:
       folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
     // Perform the TLS handshake.
     try {
-      co_await folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
-        auto cb = SslHandshakeCallback{*ssl_ptr, hostname};
-        ssl_ptr->sslConn(&cb);
-        co_await cb.wait();
-        // Check for handshake error stored in callback.
-        if (cb.error()) {
-          cb.error().throw_exception();
-        }
-        co_return folly::unit;
-      }).scheduleOn(evb_);
+      co_await co_withExecutor(
+        evb_, folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
+          auto cb = SslHandshakeCallback{*ssl_ptr, hostname};
+          ssl_ptr->sslConn(&cb);
+          co_await cb.wait();
+          // Check for handshake error stored in callback.
+          if (cb.error()) {
+            cb.error().throw_exception();
+          }
+          co_return folly::unit;
+        }));
     } catch (std::exception const& ex) {
       co_return Err{
         mysql_error{0, fmt::format("TLS handshake failed: {}", ex.what())}};
@@ -1118,7 +1109,7 @@ void parse_row_into_builder(std::span<std::byte const> data,
       field.null();
       break;
     }
-    auto str = std::move(str_result).value();
+    auto str = std::move(str_result).unwrap();
     // Convert based on column type.
     switch (col.type) {
       case mysql_type::tiny:
@@ -1195,7 +1186,7 @@ public:
       co_yield Err{std::move(meta).unwrap_err()};
       co_return;
     }
-    auto columns = std::move(meta).value().columns;
+    auto columns = std::move(meta).unwrap().columns;
     // Stream rows, building table_slices.
     auto builder = series_builder{};
     auto row_count = int64_t{0};
@@ -1205,15 +1196,15 @@ public:
         co_yield Err{std::move(row_packet).unwrap_err()};
         co_return;
       }
-      if (is_eof(row_packet.value())) {
+      if (is_eof(row_packet.unwrap())) {
         break;
       }
-      if (auto err = as_error(row_packet.value())) {
+      if (auto err = as_error(row_packet.unwrap())) {
         co_yield Err{std::move(*err)};
         co_return;
       }
       // Parse row into builder.
-      parse_row_into_builder(row_packet.value(), columns, builder);
+      parse_row_into_builder(row_packet.unwrap(), columns, builder);
       ++row_count;
       if (row_count >= cfg.batch_size) {
         co_yield builder.finish_assert_one_slice(cfg.schema_name);
@@ -1333,7 +1324,7 @@ public:
       done_ = true;
       co_return;
     }
-    client_ = std::move(result).value();
+    client_ = std::move(result).unwrap();
   }
 
   auto await_task() const -> Task<Any> override {
@@ -1359,7 +1350,7 @@ public:
         emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         break;
       }
-      co_await push(std::move(*slice_result).value());
+      co_await push(std::move(*slice_result).unwrap());
     }
     done_ = true;
   }
@@ -1444,7 +1435,7 @@ public:
       }
       // Validate TLS record structure.
       if (auto tls_val = ctx.get(tls_arg)) {
-        tls_options{*tls_val}.validate(ctx);
+        (void)tls_options{*tls_val}.validate(ctx);
       }
       return {};
     });
