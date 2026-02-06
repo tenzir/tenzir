@@ -733,7 +733,7 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
 }
 
 auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
-  -> std::optional<std::shared_ptr<folly::SSLContext>> {
+  -> failure_or<std::shared_ptr<folly::SSLContext>> {
   if (not get_tls(nullptr).inner) {
     return nullptr;
   }
@@ -744,7 +744,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       auto parsed = parse_openssl_tls_version(min->inner);
       if (not parsed) {
         diagnostic::error(parsed.error()).primary(*min).emit(dh);
-        return std::nullopt;
+        return failure::promise();
       }
       SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
     }
@@ -757,7 +757,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       diagnostic::error("`cacert` path is not a valid file")
         .primary(*cacert)
         .emit(dh);
-      return std::nullopt;
+      return failure::promise();
     }
     try {
       ctx->loadTrustedCertificates(path.c_str());
@@ -765,7 +765,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       diagnostic::error("failed to load CA certificate: {}", ex.what())
         .primary(*cacert)
         .emit(dh);
-      return std::nullopt;
+      return failure::promise();
     }
   }
   // Load client certificate.
@@ -776,7 +776,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       diagnostic::error("`certfile` path is not a valid file")
         .primary(*certfile)
         .emit(dh);
-      return std::nullopt;
+      return failure::promise();
     }
     try {
       ctx->loadCertificate(path.c_str());
@@ -784,7 +784,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       diagnostic::error("failed to load client certificate: {}", ex.what())
         .primary(*certfile)
         .emit(dh);
-      return std::nullopt;
+      return failure::promise();
     }
   }
   // Load client private key.
@@ -795,7 +795,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       diagnostic::error("`keyfile` path is not a valid file")
         .primary(*keyfile)
         .emit(dh);
-      return std::nullopt;
+      return failure::promise();
     }
     try {
       ctx->loadPrivateKey(path.c_str());
@@ -803,7 +803,7 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       diagnostic::error("failed to load client private key: {}", ex.what())
         .primary(*keyfile)
         .emit(dh);
-      return std::nullopt;
+      return failure::promise();
     }
   }
   // Set verification mode.
