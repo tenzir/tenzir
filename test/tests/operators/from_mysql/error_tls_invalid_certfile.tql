@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// Nonexistent client certificate file should produce an error
+from_mysql sql="SELECT 1",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE"),
+           tls={certfile: "/nonexistent/path/client-cert.pem"}

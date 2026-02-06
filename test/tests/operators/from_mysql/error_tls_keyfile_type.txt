@@ -1,0 +1,6 @@
+error: `tls.keyfile` must be a string
+  --> tests/operators/from_mysql/error_tls_keyfile_type.tql:12:16
+   |
+12 |            tls={keyfile: true}
+   |                ^^^^^^^^^^^^^^^ 
+   |

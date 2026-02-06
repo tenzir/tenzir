@@ -1,0 +1,6 @@
+error: `tls.certfile` path is not a valid file: /nonexistent/path/client-cert.pem
+  --> tests/operators/from_mysql/error_tls_invalid_certfile.tql:12:16
+   |
+12 |            tls={certfile: "/nonexistent/path/client-cert.pem"}
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+   |

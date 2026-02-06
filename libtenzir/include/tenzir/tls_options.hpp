@@ -15,8 +15,13 @@
 #include <caf/expected.hpp>
 #include <caf/net/fwd.hpp>
 
+#include <memory>
 #include <optional>
 #include <string_view>
+
+namespace folly {
+class SSLContext;
+} // namespace folly
 
 namespace tenzir {
 
@@ -39,6 +44,8 @@ public:
       is_server_{opts.is_server},
       tls_{located{data{opts.tls_default}, location::unknown}} {
   }
+  explicit tls_options(located<data> tls_val);
+  explicit tls_options(located<data> tls_val, options opts);
   tls_options() = default;
 
   auto add_tls_options(argument_parser2&) -> void;
@@ -62,6 +69,12 @@ public:
   auto make_caf_context(operator_control_plane& ctrl,
                         std::optional<caf::uri> uri = std::nullopt) const
     -> caf::expected<caf::net::ssl::context>;
+
+  /// Creates a folly SSL context from the TLS options.
+  /// Returns nullptr if TLS is disabled, a configured context on success,
+  /// or std::nullopt on error (diagnostics emitted via dh).
+  auto make_folly_ssl_context(diagnostic_handler& dh) const
+    -> std::optional<std::shared_ptr<folly::SSLContext>>;
 
   /// Updates values in *this using the config.
   auto update_from_config(operator_control_plane& ctrl) -> void;

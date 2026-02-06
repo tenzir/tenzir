@@ -9,6 +9,9 @@ Environment variables yielded:
 - MYSQL_PASSWORD: Test password
 - MYSQL_DATABASE: Pre-created test database
 - MYSQL_ROOT_PASSWORD: Root password for admin operations
+- MYSQL_TLS_CAFILE: Path to CA certificate (for TLS tests)
+- MYSQL_TLS_CERTFILE: Path to client certificate (for mutual TLS tests)
+- MYSQL_TLS_KEYFILE: Path to client private key (for mutual TLS tests)
 """
 
 from __future__ import annotations
@@ -17,8 +20,10 @@ import logging
 import shutil
 import socket
 import subprocess
+import tempfile
 import time
 import uuid
+from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import fixture
@@ -229,6 +234,44 @@ def _create_test_data(runtime: str, container_id: str) -> None:
     logger.info("Test data created successfully")
 
 
+def _extract_tls_files(
+    runtime: str, container_id: str, dest_dir: str
+) -> dict[str, str]:
+    """Extract TLS certificates and keys from the MySQL container.
+
+    MySQL 8 auto-generates several TLS files in /var/lib/mysql/:
+    - ca.pem: CA certificate
+    - client-cert.pem: Client certificate (signed by the CA)
+    - client-key.pem: Client private key
+
+    Returns a dict mapping descriptive names to local file paths.
+    """
+    files = {
+        "ca": "ca.pem",
+        "client_cert": "client-cert.pem",
+        "client_key": "client-key.pem",
+    }
+    paths = {}
+    for name, filename in files.items():
+        local_path = str(Path(dest_dir) / filename)
+        result = subprocess.run(
+            [
+                runtime,
+                "cp",
+                f"{container_id}:/var/lib/mysql/{filename}",
+                local_path,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to extract {filename}: {result.stderr}")
+        logger.info("Extracted %s to %s", filename, local_path)
+        paths[name] = local_path
+    return paths
+
+
 @fixture()
 def mysql() -> Iterator[dict[str, str]]:
     """Start MySQL and yield environment variables for database access."""
@@ -240,6 +283,7 @@ def mysql() -> Iterator[dict[str, str]]:
         )
     port = _find_free_port()
     container_id = None
+    tmp_dir = tempfile.mkdtemp(prefix="tenzir-mysql-tls-")
     try:
         container_id = _start_mysql(runtime, port)
         if not _wait_for_mysql(runtime, container_id, STARTUP_TIMEOUT):
@@ -247,7 +291,8 @@ def mysql() -> Iterator[dict[str, str]]:
                 f"MySQL failed to start within {STARTUP_TIMEOUT} seconds"
             )
         _create_test_data(runtime, container_id)
-        yield {
+        tls_files = _extract_tls_files(runtime, container_id, tmp_dir)
+        env = {
             "MYSQL_HOST": "127.0.0.1",
             "MYSQL_PORT": str(port),
             "MYSQL_USER": MYSQL_USER,
@@ -256,7 +301,12 @@ def mysql() -> Iterator[dict[str, str]]:
             "MYSQL_DATABASE": MYSQL_DATABASE,
             "MYSQL_CONTAINER_ID": container_id,
             "MYSQL_CONTAINER_RUNTIME": runtime,
+            "MYSQL_TLS_CAFILE": tls_files["ca"],
+            "MYSQL_TLS_CERTFILE": tls_files["client_cert"],
+            "MYSQL_TLS_KEYFILE": tls_files["client_key"],
         }
+        yield env
     finally:
         if container_id:
             _stop_mysql(runtime, container_id)
+        shutil.rmtree(tmp_dir, ignore_errors=True)

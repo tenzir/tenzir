@@ -14,11 +14,16 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/AsyncSSLSocket.h>
+#include <folly/io/async/SSLContext.h>
 #include <folly/io/coro/Transport.h>
+#include <folly/io/coro/TransportCallbackBase.h>
 #include <openssl/sha.h>
+#include <openssl/x509v3.h>
 
 #include <charconv>
 #include <cstring>
@@ -70,6 +75,13 @@ namespace {
 //     |  auth plugin data (scramble),       |
 //     |  capabilities, auth plugin name     |
 //     |                                     |
+//     |  +--- If TLS requested ---------------+
+//     |  |    SSL Request (caps + padding)  |
+//     |  |  ------>                         |
+//     |  |    TLS Handshake                 |
+//     |  |  <=====>                         |
+//     |  +----------------------------------+
+//     |                                     |
 //     |        Auth Response                |
 //     |------------------------------------>|
 //     |  capabilities, user, auth data,     |
@@ -87,7 +99,11 @@ namespace {
 //     |  |      |-------------------------->|
 //     |  |      +--- OK / ERR --------------|   done
 //     |  |                                  |
-//     |  +--- AuthSwitch (0xFE) ------------+ (not implemented)
+//     |  +--- AuthSwitch (0xFE) ------------+ different plugin
+//     |  |    new plugin + scramble           |
+//     |  |      Auth Data (re-hashed)         |
+//     |  |      |-------------------------->|
+//     |  |      +--- OK / ERR / MoreData ---|   done
 //     |                                     |
 //     |        COM_QUERY (0x03)             |
 //     |------------------------------------>|
@@ -608,6 +624,68 @@ auto as_error(std::span<std::byte const> data) -> std::optional<mysql_error> {
   return std::nullopt;
 }
 
+/// Returns the base set of client capability flags shared by SSL request and
+/// auth response packets.
+auto base_client_capabilities() -> uint32_t {
+  return std::to_underlying(capability::long_password)
+         | std::to_underlying(capability::protocol_41)
+         | std::to_underlying(capability::secure_connection)
+         | std::to_underlying(capability::plugin_auth)
+         | std::to_underlying(capability::plugin_auth_lenenc_client_data);
+}
+
+// -- TLS Handshake Callback --------------------------------------------------
+
+/// Coroutine-friendly callback for SSL/TLS handshake completion.
+class SslHandshakeCallback : public folly::coro::TransportCallbackBase,
+                             public folly::AsyncSSLSocket::HandshakeCB {
+public:
+  explicit SslHandshakeCallback(folly::AsyncSSLSocket& socket,
+                                std::string hostname)
+    : TransportCallbackBase(socket),
+      socket_(socket),
+      hostname_(std::move(hostname)) {
+  }
+
+private:
+  void cancel() noexcept override {
+    socket_.closeNow();
+  }
+
+  auto handshakeVer(folly::AsyncSSLSocket*, bool preverify_ok,
+                    X509_STORE_CTX* ctx) noexcept -> bool override {
+    if (not preverify_ok) {
+      return false;
+    }
+    // Only verify hostname on the leaf certificate (depth 0).
+    auto depth = X509_STORE_CTX_get_error_depth(ctx);
+    if (depth != 0) {
+      return true;
+    }
+    // Verify that the certificate's CN or SAN matches the target hostname.
+    auto* cert = X509_STORE_CTX_get_current_cert(ctx);
+    if (not cert) {
+      return false;
+    }
+    return X509_check_host(cert, hostname_.c_str(), hostname_.size(), 0,
+                           nullptr)
+           == 1;
+  }
+
+  void handshakeSuc(folly::AsyncSSLSocket*) noexcept override {
+    post();
+  }
+
+  void handshakeErr(folly::AsyncSSLSocket*,
+                    folly::AsyncSocketException const& ex) noexcept override {
+    storeException(ex);
+    post();
+  }
+
+  folly::AsyncSSLSocket& socket_;
+  std::string hostname_;
+};
+
 // -- Async Connection --------------------------------------------------------
 
 /// Async MySQL connection using folly::coro::Transport.
@@ -676,6 +754,7 @@ public:
     co_await folly::coro::co_invoke([&]() -> folly::coro::Task<void> {
       co_await transport_->write(folly::ByteRange{pkt.data(), pkt.size()});
     }).scheduleOn(evb_);
+    sequence_id_ = seq;
     co_return {};
   }
 
@@ -750,21 +829,120 @@ public:
     co_return info;
   }
 
+  /// Send the SSL request packet (capabilities + padding, no auth data).
+  /// This tells the server we want to upgrade to TLS before authenticating.
+  auto send_ssl_request(bool has_database) -> Task<MysqlResult<void>> {
+    auto buf = std::vector<std::byte>{};
+    buf.reserve(32);
+    auto caps
+      = base_client_capabilities() | std::to_underlying(capability::ssl);
+    if (has_database) {
+      caps |= std::to_underlying(capability::connect_with_db);
+    }
+    write_int_le<uint32_t>(buf, caps);
+    write_int_le<uint32_t>(buf, max_packet_size);
+    buf.push_back(static_cast<std::byte>(charset_utf8mb4));
+    buf.insert(buf.end(), client_reserved_bytes, std::byte{0});
+    CO_TRY(co_await write_packet(buf, 1));
+    co_return {};
+  }
+
+  /// Upgrade the connection to TLS.
+  auto upgrade_to_tls(std::shared_ptr<folly::SSLContext> ctx,
+                      std::string const& hostname) -> Task<MysqlResult<void>> {
+    // Get the underlying socket and detach its fd.
+    auto* raw_transport = transport_->getTransport();
+    auto* old_sock = dynamic_cast<folly::AsyncSocket*>(raw_transport);
+    TENZIR_ASSERT(old_sock);
+    auto fd = old_sock->detachNetworkSocket();
+    // Create an SSL socket wrapping the existing fd.
+    auto ssl_socket
+      = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb_, fd,
+                                         /*server=*/false,
+                                         /*deferSecurityNegotiation=*/true);
+    auto* ssl_ptr = ssl_socket.get();
+    // Replace the transport with one wrapping the SSL socket.
+    transport_ = Box<folly::coro::Transport>{
+      std::in_place, evb_,
+      folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
+    // Perform the TLS handshake.
+    try {
+      co_await folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
+        auto cb = SslHandshakeCallback{*ssl_ptr, hostname};
+        ssl_ptr->sslConn(&cb);
+        co_await cb.wait();
+        // Check for handshake error stored in callback.
+        if (cb.error()) {
+          cb.error().throw_exception();
+        }
+        co_return folly::unit;
+      }).scheduleOn(evb_);
+    } catch (std::exception const& ex) {
+      co_return Err{
+        mysql_error{0, fmt::format("TLS handshake failed: {}", ex.what())}};
+    }
+    is_tls_ = true;
+    co_return {};
+  }
+
+  /// Handle caching_sha2_password AuthMoreData sub-protocol.
+  /// Handles both fast auth (0x03) and full auth (0x04) responses.
+  auto handle_caching_sha2_more_data(std::span<std::byte const> response,
+                                     std::string const& password)
+    -> Task<MysqlResult<void>> {
+    TENZIR_ASSERT(response.size() > 1);
+    // 0x03 = fast auth success (cached), read the final OK.
+    if (response[1] == caching_sha2::fast_auth_success) {
+      CO_TRY(auto final_resp, co_await read_packet());
+      if (final_resp[0] == packet::ok) {
+        co_return {};
+      }
+      co_return Err{
+        mysql_error::protocol("unexpected response after fast auth")};
+    }
+    // 0x04 = full auth required. Send password as null-terminated cleartext.
+    if (response[1] == caching_sha2::full_auth_required) {
+      if (not is_tls_) {
+        co_return Err{mysql_error::protocol("full auth requires TLS (RSA "
+                                            "encryption not implemented)")};
+      }
+      auto pw_bytes = as_bytes(password);
+      auto pw_packet = std::vector<std::byte>{};
+      pw_packet.reserve(pw_bytes.size() + 1);
+      pw_packet.insert(pw_packet.end(), pw_bytes.begin(), pw_bytes.end());
+      pw_packet.push_back(std::byte{0});
+      CO_TRY(co_await write_packet(pw_packet, sequence_id_ + 1));
+      CO_TRY(auto final_resp, co_await read_packet());
+      if (final_resp[0] == packet::ok) {
+        co_return {};
+      }
+      if (final_resp[0] == packet::error) {
+        co_return Err{parse_error_from_packet(final_resp)};
+      }
+      co_return Err{
+        mysql_error::protocol("unexpected response after full auth")};
+    }
+    co_return Err{mysql_error::protocol(
+      fmt::format("unexpected caching_sha2 status: 0x{:02x}",
+                  std::to_integer<uint8_t>(response[1])))};
+  }
+
   /// Send the authentication response.
+  /// Uses the internally tracked sequence number and TLS state.
   auto
   send_auth_response(handshake_info const& handshake, std::string const& user,
                      std::string const& password, std::string const& database)
     -> Task<MysqlResult<void>> {
     auto buf = std::vector<std::byte>{};
+    buf.reserve(32 + user.size() + 1 + 32 + database.size() + 1
+                + handshake.auth_plugin_name.size() + 1);
     // Client capabilities.
-    auto caps
-      = std::to_underlying(capability::long_password)
-        | std::to_underlying(capability::protocol_41)
-        | std::to_underlying(capability::secure_connection)
-        | std::to_underlying(capability::plugin_auth)
-        | std::to_underlying(capability::plugin_auth_lenenc_client_data);
+    auto caps = base_client_capabilities();
     if (not database.empty()) {
       caps |= std::to_underlying(capability::connect_with_db);
+    }
+    if (is_tls_) {
+      caps |= std::to_underlying(capability::ssl);
     }
     write_int_le<uint32_t>(buf, caps);
     // Max packet size.
@@ -792,8 +970,8 @@ public:
     }
     // Auth plugin name.
     write_null_string(buf, handshake.auth_plugin_name);
-    // Send packet.
-    CO_TRY(co_await write_packet(buf, 1));
+    // Send packet with the next sequence number.
+    CO_TRY(co_await write_packet(buf, sequence_id_ + 1));
     // Read response.
     CO_TRY(auto resp_data, co_await read_packet());
     if (resp_data.empty()) {
@@ -807,39 +985,54 @@ public:
     if (resp_data[0] == packet::error) {
       co_return Err{parse_error_from_packet(resp_data)};
     }
-    // Auth switch request.
+    // Auth switch request: server wants a different auth plugin.
     if (resp_data[0] == packet::auth_switch) {
-      co_return Err{
-        mysql_error::protocol("auth switch request not implemented")};
+      auto reader = packet_reader{resp_data};
+      reader.skip(1); // Skip 0xFE marker.
+      auto plugin_name = reader.read_null_string();
+      auto new_scramble = std::vector<std::byte>{};
+      if (reader.remaining() > 0) {
+        auto rest = reader.data();
+        new_scramble.assign(rest.begin(), rest.end());
+        // Strip trailing null byte if present.
+        if (not new_scramble.empty() and new_scramble.back() == std::byte{0}) {
+          new_scramble.pop_back();
+        }
+      }
+      // Compute auth response for the requested plugin.
+      auto switch_auth = std::vector<std::byte>{};
+      if (plugin_name == "mysql_native_password") {
+        switch_auth = compute_native_password(password, new_scramble);
+      } else if (plugin_name == "caching_sha2_password") {
+        switch_auth = compute_caching_sha2_password(password, new_scramble);
+      } else {
+        co_return Err{mysql_error::protocol(
+          fmt::format("unsupported auth plugin: {}", plugin_name))};
+      }
+      CO_TRY(co_await write_packet(switch_auth, sequence_id_ + 1));
+      CO_TRY(auto switch_resp, co_await read_packet());
+      if (switch_resp.empty()) {
+        co_return Err{mysql_error::protocol("empty auth switch response")};
+      }
+      if (switch_resp[0] == packet::ok) {
+        co_return {};
+      }
+      if (switch_resp[0] == packet::error) {
+        co_return Err{parse_error_from_packet(switch_resp)};
+      }
+      // caching_sha2_password may send AuthMoreData after switch.
+      if (switch_resp[0] == packet::auth_more_data and switch_resp.size() > 1) {
+        CO_TRY(co_await handle_caching_sha2_more_data(switch_resp, password));
+        co_return {};
+      }
+      co_return Err{mysql_error::protocol(
+        fmt::format("unexpected auth switch response: 0x{:02x}",
+                    std::to_integer<uint8_t>(switch_resp[0])))};
     }
     // caching_sha2_password more-data response.
     if (resp_data[0] == packet::auth_more_data and resp_data.size() > 1) {
-      // 0x03 = fast auth success (cached), read the final OK.
-      if (resp_data[1] == caching_sha2::fast_auth_success) {
-        CO_TRY(auto final_resp, co_await read_packet());
-        if (final_resp[0] == packet::ok) {
-          co_return {};
-        }
-        co_return Err{
-          mysql_error::protocol("unexpected response after fast auth")};
-      }
-      // 0x04 = full auth required. Send password as null-terminated cleartext.
-      if (resp_data[1] == caching_sha2::full_auth_required) {
-        auto pw_packet = std::vector<std::byte>{};
-        auto pw_bytes = as_bytes(password);
-        pw_packet.insert(pw_packet.end(), pw_bytes.begin(), pw_bytes.end());
-        pw_packet.push_back(std::byte{0});
-        CO_TRY(co_await write_packet(pw_packet, sequence_id_ + 1));
-        CO_TRY(auto final_resp, co_await read_packet());
-        if (final_resp[0] == packet::ok) {
-          co_return {};
-        }
-        if (final_resp[0] == packet::error) {
-          co_return Err{parse_error_from_packet(final_resp)};
-        }
-        co_return Err{
-          mysql_error::protocol("unexpected response after full auth")};
-      }
+      CO_TRY(co_await handle_caching_sha2_more_data(resp_data, password));
+      co_return {};
     }
     co_return Err{mysql_error::protocol(
       fmt::format("unexpected auth response: 0x{:02x}",
@@ -856,6 +1049,7 @@ private:
   folly::EventBase* evb_ = nullptr;
   std::chrono::milliseconds read_timeout_{std::chrono::seconds{30}};
   uint8_t sequence_id_ = 0;
+  bool is_tls_ = false;
 };
 
 // -- Result Set Metadata -----------------------------------------------------
@@ -895,6 +1089,7 @@ struct client_config {
   std::string user = "root";
   std::string password;
   std::string database;
+  std::shared_ptr<folly::SSLContext> ssl_context;
 };
 
 /// Configuration for a query execution.
@@ -999,6 +1194,15 @@ public:
         mysql_error{0, fmt::format("connect failed: {}", e.what())}};
     }
     CO_TRY(auto handshake, co_await conn.perform_handshake());
+    // TLS upgrade if requested.
+    if (config.ssl_context) {
+      if (not has_cap(handshake.capabilities, capability::ssl)) {
+        co_return Err{mysql_error{0, "server does not support TLS"}};
+      }
+      CO_TRY(co_await conn.send_ssl_request(not config.database.empty()));
+      CO_TRY(co_await conn.upgrade_to_tls(std::move(config.ssl_context),
+                                          config.host));
+    }
     CO_TRY(co_await conn.send_auth_response(handshake, config.user,
                                             config.password, config.database));
     co_return Box<async_client>{std::in_place, std::move(conn)};
@@ -1069,6 +1273,7 @@ struct FromMySQLArgs {
   std::optional<located<std::string>> database;
   std::optional<located<std::string>> sql;
   std::optional<located<std::string>> show;
+  std::optional<located<data>> tls;
 };
 
 class FromMySQL final : public Operator<void, table_slice> {
@@ -1099,6 +1304,15 @@ public:
     }
     if (args_.database) {
       config.database = args_.database->inner;
+    }
+    // Build SSL context from TLS options.
+    if (args_.tls) {
+      auto result = tls_options{*args_.tls}.make_folly_ssl_context(ctx);
+      if (not result) {
+        done_ = true;
+        co_return;
+      }
+      config.ssl_context = std::move(*result);
     }
     // Build the SQL query.
     if (args_.show) {
@@ -1212,6 +1426,8 @@ public:
     d.named("user", &FromMySQLArgs::user);
     d.named("password", &FromMySQLArgs::password);
     d.named("database", &FromMySQLArgs::database);
+    // TLS option.
+    auto tls_arg = d.named("tls", &FromMySQLArgs::tls);
     // Query options.
     auto sql_arg = d.named("sql", &FromMySQLArgs::sql);
     auto show = d.named("show", &FromMySQLArgs::show);
@@ -1253,6 +1469,10 @@ public:
             .primary(ctx.get_location(show).value())
             .emit(ctx);
         }
+      }
+      // Validate TLS record structure.
+      if (auto tls_val = ctx.get(tls_arg)) {
+        tls_options{*tls_val}.validate(ctx);
       }
       return {};
     });

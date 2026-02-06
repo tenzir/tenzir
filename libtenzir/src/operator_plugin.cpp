@@ -399,7 +399,7 @@ public:
               return located{std::move(*cast), expr.get_location()};
             },
             [&](const Setter<located<data>>&) -> failure_or<Arg> {
-              TENZIR_TODO();
+              return located{std::move(value), expr.get_location()};
             },
             [&](const Setter<located<tenzir::pipeline>>&) -> failure_or<Arg> {
               TENZIR_TODO();

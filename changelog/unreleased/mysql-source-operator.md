@@ -39,4 +39,16 @@ from_mysql sql="SELECT id, name FROM users WHERE active = 1",
            database="mydb"
 ```
 
+The operator supports TLS/SSL connections for secure communication with MySQL
+servers. Use `tls=true` for default TLS settings, or pass a record for
+fine-grained control:
+
+```tql
+from_mysql "users", host="db.example.com", database="prod", tls={
+  cacert: "/path/to/ca.pem",
+  certfile: "/path/to/client-cert.pem",
+  keyfile: "/path/to/client-key.pem",
+}
+```
+
 The operator supports MySQL's `caching_sha2_password` authentication method and automatically maps MySQL data types to Tenzir types.

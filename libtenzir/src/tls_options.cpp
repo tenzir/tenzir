@@ -15,6 +15,7 @@
 #include <caf/expected.hpp>
 #include <caf/net/ssl/context.hpp>
 #include <curl/curl.h>
+#include <folly/io/async/SSLContext.h>
 #include <openssl/ssl.h>
 
 #include <algorithm>
@@ -22,6 +23,15 @@
 #include <filesystem>
 
 namespace tenzir {
+
+tls_options::tls_options(located<data> tls_val) : tls_{std::move(tls_val)} {
+}
+
+tls_options::tls_options(located<data> tls_val, options opts)
+  : uses_curl_http_{opts.uses_curl_http},
+    is_server_{opts.is_server},
+    tls_{std::move(tls_val)} {
+}
 
 namespace {
 
@@ -190,6 +200,29 @@ auto tls_options::validate_tls_record(diagnostic_handler& dh) const
   TRY(check_string("ciphers"));
   TRY(check_string("client_ca"));
   TRY(check_bool("require_client_cert"));
+  // Validate file paths exist.
+  auto check_file = [&](std::string_view key) -> failure_or<void> {
+    auto it = rec->find(key);
+    if (it == rec->end()) {
+      return {};
+    }
+    auto const* sval = try_as<std::string>(&it->second);
+    if (not sval) {
+      return {};
+    }
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(*sval, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`tls.{}` path is not a valid file: {}", key, *sval)
+        .primary(tls_->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  TRY(check_file("cacert"));
+  TRY(check_file("certfile"));
+  TRY(check_file("keyfile"));
   // Server-only keys validation
   if (not is_server_) {
     if (rec->find("client_ca") != rec->end()) {
@@ -695,6 +728,94 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
           .emit(dh);
       }
     }
+  }
+  return ctx;
+}
+
+auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
+  -> std::optional<std::shared_ptr<folly::SSLContext>> {
+  if (not get_tls(nullptr).inner) {
+    return nullptr;
+  }
+  auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
+  // Apply minimum TLS version.
+  if (auto min = get_tls_min_version(nullptr)) {
+    if (not min->inner.empty()) {
+      auto parsed = parse_openssl_tls_version(min->inner);
+      if (not parsed) {
+        diagnostic::error(parsed.error()).primary(*min).emit(dh);
+        return std::nullopt;
+      }
+      SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
+    }
+  }
+  // Load CA certificate.
+  if (auto cacert = get_cacert(nullptr)) {
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(cacert->inner, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`cacert` path is not a valid file")
+        .primary(*cacert)
+        .emit(dh);
+      return std::nullopt;
+    }
+    try {
+      ctx->loadTrustedCertificates(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load CA certificate: {}", ex.what())
+        .primary(*cacert)
+        .emit(dh);
+      return std::nullopt;
+    }
+  }
+  // Load client certificate.
+  if (auto certfile = get_certfile(nullptr)) {
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(certfile->inner, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`certfile` path is not a valid file")
+        .primary(*certfile)
+        .emit(dh);
+      return std::nullopt;
+    }
+    try {
+      ctx->loadCertificate(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load client certificate: {}", ex.what())
+        .primary(*certfile)
+        .emit(dh);
+      return std::nullopt;
+    }
+  }
+  // Load client private key.
+  if (auto keyfile = get_keyfile(nullptr)) {
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(keyfile->inner, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`keyfile` path is not a valid file")
+        .primary(*keyfile)
+        .emit(dh);
+      return std::nullopt;
+    }
+    try {
+      ctx->loadPrivateKey(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load client private key: {}", ex.what())
+        .primary(*keyfile)
+        .emit(dh);
+      return std::nullopt;
+    }
+  }
+  // Set verification mode.
+  auto skip_verify = get_skip_peer_verification(nullptr).inner;
+  if (skip_verify) {
+    diagnostic::warning("TLS peer verification is disabled "
+                        "- connection is vulnerable to "
+                        "man-in-the-middle attacks")
+      .emit(dh);
+    ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
+  } else {
+    ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
   }
   return ctx;
 }
