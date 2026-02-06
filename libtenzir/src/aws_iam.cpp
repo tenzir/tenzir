@@ -16,11 +16,144 @@
 
 namespace tenzir {
 
+namespace {
+
+/// Helper to check for CRLF injection characters in strings.
+auto contains_crlf(std::string_view s) -> bool {
+  return s.find('\r') != std::string_view::npos
+         or s.find('\n') != std::string_view::npos;
+}
+
+/// Helper to assign a secret from a record field.
+auto assign_secret(const located<record>& config, std::string_view key,
+                   std::optional<secret>& x, diagnostic_handler& dh)
+  -> failure_or<void> {
+  if (auto it = config.inner.find(key); it != config.inner.end()) {
+    if (auto* s = try_as<secret>(it->second.get_data())) {
+      x = std::move(*s);
+    } else if (auto* str = try_as<std::string>(it->second.get_data())) {
+      if (str->empty()) {
+        diagnostic::error("'{}' must not be empty", key)
+          .primary(config)
+          .emit(dh);
+        return failure::promise();
+      }
+      x = secret::make_literal(std::move(*str));
+    } else {
+      diagnostic::error("'{}' must be a `string` or `secret`", key)
+        .primary(config)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
+}
+
+/// Helper to parse headers from a record.
+auto parse_headers(const located<record>& config,
+                   std::optional<std::vector<std::pair<std::string, secret>>>& x,
+                   diagnostic_handler& dh) -> failure_or<void> {
+  auto it = config.inner.find("headers");
+  if (it == config.inner.end()) {
+    return {};
+  }
+  auto* r = try_as<record>(it->second.get_data());
+  if (not r) {
+    diagnostic::error("`headers` must be a record").primary(config).emit(dh);
+    return failure::promise();
+  }
+  x = std::vector<std::pair<std::string, secret>>{};
+  for (auto& [key, value] : *r) {
+    // Validate header name for CRLF injection.
+    if (contains_crlf(key)) {
+      diagnostic::error("header name '{}' contains invalid characters "
+                        "(newline/carriage return)",
+                        key)
+        .primary(config)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (auto* s = try_as<secret>(value.get_data())) {
+      x->emplace_back(key, std::move(*s));
+    } else if (auto* str = try_as<std::string>(value.get_data())) {
+      if (str->empty()) {
+        diagnostic::error("header '{}' value must not be empty", key)
+          .primary(config)
+          .emit(dh);
+        return failure::promise();
+      }
+      // Validate header value for CRLF injection.
+      if (contains_crlf(*str)) {
+        diagnostic::error("header '{}' value contains invalid characters "
+                          "(newline/carriage return)",
+                          key)
+          .primary(config)
+          .emit(dh);
+        return failure::promise();
+      }
+      x->emplace_back(key, secret::make_literal(std::move(*str)));
+    } else {
+      diagnostic::error("header '{}' value must be a `string` or `secret`", key)
+        .primary(config)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
+}
+
+} // namespace
+
+auto token_endpoint_options::from_record(located<record> config,
+                                         diagnostic_handler& dh)
+  -> failure_or<token_endpoint_options> {
+  constexpr auto known = std::array{"url", "headers", "path"};
+  const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
+    return std::ranges::find(known, x.first) == std::ranges::end(known);
+  });
+  if (unknown != std::ranges::end(config.inner)) {
+    diagnostic::error("unknown key '{}' in token_endpoint config",
+                      (*unknown).first)
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  auto opts = token_endpoint_options{};
+  opts.loc = config.source;
+  TRY(assign_secret(config, "url", opts.url, dh));
+  TRY(parse_headers(config, opts.headers, dh));
+  // Parse path: string, or null for plain text response.
+  if (auto it = config.inner.find("path"); it != config.inner.end()) {
+    if (is<caf::none_t>(it->second.get_data())) {
+      // Explicit null means plain text response (no JSON parsing).
+      opts.path_is_null = true;
+    } else if (auto* str = try_as<std::string>(it->second.get_data())) {
+      if (str->empty()) {
+        diagnostic::error("`path` must not be empty").primary(config).emit(dh);
+        return failure::promise();
+      }
+      opts.path = std::move(*str);
+    } else {
+      diagnostic::error("`path` must be a `string` or `null`")
+        .primary(config)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Validate: url is required.
+  if (not opts.url) {
+    diagnostic::error("`token_endpoint` requires `url`")
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  return opts;
+}
+
 auto web_identity_options::from_record(located<record> config,
                                        diagnostic_handler& dh)
   -> failure_or<web_identity_options> {
-  constexpr auto known = std::array{"token_endpoint", "token_file", "token",
-                                    "headers", "token_path"};
+  constexpr auto known = std::array{"token_endpoint", "token_file", "token"};
   const auto unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
   });
@@ -31,105 +164,23 @@ auto web_identity_options::from_record(located<record> config,
       .emit(dh);
     return failure::promise();
   }
-  const auto assign_secret
-    = [&](std::string_view key, std::optional<secret>& x) -> failure_or<void> {
-    if (auto it = config.inner.find(key); it != config.inner.end()) {
-      if (auto* s = try_as<secret>(it->second.get_data())) {
-        x = std::move(*s);
-      } else if (auto* str = try_as<std::string>(it->second.get_data())) {
-        if (str->empty()) {
-          diagnostic::error("'{}' must not be empty", key)
-            .primary(config)
-            .emit(dh);
-          return failure::promise();
-        }
-        x = secret::make_literal(std::move(*str));
-      } else {
-        diagnostic::error("'{}' must be a `string` or `secret`", key)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    return {};
-  };
   auto opts = web_identity_options{};
   opts.loc = config.source;
-  TRY(assign_secret("token_endpoint", opts.token_endpoint));
-  TRY(assign_secret("token_file", opts.token_file));
-  TRY(assign_secret("token", opts.token));
-  // Parse headers as a record where values can be strings or secrets.
-  // Validate header names and string values for CRLF injection.
-  const auto contains_crlf = [](std::string_view s) {
-    return s.find('\r') != std::string_view::npos
-           or s.find('\n') != std::string_view::npos;
-  };
-  if (auto it = config.inner.find("headers"); it != config.inner.end()) {
+  // Parse token_endpoint as a nested record.
+  if (auto it = config.inner.find("token_endpoint"); it != config.inner.end()) {
     if (auto* r = try_as<record>(it->second.get_data())) {
-      opts.headers = std::vector<std::pair<std::string, secret>>{};
-      for (auto& [key, value] : *r) {
-        // Validate header name for CRLF injection.
-        if (contains_crlf(key)) {
-          diagnostic::error("header name '{}' contains invalid characters "
-                            "(newline/carriage return)",
-                            key)
-            .primary(config)
-            .emit(dh);
-          return failure::promise();
-        }
-        if (auto* s = try_as<secret>(value.get_data())) {
-          opts.headers->emplace_back(key, std::move(*s));
-        } else if (auto* str = try_as<std::string>(value.get_data())) {
-          if (str->empty()) {
-            diagnostic::error("header '{}' value must not be empty", key)
-              .primary(config)
-              .emit(dh);
-            return failure::promise();
-          }
-          // Validate header value for CRLF injection.
-          if (contains_crlf(*str)) {
-            diagnostic::error("header '{}' value contains invalid characters "
-                              "(newline/carriage return)",
-                              key)
-              .primary(config)
-              .emit(dh);
-            return failure::promise();
-          }
-          opts.headers->emplace_back(key,
-                                     secret::make_literal(std::move(*str)));
-        } else {
-          diagnostic::error("header '{}' value must be a `string` or `secret`",
-                            key)
-            .primary(config)
-            .emit(dh);
-          return failure::promise();
-        }
-      }
+      auto endpoint_config = located{std::move(*r), config.source};
+      TRY(opts.token_endpoint,
+          token_endpoint_options::from_record(std::move(endpoint_config), dh));
     } else {
-      diagnostic::error("`headers` must be a record").primary(config).emit(dh);
-      return failure::promise();
-    }
-  }
-  // Parse token_path: string, or null for plain text response.
-  if (auto it = config.inner.find("token_path"); it != config.inner.end()) {
-    if (is<caf::none_t>(it->second.get_data())) {
-      // Explicit null means plain text response (no JSON parsing).
-      opts.token_path_is_null = true;
-    } else if (auto* str = try_as<std::string>(it->second.get_data())) {
-      if (str->empty()) {
-        diagnostic::error("`token_path` must not be empty")
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      opts.token_path = std::move(*str);
-    } else {
-      diagnostic::error("`token_path` must be a `string` or `null`")
+      diagnostic::error("`token_endpoint` must be a record")
         .primary(config)
         .emit(dh);
       return failure::promise();
     }
   }
+  TRY(assign_secret(config, "token_file", opts.token_file, dh));
+  TRY(assign_secret(config, "token", opts.token, dh));
   // Validate: exactly one of token_endpoint, token_file, token must be set.
   const auto token_source_count = (opts.token_endpoint.has_value() ? 1 : 0)
                                   + (opts.token_file.has_value() ? 1 : 0)
@@ -147,21 +198,6 @@ auto web_identity_options::from_record(located<record> config,
       .primary(config)
       .emit(dh);
     return failure::promise();
-  }
-  // Validate: headers and token_path only valid with token_endpoint.
-  if (not opts.token_endpoint) {
-    if (opts.headers) {
-      diagnostic::error("`headers` is only valid with `token_endpoint`")
-        .primary(config)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (opts.token_path or opts.token_path_is_null) {
-      diagnostic::error("`token_path` is only valid with `token_endpoint`")
-        .primary(config)
-        .emit(dh);
-      return failure::promise();
-    }
   }
   return opts;
 }
@@ -327,9 +363,34 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
     resolved.web_identity = resolved_web_identity{};
     auto& wi = *resolved.web_identity;
     if (web_identity->token_endpoint) {
-      requests.emplace_back(
-        make_secret_request("token_endpoint", *web_identity->token_endpoint,
-                            web_identity->loc, wi.token_endpoint, dh));
+      const auto& te = *web_identity->token_endpoint;
+      wi.token_endpoint = resolved_token_endpoint{};
+      auto& rte = *wi.token_endpoint;
+      requests.emplace_back(make_secret_request("token_endpoint.url", *te.url,
+                                                te.loc, rte.url, dh));
+      // Resolve header secrets.
+      if (te.headers) {
+        // Pre-allocate space for resolved headers.
+        rte.headers.reserve(te.headers->size());
+        for (const auto& [key, value] : *te.headers) {
+          // Add a placeholder that will be filled by secret resolution.
+          rte.headers.emplace_back(key, std::string{});
+          requests.emplace_back(
+            make_secret_request(fmt::format("header '{}'", key), value, te.loc,
+                                rte.headers.back().second, dh));
+        }
+      }
+      // Handle path: explicit value, explicit null, or default.
+      if (te.path_is_null) {
+        // Explicit null: plain text response (no JSON parsing).
+        rte.path = std::nullopt;
+      } else if (te.path) {
+        // Explicit JSON path.
+        rte.path = *te.path;
+      } else {
+        // Default: ".access_token" for JSON response.
+        rte.path = ".access_token";
+      }
     }
     if (web_identity->token_file) {
       requests.emplace_back(
@@ -339,29 +400,6 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
     if (web_identity->token) {
       requests.emplace_back(make_secret_request(
         "token", *web_identity->token, web_identity->loc, wi.token, dh));
-    }
-    // Resolve header secrets.
-    if (web_identity->headers) {
-      // Pre-allocate space for resolved headers.
-      wi.headers.reserve(web_identity->headers->size());
-      for (const auto& [key, value] : *web_identity->headers) {
-        // Add a placeholder that will be filled by secret resolution.
-        wi.headers.emplace_back(key, std::string{});
-        requests.emplace_back(
-          make_secret_request(fmt::format("header '{}'", key), value,
-                              web_identity->loc, wi.headers.back().second, dh));
-      }
-    }
-    // Handle token_path: explicit value, explicit null, or default.
-    if (web_identity->token_path_is_null) {
-      // Explicit null: plain text response (no JSON parsing).
-      wi.token_path = std::nullopt;
-    } else if (web_identity->token_path) {
-      // Explicit JSON path.
-      wi.token_path = *web_identity->token_path;
-    } else {
-      // Default: ".access_token" for JSON response.
-      wi.token_path = ".access_token";
     }
   }
   return requests;
