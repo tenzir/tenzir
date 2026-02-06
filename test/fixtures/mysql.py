@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import fixture
+from tenzir_test.fixtures import FixtureUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -277,9 +278,8 @@ def mysql() -> Iterator[dict[str, str]]:
     """Start MySQL and yield environment variables for database access."""
     runtime = _find_container_runtime()
     if runtime is None:
-        raise RuntimeError(
-            "A container runtime (podman or docker) is required for MySQL "
-            "fixture but none was found."
+        raise FixtureUnavailable(
+            "container runtime (docker/podman) required but not found"
         )
     port = _find_free_port()
     container_id = None
