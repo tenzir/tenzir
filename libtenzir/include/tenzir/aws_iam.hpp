@@ -24,15 +24,20 @@ namespace tenzir {
 
 class OpCtx;
 
-/// Resolved web identity token configuration.
-struct resolved_web_identity {
-  std::string token_endpoint;
-  std::string token_file;
-  std::string token;
+/// Resolved token endpoint configuration.
+struct resolved_token_endpoint {
+  std::string url;
   std::vector<std::pair<std::string, std::string>> headers;
   /// JSON path to extract the token from the endpoint response.
   /// nullopt means the response is plain text (no JSON parsing).
-  std::optional<std::string> token_path;
+  std::optional<std::string> path;
+};
+
+/// Resolved web identity token configuration.
+struct resolved_web_identity {
+  std::optional<resolved_token_endpoint> token_endpoint;
+  std::string token_file;
+  std::string token;
 };
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
@@ -47,6 +52,33 @@ struct resolved_aws_credentials {
   std::optional<resolved_web_identity> web_identity;
 };
 
+/// Token endpoint configuration for fetching OIDC tokens via HTTP.
+struct token_endpoint_options {
+  /// HTTP endpoint URL to fetch the token from.
+  std::optional<secret> url;
+  /// HTTP headers for the token endpoint request.
+  std::optional<std::vector<std::pair<std::string, secret>>> headers;
+  /// JSON path to extract the token from endpoint response.
+  /// Defaults to ".access_token". Set to null for plain text responses.
+  std::optional<std::string> path;
+  /// True if path was explicitly set to null (plain text response).
+  bool path_is_null = false;
+  /// Source location for diagnostics.
+  location loc;
+
+  friend auto inspect(auto& f, token_endpoint_options& x) -> bool {
+    return f.object(x).fields(f.field("url", x.url),
+                              f.field("headers", x.headers),
+                              f.field("path", x.path),
+                              f.field("path_is_null", x.path_is_null),
+                              f.field("loc", x.loc));
+  }
+
+  /// Parses token endpoint options from a TQL record.
+  static auto from_record(located<record> config, diagnostic_handler& dh)
+    -> failure_or<token_endpoint_options>;
+};
+
 /// Web identity token configuration for OIDC-based authentication.
 ///
 /// Supports fetching OIDC tokens from:
@@ -54,40 +86,28 @@ struct resolved_aws_credentials {
 /// - File path (e.g., Kubernetes service account token)
 /// - Direct token value
 struct web_identity_options {
-  /// HTTP endpoint to fetch the token from.
-  std::optional<secret> token_endpoint;
+  /// HTTP endpoint configuration to fetch the token.
+  std::optional<token_endpoint_options> token_endpoint;
   /// File path containing the token.
   std::optional<secret> token_file;
   /// Direct token value.
   std::optional<secret> token;
-  /// HTTP headers for the token endpoint request.
-  /// Each value can be a string or secret.
-  std::optional<std::vector<std::pair<std::string, secret>>> headers;
-  /// JSON path to extract the token from endpoint response.
-  /// Defaults to ".access_token". Set to null for plain text responses.
-  std::optional<std::string> token_path;
-  /// True if token_path was explicitly set to null (plain text response).
-  bool token_path_is_null = false;
   /// Source location for diagnostics.
   location loc;
 
   friend auto inspect(auto& f, web_identity_options& x) -> bool {
-    return f.object(x).fields(
-      f.field("token_endpoint", x.token_endpoint),
-      f.field("token_file", x.token_file), f.field("token", x.token),
-      f.field("headers", x.headers), f.field("token_path", x.token_path),
-      f.field("token_path_is_null", x.token_path_is_null),
-      f.field("loc", x.loc));
+    return f.object(x).fields(f.field("token_endpoint", x.token_endpoint),
+                              f.field("token_file", x.token_file),
+                              f.field("token", x.token), f.field("loc", x.loc));
   }
 
   /// Parses web identity options from a TQL record.
   ///
   /// Recognized keys:
-  /// - `token_endpoint`: HTTP endpoint URL to fetch the token
+  /// - `token_endpoint`: Token endpoint configuration (record with url,
+  /// headers, path)
   /// - `token_file`: File path containing the token
   /// - `token`: Direct token value
-  /// - `headers`: HTTP headers for endpoint requests
-  /// - `token_path`: JSON path to extract token (default: ".access_token")
   static auto from_record(located<record> config, diagnostic_handler& dh)
     -> failure_or<web_identity_options>;
 };

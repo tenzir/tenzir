@@ -316,14 +316,15 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
     return detail::trim(*contents);
   }
   // Case 3: Token from HTTP endpoint.
-  if (not web_identity.token_endpoint.empty()) {
+  if (web_identity.token_endpoint) {
+    const auto& te = *web_identity.token_endpoint;
     TENZIR_VERBOSE("fetching web identity token from endpoint");
     auto xfer = transfer{};
     auto req = http::request{};
-    req.uri = web_identity.token_endpoint;
+    req.uri = te.url;
     req.method = "GET";
     // Add custom headers.
-    for (const auto& [name, value] : web_identity.headers) {
+    for (const auto& [name, value] : te.headers) {
       req.headers.emplace_back(name, value);
     }
     if (auto err = xfer.prepare(req); err) {
@@ -369,23 +370,23 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
                           : body;
       return diagnostic::error("HTTP request failed")
         .note("status code: {}", status)
-        .note("endpoint: {}", web_identity.token_endpoint)
+        .note("endpoint: {}", te.url)
         .note("response: {}", error_body)
         .to_error();
     }
-    // Check if token_path is set (JSON response) or nullopt (plain text).
-    if (not web_identity.token_path) {
+    // Check if path is set (JSON response) or nullopt (plain text).
+    if (not te.path) {
       // Plain text response: return trimmed body.
       TENZIR_VERBOSE("treating web identity token response as plain text");
       return detail::trim(body);
     }
     // JSON response: extract token using JSON path.
     TENZIR_VERBOSE("extracting web identity token from JSON path: {}",
-                   *web_identity.token_path);
+                   *te.path);
     // Simple JSON path extraction. Only single-level paths like ".access_token"
     // or ".token" are supported. Nested paths like ".data.token" are not
     // supported.
-    auto path = *web_identity.token_path;
+    auto path = *te.path;
     if (path.starts_with('.')) {
       path = path.substr(1);
     }
@@ -397,7 +398,7 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
     };
     if (not std::ranges::all_of(path, is_valid_path_char)) {
       return diagnostic::error("invalid JSON path for web identity token")
-        .note("path: {}", *web_identity.token_path)
+        .note("path: {}", *te.path)
         .note("only alphanumeric characters, underscores, and hyphens are "
               "allowed")
         .to_error();
@@ -419,14 +420,14 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
     auto token_value = doc[path];
     if (token_value.error() != simdjson::SUCCESS) {
       return diagnostic::error("failed to extract token from JSON response")
-        .note("path: {}", *web_identity.token_path)
+        .note("path: {}", *te.path)
         .note("error: {}", simdjson::error_message(token_value.error()))
         .to_error();
     }
     auto token_str = token_value.get_string();
     if (token_str.error() != simdjson::SUCCESS) {
       return diagnostic::error("web identity token is not a string")
-        .note("path: {}", *web_identity.token_path)
+        .note("path: {}", *te.path)
         .to_error();
     }
     return std::string{token_str.value()};
