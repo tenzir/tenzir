@@ -331,21 +331,25 @@ public:
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>> {
     // FIXME: What to do when closed?
-    TENZIR_WARN("pushing {} rows to subpipeline", input.rows());
+    if constexpr (std::same_as<Input, table_slice>) {
+      TENZIR_WARN("pushing {} rows to subpipeline", input.rows());
+    } else {
+      TENZIR_WARN("pushing data to subpipeline");
+    }
     co_await push_(std::move(input));
-    TENZIR_WARN("pushing to subpipeline done");
     co_return {};
   }
 
-  auto close() -> void {
-    // FIXME: TODO
+  auto close() -> Task<void> {
+    co_await push_(Signal::end_of_data);
   }
 
 private:
   std::reference_wrapper<Push<OperatorMsg<Input>>> push_;
 };
 
-using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<table_slice>>;
+using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
+                                OpenPipeline<table_slice>>;
 
 class OpCtxImpl {
 public:
@@ -616,6 +620,12 @@ public:
   /// Return operator state. See file-level docs.
   virtual auto state() -> OperatorState {
     return OperatorState::unspecified;
+  }
+
+  /// Called to signal that a source should stop producing data.
+  virtual auto stop(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
+    co_return;
   }
 
 protected:

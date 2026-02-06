@@ -13,6 +13,8 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <map>
+
 namespace tenzir::_::operator_plugin {
 
 /// Wraps a diagnostic_handler to track whether any errors were emitted.
@@ -88,7 +90,7 @@ auto setter_to_type_string(const AnySetter& setter) -> std::string {
         return "number";
       } else if constexpr (std::same_as<T, bool>) {
         return "bool";
-      } else if constexpr (std::same_as<T, tenzir::pipeline>) {
+      } else if constexpr (std::same_as<T, ir::pipeline>) {
         return "{ … }";
       } else if constexpr (std::same_as<T, data>) {
         return "any";
@@ -182,17 +184,19 @@ public:
   static auto make(SharedDescription desc, ast::entity op,
                    std::vector<ast::expression> args, compile_ctx ctx)
     -> failure_or<GenericIr> {
+    auto result = GenericIr{};
+    result.op_ = std::move(op);
+    // Bind non-pipeline arguments.
     for (auto& arg : args) {
-      // TODO: This assumes that there are no subpipelines...
-      TRY(arg.bind(ctx));
+      if (is<ast::assignment>(arg) or not is<ast::pipeline_expr>(arg)) {
+        TRY(arg.bind(ctx));
+      }
     }
     auto failed = false;
     auto emit = [&](diagnostic_builder d) {
       failed = true;
       std::move(d).usage(get_usage(*desc)).docs(desc->docs).emit(ctx);
     };
-    auto result = GenericIr{};
-    result.op_ = std::move(op);
     // Track which named arguments have been found.
     auto named_found = std::vector<std::optional<location>>(desc->named.size());
     // Parse arguments, separating positional from named.
@@ -230,6 +234,27 @@ public:
         // Store the named argument for later processing.
         result.named_args_.push_back(
           NamedArg{idx, Incomplete{assignment->right}});
+      } else if (auto* pipe_expr = try_as<ast::pipeline_expr>(arg)) {
+        if (not desc->pipeline) {
+          emit(diagnostic::error("no pipeline argument expected").primary(arg));
+          continue;
+        }
+        result.pipeline_ = PipelineArg{};
+        const auto& pipe = desc->pipeline;
+        // Open a scope if there are let bindings.
+        auto scope = ctx.open_scope();
+        for (auto [binding_idx, binding] :
+             detail::enumerate(pipe->let_bindings)) {
+          auto id = scope.let(binding.name);
+          // Store let_id for later application during spawn().
+          auto [_, inserted]
+            = result.pipeline_->let_ids.emplace(binding_idx, id);
+          TENZIR_ASSERT(inserted);
+        }
+        // Compile the pipeline (with the scope if present).
+        auto pipe_loc = pipe_expr->get_location();
+        TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+        result.pipeline_->pipeline = located{std::move(pipe_ir), pipe_loc};
       } else {
         // Positional argument.
         if (positional_idx >= max_positional) {
@@ -255,6 +280,11 @@ public:
                                named.name)
                .primary(result.op_));
       }
+    }
+    // Check for missing required subpipeline.
+    if (desc->pipeline and desc->pipeline->required and not result.pipeline_) {
+      emit(diagnostic::error("required subpipeline was not provided")
+             .primary(result.op_));
     }
     if (failed) {
       return failure::promise();
@@ -314,6 +344,15 @@ public:
         [](Incomplete) {
           TENZIR_UNREACHABLE();
         });
+    }
+    if (pipeline_) {
+      // This is already checked in make().
+      TENZIR_ASSERT(desc_->pipeline);
+      desc_->pipeline->setter(args, std::move(pipeline_->pipeline));
+      for (const auto& [binding_idx, id] : pipeline_->let_ids) {
+        auto& binding = desc_->pipeline->let_bindings[binding_idx];
+        binding.setter(args, id);
+      }
     }
     if (desc_->set_filter) {
       (*desc_->set_filter)(args, std::move(filter_));
@@ -401,8 +440,9 @@ public:
             [&](const Setter<located<data>>&) -> failure_or<Arg> {
               TENZIR_TODO();
             },
-            [&](const Setter<located<tenzir::pipeline>>&) -> failure_or<Arg> {
-              TENZIR_TODO();
+            [&](const Setter<located<ir::pipeline>>&) -> failure_or<Arg> {
+              // Pipelines are compiled in make(), not during substitute.
+              TENZIR_UNREACHABLE();
             },
             [&]<class T>(const Setter<T>&) -> failure_or<Arg> {
               TENZIR_TODO();
@@ -467,7 +507,8 @@ private:
     return f.object(x).fields(f.field("op", x.op_), f.field("desc", x.desc_),
                               f.field("args", x.args_),
                               f.field("filter", x.filter_),
-                              f.field("named_args", x.named_args_));
+                              f.field("named_args", x.named_args_),
+                              f.field("pipeline", x.pipeline_));
   }
 
   /// The entity that this operator was created for.
@@ -478,6 +519,9 @@ private:
 
   /// Contains named arguments with their indices.
   std::vector<NamedArg> named_args_;
+
+  /// Pre-compiled pipeline with source location and let_ids.
+  std::optional<PipelineArg> pipeline_;
 
   /// The filter passed to `optimize` (only if the operator wants to consume it).
   ir::optimize_filter filter_;
