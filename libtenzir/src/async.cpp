@@ -160,9 +160,9 @@ private:
 template <class T>
 OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
-// Wrapper type to prevent implicit conversions.
-struct AnyWrapper {
-  explicit AnyWrapper(Any value) : value{std::move(value)} {
+// Wraps an `Any` but without the implicit construction from values.
+struct ExplicitAny {
+  explicit ExplicitAny(Any value) : value{std::move(value)} {
   }
 
   Any value;
@@ -179,8 +179,35 @@ struct SubPipeline {
   Sender<FromControl> from_control;
 };
 
-using AnySubpipeline
-  = variant<SubPipeline<void>, SubPipeline<chunk_ptr>, SubPipeline<table_slice>>;
+class AnySubpipeline : public variant<SubPipeline<void>, SubPipeline<chunk_ptr>,
+                                      SubPipeline<table_slice>> {
+public:
+  using variant::variant;
+
+  auto send(Signal signal) -> Task<void> {
+    return co_match(*this,
+                    [&]<class Input>(SubPipeline<Input>& self) -> Task<void> {
+                      return self.push(std::move(signal));
+                    });
+  }
+
+  auto send(FromControl from_control) -> void {
+    co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
+      self.from_control.send(std::move(from_control));
+    });
+  }
+};
+
+struct SubPipelineInfo {
+  /// The handle is given out to the inner implementation.
+  AnySubpipeline handle;
+  /// Save the instantiated IR because we need that to restore.
+  ir::pipeline ir;
+  /// Also need the input type it was spawned with to recreate it.
+  element_type_tag input;
+  /// True if this subpipeline received the last checkpoint, requiring a commit.
+  bool wants_commit = false;
+};
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
@@ -263,12 +290,12 @@ private:
     return *reg_;
   }
 
-  auto save(chunk_ptr chunk) -> Task<void> override {
+  auto save_checkpoint(chunk_ptr chunk) -> Task<void> override {
     TENZIR_UNUSED(chunk);
     co_return;
   }
 
-  auto load() -> Task<chunk_ptr> override {
+  auto load_checkpoint() -> Task<chunk_ptr> override {
     co_return {};
   }
 
@@ -488,9 +515,11 @@ private:
                                           push, *this);
               }
             },
-            [&](Signal output) -> Task<void> {
-              switch (output) {
-                case Signal::end_of_data: {
+            [&](Signal signal) -> Task<void> {
+              // FIXME: What should we do here?
+              co_await co_match(
+                signal,
+                [&](EndOfData) -> Task<void> {
                   if constexpr (std::same_as<Output, void>) {
                     co_await op_->finish_sub(make_view(key), *this);
                   } else {
@@ -499,12 +528,11 @@ private:
                   }
                   // TODO(tobim): Too early?
                   subpipelines_.erase(key);
+                },
+                [&](Checkpoint) -> Task<void> {
+                  //
                   co_return;
-                }
-                case Signal::checkpoint:
-                  TENZIR_TODO();
-              }
-              TENZIR_UNREACHABLE();
+                });
             });
         }
       });
@@ -514,13 +542,12 @@ private:
         auto to_control = co_await to_control_receiver.receive();
         switch (to_control) {
           case ToControl::no_more_input:
-            // FIXME: How do we inform the operator that the subpipeline doesn't
-            // want anymore input?
+            // FIXME: How do we inform the operator that the subpipeline
+            // doesn't want anymore input?
           case ToControl::ready_for_shutdown:
-            // FIXME: Send shutdown signal and then remove it from the pipelines
-            // list once the task terminated.
+            // FIXME: Send shutdown signal and then remove it from the
+            // pipelines list once the task terminated.
           case ToControl::checkpoint_begin:
-          case ToControl::checkpoint_ready:
           case ToControl::checkpoint_done:
             TENZIR_TODO();
         }
@@ -539,7 +566,7 @@ private:
                          if (not inserted) {
                            panic("already have a subpipeline for that key");
                          }
-                         auto& subpipe = as<SubPipeline<In>>(it->second);
+                         auto& subpipe = as<SubPipeline<In>>(it->second.handle);
                          return OpenPipeline<In>{*subpipe.push};
                        });
   }
@@ -550,8 +577,9 @@ private:
     if (it == subpipelines_.end()) {
       return std::nullopt;
     }
+    auto& sub = it->second;
     return co_match(
-      it->second,
+      sub.handle,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
         return OpenPipeline<In>{*subpipeline.push};
       });
@@ -580,8 +608,8 @@ private:
         co_await op_->start(*this);
       }
       TENZIR_INFO("-> post start");
-      queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task(*this)};
+      queue_.spawn([this] -> Task<ExplicitAny> {
+        co_return ExplicitAny{co_await op_->await_task(*this)};
       });
       queue_.spawn(pull_upstream_());
       queue_.spawn(from_control_.receive());
@@ -621,7 +649,7 @@ private:
     });
   }
 
-  auto process(AnyWrapper message) -> Task<void> {
+  auto process(ExplicitAny message) -> Task<void> {
     // The task provided by the inner implementation completed.
     TENZIR_VERBOSE("got future result in {}", typeid(*op_).name());
     if constexpr (std::same_as<Output, void>) {
@@ -633,8 +661,8 @@ private:
     if (op_->state() == OperatorState::done) {
       co_await handle_done();
     } else {
-      queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task(*this)};
+      queue_.spawn([this] -> Task<ExplicitAny> {
+        co_return ExplicitAny{co_await op_->await_task(*this)};
       });
     }
     TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
@@ -662,8 +690,9 @@ private:
         }
       },
       [&](Signal signal) -> Task<void> {
-        switch (signal) {
-          case Signal::end_of_data:
+        co_await co_match(
+          signal,
+          [&](EndOfData) -> Task<void> {
             TENZIR_VERBOSE("got end of data in {}", typeid(*op_).name());
             if constexpr (std::same_as<Input, void>) {
               TENZIR_UNREACHABLE();
@@ -672,19 +701,77 @@ private:
               co_await handle_done();
             }
             co_return;
-          case Signal::checkpoint:
-            TENZIR_VERBOSE("got checkpoint in {}", typeid(*op_).name());
-            to_control_.send(ToControl::checkpoint_begin);
-            co_await op_->checkpoint(*this);
-            to_control_.send(ToControl::checkpoint_ready);
-            co_await flush();
-            to_control_.send(ToControl::checkpoint_done);
-            co_await push_downstream_(Signal::checkpoint);
+          },
+          [&](Checkpoint checkpoint) -> Task<void> {
+            co_await begin_checkpoint(checkpoint);
             co_return;
-        }
-        TENZIR_UNREACHABLE();
+          });
       });
     queue_.spawn(pull_upstream_());
+  }
+
+  /// Checkpoint the operator and all of its subpipelines.
+  ///
+  /// This works as follows:
+  /// - First, checkpoint the state of the operator itself.
+  /// - If there are no subpipelines: We are done, send checkpoint downstream.
+  /// - Otherwise, forward the checkpoint to all subpipelines.
+  /// - Remember which ones exist for the commit notification later.
+  /// X Block output (perhaps with buffer) of the inner operator.
+  /// X Also block output subpipelines created after this point.
+  /// - Start asynchronous subpipeline checkpointing and return.
+  ///
+  /// Asynchronous subpipeline checkpointing works as follows:
+  /// X Wait for all subpipelines that got the checkpoint to return it to us.
+  /// X Once a subpipeline returns its checkpoint, its output is also blocked.
+  /// X When we got all checkpoints, we forward it to our actual downstream.
+  /// X Then, unblock our output and blocked subpipelines (which means all).
+  /// X The checkpoint is now complete.
+  ///
+  /// When blocking the output of a subpipeline, should we call `process_sub`?
+  /// If it does not mutate the operator state, then there is no problem. If it
+  /// does, but does, then we have to be careful: If we then process something
+  /// from another subpipeline that is not yet blocked (i.e. checkpoint is
+  /// pending), and propagate information from that with that event, then we
+  /// have information from after the checkpoint in something that comes before
+  /// the checkpoint. This must not happen. On the other hand, the same can
+  /// happen for mutations that go through `process`. So we should not call
+  /// `process_sub` for blocked subpipelines.
+  ///
+  /// Could we build a loop? Let's say `while foo < 42 { … }`. We would then
+  /// have to forward the checkpoint, but also record incoming data from the
+  /// back-edge before the checkpoint comes back. This needs to be part of the
+  /// snapshot, but we already forwarded the checkpoint, so we need to inform
+  /// the system that it must wait for the checkpoint of the back-edge. This
+  /// then covers then in-flight data at the point in time when the original
+  /// snapshot was created.
+  ///
+  /// Can we apply this to `process_sub`? We perform the snapshot, but then
+  /// record all incoming data as it comes out of the subpipelines... Hmm...
+  /// No, that doesn't sound great.
+  ///
+  /// When we get a commit notification, we forward it only to those
+  /// subpipelines that already existed when we started the checkpoint. In the
+  /// meantime, we must take care to not destroy those subpipelines.
+  auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
+    TENZIR_INFO("got checkpoint {} in {}", checkpoint.id, typeid(*op_).name());
+    to_control_.send(ToControl::checkpoint_begin);
+    co_await op_->checkpoint(*this);
+    // TODO: Also checkpoint `subpipelines_`. What else?
+    if (subpipelines_.empty()) {
+      TENZIR_INFO("finishing checkpoint with no subpipelines in {} ",
+                  typeid(*op_).name());
+      to_control_.send(ToControl::checkpoint_done);
+      co_await push_downstream_(std::move(checkpoint));
+      co_return;
+    }
+    TENZIR_INFO("checkpointing {} subpipelines in {}", subpipelines_.size(),
+                typeid(*op_).name());
+    for (auto& [_, sub] : subpipelines_) {
+      co_await sub.handle.send(checkpoint);
+      sub.wants_commit = true;
+    }
+    // TODO: Continue here?
   }
 
   auto process(FromControl message) -> Task<void> {
@@ -726,12 +813,12 @@ private:
     }
     // Afterwards, finish all subpipelines. Note that the previous step could
     // have still pushed data into them.
-    for (auto& sub : subpipelines_) {
-      co_await co_match(sub.second,
+    for (auto& [key, sub] : subpipelines_) {
+      co_await co_match(sub.handle,
                         []<class In>(SubPipeline<In>& sub) -> Task<void> {
                           // TODO: What if this is a source?
                           if constexpr (not std::same_as<In, void>) {
-                            co_await sub.push(Signal::end_of_data);
+                            co_await sub.push(EndOfData{});
                             sub.from_control.send(Shutdown{});
                           }
                           // TODO: Do we need to do anything else? Do we need
@@ -739,7 +826,7 @@ private:
                         });
     }
     if constexpr (not std::same_as<Output, void>) {
-      co_await push_downstream_(Signal::end_of_data);
+      co_await push_downstream_(EndOfData{});
     }
     TENZIR_WARN("sending ready to shutdown");
     to_control_.send(ToControl::ready_for_shutdown);
@@ -755,7 +842,7 @@ private:
   std::shared_ptr<const registry> reg_ = global_registry();
 
   // TODO: Better map type.
-  std::unordered_map<data, AnySubpipeline> subpipelines_;
+  std::unordered_map<data, SubPipelineInfo> subpipelines_;
 
   /// Scope used for tasks spawned by the inner operator implementation.
   ///
@@ -763,7 +850,7 @@ private:
   /// framing is even kept alive after the operator itself finished.
   AsyncScope* operator_scope_ = nullptr;
 
-  QueueScope<variant<AnyWrapper, OperatorMsg<Input>, FromControl>> queue_;
+  QueueScope<variant<ExplicitAny, OperatorMsg<Input>, FromControl>> queue_;
   bool got_shutdown_request_ = false;
   bool is_done_ = false;
   // TODO: Expose this?
@@ -941,19 +1028,20 @@ private:
                   }
                   return;
                 case ToControl::no_more_input:
-                  // TODO: Inform the preceding operator that we don't need any
-                  // more input.
+                  // TODO: Inform the preceding operator that we don't need
+                  // any more input.
                   if (index > 0) {
                     operator_ctrl_[index - 1].send(Stop{});
                   } else {
-                    // TODO: What if we don't host the preceding operator? Then
-                    // we need to notify OUR input!
+                    // TODO: What if we don't host the preceding operator?
+                    // Then we need to notify OUR input!
                     to_control_.send(ToControl::no_more_input);
                   }
                   return;
                 case ToControl::checkpoint_begin:
-                case ToControl::checkpoint_ready:
                 case ToControl::checkpoint_done:
+                  TENZIR_INFO("chain got {} from operator {}", to_control,
+                              index);
                   return;
               }
               TENZIR_UNREACHABLE();
@@ -1213,29 +1301,40 @@ public:
 
 auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
-  // FIXME
-  auto input = make_op_channel<void>(10).pull;
-  auto output = make_op_channel<void>(10).push;
+  auto [push_input, pull_input] = make_op_channel<void>(10);
+  auto [push_output, pull_output] = make_op_channel<void>(10);
   try {
     auto [from_control_sender, from_control_receiver]
       = make_unbounded_channel<FromControl>();
     auto [to_control_sender, to_control_receiver]
       = make_unbounded_channel<ToControl>();
-    auto queue = QueueScope<variant<std::monostate, ToControl>>{};
+    auto queue
+      = QueueScope<variant<std::monostate, ToControl, OperatorMsg<void>>>{};
     co_await queue.activate([&] -> Task<void> {
       queue.spawn([&] -> Task<std::monostate> {
-        co_await run_chain(std::move(pipeline), std::move(input),
-                           std::move(output), std::move(from_control_receiver),
+        co_await run_chain(std::move(pipeline), std::move(pull_input),
+                           std::move(push_output),
+                           std::move(from_control_receiver),
                            std::move(to_control_sender), sys, dh);
         co_return std::monostate{};
       });
+      // TODO: We just have this right now to simulate checkpointing.
+      queue.spawn([&] -> Task<std::monostate> {
+        while (true) {
+          auto checkpoint = Checkpoint{uuid::random()};
+          TENZIR_INFO("injecting checkpoint {} into pipeline", checkpoint.id);
+          co_await push_input(std::move(checkpoint));
+          co_await folly::coro::sleep(std::chrono::seconds{1});
+        }
+      });
+      queue.spawn(pull_output());
       queue.spawn(to_control_receiver.receive());
       auto is_running = true;
       while (is_running) {
         auto next = co_await queue.next();
         TENZIR_ASSERT(next);
         co_match(
-          *next,
+          std::move(*next),
           [&](std::monostate) {
             // TODO: The pipeline terminated?
             TENZIR_INFO("run_pipeline got info that chain terminated");
@@ -1247,6 +1346,20 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
             TENZIR_INFO("got shutdown request from outermost subpipeline");
             from_control_sender.send(Shutdown{});
             queue.spawn(to_control_receiver.receive());
+          },
+          [&](OperatorMsg<void> msg) {
+            co_match(msg, [&](Signal signal) {
+              co_match(
+                signal,
+                [&](EndOfData) {
+                  TENZIR_INFO("end of data is leaving pipeline");
+                },
+                [&](Checkpoint checkpoint) {
+                  TENZIR_INFO("checkpoint {} is leaving pipeline",
+                              checkpoint.id);
+                });
+            });
+            queue.spawn(pull_output());
           });
       }
       queue.cancel();

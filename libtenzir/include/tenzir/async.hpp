@@ -357,13 +357,24 @@ struct tenzir::tryable<tenzir::Result<V, E>> {
 
 namespace tenzir {
 
-TENZIR_ENUM(
-  /// A non-data message sent to an operator by its upstream.
-  Signal,
-  /// No more data will come after this signal. Will never be sent over `void`.
-  end_of_data,
-  /// Request to perform a checkpoint. To be forwarded downstream afterwards.
-  checkpoint);
+/// No more data will come after this signal. Will never be sent over `void`.
+struct EndOfData {
+  friend auto inspect(auto& f, EndOfData& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+/// Request to perform a checkpoint. To be forwarded downstream afterwards.
+struct Checkpoint {
+  uuid id;
+
+  friend auto inspect(auto& f, Checkpoint& x) -> bool {
+    return f.apply(x);
+  }
+};
+
+/// A non-data message sent to an operator by its upstream.
+using Signal = variant<EndOfData, Checkpoint>;
 
 template <class T>
 struct OperatorMsg : variant<T, Signal> {
@@ -390,7 +401,7 @@ public:
   }
 
   auto close() -> Task<void> {
-    co_await push_(Signal::end_of_data);
+    co_await push_(EndOfData{});
   }
 
 private:
@@ -425,8 +436,8 @@ public:
   virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
   // TODO: Change `void` to `Any`.
   virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
-  virtual auto save(chunk_ptr chunk) -> Task<void> = 0;
-  virtual auto load() -> Task<chunk_ptr> = 0;
+  virtual auto save_checkpoint(chunk_ptr chunk) -> Task<void> = 0;
+  virtual auto load_checkpoint() -> Task<chunk_ptr> = 0;
   virtual auto flush() -> Task<void> = 0;
 
   template <class... Ts>
@@ -588,7 +599,7 @@ class OperatorBase {
 public:
   virtual auto start(OpCtx& ctx) -> Task<void> {
     // TODO: What if we don't restore? No data? Flag?
-    auto data = co_await ctx.load();
+    auto data = co_await ctx.load_checkpoint();
     if (not data) {
       co_return;
     }
@@ -624,7 +635,7 @@ public:
     snapshot(serde);
     ok = f.end_object();
     TENZIR_ASSERT(ok);
-    co_await ctx.save(chunk::make(std::move(buffer)));
+    co_await ctx.save_checkpoint(chunk::make(std::move(buffer)));
   }
 
   virtual auto post_commit() -> Task<void> {
@@ -758,7 +769,7 @@ TENZIR_ENUM(
   no_more_input,
   // TODO: Checkpoint messages need data, move into variant.
   /// Inform the controller what checkpoint state we are in.
-  checkpoint_begin, checkpoint_ready, checkpoint_done);
+  checkpoint_begin, checkpoint_done);
 
 // TODO: Where to place this?
 template <class T>

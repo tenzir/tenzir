@@ -176,28 +176,13 @@ public:
       TENZIR_UNREACHABLE();
     }
     if (count_ != 0) {
-      co_await folly::coro::sleep(std::chrono::milliseconds{200});
+      co_await folly::coro::sleep(std::chrono::seconds{2});
     }
     co_return {};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    // throw std::runtime_error{"oh no"};
-    // auto fs = ctx.actor_system().spawn(posix_filesystem, "/");
-    // auto license
-    //   = co_await ctx
-    //       .mail(atom::read_v,
-    //             std::filesystem::path{"/Users/jannis/tenzir/LICENSE"})
-    //       .request(fs);
-    // if (license) {
-    //   auto& chunk = *license;
-    //   TENZIR_ERROR(
-    //     "{}", std::string_view{reinterpret_cast<const char*>(chunk->data()),
-    //                            chunk->size()});
-    // } else {
-    //   TENZIR_ERROR("got error");
-    // }
     TENZIR_WARN("processing task with count == {}", count_);
     TENZIR_ASSERT(count_ < total);
     auto slice = make_version(caf::content(ctx.actor_system().config()));
@@ -218,7 +203,7 @@ public:
   }
 
 private:
-  static constexpr size_t total = 1;
+  static constexpr size_t total = 5;
   size_t count_ = 0;
 };
 
