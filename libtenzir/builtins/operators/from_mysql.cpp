@@ -24,6 +24,35 @@
 #include <cstring>
 #include <utility>
 
+// TODO: Consider moving these into a common place.
+#define TENZIR_TRY_COMMON_(var, expr, ret)                                     \
+  auto var = (expr);                                                           \
+  if (not tenzir::tryable<decltype(var)>::is_success(var)) [[unlikely]] {      \
+    ret tenzir::tryable<decltype(var)>::get_error(std::move(var));             \
+  }
+
+#define TENZIR_TRY_EXTRACT_(decl, var, expr, ret)                              \
+  TENZIR_TRY_COMMON_(var, expr, ret);                                          \
+  decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
+
+#define TENZIR_TRY_DISCARD_(var, expr, ret)                                    \
+  TENZIR_TRY_COMMON_(var, expr, ret)                                           \
+  if (false) {                                                                 \
+    /* trigger [[nodiscard]] */                                                \
+    tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
+  }
+
+#define TENZIR_TRY_X_1(expr, ret)                                              \
+  TENZIR_TRY_DISCARD_(TENZIR_PP_PASTE2(_try, __COUNTER__), expr, ret)
+
+#define TENZIR_TRY_X_2(decl, expr, ret)                                        \
+  TENZIR_TRY_EXTRACT_(decl, TENZIR_PP_PASTE2(_try, __COUNTER__), expr, ret)
+
+#define TENZIR_CO_TRY(...)                                                     \
+  TENZIR_PP_OVERLOAD(TENZIR_TRY_X_, __VA_ARGS__)(__VA_ARGS__, co_return)
+
+#define CO_TRY TENZIR_CO_TRY
+
 namespace tenzir::plugins::mysql {
 
 namespace {
@@ -652,11 +681,7 @@ public:
 
   /// Perform the initial handshake with the server.
   auto perform_handshake() -> Task<MysqlResult<handshake_info>> {
-    auto pkt = co_await read_packet();
-    if (pkt.is_err()) {
-      co_return Err{std::move(pkt).unwrap_err()};
-    }
-    auto data = std::move(pkt).value();
+    CO_TRY(auto data, co_await read_packet());
     if (data.empty()) {
       co_return Err{mysql_error::protocol("empty handshake packet")};
     }
@@ -768,16 +793,9 @@ public:
     // Auth plugin name.
     write_null_string(buf, handshake.auth_plugin_name);
     // Send packet.
-    auto write_result = co_await write_packet(buf, 1);
-    if (write_result.is_err()) {
-      co_return Err{std::move(write_result).unwrap_err()};
-    }
+    CO_TRY(co_await write_packet(buf, 1));
     // Read response.
-    auto response = co_await read_packet();
-    if (response.is_err()) {
-      co_return Err{std::move(response).unwrap_err()};
-    }
-    auto resp_data = std::move(response).value();
+    CO_TRY(auto resp_data, co_await read_packet());
     if (resp_data.empty()) {
       co_return Err{mysql_error::protocol("empty auth response")};
     }
@@ -798,11 +816,8 @@ public:
     if (resp_data[0] == packet::auth_more_data and resp_data.size() > 1) {
       // 0x03 = fast auth success (cached), read the final OK.
       if (resp_data[1] == caching_sha2::fast_auth_success) {
-        auto final_response = co_await read_packet();
-        if (final_response.is_err()) {
-          co_return Err{std::move(final_response).unwrap_err()};
-        }
-        if (final_response.value()[0] == packet::ok) {
+        CO_TRY(auto final_resp, co_await read_packet());
+        if (final_resp[0] == packet::ok) {
           co_return {};
         }
         co_return Err{
@@ -814,19 +829,13 @@ public:
         auto pw_bytes = as_bytes(password);
         pw_packet.insert(pw_packet.end(), pw_bytes.begin(), pw_bytes.end());
         pw_packet.push_back(std::byte{0});
-        auto pw_write = co_await write_packet(pw_packet, sequence_id_ + 1);
-        if (pw_write.is_err()) {
-          co_return Err{std::move(pw_write).unwrap_err()};
-        }
-        auto final_response = co_await read_packet();
-        if (final_response.is_err()) {
-          co_return Err{std::move(final_response).unwrap_err()};
-        }
-        if (final_response.value()[0] == packet::ok) {
+        CO_TRY(co_await write_packet(pw_packet, sequence_id_ + 1));
+        CO_TRY(auto final_resp, co_await read_packet());
+        if (final_resp[0] == packet::ok) {
           co_return {};
         }
-        if (final_response.value()[0] == packet::error) {
-          co_return Err{parse_error_from_packet(final_response.value())};
+        if (final_resp[0] == packet::error) {
+          co_return Err{parse_error_from_packet(final_resp)};
         }
         co_return Err{
           mysql_error::protocol("unexpected response after full auth")};
@@ -840,12 +849,10 @@ public:
 private:
   explicit async_connection(folly::coro::Transport transport,
                             folly::EventBase* evb)
-    : transport_{std::make_unique<folly::coro::Transport>(
-        std::move(transport))},
-      evb_{evb} {
+    : transport_{std::in_place, std::move(transport)}, evb_{evb} {
   }
 
-  std::unique_ptr<folly::coro::Transport> transport_;
+  Box<folly::coro::Transport> transport_;
   folly::EventBase* evb_ = nullptr;
   std::chrono::milliseconds read_timeout_{std::chrono::seconds{30}};
   uint8_t sequence_id_ = 0;
@@ -861,31 +868,18 @@ struct result_set_meta {
 /// Read result set metadata (column count + column definitions).
 auto read_result_set_meta(async_connection& conn)
   -> Task<MysqlResult<result_set_meta>> {
-  auto response = co_await conn.read_packet();
-  if (response.is_err()) {
-    co_return Err{std::move(response).unwrap_err()};
-  }
-  if (auto err = as_error(response.value())) {
+  CO_TRY(auto response, co_await conn.read_packet());
+  if (auto err = as_error(response)) {
     co_return Err{std::move(*err)};
   }
-  auto reader = packet_reader{response.value()};
-  auto count_result = reader.read_lenenc_int();
-  if (count_result.is_err()) {
-    co_return Err{std::move(count_result).unwrap_err()};
-  }
-  auto column_count = count_result.value();
+  auto reader = packet_reader{response};
+  CO_TRY(auto column_count, reader.read_lenenc_int());
   auto meta = result_set_meta{};
   meta.columns.reserve(column_count);
   for (auto i = uint64_t{0}; i < column_count; ++i) {
-    auto col_packet = co_await conn.read_packet();
-    if (col_packet.is_err()) {
-      co_return Err{std::move(col_packet).unwrap_err()};
-    }
-    auto col = parse_column_definition(col_packet.value());
-    if (col.is_err()) {
-      co_return Err{std::move(col).unwrap_err()};
-    }
-    meta.columns.push_back(std::move(col).value());
+    CO_TRY(auto col_packet, co_await conn.read_packet());
+    CO_TRY(auto col, parse_column_definition(col_packet));
+    meta.columns.push_back(std::move(col));
   }
   // Skip EOF packet after column definitions.
   (void)co_await conn.read_packet();
@@ -996,7 +990,7 @@ class async_client {
 public:
   /// Connect to MySQL server asynchronously.
   static auto make(folly::EventBase* evb, client_config config)
-    -> Task<MysqlResult<std::unique_ptr<async_client>>> {
+    -> Task<MysqlResult<Box<async_client>>> {
     auto conn = async_connection{};
     try {
       conn = co_await async_connection::connect(evb, config.host, config.port);
@@ -1004,16 +998,10 @@ public:
       co_return Err{
         mysql_error{0, fmt::format("connect failed: {}", e.what())}};
     }
-    auto handshake = co_await conn.perform_handshake();
-    if (handshake.is_err()) {
-      co_return Err{std::move(handshake).unwrap_err()};
-    }
-    auto auth = co_await conn.send_auth_response(
-      handshake.value(), config.user, config.password, config.database);
-    if (auth.is_err()) {
-      co_return Err{std::move(auth).unwrap_err()};
-    }
-    co_return std::unique_ptr<async_client>{new async_client{std::move(conn)}};
+    CO_TRY(auto handshake, co_await conn.perform_handshake());
+    CO_TRY(co_await conn.send_auth_response(handshake, config.user,
+                                            config.password, config.database));
+    co_return Box<async_client>{std::in_place, std::move(conn)};
   }
 
   /// Execute query and stream results as table_slices.
@@ -1062,10 +1050,10 @@ public:
     }
   }
 
-private:
   explicit async_client(async_connection conn) : conn_{std::move(conn)} {
   }
 
+private:
   async_connection conn_;
 };
 
@@ -1200,7 +1188,7 @@ public:
 
 private:
   FromMySQLArgs args_;
-  std::unique_ptr<async_client> client_;
+  Box<async_client> client_;
   std::string query_;
   std::string schema_name_;
   bool done_ = false;
