@@ -169,18 +169,25 @@ jobs:
         run: |
           python3 .github/workflows/nix-build.py sign \
             --package-dir ${{ steps.build.outputs.package-dir }}
-      - name: Upload signed tarball artifact
+
+      # =========================================================================
+      # Upload Phase
+      # =========================================================================
+
+      - name: Upload Packages to GitHub Actions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: tenzir-${{ inputs.attribute }}-${{ inputs.arch }}-${{ inputs.os }}
+          path: ${{ steps.build.outputs.package-dir }}/
+          if-no-files-found: error
+      - name: Upload Signed Tarball to GitHub Actions
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: tenzir-signed-tarball-${{ inputs.arch }}-${{ inputs.os }}
           path: ${{ steps.sign.outputs.package-dir }}/*.tar.gz
           retention-days: 1
-
-      # =========================================================================
-      # Upload Phase
-      # =========================================================================
-      - name: Upload Packages
+      - name: Upload Packages to GCS and GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
