@@ -55,6 +55,11 @@ public:
     panic("as<{}>() called on Any with different type", type_name<T>());
   }
 
+  /// Checks whether this Any holds a value.
+  auto has_value() const noexcept -> bool {
+    return ptr_ != nullptr;
+  }
+
   /// Returns a pointer to the contained value, or nullptr if empty or type
   /// mismatch.
   template <class T>
