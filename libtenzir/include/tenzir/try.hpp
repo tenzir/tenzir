@@ -130,58 +130,48 @@ struct tenzir::tryable<tenzir::variant<V, E>> {
   }
 };
 
-#define TENZIR_TRY_COMMON(var, expr)                                           \
+// -- Internal parameterized macros (ret = `return` or `co_return`) ------------
+
+#define TENZIR_TRY_IMPL_COMMON(ret, var, expr)                                 \
   auto var = (expr);                                                           \
   if (not tenzir::tryable<decltype(var)>::is_success(var)) [[unlikely]] {      \
-    return tenzir::tryable<decltype(var)>::get_error(std::move(var));          \
+    ret tenzir::tryable<decltype(var)>::get_error(std::move(var));             \
   }
 
-#define TENZIR_TRY_EXTRACT(decl, var, expr)                                    \
-  TENZIR_TRY_COMMON(var, expr);                                                \
+#define TENZIR_TRY_IMPL_EXTRACT(ret, decl, var, expr)                          \
+  TENZIR_TRY_IMPL_COMMON(ret, var, expr);                                      \
   decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
 
-#define TENZIR_TRY_DISCARD(var, expr)                                          \
-  TENZIR_TRY_COMMON(var, expr)                                                 \
+#define TENZIR_TRY_IMPL_DISCARD(ret, var, expr)                                \
+  TENZIR_TRY_IMPL_COMMON(ret, var, expr)                                       \
   if (false) {                                                                 \
     /* trigger [[nodiscard]] */                                                \
     tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
   }
 
+// -- Regular variants (use `return`) ------------------------------------------
+
 #define TENZIR_TRY_1(expr)                                                     \
-  TENZIR_TRY_DISCARD(TENZIR_PP_PASTE2(_try, __COUNTER__), expr)
+  TENZIR_TRY_IMPL_DISCARD(return, TENZIR_PP_PASTE2(_try, __COUNTER__), expr)
 
 #define TENZIR_TRY_2(decl, expr)                                               \
-  TENZIR_TRY_EXTRACT(decl, TENZIR_PP_PASTE2(_try, __COUNTER__), expr)
+  TENZIR_TRY_IMPL_EXTRACT(return, decl, TENZIR_PP_PASTE2(_try, __COUNTER__),   \
+                                expr)
 
 #define TENZIR_TRY(...)                                                        \
   TENZIR_PP_OVERLOAD(TENZIR_TRY_, __VA_ARGS__)(__VA_ARGS__)
 
 #define TRY TENZIR_TRY
 
-// -- Coroutine variants (use `co_return` instead of `return`) -----------------
-
-#define TENZIR_CO_TRY_COMMON(var, expr)                                        \
-  auto var = (expr);                                                           \
-  if (not tenzir::tryable<decltype(var)>::is_success(var)) [[unlikely]] {      \
-    co_return tenzir::tryable<decltype(var)>::get_error(std::move(var));       \
-  }
-
-#define TENZIR_CO_TRY_EXTRACT(decl, var, expr)                                 \
-  TENZIR_CO_TRY_COMMON(var, expr);                                             \
-  decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
-
-#define TENZIR_CO_TRY_DISCARD(var, expr)                                       \
-  TENZIR_CO_TRY_COMMON(var, expr)                                              \
-  if (false) {                                                                 \
-    /* trigger [[nodiscard]] */                                                \
-    tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
-  }
+// -- Coroutine variants (use `co_return`) -------------------------------------
 
 #define TENZIR_CO_TRY_1(expr)                                                  \
-  TENZIR_CO_TRY_DISCARD(TENZIR_PP_PASTE2(_co_try, __COUNTER__), expr)
+  TENZIR_TRY_IMPL_DISCARD(co_return, TENZIR_PP_PASTE2(_co_try, __COUNTER__),   \
+                          expr)
 
 #define TENZIR_CO_TRY_2(decl, expr)                                            \
-  TENZIR_CO_TRY_EXTRACT(decl, TENZIR_PP_PASTE2(_co_try, __COUNTER__), expr)
+  TENZIR_TRY_IMPL_EXTRACT(co_return, decl,                                     \
+                          TENZIR_PP_PASTE2(_co_try, __COUNTER__), expr)
 
 #define TENZIR_CO_TRY(...)                                                     \
   TENZIR_PP_OVERLOAD(TENZIR_CO_TRY_, __VA_ARGS__)(__VA_ARGS__)
