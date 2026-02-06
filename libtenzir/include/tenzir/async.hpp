@@ -279,6 +279,17 @@ using Unit = std::monostate;
 template <class T>
 using VoidToUnit = std::conditional_t<std::is_void_v<T>, Unit, T>;
 
+/// Converts a `VoidToUnit<T>` value back to `T`. When `T` is `void`, this
+/// discards the `Unit` value and returns `void`. Otherwise, it forwards `T`.
+template <class T>
+auto unit_to_void(VoidToUnit<T>&& value) -> T {
+  if constexpr (std::is_void_v<T>) {
+    (void)value;
+  } else {
+    return std::move(value);
+  }
+}
+
 template <class Value, class Error>
 class [[nodiscard]] Result {
 public:
@@ -305,12 +316,12 @@ public:
     return is<Err<Error>>(value_);
   }
 
-  auto value() & -> ValueRef {
+  auto unwrap() & -> ValueRef {
     return std::get<VoidToUnit<Value>>(value_);
   }
 
-  auto value() && -> Value {
-    return std::move(std::get<VoidToUnit<Value>>(value_));
+  auto unwrap() && -> Value {
+    return unit_to_void<Value>(std::move(std::get<VoidToUnit<Value>>(value_)));
   }
 
   auto unwrap_err() && -> Error {
@@ -333,7 +344,7 @@ struct tenzir::tryable<tenzir::Result<V, E>> {
     if constexpr (std::is_void_v<V>) {
       return {};
     } else {
-      return std::move(x).value();
+      return std::move(x).unwrap();
     }
   }
 
