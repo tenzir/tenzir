@@ -254,6 +254,8 @@ def mysql() -> Iterator[dict[str, str]]:
             "MYSQL_PASSWORD": MYSQL_PASSWORD,
             "MYSQL_ROOT_PASSWORD": MYSQL_ROOT_PASSWORD,
             "MYSQL_DATABASE": MYSQL_DATABASE,
+            "MYSQL_CONTAINER_ID": container_id,
+            "MYSQL_CONTAINER_RUNTIME": runtime,
         }
     finally:
         if container_id:
