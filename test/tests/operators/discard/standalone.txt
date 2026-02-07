@@ -1,0 +1,1 @@
+error: `discard` cannot be used as a source

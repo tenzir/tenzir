@@ -50,15 +50,14 @@ public:
   }
 };
 
-class DiscardImpl final : public Operator<table_slice, void> {
+template <class Input>
+class DiscardImpl final : public Operator<Input, void> {
 public:
-  auto start(OpCtx& ctx) -> Task<void> override {
-    // TENZIR_ASSERT(false, "oops");
+  auto start(OpCtx&) -> Task<void> override {
     co_return;
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(input, ctx);
+  auto process(Input, OpCtx&) -> Task<void> override {
     co_return;
   }
 };
@@ -78,13 +77,23 @@ public:
   }
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_UNUSED(input);
-    return DiscardImpl{};
+    return input.match([]<class T>(tag<T>) -> AnyOperator {
+      if constexpr (std::is_void_v<T>) {
+        TENZIR_UNREACHABLE();
+      } else {
+        return DiscardImpl<T>{};
+      }
+    });
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler&) const
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    TENZIR_ASSERT(input == tag_v<table_slice>);
+    if (input.is<void>()) {
+      diagnostic::error("`discard` cannot be used as a source")
+        .primary(main_location())
+        .emit(dh);
+      return failure::promise();
+    }
     return tag_v<void>;
   }
 
