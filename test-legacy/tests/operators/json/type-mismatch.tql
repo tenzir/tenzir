@@ -1,6 +1,0 @@
-
-from {
-  timestamp: 0
-}
-write_ndjson
-read_ndjson schema_only=true, schema="suricata.component.common"

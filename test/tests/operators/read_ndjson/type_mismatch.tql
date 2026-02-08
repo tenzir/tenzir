@@ -1,0 +1,3 @@
+from_stdin {
+  read_ndjson schema_only=true, schema="suricata.component.common"
+}
