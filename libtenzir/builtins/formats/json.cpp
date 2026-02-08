@@ -13,6 +13,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -1135,9 +1136,316 @@ private:
   json_printer printer_;
 };
 
-class read_json_plugin final
-  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+struct ReadJsonArgs {
+  std::string parser_name = "json";
+  bool arrays_of_objects = false;
+  split_at split_mode = split_at::none;
+  uint64_t jobs = 0;
+  // MSB policy args.
+  std::optional<std::string> schema;
+  std::optional<std::string> selector;
+  // MSB settings args.
+  bool schema_only = false;
+  bool merge = false;
+  bool raw = false;
+  std::optional<std::string> unflatten_separator;
+  std::optional<duration> batch_timeout;
+  std::optional<uint64_t> batch_size;
+  // Preconfigured MSB defaults (for suricata/zeek).
+  std::string default_schema_name;
+  std::string unnest_separator_default;
+  // Preconfigured selector policy (for suricata/zeek).
+  std::optional<std::string> selector_field;
+  std::optional<std::string> selector_prefix;
+};
+
+auto parse_selector_value(std::string_view x)
+  -> std::optional<multi_series_builder::policy_selector> {
+  if (x.empty()) {
+    return std::nullopt;
+  }
+  auto split = detail::split(x, ":");
+  TENZIR_ASSERT(not split.empty());
+  if (split.size() > 2 or split[0].empty()) {
+    return std::nullopt;
+  }
+  if (split.size() == 2) {
+    return multi_series_builder::policy_selector{
+      .field_name = std::string{split[0]},
+      .naming_prefix = std::string{split[1]},
+    };
+  }
+  return multi_series_builder::policy_selector{
+    .field_name = std::string{split[0]},
+  };
+}
+
+auto validate_read_msb_args(diagnostic_handler& dh,
+                            std::optional<std::string> const& schema,
+                            std::optional<location> schema_loc,
+                            std::optional<std::string> const& selector,
+                            std::optional<location> selector_loc,
+                            bool schema_only,
+                            std::optional<location> schema_only_loc,
+                            std::optional<std::string> const& unflatten_separator,
+                            std::optional<location> unflatten_separator_loc,
+                            bool schema_only_requires_schema_or_selector)
+  -> void {
+  if (schema and selector) {
+    diagnostic::error("`schema` and `selector` cannot be combined")
+      .primary(schema_loc.value_or(location::unknown))
+      .primary(selector_loc.value_or(location::unknown))
+      .emit(dh);
+  }
+  if (schema and schema->empty()) {
+    diagnostic::error("`schema` must not be empty")
+      .primary(schema_loc.value_or(location::unknown))
+      .emit(dh);
+  }
+  if (selector) {
+    if (selector->empty()) {
+      diagnostic::error("selector must not be empty")
+        .primary(selector_loc.value_or(location::unknown))
+        .emit(dh);
+    } else if (not parse_selector_value(*selector)) {
+      diagnostic::error("invalid selector `{}`: must contain at most one `:` "
+                        "and field name must not be empty",
+                        *selector)
+        .primary(selector_loc.value_or(location::unknown))
+        .emit(dh);
+    }
+  }
+  if (unflatten_separator and unflatten_separator->empty()) {
+    diagnostic::error("`unflatten_separator` must not be empty")
+      .primary(unflatten_separator_loc.value_or(location::unknown))
+      .emit(dh);
+  }
+  if (schema_only and schema_only_requires_schema_or_selector and not schema
+      and not selector) {
+    diagnostic::error("`schema_only` requires a `schema` or `selector`")
+      .primary(schema_only_loc.value_or(location::unknown))
+      .emit(dh);
+  }
+  if (schema and not schema->empty()) {
+    if (not modules::get_schema(*schema)) {
+      if (schema_only) {
+        diagnostic::error(
+          "schema `{}` does not exist, but `schema_only` was specified", *schema)
+          .primary(schema_loc.value_or(location::unknown))
+          .primary(schema_only_loc.value_or(location::unknown))
+          .emit(dh);
+      } else {
+        diagnostic::warning("schema `{}` does not exist", *schema)
+          .primary(schema_loc.value_or(location::unknown))
+          .hint("if you know the input's shape, define the schema")
+          .emit(dh);
+      }
+    }
+  }
+}
+
+auto make_msb_options(ReadJsonArgs const& args)
+  -> multi_series_builder::options {
+  auto settings = multi_series_builder::settings_type{};
+  if (not args.default_schema_name.empty()) {
+    settings.default_schema_name = args.default_schema_name;
+  }
+  if (not args.unnest_separator_default.empty()) {
+    settings.unnest_separator = args.unnest_separator_default;
+  }
+  settings.schema_only = args.schema_only;
+  settings.merge = args.merge;
+  settings.raw = args.raw;
+  if (args.unflatten_separator) {
+    settings.unnest_separator = *args.unflatten_separator;
+  }
+  if (args.batch_timeout) {
+    settings.timeout = *args.batch_timeout;
+  }
+  if (args.batch_size) {
+    settings.desired_batch_size = *args.batch_size;
+  }
+  auto policy
+    = multi_series_builder::policy_type{multi_series_builder::policy_default{}};
+  if (args.selector_field) {
+    policy = multi_series_builder::policy_selector{
+      .field_name = *args.selector_field,
+      .naming_prefix = args.selector_prefix.value_or(""),
+    };
+  } else if (args.schema) {
+    policy = multi_series_builder::policy_schema{
+      .seed_schema = *args.schema,
+    };
+  } else if (args.selector) {
+    if (auto selector = parse_selector_value(*args.selector)) {
+      policy = std::move(*selector);
+    }
+  }
+  return {.policy = std::move(policy), .settings = std::move(settings)};
+}
+
+class ReadJson final : public Operator<chunk_ptr, table_slice> {
 public:
+  explicit ReadJson(ReadJsonArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    if (not parser_) {
+      auto opts = make_msb_options(args_);
+      parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts),
+                      args_.arrays_of_objects);
+    }
+    parser_->parse(as_bytes(input));
+    if (parser_->abort_requested) {
+      co_return;
+    }
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not parser_) {
+      co_return;
+    }
+    parser_->validate_completion();
+    if (parser_->abort_requested) {
+      co_return;
+    }
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+private:
+  ReadJsonArgs args_;
+  std::optional<default_parser> parser_;
+};
+
+class ReadNdjson final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadNdjson(ReadJsonArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not input or input->size() == 0) {
+      co_return;
+    }
+    if (not parser_) {
+      auto opts = make_msb_options(args_);
+      parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts));
+    }
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    // Handle case where previous chunk ended on carriage return.
+    if (args_.split_mode == split_at::newline and ended_on_carriage_return_
+        and begin != end and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (args_.split_mode == split_at::newline) {
+        if (*current != '\n' and *current != '\r') {
+          continue;
+        }
+      } else {
+        if (*current != '\0') {
+          continue;
+        }
+      }
+      // Found delimiter: extract line.
+      auto const size = static_cast<size_t>(current - begin);
+      auto const capacity = static_cast<size_t>(end - begin);
+      if (buffer_.empty() and capacity >= size + simdjson::SIMDJSON_PADDING) {
+        parser_->parse(simdjson::padded_string_view{begin, size, capacity});
+      } else {
+        buffer_.append(begin, current);
+        buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
+        parser_->parse(simdjson::padded_string_view{buffer_});
+        buffer_.clear();
+      }
+      if (parser_->abort_requested) {
+        co_return;
+      }
+      // Handle \r\n for newline mode.
+      if (args_.split_mode == split_at::newline and *current == '\r') {
+        auto const* next = current + 1;
+        if (next == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*next == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    // Buffer remaining data for the next chunk.
+    buffer_.append(begin, end);
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not parser_) {
+      co_return;
+    }
+    // Flush remaining buffer as a final line.
+    if (not buffer_.empty()) {
+      buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
+      parser_->parse(simdjson::padded_string_view{buffer_});
+      buffer_.clear();
+    }
+    parser_->validate_completion();
+    if (parser_->abort_requested) {
+      co_return;
+    }
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+private:
+  ReadJsonArgs args_;
+  std::optional<ndjson_parser> parser_;
+  std::string buffer_;
+  bool ended_on_carriage_return_ = false;
+};
+
+class read_json_plugin final
+  : public virtual operator_plugin2<parser_adapter<json_parser>>,
+    public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<ReadJsonArgs, ReadJson>{};
+    d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
+    auto schema = d.named("schema", &ReadJsonArgs::schema);
+    auto selector = d.named("selector", &ReadJsonArgs::selector);
+    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
+    d.named("merge", &ReadJsonArgs::merge);
+    d.named("raw", &ReadJsonArgs::raw);
+    auto unflatten_separator
+      = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
+    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
+    d.named("_batch_size", &ReadJsonArgs::batch_size);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
+                             ctx.get(selector), ctx.get_location(selector),
+                             ctx.get(schema_only).value_or(false),
+                             ctx.get_location(schema_only),
+                             ctx.get(unflatten_separator),
+                             ctx.get_location(unflatten_separator), true);
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
@@ -1163,10 +1471,36 @@ public:
 };
 
 class read_ndjson_plugin final
-  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+  : public virtual operator_plugin2<parser_adapter<json_parser>>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_ndjson";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadJsonArgs, ReadNdjson>{
+      ReadJsonArgs{.parser_name = "ndjson", .split_mode = split_at::newline}};
+    auto schema = d.named("schema", &ReadJsonArgs::schema);
+    auto selector = d.named("selector", &ReadJsonArgs::selector);
+    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
+    d.named("merge", &ReadJsonArgs::merge);
+    d.named("raw", &ReadJsonArgs::raw);
+    auto unflatten_separator
+      = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
+    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
+    d.named("_batch_size", &ReadJsonArgs::batch_size);
+    d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
+                             ctx.get(selector), ctx.get_location(selector),
+                             ctx.get(schema_only).value_or(false),
+                             ctx.get_location(schema_only),
+                             ctx.get(unflatten_separator),
+                             ctx.get_location(unflatten_separator), true);
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(invocation inv, session ctx) const
@@ -1192,10 +1526,39 @@ public:
 };
 
 class read_gelf_plugin final
-  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+  : public virtual operator_plugin2<parser_adapter<json_parser>>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_gelf";
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadJsonArgs, ReadNdjson>{ReadJsonArgs{
+      .parser_name = "gelf",
+      .split_mode = split_at::null,
+      .default_schema_name = "gelf",
+    }};
+    auto schema = d.named("schema", &ReadJsonArgs::schema);
+    auto selector = d.named("selector", &ReadJsonArgs::selector);
+    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
+    d.named("merge", &ReadJsonArgs::merge);
+    d.named("raw", &ReadJsonArgs::raw);
+    auto unflatten_separator
+      = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
+    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
+    d.named("_batch_size", &ReadJsonArgs::batch_size);
+    d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
+                             ctx.get(selector), ctx.get_location(selector),
+                             ctx.get(schema_only).value_or(false),
+                             ctx.get_location(schema_only),
+                             ctx.get(unflatten_separator),
+                             ctx.get_location(unflatten_separator), true);
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(invocation inv, session ctx) const
@@ -1216,10 +1579,36 @@ public:
 template <detail::string_literal Name, detail::string_literal Selector,
           detail::string_literal Prefix, detail::string_literal Separator = "">
 class configured_read_plugin final
-  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+  : public virtual operator_plugin2<parser_adapter<json_parser>>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<ReadJsonArgs, ReadNdjson>{ReadJsonArgs{
+      .parser_name = std::string{Name.str()},
+      .split_mode = split_at::newline,
+      .default_schema_name = std::string{Prefix.str()},
+      .unnest_separator_default = std::string{Separator.str()},
+      .selector_field = std::string{Selector.str()},
+      .selector_prefix = std::string{Prefix.str()},
+    }};
+    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
+    d.named("raw", &ReadJsonArgs::raw);
+    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
+    d.named("_batch_size", &ReadJsonArgs::batch_size);
+    d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      validate_read_msb_args(ctx, std::nullopt, std::nullopt, std::nullopt,
+                             std::nullopt,
+                             ctx.get(schema_only).value_or(false),
+                             ctx.get_location(schema_only), std::nullopt,
+                             std::nullopt, false);
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(invocation inv, session ctx) const
@@ -1234,7 +1623,6 @@ public:
       },
       multi_series_builder::policy_selector{
         .field_name = std::string{Selector.str()},
-
         .naming_prefix = std::string{Prefix.str()},
       },
     };
@@ -1345,44 +1733,111 @@ public:
 
 struct WriteJsonArgs {
   bool color = false;
+  bool compact = false;
+  bool strip = false;
+  bool strip_null_fields = false;
+  bool strip_nulls_in_lists = false;
+  bool strip_empty_records = false;
+  bool strip_empty_lists = false;
+  bool arrays_of_objects = false;
+  bool tql = false;
+  uint64_t jobs = 0;
 };
 
 class WriteJson final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteJson(WriteJsonArgs args) : args_{args} {
+    opts_.tql = args_.tql;
+    if (args_.color and args_.tql) {
+      opts_.style = tql_style();
+    } else if (args_.color) {
+      opts_.style = jq_style();
+    } else {
+      opts_.style = no_style();
+    }
+    opts_.oneline = args_.compact;
+    opts_.omit_null_fields = args_.strip_null_fields or args_.strip;
+    opts_.omit_nulls_in_lists = args_.strip_nulls_in_lists or args_.strip;
+    opts_.omit_empty_records = args_.strip_empty_records or args_.strip;
+    opts_.omit_empty_lists = args_.strip_empty_lists or args_.strip;
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
-    -> Task<void> {
-    auto opts = json_printer_options{};
-    opts.tql = true;
-    opts.style = args_.color ? tql_style() : no_style();
-    auto printer = tenzir::json_printer{opts};
-    // TODO: Since this printer is per-schema we can write an optimized
-    // version of it that gets the schema ahead of time and only expects
-    // data corresponding to exactly that schema.
+  auto print_slice(table_slice const& input) -> chunk_ptr {
+    auto printer = tenzir::json_printer{opts_};
     auto buffer = std::vector<char>{};
     auto resolved_slice = resolve_enumerations(input);
     auto out_iter = std::back_inserter(buffer);
     auto rows = values3(resolved_slice);
     auto row = rows.begin();
+    if (args_.arrays_of_objects) {
+      if (array_open_written_) {
+        *out_iter++ = ',';
+        if (not opts_.oneline) {
+          *out_iter++ = '\n';
+        }
+      } else {
+        out_iter = fmt::format_to(out_iter, "[");
+        array_open_written_ = true;
+      }
+    }
     if (row != rows.end()) {
-      const auto ok = printer.print(out_iter, *row);
+      auto const ok = printer.print(out_iter, *row);
       TENZIR_ASSERT(ok);
       ++row;
     }
     for (; row != rows.end(); ++row) {
-      out_iter = fmt::format_to(out_iter, "\n");
-      const auto ok = printer.print(out_iter, *row);
+      if (args_.arrays_of_objects) {
+        *out_iter++ = ',';
+        if (not opts_.oneline) {
+          *out_iter++ = '\n';
+        }
+      } else {
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
+      auto const ok = printer.print(out_iter, *row);
       TENZIR_ASSERT(ok);
     }
-    *out_iter++ = '\n';
-    auto chunk = chunk::make(std::move(buffer));
-    co_await push(std::move(chunk));
+    if (not args_.arrays_of_objects) {
+      *out_iter++ = '\n';
+    }
+    auto meta = chunk_metadata{
+      .content_type = opts_.oneline and not args_.arrays_of_objects
+                        ? "application/x-ndjson"
+                        : "application/json",
+    };
+    return chunk::make(std::move(buffer), meta);
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (args_.jobs == 0) {
+      co_await push(print_slice(input));
+    } else {
+      auto result = co_await spawn_blocking([this, input = std::move(input)]() {
+        return print_slice(input);
+      });
+      co_await push(std::move(result));
+    }
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not args_.arrays_of_objects) {
+      co_return;
+    }
+    auto meta = chunk_metadata{.content_type = "application/json"};
+    if (not array_open_written_) {
+      co_await push(chunk::copy(std::string_view{"[]"}, meta));
+      co_return;
+    }
+    co_await push(chunk::copy(std::string_view{"]"}, meta));
   }
 
 private:
   WriteJsonArgs args_;
+  json_printer_options opts_ = {};
+  bool array_open_written_ = false;
 };
 
 class write_json_plugin final : public virtual operator_plugin2<write_json>,
@@ -1396,8 +1851,27 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteJsonArgs, WriteJson>{};
+    auto d = Describer<WriteJsonArgs, WriteJson>{WriteJsonArgs{.tql = tql_}};
+    d.named("strip", &WriteJsonArgs::strip);
+    d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
+    d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
+    d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
+    d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
+    if (not tql_) {
+      d.named("compact", &WriteJsonArgs::compact);
+      d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+    }
     d.named("color", &WriteJsonArgs::color);
+    auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
+    d.validate([=, tql = tql_](ValidateCtx& ctx) -> Empty {
+      auto jobs = ctx.get(jobs_arg);
+      if (jobs and *jobs == 0) {
+        diagnostic::error("`_jobs` must be larger than 0")
+          .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 
@@ -1437,10 +1911,34 @@ public:
   bool tql_ = false;
 };
 
-class write_ndjson_plugin final : public virtual operator_plugin2<write_json> {
+class write_ndjson_plugin final : public virtual operator_plugin2<write_json>,
+                                  public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "write_ndjson";
+  }
+
+  auto describe() const -> Description override {
+    auto d
+      = Describer<WriteJsonArgs, WriteJson>{WriteJsonArgs{.compact = true}};
+    d.named("strip", &WriteJsonArgs::strip);
+    d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
+    d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
+    d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
+    d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
+    d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+    d.named("color", &WriteJsonArgs::color);
+    auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      auto jobs = ctx.get(jobs_arg);
+      if (jobs and *jobs == 0) {
+        diagnostic::error("`_jobs` must be larger than 0")
+          .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
   }
 
   auto make(invocation inv, session ctx) const
