@@ -208,6 +208,13 @@ def _create_test_data(runtime: str, container_id: str) -> None:
          '{{"key":"value"}}', 'b', 'not null'),
         (2, 127, 0, 0.0, 0.00, '', '', X'',
          '1970-01-01', '1970-01-01 00:00:00', '[]', 'a', NULL);
+    CREATE TABLE IF NOT EXISTS large_packets (
+        id INT PRIMARY KEY,
+        payload LONGTEXT NOT NULL
+    );
+    INSERT INTO large_packets (id, payload) VALUES
+        (1, REPEAT('x', 17000000)),
+        (2, 'tail');
     """
     logger.info("Creating test tables and data")
     # Use root to create tables and grant privileges

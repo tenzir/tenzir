@@ -721,11 +721,19 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
     }
   }
   if (auto ciphers = get_tls_ciphers(&ctrl)) {
+    auto cipher_loc = ciphers->source;
+    if (tls_ and cipher_loc == tls_->source) {
+      // `located<data>` for `tls={...}` only carries the whole record span.
+      // Clamp to a tiny span to avoid misleading multi-line highlights.
+      cipher_loc = cipher_loc.subloc(0, 1);
+    }
     if (auto* native = static_cast<SSL_CTX*>(concrete.native_handle())) {
       if (SSL_CTX_set_cipher_list(native, ciphers->inner.c_str()) != 1) {
-        diagnostic::warning("failed to set TLS cipher list")
-          .primary(*ciphers)
+        diagnostic::error("invalid TLS cipher list")
+          .primary(cipher_loc, "`tls.ciphers`")
           .emit(dh);
+        return caf::make_error(ec::invalid_configuration,
+                               "invalid TLS cipher list");
       }
     }
   }
@@ -803,6 +811,21 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     } catch (std::exception const& ex) {
       diagnostic::error("failed to load client private key: {}", ex.what())
         .primary(*keyfile)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  if (auto ciphers = get_tls_ciphers(nullptr)) {
+    auto cipher_loc = ciphers->source;
+    if (tls_ and cipher_loc == tls_->source) {
+      // `located<data>` for `tls={...}` only carries the whole record span.
+      // Clamp to a tiny span to avoid misleading multi-line highlights.
+      cipher_loc = cipher_loc.subloc(0, 1);
+    }
+    if (SSL_CTX_set_cipher_list(ctx->getSSLCtx(), ciphers->inner.c_str())
+        != 1) {
+      diagnostic::error("invalid TLS cipher list")
+        .primary(cipher_loc, "`tls.ciphers`")
         .emit(dh);
       return failure::promise();
     }

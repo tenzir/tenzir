@@ -2,6 +2,9 @@
   Tables_in_tenzir_test: "events",
 }
 {
+  Tables_in_tenzir_test: "large_packets",
+}
+{
   Tables_in_tenzir_test: "numbers",
 }
 {

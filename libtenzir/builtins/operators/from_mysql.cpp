@@ -682,20 +682,28 @@ public:
 
   /// Read a MySQL packet asynchronously.
   auto read_packet() -> Task<MysqlResult<std::vector<std::byte>>> {
-    // Read 4-byte header: 3 bytes length + 1 byte sequence.
-    auto header = std::array<unsigned char, 4>{};
-    CO_TRY(co_await read_exact(
-      folly::MutableByteRange{header.data(), header.size()}, "header"));
-    auto len = uint32_t{header[0]} | (uint32_t{header[1]} << 8)
-               | (uint32_t{header[2]} << 16);
-    sequence_id_ = header[3];
-    // Read payload.
-    auto payload = std::vector<std::byte>(len);
-    if (not payload.empty()) {
+    auto payload = std::vector<std::byte>{};
+    while (true) {
+      // Read 4-byte header: 3 bytes length + 1 byte sequence.
+      auto header = std::array<unsigned char, 4>{};
       CO_TRY(co_await read_exact(
-        folly::MutableByteRange{
-          reinterpret_cast<unsigned char*>(payload.data()), payload.size()},
-        "payload"));
+        folly::MutableByteRange{header.data(), header.size()}, "header"));
+      auto len = uint32_t{header[0]} | (uint32_t{header[1]} << 8)
+                 | (uint32_t{header[2]} << 16);
+      sequence_id_ = header[3];
+      // MySQL can split logical packets across continuation frames of
+      // exactly max_packet_size bytes.
+      auto offset = payload.size();
+      payload.resize(payload.size() + len);
+      if (len > 0) {
+        CO_TRY(co_await read_exact(
+          folly::MutableByteRange{
+            reinterpret_cast<unsigned char*>(payload.data()) + offset, len},
+          "payload"));
+      }
+      if (len < max_packet_size) {
+        break;
+      }
     }
     co_return payload;
   }
@@ -1047,6 +1055,12 @@ auto read_result_set_meta(async_connection& conn)
   if (auto err = as_error(response)) {
     co_return Err{std::move(*err)};
   }
+  if (response.empty()) {
+    co_return Err{mysql_error::protocol("empty COM_QUERY response")};
+  }
+  if (response[0] == packet::ok) {
+    co_return result_set_meta{};
+  }
   auto reader = packet_reader{response};
   CO_TRY(auto column_count, reader.read_lenenc_int());
   auto meta = result_set_meta{};
@@ -1206,6 +1220,9 @@ public:
       co_return;
     }
     auto columns = std::move(meta).unwrap().columns;
+    if (columns.empty()) {
+      co_return;
+    }
     // Stream rows, building table_slices.
     auto builder = series_builder{};
     auto row_count = int64_t{0};
@@ -1226,13 +1243,17 @@ public:
       parse_row_into_builder(row_packet.unwrap(), columns, builder);
       ++row_count;
       if (row_count >= cfg.batch_size) {
-        co_yield builder.finish_assert_one_slice(cfg.schema_name);
+        for (auto&& slice : builder.finish_as_table_slice(cfg.schema_name)) {
+          co_yield std::move(slice);
+        }
         builder = series_builder{};
         row_count = 0;
       }
     }
     if (row_count > 0) {
-      co_yield builder.finish_assert_one_slice(cfg.schema_name);
+      for (auto&& slice : builder.finish_as_table_slice(cfg.schema_name)) {
+        co_yield std::move(slice);
+      }
     }
   }
 
