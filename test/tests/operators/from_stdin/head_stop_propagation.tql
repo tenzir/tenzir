@@ -1,0 +1,4 @@
+from_stdin {
+  read_ndjson
+}
+head 1
