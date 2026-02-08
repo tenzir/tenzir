@@ -1,0 +1,15 @@
+{
+  alpha: 1,
+  beta: null,
+  gamma: null,
+}
+{
+  alpha: null,
+  beta: 2,
+  gamma: null,
+}
+{
+  alpha: null,
+  beta: null,
+  gamma: 3,
+}
