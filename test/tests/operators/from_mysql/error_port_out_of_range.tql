@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Out-of-range port must report a user-facing configuration error.
+from_mysql sql="SELECT 1",
+           port=-1

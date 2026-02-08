@@ -11,7 +11,6 @@
 #include <tenzir/async.hpp>
 #include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
-#include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -29,6 +28,7 @@
 
 #include <charconv>
 #include <cstring>
+#include <limits>
 #include <utility>
 
 namespace tenzir::plugins::mysql {
@@ -684,24 +684,18 @@ public:
   auto read_packet() -> Task<MysqlResult<std::vector<std::byte>>> {
     // Read 4-byte header: 3 bytes length + 1 byte sequence.
     auto header = std::array<unsigned char, 4>{};
-    auto n = co_await co_withExecutor(
-      evb_, transport_->read(folly::MutableByteRange{header.data(), 4},
-                             read_timeout_));
-    if (n != 4) {
-      co_return Err{mysql_error::protocol("short header read")};
-    }
+    CO_TRY(co_await read_exact(
+      folly::MutableByteRange{header.data(), header.size()}, "header"));
     auto len = uint32_t{header[0]} | (uint32_t{header[1]} << 8)
                | (uint32_t{header[2]} << 16);
     sequence_id_ = header[3];
     // Read payload.
     auto payload = std::vector<std::byte>(len);
-    auto read = co_await co_withExecutor(
-      evb_, transport_->read(
-              folly::MutableByteRange{
-                reinterpret_cast<unsigned char*>(payload.data()), len},
-              read_timeout_));
-    if (read != len) {
-      co_return Err{mysql_error::protocol("short payload read")};
+    if (not payload.empty()) {
+      CO_TRY(co_await read_exact(
+        folly::MutableByteRange{
+          reinterpret_cast<unsigned char*>(payload.data()), payload.size()},
+        "payload"));
     }
     co_return payload;
   }
@@ -813,25 +807,30 @@ public:
   /// Upgrade the connection to TLS.
   auto upgrade_to_tls(std::shared_ptr<folly::SSLContext> ctx,
                       std::string const& hostname) -> Task<MysqlResult<void>> {
-    // Get the underlying socket and detach its fd.
-    auto* raw_transport = transport_->getTransport();
-    auto* old_sock = dynamic_cast<folly::AsyncSocket*>(raw_transport);
-    TENZIR_ASSERT(old_sock);
-    auto fd = old_sock->detachNetworkSocket();
-    // Create an SSL socket wrapping the existing fd.
-    auto ssl_socket
-      = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb_, fd,
-                                         /*server=*/false,
-                                         /*deferSecurityNegotiation=*/true);
-    auto* ssl_ptr = ssl_socket.get();
-    // Replace the transport with one wrapping the SSL socket.
-    transport_ = Box<folly::coro::Transport>{
-      std::in_place, evb_,
-      folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
-    // Perform the TLS handshake.
+    auto hostname_copy = std::string{hostname};
     try {
       co_await co_withExecutor(
-        evb_, folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
+        evb_,
+        folly::coro::co_invoke([this, ctx = std::move(ctx),
+                                hostname = std::move(hostname_copy)]() mutable
+                                 -> folly::coro::Task<folly::Unit> {
+          // Get the underlying socket and detach its fd.
+          auto* raw_transport = transport_->getTransport();
+          auto* old_sock = dynamic_cast<folly::AsyncSocket*>(raw_transport);
+          TENZIR_ASSERT(old_sock);
+          auto fd = old_sock->detachNetworkSocket();
+          // Create an SSL socket wrapping the existing fd.
+          auto ssl_socket
+            = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb_, fd,
+                                               /*server=*/false,
+                                               /*deferSecurityNegotiation=*/
+                                               true);
+          auto* ssl_ptr = ssl_socket.get();
+          // Replace the transport with one wrapping the SSL socket.
+          transport_ = Box<folly::coro::Transport>{
+            std::in_place, evb_,
+            folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
+          // Perform the TLS handshake.
           auto cb = SslHandshakeCallback{*ssl_ptr, hostname};
           ssl_ptr->sslConn(&cb);
           co_await cb.wait();
@@ -1004,6 +1003,24 @@ public:
   }
 
 private:
+  auto read_exact(folly::MutableByteRange buffer, std::string_view what)
+    -> Task<MysqlResult<void>> {
+    auto bytes_read = size_t{0};
+    while (bytes_read < buffer.size()) {
+      auto chunk = co_await co_withExecutor(
+        evb_,
+        transport_->read(folly::MutableByteRange{buffer.data() + bytes_read,
+                                                 buffer.size() - bytes_read},
+                         read_timeout_));
+      if (chunk == 0) {
+        co_return Err{
+          mysql_error::protocol(fmt::format("short {} read", what))};
+      }
+      bytes_read += chunk;
+    }
+    co_return {};
+  }
+
   explicit async_connection(folly::coro::Transport transport,
                             folly::EventBase* evb)
     : transport_{std::in_place, std::move(transport)}, evb_{evb} {
@@ -1259,7 +1276,15 @@ public:
       config.host = args_.host->inner;
     }
     if (args_.port) {
-      config.port = detail::narrow<uint16_t>(args_.port->inner);
+      constexpr auto max_port = int64_t{std::numeric_limits<uint16_t>::max()};
+      if (args_.port->inner < 0 or args_.port->inner > max_port) {
+        diagnostic::error("`port` must be in range [0, {}]", max_port)
+          .primary(args_.port->source)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      }
+      config.port = static_cast<uint16_t>(args_.port->inner);
     }
     if (args_.user) {
       config.user = args_.user->inner;
@@ -1387,7 +1412,7 @@ public:
     auto table_arg = d.positional("table", &FromMySQLArgs::table);
     // Connection options.
     d.named("host", &FromMySQLArgs::host);
-    d.named("port", &FromMySQLArgs::port);
+    auto port_arg = d.named("port", &FromMySQLArgs::port);
     d.named("user", &FromMySQLArgs::user);
     d.named("password", &FromMySQLArgs::password);
     d.named("database", &FromMySQLArgs::database);
@@ -1415,6 +1440,15 @@ public:
       if (has_sql and has_table) {
         diagnostic::error("`sql` and `table` are mutually exclusive").emit(ctx);
         return {};
+      }
+      // Validate port range.
+      if (auto port = ctx.get(port_arg)) {
+        constexpr auto max_port = int64_t{std::numeric_limits<uint16_t>::max()};
+        if (port->inner < 0 or port->inner > max_port) {
+          diagnostic::error("`port` must be in range [0, {}]", max_port)
+            .primary(ctx.get_location(port_arg).value())
+            .emit(ctx);
+        }
       }
       // Validate show mode.
       if (has_show) {

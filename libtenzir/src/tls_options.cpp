@@ -750,7 +750,8 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     }
   }
   // Load CA certificate.
-  if (auto cacert = get_cacert(nullptr)) {
+  auto cacert = get_cacert(nullptr);
+  if (cacert) {
     auto ec = std::error_code{};
     auto path = std::filesystem::canonical(cacert->inner, ec);
     if (ec or not std::filesystem::is_regular_file(path, ec)) {
@@ -816,6 +817,11 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
+    if (not cacert
+        and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
+      diagnostic::error("failed to enable default verify paths").emit(dh);
+      return failure::promise();
+    }
   }
   return ctx;
 }

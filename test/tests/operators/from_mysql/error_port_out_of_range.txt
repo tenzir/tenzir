@@ -1,0 +1,6 @@
+error: `port` must be in range [0, 65535]
+ --> tests/operators/from_mysql/error_port_out_of_range.tql:7:17
+  |
+7 |            port=-1
+  |                 ^^ 
+  |
