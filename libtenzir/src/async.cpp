@@ -167,27 +167,19 @@ struct AnyWrapper {
 
 template <class Input>
 struct SubPipeline {
-  SubPipeline(Box<Push<OperatorMsg<Input>>> push,
-              Sender<FromControl> from_control, AsyncHandle<void> runner_handle,
-              AsyncHandle<void> drain_handle, AsyncHandle<void> control_handle)
-    : push{std::move(push)},
-      from_control{std::move(from_control)},
-      runner_handle{std::move(runner_handle)},
-      drain_handle{std::move(drain_handle)},
-      control_handle{std::move(control_handle)} {
+  SubPipeline(std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel,
+              Sender<FromControl> from_control)
+    : push_channel{std::move(push_channel)},
+      from_control{std::move(from_control)} {
   }
 
-  Box<Push<OperatorMsg<Input>>> push;
+  std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel;
   Sender<FromControl> from_control;
-  // Runs the subpipeline operator chain (`run_chain`).
-  AsyncHandle<void> runner_handle;
-  // Drains subpipeline output and forwards it via `process_sub`/`finish_sub`.
-  AsyncHandle<void> drain_handle;
-  // Relays control events from the subpipeline and sends final `Shutdown`.
-  AsyncHandle<void> control_handle;
 
   /// Whether we sent `Signal::end_of_data` to the subpipeline input.
   bool input_closed = false;
+  /// Whether the subpipeline asked us to stop sending input.
+  bool no_more_input = false;
   /// Whether the subpipeline emitted all of its output and `finish_sub` ran.
   bool drain_finished = false;
   /// Whether the subpipeline controller acknowledged `ready_for_shutdown`.
@@ -278,9 +270,6 @@ private:
       = make_unbounded_channel<FromControl>();
     auto [to_control_sender, to_control_receiver]
       = make_unbounded_channel<ToControl>();
-    // The runner task is created inside the typed branch below; keep the handle
-    // here so we can attach it to the stored subpipeline state afterwards.
-    auto runner_handle = std::optional<AsyncHandle<void>>{};
     auto push_upstream = co_match(
       std::move(chain),
       [&]<class In>(OperatorChain<In, table_slice> chain)
@@ -293,12 +282,12 @@ private:
                                 std::move(from_control_receiver),
                                 std::move(to_control_sender),
                                 ctx_.actor_system(), ctx_.dh());
-        runner_handle.emplace(queue_.scope().spawn(std::move(runner)));
+        queue_.scope().spawn(std::move(runner));
         return std::move(push_upstream);
       });
     // Drain subpipeline output independently from host operator processing to
     // avoid deadlocking on subpipeline backpressure.
-    auto drain_handle = queue_.scope().spawn(
+    queue_.scope().spawn(
       [this, key,
        pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
         // Pulling from the subpipeline needs to happen independently from the
@@ -335,50 +324,47 @@ private:
         }
       });
     // Handle control messages from the subpipeline chain.
-    auto control_handle
-      = queue_.scope().spawn([this, key,
-                              to_control_receiver = std::move(
-                                to_control_receiver)] mutable -> Task<void> {
-          while (true) {
-            auto to_control = co_await to_control_receiver.receive();
-            switch (to_control) {
-              case ToControl::no_more_input:
-                queue_.spawn([key] -> Task<SubPipelineEvent> {
-                  co_return SubPipelineNoMoreInput{key};
-                });
-                break;
-              case ToControl::ready_for_shutdown:
-                queue_.spawn([key] -> Task<SubPipelineEvent> {
-                  co_return SubPipelineReadyForShutdown{key};
-                });
-                co_return;
-              case ToControl::checkpoint_begin:
-              case ToControl::checkpoint_ready:
-              case ToControl::checkpoint_done:
-                // TODO: Add checkpoint support for subpipeline control.
-                break;
-            }
-          }
-        });
+    queue_.scope().spawn([this, key,
+                          to_control_receiver = std::move(
+                            to_control_receiver)] mutable -> Task<void> {
+      while (true) {
+        auto to_control = co_await to_control_receiver.receive();
+        switch (to_control) {
+          case ToControl::no_more_input:
+            queue_.spawn([key] -> Task<SubPipelineEvent> {
+              co_return SubPipelineNoMoreInput{key};
+            });
+            break;
+          case ToControl::ready_for_shutdown:
+            queue_.spawn([key] -> Task<SubPipelineEvent> {
+              co_return SubPipelineReadyForShutdown{key};
+            });
+            co_return;
+          case ToControl::checkpoint_begin:
+          case ToControl::checkpoint_ready:
+          case ToControl::checkpoint_done:
+            // TODO: Add checkpoint support for subpipeline control.
+            break;
+        }
+      }
+    });
     // TODO: Cleanup.
-    TENZIR_ASSERT(runner_handle);
-    co_return co_match(push_upstream,
-                       [&]<class In>(Box<Push<OperatorMsg<In>>>& push_upstream)
-                         -> AnyOpenPipeline {
-                         auto [it, inserted] = subpipelines_.try_emplace(
-                           std::move(key), SubPipeline{
-                                             std::move(push_upstream),
-                                             std::move(from_control_sender),
-                                             std::move(*runner_handle),
-                                             std::move(drain_handle),
-                                             std::move(control_handle),
-                                           });
-                         if (not inserted) {
-                           panic("already have a subpipeline for that key");
-                         }
-                         auto& subpipe = as<SubPipeline<In>>(it->second);
-                         return OpenPipeline<In>{*subpipe.push};
-                       });
+    co_return co_match(
+      push_upstream,
+      [&]<class In>(
+        Box<Push<OperatorMsg<In>>>& push_upstream) -> AnyOpenPipeline {
+        auto push_channel = std::make_shared<Box<Push<OperatorMsg<In>>>>(
+          std::move(push_upstream));
+        auto [it, inserted] = subpipelines_.try_emplace(
+          std::move(key), SubPipeline{
+                            push_channel,
+                            std::move(from_control_sender),
+                          });
+        if (not inserted) {
+          panic("already have a subpipeline for that key");
+        }
+        return OpenPipeline<In>{std::move(push_channel)};
+      });
   }
 
   auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> override {
@@ -390,7 +376,7 @@ private:
     return co_match(
       it->second,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
-        return OpenPipeline<In>{*subpipeline.push};
+        return OpenPipeline<In>{subpipeline.push_channel};
       });
   }
 
@@ -594,6 +580,25 @@ private:
         if (it == subpipelines_.end()) {
           co_return;
         }
+        co_await co_match(
+          it->second, []<class In>(SubPipeline<In>& sub) -> Task<void> {
+            if (sub.no_more_input) {
+              co_return;
+            }
+            sub.no_more_input = true;
+            if constexpr (not std::same_as<In, void>) {
+              if (not sub.input_closed) {
+                co_await (*sub.push_channel)(Signal::end_of_data);
+                sub.input_closed = true;
+              }
+            }
+          });
+        // Sources that feed a subpipeline should stop producing as soon as the
+        // subpipeline says it no longer needs input.
+        if constexpr (std::same_as<Input, void>) {
+          co_await handle_done();
+        }
+        co_await maybe_complete_done();
       });
   }
 
@@ -655,7 +660,7 @@ private:
       co_await co_match(sub, []<class In>(SubPipeline<In>& sub) -> Task<void> {
         if constexpr (not std::same_as<In, void>) {
           if (not sub.input_closed) {
-            co_await sub.push(Signal::end_of_data);
+            co_await (*sub.push_channel)(Signal::end_of_data);
             sub.input_closed = true;
           }
         }

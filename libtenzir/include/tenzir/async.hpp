@@ -324,7 +324,10 @@ struct OperatorMsg : variant<T, Signal> {
 template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Push<OperatorMsg<Input>>& push) : push_{push} {
+  explicit OpenPipeline(
+    std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel)
+    : push_channel_{std::move(push_channel)} {
+    TENZIR_ASSERT(push_channel_);
   }
 
   // TODO: What if the pipeline starts with a source?
@@ -336,16 +339,16 @@ public:
     } else {
       TENZIR_WARN("pushing data to subpipeline");
     }
-    co_await push_(std::move(input));
+    co_await (*push_channel_)(std::move(input));
     co_return {};
   }
 
   auto close() -> Task<void> {
-    co_await push_(Signal::end_of_data);
+    co_await (*push_channel_)(Signal::end_of_data);
   }
 
 private:
-  std::reference_wrapper<Push<OperatorMsg<Input>>> push_;
+  std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
