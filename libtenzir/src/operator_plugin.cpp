@@ -474,7 +474,7 @@ public:
     if (desc_->validator) {
       auto error_tracker = error_tracking_handler{ctx};
       auto validate_ctx
-        = ValidateCtx{args_, named_args_, *desc_, error_tracker};
+        = ValidateCtx{args_, named_args_, pipeline_, *desc_, error_tracker};
       (*desc_->validator)(validate_ctx);
       if (error_tracker.had_error()) {
         return failure::promise();
