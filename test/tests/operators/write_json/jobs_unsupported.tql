@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+write_json _jobs=1

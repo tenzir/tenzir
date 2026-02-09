@@ -1,0 +1,6 @@
+error: `_jobs` is not supported for `read_ndjson` in neo
+ --> tests/operators/read_ndjson/jobs_unsupported.tql:5:19
+  |
+5 | read_ndjson _jobs=1
+  |                   ^ 
+  |

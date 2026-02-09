@@ -13,7 +13,6 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -1489,7 +1488,7 @@ public:
       = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
     d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
     d.named("_batch_size", &ReadJsonArgs::batch_size);
-    d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
                              ctx.get(selector), ctx.get_location(selector),
@@ -1497,6 +1496,11 @@ public:
                              ctx.get_location(schema_only),
                              ctx.get(unflatten_separator),
                              ctx.get_location(unflatten_separator), true);
+      if (ctx.get(jobs)) {
+        diagnostic::error("`_jobs` is not supported for `read_ndjson` in neo")
+          .primary(ctx.get_location(jobs).value_or(location::unknown))
+          .emit(ctx);
+      }
       return {};
     });
     return d.without_optimize();
@@ -1547,7 +1551,7 @@ public:
       = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
     d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
     d.named("_batch_size", &ReadJsonArgs::batch_size);
-    d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
                              ctx.get(selector), ctx.get_location(selector),
@@ -1555,6 +1559,11 @@ public:
                              ctx.get_location(schema_only),
                              ctx.get(unflatten_separator),
                              ctx.get_location(unflatten_separator), true);
+      if (ctx.get(jobs)) {
+        diagnostic::error("`_jobs` is not supported for `read_gelf` in neo")
+          .primary(ctx.get_location(jobs).value_or(location::unknown))
+          .emit(ctx);
+      }
       return {};
     });
     return d.without_optimize();
@@ -1598,12 +1607,17 @@ public:
     d.named("raw", &ReadJsonArgs::raw);
     d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
     d.named("_batch_size", &ReadJsonArgs::batch_size);
-    d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       validate_read_msb_args(ctx, std::nullopt, std::nullopt, std::nullopt,
                              std::nullopt, ctx.get(schema_only).value_or(false),
                              ctx.get_location(schema_only), std::nullopt,
                              std::nullopt, false);
+      if (ctx.get(jobs)) {
+        diagnostic::error("`_jobs` is not supported for this operator in neo")
+          .primary(ctx.get_location(jobs).value_or(location::unknown))
+          .emit(ctx);
+      }
       return {};
     });
     return d.without_optimize();
@@ -1809,14 +1823,7 @@ public:
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (args_.jobs == 0) {
-      co_await push(print_slice(input));
-    } else {
-      auto result = co_await spawn_blocking([this, input = std::move(input)]() {
-        return print_slice(input);
-      });
-      co_await push(std::move(result));
-    }
+    co_await push(print_slice(input));
   }
 
   auto finalize(Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
@@ -1859,19 +1866,10 @@ public:
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     if (not tql_) {
       d.named("compact", &WriteJsonArgs::compact);
-      auto arrays_of_objects
-        = d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+      d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
       d.validate([=](ValidateCtx& ctx) -> Empty {
-        auto jobs = ctx.get(jobs_arg);
-        if (jobs and *jobs == 0) {
-          diagnostic::error("`_jobs` must be larger than 0")
-            .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
-            .emit(ctx);
-        }
-        if (jobs and ctx.get(arrays_of_objects).value_or(false)) {
-          diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
-            .primary(
-              ctx.get_location(arrays_of_objects).value_or(location::unknown))
+        if (ctx.get(jobs_arg)) {
+          diagnostic::error("`_jobs` is not supported for `write_json` in neo")
             .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
             .emit(ctx);
         }
@@ -1879,9 +1877,8 @@ public:
       });
     } else {
       d.validate([=](ValidateCtx& ctx) -> Empty {
-        auto jobs = ctx.get(jobs_arg);
-        if (jobs and *jobs == 0) {
-          diagnostic::error("`_jobs` must be larger than 0")
+        if (ctx.get(jobs_arg)) {
+          diagnostic::error("`_jobs` is not supported for `write_tql` in neo")
             .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
             .emit(ctx);
         }
@@ -1942,21 +1939,12 @@ public:
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
-    auto arrays_of_objects
-      = d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+    d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
     d.named("color", &WriteJsonArgs::color);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      auto jobs = ctx.get(jobs_arg);
-      if (jobs and *jobs == 0) {
-        diagnostic::error("`_jobs` must be larger than 0")
-          .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
-          .emit(ctx);
-      }
-      if (jobs and ctx.get(arrays_of_objects).value_or(false)) {
-        diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
-          .primary(
-            ctx.get_location(arrays_of_objects).value_or(location::unknown))
+      if (ctx.get(jobs_arg)) {
+        diagnostic::error("`_jobs` is not supported for `write_ndjson` in neo")
           .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
           .emit(ctx);
       }

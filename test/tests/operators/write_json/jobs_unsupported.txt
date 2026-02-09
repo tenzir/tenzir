@@ -1,0 +1,6 @@
+error: `_jobs` is not supported for `write_json` in neo
+ --> tests/operators/write_json/jobs_unsupported.tql:6:18
+  |
+6 | write_json _jobs=1
+  |                  ^ 
+  |
