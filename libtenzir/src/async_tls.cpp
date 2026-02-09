@@ -12,9 +12,9 @@
 
 #include <folly/coro/Invoke.h>
 #include <folly/coro/Task.h>
-#include <folly/coro/Transport.h>
-#include <folly/coro/TransportCallbackBase.h>
 #include <folly/io/async/AsyncSSLSocket.h>
+#include <folly/io/coro/Transport.h>
+#include <folly/io/coro/TransportCallbackBase.h>
 #include <openssl/x509v3.h>
 
 namespace tenzir {
@@ -77,20 +77,19 @@ auto upgrade_transport_to_tls(Box<folly::coro::Transport>& transport,
                               std::shared_ptr<folly::SSLContext> ssl_context,
                               std::string hostname) -> Task<void> {
   co_await folly::coro::co_withExecutor(
-    evb,
-    folly::coro::co_invoke([&transport, evb, ctx = std::move(ssl_context),
-                            hostname = std::move(hostname)]() mutable
-                             -> Task<void> {
+    evb, folly::coro::co_invoke([&transport, evb, ctx = std::move(ssl_context),
+                                 hostname = std::move(
+                                   hostname)]() mutable -> Task<void> {
       // Get the underlying socket and detach its fd.
       auto* raw_transport = transport->getTransport();
       auto* socket = dynamic_cast<folly::AsyncSocket*>(raw_transport);
       TENZIR_ASSERT(socket);
       auto fd = socket->detachNetworkSocket();
       // Create an SSL socket wrapping the existing fd.
-      auto ssl_socket = folly::AsyncSSLSocket::newSocket(
-        std::move(ctx), evb, fd,
-        /*server=*/false,
-        /*deferSecurityNegotiation=*/true);
+      auto ssl_socket
+        = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb, fd,
+                                           /*server=*/false,
+                                           /*deferSecurityNegotiation=*/true);
       auto* ssl_ptr = ssl_socket.get();
       // Replace the transport with one wrapping the SSL socket.
       transport = Box<folly::coro::Transport>{
