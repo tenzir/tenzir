@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+write_ndjson _jobs=1
