@@ -1,0 +1,4 @@
+created: 2026-02-09
+title: Tenzir Node v5.25.2
+intro: >-
+  This release fixes the sigma operator to correctly load all rule files from a directory.
