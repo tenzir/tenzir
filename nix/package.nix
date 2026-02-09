@@ -44,14 +44,14 @@ rec {
 
   tenzir-test = pkgs.python3Packages.buildPythonPackage rec {
     pname = "tenzir-test";
-    version = "1.0.2";
+    version = "1.2.2";
     pyproject = true;
 
     src = pkgs.fetchFromGitHub {
       owner = "tenzir";
       repo = "test";
       tag = "v${version}";
-      hash = "sha256-KkyD5zJHE83DLO93j8VWmUlYNCOaJvDVebe92/5qPkI=";
+      hash = "sha256-/a1qZnbXyt1Rwcp/b69cV8sRWXyBDmPSCbsjOSX8+hk=";
     };
 
     build-system = with pkgs.python3Packages; [ hatchling ];
@@ -78,6 +78,7 @@ rec {
     pkgs.parallel
     (pkgs.python3.withPackages (ps: [
       ps.trustme
+      ps.pymysql
     ]))
     tenzir-test
   ];

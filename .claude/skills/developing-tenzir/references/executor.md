@@ -95,6 +95,29 @@ auto state() -> OperatorState override {
 }
 ```
 
+## Cross-Executor I/O (folly EventBase)
+
+Socket operations via folly's `AsyncSocket` / `Transport` must run on the
+owning `EventBase` thread. Use `co_withExecutor` to schedule each call there:
+
+```cpp
+auto n = co_await co_withExecutor(evb_, transport_->read(buf, timeout));
+```
+
+Do not use `co_viaIfAsync` — it only controls where the caller resumes, not
+where the task executes. Do not use the deprecated `.scheduleOn()` method.
+
+For multi-statement blocks, wrap with `co_invoke`:
+
+```cpp
+co_await co_withExecutor(evb_,
+  folly::coro::co_invoke([&]() -> folly::coro::Task<folly::Unit> {
+    ssl_ptr->sslConn(&cb);
+    co_await cb.wait();
+    co_return folly::unit;
+  }));
+```
+
 ## Plugin Declaration
 
 Use `Describer` to register operators:

@@ -438,7 +438,7 @@ public:
               return located{std::move(*cast), expr.get_location()};
             },
             [&](const Setter<located<data>>&) -> failure_or<Arg> {
-              TENZIR_TODO();
+              return located{std::move(value), expr.get_location()};
             },
             [&](const Setter<located<ir::pipeline>>&) -> failure_or<Arg> {
               // Pipelines are compiled in make(), not during substitute.

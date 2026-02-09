@@ -1,0 +1,5 @@
+suite: mysql-fixture
+fixtures: [mysql]
+timeout: 180
+skip:
+  on: fixture-unavailable

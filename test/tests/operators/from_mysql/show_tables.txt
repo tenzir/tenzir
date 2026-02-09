@@ -1,0 +1,20 @@
+{
+  database: "tenzir_test",
+  table: "events",
+}
+{
+  database: "tenzir_test",
+  table: "large_packets",
+}
+{
+  database: "tenzir_test",
+  table: "numbers",
+}
+{
+  database: "tenzir_test",
+  table: "types",
+}
+{
+  database: "tenzir_test",
+  table: "users",
+}

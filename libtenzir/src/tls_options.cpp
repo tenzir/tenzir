@@ -15,6 +15,7 @@
 #include <caf/expected.hpp>
 #include <caf/net/ssl/context.hpp>
 #include <curl/curl.h>
+#include <folly/io/async/SSLContext.h>
 #include <openssl/ssl.h>
 
 #include <algorithm>
@@ -22,6 +23,15 @@
 #include <filesystem>
 
 namespace tenzir {
+
+tls_options::tls_options(located<data> tls_val) : tls_{std::move(tls_val)} {
+}
+
+tls_options::tls_options(located<data> tls_val, options opts)
+  : uses_curl_http_{opts.uses_curl_http},
+    is_server_{opts.is_server},
+    tls_{std::move(tls_val)} {
+}
 
 namespace {
 
@@ -190,6 +200,29 @@ auto tls_options::validate_tls_record(diagnostic_handler& dh) const
   TRY(check_string("ciphers"));
   TRY(check_string("client_ca"));
   TRY(check_bool("require_client_cert"));
+  // Validate file paths exist.
+  auto check_file = [&](std::string_view key) -> failure_or<void> {
+    auto it = rec->find(key);
+    if (it == rec->end()) {
+      return {};
+    }
+    auto const* sval = try_as<std::string>(&it->second);
+    if (not sval) {
+      return {};
+    }
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(*sval, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`tls.{}` path is not a valid file: {}", key, *sval)
+        .primary(tls_->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  TRY(check_file("cacert"));
+  TRY(check_file("certfile"));
+  TRY(check_file("keyfile"));
   // Server-only keys validation
   if (not is_server_) {
     if (rec->find("client_ca") != rec->end()) {
@@ -688,12 +721,125 @@ auto tls_options::make_caf_context(operator_control_plane& ctrl,
     }
   }
   if (auto ciphers = get_tls_ciphers(&ctrl)) {
+    auto cipher_loc = ciphers->source;
+    if (tls_ and cipher_loc == tls_->source) {
+      // `located<data>` for `tls={...}` only carries the whole record span.
+      // Clamp to a tiny span to avoid misleading multi-line highlights.
+      cipher_loc = cipher_loc.subloc(0, 1);
+    }
     if (auto* native = static_cast<SSL_CTX*>(concrete.native_handle())) {
       if (SSL_CTX_set_cipher_list(native, ciphers->inner.c_str()) != 1) {
-        diagnostic::warning("failed to set TLS cipher list")
-          .primary(*ciphers)
+        diagnostic::error("invalid TLS cipher list")
+          .primary(cipher_loc, "`tls.ciphers`")
           .emit(dh);
+        return caf::make_error(ec::invalid_configuration,
+                               "invalid TLS cipher list");
       }
+    }
+  }
+  return ctx;
+}
+
+auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
+  -> failure_or<std::shared_ptr<folly::SSLContext>> {
+  if (not get_tls(nullptr).inner) {
+    return nullptr;
+  }
+  auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
+  // Apply minimum TLS version.
+  if (auto min = get_tls_min_version(nullptr)) {
+    if (not min->inner.empty()) {
+      auto parsed = parse_openssl_tls_version(min->inner);
+      if (not parsed) {
+        diagnostic::error(parsed.error()).primary(*min).emit(dh);
+        return failure::promise();
+      }
+      SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
+    }
+  }
+  // Load CA certificate.
+  auto cacert = get_cacert(nullptr);
+  if (cacert) {
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(cacert->inner, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`cacert` path is not a valid file")
+        .primary(*cacert)
+        .emit(dh);
+      return failure::promise();
+    }
+    try {
+      ctx->loadTrustedCertificates(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load CA certificate: {}", ex.what())
+        .primary(*cacert)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Load client certificate.
+  if (auto certfile = get_certfile(nullptr)) {
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(certfile->inner, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`certfile` path is not a valid file")
+        .primary(*certfile)
+        .emit(dh);
+      return failure::promise();
+    }
+    try {
+      ctx->loadCertificate(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load client certificate: {}", ex.what())
+        .primary(*certfile)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Load client private key.
+  if (auto keyfile = get_keyfile(nullptr)) {
+    auto ec = std::error_code{};
+    auto path = std::filesystem::canonical(keyfile->inner, ec);
+    if (ec or not std::filesystem::is_regular_file(path, ec)) {
+      diagnostic::error("`keyfile` path is not a valid file")
+        .primary(*keyfile)
+        .emit(dh);
+      return failure::promise();
+    }
+    try {
+      ctx->loadPrivateKey(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load client private key: {}", ex.what())
+        .primary(*keyfile)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  if (auto ciphers = get_tls_ciphers(nullptr)) {
+    auto cipher_loc = ciphers->source;
+    if (tls_ and cipher_loc == tls_->source) {
+      // `located<data>` for `tls={...}` only carries the whole record span.
+      // Clamp to a tiny span to avoid misleading multi-line highlights.
+      cipher_loc = cipher_loc.subloc(0, 1);
+    }
+    if (SSL_CTX_set_cipher_list(ctx->getSSLCtx(), ciphers->inner.c_str())
+        != 1) {
+      diagnostic::error("invalid TLS cipher list")
+        .primary(cipher_loc, "`tls.ciphers`")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Set verification mode.
+  auto skip_verify = get_skip_peer_verification(nullptr).inner;
+  if (skip_verify) {
+    ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
+  } else {
+    ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
+    if (not cacert
+        and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
+      diagnostic::error("failed to enable default verify paths").emit(dh);
+      return failure::promise();
     }
   }
   return ctx;
