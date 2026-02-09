@@ -1,5 +1,5 @@
 error: `tls.keyfile` path is not a valid file: /nonexistent/path/client-key.pem
-  --> tests/operators/from_mysql/error_tls_invalid_keyfile.tql:12:16
+  --> tests/operators/from_mysql/tls/error_tls_invalid_keyfile.tql:12:16
    |
 12 |            tls={keyfile: "/nonexistent/path/client-key.pem"}
    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 

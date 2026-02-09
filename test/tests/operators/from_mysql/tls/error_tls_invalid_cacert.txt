@@ -1,5 +1,5 @@
 error: `tls.cacert` path is not a valid file: /nonexistent/path/ca.pem
-  --> tests/operators/from_mysql/error_tls_invalid_cacert.tql:12:16
+  --> tests/operators/from_mysql/tls/error_tls_invalid_cacert.tql:12:16
    |
 12 |            tls={cacert: "/nonexistent/path/ca.pem"}
    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 

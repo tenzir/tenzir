@@ -1,5 +1,5 @@
 error: `tls.skip_peer_verification` must be a bool
-  --> tests/operators/from_mysql/error_tls_skip_verify_type.tql:12:16
+  --> tests/operators/from_mysql/tls/error_tls_skip_verify_type.tql:12:16
    |
 12 |            tls={skip_peer_verification: "yes"}
    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
