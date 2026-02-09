@@ -55,7 +55,7 @@ assertion_failure(std::string_view cond, std::source_location location) {
   static_assert(true)
 
 #define TENZIR_ASSERT_RELATION_ALWAYS(OP, LHS, RHS, ...)                       \
-  {                                                                            \
+  if (not static_cast<bool>(LHS OP RHS)) [[unlikely]] {                        \
     auto txt = std::string{};                                                  \
     constexpr static bool formattable                                          \
       = fmt::is_formattable<decltype(LHS)>::value                              \
@@ -65,10 +65,8 @@ assertion_failure(std::string_view cond, std::source_location location) {
     } else {                                                                   \
       txt = #LHS " " #OP " " #RHS;                                             \
     }                                                                          \
-    if (not static_cast<bool>(LHS OP RHS)) [[unlikely]] {                      \
-      ::tenzir::detail::assertion_failure<true>(                               \
-        txt, std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);      \
-    }                                                                          \
+    ::tenzir::detail::assertion_failure<true>(                                 \
+      txt, std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);        \
   }                                                                            \
   static_assert(true)
 
