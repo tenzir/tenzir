@@ -1212,14 +1212,6 @@ public:
       config.host = args_.host->inner;
     }
     if (args_.port) {
-      constexpr auto max_port = int64_t{std::numeric_limits<uint16_t>::max()};
-      if (args_.port->inner < 0 or args_.port->inner > max_port) {
-        diagnostic::error("`port` must be in range [0, {}]", max_port)
-          .primary(args_.port->source)
-          .emit(ctx);
-        done_ = true;
-        co_return;
-      }
       config.port = static_cast<uint16_t>(args_.port->inner);
     }
     if (args_.user) {
