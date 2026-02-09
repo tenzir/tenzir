@@ -609,8 +609,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<SliceArgs, Slice>{
-      SliceArgs{.stride = -1}, "https://docs.tenzir.com/operators/reverse"};
+    auto d = Describer<SliceArgs, Slice>{SliceArgs{.stride = -1}};
     return d.without_optimize();
   }
 };
