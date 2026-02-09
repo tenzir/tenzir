@@ -9,6 +9,7 @@
 #include <tenzir/any.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async_tls.hpp>
 #include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -19,12 +20,8 @@
 #include <tenzir/try.hpp>
 
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/io/async/AsyncSSLSocket.h>
-#include <folly/io/async/SSLContext.h>
 #include <folly/io/coro/Transport.h>
-#include <folly/io/coro/TransportCallbackBase.h>
 #include <openssl/sha.h>
-#include <openssl/x509v3.h>
 
 #include <charconv>
 #include <cstring>
@@ -607,58 +604,6 @@ auto base_client_capabilities() -> uint32_t {
          | std::to_underlying(capability::plugin_auth_lenenc_client_data);
 }
 
-// -- TLS Handshake Callback --------------------------------------------------
-
-/// Coroutine-friendly callback for SSL/TLS handshake completion.
-class SslHandshakeCallback : public folly::coro::TransportCallbackBase,
-                             public folly::AsyncSSLSocket::HandshakeCB {
-public:
-  explicit SslHandshakeCallback(folly::AsyncSSLSocket& socket,
-                                std::string hostname)
-    : TransportCallbackBase(socket),
-      socket_(socket),
-      hostname_(std::move(hostname)) {
-  }
-
-private:
-  void cancel() noexcept override {
-    socket_.closeNow();
-  }
-
-  auto handshakeVer(folly::AsyncSSLSocket*, bool preverify_ok,
-                    X509_STORE_CTX* ctx) noexcept -> bool override {
-    if (not preverify_ok) {
-      return false;
-    }
-    // Only verify hostname on the leaf certificate (depth 0).
-    auto depth = X509_STORE_CTX_get_error_depth(ctx);
-    if (depth != 0) {
-      return true;
-    }
-    // Verify that the certificate's CN or SAN matches the target hostname.
-    auto* cert = X509_STORE_CTX_get_current_cert(ctx);
-    if (not cert) {
-      return false;
-    }
-    return X509_check_host(cert, hostname_.c_str(), hostname_.size(), 0,
-                           nullptr)
-           == 1;
-  }
-
-  void handshakeSuc(folly::AsyncSSLSocket*) noexcept override {
-    post();
-  }
-
-  void handshakeErr(folly::AsyncSSLSocket*,
-                    folly::AsyncSocketException const& ex) noexcept override {
-    storeException(ex);
-    post();
-  }
-
-  folly::AsyncSSLSocket& socket_;
-  std::string hostname_;
-};
-
 // -- Async Connection --------------------------------------------------------
 
 /// Async MySQL connection using folly::coro::Transport.
@@ -815,39 +760,9 @@ public:
   /// Upgrade the connection to TLS.
   auto upgrade_to_tls(std::shared_ptr<folly::SSLContext> ctx,
                       std::string const& hostname) -> Task<MysqlResult<void>> {
-    auto hostname_copy = std::string{hostname};
     try {
-      co_await co_withExecutor(
-        evb_,
-        folly::coro::co_invoke([this, ctx = std::move(ctx),
-                                hostname = std::move(hostname_copy)]() mutable
-                                 -> folly::coro::Task<folly::Unit> {
-          // Get the underlying socket and detach its fd.
-          auto* raw_transport = transport_->getTransport();
-          auto* old_sock = dynamic_cast<folly::AsyncSocket*>(raw_transport);
-          TENZIR_ASSERT(old_sock);
-          auto fd = old_sock->detachNetworkSocket();
-          // Create an SSL socket wrapping the existing fd.
-          auto ssl_socket
-            = folly::AsyncSSLSocket::newSocket(std::move(ctx), evb_, fd,
-                                               /*server=*/false,
-                                               /*deferSecurityNegotiation=*/
-                                               true);
-          auto* ssl_ptr = ssl_socket.get();
-          // Replace the transport with one wrapping the SSL socket.
-          transport_ = Box<folly::coro::Transport>{
-            std::in_place, evb_,
-            folly::AsyncTransport::UniquePtr{ssl_socket.release()}};
-          // Perform the TLS handshake.
-          auto cb = SslHandshakeCallback{*ssl_ptr, hostname};
-          ssl_ptr->sslConn(&cb);
-          co_await cb.wait();
-          // Check for handshake error stored in callback.
-          if (cb.error()) {
-            cb.error().throw_exception();
-          }
-          co_return folly::unit;
-        }));
+      co_await upgrade_transport_to_tls(transport_, evb_, std::move(ctx),
+                                        std::string{hostname});
     } catch (std::exception const& ex) {
       co_return Err{
         mysql_error{0, fmt::format("TLS handshake failed: {}", ex.what())}};
