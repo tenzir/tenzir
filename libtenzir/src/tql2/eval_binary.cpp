@@ -620,7 +620,7 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
             auto out = std::dynamic_pointer_cast<arrow::BooleanArray>(
               EvalBinOp<ast::binary_op::eq, L, R>::eval(*lslice, *vals, warn));
             TENZIR_ASSERT(out);
-            TENZIR_ASSERT(out->length() == 1);
+            TENZIR_ASSERT_EQ(out->length(), 1);
             // Equality never returns `null` (if it's defined for the types).
             TENZIR_ASSERT(out->IsValid(0));
             if (out->Value(0)) {
@@ -644,10 +644,10 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
 
 template <ast::binary_op Op>
 auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
-  TENZIR_ASSERT(x.op.inner == Op);
+  TENZIR_ASSERT_EQ(x.op.inner, Op);
   auto left = self.eval(x.left);
   auto right = self.eval(x.right);
-  TENZIR_ASSERT(left.length() == right.length());
+  TENZIR_ASSERT_EQ(left.length(), right.length());
   return map_series(
     std::move(left), std::move(right), [&](series left, series right) {
       return match(
@@ -719,19 +719,23 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
     if constexpr (Op == ast::binary_op::and_) {
       if (not typed_left) {
         short_circuit_eval_right.template operator()<false>();
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
       if (typed_left->array->false_count() == length) {
         check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
     } else if constexpr (Op == ast::binary_op::or_) {
       if (not typed_left) {
         short_circuit_eval_right.template operator()<true>();
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
       if (typed_left->array->true_count() == length) {
         check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        TENZIR_ASSERT_EQ(builder.length(), left_offset);
         continue;
       }
     } else {
@@ -742,6 +746,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       return typed_left->array->IsValid(i) and typed_left->array->GetView(i);
     };
     const auto eval_right = [&](int64_t start, int64_t end) -> void {
+      TENZIR_ASSERT_LT(start, end);
       for (const auto& right :
            self.slice(left_begin + start, left_begin + end).eval(x.right)) {
         if (is<bool_type>(right.type)) {
@@ -761,6 +766,8 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
     auto range_offset = int64_t{0};
     auto range_current = get_left(0);
     const auto append_until = [&](int64_t end) {
+      TENZIR_ASSERT_GT(end, range_offset);
+      TENZIR_ASSERT_LT(range_offset, length);
       if constexpr (Op == ast::binary_op::and_ or Op == ast::binary_op::or_) {
         if (range_current == (Op == ast::binary_op::and_)) {
           eval_right(range_offset, end);
@@ -771,6 +778,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       } else {
         static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
       }
+      TENZIR_ASSERT_EQ(builder.length(), left_begin + end);
     };
     for (auto i = int64_t{1}; i < length; ++i) {
       if (range_current == get_left(i)) {
@@ -781,10 +789,13 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       range_current = not range_current;
     }
     append_until(length);
+    TENZIR_ASSERT_EQ(builder.length(), left_offset);
   }
+  auto result = finish(builder);
+  TENZIR_ASSERT_EQ(result->length(), self.length());
   return series{
     bool_type{},
-    finish(builder),
+    std::move(result),
   };
 }
 

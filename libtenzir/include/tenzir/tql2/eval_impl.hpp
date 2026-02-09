@@ -34,10 +34,13 @@ public:
     }
     const auto* input = result.get_input();
     if (not input) {
-      TENZIR_ASSERT(begin == 0);
-      TENZIR_ASSERT(end == 1);
+      TENZIR_ASSERT_EQ(begin, 0);
+      TENZIR_ASSERT_EQ(end, 1);
       return result;
     }
+    TENZIR_ASSERT_GEQ(begin, 0);
+    TENZIR_ASSERT_GEQ(end, begin);
+    TENZIR_ASSERT_LEQ(static_cast<size_t>(end), input->rows());
     result.input_ = subslice(*input, begin, end);
     result.length_ = end - begin;
     return result;

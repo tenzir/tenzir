@@ -125,16 +125,21 @@ struct replace_visitor {
   auto operator()(const basic_series<record_type>& r) -> std::optional<series> {
     auto fields = std::vector<series_field>{};
     fields.reserve(r.type.num_fields());
-    for (const auto& f : r.type.fields()) {
-      fields.emplace_back(f.name, series{f.type, nullptr});
+    {
+      auto i = uint32_t{0};
+      for (const auto& f : r.type.fields()) {
+        fields.emplace_back(f.name,
+                            series{
+                              f.type,
+                              r.array->field(detail::narrow_cast<int>(i)),
+                            });
+        ++i;
+      }
+      TENZIR_ASSERT_EQ(i, fields.size());
     }
-    TENZIR_ASSERT(static_cast<size_t>(r.type.num_fields()) == fields.size(),
-                  "{} != {}", r.type.num_fields(), fields.size());
-    TENZIR_ASSERT(r.type.num_fields()
-                  == static_cast<size_t>(r.array->num_fields()));
-    for (auto i = uint32_t{}; i < static_cast<uint32_t>(fields.size()); ++i) {
-      fields[i].data.array = r.array->field(detail::narrow_cast<int>(i));
-    }
+    TENZIR_ASSERT_EQ(static_cast<size_t>(r.type.num_fields()), fields.size());
+    TENZIR_ASSERT_EQ(r.type.num_fields(),
+                     static_cast<size_t>(r.array->num_fields()));
     auto any_replacement = false;
     for (auto& field : fields) {
       auto nested_replacement = (*this)(field.data);
