@@ -1180,17 +1180,15 @@ auto parse_selector_value(std::string_view x)
   };
 }
 
-auto validate_read_msb_args(diagnostic_handler& dh,
-                            std::optional<std::string> const& schema,
-                            std::optional<location> schema_loc,
-                            std::optional<std::string> const& selector,
-                            std::optional<location> selector_loc,
-                            bool schema_only,
-                            std::optional<location> schema_only_loc,
-                            std::optional<std::string> const& unflatten_separator,
-                            std::optional<location> unflatten_separator_loc,
-                            bool schema_only_requires_schema_or_selector)
-  -> void {
+auto validate_read_msb_args(
+  diagnostic_handler& dh, std::optional<std::string> const& schema,
+  std::optional<location> schema_loc,
+  std::optional<std::string> const& selector,
+  std::optional<location> selector_loc, bool schema_only,
+  std::optional<location> schema_only_loc,
+  std::optional<std::string> const& unflatten_separator,
+  std::optional<location> unflatten_separator_loc,
+  bool schema_only_requires_schema_or_selector) -> void {
   if (schema and selector) {
     diagnostic::error("`schema` and `selector` cannot be combined")
       .primary(schema_loc.value_or(location::unknown))
@@ -1229,8 +1227,9 @@ auto validate_read_msb_args(diagnostic_handler& dh,
   if (schema and not schema->empty()) {
     if (not modules::get_schema(*schema)) {
       if (schema_only) {
-        diagnostic::error(
-          "schema `{}` does not exist, but `schema_only` was specified", *schema)
+        diagnostic::error("schema `{}` does not exist, but `schema_only` was "
+                          "specified",
+                          *schema)
           .primary(schema_loc.value_or(location::unknown))
           .primary(schema_only_loc.value_or(location::unknown))
           .emit(dh);
@@ -1602,8 +1601,7 @@ public:
     d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       validate_read_msb_args(ctx, std::nullopt, std::nullopt, std::nullopt,
-                             std::nullopt,
-                             ctx.get(schema_only).value_or(false),
+                             std::nullopt, ctx.get(schema_only).value_or(false),
                              ctx.get_location(schema_only), std::nullopt,
                              std::nullopt, false);
       return {};
@@ -1857,21 +1855,39 @@ public:
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
-    if (not tql_) {
-      d.named("compact", &WriteJsonArgs::compact);
-      d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
-    }
     d.named("color", &WriteJsonArgs::color);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
-    d.validate([=, tql = tql_](ValidateCtx& ctx) -> Empty {
-      auto jobs = ctx.get(jobs_arg);
-      if (jobs and *jobs == 0) {
-        diagnostic::error("`_jobs` must be larger than 0")
-          .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
-          .emit(ctx);
-      }
-      return {};
-    });
+    if (not tql_) {
+      d.named("compact", &WriteJsonArgs::compact);
+      auto arrays_of_objects
+        = d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+      d.validate([=](ValidateCtx& ctx) -> Empty {
+        auto jobs = ctx.get(jobs_arg);
+        if (jobs and *jobs == 0) {
+          diagnostic::error("`_jobs` must be larger than 0")
+            .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+            .emit(ctx);
+        }
+        if (jobs and ctx.get(arrays_of_objects).value_or(false)) {
+          diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
+            .primary(
+              ctx.get_location(arrays_of_objects).value_or(location::unknown))
+            .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+            .emit(ctx);
+        }
+        return {};
+      });
+    } else {
+      d.validate([=](ValidateCtx& ctx) -> Empty {
+        auto jobs = ctx.get(jobs_arg);
+        if (jobs and *jobs == 0) {
+          diagnostic::error("`_jobs` must be larger than 0")
+            .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+            .emit(ctx);
+        }
+        return {};
+      });
+    }
     return d.without_optimize();
   }
 
@@ -1926,13 +1942,21 @@ public:
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
-    d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+    auto arrays_of_objects
+      = d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
     d.named("color", &WriteJsonArgs::color);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto jobs = ctx.get(jobs_arg);
       if (jobs and *jobs == 0) {
         diagnostic::error("`_jobs` must be larger than 0")
+          .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+          .emit(ctx);
+      }
+      if (jobs and ctx.get(arrays_of_objects).value_or(false)) {
+        diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
+          .primary(
+            ctx.get_location(arrays_of_objects).value_or(location::unknown))
           .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
           .emit(ctx);
       }
