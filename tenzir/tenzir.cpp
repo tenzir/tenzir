@@ -137,36 +137,6 @@ private:
     queue_.pop_back();
   }
 
-  void sift_up(size_t i) {
-    while (i > 0) {
-      auto parent = (i - 1) / 2;
-      if (not entry_cmp(queue_[parent], queue_[i])) {
-        break;
-      }
-      std::swap(queue_[i], queue_[parent]);
-      i = parent;
-    }
-  }
-
-  void sift_down(size_t i) {
-    while (true) {
-      auto smallest = i;
-      auto left = (2 * i) + 1;
-      auto right = (2 * i) + 2;
-      if (left < queue_.size() && entry_cmp(queue_[smallest], queue_[left])) {
-        smallest = left;
-      }
-      if (right < queue_.size() && entry_cmp(queue_[smallest], queue_[right])) {
-        smallest = right;
-      }
-      if (smallest == i) {
-        break;
-      }
-      std::swap(queue_[i], queue_[smallest]);
-      i = smallest;
-    }
-  }
-
   auto make_cleanup_entry() -> entry {
     constexpr static auto cleanup_interval = std::chrono::minutes{10};
     return {
@@ -179,27 +149,11 @@ private:
 
   void do_cleanup() {
     const auto guard = std::scoped_lock{mutex_};
-    for (size_t i = queue_.size(); i-- > 0;) {
-      if (not queue_[i].callback.disposed()) {
-        continue;
-      }
-      // Swap disposed element with last and remove
-      if (i != queue_.size() - 1) {
-        std::swap(queue_[i], queue_.back());
-      }
-      queue_.pop_back();
-      // Fix heap at position i
-      if (i < queue_.size()) {
-        // Check if element needs to move up or down
-        if (i > 0) {
-          auto parent = (i - 1) / 2;
-          if (entry_cmp(queue_[parent], queue_[i])) {
-            sift_up(i);
-            continue;
-          }
-        }
-        sift_down(i);
-      }
+    const auto it = std::ranges::remove_if(queue_, &caf::action::disposed,
+                                           &entry::callback);
+    if (std::ranges::begin(it) != queue_.end()) {
+      queue_.erase(std::ranges::begin(it), queue_.end());
+      std::ranges::make_heap(queue_, entry_cmp);
     }
     push(make_cleanup_entry());
   }
