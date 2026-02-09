@@ -1,5 +1,5 @@
 // Show columns of the users table
-from_mysql "users",
+from_mysql table="users",
            show="columns",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

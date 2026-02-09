@@ -1336,8 +1336,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromMySQLArgs, FromMySQL>{};
-    // Positional: table name.
-    auto table_arg = d.positional("table", &FromMySQLArgs::table);
+    auto table_arg = d.named("table", &FromMySQLArgs::table);
     // Connection options.
     d.named("host", &FromMySQLArgs::host);
     auto port_arg = d.named("port", &FromMySQLArgs::port);

@@ -13,7 +13,7 @@ The `from_mysql` operator lets you read data directly from MySQL databases.
 Read a table:
 
 ```tql
-from_mysql "users", host="localhost", port=3306, user="admin", password="secret", database="mydb"
+from_mysql table="users", host="localhost", port=3306, user="admin", password="secret", database="mydb"
 ```
 
 List tables:
@@ -25,7 +25,7 @@ from_mysql show="tables", host="localhost", port=3306, user="admin", password="s
 Show columns:
 
 ```tql
-from_mysql "users", show="columns", host="localhost", port=3306, user="admin", password="secret", database="mydb"
+from_mysql table="users", show="columns", host="localhost", port=3306, user="admin", password="secret", database="mydb"
 ```
 
 And ultimately execute a custom SQL query:
@@ -44,7 +44,7 @@ servers. Use `tls=true` for default TLS settings, or pass a record for
 fine-grained control:
 
 ```tql
-from_mysql "users", host="db.example.com", database="prod", tls={
+from_mysql table="users", host="db.example.com", database="prod", tls={
   cacert: "/path/to/ca.pem",
   certfile: "/path/to/client-cert.pem",
   keyfile: "/path/to/client-key.pem",
