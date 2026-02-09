@@ -52,7 +52,7 @@ public:
     co_return;
   }
 
-  auto await_task() const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     auto next = last_started_ + interval_;
     TENZIR_WARN("sleeping in every until {}", next);
     co_await sleep_until(next);

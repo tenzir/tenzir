@@ -98,7 +98,7 @@ public:
     : events_{std::move(events)} {
   }
 
-  auto await_task() const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     co_return {};
   }
 
