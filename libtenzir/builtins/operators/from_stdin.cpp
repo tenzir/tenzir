@@ -21,6 +21,8 @@
 #include <folly/net/NetworkSocket.h>
 #include <sys/stat.h>
 
+#include <cerrno>
+#include <cstring>
 #include <deque>
 #include <fcntl.h>
 #include <memory>
@@ -97,8 +99,8 @@ public:
       co_return;
     }
     co_await ctx.spawn_sub(caf::none, std::move(pipe), tag_v<chunk_ptr>);
-    ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalIOExecutor(),
-                                                read_stdin(chunk_queue_)));
+    ctx.spawn_task(folly::coro::co_withExecutor(
+      folly::getGlobalIOExecutor(), read_stdin(chunk_queue_, ctx.dh())));
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -152,10 +154,30 @@ public:
   }
 
 private:
-  static auto read_stdin(std::shared_ptr<ChunkQueue> queue) -> Task<void> {
+  static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
+                         diagnostic_handler& dh) -> Task<void> {
+    struct stat st{};
+    if (::fstat(STDIN_FILENO, &st) != 0) {
+      diagnostic::error("from_stdin: failed to inspect stdin: {}",
+                        std::strerror(errno))
+        .emit(dh);
+      co_await queue->enqueue(std::nullopt);
+      co_return;
+    }
+    if (S_ISREG(st.st_mode)) {
+      diagnostic::error(
+        "from_stdin requires async/eventable stdin; regular-file stdin is "
+        "unsupported")
+        .emit(dh);
+      co_await queue->enqueue(std::nullopt);
+      co_return;
+    }
     // Set stdin to non-blocking for event-driven IO.
     auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
     if (orig_flags < 0) {
+      diagnostic::error("from_stdin: failed to get stdin flags: {}",
+                        std::strerror(errno))
+        .emit(dh);
       co_await queue->enqueue(std::nullopt);
       co_return;
     }
@@ -171,6 +193,13 @@ private:
     reader->setCloseCallback([](folly::NetworkSocket) {});
     auto cb = ReadCB{};
     reader->setReadCB(&cb);
+    if (not reader->isHandlerRegistered()) {
+      diagnostic::error(
+        "from_stdin failed to register stdin with the async event loop")
+        .emit(dh);
+      co_await queue->enqueue(std::nullopt);
+      co_return;
+    }
     // The callback object lives on this coroutine frame, so unregister it on
     // every exit path before `cb` is destroyed.
     auto cb_guard = folly::makeGuard([&reader] {
@@ -185,6 +214,14 @@ private:
           reader->setReadCB(nullptr);
           co_await queue->enqueue(std::move(item));
           reader->setReadCB(&cb);
+          if (not reader->isHandlerRegistered()) {
+            diagnostic::error(
+              "from_stdin failed to re-register stdin with the async event "
+              "loop")
+              .emit(dh);
+            co_await queue->enqueue(std::nullopt);
+            co_return;
+          }
         }
       }
       if (cb.done) {
