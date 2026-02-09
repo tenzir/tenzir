@@ -10,4 +10,3 @@
   id: 3,
   name: "Charlie",
 }
-warning: TLS peer verification is disabled - connection is vulnerable to man-in-the-middle attacks

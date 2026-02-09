@@ -833,10 +833,6 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
   // Set verification mode.
   auto skip_verify = get_skip_peer_verification(nullptr).inner;
   if (skip_verify) {
-    diagnostic::warning("TLS peer verification is disabled "
-                        "- connection is vulnerable to "
-                        "man-in-the-middle attacks")
-      .emit(dh);
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
