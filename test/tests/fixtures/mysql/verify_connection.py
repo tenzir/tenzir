@@ -5,6 +5,10 @@ import os
 
 import pymysql
 
+# /// script
+# dependencies = ["pymysql"]
+# ///
+
 
 def main() -> None:
     """Connect to MySQL and verify test data exists."""
