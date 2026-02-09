@@ -9,7 +9,7 @@
 #include <tenzir/any.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
-#include <tenzir/async_tls.hpp>
+#include <tenzir/async/tls.hpp>
 #include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/operator_plugin.hpp>

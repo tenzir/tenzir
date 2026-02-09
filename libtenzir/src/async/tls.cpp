@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async_tls.hpp"
+#include "tenzir/async/tls.hpp"
 
 #include "tenzir/detail/assert.hpp"
 
