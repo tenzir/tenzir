@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <memory>
 #include <unistd.h>
+#include <vector>
 
 namespace tenzir::plugins::from_stdin {
 
@@ -154,6 +155,58 @@ public:
   }
 
 private:
+  static auto read_stdin_blocking(std::shared_ptr<ChunkQueue> queue,
+                                  diagnostic_handler& dh) -> Task<void> {
+    auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
+    if (orig_flags < 0) {
+      diagnostic::error("from_stdin: failed to inspect stdin flags before "
+                        "blocking read: {}",
+                        std::strerror(errno))
+        .emit(dh);
+      co_await queue->enqueue(std::nullopt);
+      co_return;
+    }
+    if ((orig_flags & O_NONBLOCK) != 0) {
+      if (::fcntl(STDIN_FILENO, F_SETFL, orig_flags & ~O_NONBLOCK) != 0) {
+        diagnostic::error("from_stdin: failed to switch stdin to blocking "
+                          "mode: {}",
+                          std::strerror(errno))
+          .emit(dh);
+        co_await queue->enqueue(std::nullopt);
+        co_return;
+      }
+    }
+    auto guard = folly::makeGuard([orig_flags] {
+      ::fcntl(STDIN_FILENO, F_SETFL, orig_flags);
+    });
+    auto buffer = std::vector<std::byte>(buffer_size);
+    while (true) {
+      auto bytes_read = ::read(STDIN_FILENO, buffer.data(), buffer.size());
+      if (bytes_read > 0) {
+        auto item = std::optional{
+          chunk::copy(buffer.data(), static_cast<size_t>(bytes_read))};
+        if (not item.value()) {
+          diagnostic::error("from_stdin: failed to allocate input chunk")
+            .emit(dh);
+          break;
+        }
+        co_await queue->enqueue(std::move(item));
+        continue;
+      }
+      if (bytes_read == 0) {
+        break;
+      }
+      if (errno == EINTR) {
+        continue;
+      }
+      diagnostic::error("from_stdin: blocking read failed: {}",
+                        std::strerror(errno))
+        .emit(dh);
+      break;
+    }
+    co_await queue->enqueue(std::nullopt);
+  }
+
   static auto read_stdin(std::shared_ptr<ChunkQueue> queue,
                          diagnostic_handler& dh) -> Task<void> {
     struct stat st{};
@@ -165,11 +218,7 @@ private:
       co_return;
     }
     if (S_ISREG(st.st_mode)) {
-      diagnostic::error(
-        "from_stdin requires async/eventable stdin; regular-file stdin is "
-        "unsupported")
-        .emit(dh);
-      co_await queue->enqueue(std::nullopt);
+      co_await read_stdin_blocking(queue, dh);
       co_return;
     }
     // Set stdin to non-blocking for event-driven IO.
@@ -182,7 +231,15 @@ private:
       co_return;
     }
     auto rc = ::fcntl(STDIN_FILENO, F_SETFL, orig_flags | O_NONBLOCK);
-    TENZIR_ASSERT(rc >= 0);
+    if (rc < 0) {
+      diagnostic::warning("from_stdin: failed to enable non-blocking mode, "
+                          "falling back to "
+                          "blocking reads: {}",
+                          std::strerror(errno))
+        .emit(dh);
+      co_await read_stdin_blocking(queue, dh);
+      co_return;
+    }
     auto guard = folly::makeGuard([orig_flags] {
       ::fcntl(STDIN_FILENO, F_SETFL, orig_flags);
     });
@@ -194,10 +251,12 @@ private:
     auto cb = ReadCB{};
     reader->setReadCB(&cb);
     if (not reader->isHandlerRegistered()) {
-      diagnostic::error(
-        "from_stdin failed to register stdin with the async event loop")
+      reader->setReadCB(nullptr);
+      diagnostic::warning(
+        "from_stdin: stdin is not eventable on this platform, falling back to "
+        "blocking reads")
         .emit(dh);
-      co_await queue->enqueue(std::nullopt);
+      co_await read_stdin_blocking(queue, dh);
       co_return;
     }
     // The callback object lives on this coroutine frame, so unregister it on
@@ -215,11 +274,12 @@ private:
           co_await queue->enqueue(std::move(item));
           reader->setReadCB(&cb);
           if (not reader->isHandlerRegistered()) {
-            diagnostic::error(
-              "from_stdin failed to re-register stdin with the async event "
-              "loop")
+            reader->setReadCB(nullptr);
+            diagnostic::warning(
+              "from_stdin: async stdin re-registration failed, falling back "
+              "to blocking reads")
               .emit(dh);
-            co_await queue->enqueue(std::nullopt);
+            co_await read_stdin_blocking(queue, dh);
             co_return;
           }
         }
