@@ -326,7 +326,9 @@ public:
       // XXX: When can output be nullopt?
       // FIXME: `spawn_sub` cannot spawn pipelines returning void.
       if (*output and (*output)->is_not<table_slice>()) {
-        diagnostic::error("pipeline must return events").primary(pipe).emit(ctx);
+        diagnostic::error("pipeline must return events")
+          .primary(pipe.source.subloc(0, 1))
+          .emit(ctx);
       }
       return {};
     });

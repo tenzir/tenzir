@@ -2,5 +2,5 @@ error: pipeline must return events
  --> tests/operators/from_stdin/sink_pipeline.tql:5:12
   |
 5 | from_stdin {
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |            ^ 
   |
