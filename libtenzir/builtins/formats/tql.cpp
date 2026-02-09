@@ -8,11 +8,12 @@
 
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
-#include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/identifier.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/escapers.hpp>
 #include <tenzir/detail/overload.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -20,9 +21,11 @@
 
 #include <cctype>
 #include <cstddef>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 namespace tenzir::plugins::tql {
 namespace {
@@ -33,115 +36,48 @@ constexpr auto max_record_size = size_t{64} * 1024 * 1024;
 // Maximum nesting depth to prevent stack overflow from deeply nested structures.
 constexpr auto max_nesting_depth = size_t{256};
 
-/// Parser for JSON-escaped strings that produces unescaped output.
-/// This handles the standard JSON escape sequences: \\, \", \/, \b, \f, \n,
-/// \r, \t, and \uXXXX.
+/// Parser for JSON strings that reuses `detail::json_unescape`.
 struct json_string_parser : parser_base<json_string_parser> {
   using attribute = std::string;
 
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& result) const -> bool {
-    // Check if we should skip result modification (unused_type or const)
-    constexpr bool skip_result
-      = std::is_same_v<unused_type, std::remove_cvref_t<Attribute>>
-        || std::is_const_v<std::remove_reference_t<Attribute>>;
-
     if (f == l || *f != '"') {
       return false;
     }
-    ++f; // Skip opening quote
-    // Reserve capacity to minimize reallocations (escaped strings are shorter)
-    if constexpr (not skip_result) {
-      result.reserve(static_cast<size_t>(std::distance(f, l)));
-    }
-    while (f != l && *f != '"') {
-      if (*f == '\\') {
-        // Handle escape sequence
-        ++f; // Skip backslash
-        if (f == l) {
-          return false;
-        }
-        char escaped = *f;
-        ++f;
-        if constexpr (not skip_result) {
-          switch (escaped) {
-            case '\\':
-              result.push_back('\\');
-              break;
-            case '"':
-              result.push_back('"');
-              break;
-            case '/':
-              result.push_back('/');
-              break;
-            case 'b':
-              result.push_back('\b');
-              break;
-            case 'f':
-              result.push_back('\f');
-              break;
-            case 'r':
-              result.push_back('\r');
-              break;
-            case 'n':
-              result.push_back('\n');
-              break;
-            case 't':
-              result.push_back('\t');
-              break;
-            case 'u': {
-              // Unicode escape: \uXXXX - simplified handling
-              if (l - f < 4) {
-                return false;
-              }
-              // For now, only handle \u00XX (single-byte)
-              char hex[5] = {*f, *(f + 1), *(f + 2), *(f + 3), '\0'};
-              f += 4;
-              if (hex[0] == '0' && hex[1] == '0') {
-                // Convert hex to byte
-                auto hex_to_nibble = [](char c) -> int {
-                  if (c >= '0' && c <= '9') {
-                    return c - '0';
-                  }
-                  if (c >= 'a' && c <= 'f') {
-                    return c - 'a' + 10;
-                  }
-                  if (c >= 'A' && c <= 'F') {
-                    return c - 'A' + 10;
-                  }
-                  return -1;
-                };
-                int hi = hex_to_nibble(hex[2]);
-                int lo = hex_to_nibble(hex[3]);
-                if (hi < 0 || lo < 0) {
-                  return false;
-                }
-                result.push_back(static_cast<char>((hi << 4) | lo));
-              } else {
-                // Leave multi-byte unicode as-is (literal \uXXXX)
-                result.push_back('\\');
-                result.push_back('u');
-                result.append(hex, 4);
-              }
-              break;
-            }
-            default:
-              // Unknown escape - invalid
-              return false;
+    auto begin = f;
+    auto it = f;
+    auto escape = false;
+    ++it;
+    while (it != l) {
+      if (escape) {
+        escape = false;
+      } else if (*it == '\\') {
+        escape = true;
+      } else if (*it == '"') {
+        constexpr auto skip_result
+          = std::is_same_v<unused_type, std::remove_cvref_t<Attribute>>
+            || std::is_const_v<std::remove_reference_t<Attribute>>;
+        auto decoded = std::string{};
+        decoded.reserve(static_cast<size_t>(std::distance(begin, it)));
+        auto escaped_begin = begin;
+        ++escaped_begin;
+        auto out = std::back_inserter(decoded);
+        while (escaped_begin != it) {
+          if (not detail::json_unescaper(escaped_begin, it, out)) {
+            return false;
           }
         }
-      } else {
         if constexpr (not skip_result) {
-          result.push_back(*f);
+          result = std::move(decoded);
         }
-        ++f;
+        ++it;
+        f = it;
+        return true;
       }
+      ++it;
     }
-    if (f == l || *f != '"') {
-      return false;
-    }
-    ++f; // Skip closing quote
-    return true;
+    return false;
   }
 };
 
@@ -251,6 +187,9 @@ auto find_record_end(std::string_view input) -> std::optional<size_t> {
         return std::nullopt; // Too deeply nested
       }
     } else if (c == '}' || c == ']') {
+      if (depth == 0) {
+        return std::nullopt;
+      }
       --depth;
       if (depth == 0) {
         return i + 1; // Position after closing brace
@@ -263,17 +202,14 @@ auto find_record_end(std::string_view input) -> std::optional<size_t> {
 /// Parse a complete TQL record from the buffer.
 auto parse_tql_record(std::string_view input, diagnostic_handler& dh)
   -> std::optional<data> {
+  input = detail::trim_front(input);
+  if (input.empty()) {
+    return std::nullopt;
+  }
   auto parser = tql_data_parser{};
   const auto* f = input.begin();
   const auto* l = input.end();
   data result;
-  // Skip leading whitespace
-  while (f != l && std::isspace(static_cast<unsigned char>(*f)) != 0) {
-    ++f;
-  }
-  if (f == l) {
-    return std::nullopt;
-  }
   if (not parser.parse(f, l, result)) {
     diagnostic::warning("failed to parse TQL record").emit(dh);
     return std::nullopt;
@@ -281,139 +217,66 @@ auto parse_tql_record(std::string_view input, diagnostic_handler& dh)
   return result;
 }
 
-/// Recursively adds data to a multi_series_builder.
-/// The depth parameter tracks recursion depth to prevent stack overflow.
-void add_data_to_object(const data& d,
-                        detail::multi_series_builder::object_generator& obj,
-                        size_t depth = 0);
-void add_data_to_list(const data& d,
-                      detail::multi_series_builder::list_generator& list_gen,
-                      size_t depth = 0);
-
-void add_data_to_object(const data& d,
-                        detail::multi_series_builder::object_generator& obj,
-                        size_t depth) {
+/// Recursively adds data to a multi_series_builder generator.
+template <class Generator>
+void add_data_to_builder(const data& d, Generator& gen, size_t depth = 0) {
   if (depth > max_nesting_depth) {
-    obj.null();
+    gen.null();
     return;
   }
   auto f = detail::overload{
     [&](caf::none_t) {
-      obj.null();
+      gen.null();
     },
     [&](bool x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](int64_t x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](uint64_t x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](double x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](duration x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](time x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](const std::string& x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](const blob& x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](const ip& x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](const subnet& x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](enumeration x) {
-      obj.data(x);
+      gen.data(x);
     },
     [&](const list& x) {
-      auto list_gen = obj.list();
+      auto list_gen = gen.list();
       for (const auto& elem : x) {
-        add_data_to_list(elem, list_gen, depth + 1);
+        add_data_to_builder(elem, list_gen, depth + 1);
       }
     },
     [&](const record& x) {
-      auto rec = obj.record();
+      auto rec = gen.record();
       for (const auto& [key, value] : x) {
         auto field = rec.exact_field(key);
-        add_data_to_object(value, field, depth + 1);
+        add_data_to_builder(value, field, depth + 1);
       }
     },
     [&](const auto&) {
       // map, pattern, secret - not expected in TQL format
-      obj.null();
-    },
-  };
-  match(d, f);
-}
-
-void add_data_to_list(const data& d,
-                      detail::multi_series_builder::list_generator& list_gen,
-                      size_t depth) {
-  if (depth > max_nesting_depth) {
-    list_gen.null();
-    return;
-  }
-  auto f = detail::overload{
-    [&](caf::none_t) {
-      list_gen.null();
-    },
-    [&](bool x) {
-      list_gen.data(x);
-    },
-    [&](int64_t x) {
-      list_gen.data(x);
-    },
-    [&](uint64_t x) {
-      list_gen.data(x);
-    },
-    [&](double x) {
-      list_gen.data(x);
-    },
-    [&](duration x) {
-      list_gen.data(x);
-    },
-    [&](time x) {
-      list_gen.data(x);
-    },
-    [&](const std::string& x) {
-      list_gen.data(x);
-    },
-    [&](const blob& x) {
-      list_gen.data(x);
-    },
-    [&](const ip& x) {
-      list_gen.data(x);
-    },
-    [&](const subnet& x) {
-      list_gen.data(x);
-    },
-    [&](enumeration x) {
-      list_gen.data(x);
-    },
-    [&](const list& x) {
-      auto nested = list_gen.list();
-      for (const auto& elem : x) {
-        add_data_to_list(elem, nested, depth + 1);
-      }
-    },
-    [&](const record& x) {
-      auto rec = list_gen.record();
-      for (const auto& [key, value] : x) {
-        auto field = rec.exact_field(key);
-        add_data_to_object(value, field, depth + 1);
-      }
-    },
-    [&](const auto&) {
-      list_gen.null();
+      gen.null();
     },
   };
   match(d, f);
@@ -423,7 +286,7 @@ void add_record_to_builder(const record& r, multi_series_builder& builder) {
   auto rec = builder.record();
   for (const auto& [key, value] : r) {
     auto field = rec.exact_field(key);
-    add_data_to_object(value, field);
+    add_data_to_builder(value, field);
   }
 }
 
@@ -558,8 +421,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadTqlArgs, ReadTql>{
-      "https://docs.tenzir.com/operators/read_tql"};
+    auto d = Describer<ReadTqlArgs, ReadTql>{};
     return d.without_optimize();
   }
 };
