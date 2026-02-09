@@ -1,15 +1,20 @@
 {
-  Tables_in_tenzir_test: "events",
+  database: "tenzir_test",
+  table: "events",
 }
 {
-  Tables_in_tenzir_test: "large_packets",
+  database: "tenzir_test",
+  table: "large_packets",
 }
 {
-  Tables_in_tenzir_test: "numbers",
+  database: "tenzir_test",
+  table: "numbers",
 }
 {
-  Tables_in_tenzir_test: "types",
+  database: "tenzir_test",
+  table: "types",
 }
 {
-  Tables_in_tenzir_test: "users",
+  database: "tenzir_test",
+  table: "users",
 }

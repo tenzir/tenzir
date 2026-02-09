@@ -1235,7 +1235,11 @@ public:
     // Build the SQL query.
     if (args_.show) {
       if (args_.show->inner == "tables") {
-        query_ = "SHOW TABLES";
+        query_ = "SELECT table_schema AS `database`, table_name AS `table` "
+                 "FROM information_schema.tables "
+                 "WHERE table_schema = DATABASE() "
+                 "AND table_type = 'BASE TABLE' "
+                 "ORDER BY table_name";
         schema_name_ = "mysql.tables";
       } else if (args_.show->inner == "columns") {
         if (not args_.table) {
