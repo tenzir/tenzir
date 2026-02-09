@@ -11,6 +11,7 @@
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
@@ -18,6 +19,7 @@
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Sleep.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
@@ -187,13 +189,14 @@ public:
          Box<Pull<OperatorMsg<Input>>> pull_upstream,
          Box<Push<OperatorMsg<Output>>> push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-         caf::actor_system& sys, diagnostic_handler& dh)
+         caf::actor_system& sys, diagnostic_handler& dh,
+         std::shared_ptr<pipeline_metrics> metrics)
     : op_{std::move(op)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
-      ctx_{sys, dh, *this} {
+      ctx_{sys, dh, *this, std::move(metrics)} {
   }
 
   Runner(Runner&&) = delete;
@@ -251,7 +254,7 @@ private:
                                 std::move(push_downstream),
                                 std::move(from_control_receiver),
                                 std::move(to_control_sender),
-                                ctx_.actor_system(), ctx_.dh());
+                                ctx_.actor_system(), ctx_.dh(), ctx_.metrics());
         // TODO: What do we do here? Do we need to react to it finishing?
         auto handle = queue_.scope().spawn(std::move(runner));
         return std::move(push_upstream);
@@ -569,7 +572,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Box<Push<OperatorMsg<Output>>> push_downstream,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void> {
+                  diagnostic_handler& dh,
+                  std::shared_ptr<pipeline_metrics> metrics) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await Runner<Input, Output>{
     std::move(op),
@@ -579,6 +583,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
     std::move(to_control),
     sys,
     dh,
+    std::move(metrics),
   }
     .run_to_completion();
 }
@@ -592,14 +597,16 @@ public:
               Box<Pull<OperatorMsg<Input>>> pull_upstream,
               Box<Push<OperatorMsg<Output>>> push_downstream,
               Receiver<FromControl> from_control, Sender<ToControl> to_control,
-              caf::actor_system& sys, diagnostic_handler& dh)
+              caf::actor_system& sys, diagnostic_handler& dh,
+              std::shared_ptr<pipeline_metrics> metrics)
     : operators_{std::move(chain).unwrap()},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
       sys_{sys},
-      dh_{dh} {
+      dh_{dh},
+      metrics_{std::move(metrics)} {
   }
 
   auto run_to_completion() && -> Task<void> {
@@ -651,10 +658,11 @@ private:
           = make_unbounded_channel<ToControl>();
         operator_ctrl_.push_back(std::move(from_control_sender));
         next_input = std::move(output_receiver);
-        auto task = run_operator(std::move(op), std::move(input),
-                                 std::move(output_sender),
-                                 std::move(from_control_receiver),
-                                 std::move(to_control_sender), sys_, dh_);
+        auto task
+          = run_operator(std::move(op), std::move(input),
+                         std::move(output_sender),
+                         std::move(from_control_receiver),
+                         std::move(to_control_sender), sys_, dh_, metrics_);
         TENZIR_INFO("spawning operator task");
         queue_.spawn([task = std::move(task),
                       index] mutable -> Task<std::pair<size_t, Shutdown>> {
@@ -781,6 +789,7 @@ private:
   Sender<ToControl> to_control_;
   caf::actor_system& sys_;
   diagnostic_handler& dh_;
+  std::shared_ptr<pipeline_metrics> metrics_;
 
   std::vector<Sender<FromControl>> operator_ctrl_;
 
@@ -805,7 +814,8 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void> {
+               caf::actor_system& sys, diagnostic_handler& dh,
+               std::shared_ptr<pipeline_metrics> metrics) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain),
@@ -815,6 +825,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
     std::move(to_control),
     sys,
     dh,
+    std::move(metrics),
   }
     .run_to_completion();
   TENZIR_INFO("chain runner finished");
@@ -837,6 +848,14 @@ auto OpCtx::spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
 
 auto OpCtx::get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> {
   return impl_.get_sub(key);
+}
+
+auto OpCtx::make_counter(metrics_label label, metrics_direction direction,
+                         metrics_visibility visibility) -> metrics_counter {
+  if (not metrics_) {
+    return {};
+  }
+  return metrics_->make_counter(std::move(label), direction, visibility);
 }
 
 template <class T>
@@ -1030,10 +1049,12 @@ public:
 };
 
 auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void> {
+                  diagnostic_handler& dh, metrics_callback emit_fn)
+  -> Task<void> {
   // FIXME
   auto input = make_op_channel<void>(10).pull;
   auto output = make_op_channel<void>(10).push;
+  auto metrics = std::make_shared<pipeline_metrics>();
   try {
     auto [from_control_sender, from_control_receiver]
       = make_unbounded_channel<FromControl>();
@@ -1041,10 +1062,25 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
       = make_unbounded_channel<ToControl>();
     auto queue = QueueScope<variant<std::monostate, ToControl>>{};
     co_await queue.activate([&] -> Task<void> {
+      // Spawn periodic metrics emission if a callback was provided.
+      if (emit_fn) {
+        queue.scope().spawn([metrics, emit_fn] -> Task<void> {
+          while (true) {
+            co_await folly::coro::sleep(
+              std::chrono::duration_cast<folly::HighResDuration>(
+                defaults::metrics_interval));
+            auto snapshot = metrics->take_snapshot();
+            if (not snapshot.empty()) {
+              emit_fn(snapshot);
+            }
+          }
+        });
+      }
       queue.spawn([&] -> Task<std::monostate> {
         co_await run_chain(std::move(pipeline), std::move(input),
                            std::move(output), std::move(from_control_receiver),
-                           std::move(to_control_sender), sys, dh);
+                           std::move(to_control_sender), sys, dh,
+                           std::move(metrics));
         co_return std::monostate{};
       });
       queue.spawn(to_control_receiver.receive());

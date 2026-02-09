@@ -524,13 +524,16 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  // auto [push_input, pull_input] = make_op_channel<void>(10);
-  // auto [push_output, pull_output] = make_op_channel<void>(10);
-  // co_await push_input(Signal::checkpoint);
   TENZIR_WARN("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain),
-                        // std::move(pull_input), std::move(push_output),
-                        sys, dh);
+  auto emit_fn = [](std::span<const metrics_snapshot_entry> entries) {
+    for (auto const& e : entries) {
+      TENZIR_INFO("metrics: key={} value={} direction={} bytes={}", e.label.key,
+                  e.label.value,
+                  e.direction == metrics_direction::read ? "read" : "write",
+                  e.value);
+    }
+  };
+  co_await run_pipeline(std::move(*chain), sys, dh, std::move(emit_fn));
   TENZIR_WARN("blocking on pipeline done");
   co_return {};
 }

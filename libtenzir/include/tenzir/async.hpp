@@ -50,6 +50,7 @@
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -391,8 +392,13 @@ protected:
 
 class OpCtx {
 public:
-  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, OpCtxImpl& impl)
-    : sys_{sys}, dh_{dh}, reg_{global_registry()}, impl_{impl} {
+  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, OpCtxImpl& impl,
+        std::shared_ptr<pipeline_metrics> metrics = {})
+    : sys_{sys},
+      dh_{dh},
+      reg_{global_registry()},
+      impl_{impl},
+      metrics_{std::move(metrics)} {
   }
 
   virtual ~OpCtx() = default;
@@ -456,11 +462,21 @@ public:
     return spawn_task(folly::coro::co_invoke(std::move(f)));
   }
 
+  /// Create a throughput counter with the given label.
+  /// Returns a null counter if metrics collection is disabled.
+  auto make_counter(metrics_label label, metrics_direction direction,
+                    metrics_visibility visibility) -> metrics_counter;
+
+  auto metrics() const -> std::shared_ptr<pipeline_metrics> const& {
+    return metrics_;
+  }
+
 private:
   caf::actor_system& sys_;
   diagnostic_handler& dh_;
   std::shared_ptr<const registry> reg_;
   OpCtxImpl& impl_;
+  std::shared_ptr<pipeline_metrics> metrics_;
 };
 
 enum class OperatorState {
@@ -785,7 +801,8 @@ using VoidToNever = std::conditional_t<std::same_as<T, void>, Never, T>;
 
 /// Run a closed pipeline without external control.
 auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void>;
+                  diagnostic_handler& dh, metrics_callback emit_fn = {})
+  -> Task<void>;
 
 /// Run a right-open pipeline without external control.
 template <class Output>
@@ -807,6 +824,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void>;
+               caf::actor_system& sys, diagnostic_handler& dh,
+               std::shared_ptr<pipeline_metrics> metrics) -> Task<void>;
 
 } // namespace tenzir
