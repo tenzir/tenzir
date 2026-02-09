@@ -159,18 +159,19 @@ private:
                                   diagnostic_handler& dh) -> Task<void> {
     auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
     if (orig_flags < 0) {
-      diagnostic::error("from_stdin: failed to inspect stdin flags before "
-                        "blocking read: {}",
-                        std::strerror(errno))
+      auto err = errno;
+      diagnostic::error(
+        "from_stdin: failed to inspect stdin flags before blocking read")
+        .note("errno {}: {}", err, std::strerror(err))
         .emit(dh);
       co_await queue->enqueue(std::nullopt);
       co_return;
     }
     if ((orig_flags & O_NONBLOCK) != 0) {
       if (::fcntl(STDIN_FILENO, F_SETFL, orig_flags & ~O_NONBLOCK) != 0) {
-        diagnostic::error("from_stdin: failed to switch stdin to blocking "
-                          "mode: {}",
-                          std::strerror(errno))
+        auto err = errno;
+        diagnostic::error("from_stdin: failed to switch stdin to blocking mode")
+          .note("errno {}: {}", err, std::strerror(err))
           .emit(dh);
         co_await queue->enqueue(std::nullopt);
         co_return;
@@ -199,8 +200,9 @@ private:
       if (errno == EINTR) {
         continue;
       }
-      diagnostic::error("from_stdin: blocking read failed: {}",
-                        std::strerror(errno))
+      auto err = errno;
+      diagnostic::error("from_stdin: blocking read failed")
+        .note("errno {}: {}", err, std::strerror(err))
         .emit(dh);
       break;
     }
@@ -211,8 +213,9 @@ private:
                          diagnostic_handler& dh) -> Task<void> {
     struct stat st{};
     if (::fstat(STDIN_FILENO, &st) != 0) {
-      diagnostic::error("from_stdin: failed to inspect stdin: {}",
-                        std::strerror(errno))
+      auto err = errno;
+      diagnostic::error("from_stdin: failed to inspect stdin")
+        .note("errno {}: {}", err, std::strerror(err))
         .emit(dh);
       co_await queue->enqueue(std::nullopt);
       co_return;
@@ -224,8 +227,9 @@ private:
     // Set stdin to non-blocking for event-driven IO.
     auto orig_flags = ::fcntl(STDIN_FILENO, F_GETFL, 0);
     if (orig_flags < 0) {
-      diagnostic::error("from_stdin: failed to get stdin flags: {}",
-                        std::strerror(errno))
+      auto err = errno;
+      diagnostic::error("from_stdin: failed to get stdin flags")
+        .note("errno {}: {}", err, std::strerror(err))
         .emit(dh);
       co_await queue->enqueue(std::nullopt);
       co_return;
