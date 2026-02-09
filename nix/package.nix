@@ -78,6 +78,7 @@ rec {
     pkgs.parallel
     (pkgs.python3.withPackages (ps: [
       ps.trustme
+      ps.pymysql
     ]))
     tenzir-test
   ];
