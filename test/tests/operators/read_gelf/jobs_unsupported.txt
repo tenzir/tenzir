@@ -1,0 +1,6 @@
+error: `_jobs` is not supported for `read_gelf` in neo
+ --> tests/operators/read_gelf/jobs_unsupported.tql:5:17
+  |
+5 | read_gelf _jobs=1
+  |                 ^ 
+  |
