@@ -168,7 +168,7 @@ public:
     co_return;
   }
 
-  auto await_task() const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     // This is just a test to see what happens if we want to return the version
     // a certain number of times with 1 second of sleep in between.
     if (count_ == total) {
