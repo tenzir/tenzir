@@ -1,0 +1,40 @@
+from {
+  a: {x: {y: {z: 1, w: 2}}},
+  b: {x: {y: {z: 99, v: 3}}},
+  c: {key: "string_value"},
+  d: {key: {nested: 1}},
+  e: {foo: 1},
+  f: {bar: 2},
+}
+deep = merge(a, b)
+conflict = merge(c, d)
+disjoint = merge(e, f)
+// Null handling: left null returns right, right null returns left.
+null_left = merge(null, {b: 2})
+null_right = merge({a: 1}, null)
+null_both = merge(null, null)
+// Null field within a record: right side overwrites null field.
+null_field = merge({a: 1, b: null}, {b: 2, c: 3})
+// Empty records.
+empty_left = merge({}, {a: 1})
+empty_right = merge({a: 1}, {})
+// 4+ levels of nesting to validate full recursion.
+deep4 = merge({a: {b: {c: {d: {e: 1, f: 2}}}}}, {a: {b: {c: {d: {e: 99, g: 3}}}}})
+// Scalar-to-scalar conflict: right side wins.
+scalar_conflict = merge({value: 1}, {value: 2})
+// List fields: right side replaces left (no list merging).
+list_conflict = merge({items: [1, 2]}, {items: [3, 4]})
+this = {
+  deep: deep,
+  conflict: conflict,
+  disjoint: disjoint,
+  null_left: null_left,
+  null_right: null_right,
+  null_both: null_both,
+  null_field: null_field,
+  empty_left: empty_left,
+  empty_right: empty_right,
+  deep4: deep4,
+  scalar_conflict: scalar_conflict,
+  list_conflict: list_conflict,
+}

@@ -1,0 +1,8 @@
+{
+  hostname: "server1",
+  domain: "acme.com",
+  hw: {
+    sn: "XYZ123",
+    model: "foobar",
+  },
+}

@@ -6,13 +6,18 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_memory_pool.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/defaults.hpp>
+#include <tenzir/detail/enumerate.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
+#include <tenzir/detail/stable_map.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <arrow/compute/api_scalar.h>
+#include <arrow/compute/api.h>
 #include <boost/process/v2/environment.hpp>
 #if __has_include(<boost/process/v1/environment.hpp>)
 #  include <boost/process/v1/environment.hpp>
@@ -670,6 +675,104 @@ private:
   bool select_ = {};
 };
 
+// Columnar deep merge for two series. Recurses into nested records so that
+// overlapping record fields are merged rather than replaced. Non-record
+// conflicts are resolved in favor of the right side.
+auto deep_merge_series(series left, series right, size_t depth = 0) -> series {
+  auto length = left.length();
+  // Both null-typed: return null.
+  if (is<null_type>(left.type) and is<null_type>(right.type)) {
+    return series::null(null_type{}, length);
+  }
+  // Left is null-typed: right wins entirely.
+  if (is<null_type>(left.type)) {
+    return right;
+  }
+  // Right is null-typed: left wins entirely.
+  if (is<null_type>(right.type)) {
+    return left;
+  }
+  // Both records: deep merge.
+  auto left_rec = left.as<record_type>();
+  auto right_rec = right.as<record_type>();
+  if (left_rec and right_rec) {
+    if (depth >= defaults::max_recursion) {
+      return right;
+    }
+    // Flatten propagates parent null bitmaps into children.
+    auto left_flat
+      = check(left_rec->array->Flatten(tenzir::arrow_memory_pool()));
+    auto right_flat
+      = check(right_rec->array->Flatten(tenzir::arrow_memory_pool()));
+    // Collect left fields into a stable map (preserves insertion order).
+    auto fields = detail::stable_map<std::string, series>{};
+    for (auto [i, arr] : detail::enumerate(left_flat)) {
+      auto f = left_rec->type.field(i);
+      fields[std::string{f.name}] = series{f.type, arr};
+    }
+    // Condition for IfElse: where the right parent struct is valid.
+    auto right_valid = check(arrow::compute::IsValid(*right_rec->array));
+    // Process right fields.
+    for (auto [i, arr] : detail::enumerate(right_flat)) {
+      auto f = right_rec->type.field(i);
+      auto right_f = series{f.type, arr};
+      auto it = fields.find(f.name);
+      if (it == fields.end()) {
+        // Right-only field.
+        fields[std::string{f.name}] = std::move(right_f);
+        continue;
+      }
+      auto& left_f = it->second;
+      // Overlapping field: both are records -> recurse.
+      if (left_f.type.kind().is<record_type>()
+          and right_f.type.kind().is<record_type>()) {
+        it->second
+          = deep_merge_series(std::move(left_f), std::move(right_f), depth + 1);
+        continue;
+      }
+      // Overlapping field: same type -> IfElse on parent validity.
+      if (left_f.type == right_f.type) {
+        auto merged = check(arrow::compute::CallFunction(
+          "if_else", {right_valid, *right_f.array, *left_f.array}));
+        it->second = series{left_f.type, merged.make_array()};
+        continue;
+      }
+      // Overlapping field: different non-record types -> right wins.
+      // After Flatten, right_f already has nulls where the right parent was
+      // null, which is the correct behavior for a type conflict.
+      it->second = std::move(right_f);
+    }
+    // Build result null bitmap: valid where either parent was valid.
+    auto left_valid = check(arrow::compute::IsValid(*left_rec->array));
+    auto result_valid = check(arrow::compute::Or(left_valid, right_valid));
+    auto result_bitmap = result_valid.make_array()->data()->buffers[1];
+    // Reconstruct struct array.
+    auto field_names = std::vector<std::string>{};
+    auto field_arrays = arrow::ArrayVector{};
+    auto field_types = std::vector<record_type::field_view>{};
+    for (auto& [name, s] : fields) {
+      field_names.push_back(name);
+      field_arrays.push_back(s.array);
+      field_types.push_back({name, s.type});
+    }
+    auto result_type = type{record_type{field_types}};
+    auto result
+      = make_struct_array(length, std::move(result_bitmap),
+                          std::move(field_names), std::move(field_arrays),
+                          as<record_type>(result_type));
+    return series{std::move(result_type), std::move(result)};
+  }
+  // Non-record, same type: IfElse (right wins where valid).
+  if (left.type == right.type) {
+    auto right_valid = check(arrow::compute::IsValid(*right.array));
+    auto merged = check(arrow::compute::CallFunction(
+      "if_else", {right_valid, *right.array, *left.array}));
+    return series{left.type, merged.make_array()};
+  }
+  // Non-record, different types: right wins entirely.
+  return right;
+}
+
 class merge final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -690,21 +793,13 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [record1 = std::move(record1),
-       record2 = std::move(record2)](evaluator eval, session) {
-        return eval(ast::record{
-          location::unknown,
-          {
-            ast::spread{
-              location::unknown,
-              record1,
-            },
-            ast::spread{
-              location::unknown,
-              record2,
-            },
-          },
-          location::unknown,
-        });
+       record2 = std::move(record2)](evaluator eval, session ctx) {
+        TENZIR_UNUSED(ctx);
+        return map_series(eval(record1), eval(record2),
+                          [&](series left, series right) -> multi_series {
+                            return deep_merge_series(std::move(left),
+                                                     std::move(right));
+                          });
       });
   }
 };

@@ -1,0 +1,6 @@
+from {
+  a: {hostname: "server1", domain: "acme.com", hw: {sn: "XYZ123"}},
+  b: {hw: {model: "foobar"}},
+}
+x = merge(a, b)
+this = x

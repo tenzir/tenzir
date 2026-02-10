@@ -1,0 +1,60 @@
+{
+  deep: {
+    x: {
+      y: {
+        z: 99,
+        w: 2,
+        v: 3,
+      },
+    },
+  },
+  conflict: {
+    key: {
+      nested: 1,
+    },
+  },
+  disjoint: {
+    foo: 1,
+    bar: 2,
+  },
+  null_left: {
+    b: 2,
+  },
+  null_right: {
+    a: 1,
+  },
+  null_both: null,
+  null_field: {
+    a: 1,
+    b: 2,
+    c: 3,
+  },
+  empty_left: {
+    a: 1,
+  },
+  empty_right: {
+    a: 1,
+  },
+  deep4: {
+    a: {
+      b: {
+        c: {
+          d: {
+            e: 99,
+            f: 2,
+            g: 3,
+          },
+        },
+      },
+    },
+  },
+  scalar_conflict: {
+    value: 2,
+  },
+  list_conflict: {
+    items: [
+      3,
+      4,
+    ],
+  },
+}
