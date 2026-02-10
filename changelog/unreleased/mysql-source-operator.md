@@ -4,7 +4,7 @@ type: feature
 authors:
   - mavam
   - claude
-pr: 5721
+pr: [5721, 5738]
 created: 2026-02-06T08:53:45.097588Z
 ---
 
@@ -52,3 +52,19 @@ from_mysql table="users", host="db.example.com", database="prod", tls={
 ```
 
 The operator supports MySQL's `caching_sha2_password` authentication method and automatically maps MySQL data types to Tenzir types.
+
+Use `live=true` to continuously stream new rows from a table. The operator
+tracks progress using a watermark on an integer column, polling for rows above
+the last-seen value:
+
+```tql
+from_mysql table="events", live=true, host="localhost", database="mydb"
+```
+
+By default, the tracking column is auto-detected from the table's
+auto-increment primary key. To specify one explicitly:
+
+```tql
+from_mysql table="events", live=true, tracking_column="event_id",
+           host="localhost", database="mydb"
+```
