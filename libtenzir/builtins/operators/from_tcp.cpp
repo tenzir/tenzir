@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/tls.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -14,6 +15,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
+#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -36,6 +38,7 @@ constexpr auto kListenBacklog = uint32_t{128};
 
 struct FromTcpArgs {
   located<std::string> endpoint;
+  std::optional<located<data>> tls;
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
@@ -59,6 +62,9 @@ public:
     } else {
       address_.setFromHostPort(ep->host, ep->port->number());
     }
+    if (args.tls) {
+      tls_ = tls_options{*args.tls, {.is_server = true}};
+    }
   }
 
   FromTcpListener(const FromTcpListener&) = delete;
@@ -68,9 +74,18 @@ public:
   ~FromTcpListener() override = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    if (tls_ and tls_->get_tls(nullptr).inner) {
+      auto context = tls_->make_folly_ssl_context(ctx);
+      if (not context) {
+        done_ = true;
+        co_return;
+      }
+      tls_context_ = std::move(*context);
+    }
     TENZIR_VERBOSE("from_tcp: starting listener on {}", address_.describe());
-    auto* evb = folly::getGlobalIOExecutor()->getEventBase();
-    auto socket = folly::AsyncServerSocket::newSocket(evb);
+    evb_ = folly::getGlobalIOExecutor()->getEventBase();
+    TENZIR_ASSERT(evb_);
+    auto socket = folly::AsyncServerSocket::newSocket(evb_);
     // Let ServerSocket handle bind/listen setup
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, kListenBacklog);
@@ -78,9 +93,14 @@ public:
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    if (done_) {
+      co_return {};
+    }
+    TENZIR_ASSERT(evb_);
+    TENZIR_ASSERT(server_);
     TENZIR_VERBOSE("from_tcp: waiting for connection");
-    auto transport = co_await folly::coro::co_withExecutor(
-      folly::getGlobalIOExecutor(), server_->accept());
+    auto transport
+      = co_await folly::coro::co_withExecutor(evb_, server_->accept());
     TENZIR_INFO("from_tcp: accepted connection from {}",
                 transport->getPeerAddress().describe());
     co_return Box<folly::coro::Transport>::from_unique_ptr(
@@ -89,9 +109,24 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    if (done_) {
+      co_return;
+    }
     auto transport = std::move(result).as<Box<folly::coro::Transport>>();
-    // Create peer info record from the connection
+    auto* transport_evb = transport->getEventBase();
+    TENZIR_ASSERT(transport_evb);
     auto peer_addr = transport->getPeerAddress();
+    if (tls_context_) {
+      try {
+        co_await upgrade_transport_to_tls_server(transport, tls_context_);
+      } catch (std::exception const& ex) {
+        diagnostic::warning("TLS handshake failed with {}: {}",
+                            peer_addr.describe(), ex.what())
+          .emit(ctx);
+        co_return;
+      }
+    }
+    // Create peer info record from the connection
     auto peer_record = record{
       {"ip", peer_addr.getAddressStr()},
       {"port", int64_t{peer_addr.getPort()}},
@@ -115,7 +150,7 @@ public:
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     // Spawn read loop on IO executor
     ctx.spawn_task(folly::coro::co_withExecutor(
-      folly::getGlobalIOExecutor(),
+      transport_evb,
       read_loop(conn_id, std::move(transport), open_pipeline, ctx.dh())));
   }
 
@@ -128,12 +163,15 @@ public:
     co_return;
   }
 
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
 private:
   // TODO: Make OpenPipeline thread safe.
   static auto read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
                         OpenPipeline<chunk_ptr> pipeline,
                         diagnostic_handler& dh) -> Task<void> {
-    auto io_executor = folly::getGlobalIOExecutor();
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
@@ -171,7 +209,11 @@ private:
   folly::SocketAddress address_;
   located<ir::pipeline> user_pipeline_;
   let_id peer_let_id_;
+  std::optional<tls_options> tls_;
+  std::shared_ptr<folly::SSLContext> tls_context_;
+  folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
+  bool done_ = false;
   mutable uint64_t next_conn_id_{0};
 };
 
@@ -184,6 +226,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<FromTcpArgs, FromTcpListener>{};
     auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
+    auto tls_arg = d.named("tls", &FromTcpArgs::tls);
     d.pipeline(&FromTcpArgs::user_pipeline,
                {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
@@ -194,6 +237,12 @@ public:
         diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);
       } else if (not ep->port) {
         diagnostic::error("port number is required").primary(loc).emit(ctx);
+      }
+      if (auto tls_val = ctx.get(tls_arg)) {
+        auto tls_opts = tls_options{*tls_val, {.is_server = true}};
+        if (auto valid = tls_opts.validate(ctx); not valid) {
+          return {};
+        }
       }
       return {};
     });

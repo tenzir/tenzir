@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_tcp "127.0.0.1:31337",
+         tls={keyfile: true} { read_lines }
