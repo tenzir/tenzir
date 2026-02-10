@@ -334,6 +334,12 @@ private:
       for (auto& slice : builder_->yield_ready_as_table_slice()) {
         co_await push(std::move(slice));
       }
+      if (parsed->has_error) {
+        buffer_.clear();
+        buffer_offset_ = 0;
+        done_ = true;
+        break;
+      }
     }
   }
 

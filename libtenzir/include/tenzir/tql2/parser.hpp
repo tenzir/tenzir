@@ -31,6 +31,7 @@ auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
 struct expression_stream {
   std::vector<ast::expression> expressions;
   size_t bytes_consumed = 0;
+  bool has_error = false;
 };
 auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
                                                   session ctx)

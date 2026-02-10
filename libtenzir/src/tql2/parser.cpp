@@ -1108,6 +1108,12 @@ public:
           return result;
         }
         diag_.emit(std::move(d));
+        // Keep an already parsed prefix so stream readers can emit it before
+        // stopping on a malformed suffix.
+        if (not result.expressions.empty()) {
+          result.has_error = true;
+          return result;
+        }
         return failure::promise();
       }
       consume_trivia_with_newlines();
@@ -1527,7 +1533,8 @@ auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
 auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
                                                   session ctx)
   -> failure_or<expression_stream> {
-  TRY(validate_utf8(source, ctx));
+  // Streaming callers may pass partial trailing UTF-8 sequences at chunk
+  // boundaries; defer handling to permissive tokenization + parser recovery.
   auto tokens = tokenize_permissive(source);
   return parse_expression_stream(tokens, source, ctx, true);
 }
