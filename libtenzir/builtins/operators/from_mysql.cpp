@@ -1024,6 +1024,69 @@ struct query_config {
   int64_t batch_size = 10000;
 };
 
+using result_row = std::vector<std::optional<std::string>>;
+
+/// Parse a row packet into nullable string cells.
+auto parse_row_as_strings(std::span<std::byte const> data, size_t column_count)
+  -> MysqlResult<result_row> {
+  auto reader = packet_reader{data};
+  auto row = result_row{};
+  row.reserve(column_count);
+  for (auto i = size_t{0}; i < column_count; ++i) {
+    if (reader.at_end()) {
+      row.emplace_back(std::nullopt);
+      continue;
+    }
+    if (reader.current_byte() == lenenc::null_marker) {
+      reader.skip(1);
+      row.emplace_back(std::nullopt);
+      continue;
+    }
+    TRY(auto value, reader.read_lenenc_string());
+    row.emplace_back(std::move(value));
+  }
+  return row;
+}
+
+/// Extract the first column from each row, skipping NULLs.
+auto extract_first_column(std::vector<result_row> rows)
+  -> MysqlResult<std::vector<std::string>> {
+  auto result = std::vector<std::string>{};
+  result.reserve(rows.size());
+  for (auto& row : rows) {
+    if (row.empty()) {
+      return Err{mysql_error::protocol("expected at least one column")};
+    }
+    if (row[0]) {
+      result.push_back(std::move(*row[0]));
+    }
+  }
+  return result;
+}
+
+/// Parse the first row and first column as optional unsigned 64-bit integer.
+auto parse_first_optional_uint64(std::vector<result_row> const& rows)
+  -> MysqlResult<std::optional<uint64_t>> {
+  if (rows.empty()) {
+    return std::optional<uint64_t>{};
+  }
+  if (rows[0].empty()) {
+    return Err{mysql_error::protocol("expected at least one column")};
+  }
+  if (not rows[0][0]) {
+    return std::optional<uint64_t>{};
+  }
+  auto value = uint64_t{};
+  auto& cell = *rows[0][0];
+  auto [ptr, ec]
+    = std::from_chars(cell.data(), cell.data() + cell.size(), value);
+  if (ec != std::errc{} or ptr != cell.data() + cell.size()) {
+    return Err{
+      mysql_error::protocol(fmt::format("invalid uint64 value `{}`", cell))};
+  }
+  return std::optional<uint64_t>{value};
+}
+
 /// Parse a row packet into a series_builder.
 void parse_row_into_builder(std::span<std::byte const> data,
                             std::vector<column_info> const& cols,
@@ -1109,8 +1172,6 @@ void parse_row_into_builder(std::span<std::byte const> data,
 
 class async_client {
 public:
-  using result_row = std::vector<std::optional<std::string>>;
-
   /// Connect to MySQL server asynchronously.
   static auto make(folly::EventBase* evb, client_config config)
     -> Task<MysqlResult<Box<async_client>>> {
@@ -1138,20 +1199,12 @@ public:
 
   /// Execute query and stream results as table_slices.
   auto query(query_config cfg) -> AsyncGenerator<MysqlResult<table_slice>> {
-    // Send COM_QUERY.
-    auto pkt = make_query_packet(cfg.sql);
-    auto write_result = co_await conn_.write_packet(pkt, 0);
-    if (write_result.is_err()) {
-      co_yield Err{std::move(write_result).unwrap_err()};
+    auto columns_result = co_await start_query(cfg.sql);
+    if (columns_result.is_err()) {
+      co_yield Err{std::move(columns_result).unwrap_err()};
       co_return;
     }
-    // Read result set metadata.
-    auto meta = co_await read_result_set_meta(conn_);
-    if (meta.is_err()) {
-      co_yield Err{std::move(meta).unwrap_err()};
-      co_return;
-    }
-    auto columns = std::move(meta).unwrap().columns;
+    auto columns = std::move(columns_result).unwrap();
     if (columns.empty()) {
       co_return;
     }
@@ -1159,20 +1212,17 @@ public:
     auto builder = series_builder{};
     auto row_count = int64_t{0};
     while (true) {
-      auto row_packet = co_await conn_.read_packet();
-      if (row_packet.is_err()) {
-        co_yield Err{std::move(row_packet).unwrap_err()};
+      auto row_packet_result = co_await read_next_row_packet();
+      if (row_packet_result.is_err()) {
+        co_yield Err{std::move(row_packet_result).unwrap_err()};
         co_return;
       }
-      if (is_eof(row_packet.unwrap())) {
+      auto maybe_row_packet = std::move(row_packet_result).unwrap();
+      if (not maybe_row_packet) {
         break;
       }
-      if (auto err = as_error(row_packet.unwrap())) {
-        co_yield Err{std::move(*err)};
-        co_return;
-      }
       // Parse row into builder.
-      parse_row_into_builder(row_packet.unwrap(), columns, builder);
+      parse_row_into_builder(*maybe_row_packet, columns, builder);
       ++row_count;
       if (row_count >= cfg.batch_size) {
         for (auto&& slice : builder.finish_as_table_slice(cfg.schema_name)) {
@@ -1192,91 +1242,46 @@ public:
   /// Execute query and return all rows as nullable strings.
   auto query_rows(std::string_view sql)
     -> Task<MysqlResult<std::vector<result_row>>> {
-    auto pkt = make_query_packet(sql);
-    CO_TRY(co_await conn_.write_packet(pkt, 0));
-    CO_TRY(auto meta, co_await read_result_set_meta(conn_));
-    auto columns = std::move(meta).columns;
+    CO_TRY(auto columns, co_await start_query(sql));
     if (columns.empty()) {
       co_return std::vector<result_row>{};
     }
     auto rows = std::vector<result_row>{};
     while (true) {
-      CO_TRY(auto row_packet, co_await conn_.read_packet());
-      if (is_eof(row_packet)) {
+      CO_TRY(auto maybe_row_packet, co_await read_next_row_packet());
+      if (not maybe_row_packet) {
         break;
       }
-      if (auto err = as_error(row_packet)) {
-        co_return Err{std::move(*err)};
-      }
-      auto reader = packet_reader{row_packet};
-      auto row = result_row{};
-      row.reserve(columns.size());
-      for (auto i = size_t{0}; i < columns.size(); ++i) {
-        if (reader.at_end()) {
-          row.emplace_back(std::nullopt);
-          continue;
-        }
-        if (reader.current_byte() == lenenc::null_marker) {
-          reader.skip(1);
-          row.emplace_back(std::nullopt);
-          continue;
-        }
-        auto value = reader.read_lenenc_string();
-        if (value.is_err()) {
-          co_return Err{std::move(value).unwrap_err()};
-        }
-        row.emplace_back(std::move(value).unwrap());
-      }
+      CO_TRY(auto row, parse_row_as_strings(*maybe_row_packet, columns.size()));
       rows.push_back(std::move(row));
     }
     co_return rows;
-  }
-
-  /// Execute query and return first column for every row.
-  auto query_first_column(std::string_view sql)
-    -> Task<MysqlResult<std::vector<std::string>>> {
-    CO_TRY(auto rows, co_await query_rows(sql));
-    auto result = std::vector<std::string>{};
-    result.reserve(rows.size());
-    for (auto& row : rows) {
-      if (row.empty()) {
-        co_return Err{mysql_error::protocol("expected at least one column")};
-      }
-      if (row[0]) {
-        result.push_back(std::move(*row[0]));
-      }
-    }
-    co_return result;
-  }
-
-  /// Execute query and parse first scalar result as unsigned 64-bit integer.
-  auto query_optional_uint64(std::string_view sql)
-    -> Task<MysqlResult<std::optional<uint64_t>>> {
-    CO_TRY(auto rows, co_await query_rows(sql));
-    if (rows.empty()) {
-      co_return std::optional<uint64_t>{};
-    }
-    if (rows[0].empty()) {
-      co_return Err{mysql_error::protocol("expected at least one column")};
-    }
-    if (not rows[0][0]) {
-      co_return std::optional<uint64_t>{};
-    }
-    auto value = uint64_t{};
-    auto& cell = *rows[0][0];
-    auto [ptr, ec] = std::from_chars(cell.data(), cell.data() + cell.size(),
-                                     value);
-    if (ec != std::errc{} or ptr != cell.data() + cell.size()) {
-      co_return Err{
-        mysql_error::protocol(fmt::format("invalid uint64 value `{}`", cell))};
-    }
-    co_return std::optional<uint64_t>{value};
   }
 
   explicit async_client(async_connection conn) : conn_{std::move(conn)} {
   }
 
 private:
+  auto start_query(std::string_view sql)
+    -> Task<MysqlResult<std::vector<column_info>>> {
+    auto pkt = make_query_packet(sql);
+    CO_TRY(co_await conn_.write_packet(pkt, 0));
+    CO_TRY(auto meta, co_await read_result_set_meta(conn_));
+    co_return std::move(meta).columns;
+  }
+
+  auto read_next_row_packet()
+    -> Task<MysqlResult<std::optional<std::vector<std::byte>>>> {
+    CO_TRY(auto row_packet, co_await conn_.read_packet());
+    if (is_eof(row_packet)) {
+      co_return std::optional<std::vector<std::byte>>{};
+    }
+    if (auto err = as_error(row_packet)) {
+      co_return Err{std::move(*err)};
+    }
+    co_return std::optional<std::vector<std::byte>>{std::move(row_packet)};
+  }
+
   async_connection conn_;
 };
 
@@ -1321,7 +1326,11 @@ private:
              "'bigint')";
     }
     sql += " ORDER BY ordinal_position";
-    co_return co_await client_->query_first_column(sql);
+    auto rows = co_await client_->query_rows(sql);
+    if (rows.is_err()) {
+      co_return Err{std::move(rows).unwrap_err()};
+    }
+    co_return extract_first_column(std::move(rows).unwrap());
   }
 
   auto resolve_tracking_column(OpCtx& ctx) -> Task<bool> {
@@ -1337,7 +1346,12 @@ private:
         "'bigint')",
         quote_string_literal(args_.table->inner),
         quote_string_literal(args_.tracking_column->inner));
-      auto result = co_await client_->query_first_column(sql);
+      auto rows = co_await client_->query_rows(sql);
+      if (rows.is_err()) {
+        emit_mysql_error(std::move(rows).unwrap_err(), ctx);
+        co_return false;
+      }
+      auto result = extract_first_column(std::move(rows).unwrap());
       if (result.is_err()) {
         emit_mysql_error(std::move(result).unwrap_err(), ctx);
         co_return false;
@@ -1408,7 +1422,11 @@ private:
     auto sql = fmt::format("SELECT MAX({}) FROM {}", quote_identifier(
                              tracking_column_),
                            quote_identifier(table_name_));
-    auto value = co_await client_->query_optional_uint64(sql);
+    auto rows = co_await client_->query_rows(sql);
+    if (rows.is_err()) {
+      co_return Err{std::move(rows).unwrap_err()};
+    }
+    auto value = parse_first_optional_uint64(std::move(rows).unwrap());
     if (value.is_err()) {
       co_return Err{std::move(value).unwrap_err()};
     }
