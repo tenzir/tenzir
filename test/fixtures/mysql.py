@@ -9,25 +9,27 @@ Environment variables yielded:
 - MYSQL_PASSWORD: Test password
 - MYSQL_DATABASE: Pre-created test database
 - MYSQL_ROOT_PASSWORD: Root password for admin operations
-- MYSQL_TLS_CAFILE: Path to CA certificate (for TLS tests)
-- MYSQL_TLS_CERTFILE: Path to client certificate (for mutual TLS tests)
-- MYSQL_TLS_KEYFILE: Path to client private key (for mutual TLS tests)
+- MYSQL_TLS_CAFILE: Path to CA certificate (when tls=True)
+- MYSQL_TLS_CERTFILE: Path to client certificate (when tls=True)
+- MYSQL_TLS_KEYFILE: Path to client private key (when tls=True)
 """
 
 from __future__ import annotations
 
 import logging
 import shutil
-import socket
 import subprocess
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import fixture
-from tenzir_test.fixtures import FixtureUnavailable
+from tenzir_test.fixtures import FixtureUnavailable, current_options
+
+from ._utils import find_container_runtime, find_free_port
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +43,9 @@ STARTUP_TIMEOUT = 120  # seconds (MySQL can be slow to start)
 HEALTH_CHECK_INTERVAL = 2  # seconds
 
 
-def _find_free_port() -> int:
-    """Find an available port on localhost."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _find_container_runtime() -> str | None:
-    """Find an available container runtime (podman or docker)."""
-    for runtime in ("podman", "docker"):
-        if shutil.which(runtime) is not None:
-            return runtime
-    return None
+@dataclass(frozen=True)
+class MysqlOptions:
+    tls: bool = True
 
 
 def _start_mysql(runtime: str, port: int) -> str:
@@ -280,17 +272,18 @@ def _extract_tls_files(
     return paths
 
 
-@fixture()
+@fixture(options=MysqlOptions)
 def mysql() -> Iterator[dict[str, str]]:
     """Start MySQL and yield environment variables for database access."""
-    runtime = _find_container_runtime()
+    opts = current_options("mysql")
+    runtime = find_container_runtime()
     if runtime is None:
         raise FixtureUnavailable(
             "container runtime (docker/podman) required but not found"
         )
-    port = _find_free_port()
+    port = find_free_port()
     container_id = None
-    tmp_dir = tempfile.mkdtemp(prefix="tenzir-mysql-tls-")
+    tmp_dir = tempfile.mkdtemp(prefix="tenzir-mysql-tls-") if opts.tls else None
     try:
         container_id = _start_mysql(runtime, port)
         if not _wait_for_mysql(runtime, container_id, STARTUP_TIMEOUT):
@@ -298,8 +291,7 @@ def mysql() -> Iterator[dict[str, str]]:
                 f"MySQL failed to start within {STARTUP_TIMEOUT} seconds"
             )
         _create_test_data(runtime, container_id)
-        tls_files = _extract_tls_files(runtime, container_id, tmp_dir)
-        env = {
+        env: dict[str, str] = {
             "MYSQL_HOST": "127.0.0.1",
             "MYSQL_PORT": str(port),
             "MYSQL_USER": MYSQL_USER,
@@ -308,12 +300,20 @@ def mysql() -> Iterator[dict[str, str]]:
             "MYSQL_DATABASE": MYSQL_DATABASE,
             "MYSQL_CONTAINER_ID": container_id,
             "MYSQL_CONTAINER_RUNTIME": runtime,
-            "MYSQL_TLS_CAFILE": tls_files["ca"],
-            "MYSQL_TLS_CERTFILE": tls_files["client_cert"],
-            "MYSQL_TLS_KEYFILE": tls_files["client_key"],
         }
+        if opts.tls:
+            assert tmp_dir is not None
+            tls_files = _extract_tls_files(runtime, container_id, tmp_dir)
+            env.update(
+                {
+                    "MYSQL_TLS_CAFILE": tls_files["ca"],
+                    "MYSQL_TLS_CERTFILE": tls_files["client_cert"],
+                    "MYSQL_TLS_KEYFILE": tls_files["client_key"],
+                }
+            )
         yield env
     finally:
         if container_id:
             _stop_mysql(runtime, container_id)
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)

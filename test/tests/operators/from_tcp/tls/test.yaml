@@ -1,3 +1,5 @@
 suite: from-tcp-tls
-fixtures: [tcp_tls_source]
+fixtures:
+  - tcp:
+      tls: true
 timeout: 60
