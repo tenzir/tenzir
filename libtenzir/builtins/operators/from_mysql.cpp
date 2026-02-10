@@ -20,6 +20,7 @@
 #include <tenzir/try.hpp>
 
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/coro/Sleep.h>
 #include <folly/io/coro/Transport.h>
 #include <openssl/sha.h>
 
@@ -505,6 +506,20 @@ auto quote_identifier(std::string_view name) -> std::string {
     }
   }
   result += '`';
+  return result;
+}
+
+/// Wraps a SQL string literal with single quotes and escapes embedded quotes.
+auto quote_string_literal(std::string_view value) -> std::string {
+  auto result = std::string{"'"};
+  for (auto c : value) {
+    if (c == '\'') {
+      result += "''";
+    } else {
+      result += c;
+    }
+  }
+  result += '\'';
   return result;
 }
 
@@ -1094,6 +1109,8 @@ void parse_row_into_builder(std::span<std::byte const> data,
 
 class async_client {
 public:
+  using result_row = std::vector<std::optional<std::string>>;
+
   /// Connect to MySQL server asynchronously.
   static auto make(folly::EventBase* evb, client_config config)
     -> Task<MysqlResult<Box<async_client>>> {
@@ -1172,6 +1189,90 @@ public:
     }
   }
 
+  /// Execute query and return all rows as nullable strings.
+  auto query_rows(std::string_view sql)
+    -> Task<MysqlResult<std::vector<result_row>>> {
+    auto pkt = make_query_packet(sql);
+    CO_TRY(co_await conn_.write_packet(pkt, 0));
+    CO_TRY(auto meta, co_await read_result_set_meta(conn_));
+    auto columns = std::move(meta).columns;
+    if (columns.empty()) {
+      co_return std::vector<result_row>{};
+    }
+    auto rows = std::vector<result_row>{};
+    while (true) {
+      CO_TRY(auto row_packet, co_await conn_.read_packet());
+      if (is_eof(row_packet)) {
+        break;
+      }
+      if (auto err = as_error(row_packet)) {
+        co_return Err{std::move(*err)};
+      }
+      auto reader = packet_reader{row_packet};
+      auto row = result_row{};
+      row.reserve(columns.size());
+      for (auto i = size_t{0}; i < columns.size(); ++i) {
+        if (reader.at_end()) {
+          row.emplace_back(std::nullopt);
+          continue;
+        }
+        if (reader.current_byte() == lenenc::null_marker) {
+          reader.skip(1);
+          row.emplace_back(std::nullopt);
+          continue;
+        }
+        auto value = reader.read_lenenc_string();
+        if (value.is_err()) {
+          co_return Err{std::move(value).unwrap_err()};
+        }
+        row.emplace_back(std::move(value).unwrap());
+      }
+      rows.push_back(std::move(row));
+    }
+    co_return rows;
+  }
+
+  /// Execute query and return first column for every row.
+  auto query_first_column(std::string_view sql)
+    -> Task<MysqlResult<std::vector<std::string>>> {
+    CO_TRY(auto rows, co_await query_rows(sql));
+    auto result = std::vector<std::string>{};
+    result.reserve(rows.size());
+    for (auto& row : rows) {
+      if (row.empty()) {
+        co_return Err{mysql_error::protocol("expected at least one column")};
+      }
+      if (row[0]) {
+        result.push_back(std::move(*row[0]));
+      }
+    }
+    co_return result;
+  }
+
+  /// Execute query and parse first scalar result as unsigned 64-bit integer.
+  auto query_optional_uint64(std::string_view sql)
+    -> Task<MysqlResult<std::optional<uint64_t>>> {
+    CO_TRY(auto rows, co_await query_rows(sql));
+    if (rows.empty()) {
+      co_return std::optional<uint64_t>{};
+    }
+    if (rows[0].empty()) {
+      co_return Err{mysql_error::protocol("expected at least one column")};
+    }
+    if (not rows[0][0]) {
+      co_return std::optional<uint64_t>{};
+    }
+    auto value = uint64_t{};
+    auto& cell = *rows[0][0];
+    auto [ptr, ec] = std::from_chars(cell.data(), cell.data() + cell.size(),
+                                     value);
+    if (ec != std::errc{} or ptr != cell.data() + cell.size()) {
+      co_return Err{
+        mysql_error::protocol(fmt::format("invalid uint64 value `{}`", cell))};
+    }
+    co_return std::optional<uint64_t>{value};
+  }
+
   explicit async_client(async_connection conn) : conn_{std::move(conn)} {
   }
 
@@ -1191,6 +1292,8 @@ struct FromMySQLArgs {
   std::optional<located<std::string>> database;
   std::optional<located<std::string>> sql;
   std::optional<located<std::string>> show;
+  std::optional<located<bool>> live;
+  std::optional<located<std::string>> tracking_column;
   std::optional<located<data>> tls;
 };
 
@@ -1201,10 +1304,167 @@ public:
   explicit FromMySQL(FromMySQLArgs args) : args_{std::move(args)} {
   }
 
+private:
+  auto find_tracking_candidates(std::string const& table,
+                                bool auto_increment_only)
+    -> Task<MysqlResult<std::vector<std::string>>> {
+    auto sql = fmt::format(
+      "SELECT column_name "
+      "FROM information_schema.columns "
+      "WHERE table_schema = DATABASE() "
+      "AND table_name = {}",
+      quote_string_literal(table));
+    if (auto_increment_only) {
+      sql += " AND column_key = 'PRI' AND LOCATE('auto_increment', extra) > 0";
+    } else {
+      sql += " AND data_type IN ('tinyint', 'smallint', 'mediumint', 'int', "
+             "'bigint')";
+    }
+    sql += " ORDER BY ordinal_position";
+    co_return co_await client_->query_first_column(sql);
+  }
+
+  auto resolve_tracking_column(OpCtx& ctx) -> Task<bool> {
+    TENZIR_ASSERT(args_.table);
+    if (args_.tracking_column) {
+      auto sql = fmt::format(
+        "SELECT column_name "
+        "FROM information_schema.columns "
+        "WHERE table_schema = DATABASE() "
+        "AND table_name = {} "
+        "AND column_name = {} "
+        "AND data_type IN ('tinyint', 'smallint', 'mediumint', 'int', "
+        "'bigint')",
+        quote_string_literal(args_.table->inner),
+        quote_string_literal(args_.tracking_column->inner));
+      auto result = co_await client_->query_first_column(sql);
+      if (result.is_err()) {
+        emit_mysql_error(std::move(result).unwrap_err(), ctx);
+        co_return false;
+      }
+      if (result.unwrap().empty()) {
+        diagnostic::error("`tracking_column` `{}` does not exist in `{}` or "
+                          "is not an integer column",
+                          args_.tracking_column->inner, args_.table->inner)
+          .primary(args_.tracking_column->source)
+          .emit(ctx);
+        co_return false;
+      }
+      tracking_column_ = args_.tracking_column->inner;
+      co_return true;
+    }
+    auto auto_increment = co_await find_tracking_candidates(args_.table->inner,
+                                                            true);
+    if (auto_increment.is_err()) {
+      emit_mysql_error(std::move(auto_increment).unwrap_err(), ctx);
+      co_return false;
+    }
+    auto auto_increment_columns = std::move(auto_increment).unwrap();
+    if (auto_increment_columns.size() > 1) {
+      diagnostic::error("multiple auto-increment tracking columns found for "
+                        "table `{}`: {}",
+                        args_.table->inner,
+                        fmt::join(auto_increment_columns, ", "))
+        .primary(args_.table->source)
+        .hint("set `tracking_column` explicitly")
+        .emit(ctx);
+      co_return false;
+    }
+    if (auto_increment_columns.size() == 1) {
+      tracking_column_ = std::move(auto_increment_columns[0]);
+      co_return true;
+    }
+    auto integer_candidates = co_await find_tracking_candidates(
+      args_.table->inner, false);
+    if (integer_candidates.is_err()) {
+      emit_mysql_error(std::move(integer_candidates).unwrap_err(), ctx);
+      co_return false;
+    }
+    auto candidates = std::move(integer_candidates).unwrap();
+    if (candidates.empty()) {
+      diagnostic::error("could not find a suitable `tracking_column` for table "
+                        "`{}`",
+                        args_.table->inner)
+        .primary(args_.table->source)
+        .hint("set `tracking_column` to an integer column")
+        .emit(ctx);
+      co_return false;
+    }
+    if (candidates.size() > 1) {
+      diagnostic::error("ambiguous tracking columns for table `{}`: {}",
+                        args_.table->inner, fmt::join(candidates, ", "))
+        .primary(args_.table->source)
+        .hint("set `tracking_column` explicitly")
+        .emit(ctx);
+      co_return false;
+    }
+    tracking_column_ = std::move(candidates[0]);
+    co_return true;
+  }
+
+  auto query_max_tracking_value() -> Task<MysqlResult<uint64_t>> {
+    TENZIR_ASSERT(not tracking_column_.empty());
+    TENZIR_ASSERT(not table_name_.empty());
+    auto sql = fmt::format("SELECT MAX({}) FROM {}", quote_identifier(
+                             tracking_column_),
+                           quote_identifier(table_name_));
+    auto value = co_await client_->query_optional_uint64(sql);
+    if (value.is_err()) {
+      co_return Err{std::move(value).unwrap_err()};
+    }
+    co_return std::move(value).unwrap().value_or(uint64_t{0});
+  }
+
+  auto initialize_live(OpCtx& ctx) -> Task<bool> {
+    if (tracking_column_.empty()) {
+      if (not(co_await resolve_tracking_column(ctx))) {
+        co_return false;
+      }
+    }
+    auto watermark = co_await query_max_tracking_value();
+    if (watermark.is_err()) {
+      emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+      co_return false;
+    }
+    live_watermark_ = std::move(watermark).unwrap();
+    live_initialized_ = true;
+    co_return true;
+  }
+
+  auto stream_live_window(uint64_t lower, uint64_t upper,
+                          Push<table_slice>& push, OpCtx& ctx) -> Task<bool> {
+    auto sql = fmt::format("SELECT * FROM {} WHERE {} > {} AND {} <= {} "
+                           "ORDER BY {}",
+                           quote_identifier(table_name_),
+                           quote_identifier(tracking_column_), lower,
+                           quote_identifier(tracking_column_), upper,
+                           quote_identifier(tracking_column_));
+    auto slice_stream = client_->query({
+      .sql = sql,
+      .schema_name = schema_name_,
+    });
+    while (auto slice_result = co_await slice_stream.next()) {
+      if (slice_result->is_err()) {
+        emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
+        co_return false;
+      }
+      co_await push(std::move(*slice_result).unwrap());
+    }
+    co_return true;
+  }
+
+public:
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
     if (done_) {
       co_return;
+    }
+    live_ = args_.live and args_.live->inner;
+    if (args_.table) {
+      table_name_ = args_.table->inner;
+    }
+    if (args_.tracking_column) {
+      tracking_column_ = args_.tracking_column->inner;
     }
     // Build client configuration.
     auto config = client_config{};
@@ -1291,6 +1551,10 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
+    if (live_ and live_initialized_) {
+      co_await folly::coro::sleep(std::chrono::duration_cast<
+                                  folly::HighResDuration>(live_poll_interval_));
+    }
     co_return {};
   }
 
@@ -1298,6 +1562,30 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(result);
     if (done_) {
+      co_return;
+    }
+    if (live_) {
+      if (not live_initialized_) {
+        if (not(co_await initialize_live(ctx))) {
+          done_ = true;
+        }
+        co_return;
+      }
+      auto upper_result = co_await query_max_tracking_value();
+      if (upper_result.is_err()) {
+        emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
+        done_ = true;
+        co_return;
+      }
+      auto upper = std::move(upper_result).unwrap();
+      if (upper <= live_watermark_) {
+        co_return;
+      }
+      if (not(co_await stream_live_window(live_watermark_, upper, push, ctx))) {
+        done_ = true;
+        co_return;
+      }
+      live_watermark_ = upper;
       co_return;
     }
     auto slice_stream = client_->query({
@@ -1320,6 +1608,11 @@ public:
 
   auto snapshot(Serde& serde) -> void override {
     serde("done", done_);
+    serde("live", live_);
+    serde("table_name", table_name_);
+    serde("tracking_column", tracking_column_);
+    serde("live_initialized", live_initialized_);
+    serde("live_watermark", live_watermark_);
   }
 
 private:
@@ -1327,6 +1620,12 @@ private:
   Box<async_client> client_;
   std::string query_;
   std::string schema_name_;
+  std::string table_name_;
+  std::string tracking_column_;
+  bool live_ = false;
+  bool live_initialized_ = false;
+  uint64_t live_watermark_ = 0;
+  static constexpr auto live_poll_interval_ = std::chrono::seconds{1};
   bool done_ = false;
 };
 
@@ -1352,10 +1651,43 @@ public:
     // Query options.
     auto sql_arg = d.named("sql", &FromMySQLArgs::sql);
     auto show = d.named("show", &FromMySQLArgs::show);
+    auto live_arg = d.named("live", &FromMySQLArgs::live);
+    auto tracking_column_arg
+      = d.named("tracking_column", &FromMySQLArgs::tracking_column);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto has_table = ctx.get(table_arg).has_value();
       auto has_sql = ctx.get(sql_arg).has_value();
       auto has_show = ctx.get(show).has_value();
+      auto is_live = false;
+      if (auto live = ctx.get(live_arg)) {
+        is_live = live->inner;
+      }
+      if (ctx.get(tracking_column_arg) and not is_live) {
+        diagnostic::error("`tracking_column` requires `live=true`")
+          .primary(ctx.get_location(tracking_column_arg).value())
+          .emit(ctx);
+        return {};
+      }
+      if (is_live) {
+        if (not has_table) {
+          diagnostic::error("`live=true` requires `table`")
+            .primary(ctx.get_location(live_arg).value())
+            .emit(ctx);
+          return {};
+        }
+        if (has_sql) {
+          diagnostic::error("`live=true` does not support `sql`")
+            .primary(ctx.get_location(sql_arg).value())
+            .emit(ctx);
+          return {};
+        }
+        if (has_show) {
+          diagnostic::error("`live=true` does not support `show`")
+            .primary(ctx.get_location(show).value())
+            .emit(ctx);
+          return {};
+        }
+      }
       // At least one query option must be specified.
       if (not has_table and not has_sql and not has_show) {
         diagnostic::error("no query specified")

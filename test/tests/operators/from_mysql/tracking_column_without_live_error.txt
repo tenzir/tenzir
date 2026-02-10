@@ -1,0 +1,6 @@
+error: `tracking_column` requires `live=true`
+ --> tests/operators/from_mysql/tracking_column_without_live_error.tql:6:28
+  |
+6 |            tracking_column="id",
+  |                            ^^^^ 
+  |
