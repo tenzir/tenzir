@@ -1,0 +1,6 @@
+error: `tracking_column` `name` does not exist in `users` or is not an integer column
+ --> tests/operators/from_mysql/live_non_integer_tracking_column_error.tql:3:28
+  |
+3 |            tracking_column="name",
+  |                            ^^^^^^ 
+  |

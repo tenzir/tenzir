@@ -1,0 +1,12 @@
+{
+  id: 0,
+  payload: "live-signed-stream-token",
+}
+{
+  id: 1,
+  payload: "live-signed-stream-token",
+}
+{
+  id: 2,
+  payload: "live-signed-stream-token",
+}

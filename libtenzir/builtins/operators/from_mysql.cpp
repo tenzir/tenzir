@@ -27,6 +27,7 @@
 #include <charconv>
 #include <cstring>
 #include <limits>
+#include <type_traits>
 #include <utility>
 
 namespace tenzir::plugins::mysql {
@@ -1025,6 +1026,10 @@ struct query_config {
 };
 
 using result_row = std::vector<std::optional<std::string>>;
+struct tracking_candidate {
+  std::string name;
+  bool is_unsigned = false;
+};
 
 /// Parse a row packet into nullable string cells.
 auto parse_row_as_strings(std::span<std::byte const> data, size_t column_count)
@@ -1048,18 +1053,37 @@ auto parse_row_as_strings(std::span<std::byte const> data, size_t column_count)
   return row;
 }
 
-/// Extract the first column from each row, skipping NULLs.
-auto extract_first_column(std::vector<result_row> rows)
-  -> MysqlResult<std::vector<std::string>> {
-  auto result = std::vector<std::string>{};
+auto parse_zero_one_bool(std::string_view value) -> MysqlResult<bool> {
+  if (value == "0") {
+    return false;
+  }
+  if (value == "1") {
+    return true;
+  }
+  return Err{mysql_error::protocol(
+    fmt::format("expected bool encoded as 0/1, got `{}`", value))};
+}
+
+/// Extract tracking candidates from information_schema query rows.
+auto extract_tracking_candidates(std::vector<result_row> rows)
+  -> MysqlResult<std::vector<tracking_candidate>> {
+  auto result = std::vector<tracking_candidate>{};
   result.reserve(rows.size());
   for (auto& row : rows) {
-    if (row.empty()) {
-      return Err{mysql_error::protocol("expected at least one column")};
+    if (row.size() < 2) {
+      return Err{mysql_error::protocol("expected at least two columns for "
+                                       "tracking candidate")};
     }
-    if (row[0]) {
-      result.push_back(std::move(*row[0]));
+    if (not row[0]) {
+      return Err{
+        mysql_error::protocol("tracking candidate name must not be NULL")};
     }
+    if (not row[1]) {
+      return Err{mysql_error::protocol("tracking candidate unsigned flag must "
+                                       "not be NULL")};
+    }
+    TRY(auto is_unsigned, parse_zero_one_bool(*row[1]));
+    result.push_back({.name = std::move(*row[0]), .is_unsigned = is_unsigned});
   }
   return result;
 }
@@ -1085,6 +1109,29 @@ auto parse_first_optional_uint64(std::vector<result_row> const& rows)
       mysql_error::protocol(fmt::format("invalid uint64 value `{}`", cell))};
   }
   return std::optional<uint64_t>{value};
+}
+
+/// Parse the first row and first column as optional signed 64-bit integer.
+auto parse_first_optional_int64(std::vector<result_row> const& rows)
+  -> MysqlResult<std::optional<int64_t>> {
+  if (rows.empty()) {
+    return std::optional<int64_t>{};
+  }
+  if (rows[0].empty()) {
+    return Err{mysql_error::protocol("expected at least one column")};
+  }
+  if (not rows[0][0]) {
+    return std::optional<int64_t>{};
+  }
+  auto value = int64_t{};
+  auto& cell = *rows[0][0];
+  auto [ptr, ec]
+    = std::from_chars(cell.data(), cell.data() + cell.size(), value);
+  if (ec != std::errc{} or ptr != cell.data() + cell.size()) {
+    return Err{
+      mysql_error::protocol(fmt::format("invalid int64 value `{}`", cell))};
+  }
+  return std::optional<int64_t>{value};
 }
 
 /// Parse a row packet into a series_builder.
@@ -1310,10 +1357,21 @@ public:
   }
 
 private:
+  auto format_tracking_candidate_names(
+    std::vector<tracking_candidate> const& candidates) const -> std::string {
+    auto names = std::vector<std::string>{};
+    names.reserve(candidates.size());
+    for (auto const& candidate : candidates) {
+      names.push_back(candidate.name);
+    }
+    return fmt::format("{}", fmt::join(names, ", "));
+  }
+
   auto
   find_tracking_candidates(std::string const& table, bool auto_increment_only)
-    -> Task<MysqlResult<std::vector<std::string>>> {
-    auto sql = fmt::format("SELECT column_name "
+    -> Task<MysqlResult<std::vector<tracking_candidate>>> {
+    auto sql = fmt::format("SELECT column_name, "
+                           "LOCATE('unsigned', column_type) > 0 "
                            "FROM information_schema.columns "
                            "WHERE table_schema = DATABASE() "
                            "AND table_name = {}",
@@ -1329,14 +1387,15 @@ private:
     if (rows.is_err()) {
       co_return Err{std::move(rows).unwrap_err()};
     }
-    co_return extract_first_column(std::move(rows).unwrap());
+    co_return extract_tracking_candidates(std::move(rows).unwrap());
   }
 
   auto resolve_tracking_column(OpCtx& ctx) -> Task<bool> {
     TENZIR_ASSERT(args_.table);
     if (args_.tracking_column) {
       auto sql = fmt::format(
-        "SELECT column_name "
+        "SELECT column_name, "
+        "LOCATE('unsigned', column_type) > 0 "
         "FROM information_schema.columns "
         "WHERE table_schema = DATABASE() "
         "AND table_name = {} "
@@ -1350,12 +1409,13 @@ private:
         emit_mysql_error(std::move(rows).unwrap_err(), ctx);
         co_return false;
       }
-      auto result = extract_first_column(std::move(rows).unwrap());
+      auto result = extract_tracking_candidates(std::move(rows).unwrap());
       if (result.is_err()) {
         emit_mysql_error(std::move(result).unwrap_err(), ctx);
         co_return false;
       }
-      if (result.unwrap().empty()) {
+      auto candidates = std::move(result).unwrap();
+      if (candidates.empty()) {
         diagnostic::error("`tracking_column` `{}` does not exist in `{}` or "
                           "is not an integer column",
                           args_.tracking_column->inner, args_.table->inner)
@@ -1363,7 +1423,9 @@ private:
           .emit(ctx);
         co_return false;
       }
-      tracking_column_ = args_.tracking_column->inner;
+      tracking_column_ = std::move(candidates[0].name);
+      tracking_column_is_unsigned_ = candidates[0].is_unsigned;
+      tracking_column_resolved_ = true;
       co_return true;
     }
     auto auto_increment
@@ -1377,14 +1439,16 @@ private:
       diagnostic::error("multiple auto-increment tracking columns found for "
                         "table `{}`: {}",
                         args_.table->inner,
-                        fmt::join(auto_increment_columns, ", "))
+                        format_tracking_candidate_names(auto_increment_columns))
         .primary(args_.table->source)
         .hint("set `tracking_column` explicitly")
         .emit(ctx);
       co_return false;
     }
     if (auto_increment_columns.size() == 1) {
-      tracking_column_ = std::move(auto_increment_columns[0]);
+      tracking_column_ = std::move(auto_increment_columns[0].name);
+      tracking_column_is_unsigned_ = auto_increment_columns[0].is_unsigned;
+      tracking_column_resolved_ = true;
       co_return true;
     }
     auto integer_candidates
@@ -1405,17 +1469,21 @@ private:
     }
     if (candidates.size() > 1) {
       diagnostic::error("ambiguous tracking columns for table `{}`: {}",
-                        args_.table->inner, fmt::join(candidates, ", "))
+                        args_.table->inner,
+                        format_tracking_candidate_names(candidates))
         .primary(args_.table->source)
         .hint("set `tracking_column` explicitly")
         .emit(ctx);
       co_return false;
     }
-    tracking_column_ = std::move(candidates[0]);
+    tracking_column_ = std::move(candidates[0].name);
+    tracking_column_is_unsigned_ = candidates[0].is_unsigned;
+    tracking_column_resolved_ = true;
     co_return true;
   }
 
-  auto query_max_tracking_value() -> Task<MysqlResult<uint64_t>> {
+  auto query_max_tracking_value_unsigned()
+    -> Task<MysqlResult<std::optional<uint64_t>>> {
     TENZIR_ASSERT(not tracking_column_.empty());
     TENZIR_ASSERT(not table_name_.empty());
     auto sql = fmt::format("SELECT MAX({}) FROM {}",
@@ -1429,33 +1497,81 @@ private:
     if (value.is_err()) {
       co_return Err{std::move(value).unwrap_err()};
     }
-    co_return std::move(value).unwrap().value_or(uint64_t{0});
+    co_return std::move(value).unwrap();
+  }
+
+  auto query_max_tracking_value_signed()
+    -> Task<MysqlResult<std::optional<int64_t>>> {
+    TENZIR_ASSERT(not tracking_column_.empty());
+    TENZIR_ASSERT(not table_name_.empty());
+    auto sql = fmt::format("SELECT MAX({}) FROM {}",
+                           quote_identifier(tracking_column_),
+                           quote_identifier(table_name_));
+    auto rows = co_await client_->query_rows(sql);
+    if (rows.is_err()) {
+      co_return Err{std::move(rows).unwrap_err()};
+    }
+    auto value = parse_first_optional_int64(std::move(rows).unwrap());
+    if (value.is_err()) {
+      co_return Err{std::move(value).unwrap_err()};
+    }
+    co_return std::move(value).unwrap();
   }
 
   auto initialize_live(OpCtx& ctx) -> Task<bool> {
-    if (tracking_column_.empty()) {
+    if (not tracking_column_resolved_) {
       if (not(co_await resolve_tracking_column(ctx))) {
         co_return false;
       }
     }
-    auto watermark = co_await query_max_tracking_value();
-    if (watermark.is_err()) {
-      emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
-      co_return false;
+    if (tracking_column_is_unsigned_) {
+      auto watermark = co_await query_max_tracking_value_unsigned();
+      if (watermark.is_err()) {
+        emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+        co_return false;
+      }
+      if (auto value = std::move(watermark).unwrap()) {
+        live_watermark_unsigned_ = *value;
+        live_has_watermark_ = true;
+      } else {
+        live_has_watermark_ = false;
+      }
+    } else {
+      auto watermark = co_await query_max_tracking_value_signed();
+      if (watermark.is_err()) {
+        emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+        co_return false;
+      }
+      if (auto value = std::move(watermark).unwrap()) {
+        live_watermark_signed_ = *value;
+        live_has_watermark_ = true;
+      } else {
+        live_has_watermark_ = false;
+      }
     }
-    live_watermark_ = std::move(watermark).unwrap();
     live_initialized_ = true;
     co_return true;
   }
 
-  auto stream_live_window(uint64_t lower, uint64_t upper,
+  template <class Integer>
+  auto stream_live_window(std::optional<Integer> lower, Integer upper,
                           Push<table_slice>& push, OpCtx& ctx) -> Task<bool> {
-    auto sql = fmt::format("SELECT * FROM {} WHERE {} > {} AND {} <= {} "
-                           "ORDER BY {}",
-                           quote_identifier(table_name_),
-                           quote_identifier(tracking_column_), lower,
-                           quote_identifier(tracking_column_), upper,
-                           quote_identifier(tracking_column_));
+    static_assert(std::is_same_v<Integer, int64_t>
+                  or std::is_same_v<Integer, uint64_t>);
+    auto sql = std::string{};
+    if (lower) {
+      sql = fmt::format("SELECT * FROM {} WHERE {} > {} AND {} <= {} "
+                        "ORDER BY {}",
+                        quote_identifier(table_name_),
+                        quote_identifier(tracking_column_), *lower,
+                        quote_identifier(tracking_column_), upper,
+                        quote_identifier(tracking_column_));
+    } else {
+      sql = fmt::format("SELECT * FROM {} WHERE {} <= {} ORDER BY {}",
+                        quote_identifier(table_name_),
+                        quote_identifier(tracking_column_), upper,
+                        quote_identifier(tracking_column_));
+    }
     auto slice_stream = client_->query({
       .sql = sql,
       .schema_name = schema_name_,
@@ -1479,9 +1595,6 @@ public:
     live_ = args_.live and args_.live->inner;
     if (args_.table) {
       table_name_ = args_.table->inner;
-    }
-    if (args_.tracking_column) {
-      tracking_column_ = args_.tracking_column->inner;
     }
     // Build client configuration.
     auto config = client_config{};
@@ -1589,21 +1702,56 @@ public:
         }
         co_return;
       }
-      auto upper_result = co_await query_max_tracking_value();
-      if (upper_result.is_err()) {
-        emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
-        done_ = true;
-        co_return;
+      if (tracking_column_is_unsigned_) {
+        auto upper_result = co_await query_max_tracking_value_unsigned();
+        if (upper_result.is_err()) {
+          emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
+          done_ = true;
+          co_return;
+        }
+        auto maybe_upper = std::move(upper_result).unwrap();
+        if (not maybe_upper) {
+          co_return;
+        }
+        auto upper = *maybe_upper;
+        if (live_has_watermark_ and upper <= live_watermark_unsigned_) {
+          co_return;
+        }
+        auto lower = std::optional<uint64_t>{};
+        if (live_has_watermark_) {
+          lower = live_watermark_unsigned_;
+        }
+        if (not(co_await stream_live_window(lower, upper, push, ctx))) {
+          done_ = true;
+          co_return;
+        }
+        live_watermark_unsigned_ = upper;
+      } else {
+        auto upper_result = co_await query_max_tracking_value_signed();
+        if (upper_result.is_err()) {
+          emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
+          done_ = true;
+          co_return;
+        }
+        auto maybe_upper = std::move(upper_result).unwrap();
+        if (not maybe_upper) {
+          co_return;
+        }
+        auto upper = *maybe_upper;
+        if (live_has_watermark_ and upper <= live_watermark_signed_) {
+          co_return;
+        }
+        auto lower = std::optional<int64_t>{};
+        if (live_has_watermark_) {
+          lower = live_watermark_signed_;
+        }
+        if (not(co_await stream_live_window(lower, upper, push, ctx))) {
+          done_ = true;
+          co_return;
+        }
+        live_watermark_signed_ = upper;
       }
-      auto upper = std::move(upper_result).unwrap();
-      if (upper <= live_watermark_) {
-        co_return;
-      }
-      if (not(co_await stream_live_window(live_watermark_, upper, push, ctx))) {
-        done_ = true;
-        co_return;
-      }
-      live_watermark_ = upper;
+      live_has_watermark_ = true;
       co_return;
     }
     auto slice_stream = client_->query({
@@ -1629,8 +1777,12 @@ public:
     serde("live", live_);
     serde("table_name", table_name_);
     serde("tracking_column", tracking_column_);
+    serde("tracking_column_resolved", tracking_column_resolved_);
+    serde("tracking_column_is_unsigned", tracking_column_is_unsigned_);
     serde("live_initialized", live_initialized_);
-    serde("live_watermark", live_watermark_);
+    serde("live_has_watermark", live_has_watermark_);
+    serde("live_watermark_signed", live_watermark_signed_);
+    serde("live_watermark_unsigned", live_watermark_unsigned_);
   }
 
 private:
@@ -1640,9 +1792,13 @@ private:
   std::string schema_name_;
   std::string table_name_;
   std::string tracking_column_;
+  bool tracking_column_resolved_ = false;
+  bool tracking_column_is_unsigned_ = false;
   bool live_ = false;
   bool live_initialized_ = false;
-  uint64_t live_watermark_ = 0;
+  bool live_has_watermark_ = false;
+  int64_t live_watermark_signed_ = 0;
+  uint64_t live_watermark_unsigned_ = 0;
   static constexpr auto live_poll_interval_ = std::chrono::seconds{1};
   bool done_ = false;
 };
