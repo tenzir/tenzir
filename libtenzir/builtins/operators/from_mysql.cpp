@@ -761,8 +761,9 @@ public:
   auto upgrade_to_tls(std::shared_ptr<folly::SSLContext> ctx,
                       std::string const& hostname) -> Task<MysqlResult<void>> {
     try {
-      co_await upgrade_transport_to_tls(transport_, evb_, std::move(ctx),
-                                        std::string{hostname});
+      co_await upgrade_transport_to_tls_client(transport_, evb_,
+                                               std::move(ctx),
+                                               std::string{hostname});
     } catch (std::exception const& ex) {
       co_return Err{
         mysql_error{0, fmt::format("TLS handshake failed: {}", ex.what())}};

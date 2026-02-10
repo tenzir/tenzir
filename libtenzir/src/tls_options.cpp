@@ -300,6 +300,29 @@ auto tls_options::add_tls_options(argument_parser2& parser) -> void {
 auto tls_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   // Validate the tls record structure first
   TRY(validate_tls_record(dh));
+  if (is_server_ and get_tls(nullptr).inner) {
+    // `tls=true` may rely on defaults from config. Only reject incomplete
+    // explicit key-pair configuration.
+    auto has_certfile = get_record_string("certfile").has_value()
+                        or certfile_.has_value();
+    auto has_keyfile
+      = get_record_string("keyfile").has_value() or keyfile_.has_value();
+    auto tls_loc = tls_.has_value() ? tls_->source : location::unknown;
+    if (has_certfile and not has_keyfile) {
+      diagnostic::error("`tls.keyfile` is required when `tls.certfile` is set")
+        .primary(tls_loc)
+        .hint("set both `tls.certfile` and `tls.keyfile`")
+        .emit(dh);
+      return failure::promise();
+    }
+    if (has_keyfile and not has_certfile) {
+      diagnostic::error("`tls.certfile` is required when `tls.keyfile` is set")
+        .primary(tls_loc)
+        .hint("set both `tls.certfile` and `tls.keyfile`")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
   // Warn if explicit TLS options are used - they are deprecated in favor of
   // the record form
   auto warn_explicit
