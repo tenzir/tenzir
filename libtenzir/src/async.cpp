@@ -168,16 +168,18 @@ struct AnyWrapper {
 template <class Input>
 struct SubPipeline {
   SubPipeline(std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel,
-              Sender<FromControl> from_control)
+              Sender<FromControl> from_control,
+              std::shared_ptr<std::atomic<bool>> input_closed)
     : push_channel{std::move(push_channel)},
-      from_control{std::move(from_control)} {
+      from_control{std::move(from_control)},
+      input_closed{std::move(input_closed)} {
+    TENZIR_ASSERT(this->input_closed);
   }
 
   std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel;
   Sender<FromControl> from_control;
+  std::shared_ptr<std::atomic<bool>> input_closed;
 
-  /// Whether we sent `Signal::end_of_data` to the subpipeline input.
-  bool input_closed = false;
   /// Whether the subpipeline asked us to stop sending input.
   bool no_more_input = false;
   /// Whether the subpipeline emitted all of its output and `finish_sub` ran.
@@ -355,15 +357,18 @@ private:
         Box<Push<OperatorMsg<In>>>& push_upstream) -> AnyOpenPipeline {
         auto push_channel = std::make_shared<Box<Push<OperatorMsg<In>>>>(
           std::move(push_upstream));
+        auto input_closed = std::make_shared<std::atomic<bool>>(false);
         auto [it, inserted] = subpipelines_.try_emplace(
           std::move(key), SubPipeline{
                             push_channel,
                             std::move(from_control_sender),
+                            input_closed,
                           });
         if (not inserted) {
           panic("already have a subpipeline for that key");
         }
-        return OpenPipeline<In>{std::move(push_channel)};
+        return OpenPipeline<In>{std::move(push_channel),
+                                std::move(input_closed)};
       });
   }
 
@@ -376,7 +381,8 @@ private:
     return co_match(
       it->second,
       []<class In>(SubPipeline<In>& subpipeline) -> AnyOpenPipeline {
-        return OpenPipeline<In>{subpipeline.push_channel};
+        return OpenPipeline<In>{subpipeline.push_channel,
+                                subpipeline.input_closed};
       });
   }
 
@@ -510,6 +516,14 @@ private:
     queue_.spawn(pull_upstream_());
   }
 
+  auto stop_operator() -> Task<void> {
+    if (stop_called_) {
+      co_return;
+    }
+    stop_called_ = true;
+    co_await op_->stop(ctx_);
+  }
+
   auto process(FromControl message) -> Task<void> {
     auto overloads = detail::overload{
       [&](PostCommit) -> Task<void> {
@@ -519,10 +533,12 @@ private:
       [&](Shutdown) -> Task<void> {
         // FIXME: Cleanup on shutdown?
         TENZIR_VERBOSE("got shutdown in {}", typeid(*op_).name());
+        co_await stop_operator();
         got_shutdown_request_ = true;
         co_return;
       },
       [&](Stop) -> Task<void> {
+        co_await stop_operator();
         co_await handle_done();
       }};
     co_await match(std::move(message), overloads);
@@ -549,6 +565,7 @@ private:
               co_await op_->finish_sub(make_view(event.key), push, ctx_);
             }
             sub.drain_finished = true;
+            sub.input_closed->store(true, std::memory_order_release);
             if (sub.ready_for_shutdown and not sub.shutdown_sent) {
               sub.from_control.send(Shutdown{});
               sub.shutdown_sent = true;
@@ -564,6 +581,7 @@ private:
         }
         co_match(it->second, []<class In>(SubPipeline<In>& sub) {
           sub.ready_for_shutdown = true;
+          sub.input_closed->store(true, std::memory_order_release);
         });
         co_match(it->second, []<class In>(SubPipeline<In>& sub) {
           if (sub.drain_finished and not sub.shutdown_sent) {
@@ -586,12 +604,7 @@ private:
               co_return;
             }
             sub.no_more_input = true;
-            if constexpr (not std::same_as<In, void>) {
-              if (not sub.input_closed) {
-                co_await (*sub.push_channel)(Signal::end_of_data);
-                sub.input_closed = true;
-              }
-            }
+            sub.input_closed->store(true, std::memory_order_release);
           });
         // Sources that feed a subpipeline should stop producing as soon as the
         // subpipeline says it no longer needs input.
@@ -659,9 +672,8 @@ private:
     for (auto& [_, sub] : subpipelines_) {
       co_await co_match(sub, []<class In>(SubPipeline<In>& sub) -> Task<void> {
         if constexpr (not std::same_as<In, void>) {
-          if (not sub.input_closed) {
+          if (not sub.input_closed->exchange(true, std::memory_order_acq_rel)) {
             co_await (*sub.push_channel)(Signal::end_of_data);
-            sub.input_closed = true;
           }
         }
       });
@@ -690,6 +702,7 @@ private:
     variant<AnyWrapper, OperatorMsg<Input>, FromControl, SubPipelineEvent>>
     queue_;
   bool got_shutdown_request_ = false;
+  bool stop_called_ = false;
   bool is_done_ = false;
   bool finalized_ = false;
   bool ready_for_shutdown_sent_ = false;
@@ -838,6 +851,7 @@ private:
                 ctrl.send(Shutdown{});
               }
             });
+          queue_.spawn(from_control_.receive());
         },
         [&](std::pair<size_t, variant<Shutdown, ToControl>> next) {
           auto [index, kind] = std::move(next);

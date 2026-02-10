@@ -69,6 +69,8 @@
 #include <folly/coro/Traits.h>
 #include <folly/futures/Future.h>
 
+#include <atomic>
+
 namespace tenzir {
 
 template <class T>
@@ -324,15 +326,24 @@ struct OperatorMsg : variant<T, Signal> {
 template <class Input>
 class OpenPipeline {
 public:
+  using ClosedState = std::atomic<bool>;
+
   explicit OpenPipeline(
-    std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel)
-    : push_channel_{std::move(push_channel)} {
+    std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel,
+    std::shared_ptr<ClosedState> input_closed
+    = std::make_shared<ClosedState>(false))
+    : push_channel_{std::move(push_channel)},
+      input_closed_{std::move(input_closed)} {
     TENZIR_ASSERT(push_channel_);
+    TENZIR_ASSERT(input_closed_);
   }
 
   // TODO: What if the pipeline starts with a source?
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>> {
+    if (input_closed_->load(std::memory_order_acquire)) {
+      co_return Err<In>{std::move(input)};
+    }
     // FIXME: What to do when closed?
     if constexpr (std::same_as<Input, table_slice>) {
       TENZIR_WARN("pushing {} rows to subpipeline", input.rows());
@@ -344,11 +355,15 @@ public:
   }
 
   auto close() -> Task<void> {
+    if (input_closed_->exchange(true, std::memory_order_acq_rel)) {
+      co_return;
+    }
     co_await (*push_channel_)(Signal::end_of_data);
   }
 
 private:
   std::shared_ptr<Box<Push<OperatorMsg<Input>>>> push_channel_;
+  std::shared_ptr<ClosedState> input_closed_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
