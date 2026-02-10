@@ -19,8 +19,8 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
-#include <folly/executors/GlobalExecutor.h>
 #include <folly/coro/Sleep.h>
+#include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
 #include <openssl/sha.h>
 
@@ -1310,15 +1310,14 @@ public:
   }
 
 private:
-  auto find_tracking_candidates(std::string const& table,
-                                bool auto_increment_only)
+  auto
+  find_tracking_candidates(std::string const& table, bool auto_increment_only)
     -> Task<MysqlResult<std::vector<std::string>>> {
-    auto sql = fmt::format(
-      "SELECT column_name "
-      "FROM information_schema.columns "
-      "WHERE table_schema = DATABASE() "
-      "AND table_name = {}",
-      quote_string_literal(table));
+    auto sql = fmt::format("SELECT column_name "
+                           "FROM information_schema.columns "
+                           "WHERE table_schema = DATABASE() "
+                           "AND table_name = {}",
+                           quote_string_literal(table));
     if (auto_increment_only) {
       sql += " AND column_key = 'PRI' AND LOCATE('auto_increment', extra) > 0";
     } else {
@@ -1367,8 +1366,8 @@ private:
       tracking_column_ = args_.tracking_column->inner;
       co_return true;
     }
-    auto auto_increment = co_await find_tracking_candidates(args_.table->inner,
-                                                            true);
+    auto auto_increment
+      = co_await find_tracking_candidates(args_.table->inner, true);
     if (auto_increment.is_err()) {
       emit_mysql_error(std::move(auto_increment).unwrap_err(), ctx);
       co_return false;
@@ -1388,8 +1387,8 @@ private:
       tracking_column_ = std::move(auto_increment_columns[0]);
       co_return true;
     }
-    auto integer_candidates = co_await find_tracking_candidates(
-      args_.table->inner, false);
+    auto integer_candidates
+      = co_await find_tracking_candidates(args_.table->inner, false);
     if (integer_candidates.is_err()) {
       emit_mysql_error(std::move(integer_candidates).unwrap_err(), ctx);
       co_return false;
@@ -1419,8 +1418,8 @@ private:
   auto query_max_tracking_value() -> Task<MysqlResult<uint64_t>> {
     TENZIR_ASSERT(not tracking_column_.empty());
     TENZIR_ASSERT(not table_name_.empty());
-    auto sql = fmt::format("SELECT MAX({}) FROM {}", quote_identifier(
-                             tracking_column_),
+    auto sql = fmt::format("SELECT MAX({}) FROM {}",
+                           quote_identifier(tracking_column_),
                            quote_identifier(table_name_));
     auto rows = co_await client_->query_rows(sql);
     if (rows.is_err()) {
@@ -1570,8 +1569,9 @@ public:
       TENZIR_UNREACHABLE();
     }
     if (live_ and live_initialized_) {
-      co_await folly::coro::sleep(std::chrono::duration_cast<
-                                  folly::HighResDuration>(live_poll_interval_));
+      co_await folly::coro::sleep(
+        std::chrono::duration_cast<folly::HighResDuration>(
+          live_poll_interval_));
     }
     co_return {};
   }
