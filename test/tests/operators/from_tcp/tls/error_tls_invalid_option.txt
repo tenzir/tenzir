@@ -1,5 +1,5 @@
 error: unknown key `bogus_option` in `tls` record
- --> tests/operators/from_tcp/error_tls_invalid_option.tql:6:14
+ --> tests/operators/from_tcp/tls/error_tls_invalid_option.tql:6:14
   |
 6 |          tls={bogus_option: true} { read_lines }
   |              ^^^^^^^^^^^^^^^^^^^^ 
