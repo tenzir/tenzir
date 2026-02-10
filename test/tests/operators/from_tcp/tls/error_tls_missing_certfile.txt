@@ -1,7 +1,7 @@
-error: `tls.keyfile` is required when `tls.certfile` is set
+error: `tls.certfile` is required when `tls.keyfile` is set
  --> tests/operators/from_tcp/tls/error_tls_missing_certfile.tql:6:14
   |
-6 |          tls={certfile: "tests/operators/from_tcp/test.yaml"} { read_lines }
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+6 |          tls={keyfile: "tests/operators/from_tcp/test.yaml"} { read_lines }
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
   = hint: set both `tls.certfile` and `tls.keyfile`

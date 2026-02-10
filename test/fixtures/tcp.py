@@ -23,10 +23,11 @@ def _find_free_port() -> int:
         return sock.getsockname()[1]
 
 
-def _generate_self_signed_cert(temp_dir: Path) -> tuple[Path, Path, Path]:
+def _generate_self_signed_cert(temp_dir: Path) -> tuple[Path, Path, Path, Path]:
     key_path = temp_dir / "server-key.pem"
     cert_path = temp_dir / "server-cert.pem"
     ca_path = temp_dir / "ca.pem"
+    cert_and_key_path = temp_dir / "server-cert-and-key.pem"
     cmd = [
         "openssl",
         "req",
@@ -45,23 +46,25 @@ def _generate_self_signed_cert(temp_dir: Path) -> tuple[Path, Path, Path]:
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     shutil.copy(cert_path, ca_path)
-    return cert_path, key_path, ca_path
+    cert_and_key_path.write_bytes(cert_path.read_bytes() + key_path.read_bytes())
+    return cert_path, key_path, ca_path, cert_and_key_path
 
 
 @fixture(name="tcp_tls_source")
 def tcp_tls_source() -> Iterator[dict[str, str]]:
     port = _find_free_port()
     temp_dir = Path(tempfile.mkdtemp(prefix="tcp-tls-"))
-    cert_path, key_path, ca_path = _generate_self_signed_cert(temp_dir)
+    cert_path, key_path, ca_path, cert_and_key_path = _generate_self_signed_cert(
+        temp_dir
+    )
     endpoint = f"{_HOST}:{port}"
     stop_event = threading.Event()
 
     def _send_payload() -> None:
-        deadline = time.time() + 10
         context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         context.check_hostname = False
         context.load_verify_locations(cafile=ca_path)
-        while not stop_event.is_set() and time.time() < deadline:
+        while not stop_event.is_set():
             try:
                 with socket.create_connection((_HOST, port), timeout=1) as raw_sock:
                     with context.wrap_socket(
@@ -76,10 +79,11 @@ def tcp_tls_source() -> Iterator[dict[str, str]]:
                                     break
                         except OSError:
                             pass
-                    break
             except (ConnectionRefusedError, ssl.SSLError, OSError):
                 time.sleep(0.1)
-        stop_event.set()
+                continue
+            # Allow subsequent tests to establish their own connection.
+            time.sleep(0.1)
 
     worker = threading.Thread(target=_send_payload, daemon=True)
     worker.start()
@@ -90,6 +94,7 @@ def tcp_tls_source() -> Iterator[dict[str, str]]:
             "TCP_TLS_CERTFILE": str(cert_path),
             "TCP_TLS_KEYFILE": str(key_path),
             "TCP_TLS_CAFILE": str(ca_path),
+            "TCP_TLS_CERTKEYFILE": str(cert_and_key_path),
         }
     finally:
         stop_event.set()

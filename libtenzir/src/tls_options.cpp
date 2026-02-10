@@ -302,19 +302,12 @@ auto tls_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   TRY(validate_tls_record(dh));
   if (is_server_ and get_tls(nullptr).inner) {
     // `tls=true` may rely on defaults from config. Only reject incomplete
-    // explicit key-pair configuration.
+    // explicit key-pair configuration if a key file is set without a cert file.
     auto has_certfile
       = get_record_string("certfile").has_value() or certfile_.has_value();
     auto has_keyfile
       = get_record_string("keyfile").has_value() or keyfile_.has_value();
     auto tls_loc = tls_.has_value() ? tls_->source : location::unknown;
-    if (has_certfile and not has_keyfile) {
-      diagnostic::error("`tls.keyfile` is required when `tls.certfile` is set")
-        .primary(tls_loc)
-        .hint("set both `tls.certfile` and `tls.keyfile`")
-        .emit(dh);
-      return failure::promise();
-    }
     if (has_keyfile and not has_certfile) {
       diagnostic::error("`tls.certfile` is required when `tls.keyfile` is set")
         .primary(tls_loc)
@@ -800,8 +793,9 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  // Load client certificate.
-  if (auto certfile = get_certfile(nullptr)) {
+  auto certfile = get_certfile(nullptr);
+  // Load certificate chain.
+  if (certfile) {
     auto ec = std::error_code{};
     auto path = std::filesystem::canonical(certfile->inner, ec);
     if (ec or not std::filesystem::is_regular_file(path, ec)) {
@@ -819,22 +813,32 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh) const
       return failure::promise();
     }
   }
-  // Load client private key.
-  if (auto keyfile = get_keyfile(nullptr)) {
+  // Load private key. If `keyfile` is omitted, try reading it from `certfile`.
+  auto keyfile = get_keyfile(nullptr);
+  auto private_key_file = keyfile ? keyfile : certfile;
+  if (private_key_file) {
     auto ec = std::error_code{};
-    auto path = std::filesystem::canonical(keyfile->inner, ec);
+    auto path = std::filesystem::canonical(private_key_file->inner, ec);
     if (ec or not std::filesystem::is_regular_file(path, ec)) {
-      diagnostic::error("`keyfile` path is not a valid file")
-        .primary(*keyfile)
+      diagnostic::error("`{}` path is not a valid file",
+                        keyfile ? "keyfile" : "certfile")
+        .primary(*private_key_file)
         .emit(dh);
       return failure::promise();
     }
     try {
       ctx->loadPrivateKey(path.c_str());
     } catch (std::exception const& ex) {
-      diagnostic::error("failed to load client private key: {}", ex.what())
-        .primary(*keyfile)
-        .emit(dh);
+      if (not keyfile and certfile) {
+        diagnostic::error("failed to load client private key: {}", ex.what())
+          .primary(*private_key_file)
+          .hint("set `tls.keyfile` or include a private key in `tls.certfile`")
+          .emit(dh);
+      } else {
+        diagnostic::error("failed to load client private key: {}", ex.what())
+          .primary(*private_key_file)
+          .emit(dh);
+      }
       return failure::promise();
     }
   }
