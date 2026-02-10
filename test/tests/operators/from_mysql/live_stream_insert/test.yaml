@@ -1,5 +1,8 @@
 suite: from-mysql-live-stream-insert
-fixtures: [mysql_live_insert_loop]
+fixtures:
+  - mysql:
+      tls: false
+      streaming: unsigned
 timeout: 180
 skip:
   on: fixture-unavailable
