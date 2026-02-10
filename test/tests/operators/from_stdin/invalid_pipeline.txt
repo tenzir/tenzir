@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/from_stdin/invalid_pipeline.tql:5:12
+  |
+5 | from_stdin {
+  |            ^ 
+  |

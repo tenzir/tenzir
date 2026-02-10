@@ -643,7 +643,8 @@ public:
   }
 
   /// Return task for sources to await. See file-level docs.
-  virtual auto await_task() const -> Task<Any> {
+  virtual auto await_task(diagnostic_handler& dh) const -> Task<Any> {
+    TENZIR_UNUSED(dh);
     co_await wait_forever();
     TENZIR_UNREACHABLE();
   }

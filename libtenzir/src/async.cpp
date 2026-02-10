@@ -214,6 +214,9 @@ public:
           operator_scope_ = nullptr;
         }};
         co_await run();
+        // Cancel operator-spawned tasks (e.g., background IO coroutines) so
+        // the scope join does not block on them.
+        operator_scope.cancel();
       });
     });
   }
@@ -370,7 +373,7 @@ private:
       }
       TENZIR_INFO("-> post start");
       queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task()};
+        co_return AnyWrapper{co_await op_->await_task(ctx_.dh())};
       });
       queue_.spawn(pull_upstream_());
       queue_.spawn(from_control_.receive());
@@ -423,7 +426,7 @@ private:
       co_await handle_done();
     } else {
       queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task()};
+        co_return AnyWrapper{co_await op_->await_task(ctx_.dh())};
       });
     }
     TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());

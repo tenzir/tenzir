@@ -144,16 +144,21 @@ private:
   mutable std::shared_ptr<const Description> cached_desc_;
 };
 
+enum class ArgumentType { positional, named, pipeline };
+
 template <class Args, ArgType T>
 class Argument {
 public:
   Argument() = default;
 
-  Argument(bool is_named, size_t index) : is_named_{is_named}, index_{index} {
+  Argument(ArgumentType type, size_t index) : type_{type}, index_{index} {
+    if (type == ArgumentType::pipeline) {
+      TENZIR_ASSERT(index == 0);
+    }
   }
 
-  auto is_named() const -> bool {
-    return is_named_;
+  auto type() const -> ArgumentType {
+    return type_;
   }
 
   auto index() const -> size_t {
@@ -165,7 +170,7 @@ public:
   auto non_negative() -> Argument;
 
 private:
-  bool is_named_ = false;
+  ArgumentType type_ = ArgumentType::positional;
   size_t index_ = 0;
 };
 
@@ -257,32 +262,47 @@ struct PipelineArg {
 class ValidateCtx {
 public:
   ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
+              std::optional<const PipelineArg> pipeline,
               const Description& /*desc*/, diagnostic_handler& dh)
-    : args_{args}, named_args_{named_args}, dh_{&dh} {
+    : args_{args},
+      named_args_{named_args},
+      pipeline_{std::move(pipeline)},
+      dh_{&dh} {
   }
 
   template <class Args, class T>
   auto get(Argument<Args, T> arg) -> std::optional<T> {
     const Arg* value = nullptr;
-    if (arg.is_named()) {
-      // Find the named argument with matching index
-      for (const auto& named : named_args_) {
-        if (named.index == arg.index()) {
-          value = &named.value;
-          break;
+    switch (arg.type()) {
+      case ArgumentType::named: {
+        for (const auto& named : named_args_) {
+          if (named.index == arg.index()) {
+            value = &named.value;
+            break;
+          }
+        }
+        if (not value) {
+          return std::nullopt;
+        }
+        break;
+      }
+      case ArgumentType::positional: {
+        if (arg.index() >= args_.size()) {
+          return std::nullopt;
+        }
+        value = &args_[arg.index()];
+        break;
+      }
+      case ArgumentType::pipeline: {
+        if (not pipeline_) {
+          return std::nullopt;
+        }
+        if constexpr (std::same_as<T, located<ir::pipeline>>) {
+          return pipeline_->pipeline;
+        } else {
+          return std::nullopt;
         }
       }
-      if (not value) {
-        // Named argument was not provided
-        return std::nullopt;
-      }
-    } else {
-      // Positional argument
-      if (arg.index() >= args_.size()) {
-        // Positional argument was not provided
-        return std::nullopt;
-      }
-      value = &args_[arg.index()];
     }
     // Check if still incomplete
     if (is<Incomplete>(*value)) {
@@ -311,21 +331,32 @@ public:
   template <class Args, class T>
   auto get_location(Argument<Args, T> arg) -> std::optional<location> {
     const Arg* value = nullptr;
-    if (arg.is_named()) {
-      for (const auto& named : named_args_) {
-        if (named.index == arg.index()) {
-          value = &named.value;
-          break;
+    switch (arg.type()) {
+      case ArgumentType::named: {
+        for (const auto& named : named_args_) {
+          if (named.index == arg.index()) {
+            value = &named.value;
+            break;
+          }
         }
+        if (not value) {
+          return std::nullopt;
+        }
+        break;
       }
-      if (not value) {
-        return std::nullopt;
+      case ArgumentType::positional: {
+        if (arg.index() >= args_.size()) {
+          return std::nullopt;
+        }
+        value = &args_[arg.index()];
+        break;
       }
-    } else {
-      if (arg.index() >= args_.size()) {
-        return std::nullopt;
+      case ArgumentType::pipeline: {
+        if (not pipeline_) {
+          return std::nullopt;
+        }
+        return pipeline_->pipeline.source;
       }
-      value = &args_[arg.index()];
     }
     return match(
       *value,
@@ -347,6 +378,7 @@ public:
 private:
   std::span<const Arg> args_;
   std::span<const NamedArg> named_args_;
+  std::optional<const PipelineArg> pipeline_;
   diagnostic_handler* dh_;
 };
 
@@ -410,7 +442,7 @@ public:
       std::move(type),
       make_setter(ptr),
     });
-    return Argument<Args, T>{false, index};
+    return Argument<Args, T>{ArgumentType::positional, index};
   }
 
   template <ArgType T>
@@ -425,7 +457,7 @@ public:
       std::move(type),
       make_setter(ptr),
     });
-    return Argument<Args, T>{false, index};
+    return Argument<Args, T>{ArgumentType::positional, index};
   }
 
   template <ArgType T>
@@ -441,25 +473,29 @@ public:
       std::move(type),
       make_setter(ptr),
     });
-    return Argument<Args, T>{false, index};
+    return Argument<Args, T>{ArgumentType::positional, index};
   }
 
-  auto pipeline(located<ir::pipeline> Args::* ptr) -> void {
+  auto pipeline(located<ir::pipeline> Args::* ptr)
+    -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     desc_.pipeline = Pipeline{
       make_setter(ptr),
       {},
       true,
     };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
-  auto pipeline(std::optional<located<ir::pipeline>> Args::* ptr) -> void {
+  auto pipeline(std::optional<located<ir::pipeline>> Args::* ptr)
+    -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     desc_.pipeline = Pipeline{
       make_setter(ptr),
       {},
       false,
     };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
   /// Pipeline with let bindings that are injected into the subpipeline.
@@ -467,7 +503,7 @@ public:
   auto pipeline(
     located<ir::pipeline> Args::* ptr,
     std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
-    -> void {
+    -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     auto let_bindings = std::vector<LetBinding>{};
     for (const auto& [name, member_ptr] : bindings) {
@@ -481,12 +517,13 @@ public:
       std::move(let_bindings),
       true,
     };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
   auto pipeline(
     std::optional<located<ir::pipeline>> Args::* ptr,
     std::initializer_list<std::pair<std::string_view, let_id Args::*>> bindings)
-    -> void {
+    -> Argument<Args, located<ir::pipeline>> {
     TENZIR_ASSERT(not desc_.pipeline);
     auto let_bindings = std::vector<LetBinding>{};
     for (const auto& [name, member_ptr] : bindings) {
@@ -500,6 +537,7 @@ public:
       std::move(let_bindings),
       false,
     };
+    return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
   // TODO
@@ -522,7 +560,7 @@ public:
       make_setter(ptr),
       true,
     });
-    return Argument<Args, T>{true, index};
+    return Argument<Args, T>{ArgumentType::named, index};
   }
 
   /// Adds an optional named argument.
@@ -536,7 +574,7 @@ public:
       make_setter(ptr),
       false,
     });
-    return Argument<Args, T>{true, index};
+    return Argument<Args, T>{ArgumentType::named, index};
   }
 
   /// Adds an optional named argument with a default value.
@@ -550,7 +588,7 @@ public:
       make_setter(ptr),
       false,
     });
-    return Argument<Args, T>{true, index};
+    return Argument<Args, T>{ArgumentType::named, index};
   }
 
   /// Adds an optional boolean flag.
@@ -563,7 +601,7 @@ public:
       make_setter(ptr),
       false,
     });
-    return Argument<Args, bool>{true, index};
+    return Argument<Args, bool>{ArgumentType::named, index};
   }
 
   /// Adds an optional location flag.
@@ -576,7 +614,7 @@ public:
       make_setter(ptr),
       false,
     });
-    return Argument<Args, bool>{true, index};
+    return Argument<Args, bool>{ArgumentType::named, index};
   }
 
   auto validate(Validator validator) -> void {

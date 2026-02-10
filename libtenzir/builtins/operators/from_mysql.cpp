@@ -1286,7 +1286,7 @@ public:
     client_ = std::move(result).unwrap();
   }
 
-  auto await_task() const -> Task<Any> override {
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     if (done_) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();

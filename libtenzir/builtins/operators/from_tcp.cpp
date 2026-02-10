@@ -77,7 +77,7 @@ public:
     co_return;
   }
 
-  auto await_task() const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_VERBOSE("from_tcp: waiting for connection");
     auto transport = co_await folly::coro::co_withExecutor(
       folly::getGlobalIOExecutor(), server_->accept());
