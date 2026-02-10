@@ -1,5 +1,3 @@
 suite: from-tcp-tls
 fixtures: [tcp_tls_source]
 timeout: 60
-skip:
-  on: fixture-unavailable
