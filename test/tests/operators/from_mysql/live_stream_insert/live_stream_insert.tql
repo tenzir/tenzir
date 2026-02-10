@@ -1,0 +1,9 @@
+from_mysql table=env("MYSQL_LIVE_STREAM_TABLE"),
+           live=true,
+           tracking_column="id",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+head 10

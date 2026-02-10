@@ -1,4 +1,0 @@
-{
-  id: 1,
-  payload: "live-stream-token",
-}
