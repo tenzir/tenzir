@@ -303,8 +303,8 @@ auto tls_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   if (is_server_ and get_tls(nullptr).inner) {
     // `tls=true` may rely on defaults from config. Only reject incomplete
     // explicit key-pair configuration.
-    auto has_certfile = get_record_string("certfile").has_value()
-                        or certfile_.has_value();
+    auto has_certfile
+      = get_record_string("certfile").has_value() or certfile_.has_value();
     auto has_keyfile
       = get_record_string("keyfile").has_value() or keyfile_.has_value();
     auto tls_loc = tls_.has_value() ? tls_->source : location::unknown;
