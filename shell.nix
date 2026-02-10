@@ -19,7 +19,7 @@ pkgs.mkShell (
         pkgs.ccache
         pkgs.clang-tools
         pkgs.cmake-format
-        pkgs.nixfmt-rfc-style
+        pkgs.nixfmt
         pkgs.speeve
         pkgs.shfmt
         pkgs.poetry

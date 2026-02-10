@@ -10,7 +10,7 @@
 
   inputs = {
     isReleaseBuild.url = "github:boolean-option/false";
-    nixpkgs.url = "github:tobim/nixpkgs/feb094c7b636764a305a6486998805dcb6db7b79";
+    nixpkgs.url = "github:nixos/nixpkgs/54976e3e465886fe3faac44bb0e2185a347ed905";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
@@ -59,19 +59,71 @@
       system:
       let
         overlay = import ./nix/overlay.nix;
-        pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+        lib = pkgs.lib;
+        # makeMuslParsedPlatform copied from nixpkgs / pkgs / top-level / stage.nix.
+        # This is a function from parsed platforms (like
+        # stdenv.hostPlatform.parsed) to parsed platforms.
+        makeMuslParsedPlatform =
+          parsed:
+          # The following line guarantees that the output of this function
+          # is a well-formed platform with no missing fields.  It will be
+          # uncommented in a separate PR, in case it breaks the build.
+          #(x: lib.trivial.pipe x [ (x: removeAttrs x [ "_type" ]) lib.systems.parse.mkSystem ])
+          (
+            parsed
+            // {
+              abi =
+                {
+                  gnu = lib.systems.parse.abis.musl;
+                  gnueabi = lib.systems.parse.abis.musleabi;
+                  gnueabihf = lib.systems.parse.abis.musleabihf;
+                  gnuabin32 = lib.systems.parse.abis.muslabin32;
+                  gnuabi64 = lib.systems.parse.abis.muslabi64;
+                  gnuabielfv2 = lib.systems.parse.abis.musl;
+                  gnuabielfv1 = lib.systems.parse.abis.musl;
+                  # The following two entries ensure that this function is idempotent.
+                  musleabi = lib.systems.parse.abis.musleabi;
+                  musleabihf = lib.systems.parse.abis.musleabihf;
+                  muslabin32 = lib.systems.parse.abis.muslabin32;
+                  muslabi64 = lib.systems.parse.abis.muslabi64;
+                }
+                .${parsed.abi.name} or lib.systems.parse.abis.musl;
+            }
+          );
+        pkgsStaticPic = import nixpkgs {
+          inherit system;
+          overlays = [ overlay ];
+          crossSystem = {
+            #inherit system;
+            config = lib.systems.parse.tripleFromSystem (
+              if pkgs.stdenv.hostPlatform.isLinux then
+                makeMuslParsedPlatform pkgs.stdenv.hostPlatform.parsed
+              else
+                pkgs.stdenv.hostPlatform.parsed
+            );
+            isStatic = true;
+          };
+          crossOverlays = [
+            (final: prev: {
+              stdenv = prev.stdenvAdapters.withCFlags [ "-fPIC" ] prev.stdenv;
+            })
+          ];
+        };
+        pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [
+          overlay
+        ];
         tenzirPythonPkgs = pkgs.callPackage ./python {
           inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
         };
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
-          inherit tenzirPythonPkgs;
+          inherit pkgsStaticPic tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
           isReleaseBuild = inputs.isReleaseBuild.value;
-          inherit tenzirPythonPkgs;
+          inherit pkgsStaticPic tenzirPythonPkgs;
           forceClang = true;
         };
       in
@@ -152,7 +204,7 @@
           };
         # Legacy aliases for backwards compatibility.
         devShell = import ./shell.nix { inherit pkgs package; };
-        formatter = pkgs.nixfmt-rfc-style;
+        formatter = pkgs.nixfmt;
         hydraJobs =
           {
             packages = self.packages.${system};

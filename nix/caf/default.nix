@@ -29,7 +29,6 @@ in
     # The OpenSSL dependency appears in the interface of CAF, so it has to
     # be propagated downstream.
     propagatedBuildInputs = [ openssl ];
-    env.NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
     # Building statically implies using -flto. Since we produce a final binary with
     # link time optimizaitons in Tenzir, we need to make sure that type definitions that
     # are parsed in both projects are the same, otherwise the compiler will complain
@@ -70,14 +69,6 @@ in
         "-DCMAKE_C_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
         "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
         "-DCMAKE_LINKER_TYPE=LLD"
-      ];
-    hardeningDisable =
-      [
-        "fortify"
-        "pic"
-      ]
-      ++ lib.optionals stdenv.cc.isClang [
-        "pie"
       ];
     dontStrip = true;
     doCheck = false;
