@@ -118,8 +118,7 @@ public:
     auto peer_addr = transport->getPeerAddress();
     if (tls_context_) {
       try {
-        co_await upgrade_transport_to_tls_server(transport, transport_evb,
-                                                 tls_context_);
+        co_await upgrade_transport_to_tls_server(transport, tls_context_);
       } catch (std::exception const& ex) {
         diagnostic::warning("TLS handshake failed with {}: {}",
                             peer_addr.describe(), ex.what())

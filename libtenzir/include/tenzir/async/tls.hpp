@@ -15,7 +15,6 @@
 #include <string>
 
 namespace folly {
-class EventBase;
 class SSLContext;
 
 namespace coro {
@@ -27,18 +26,17 @@ namespace tenzir {
 
 /// Upgrade an existing connected transport to TLS in-place as a client.
 auto upgrade_transport_to_tls_client(
-  Box<folly::coro::Transport>& transport, folly::EventBase* evb,
+  Box<folly::coro::Transport>& transport,
   std::shared_ptr<folly::SSLContext> ssl_context, std::string hostname)
   -> Task<void>;
 
 /// Upgrade an existing accepted transport to TLS in-place as a server.
 auto upgrade_transport_to_tls_server(
-  Box<folly::coro::Transport>& transport, folly::EventBase* evb,
+  Box<folly::coro::Transport>& transport,
   std::shared_ptr<folly::SSLContext> ssl_context) -> Task<void>;
 
 /// Backward-compatible alias for client-side upgrade.
 auto upgrade_transport_to_tls(Box<folly::coro::Transport>& transport,
-                              folly::EventBase* evb,
                               std::shared_ptr<folly::SSLContext> ssl_context,
                               std::string hostname) -> Task<void>;
 
