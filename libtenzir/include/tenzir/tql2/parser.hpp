@@ -14,6 +14,7 @@
 #include "tenzir/tql2/tokens.hpp"
 
 #include <string_view>
+#include <vector>
 
 namespace tenzir {
 
@@ -27,6 +28,13 @@ auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::pipeline>;
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::expression>;
+struct expression_stream {
+  std::vector<ast::expression> expressions;
+  size_t bytes_consumed = 0;
+};
+auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
+                                                  session ctx)
+  -> failure_or<expression_stream>;
 auto parse_assignment_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::assignment>;
 auto parse_multiple_assignments_with_bad_diagnostics(std::string_view source,

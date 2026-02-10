@@ -1096,6 +1096,26 @@ public:
     }
   }
 
+  auto parse_expression_stream() -> failure_or<expression_stream> {
+    auto result = expression_stream{};
+    consume_trivia_with_newlines();
+    result.bytes_consumed = current_offset();
+    while (not eoi()) {
+      try {
+        result.expressions.push_back(parse_expression());
+      } catch (diagnostic& d) {
+        if (is_incomplete_trailing_error()) {
+          return result;
+        }
+        diag_.emit(std::move(d));
+        return failure::promise();
+      }
+      consume_trivia_with_newlines();
+      result.bytes_consumed = current_offset();
+    }
+    return result;
+  }
+
   auto parse_list() -> ast::list {
     auto begin = expect(tk::lbracket);
     auto scope = ignore_newlines(true);
@@ -1390,6 +1410,38 @@ public:
     return "EOF";
   }
 
+  auto current_offset() const -> size_t {
+    if (tokens_.empty()) {
+      return 0;
+    }
+    if (next_ < tokens_.size()) {
+      return next_ == 0 ? 0 : tokens_[next_ - 1].end;
+    }
+    return tokens_.back().end;
+  }
+
+  auto is_incomplete_trailing_error() const -> bool {
+    if (eoi()) {
+      return true;
+    }
+    if (tokens_[next_].kind != tk::error) {
+      return false;
+    }
+    for (auto i = next_; i < tokens_.size(); ++i) {
+      switch (tokens_[i].kind) {
+        case tk::error:
+        case tk::line_comment:
+        case tk::delim_comment:
+        case tk::whitespace:
+        case tk::newline:
+          continue;
+        default:
+          return false;
+      }
+    }
+    return true;
+  }
+
   [[noreturn]] void throw_token(std::string message) {
     diagnostic::error("{}", message)
       .primary(next_location(), "got {}", next_description())
@@ -1439,6 +1491,13 @@ auto parse_pipeline(std::span<token> tokens, std::string_view source,
   });
 }
 
+auto parse_expression_stream(std::span<token> tokens, std::string_view source,
+                             diagnostic_handler& dh, bool anonymous)
+  -> failure_or<expression_stream> {
+  auto self = parser{tokens, source, dh, anonymous};
+  return self.parse_expression_stream();
+}
+
 } // namespace
 
 auto parse(std::span<token> tokens, std::string_view source, session ctx)
@@ -1463,6 +1522,14 @@ auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   return parser::parse_with(tokens, source, ctx, true, [](class parser& self) {
     return self.parse_expression();
   });
+}
+
+auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
+                                                  session ctx)
+  -> failure_or<expression_stream> {
+  TRY(validate_utf8(source, ctx));
+  auto tokens = tokenize_permissive(source);
+  return parse_expression_stream(tokens, source, ctx, true);
 }
 
 auto parse_assignment_with_bad_diagnostics(std::string_view source, session ctx)
