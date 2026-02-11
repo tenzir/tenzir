@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {url: "https://example.org/data.json"}
+http url, paginate="invalid"

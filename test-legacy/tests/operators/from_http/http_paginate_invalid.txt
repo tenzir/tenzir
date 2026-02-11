@@ -1,0 +1,7 @@
+error: unsupported pagination mode: `invalid`
+ --> tests/operators/from_http/http_paginate_invalid.tql:6:20
+  |
+6 | http url, paginate="invalid"
+  |                    ^^^^^^^^^ 
+  |
+  = hint: `paginate` must be `"link"` or a lambda

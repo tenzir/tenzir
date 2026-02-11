@@ -15,6 +15,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/flat_map.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/operator_control_plane.hpp"
@@ -31,6 +32,7 @@
 
 #include <arrow/util/compression.h>
 #include <boost/url/parse.hpp>
+#include <boost/url/url.hpp>
 #include <caf/action.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
@@ -48,10 +50,12 @@
 #include <caf/timespan.hpp>
 #include <openssl/ssl.h>
 
+#include <cctype>
 #include <charconv>
 #include <ranges>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 
 constexpr auto max_response_size = std::numeric_limits<int32_t>::max();
 
@@ -539,10 +543,50 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
   return ha;
 }
 
-auto next_url(const std::optional<ast::lambda_expr>& paginate,
-              const table_slice& slice, diagnostic_handler& dh)
+using pagination_spec = located<variant<ast::lambda_expr, std::string>>;
+
+auto validate_paginate(std::optional<ast::expression> expr, session ctx,
+                       diagnostic_handler& dh)
+  -> failure_or<std::optional<pagination_spec>> {
+  if (not expr) {
+    return std::nullopt;
+  }
+  if (const auto* lambda = try_as<ast::lambda_expr>(*expr)) {
+    return std::optional<pagination_spec>{
+      {variant<ast::lambda_expr, std::string>{*lambda}, expr->get_location()}};
+  }
+  TRY(auto value, const_eval(*expr, ctx));
+  return match(
+    value,
+    [&](const std::string& mode) -> failure_or<std::optional<pagination_spec>> {
+      if (mode != "link") {
+        diagnostic::error("unsupported pagination mode: `{}`", mode)
+          .primary(*expr)
+          .hint("`paginate` must be `\"link\"` or a lambda")
+          .emit(dh);
+        return failure::promise();
+      }
+      return std::optional<pagination_spec>{
+        {variant<ast::lambda_expr, std::string>{mode}, expr->get_location()}};
+    },
+    [&](const auto&) -> failure_or<std::optional<pagination_spec>> {
+      const auto ty = type::infer(value);
+      diagnostic::error("expected `paginate` to be `string` or `lambda`")
+        .primary(*expr, "got `{}`", ty ? ty->kind() : type_kind{})
+        .hint("`paginate` must be `\"link\"` or a lambda")
+        .emit(dh);
+      return failure::promise();
+    });
+}
+
+auto next_url_from_lambda(const std::optional<pagination_spec>& paginate,
+                          const table_slice& slice, diagnostic_handler& dh)
   -> std::optional<std::string> {
   if (not paginate) {
+    return std::nullopt;
+  }
+  const auto* lambda = try_as<ast::lambda_expr>(&paginate->inner);
+  if (not lambda) {
     return std::nullopt;
   }
   if (slice.rows() != 1) {
@@ -552,7 +596,7 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
       .emit(dh);
     return std::nullopt;
   }
-  const auto ms = eval(*paginate, series{slice}, dh);
+  const auto ms = eval(*lambda, series{slice}, dh);
   const auto val = ms.value_at(0);
   return match(
     val,
@@ -571,6 +615,218 @@ auto next_url(const std::optional<ast::lambda_expr>& paginate,
         .emit(dh);
       return std::nullopt;
     });
+}
+
+auto split_link_header(std::string_view value)
+  -> std::vector<std::string_view> {
+  auto result = std::vector<std::string_view>{};
+  auto start = size_t{0};
+  auto in_angle = false;
+  auto in_quotes = false;
+  auto escaped = false;
+  for (auto i = size_t{}; i < value.size(); ++i) {
+    const auto c = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\' and in_quotes) {
+      escaped = true;
+      continue;
+    }
+    if (c == '"' and not in_angle) {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == '<' and not in_quotes) {
+      in_angle = true;
+      continue;
+    }
+    if (c == '>' and not in_quotes) {
+      in_angle = false;
+      continue;
+    }
+    if (c == ',' and not in_quotes and not in_angle) {
+      auto item = detail::trim(value.substr(start, i - start));
+      if (not item.empty()) {
+        result.push_back(item);
+      }
+      start = i + 1;
+    }
+  }
+  auto item = detail::trim(value.substr(start));
+  if (not item.empty()) {
+    result.push_back(item);
+  }
+  return result;
+}
+
+auto split_link_params(std::string_view value)
+  -> std::pair<std::vector<std::string_view>, bool> {
+  auto result = std::vector<std::string_view>{};
+  auto start = size_t{0};
+  auto in_quotes = false;
+  auto escaped = false;
+  for (auto i = size_t{}; i < value.size(); ++i) {
+    const auto c = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\' and in_quotes) {
+      escaped = true;
+      continue;
+    }
+    if (c == '"') {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == ';' and not in_quotes) {
+      auto item = detail::trim(value.substr(start, i - start));
+      if (not item.empty()) {
+        result.push_back(item);
+      }
+      start = i + 1;
+    }
+  }
+  auto item = detail::trim(value.substr(start));
+  if (not item.empty()) {
+    result.push_back(item);
+  }
+  return {std::move(result), not in_quotes};
+}
+
+auto rel_contains_next(std::string_view value) -> bool {
+  value = detail::trim(value);
+  if (value.size() >= 2 and value.front() == '"' and value.back() == '"') {
+    value.remove_prefix(1);
+    value.remove_suffix(1);
+  }
+  auto index = size_t{};
+  while (index < value.size()) {
+    while (index < value.size()
+           and std::isspace(static_cast<unsigned char>(value[index])) != 0) {
+      ++index;
+    }
+    const auto token_begin = index;
+    while (index < value.size()
+           and std::isspace(static_cast<unsigned char>(value[index])) == 0) {
+      ++index;
+    }
+    const auto token = value.substr(token_begin, index - token_begin);
+    if (not token.empty() and caf::icase_equal(token, "next")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+auto next_link_target(std::string_view header)
+  -> std::variant<caf::none_t, std::string_view, const char*> {
+  auto item = detail::trim(header);
+  if (item.empty()) {
+    return caf::none;
+  }
+  if (item.front() != '<') {
+    return "missing opening `<` in Link header";
+  }
+  const auto uri_end = item.find('>');
+  if (uri_end == std::string_view::npos) {
+    return "missing closing `>` in Link header";
+  }
+  auto target = item.substr(1, uri_end - 1);
+  auto params = item.substr(uri_end + 1);
+  auto [param_parts, ok] = split_link_params(params);
+  if (not ok) {
+    return "unterminated quoted value in Link header";
+  }
+  auto has_next = false;
+  for (const auto part : param_parts) {
+    const auto eq = part.find('=');
+    auto name = detail::trim(part.substr(0, eq));
+    if (name.empty()) {
+      continue;
+    }
+    if (not caf::icase_equal(name, "rel")) {
+      continue;
+    }
+    if (eq == std::string_view::npos) {
+      continue;
+    }
+    const auto value = detail::trim(part.substr(eq + 1));
+    if (rel_contains_next(value)) {
+      has_next = true;
+      break;
+    }
+  }
+  if (has_next) {
+    return target;
+  }
+  return caf::none;
+}
+
+auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
+                                const http::response& response,
+                                const caf::uri& request_uri,
+                                diagnostic_handler& dh)
+  -> std::optional<std::string> {
+  if (not paginate) {
+    return std::nullopt;
+  }
+  const auto* mode = try_as<std::string>(&paginate->inner);
+  if (not mode or *mode != "link") {
+    return std::nullopt;
+  }
+  const auto base_uri = boost::urls::parse_uri_reference(request_uri.str());
+  if (not base_uri) {
+    diagnostic::warning("failed to parse request URI for link pagination: {}",
+                        base_uri.error().message())
+      .primary(*paginate)
+      .note("stopping pagination")
+      .emit(dh);
+    return std::nullopt;
+  }
+  auto malformed = false;
+  for (const auto& [name, value] : response.header_fields()) {
+    if (not caf::icase_equal(name, "link")) {
+      continue;
+    }
+    for (const auto header : split_link_header(value)) {
+      auto parsed = next_link_target(header);
+      if (const auto* target = std::get_if<std::string_view>(&parsed)) {
+        auto ref = boost::urls::parse_uri_reference(*target);
+        if (not ref) {
+          diagnostic::warning("invalid `rel=next` URL in Link header: {}",
+                              ref.error().message())
+            .primary(*paginate)
+            .note("stopping pagination")
+            .emit(dh);
+          return std::nullopt;
+        }
+        auto resolved = boost::urls::url{};
+        if (auto result = boost::urls::resolve(*base_uri, *ref, resolved);
+            not result) {
+          diagnostic::warning("failed to resolve `rel=next` URL: {}",
+                              result.error().message())
+            .primary(*paginate)
+            .note("stopping pagination")
+            .emit(dh);
+          return std::nullopt;
+        }
+        return std::string{resolved.buffer()};
+      }
+      if (std::get_if<const char*>(&parsed)) {
+        malformed = true;
+      }
+    }
+  }
+  if (malformed) {
+    diagnostic::warning("failed to parse Link header for pagination")
+      .primary(*paginate)
+      .note("stopping pagination")
+      .emit(dh);
+  }
+  return std::nullopt;
 }
 
 auto make_metadata(const http::response& r, const uint64_t len)
@@ -617,7 +873,8 @@ struct from_http_args {
   std::optional<located<record>> headers;
   std::optional<ast::field_path> metadata_field;
   std::optional<ast::field_path> error_field;
-  std::optional<ast::lambda_expr> paginate;
+  std::optional<ast::expression> paginate_expr;
+  std::optional<pagination_spec> paginate;
   std::optional<located<duration>> paginate_delay;
   std::optional<located<duration>> connection_timeout;
   std::optional<located<uint64_t>> max_retry_count;
@@ -637,7 +894,7 @@ struct from_http_args {
     p.named("headers", headers);
     p.named("metadata_field", metadata_field);
     p.named("error_field", error_field);
-    p.named("paginate", paginate, "record->string");
+    p.named("paginate", paginate_expr, "record->string|string");
     p.named("paginate_delay", paginate_delay);
     p.named("connection_timeout", connection_timeout);
     p.named("max_retry_count", max_retry_count);
@@ -1191,6 +1448,22 @@ public:
           }
           return blob{r.body()};
         };
+        const auto queue_paginate = [&](std::string next_url) {
+          if (not next_url.starts_with("http://")
+              and not next_url.starts_with("https://")) {
+            next_url.insert(0, tls_enabled ? "https://" : "http://");
+          } else if (tls_enabled and next_url.starts_with("http://")) {
+            next_url.insert(4, "s");
+          }
+          auto next_uri = caf::make_uri(next_url);
+          if (not next_uri) {
+            diagnostic::error("failed to parse uri: {}", next_uri.error())
+              .primary(args_.op)
+              .emit(ctrl.diagnostics());
+            return;
+          }
+          paginate_queue.emplace_back(std::move(*next_uri), hdrs);
+        };
         if (const auto code = std::to_underlying(r.code());
             code < 200 or 399 < code) {
           if (not args_.error_field) {
@@ -1214,6 +1487,9 @@ public:
           }
           slices.push_back(std::move(slice));
           return;
+        }
+        if (auto url = next_url_from_link_headers(args_.paginate, r, uri, dh)) {
+          queue_paginate(std::move(*url));
         }
         if (r.body().empty()) {
           --awaiting;
@@ -1247,20 +1523,9 @@ public:
                                    sb.finish_assert_one_array(), slice,
                                    ctrl.diagnostics());
                   }
-                  if (auto url = next_url(args_.paginate, slice, dh)) {
-                    if (not url->starts_with("http://")
-                        and not url->starts_with("https://")) {
-                      url->insert(0, tls_enabled ? "https://" : "http://");
-                    } else if (tls_enabled and url->starts_with("http://")) {
-                      url->insert(4, "s");
-                    }
-                    auto uri = caf::make_uri(*url);
-                    if (not uri) {
-                      diagnostic::error("failed to parse uri: {}", uri.error())
-                        .primary(args_.op)
-                        .emit(ctrl.diagnostics());
-                    }
-                    paginate_queue.emplace_back(std::move(*uri), hdrs);
+                  if (auto url
+                      = next_url_from_lambda(args_.paginate, slice, dh)) {
+                    queue_paginate(std::move(*url));
                   } else {
                     TENZIR_TRACE("[http] done paginating");
                   }
@@ -1439,6 +1704,9 @@ struct from_http final : public virtual operator_factory_plugin {
     auto p = argument_parser2::operator_(name());
     args.add_to(p);
     TRY(p.parse(inv, ctx));
+    TRY(auto paginate,
+        validate_paginate(std::move(args.paginate_expr), ctx, ctx));
+    args.paginate = std::move(paginate);
     TRY(args.validate(ctx));
     warn_deprecated_payload(inv, ctx);
     // Check if the subpipeline is a sink
@@ -1494,7 +1762,8 @@ struct http_args {
   std::optional<ast::field_path> response_field;
   std::optional<ast::field_path> metadata_field;
   std::optional<ast::field_path> error_field;
-  std::optional<ast::lambda_expr> paginate;
+  std::optional<ast::expression> paginate_expr;
+  std::optional<pagination_spec> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
   tls_options ssl{{.tls_default = false}};
@@ -1513,7 +1782,7 @@ struct http_args {
     p.named("response_field", response_field);
     p.named("metadata_field", metadata_field);
     p.named("error_field", error_field);
-    p.named("paginate", paginate, "record->string");
+    p.named("paginate", paginate_expr, "record->string|string");
     p.named_optional("paginate_delay", paginate_delay);
     p.named_optional("parallel", parallel);
     ssl.add_tls_options(p);
@@ -1702,6 +1971,24 @@ public:
               }
               return blob{r.body()};
             };
+            const auto queue_paginate = [&](std::string next_url) {
+              if (not next_url.starts_with("http://")
+                  and not next_url.starts_with("https://")) {
+                next_url.insert(0, tls_enabled ? "https://" : "http://");
+              } else if (tls_enabled and next_url.starts_with("http://")) {
+                next_url.insert(4, "s");
+              }
+              auto next_uri = caf::make_uri(next_url);
+              if (not next_uri) {
+                diagnostic::warning("failed to parse uri: {}", next_uri.error())
+                  .primary(args_.op)
+                  .note("skipping request")
+                  .emit(dh);
+                return;
+              }
+              pagination_queue.emplace_back(
+                pagination_request{std::move(*next_uri), hdrs});
+            };
             if (const auto code = std::to_underlying(r.code());
                 code < 200 or 399 < code) {
               --awaiting;
@@ -1729,6 +2016,10 @@ public:
               }
               slices.push_back(std::move(slice));
               return;
+            }
+            if (auto url
+                = next_url_from_link_headers(args_.paginate, r, uri, tdh)) {
+              queue_paginate(std::move(*url));
             }
             if (r.body().empty()) {
               --awaiting;
@@ -1771,24 +2062,9 @@ public:
                                      sb.finish_assert_one_array(), slice,
                                      ctrl.diagnostics());
                     }
-                    if (auto url = next_url(args_.paginate, slice, tdh)) {
-                      if (not url->starts_with("http://")
-                          and not url->starts_with("https://")) {
-                        url->insert(0, tls_enabled ? "https://" : "http://");
-                      } else if (tls_enabled and url->starts_with("http://")) {
-                        url->insert(4, "s");
-                      }
-                      auto caf_uri = caf::make_uri(*url);
-                      if (not caf_uri) {
-                        diagnostic::warning("failed to parse uri: {}",
-                                            caf_uri.error())
-                          .primary(args_.op)
-                          .note("skipping request")
-                          .emit(dh);
-                      } else {
-                        pagination_queue.emplace_back(pagination_request{
-                          std::move(*caf_uri), std::move(hdrs)});
-                      }
+                    if (auto url
+                        = next_url_from_lambda(args_.paginate, slice, tdh)) {
+                      queue_paginate(std::move(*url));
                     } else {
                       TENZIR_TRACE("[http] done paginating");
                     }
@@ -2214,6 +2490,9 @@ struct http_plugin final : public operator_plugin2<http_operator> {
     auto p = argument_parser2::operator_(name());
     args.add_to(p);
     TRY(p.parse(inv, ctx));
+    TRY(auto paginate,
+        validate_paginate(std::move(args.paginate_expr), ctx, ctx));
+    args.paginate = std::move(paginate);
     TRY(args.validate(ctx));
     warn_deprecated_payload(inv, ctx);
     return std::make_unique<http_operator>(std::move(args));

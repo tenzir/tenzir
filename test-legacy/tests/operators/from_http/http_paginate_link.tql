@@ -1,0 +1,8 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {url: env("HTTP_FIXTURE_URL"), body: {foo: "42", bar: {baz: 1, baz2: "baz2"}}}
+http url, method="post", body=body, paginate="link"
+head 1
