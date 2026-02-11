@@ -28,8 +28,23 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Iterator
+from urllib.parse import urlsplit
 
 from tenzir_test import fixture
+
+_LINK_BASIC_PAGE_1 = "/link-pagination/basic/1"
+_LINK_BASIC_PAGE_2 = "/link-pagination/basic/2"
+_LINK_CHAIN_PREFIX = "/link-pagination/chain/"
+_LINK_CHAIN_LAST = 5
+_LINK_EDGE_PAGE_1 = "/link-pagination/edge/1"
+_LINK_EDGE_PAGE_2 = "/link-pagination/edge/2"
+_LINK_UNREACHABLE_PAGE_1 = "/link-pagination/unreachable/1"
+_LINK_MULTI_SINGLE_PAGE_1 = "/link-pagination/multi-single/1"
+_LINK_MULTI_SINGLE_PAGE_2 = "/link-pagination/multi-single/2"
+_LINK_MULTI_MULTI_PAGE_1 = "/link-pagination/multi-multi/1"
+_LINK_MULTI_MULTI_PAGE_2 = "/link-pagination/multi-multi/2"
+_LINK_MULTI_MULTI_PAGE_3 = "/link-pagination/multi-multi/3"
+_LINK_NONE_PAGE_1 = "/link-pagination/no-link/1"
 
 
 def _make_handler(capture_path: Path):
@@ -66,29 +81,123 @@ def _make_handler(capture_path: Path):
             parts.append(body.decode("utf-8"))
             capture_path.write_text("\n".join(parts), encoding="utf-8")
 
-        def _reply(self, payload: bytes) -> None:
+        def _reply(
+            self, payload: bytes, extra_headers: list[tuple[str, str]] | None = None
+        ) -> None:
             content_type = self.headers.get("Content-Type", "application/json")
             if not content_type:
                 content_type = "application/json"
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
+            if extra_headers:
+                for key, value in extra_headers:
+                    self.send_header(key, value)
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             if payload:
                 self.wfile.write(payload)
 
+        def _page_payload(self, page: int) -> bytes:
+            return f'{{"page":{page}}}\n'.encode()
+
+        def _handle_request(self, body: bytes) -> None:
+            self._record_request(body)
+            path = urlsplit(self.path).path
+            if path == _LINK_BASIC_PAGE_1:
+                self._reply(
+                    self._page_payload(1),
+                    [("Link", f"<{_LINK_BASIC_PAGE_2}>; rel=\"next\"")],
+                )
+                return
+            if path == _LINK_BASIC_PAGE_2:
+                self._reply(self._page_payload(2))
+                return
+            if path.startswith(_LINK_CHAIN_PREFIX):
+                page_str = path.removeprefix(_LINK_CHAIN_PREFIX)
+                if page_str.isdigit():
+                    page = int(page_str)
+                    if 1 <= page <= _LINK_CHAIN_LAST:
+                        headers: list[tuple[str, str]] | None = None
+                        if page < _LINK_CHAIN_LAST:
+                            headers = [
+                                ("Link", f"<{_LINK_CHAIN_PREFIX}{page + 1}>; rel=\"next\"")
+                            ]
+                        self._reply(self._page_payload(page), headers)
+                        return
+            if path == _LINK_EDGE_PAGE_1:
+                self._reply(
+                    self._page_payload(1),
+                    [
+                        (
+                            "Link",
+                            f"<{_LINK_EDGE_PAGE_2}>; rel=\"prev next\"; "
+                            "title=\"a\\\"b,c;d\", "
+                            "</link-pagination/edge/ignored>; rel=\"last\"",
+                        ),
+                    ],
+                )
+                return
+            if path == _LINK_EDGE_PAGE_2:
+                self._reply(self._page_payload(2))
+                return
+            if path == _LINK_UNREACHABLE_PAGE_1:
+                self._reply(
+                    self._page_payload(1),
+                    [
+                        (
+                            "Link",
+                            "<http://127.0.0.1:9/link-pagination/unreachable/next>;"
+                            " rel=\"next\"",
+                        ),
+                    ],
+                )
+                return
+            if path == _LINK_MULTI_SINGLE_PAGE_1:
+                self._reply(
+                    self._page_payload(1),
+                    [
+                        ("Link", "</link-pagination/multi-single/ignored>; rel=\"prev\""),
+                        ("Link", f"<{_LINK_MULTI_SINGLE_PAGE_2}>; rel=\"next\""),
+                        ("Link", "</link-pagination/multi-single/ignored>; rel=\"last\""),
+                    ],
+                )
+                return
+            if path == _LINK_MULTI_SINGLE_PAGE_2:
+                self._reply(self._page_payload(2))
+                return
+            if path == _LINK_MULTI_MULTI_PAGE_1:
+                self._reply(
+                    self._page_payload(1),
+                    [
+                        ("Link", f"<{_LINK_MULTI_MULTI_PAGE_2}>; rel=\"next\""),
+                        ("Link", f"<{_LINK_MULTI_MULTI_PAGE_3}>; rel=\"next\""),
+                    ],
+                )
+                return
+            if path == _LINK_MULTI_MULTI_PAGE_2:
+                self._reply(self._page_payload(2))
+                return
+            if path == _LINK_MULTI_MULTI_PAGE_3:
+                self._reply(self._page_payload(3))
+                return
+            if path == _LINK_NONE_PAGE_1:
+                self._reply(self._page_payload(1))
+                return
+            self._reply(body)
+
         def log_message(self, *_: object) -> None:  # noqa: D401
             return
 
+        def do_GET(self) -> None:  # noqa: N802
+            self._handle_request(b"{}")
+
         def do_POST(self) -> None:  # noqa: N802
             body = self._read_body() or b"{}"
-            self._record_request(body)
-            self._reply(body)
+            self._handle_request(body)
 
         def do_PUT(self) -> None:  # noqa: N802
             body = self._read_body() or b"{}"
-            self._record_request(body)
-            self._reply(body)
+            self._handle_request(body)
 
     return RecordingEchoHandler
 
@@ -105,10 +214,18 @@ def run() -> Iterator[dict[str, str]]:
 
     try:
         port = server.server_address[1]
-        url = f"http://127.0.0.1:{port}/"
+        base_url = f"http://127.0.0.1:{port}"
+        url = f"{base_url}/"
         yield {
             "HTTP_FIXTURE_URL": url,
             "HTTP_FIXTURE_ENDPOINT": url,
+            "HTTP_FIXTURE_LINK_URL": f"{base_url}{_LINK_BASIC_PAGE_1}",
+            "HTTP_FIXTURE_LINK_CHAIN_URL": f"{base_url}{_LINK_CHAIN_PREFIX}1",
+            "HTTP_FIXTURE_LINK_EDGE_URL": f"{base_url}{_LINK_EDGE_PAGE_1}",
+            "HTTP_FIXTURE_LINK_UNREACHABLE_URL": f"{base_url}{_LINK_UNREACHABLE_PAGE_1}",
+            "HTTP_FIXTURE_LINK_MULTI_SINGLE_URL": f"{base_url}{_LINK_MULTI_SINGLE_PAGE_1}",
+            "HTTP_FIXTURE_LINK_MULTI_MULTI_URL": f"{base_url}{_LINK_MULTI_MULTI_PAGE_1}",
+            "HTTP_FIXTURE_LINK_NONE_URL": f"{base_url}{_LINK_NONE_PAGE_1}",
             "HTTP_CAPTURE_FILE": str(capture_path),
         }
     finally:
