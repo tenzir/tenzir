@@ -21,6 +21,10 @@
 #include <arrow/record_batch.h>
 #include <arrow/type_fwd.h>
 
+#include <atomic>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -39,6 +43,7 @@ struct from_kafka_args {
   std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
+  uint64_t jobs = 1;
 
   friend auto inspect(auto& f, from_kafka_args& x) -> bool {
     return f.object(x).fields(
@@ -46,8 +51,226 @@ struct from_kafka_args {
       f.field("exit", x.exit), f.field("offset", x.offset),
       f.field("commit_batch_size", x.commit_batch_size),
       f.field("options", x.options), f.field("aws_region", x.aws_region),
-      f.field("aws", x.aws), f.field("operator_location", x.operator_location));
+      f.field("aws", x.aws), f.field("operator_location", x.operator_location),
+      f.field("jobs", x.jobs));
   }
+};
+
+// Owns the shared synchronization state between the main coroutine and
+// worker threads.
+struct consume_synchronizer {
+  std::deque<table_slice> outputs;
+  std::mutex outputs_mutex;
+  std::atomic<size_t> total_messages = 0;
+  std::atomic<bool> shutdown = false;
+  std::atomic<size_t> active_workers = 0;
+  std::condition_variable cv;
+
+  constexpr static auto backpressure_size = 42;
+
+  auto emit(table_slice slice) -> void {
+    auto lock = std::unique_lock{outputs_mutex};
+    if (outputs.size() > backpressure_size) {
+      cv.wait(lock, [this]() -> bool {
+        return outputs.size() < backpressure_size;
+      });
+    }
+    outputs.push_back(std::move(slice));
+  }
+
+  auto request_shutdown() -> void {
+    shutdown.store(true, std::memory_order_relaxed);
+  }
+
+  auto is_shutdown() const -> bool {
+    return shutdown.load(std::memory_order_relaxed);
+  }
+
+  auto count_message() -> size_t {
+    return total_messages.fetch_add(1, std::memory_order_relaxed) + 1;
+  }
+};
+
+// Per-thread worker that owns a consumer and runs the consume loop.
+class consume_worker {
+public:
+  static auto make(configuration config, from_kafka_args const& args,
+                   diagnostic_handler& dh, consume_synchronizer& sync)
+    -> std::optional<consume_worker> {
+    if (auto value = config.get("bootstrap.servers")) {
+      TENZIR_INFO("kafka connecting to broker: {}", *value);
+    }
+    auto client = consumer::make(std::move(config));
+    if (not client) {
+      diagnostic::error("failed to create consumer: {}", client.error())
+        .primary(args.operator_location)
+        .emit(dh);
+      return std::nullopt;
+    }
+    TENZIR_INFO("kafka subscribes to topic {}", args.topic);
+    if (auto err = client->subscribe({args.topic}); err.valid()) {
+      diagnostic::error("failed to subscribe to topic: {}", err)
+        .primary(args.operator_location)
+        .emit(dh);
+      return std::nullopt;
+    }
+    return consume_worker{std::move(*client), args, dh, sync};
+  }
+
+  auto
+  commit_pending(std::unordered_map<int32_t, std::shared_ptr<RdKafka::Message>>&
+                   pending_messages) -> bool {
+    for (auto const& [_, msg] : pending_messages) {
+      if (not client_.commit(msg.get(), dh_, args_.operator_location)) {
+        return false;
+      }
+    }
+    pending_messages.clear();
+    return true;
+  }
+
+  auto run() -> void {
+    auto num_messages = size_t{0};
+    auto last_commit_time = time::clock::now();
+    auto pending_messages
+      = std::unordered_map<int32_t, std::shared_ptr<RdKafka::Message>>{};
+    // Optional distinguishes "no assignment fetched yet" from a legitimate
+    // empty assignment (e.g., rebalancing or no partitions), which must not
+    // reset EOF tracking.
+    auto assigned_partitions = std::optional<std::unordered_set<int32_t>>{};
+    auto eof_partitions = std::unordered_set<int32_t>{};
+    auto const schema = type{
+      "tenzir.kafka",
+      record_type{
+        {"message", string_type{}},
+      },
+    };
+    auto const arrow_schema = schema.to_arrow_schema();
+    auto b = string_type::make_arrow_builder(arrow_memory_pool());
+    auto const finish_as_slice = [&] -> table_slice {
+      auto const length = b->length();
+      return table_slice{
+        arrow::RecordBatch::Make(arrow_schema, length, {finish(*b)}),
+      };
+    };
+    while (not sync_.is_shutdown()) {
+      auto raw_msg = client_.consume_raw(500ms);
+      TENZIR_ASSERT(raw_msg);
+      auto const now = time::clock::now();
+      auto const timed_out = now - last_commit_time >= commit_timeout;
+      switch (raw_msg->err()) {
+        case RdKafka::ERR_NO_ERROR: {
+          auto partition = raw_msg->partition();
+          pending_messages[partition] = std::move(raw_msg);
+          auto& message = pending_messages[partition];
+          check(b->Append(reinterpret_cast<const char*>(message->payload()),
+                          detail::narrow<int32_t>(message->len())));
+          ++num_messages;
+          auto const global_count = sync_.count_message();
+          auto const reached_count
+            = args_.count and args_.count->inner == global_count;
+          auto const full_batch = num_messages % args_.commit_batch_size == 0;
+          if (full_batch or timed_out or reached_count) {
+            last_commit_time = now;
+            sync_.emit(finish_as_slice());
+            if (not commit_pending(pending_messages)) {
+              return;
+            }
+            if (reached_count) {
+              sync_.request_shutdown();
+              return;
+            }
+          }
+          continue;
+        }
+        case RdKafka::ERR__TIMED_OUT: {
+          if (not pending_messages.empty() and timed_out) {
+            last_commit_time = now;
+            sync_.emit(finish_as_slice());
+            if (not commit_pending(pending_messages)) {
+              return;
+            }
+          }
+          continue;
+        }
+        case RdKafka::ERR__PARTITION_EOF: {
+          auto assignment
+            = client_.get_assignment(args_.topic, dh_, args_.operator_location);
+          if (not assignment) {
+            commit_pending(pending_messages);
+            return;
+          }
+          if (assignment->empty()) {
+            TENZIR_DEBUG("kafka partition {} reached EOF with no assignment",
+                         raw_msg->partition());
+            continue;
+          }
+          if (not assigned_partitions or *assigned_partitions != *assignment) {
+            assigned_partitions = std::move(*assignment);
+            eof_partitions.clear();
+          }
+          if (not assigned_partitions->contains(raw_msg->partition())) {
+            TENZIR_DEBUG("kafka partition {} EOF not in assignment",
+                         raw_msg->partition());
+            continue;
+          }
+          eof_partitions.insert(raw_msg->partition());
+          TENZIR_DEBUG("kafka partition {} reached EOF ({}/{} partitions EOF)",
+                       raw_msg->partition(), eof_partitions.size(),
+                       assigned_partitions->size());
+          if (eof_partitions.size() == assigned_partitions->size()) {
+            if (not pending_messages.empty()) {
+              sync_.emit(finish_as_slice());
+              last_commit_time = now;
+              commit_pending(pending_messages);
+            }
+            return;
+          }
+          continue;
+        }
+        default: {
+          if (not pending_messages.empty()) {
+            auto ndh = transforming_diagnostic_handler{
+              dh_,
+              [](auto&& diag) {
+                return std::move(diag)
+                  .modify()
+                  .severity(severity::warning)
+                  .done();
+              },
+            };
+            sync_.emit(finish_as_slice());
+            last_commit_time = now;
+            for (auto const& [_, msg] : pending_messages) {
+              std::ignore
+                = client_.commit(msg.get(), ndh, args_.operator_location);
+            }
+            pending_messages.clear();
+          }
+          diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
+            .primary(args_.operator_location)
+            .emit(dh_);
+          return;
+        }
+      }
+    }
+    // Shutdown was requested; commit any remaining pending messages.
+    if (not pending_messages.empty()) {
+      sync_.emit(finish_as_slice());
+      commit_pending(pending_messages);
+    }
+  }
+
+private:
+  consume_worker(consumer client, from_kafka_args const& args,
+                 diagnostic_handler& dh, consume_synchronizer& sync)
+    : client_{std::move(client)}, args_{args}, dh_{dh}, sync_{sync} {
+  }
+
+  consumer client_;
+  from_kafka_args const& args_;
+  diagnostic_handler& dh_;
+  consume_synchronizer& sync_;
 };
 
 class from_kafka_operator final : public crtp_operator<from_kafka_operator> {
@@ -80,211 +303,93 @@ public:
       resolved_creds->region = args_.aws_region->inner;
     }
     co_yield {};
-    auto cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
-    if (not cfg) {
-      diagnostic::error("failed to create configuration: {}", cfg.error())
+    // Build a fully-configured configuration that workers will copy.
+    auto tmp_cfg = configuration::make(config_, args_.aws, resolved_creds, dh);
+    if (not tmp_cfg) {
+      diagnostic::error("failed to create configuration: {}", tmp_cfg.error())
         .primary(args_.operator_location)
         .emit(dh);
       co_return;
     }
-    // If we want to exit when we're done, we need to tell Kafka to emit a
-    // signal so that we know when to terminate.
+    {
+      auto secrets = configure_or_request(args_.options, *tmp_cfg, dh);
+      co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
+    }
+    // Configure per-consumer settings on tmp_cfg before spawning workers.
     if (args_.exit) {
-      if (auto err = cfg->set("enable.partition.eof", "true"); err.valid()) {
+      if (auto err = tmp_cfg->set("enable.partition.eof", "true");
+          err.valid()) {
         diagnostic::error("failed to enable partition EOF: {}", err)
           .primary(args_.operator_location)
           .emit(dh);
         co_return;
       }
     }
-    // Disable auto-commit to use manual commit for precise message counting
-    if (auto err = cfg->set("enable.auto.commit", "false"); err.valid()) {
+    if (auto err = tmp_cfg->set("enable.auto.commit", "false"); err.valid()) {
       diagnostic::error("failed to disable auto-commit: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
       co_return;
     }
-    // Adjust rebalance callback to set desired offset.
     auto offset = RdKafka::Topic::OFFSET_STORED;
     if (args_.offset) {
       auto success = offset_parser()(args_.offset->inner, offset);
-      TENZIR_ASSERT(success); // validated earlier;
+      TENZIR_ASSERT(success);
       TENZIR_INFO("kafka adjusts offset to {} ({})", args_.offset->inner,
                   offset);
     }
-    if (auto err = cfg->set_rebalance_cb(offset); err.valid()) {
+    if (auto err = tmp_cfg->set_rebalance_cb(offset); err.valid()) {
       diagnostic::error("failed to set rebalance callback: {}", err)
         .primary(args_.operator_location)
         .emit(dh);
       co_return;
     }
-    // Override configuration with arguments.
-    {
-      auto secrets = configure_or_request(args_.options, *cfg, dh);
-      co_yield ctrl.resolve_secrets_must_yield(std::move(secrets));
-    }
-    // Create the consumer.
-    if (auto value = cfg->get("bootstrap.servers")) {
-      TENZIR_INFO("kafka connecting to broker: {}", *value);
-    }
-    auto client = consumer::make(*cfg);
-    if (not client) {
-      diagnostic::error("failed to create consumer: {}", client.error())
-        .primary(args_.operator_location)
-        .emit(dh);
-      co_return;
-    };
-    TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
-    if (auto err = client->subscribe({args_.topic}); err.valid()) {
-      diagnostic::error("failed to subscribe to topic: {}", err)
-        .primary(args_.operator_location)
-        .emit(dh);
-      co_return;
-    }
-    auto num_messages = size_t{0};
-    auto last_commit_time = time::clock::now();
-    auto pending_messages
-      = std::unordered_map<int32_t, std::shared_ptr<RdKafka::Message>>{};
-    // Optional distinguishes "no assignment fetched yet" from a legitimate
-    // empty assignment (e.g., rebalancing or no partitions), which must not
-    // reset EOF tracking.
-    auto assigned_partitions = std::optional<std::unordered_set<int32_t>>{};
-    auto eof_partitions = std::unordered_set<int32_t>{};
-    const auto schema = type{
-      "tenzir.kafka",
-      record_type{
-        {"message", string_type{}},
-      },
-    };
-    const auto arrow_schema = schema.to_arrow_schema();
-    auto b = string_type::make_arrow_builder(arrow_memory_pool());
-    const auto finish_as_slice = [&] -> table_slice {
-      const auto length = b->length();
-      return table_slice{
-        arrow::RecordBatch::Make(arrow_schema, length, {finish(*b)}),
-      };
-    };
-    while (true) {
-      auto raw_msg = client->consume_raw(500ms);
-      TENZIR_ASSERT(raw_msg);
-      const auto now = time::clock::now();
-      const auto timed_out = now - last_commit_time >= commit_timeout;
-      switch (raw_msg->err()) {
-        case RdKafka::ERR_NO_ERROR: {
-          auto partition = raw_msg->partition();
-          pending_messages[partition] = std::move(raw_msg);
-          auto& message = pending_messages[partition];
-          check(b->Append(reinterpret_cast<const char*>(message->payload()),
-                          detail::narrow<int32_t>(message->len())));
-          ++num_messages;
-          const auto reached_count
-            = args_.count && args_.count->inner == num_messages;
-          const auto full_batch = num_messages % args_.commit_batch_size == 0;
-          if (full_batch or timed_out or reached_count) {
-            last_commit_time = now;
-            co_yield finish_as_slice();
-            for (const auto& [_, msg] : pending_messages) {
-              if (not client->commit(msg.get(), dh, args_.operator_location)) {
-                co_return;
-              }
-            }
-            pending_messages.clear();
-            if (reached_count) {
-              co_return;
-            }
-          } else {
-            co_yield {};
-          }
-          continue;
-        }
-        case RdKafka::ERR__TIMED_OUT: {
-          if (not pending_messages.empty() and timed_out) {
-            last_commit_time = now;
-            co_yield finish_as_slice();
-            for (const auto& [_, msg] : pending_messages) {
-              if (not client->commit(msg.get(), dh, args_.operator_location)) {
-                co_return;
-              }
-            }
-            pending_messages.clear();
-          } else {
-            co_yield {};
-          }
-          continue;
-        }
-        case RdKafka::ERR__PARTITION_EOF: {
-          auto assignment
-            = client->get_assignment(args_.topic, dh, args_.operator_location);
-          if (not assignment) {
-            co_return;
-          }
-          if (assignment->empty()) {
-            TENZIR_DEBUG("kafka partition {} reached EOF with no assignment",
-                         raw_msg->partition());
-            co_yield {};
-            continue;
-          }
-          if (not assigned_partitions or *assigned_partitions != *assignment) {
-            assigned_partitions = std::move(*assignment);
-            eof_partitions.clear();
-          }
-          if (not assigned_partitions->contains(raw_msg->partition())) {
-            TENZIR_DEBUG("kafka partition {} EOF not in assignment",
-                         raw_msg->partition());
-            co_yield {};
-            continue;
-          }
-          eof_partitions.insert(raw_msg->partition());
-          TENZIR_DEBUG("kafka partition {} reached EOF ({}/{} partitions EOF)",
-                       raw_msg->partition(), eof_partitions.size(),
-                       assigned_partitions->size());
-          if (eof_partitions.size() == assigned_partitions->size()) {
-            if (not pending_messages.empty()) {
-              co_yield finish_as_slice();
-              last_commit_time = now;
-              for (const auto& [_, msg] : pending_messages) {
-                std::ignore
-                  = client->commit(msg.get(), dh, args_.operator_location);
-              }
-              pending_messages.clear();
-            }
-            co_yield {};
-            co_return;
-          }
-          co_yield {};
-          continue;
-        }
-        default: {
-          if (not pending_messages.empty()) {
-            auto ndh = transforming_diagnostic_handler{
-              dh,
-              [](auto&& diag) {
-                return std::move(diag)
-                  .modify()
-                  .severity(severity::warning)
-                  .done();
-              },
-            };
-            co_yield finish_as_slice();
-            last_commit_time = now;
-            for (const auto& [_, msg] : pending_messages) {
-              std::ignore
-                = client->commit(msg.get(), ndh, args_.operator_location);
-            }
-            pending_messages.clear();
-          }
-          diagnostic::error("unexpected kafka error: `{}`", raw_msg->errstr())
-            .primary(args_.operator_location)
-            .emit(dh);
-          co_yield {};
-          co_return;
-        }
+    auto const num_workers = std::max(args_.jobs, uint64_t{1});
+    auto sync = consume_synchronizer{};
+    sync.active_workers.store(num_workers, std::memory_order_relaxed);
+    auto threads = std::vector<std::thread>{};
+    threads.reserve(num_workers);
+    auto guard = detail::scope_guard{[&]() noexcept {
+      sync.request_shutdown();
+      for (auto& thread : threads) {
+        thread.join();
       }
+    }};
+    for (auto i = uint64_t{0}; i < num_workers; ++i) {
+      threads.emplace_back([&, sdh = ctrl.shared_diagnostics()]() mutable {
+        caf::detail::set_thread_name("kafka_consume");
+        auto worker = consume_worker::make(*tmp_cfg, args_, sdh, sync);
+        if (not worker) {
+          sync.active_workers.fetch_sub(1, std::memory_order_release);
+          return;
+        }
+        worker->run();
+        sync.active_workers.fetch_sub(1, std::memory_order_release);
+      });
+    }
+    while (sync.active_workers.load(std::memory_order_acquire) > 0) {
+      auto lock = std::unique_lock{sync.outputs_mutex};
+      if (sync.outputs.empty()) {
+        lock.unlock();
+        co_yield {};
+        continue;
+      }
+      auto batch = std::move(sync.outputs);
+      sync.outputs.clear();
+      lock.unlock();
+      sync.cv.notify_all();
+      for (auto& slice : batch) {
+        co_yield std::move(slice);
+      }
+    }
+    guard.trigger();
+    for (auto& slice : sync.outputs) {
+      co_yield std::move(slice);
     }
   }
 
   auto detached() const -> bool override {
-    return true;
+    return false;
   }
 
   auto optimize(const expression&, event_order) const
@@ -358,6 +463,7 @@ public:
           .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .named_optional("commit_batch_size", args.commit_batch_size)
+          .named_optional("_jobs", args.jobs)
           .parse(inv, ctx));
     if (args.commit_batch_size == 0) {
       diagnostic::error("`commit_batch_size` must be greater than 0")
@@ -381,6 +487,7 @@ public:
         return failure::promise();
       }
     }
+    // Disable auto-commit to use manual commit for precise message counting
     if (args.options.inner.contains("enable.auto.commit")) {
       diagnostic::error("`enable.auto.commit` must not be specified")
         .primary(args.options)
