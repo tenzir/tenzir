@@ -347,6 +347,10 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
       if (stop) {
         // We intentionally don't pop the element so that the other threads can
         // also get to see it.
+        auto outputs_lock = std::scoped_lock{outputs_mutex};
+        for (auto slice : parser.builder.finalize_as_table_slice()) {
+          outputs.push_back(std::move(slice));
+        }
         return;
       }
       auto input = std::move(inputs.front());
@@ -370,16 +374,22 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
         }
         TENZIR_UNREACHABLE();
       });
-      auto parsed = parser_loop<ndjson_parser&>(std::move(split_gen), parser);
-      for (auto slice : parsed) {
-        if (slice.rows() == 0) {
-          // We don't care, because our input is already fully there.
+      for (const auto& chunk : split_gen) {
+        if (not chunk or chunk->size() == 0u) {
           continue;
         }
-        auto outputs_lock = std::unique_lock{outputs_mutex};
+        parser.parse(*chunk);
+        TENZIR_ASSERT(not parser.abort_requested);
+      }
+      const auto outputs_lock = std::scoped_lock{outputs_mutex};
+      for (auto slice : parser.builder.yield_ready_as_table_slice()) {
+        if (slice.rows() == 0) {
+          continue;
+        }
         outputs.push_back(std::move(slice));
       }
     }
+    TENZIR_UNREACHABLE();
   };
   // Set up the threads.
   TENZIR_ASSERT(args.jobs > 0);
