@@ -87,8 +87,10 @@ public:
         // TODO: This is a hack for the case where we don't have the information.
         break;
       }
-      auto [line, col] = line_col_indices(annotation.source.begin);
-      indent_width = std::max(indent_width, std::to_string(line + 1).size());
+      if (auto lc = line_col_indices(annotation.source.begin)) {
+        auto [line, col] = *lc;
+        indent_width = std::max(indent_width, std::to_string(line + 1).size());
+      }
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
@@ -100,7 +102,13 @@ public:
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
-      auto [line_idx, col] = line_col_indices(annotation.source.begin);
+      auto lc = line_col_indices(annotation.source.begin);
+      if (not lc) {
+        // Source offset is beyond the available source text. This can
+        // happen when diagnostics reference a modified definition.
+        continue;
+      }
+      auto [line_idx, col] = *lc;
       auto line = line_idx + 1;
       if (&annotation == &diag.annotations.front()) {
         fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
@@ -167,19 +175,23 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  /// Returned indices are zero-based.
-  auto line_col_indices(size_t offset) -> std::pair<size_t, size_t> {
+  /// Returned indices are zero-based. Returns nullopt if the offset is
+  /// beyond the end of the source text.
+  auto line_col_indices(size_t offset)
+    -> std::optional<std::pair<size_t, size_t>> {
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      TENZIR_ASSERT(line < lines_.size());
+      if (line >= lines_.size()) {
+        return std::nullopt;
+      }
       if (col <= lines_[line].size()) {
         break;
       }
       col -= lines_[line].size() + 1;
       line += 1;
     }
-    return {line, col};
+    return std::pair{line, col};
   }
 
   bool first = true;
