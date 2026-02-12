@@ -7,15 +7,23 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/arrow_fs.hpp>
+#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/from_file_base.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/secret_resolution.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/s3fs.h>
+#include <arrow/util/uri.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/S3ClientConfiguration.h>
+#include <aws/s3/model/DeleteObjectRequest.h>
 #include <caf/actor_from_state.hpp>
 
 #include <memory>
@@ -208,7 +216,119 @@ private:
   event_order order_{event_order::ordered};
 };
 
-class from_s3 final : public operator_plugin2<from_s3_operator> {
+struct FromS3Args : ArrowFsArgs {
+  bool anonymous = false;
+  std::optional<located<record>> aws_iam;
+};
+
+class FromS3Operator final : public ArrowFsOperator {
+public:
+  explicit FromS3Operator(FromS3Args args)
+    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+  }
+
+protected:
+  auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>> override {
+    auto uri = arrow::util::Uri{};
+    auto requests = std::vector<secret_request>{
+      make_uri_request(args_.url, "s3://", uri, ctx.dh()),
+    };
+    auto result = co_await ctx.resolve_secrets(std::move(requests));
+    if (result.is_error()) {
+      co_return failure::promise();
+    }
+    resolved_ = co_await resolve_aws_iam_auth(args_.aws_iam, std::nullopt, ctx);
+    if (not resolved_) {
+      co_return failure::promise();
+    }
+    TENZIR_ASSERT(resolved_->secret_requests.empty());
+    co_return std::move(uri);
+  }
+
+  auto make_filesystem(arrow::util::Uri const& uri, diagnostic_handler& dh)
+    -> Task<failure_or<MakeFilesystemResult>> override {
+    auto path = std::string{};
+    auto opts_result = arrow::fs::S3Options::FromUri(uri, &path);
+    if (not opts_result.ok()) {
+      diagnostic::error("failed to create S3 options from URI")
+        .primary(args_.url)
+        .note(opts_result.status().ToStringWithoutContextLines())
+        .emit(dh);
+      co_return failure::promise();
+    }
+    auto opts = opts_result.MoveValueUnsafe();
+    if (args_.anonymous) {
+      opts.ConfigureAnonymousCredentials();
+    } else {
+      auto creds = resolved_ ? resolved_->credentials : std::nullopt;
+      auto region = std::optional<std::string>{};
+      if (creds and not creds->region.empty()) {
+        region = creds->region;
+        opts.region = *region;
+      }
+      auto provider = make_aws_credentials_provider(creds, region);
+      if (not provider) {
+        diagnostic::error(provider.error()).primary(args_.url).emit(dh);
+        co_return failure::promise();
+      }
+      opts.credentials_provider = std::move(*provider);
+      if (creds) {
+        if (not creds->access_key_id.empty() or not creds->profile.empty()) {
+          opts.credentials_kind = arrow::fs::S3CredentialsKind::Explicit;
+        } else if (not creds->role.empty()) {
+          opts.credentials_kind = arrow::fs::S3CredentialsKind::Role;
+        }
+      }
+    }
+    auto fs_result = arrow::fs::S3FileSystem::Make(opts);
+    if (not fs_result.ok()) {
+      diagnostic::error("failed to create S3 filesystem")
+        .primary(args_.url)
+        .note(fs_result.status().ToStringWithoutContextLines())
+        .emit(dh);
+      co_return failure::promise();
+    }
+    co_return MakeFilesystemResult{fs_result.MoveValueUnsafe(),
+                                   std::move(path)};
+  }
+
+  auto remove_file(std::string const& path, diagnostic_handler& dh) const
+    -> Task<void> override {
+    auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(filesystem().get());
+    TENZIR_ASSERT(s3_fs);
+    co_await spawn_blocking([&] {
+      auto const& options = s3_fs->options();
+      auto config = Aws::S3::S3ClientConfiguration{};
+      config.region = options.region;
+      if (not options.endpoint_override.empty()) {
+        config.endpointOverride = options.endpoint_override;
+        config.useVirtualAddressing = options.force_virtual_addressing;
+      }
+      config.scheme = options.scheme == "http" ? Aws::Http::Scheme::HTTP
+                                               : Aws::Http::Scheme::HTTPS;
+      auto [bucket, key] = split_at_first_slash(path);
+      auto client
+        = Aws::S3::S3Client{options.credentials_provider, nullptr, config};
+      auto request = Aws::S3::Model::DeleteObjectRequest{};
+      request.SetBucket(bucket);
+      request.SetKey(key);
+      auto outcome = client.DeleteObject(request);
+      if (not outcome.IsSuccess()) {
+        diagnostic::warning("failed to delete `{}`", path)
+          .primary(args_.url)
+          .note("{}", outcome.GetError().GetMessage())
+          .emit(dh);
+      }
+    });
+  }
+
+private:
+  FromS3Args args_;
+  std::optional<ResolvedAwsIamAuth> resolved_;
+};
+
+class from_s3 final : public operator_plugin2<from_s3_operator>,
+                      public OperatorPlugin {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_s3_args{};
@@ -304,6 +424,25 @@ class from_s3 final : public operator_plugin2<from_s3_operator> {
     TRY(auto result, args.base_args.handle(ctx));
     result.prepend(std::make_unique<from_s3_operator>(std::move(args)));
     return std::make_unique<pipeline>(std::move(result));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<FromS3Args, FromS3Operator>{};
+    auto anon = d.named("anonymous", &FromS3Args::anonymous);
+    auto aws_iam_arg = d.named("aws_iam", &FromS3Args::aws_iam);
+    ArrowFsArgs::describe_to(d, [=](ValidateCtx& ctx) {
+      auto has_anon = ctx.get_location(anon).has_value();
+      auto has_iam = ctx.get_location(aws_iam_arg).has_value();
+      if (has_anon and has_iam) {
+        diagnostic::error("`anonymous` cannot be used with `aws_iam`")
+          .primary(ctx.get_location(anon).value_or(location::unknown))
+          .emit(ctx);
+      }
+      if (auto iam = ctx.get(aws_iam_arg); iam) {
+        std::ignore = aws_iam_options::from_record(*iam, ctx);
+      }
+    });
+    return d.without_optimize();
   }
 };
 
