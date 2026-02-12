@@ -7,13 +7,18 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/arrow_fs.hpp>
+#include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/from_file_base.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/azurefs.h>
+#include <arrow/util/uri.h>
+#include <azure/storage/blobs.hpp>
 #include <caf/actor_from_state.hpp>
 
 #include <memory>
@@ -134,7 +139,106 @@ private:
   event_order order_{event_order::ordered};
 };
 
-class from_abs final : public operator_plugin2<from_abs_operator> {
+struct FromAbsArgs : ArrowFsArgs {
+  std::optional<std::string> account_key;
+};
+
+class FromAbsOperator final : public ArrowFsOperator {
+public:
+  explicit FromAbsOperator(FromAbsArgs args)
+    : ArrowFsOperator{static_cast<ArrowFsArgs&>(args)}, args_{std::move(args)} {
+  }
+
+protected:
+  auto resolve_url(OpCtx& ctx) -> Task<failure_or<arrow::util::Uri>> override {
+    auto uri = arrow::util::Uri{};
+    auto account_key = std::string{};
+    auto requests = std::vector<secret_request>{
+      make_uri_request(args_.url, "", uri, ctx.dh()),
+    };
+    if (args_.account_key) {
+      requests.push_back(
+        make_secret_request("account_key", args_.url, account_key, ctx.dh()));
+    }
+    auto result = co_await ctx.resolve_secrets(std::move(requests));
+    if (result.is_error()) {
+      co_return failure::promise();
+    }
+    resolved_account_key_ = std::move(account_key);
+    co_return std::move(uri);
+  }
+
+  auto make_filesystem(arrow::util::Uri const& uri, diagnostic_handler& dh)
+    -> Task<failure_or<MakeFilesystemResult>> override {
+    auto path = std::string{};
+    auto opts_result = arrow::fs::AzureOptions::FromUri(uri, &path);
+    if (not opts_result.ok()) {
+      diagnostic::error("failed to create Azure Blob Storage options from URI")
+        .primary(args_.url)
+        .note(opts_result.status().ToStringWithoutContextLines())
+        .emit(dh);
+      co_return failure::promise();
+    }
+    auto opts = opts_result.MoveValueUnsafe();
+    if (args_.account_key and not resolved_account_key_.empty()) {
+      auto status = opts.ConfigureAccountKeyCredential(resolved_account_key_);
+      if (not status.ok()) {
+        diagnostic::error("failed to set account key")
+          .primary(args_.url)
+          .note(status.ToStringWithoutContextLines())
+          .emit(dh);
+        co_return failure::promise();
+      }
+    }
+    auto fs_result = arrow::fs::AzureFileSystem::Make(opts);
+    if (not fs_result.ok()) {
+      diagnostic::error("failed to create Azure Blob Storage filesystem")
+        .primary(args_.url)
+        .note(fs_result.status().ToStringWithoutContextLines())
+        .emit(dh);
+      co_return failure::promise();
+    }
+    co_return MakeFilesystemResult{fs_result.MoveValueUnsafe(),
+                                   std::move(path)};
+  }
+
+  auto remove_file(std::string const& path, diagnostic_handler& dh) const
+    -> Task<void> override {
+    auto* abs_fs
+      = dynamic_cast<arrow::fs::AzureFileSystem*>(filesystem().get());
+    TENZIR_ASSERT(abs_fs);
+    co_await spawn_blocking([&] {
+      auto service_client_result = abs_fs->options().MakeBlobServiceClient();
+      if (not service_client_result.ok()) {
+        diagnostic::warning("failed to delete `{}`", path)
+          .primary(args_.url)
+          .note("{}",
+                service_client_result.status().ToStringWithoutContextLines())
+          .emit(dh);
+        return;
+      }
+      auto service_client = std::move(*service_client_result);
+      auto [container, blob_path] = split_at_first_slash(path);
+      auto container_client = service_client->GetBlobContainerClient(container);
+      auto blob_client = container_client.GetBlobClient(blob_path);
+      try {
+        blob_client.Delete();
+      } catch (Azure::Storage::StorageException const& e) {
+        diagnostic::warning("failed to delete `{}`", path)
+          .primary(args_.url)
+          .note("{}", e.what())
+          .emit(dh);
+      }
+    });
+  }
+
+private:
+  FromAbsArgs args_;
+  std::string resolved_account_key_;
+};
+
+class from_abs final : public operator_plugin2<from_abs_operator>,
+                       public OperatorPlugin {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = from_abs_args{};
@@ -145,6 +249,13 @@ class from_abs final : public operator_plugin2<from_abs_operator> {
     TRY(auto result, args.base_args.handle(ctx));
     result.prepend(std::make_unique<from_abs_operator>(std::move(args)));
     return std::make_unique<pipeline>(std::move(result));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<FromAbsArgs, FromAbsOperator>{};
+    d.named("account_key", &FromAbsArgs::account_key);
+    ArrowFsArgs::describe_to(d);
+    return d.without_optimize();
   }
 };
 
