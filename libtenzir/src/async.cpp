@@ -1070,9 +1070,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
               std::chrono::duration_cast<folly::HighResDuration>(
                 defaults::metrics_interval));
             auto snapshot = metrics->take_snapshot();
-            if (not snapshot.empty()) {
-              emit_fn(snapshot);
-            }
+            emit_fn(snapshot);
           }
         });
       }
