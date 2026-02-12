@@ -1068,7 +1068,7 @@ private:
       std::move(*message),
       [&](PostCommit) -> Task<void> {
         LOGV("got post commit in {}", op_name());
-        co_await base_op().post_commit();
+        co_await base_op().post_commit(*this);
       },
       [&](Shutdown) -> Task<void> {
         // FIXME: Cleanup on shutdown?

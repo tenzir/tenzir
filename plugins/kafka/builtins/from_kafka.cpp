@@ -477,7 +477,7 @@ public:
     }
   }
 
-  auto post_commit() -> Task<void> override {
+  auto post_commit(OpCtx&) -> Task<void> override {
     co_await commit_pending_offsets();
   }
 
