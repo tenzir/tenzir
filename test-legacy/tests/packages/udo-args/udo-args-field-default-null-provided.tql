@@ -1,0 +1,5 @@
+from {
+  name: "Alice",
+  input: "value",
+}
+argspkg::optional_field_indicator field=this.input

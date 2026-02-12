@@ -35,6 +35,11 @@ auto parameter_default_string(const ast::expression& expr)
   return std::nullopt;
 }
 
+auto is_null_constant_expression(const ast::expression& expr) -> bool {
+  const auto* constant = try_as<ast::constant>(expr);
+  return constant && is<caf::none_t>(constant->value);
+}
+
 auto make_usage_string(std::string_view op_name,
                        const user_defined_operator& udo) -> std::string {
   auto usage = std::string{op_name};
@@ -224,6 +229,8 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   -> failure_or<ast::pipeline> {
   auto positional_values = std::vector<ast::expression>{};
   positional_values.reserve(udo.positional_params.size());
+  auto positional_from_default = std::vector<bool>{};
+  positional_from_default.reserve(udo.positional_params.size());
   auto named_values
     = std::vector<std::optional<ast::expression>>(udo.named_params.size());
   auto named_value_locations
@@ -251,6 +258,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
         || try_as<ast::assignment>(inv.args[next_arg]);
     if (not missing_argument) {
       positional_values.push_back(std::move(inv.args[next_arg]));
+      positional_from_default.push_back(false);
       ++next_arg;
       return std::nullopt;
     }
@@ -262,6 +270,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       return failure::promise();
     }
     positional_values.push_back(*param.default_value);
+    positional_from_default.push_back(true);
     return std::nullopt;
   };
   for (const auto& positional_param : udo.positional_params) {
@@ -371,10 +380,17 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     auto& expr = positional_values[i];
     const auto& param = udo.positional_params[i];
     if (param.type_hint == "field") {
-      auto copy = ast::expression{expr};
-      if (not ast::selector::try_from(std::move(copy))) {
-        diagnostic::error("expected a selector").primary(expr).emit(dh);
-        return failure::promise();
+      if (is_null_constant_expression(expr)) {
+        if (not positional_from_default[i]) {
+          diagnostic::error("expected a selector").primary(expr).emit(dh);
+          return failure::promise();
+        }
+      } else {
+        auto copy = ast::expression{expr};
+        if (not ast::selector::try_from(std::move(copy))) {
+          diagnostic::error("expected a selector").primary(expr).emit(dh);
+          return failure::promise();
+        }
       }
     }
     if (not validate_type(param, expr, std::nullopt)) {
@@ -390,16 +406,23 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
     auto value = std::move(*named_values[i]);
     if (param.type_hint == "field") {
-      auto copy = ast::expression{value};
-      if (not ast::selector::try_from(std::move(copy))) {
-        if (named_value_locations[i]) {
-          diagnostic::error("expected a selector")
-            .primary(*named_value_locations[i])
-            .emit(dh);
+      if (is_null_constant_expression(value) && named_value_locations[i]) {
+        diagnostic::error("expected a selector")
+          .primary(*named_value_locations[i])
+          .emit(dh);
+        return failure::promise();
+      } else if (not is_null_constant_expression(value)) {
+        auto copy = ast::expression{value};
+        if (not ast::selector::try_from(std::move(copy))) {
+          if (named_value_locations[i]) {
+            diagnostic::error("expected a selector")
+              .primary(*named_value_locations[i])
+              .emit(dh);
+            return failure::promise();
+          }
+          diagnostic::error("expected a selector").primary(inv.self).emit(dh);
           return failure::promise();
         }
-        diagnostic::error("expected a selector").primary(inv.self).emit(dh);
-        return failure::promise();
       }
     }
     if (not validate_type(param, value, named_value_locations[i])) {

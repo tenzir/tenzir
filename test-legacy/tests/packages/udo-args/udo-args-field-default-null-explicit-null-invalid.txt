@@ -1,0 +1,11 @@
+error: expected a selector
+ --> tests/packages/udo-args/udo-args-field-default-null-explicit-null-invalid.tql:6:41
+  |
+6 | argspkg::optional_field_indicator field=null
+  |                                         ^^^^ 
+  |
+  = usage: argspkg::optional_field_indicator [field=field]
+  = note: parameters:
+            named:
+              name   type   default  description
+              field  field  ~        Optional field selector
