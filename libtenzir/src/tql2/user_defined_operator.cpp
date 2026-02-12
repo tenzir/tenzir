@@ -9,6 +9,7 @@
 #include "tenzir/tql2/user_defined_operator.hpp"
 
 #include "tenzir/detail/similarity.hpp"
+#include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 
@@ -342,6 +343,23 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   auto substitutions = std::unordered_map<std::string, ast::expression>{};
   substitutions.reserve(udo.positional_params.size() + udo.named_params.size());
 
+  auto coerce_const_string_to_secret =
+    [&](const user_defined_operator::parameter& param, ast::expression& expr) {
+      if (not param.value_type || not is<secret_type>(*param.value_type)) {
+        return;
+      }
+      auto value = try_const_eval(expr, ctx);
+      if (not value) {
+        return;
+      }
+      auto* str = try_as<std::string>(&*value);
+      if (not str) {
+        return;
+      }
+      expr = ast::expression{
+        ast::constant{secret::make_literal(*str), expr.get_location()}};
+    };
+
   auto validate_type
     = [&](const user_defined_operator::parameter& param,
           const ast::expression& expr,
@@ -377,6 +395,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
         return failure::promise();
       }
     }
+    coerce_const_string_to_secret(param, expr);
     if (not validate_type(param, expr, std::nullopt)) {
       return failure::promise();
     }
@@ -402,6 +421,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
         return failure::promise();
       }
     }
+    coerce_const_string_to_secret(param, value);
     if (not validate_type(param, value, named_value_locations[i])) {
       return failure::promise();
     }
