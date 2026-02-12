@@ -18,24 +18,41 @@
 
 namespace tenzir::plugins::kafka {
 
+producer::~producer() {
+  using namespace std::chrono_literals;
+  if (! producer_) {
+    return;
+  }
+  TENZIR_DEBUG("flushing pending Kafka messages");
+  if (auto err = flush(10s); err.valid()) {
+    TENZIR_WARN(err);
+  }
+  if (auto num_messages = queue_size(); num_messages > 0) {
+    TENZIR_ERROR("{} Kafka messages were not delivered", num_messages);
+  }
+}
+
 auto producer::make(configuration config) -> caf::expected<producer> {
   producer result;
   std::string error;
   result.producer_.reset(RdKafka::Producer::create(config.conf_.get(), error));
-  if (!result.producer_)
+  if (! result.producer_) {
     return caf::make_error(ec::unspecified,
                            fmt::format("failed to create producer: {}", error));
+  }
   result.config_ = std::move(config);
   return result;
 }
 
 auto producer::produce(std::string topic, std::span<const std::byte> bytes,
                        std::string_view key, time timestamp) -> caf::error {
+  TENZIR_ASSERT(producer_);
   auto ms = int64_t{0};
-  if (timestamp != time{})
+  if (timestamp != time{}) {
     ms = std::chrono::duration_cast<std::chrono::milliseconds>(
            timestamp.time_since_epoch())
            .count();
+  }
   while (true) {
     auto result = producer_->produce(
       /// The message topic.
@@ -93,11 +110,13 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
 }
 
 auto producer::poll(std::chrono::milliseconds timeout) -> int {
+  TENZIR_ASSERT(producer_);
   auto ms = detail::narrow_cast<int>(timeout.count());
   return producer_->poll(ms);
 }
 
 auto producer::flush(std::chrono::milliseconds timeout) -> caf::error {
+  TENZIR_ASSERT(producer_);
   auto ms = detail::narrow_cast<int>(timeout.count());
   auto result = producer_->flush(ms);
   switch (result) {
@@ -114,6 +133,7 @@ auto producer::flush(std::chrono::milliseconds timeout) -> caf::error {
 }
 
 auto producer::queue_size() const -> size_t {
+  TENZIR_ASSERT(producer_);
   return static_cast<size_t>(producer_->outq_len());
 }
 

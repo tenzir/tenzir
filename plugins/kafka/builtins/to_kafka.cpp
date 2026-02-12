@@ -17,6 +17,10 @@
 
 #include <tenzir/tql2/plugin.hpp>
 
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <variant>
 
 namespace tenzir::plugins::kafka {
@@ -36,14 +40,123 @@ struct to_kafka_args {
   located<record> options;
   std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
+  uint64_t jobs = 0;
 
   friend auto inspect(auto& f, to_kafka_args& x) -> bool {
-    return f.object(x).fields(
-      f.field("op", x.op), f.field("topic", x.topic),
-      f.field("message", x.message), f.field("key", x.key),
-      f.field("timestamp", x.timestamp), f.field("options", x.options),
-      f.field("aws_region", x.aws_region), f.field("aws", x.aws));
+    return f.object(x).fields(f.field("op", x.op), f.field("topic", x.topic),
+                              f.field("message", x.message),
+                              f.field("key", x.key),
+                              f.field("timestamp", x.timestamp),
+                              f.field("options", x.options),
+                              f.field("aws_region", x.aws_region),
+                              f.field("aws", x.aws), f.field("jobs", x.jobs));
   }
+};
+
+// Owns the shared work queue between the main coroutine and worker threads.
+// An empty table_slice signals shutdown and is left in the queue so that all
+// workers observe it.
+struct produce_synchronizer {
+  auto put(table_slice slice) -> generator<std::monostate> {
+    auto lock = std::unique_lock{mutex_};
+    inputs_.push_back(std::move(slice));
+    cv_.notify_one();
+    constexpr static auto max_queue_size = 20;
+    while (inputs_.size() > max_queue_size) {
+      lock.unlock();
+      co_yield {};
+      lock.lock();
+    }
+  }
+
+  auto shutdown() -> void {
+    {
+      auto lock = std::unique_lock{mutex_};
+      inputs_.emplace_back();
+    }
+    cv_.notify_all();
+  }
+
+  // Blocks until a slice is available. Returns an empty slice on shutdown.
+  auto take() -> table_slice {
+    auto lock = std::unique_lock{mutex_};
+    cv_.wait(lock, [&] {
+      return not inputs_.empty();
+    });
+    auto const& front = inputs_.front();
+    if (front.rows() == 0) {
+      return {};
+    }
+    auto result = std::move(inputs_.front());
+    inputs_.pop_front();
+    return result;
+  }
+
+private:
+  std::deque<table_slice> inputs_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+};
+
+// Owns a Kafka producer and sends table slices to Kafka.
+class produce_worker {
+public:
+  // Takes a fully-configured configuration (secrets already resolved).
+  static auto make(configuration config, to_kafka_args const& args,
+                   diagnostic_handler& dh) -> std::optional<produce_worker> {
+    auto p = producer::make(std::move(config));
+    if (not p) {
+      diagnostic::error(std::move(p).error()).primary(args.op).emit(dh);
+      return std::nullopt;
+    }
+    return produce_worker{std::move(*p), args, dh};
+  }
+
+  auto send(table_slice const& slice) -> void {
+    auto const& ms = eval(args_.message, slice, dh_);
+    for (auto const& s : ms) {
+      match(
+        *s.array,
+        [&](concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto const&
+              array) {
+          for (auto i = int64_t{}; i < array.length(); ++i) {
+            if (array.IsNull(i)) {
+              diagnostic::warning("expected `string` or `blob`, got `null`")
+                .primary(args_.message)
+                .emit(dh_);
+              continue;
+            }
+            if (auto e = producer_.produce(
+                  args_.topic, as_bytes(array.Value(i)), key_, timestamp_);
+                e.valid()) {
+              diagnostic::error(std::move(e)).primary(args_.op).emit(dh_);
+            }
+          }
+        },
+        [&](auto const&) {
+          diagnostic::warning("expected `string` or `blob`, got `{}`",
+                              s.type.kind())
+            .primary(args_.message)
+            .emit(dh_);
+        });
+    }
+    producer_.poll(0ms);
+  }
+
+private:
+  produce_worker(producer p, to_kafka_args const& args, diagnostic_handler& dh)
+    : producer_{std::move(p)},
+      args_{args},
+      dh_{dh},
+      key_{args.key ? args.key->inner : ""},
+      timestamp_{args.timestamp ? args.timestamp->inner : time{}} {
+  }
+
+  producer producer_;
+  to_kafka_args const& args_;
+  diagnostic_handler& dh_;
+  std::string key_;
+  time timestamp_;
 };
 
 class to_kafka_operator final : public crtp_operator<to_kafka_operator> {
@@ -81,56 +194,55 @@ public:
     }
     co_yield ctrl.resolve_secrets_must_yield(
       configure_or_request(args_.options, *config, ctrl.diagnostics()));
-    auto p = producer::make(std::move(*config));
-    if (not p) {
-      diagnostic::error(std::move(p).error()).primary(args_.op).emit(dh);
-      co_return;
-    }
-    const auto guard = detail::scope_guard([&] noexcept {
-      TENZIR_DEBUG("[to_kafka] waiting 10 seconds to flush pending messages");
-      if (const auto err = p->flush(10s); err.valid()) {
-        TENZIR_WARN(err);
+    if (args_.jobs == 0) {
+      // Single-threaded path.
+      auto worker = produce_worker::make(std::move(*config), args_, dh);
+      if (not worker) {
+        co_return;
       }
-      const auto num_messages = p->queue_size();
-      if (num_messages > 0) {
-        TENZIR_ERROR("[to_kafka] {} messages were not delivered", num_messages);
+      for (auto const& slice : input) {
+        if (slice.rows() == 0) {
+          co_yield {};
+          continue;
+        }
+        worker->send(slice);
       }
-    });
-    const auto key = args_.key ? args_.key->inner : "";
-    const auto timestamp = args_.timestamp ? args_.timestamp->inner : time{};
-    for (const auto& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      const auto& ms = eval(args_.message, slice, dh);
-      for (const auto& s : ms) {
-        match(
-          *s.array,
-          [&](const concepts::one_of<arrow::BinaryArray,
-                                     arrow::StringArray> auto& array) {
-            for (auto i = int64_t{}; i < array.length(); ++i) {
-              if (array.IsNull(i)) {
-                diagnostic::warning("expected `string` or `blob`, got `null`")
-                  .primary(args_.message)
-                  .emit(dh);
-                continue;
-              }
-              if (auto e = p->produce(args_.topic, as_bytes(array.Value(i)),
-                                      key, timestamp);
-                  e.valid()) {
-                diagnostic::error(std::move(e)).primary(args_.op).emit(dh);
-              }
+    } else {
+      // Multi-threaded path.
+      auto sync = produce_synchronizer{};
+      auto threads = std::vector<std::thread>{};
+      threads.reserve(args_.jobs);
+      auto guard = detail::scope_guard{[&]() noexcept {
+        sync.shutdown();
+        for (auto& thread : threads) {
+          thread.join();
+        }
+      }};
+      for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+        threads.emplace_back([&, sdh = ctrl.shared_diagnostics()]() mutable {
+          caf::detail::set_thread_name("kafka_produce");
+          auto worker = produce_worker::make(*config, args_, sdh);
+          if (not worker) {
+            return;
+          }
+          while (true) {
+            auto slice = sync.take();
+            if (slice.rows() == 0) {
+              break;
             }
-          },
-          [&](const auto&) {
-            diagnostic::warning("expected `string` or `blob`, got `{}`",
-                                s.type.kind())
-              .primary(args_.message)
-              .emit(dh);
-          });
+            worker->send(slice);
+          }
+        });
       }
-      p->poll(0ms);
+      for (auto const& slice : input) {
+        if (slice.rows() == 0) {
+          co_yield {};
+          continue;
+        }
+        for (auto _ : sync.put(slice)) {
+          co_yield {};
+        }
+      }
     }
   }
 
@@ -206,6 +318,7 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
           .named("aws_region", args.aws_region)
           .named("aws_iam", iam_opts)
           .named_optional("options", args.options)
+          .named_optional("_jobs", args.jobs)
           .parse(inv, ctx));
     if (iam_opts) {
       TRY(check_sasl_mechanism(args.options, ctx));

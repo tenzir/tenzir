@@ -27,6 +27,10 @@ class message;
 /// Wraps a producer in a friendly interface.
 class producer {
 public:
+  /// Flushes pending messages on destruction.
+  ~producer();
+  producer(producer&&) = default;
+
   /// Constructs a producer from a configuration.
   static auto make(configuration config) -> caf::expected<producer>;
 
@@ -51,7 +55,7 @@ private:
   producer() = default;
 
   configuration config_{};
-  std::shared_ptr<RdKafka::Producer> producer_{};
+  std::unique_ptr<RdKafka::Producer> producer_{};
 };
 
 } // namespace tenzir::plugins::kafka

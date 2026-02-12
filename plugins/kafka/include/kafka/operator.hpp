@@ -22,7 +22,6 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
@@ -500,16 +499,6 @@ public:
       TENZIR_ERROR(client.error());
       diagnostic::error(client.error()).emit(dh);
     };
-    auto guard = detail::scope_guard([client = *client]() mutable noexcept {
-      TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
-      if (auto err = client.flush(10s); err.valid()) {
-        TENZIR_WARN(err);
-      }
-      auto num_messages = client.queue_size();
-      if (num_messages > 0) {
-        TENZIR_ERROR("{} messages were not delivered", num_messages);
-      }
-    });
     auto topics = std::vector<std::string>{args_.topic};
     auto key = std::string{};
     if (args_.key) {
