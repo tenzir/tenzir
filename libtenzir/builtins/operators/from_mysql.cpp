@@ -1586,6 +1586,37 @@ private:
     co_return true;
   }
 
+  template <class QueryUpperFn, class Integer>
+  auto process_live_tracking(QueryUpperFn&& query_upper, Integer& watermark,
+                             Push<table_slice>& push, OpCtx& ctx)
+    -> Task<bool> {
+    static_assert(std::is_same_v<Integer, int64_t>
+                  or std::is_same_v<Integer, uint64_t>);
+    auto upper_result = co_await query_upper();
+    if (upper_result.is_err()) {
+      emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
+      co_return false;
+    }
+    auto maybe_upper = std::move(upper_result).unwrap();
+    if (not maybe_upper) {
+      co_return true;
+    }
+    auto upper = *maybe_upper;
+    if (live_has_watermark_ and upper <= watermark) {
+      co_return true;
+    }
+    auto lower = std::optional<Integer>{};
+    if (live_has_watermark_) {
+      lower = watermark;
+    }
+    if (not(co_await stream_live_window(lower, upper, push, ctx))) {
+      co_return false;
+    }
+    watermark = upper;
+    live_has_watermark_ = true;
+    co_return true;
+  }
+
 public:
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
@@ -1702,56 +1733,23 @@ public:
         }
         co_return;
       }
+      auto live_ok = false;
       if (tracking_column_is_unsigned_) {
-        auto upper_result = co_await query_max_tracking_value_unsigned();
-        if (upper_result.is_err()) {
-          emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
-          done_ = true;
-          co_return;
-        }
-        auto maybe_upper = std::move(upper_result).unwrap();
-        if (not maybe_upper) {
-          co_return;
-        }
-        auto upper = *maybe_upper;
-        if (live_has_watermark_ and upper <= live_watermark_unsigned_) {
-          co_return;
-        }
-        auto lower = std::optional<uint64_t>{};
-        if (live_has_watermark_) {
-          lower = live_watermark_unsigned_;
-        }
-        if (not(co_await stream_live_window(lower, upper, push, ctx))) {
-          done_ = true;
-          co_return;
-        }
-        live_watermark_unsigned_ = upper;
+        live_ok = co_await process_live_tracking(
+          [this]() {
+            return query_max_tracking_value_unsigned();
+          },
+          live_watermark_unsigned_, push, ctx);
       } else {
-        auto upper_result = co_await query_max_tracking_value_signed();
-        if (upper_result.is_err()) {
-          emit_mysql_error(std::move(upper_result).unwrap_err(), ctx);
-          done_ = true;
-          co_return;
-        }
-        auto maybe_upper = std::move(upper_result).unwrap();
-        if (not maybe_upper) {
-          co_return;
-        }
-        auto upper = *maybe_upper;
-        if (live_has_watermark_ and upper <= live_watermark_signed_) {
-          co_return;
-        }
-        auto lower = std::optional<int64_t>{};
-        if (live_has_watermark_) {
-          lower = live_watermark_signed_;
-        }
-        if (not(co_await stream_live_window(lower, upper, push, ctx))) {
-          done_ = true;
-          co_return;
-        }
-        live_watermark_signed_ = upper;
+        live_ok = co_await process_live_tracking(
+          [this]() {
+            return query_max_tracking_value_signed();
+          },
+          live_watermark_signed_, push, ctx);
       }
-      live_has_watermark_ = true;
+      if (not live_ok) {
+        done_ = true;
+      }
       co_return;
     }
     auto slice_stream = client_->query({
@@ -1774,8 +1772,6 @@ public:
 
   auto snapshot(Serde& serde) -> void override {
     serde("done", done_);
-    serde("live", live_);
-    serde("table_name", table_name_);
     serde("tracking_column", tracking_column_);
     serde("tracking_column_resolved", tracking_column_resolved_);
     serde("tracking_column_is_unsigned", tracking_column_is_unsigned_);
