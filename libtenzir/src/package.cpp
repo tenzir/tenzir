@@ -439,6 +439,9 @@ auto parse_parameter_value_type(const package_operator_parameter& param,
   if (not param.type || is_field_path_type(param)) {
     return std::optional<type>{};
   }
+  if (*param.type == "secret") {
+    return std::optional<type>{type{secret_type{}}};
+  }
   // Using the legacy parser here because it is convenient.
   // We will eventually add support for user defined operators in TQL itself and
   // deprecate this approach, so it does not make sense to refactor the tql2
