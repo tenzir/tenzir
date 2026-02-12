@@ -14,6 +14,7 @@
 #include "tenzir/ir.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
+#include <caf/detail/pretty_type_name.hpp>
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
@@ -382,11 +383,14 @@ private:
       TENZIR_VERBOSE("shutting down operator after cancellation");
       throw;
     } catch (std::exception& e) {
-      TENZIR_ERROR("shutting down operator after uncaught exception: {}",
-                   e.what());
+      diagnostic::error("uncaught exception in operator `{}`: {}",
+                        caf::detail::pretty_type_name(typeid(*op_)), e.what())
+        .emit(ctx_.dh());
       throw;
     } catch (...) {
-      TENZIR_ERROR("shutting down operator after uncaught exception");
+      diagnostic::error("uncaught exception in operator `{}`",
+                        caf::detail::pretty_type_name(typeid(*op_)))
+        .emit(ctx_.dh());
       throw;
     }
     TENZIR_WARN("CANCELING queue");
@@ -601,7 +605,17 @@ public:
   auto run_to_completion() && -> Task<void> {
     return queue_.activate([&] -> Task<void> {
       spawn_operators();
-      co_await run_until_shutdown();
+      try {
+        co_await run_until_shutdown();
+      } catch (folly::OperationCancelled) {
+        TENZIR_WARN("chain run_to_completion: run_until_shutdown threw "
+                    "OperationCancelled");
+        throw;
+      } catch (std::exception& e) {
+        TENZIR_WARN("chain run_to_completion: run_until_shutdown threw: {}",
+                    e.what());
+        throw;
+      }
       TENZIR_WARN("cancelling all queue items in chain");
       queue_.cancel();
       TENZIR_WARN("waiting for chain queue tasks to finish");
@@ -671,7 +685,16 @@ private:
     auto keep_running = true;
     while (keep_running) {
       TENZIR_WARN("waiting for next info in chain runner");
-      auto next = co_await queue_.next();
+      auto next = std::optional<typename decltype(queue_)::Next>{};
+      try {
+        next = co_await queue_.next();
+      } catch (folly::OperationCancelled) {
+        TENZIR_WARN("chain runner: queue_.next() threw OperationCancelled");
+        throw;
+      } catch (std::exception& e) {
+        TENZIR_WARN("chain runner: queue_.next() threw: {}", e.what());
+        throw;
+      }
       // We should never be done here...
       // TODO: Cancellation?
       TENZIR_ASSERT(next, "unexpected end of queue");
