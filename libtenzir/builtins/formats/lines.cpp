@@ -150,7 +150,7 @@ private:
 
 struct lines_printer_impl {
   template <typename It>
-  auto print_values(It& out, const view<record>& x) const -> bool {
+  auto print_values(It& out, const view3<record>& x) const -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
       if (is<caf::none_t>(v)) {
@@ -181,29 +181,29 @@ struct lines_printer_impl {
       return p.print(out, x);
     }
 
-    auto operator()(const view<pattern>&) -> bool {
+    auto operator()(const view3<pattern>&) -> bool {
       TENZIR_UNREACHABLE();
     }
 
-    auto operator()(const view<map>&) -> bool {
+    auto operator()(const view3<map>&) -> bool {
       TENZIR_UNREACHABLE();
     }
 
-    auto operator()(const view<record>&) -> bool {
+    auto operator()(const view3<record>&) -> bool {
       TENZIR_UNREACHABLE();
     }
 
-    auto operator()(view<std::string> x) -> bool {
+    auto operator()(view3<std::string> x) -> bool {
       sequence_empty = false;
       out = std::copy(x.begin(), x.end(), out);
       return true;
     }
 
-    auto operator()(view<blob> x) -> bool {
+    auto operator()(view3<blob> x) -> bool {
       return (*this)(detail::base64::encode(x));
     }
 
-    auto operator()(const view<list>& x) -> bool {
+    auto operator()(const view3<list>& x) -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
         if (is<caf::none_t>(v)) {
@@ -245,7 +245,7 @@ public:
         auto input_schema = resolved_slice.schema();
         const auto& input_type = as<record_type>(input_schema);
         auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-        for (const auto& row : values(input_type, *array)) {
+        for (const auto& row : values3(*array)) {
           TENZIR_ASSERT(row);
           const auto ok = printer.print_values(out_iter, *row);
           TENZIR_ASSERT(ok);
