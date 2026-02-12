@@ -13,6 +13,7 @@
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
@@ -137,6 +138,10 @@ public:
     // Substitute the pipeline copy with peer info in the environment
     auto env = substitute_ctx::env_t{};
     env[peer_let_id_] = std::move(peer_record);
+    auto bytes_read = ctx.make_counter(
+      MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
+                                peer_addr.getAddressStr())},
+      MetricsDirection::read, MetricsVisibility::external_);
     TENZIR_DEBUG("from_tcp: using peer_let_id_ = {}", peer_let_id_.id);
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg};
@@ -150,7 +155,8 @@ public:
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     // Spawn read loop on IO executor
     ctx.spawn_task(folly::coro::co_withExecutor(
-      transport_evb, read_loop(std::move(transport), open_pipeline, ctx.dh())));
+      transport_evb, read_loop(std::move(transport), open_pipeline, ctx.dh(),
+                               std::move(bytes_read))));
   }
 
   auto state() -> OperatorState override {
@@ -161,7 +167,8 @@ private:
   // TODO: Make OpenPipeline thread safe.
   static auto read_loop(Box<folly::coro::Transport> transport,
                         OpenPipeline<chunk_ptr> pipeline,
-                        diagnostic_handler& dh) -> Task<void> {
+                        diagnostic_handler& dh, MetricsCounter bytes_counter)
+    -> Task<void> {
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
@@ -179,6 +186,7 @@ private:
       if (bytes == 0) {
         break;
       }
+      bytes_counter.add(bytes);
       // Convert IOBuf to chunk
       auto iobuf = buf.move();
       auto data = std::vector<std::byte>{};
