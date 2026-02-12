@@ -1,0 +1,7 @@
+error: ambiguous tracking columns for table `numbers`: tiny_val, small_val, int_val, big_val, ubig_val
+ --> tests/operators/from_mysql/live_ambiguous_tracking_column.tql:1:18
+  |
+1 | from_mysql table="numbers",
+  |                  ^^^^^^^^^ 
+  |
+  = hint: set `tracking_column` explicitly

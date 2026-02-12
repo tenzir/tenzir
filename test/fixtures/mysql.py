@@ -20,6 +20,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -41,11 +42,20 @@ MYSQL_PASSWORD = "tenzir_test_password"
 MYSQL_DATABASE = "tenzir_test"
 STARTUP_TIMEOUT = 120  # seconds (MySQL can be slow to start)
 HEALTH_CHECK_INTERVAL = 2  # seconds
+LIVE_STREAM_TABLE = "users_live_stream"
+LIVE_STREAM_TOKEN = "live-stream-token"
+LIVE_STREAM_INITIAL_DELAY = 5.0
+LIVE_STREAM_INSERT_INTERVAL = 0.1
+LIVE_SIGNED_STREAM_TABLE = "users_live_signed_stream"
+LIVE_SIGNED_STREAM_TOKEN = "live-signed-stream-token"
+LIVE_SIGNED_STREAM_SEED_TOKEN = "live-signed-seed-token"
+LIVE_SIGNED_STREAM_START_ID = 0
 
 
 @dataclass(frozen=True)
 class MysqlOptions:
     tls: bool = True
+    streaming: str = ""  # "unsigned" or "signed"; empty = disabled
 
 
 def _start_mysql(runtime: str, port: int) -> str:
@@ -272,6 +282,147 @@ def _extract_tls_files(
     return paths
 
 
+def _exec_mysql_sql(
+    runtime: str,
+    container_id: str,
+    *,
+    user: str,
+    password: str,
+    sql: str,
+    database: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    cmd = [
+        runtime,
+        "exec",
+        "-i",
+        container_id,
+        "mysql",
+        "-h",
+        "127.0.0.1",
+        f"-u{user}",
+        f"-p{password}",
+    ]
+    if database is not None:
+        cmd.extend(["-D", database])
+    return subprocess.run(
+        cmd,
+        input=sql,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _prepare_live_stream_table(runtime: str, container_id: str) -> None:
+    sql = f"""
+    CREATE TABLE IF NOT EXISTS {LIVE_STREAM_TABLE} (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        payload VARCHAR(255) NOT NULL
+    );
+    TRUNCATE TABLE {LIVE_STREAM_TABLE};
+    """
+    result = _exec_mysql_sql(
+        runtime,
+        container_id,
+        user="root",
+        password=MYSQL_ROOT_PASSWORD,
+        database=MYSQL_DATABASE,
+        sql=sql,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to prepare live stream table: {result.stderr}")
+
+
+def _prepare_live_signed_stream_table(runtime: str, container_id: str) -> None:
+    sql = f"""
+    CREATE TABLE IF NOT EXISTS {LIVE_SIGNED_STREAM_TABLE} (
+        id BIGINT PRIMARY KEY,
+        payload VARCHAR(255) NOT NULL
+    );
+    TRUNCATE TABLE {LIVE_SIGNED_STREAM_TABLE};
+    INSERT INTO {LIVE_SIGNED_STREAM_TABLE} (id, payload) VALUES
+        (-2, '{LIVE_SIGNED_STREAM_SEED_TOKEN}'),
+        (-1, '{LIVE_SIGNED_STREAM_SEED_TOKEN}');
+    """
+    result = _exec_mysql_sql(
+        runtime,
+        container_id,
+        user="root",
+        password=MYSQL_ROOT_PASSWORD,
+        database=MYSQL_DATABASE,
+        sql=sql,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to prepare signed live stream table: {result.stderr}"
+        )
+
+
+def _drop_table(runtime: str, container_id: str, table_name: str) -> None:
+    result = _exec_mysql_sql(
+        runtime,
+        container_id,
+        user="root",
+        password=MYSQL_ROOT_PASSWORD,
+        database=MYSQL_DATABASE,
+        sql=f"DROP TABLE IF EXISTS {table_name};",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to drop table {table_name}: {result.stderr}")
+
+
+def _run_live_insert_loop(
+    runtime: str,
+    container_id: str,
+    stop_event: threading.Event,
+) -> None:
+    if stop_event.wait(LIVE_STREAM_INITIAL_DELAY):
+        return
+    sql = f"INSERT INTO {LIVE_STREAM_TABLE} (payload) VALUES ('{LIVE_STREAM_TOKEN}');"
+    while not stop_event.is_set():
+        result = _exec_mysql_sql(
+            runtime,
+            container_id,
+            user=MYSQL_USER,
+            password=MYSQL_PASSWORD,
+            database=MYSQL_DATABASE,
+            sql=sql,
+        )
+        if result.returncode != 0:
+            logger.warning("Live insert loop failed: %s", result.stderr.strip())
+        if stop_event.wait(LIVE_STREAM_INSERT_INTERVAL):
+            break
+
+
+def _run_live_signed_insert_loop(
+    runtime: str,
+    container_id: str,
+    stop_event: threading.Event,
+) -> None:
+    if stop_event.wait(LIVE_STREAM_INITIAL_DELAY):
+        return
+    next_id = LIVE_SIGNED_STREAM_START_ID
+    while not stop_event.is_set():
+        sql = (
+            "INSERT INTO "
+            f"{LIVE_SIGNED_STREAM_TABLE} (id, payload) VALUES "
+            f"({next_id}, '{LIVE_SIGNED_STREAM_TOKEN}');"
+        )
+        result = _exec_mysql_sql(
+            runtime,
+            container_id,
+            user=MYSQL_USER,
+            password=MYSQL_PASSWORD,
+            database=MYSQL_DATABASE,
+            sql=sql,
+        )
+        if result.returncode != 0:
+            logger.warning("Signed live insert loop failed: %s", result.stderr.strip())
+        next_id += 1
+        if stop_event.wait(LIVE_STREAM_INSERT_INTERVAL):
+            break
+
+
 @fixture(options=MysqlOptions)
 def mysql() -> Iterator[dict[str, str]]:
     """Start MySQL and yield environment variables for database access."""
@@ -284,6 +435,9 @@ def mysql() -> Iterator[dict[str, str]]:
     port = find_free_port()
     container_id = None
     tmp_dir = tempfile.mkdtemp(prefix="tenzir-mysql-tls-") if opts.tls else None
+    stop_event = None
+    inserter = None
+    stream_table = None
     try:
         container_id = _start_mysql(runtime, port)
         if not _wait_for_mysql(runtime, container_id, STARTUP_TIMEOUT):
@@ -311,8 +465,51 @@ def mysql() -> Iterator[dict[str, str]]:
                     "MYSQL_TLS_KEYFILE": tls_files["client_key"],
                 }
             )
+        if opts.streaming == "unsigned":
+            _prepare_live_stream_table(runtime, container_id)
+            stream_table = LIVE_STREAM_TABLE
+            stop_event = threading.Event()
+            inserter = threading.Thread(
+                target=_run_live_insert_loop,
+                args=(runtime, container_id, stop_event),
+                daemon=True,
+            )
+            inserter.start()
+            env.update(
+                {
+                    "MYSQL_LIVE_STREAM_TABLE": LIVE_STREAM_TABLE,
+                    "MYSQL_LIVE_STREAM_TOKEN": LIVE_STREAM_TOKEN,
+                }
+            )
+        elif opts.streaming == "signed":
+            _prepare_live_signed_stream_table(runtime, container_id)
+            stream_table = LIVE_SIGNED_STREAM_TABLE
+            stop_event = threading.Event()
+            inserter = threading.Thread(
+                target=_run_live_signed_insert_loop,
+                args=(runtime, container_id, stop_event),
+                daemon=True,
+            )
+            inserter.start()
+            env.update(
+                {
+                    "MYSQL_LIVE_SIGNED_STREAM_TABLE": LIVE_SIGNED_STREAM_TABLE,
+                    "MYSQL_LIVE_SIGNED_STREAM_TOKEN": LIVE_SIGNED_STREAM_TOKEN,
+                }
+            )
         yield env
     finally:
+        if stop_event is not None:
+            stop_event.set()
+        if inserter is not None:
+            inserter.join(timeout=5)
+            if inserter.is_alive():
+                logger.warning("Live insert loop thread did not stop in time")
+        if stream_table is not None and container_id is not None:
+            try:
+                _drop_table(runtime, container_id, stream_table)
+            except RuntimeError as exc:
+                logger.warning("Failed to drop stream table: %s", exc)
         if container_id:
             _stop_mysql(runtime, container_id)
         if tmp_dir:

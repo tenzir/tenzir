@@ -1,0 +1,6 @@
+error: `live=true` does not support `sql`
+ --> tests/operators/from_mysql/live_with_sql_error.tql:6:16
+  |
+6 |            sql="SELECT 1",
+  |                ^^^^^^^^^^ 
+  |
