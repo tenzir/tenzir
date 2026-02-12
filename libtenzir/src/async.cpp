@@ -383,7 +383,8 @@ private:
         co_await tick();
       }
     } catch (folly::OperationCancelled) {
-      TENZIR_VERBOSE("shutting down operator after cancellation");
+      TENZIR_WARN("shutting down operator {} after cancellation",
+                  typeid(*op_).name());
       throw;
     } catch (std::exception& e) {
       diagnostic::error("uncaught exception in operator `{}`: {}",
@@ -1066,11 +1067,25 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
       if (emit_fn) {
         queue.scope().spawn([metrics, emit_fn] -> Task<void> {
           while (true) {
-            co_await folly::coro::sleep(
-              std::chrono::duration_cast<folly::HighResDuration>(
-                defaults::metrics_interval));
-            auto snapshot = metrics->take_snapshot();
-            emit_fn(snapshot);
+            try {
+              co_await folly::coro::sleep(
+                std::chrono::duration_cast<folly::HighResDuration>(
+                  defaults::metrics_interval));
+            } catch (folly::OperationCancelled const&) {
+              co_return;
+            }
+            try {
+              auto snapshot = metrics->take_snapshot();
+              emit_fn(snapshot);
+            } catch (folly::OperationCancelled const&) {
+              co_return;
+            } catch (std::exception const& e) {
+              TENZIR_DEBUG("metrics emission task failed: {}", e.what());
+              co_return;
+            } catch (...) {
+              TENZIR_DEBUG("metrics emission task failed with unknown error");
+              co_return;
+            }
           }
         });
       }
@@ -1111,8 +1126,10 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
     // TODO: Return failure?
     co_return;
   } catch (std::exception& e) {
-    diagnostic::error("uncaught exception in pipeline: {}", e.what()).emit(dh);
-    // TODO: Return failure?
+    // Operator-level exceptions are already reported with operator context by
+    // the Runner catch block. Only log here as a fallback for exceptions that
+    // originate outside of individual operators.
+    TENZIR_VERBOSE("pipeline terminated with exception: {}", e.what());
     co_return;
   } catch (...) {
     diagnostic::error("uncaught exception in pipeline").emit(dh);
