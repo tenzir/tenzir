@@ -82,32 +82,51 @@ void mail_with_callback(Handle receiver, caf::message msg, F f) {
   auto companion_id = companion->id();
   // We need to wrap non-copyable functions because CAF wants a copy...
   auto handled = std::make_shared<bool>(false);
-  companion->on_enqueue([f = std::make_shared<F>(std::move(f)), handled,
-                         &registry,
-                         companion_id](caf::mailbox_element_ptr ptr) {
-    // Only process the first message (the response).
-    if (*handled) {
-      return;
+  if constexpr (std::is_void_v<Result>) {
+    // CAF does not route void success responses back for send(). We still set
+    // up on_enqueue to catch error responses, but fulfill the promise
+    // immediately after sending for the success path.
+    auto f_shared = std::make_shared<F>(std::move(f));
+    companion->on_enqueue([f_shared, handled, &registry,
+                           companion_id](caf::mailbox_element_ptr ptr) {
+      if (*handled) {
+        return;
+      }
+      *handled = true;
+      if (ptr->payload.match_elements<caf::error>()) {
+        std::invoke(std::move(*f_shared),
+                    caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+      }
+      registry.erase(companion_id);
+    });
+    companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
+    // Fulfill immediately — the void success response will never arrive.
+    if (not *handled) {
+      *handled = true;
+      std::invoke(std::move(*f_shared), caf::expected<Result>{});
     }
-    *handled = true;
-    if (ptr->payload.match_elements<caf::error>()) {
-      std::invoke(std::move(*f),
-                  caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
-    } else if constexpr (std::is_void_v<Result>) {
-      // CAF void responses have an empty payload.
-      std::invoke(std::move(*f), caf::expected<Result>{});
-    } else if (ptr->payload.match_element<Result>(0)) {
-      std::invoke(std::move(*f),
-                  caf::expected<Result>{ptr->payload.get_as<Result>(0)});
-    } else {
-      // TODO: Apparently we cannot throw here?
-      TENZIR_ERROR("OH NO");
-    }
-    // Serializing the companion for network transmission registers it.
-    // Erase it to release that reference and allow cleanup.
-    registry.erase(companion_id);
-  });
-  companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
+  } else {
+    companion->on_enqueue([f = std::make_shared<F>(std::move(f)), handled,
+                           &registry,
+                           companion_id](caf::mailbox_element_ptr ptr) {
+      if (*handled) {
+        return;
+      }
+      *handled = true;
+      if (ptr->payload.match_elements<caf::error>()) {
+        std::invoke(std::move(*f),
+                    caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+      } else if (ptr->payload.match_element<Result>(0)) {
+        std::invoke(std::move(*f),
+                    caf::expected<Result>{ptr->payload.get_as<Result>(0)});
+      } else {
+        // TODO: Apparently we cannot throw here?
+        TENZIR_ERROR("OH NO");
+      }
+      registry.erase(companion_id);
+    });
+    companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
+  }
 }
 
 template <class Handle, class... Args>
