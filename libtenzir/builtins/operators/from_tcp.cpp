@@ -12,6 +12,7 @@
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -102,6 +103,9 @@ public:
     // Substitute the pipeline copy with peer info in the environment
     auto env = substitute_ctx::env_t{};
     env[peer_let_id_] = std::move(peer_record);
+    auto bytes_read = ctx.make_counter({"peer_ip", "peer_addr.getAddressStr()"},
+                                       metrics_direction::read,
+                                       metrics_visibility::external_);
     TENZIR_DEBUG("from_tcp: using peer_let_id_ = {}", peer_let_id_.id);
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg};
@@ -116,7 +120,8 @@ public:
     // Spawn read loop on IO executor
     ctx.spawn_task(folly::coro::co_withExecutor(
       folly::getGlobalIOExecutor(),
-      read_loop(conn_id, std::move(transport), open_pipeline, ctx.dh())));
+      read_loop(std::move(transport), open_pipeline, ctx.dh(),
+                std::move(bytes_read))));
   }
 
   auto stop(OpCtx& /*ctx*/) -> Task<void> override {
@@ -130,10 +135,9 @@ public:
 
 private:
   // TODO: Make OpenPipeline thread safe.
-  static auto read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
-                        OpenPipeline<chunk_ptr> pipeline,
-                        diagnostic_handler& dh) -> Task<void> {
-    auto io_executor = folly::getGlobalIOExecutor();
+  auto read_loop(Box<folly::coro::Transport> transport,
+                 OpenPipeline<chunk_ptr> pipeline, diagnostic_handler& dh,
+                 metrics_counter bytes_counter) -> Task<void> {
     while (true) {
       folly::IOBufQueue buf{folly::IOBufQueue::cacheChainLength()};
       size_t bytes = 0;
@@ -151,6 +155,7 @@ private:
       if (bytes == 0) {
         break;
       }
+      bytes_counter.add(bytes);
       // Convert IOBuf to chunk
       auto iobuf = buf.move();
       auto data = std::vector<std::byte>{};
