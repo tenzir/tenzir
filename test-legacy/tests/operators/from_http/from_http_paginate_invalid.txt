@@ -1,0 +1,7 @@
+error: unsupported pagination mode: `invalid`
+ --> tests/operators/from_http/from_http_paginate_invalid.tql:5:53
+  |
+5 | from_http "https://example.org/data.json", paginate="invalid"
+  |                                                     ^^^^^^^^^ 
+  |
+  = hint: `paginate` must be `"link"` or a lambda
