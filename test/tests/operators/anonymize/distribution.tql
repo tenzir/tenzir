@@ -1,0 +1,15 @@
+from {
+  i: 42,
+  u: uint(7),
+  d: 3.5,
+  b: true,
+  s: "x",
+  ts: 2025-01-15,
+  dur: 5s,
+  nested: {
+    x: 9,
+    y: "z",
+  },
+  items: [7],
+}
+anonymize seed=1, sample=1, count=2, fully_random=false
