@@ -69,7 +69,7 @@ public:
 
   FromTcpListener(const FromTcpListener&) = delete;
   FromTcpListener& operator=(const FromTcpListener&) = delete;
-  FromTcpListener(FromTcpListener&&) = default;
+  FromTcpListener(FromTcpListener&&) noexcept = default;
   FromTcpListener& operator=(FromTcpListener&&) noexcept = default;
   ~FromTcpListener() override = default;
 
@@ -150,17 +150,7 @@ public:
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     // Spawn read loop on IO executor
     ctx.spawn_task(folly::coro::co_withExecutor(
-      transport_evb,
-      read_loop(conn_id, std::move(transport), open_pipeline, ctx.dh())));
-  }
-
-  auto stop(OpCtx& /*ctx*/) -> Task<void> override {
-    TENZIR_VERBOSE("from_tcp: finalizing, closing server");
-    // Stop accepting new connections
-    if (server_) {
-      server_->close();
-    }
-    co_return;
+      transport_evb, read_loop(std::move(transport), open_pipeline, ctx.dh())));
   }
 
   auto state() -> OperatorState override {
@@ -169,7 +159,7 @@ public:
 
 private:
   // TODO: Make OpenPipeline thread safe.
-  static auto read_loop(uint64_t conn_id, Box<folly::coro::Transport> transport,
+  static auto read_loop(Box<folly::coro::Transport> transport,
                         OpenPipeline<chunk_ptr> pipeline,
                         diagnostic_handler& dh) -> Task<void> {
     while (true) {
