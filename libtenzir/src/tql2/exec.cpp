@@ -535,19 +535,39 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   co_return {};
 }
 
+class DeduplicatingDiagnosticHandler final : public diagnostic_handler {
+public:
+  explicit DeduplicatingDiagnosticHandler(diagnostic_handler& inner)
+    : inner_{inner} {
+  }
+
+  void emit(diagnostic d) override {
+    if (dedup_.insert(d)) {
+      inner_.get().emit(std::move(d));
+    }
+  }
+
+private:
+  std::reference_wrapper<diagnostic_handler> inner_;
+  diagnostic_deduplicator dedup_;
+};
+
 auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
                        diagnostic_handler& dh) -> failure_or<void> {
 #if 1
+  // TODO: Decide where the deduplication should happen and move this.
+  auto dedup = DeduplicatingDiagnosticHandler{dh};
   TENZIR_INFO("begin blocking");
-  auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dh));
+  auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup));
   TENZIR_INFO("end blocking");
   return result;
 #else
   TENZIR_WARN("running {}/{} threads",
               folly::getGlobalCPUExecutorCounters().numActiveThreads,
               folly::getGlobalCPUExecutorCounters().numThreads);
-  return folly::coro::blockingWait(
-    run_plan(std::move(ops), sys, dh).semi().via(folly::getGlobalCPUExecutor()));
+  return folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup)
+                                     .semi()
+                                     .via(folly::getGlobalCPUExecutor()));
 #endif
 }
 
