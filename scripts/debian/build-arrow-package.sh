@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+BUILD_JOBS="${BUILD_JOBS:-$(nproc --all 2>/dev/null || echo 2)}"
+
 : "${ARROW_TAG=apache-arrow-21.0.0}"
 : "${ARROW_VERSION=$(printf '%s' "$ARROW_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
@@ -68,7 +70,7 @@ cmake -B build -S . \
   -DARROW_WITH_ZSTD=ON \
   "${EXTRA_CMAKE_ARGS[@]}"
 
-cmake --build build --parallel "$(nproc --all)"
+cmake --build build --parallel "${BUILD_JOBS}"
 
 checkinstall \
   --fstrans=no \
