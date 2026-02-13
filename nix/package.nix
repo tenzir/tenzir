@@ -24,7 +24,6 @@ rec {
     ../changelog
     ../cmake
     ../libtenzir
-    ../libtenzir/aux/proxygen
     ../libtenzir_test
     ../plugins
     ../schema

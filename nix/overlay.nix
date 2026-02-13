@@ -29,6 +29,7 @@ in
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
   fluent-bit = prevPkgs.callPackage ./fluent-bit { };
   pfs = prevPkgs.callPackage ./pfs { };
+  proxygen = finalPkgs.callPackage ./proxygen { };
   speeve = prevPkgs.callPackage ./speeve { };
   uv-bin = prevPkgs.callPackage ./uv-binary { };
   empty-libgcc_eh = prevPkgs.callPackage ./empty-libgcc_eh { };
@@ -47,6 +48,7 @@ in
   };
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
+  fizz = callFunction ./overrides/fizz.nix { inherit (prevPkgs) fizz; };
   folly = callFunction ./overrides/folly.nix { inherit (prevPkgs) folly; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
@@ -56,9 +58,11 @@ in
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
+  mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
+  wangle = callFunction ./overrides/wangle.nix { inherit (prevPkgs) wangle; };
   yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
   zeromq = callFunction ./overrides/zeromq.nix { inherit (prevPkgs) zeromq; };
 }
