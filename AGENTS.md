@@ -78,6 +78,7 @@ Common options:
 - `--passthrough`: Generate output in terminal instead (good on first run)
 - `--update`: Update reference outputs after validating changes
 - `--debug`: Show detailed test information
+- `--match`: Filter test paths with glob expression
 
 Reference documentation: https://docs.tenzir.com/reference/test-framework.md
 
