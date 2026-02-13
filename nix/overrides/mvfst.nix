@@ -30,6 +30,13 @@ mvfst.overrideAttrs (orig: {
       printf 'install(TARGETS mvfst_dsr_backend)\n' >> quic/dsr/CMakeLists.txt
     fi
   '';
+  postInstall =
+    (orig.postInstall or "")
+    + ''
+      # With BUILD_TESTS=OFF, mvfst does not install any binaries. Keep the
+      # declared `bin` output present so multi-output derivation checks pass.
+      mkdir -p "$bin/bin"
+    '';
   env =
     let
       origEnv = orig.env or { };
