@@ -524,22 +524,13 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
 endif ()
 if (TENZIR_ENABLE_PROXYGEN)
-  if (DEFINED _tenzir_bundled_proxygen AND TARGET ${_tenzir_bundled_proxygen})
-    get_target_property(
-      _tenzir_proxygen_include_dirs ${_tenzir_bundled_proxygen}
-      INTERFACE_INCLUDE_DIRECTORIES)
-    if (_tenzir_proxygen_include_dirs)
-      target_include_directories(libtenzir
-                                 PRIVATE ${_tenzir_proxygen_include_dirs})
+  if (DEFINED _tenzir_proxygen_target AND TARGET ${_tenzir_proxygen_target})
+    target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
+    if (NOT TENZIR_ENABLE_BUNDLED_PROXYGEN)
+      string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+             "\nfind_package(proxygen REQUIRED CONFIG)")
     endif ()
-    target_link_libraries(
-      libtenzir
-      PRIVATE
-        $<$<BOOL:${_tenzir_bundled_proxygen}>:$<TARGET_FILE:${_tenzir_bundled_proxygen}>>
-    )
-    if (DEFINED _tenzir_bundled_proxygen)
-      message(VERBOSE "Linking Proxygen target: ${_tenzir_bundled_proxygen}")
-    endif ()
+    message(VERBOSE "Linking Proxygen target: ${_tenzir_proxygen_target}")
   else ()
     message(
       WARNING
