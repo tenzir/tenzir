@@ -379,40 +379,17 @@ let
             ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure =
-            (
-              if isReleaseBuild then
-                ''
-                  cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
-                ''
-              else
-                ''
-                  version_build_metadata=$(basename $out | cut -d'-' -f 1)
-                  cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-                ''
-            )
-            + ''
-              mkdir -p "$PWD/cmake/sodium"
-              cat > "$PWD/cmake/sodium/SodiumConfig.cmake" <<'EOF'
-              set(Sodium_FOUND TRUE)
-
-              if(NOT TARGET Sodium::Sodium)
-                add_library(Sodium::Sodium UNKNOWN IMPORTED)
-                set(_sodium_shared "${libsodium}/lib/libsodium${stdenv.hostPlatform.extensions.sharedLibrary}")
-                set(_sodium_static "${libsodium}/lib/libsodium.a")
-                if(EXISTS "''${_sodium_shared}")
-                  set(_sodium_library "''${_sodium_shared}")
-                else()
-                  set(_sodium_library "''${_sodium_static}")
-                endif()
-                set_target_properties(Sodium::Sodium PROPERTIES
-                  IMPORTED_LOCATION "''${_sodium_library}"
-                  INTERFACE_INCLUDE_DIRECTORIES "${libsodium}/include"
-                )
-              endif()
-              EOF
-              cmakeFlagsArray+=("-DSodium_DIR=$PWD/cmake/sodium")
-            '';
+          preConfigure = (
+            if isReleaseBuild then
+              ''
+                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
+              ''
+            else
+              ''
+                version_build_metadata=$(basename $out | cut -d'-' -f 1)
+                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
+              ''
+          );
 
           hardeningDisable =
             lib.optionals isStatic [
