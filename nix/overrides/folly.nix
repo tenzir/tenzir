@@ -6,13 +6,18 @@
   glog,
   xz,
 }:
+let
+  facebookNetworkStack = import ../facebook-network-stack.nix;
+in
 folly.overrideAttrs (orig: {
-  version = "2026.01.19.00-tenzir";
+  version = "${facebookNetworkStack.release}-tenzir";
   src = fetchFromGitHub {
-    owner = "tenzir";
-    repo = "folly";
-    rev = "8831f8cc8e38c4733facdcf20342338360eaf3a9";
-    hash = "sha256-WeHeWN+tIeI3no2+4hSafOdGXxhcL7AR7F+ScqMkHhY=";
+    inherit (facebookNetworkStack.folly)
+      owner
+      repo
+      rev
+      hash
+      ;
   };
   propagatedBuildInputs = (orig.propagatedBuildInputs or []) ++ [
     glog
