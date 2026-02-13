@@ -75,8 +75,8 @@ uvx tenzir-test --root test
 
 Common options:
 
-- `--passthrough`: Generate output in terminal instead (good on first run)
-- `--update`: Update reference outputs after validating changes
+- `--passthrough`: Generate output in terminal instead (does not compare reference)
+- `--update`: Update reference outputs (check correctness before or after)
 - `--debug`: Show detailed test information
 - `--match`: Filter test paths with glob expression
 
