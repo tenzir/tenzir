@@ -1,0 +1,7 @@
+created: 2026-02-13
+title: Tenzir Node v5.26.0
+intro: >-
+  This release introduces the from_mysql operator for reading data directly from MySQL
+  databases, with support for live streaming, custom SQL queries, and TLS connections.
+  It also adds link-based HTTP pagination and optional field parameters for user-defined
+  operators.
