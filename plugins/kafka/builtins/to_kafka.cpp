@@ -9,6 +9,7 @@
 #include "kafka/configuration.hpp"
 #include "kafka/operator.hpp"
 #include "tenzir/aws_iam.hpp"
+#include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
@@ -112,7 +113,87 @@ public:
     return produce_worker{std::move(*p), args, dh};
   }
 
+  static auto try_make_json_printer(ast::expression const& expr)
+    -> std::optional<json_printer> {
+    auto const* const call = try_as<ast::function_call>(expr);
+    if (not call) {
+      return std::nullopt;
+    }
+    if (not call->fn.ref.resolved()) {
+      return std::nullopt;
+    }
+    auto const& segments = call->fn.ref.segments();
+    if (segments.size() != 1) {
+      return std::nullopt;
+    }
+    auto compact = false;
+    if (segments.front() == "print_ndjson") {
+      compact = true;
+    } else if (segments.front() != "print_json") {
+      return std::nullopt;
+    }
+    // The first argument must be `this` (the positional argument).
+    if (call->args.empty() or not is<ast::this_>(call->args.front())) {
+      return std::nullopt;
+    }
+    // Parse any named options from the remaining arguments.
+    auto strip = false;
+    auto strip_null_fields = false;
+    auto strip_nulls_in_lists = false;
+    auto strip_empty_records = false;
+    auto strip_empty_lists = false;
+    for (auto const& arg : std::span{call->args}.subspan(1)) {
+      auto const* const assignment = try_as<ast::assignment>(arg);
+      if (not assignment) {
+        return std::nullopt;
+      }
+      auto const* const fp = try_as<ast::field_path>(assignment->left);
+      if (not fp or fp->path().size() != 1) {
+        return std::nullopt;
+      }
+      // The value must be the boolean constant `true`.
+      auto const* const val = try_as<ast::constant>(assignment->right);
+      if (not val) {
+        return std::nullopt;
+      }
+      auto const* const flag = try_as<bool>(val->value);
+      if (not flag or not *flag) {
+        return std::nullopt;
+      }
+      auto const name = fp->path().front().id.name;
+      if (name == "strip") {
+        strip = true;
+      } else if (name == "strip_null_fields") {
+        strip_null_fields = true;
+      } else if (name == "strip_nulls_in_lists") {
+        strip_nulls_in_lists = true;
+      } else if (name == "strip_empty_records") {
+        strip_empty_records = true;
+      } else if (name == "strip_empty_lists") {
+        strip_empty_lists = true;
+      } else {
+        return std::nullopt;
+      }
+    }
+    return json_printer{json_printer_options{
+      .style = no_style(),
+      .oneline = compact,
+      .omit_null_fields = strip_null_fields or strip,
+      .omit_nulls_in_lists = strip_nulls_in_lists or strip,
+      .omit_empty_records = strip_empty_records or strip,
+      .omit_empty_lists = strip_empty_lists or strip,
+    }};
+  }
+
   auto send(table_slice const& slice) -> void {
+    if (printer_) {
+      send_optimized(slice);
+    } else {
+      send_with_expression(slice);
+    }
+  }
+
+  auto send_with_expression(table_slice const& slice) -> void {
     auto const& ms = eval(args_.message, slice, dh_);
     for (auto const& s : ms) {
       match(
@@ -143,13 +224,29 @@ public:
     producer_.poll(0ms);
   }
 
+  auto send_optimized(table_slice const& slice) -> void {
+    TENZIR_ASSERT(printer_);
+    auto buff = std::string{};
+    for (auto row : values3(slice)) {
+      buff.clear();
+      auto it = std::back_inserter(buff);
+      printer_->print(it, row);
+      if (auto e
+          = producer_.produce(args_.topic, as_bytes(buff), key_, timestamp_);
+          e.valid()) {
+        diagnostic::error(std::move(e)).primary(args_.op).emit(dh_);
+      }
+    }
+  }
+
 private:
   produce_worker(producer p, to_kafka_args const& args, diagnostic_handler& dh)
     : producer_{std::move(p)},
       args_{args},
       dh_{dh},
       key_{args.key ? args.key->inner : ""},
-      timestamp_{args.timestamp ? args.timestamp->inner : time{}} {
+      timestamp_{args.timestamp ? args.timestamp->inner : time{}},
+      printer_{try_make_json_printer(args.message)} {
   }
 
   producer producer_;
@@ -157,6 +254,7 @@ private:
   diagnostic_handler& dh_;
   std::string key_;
   time timestamp_;
+  std::optional<json_printer> printer_;
 };
 
 class to_kafka_operator final : public crtp_operator<to_kafka_operator> {
