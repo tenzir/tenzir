@@ -240,6 +240,7 @@ let
               fluent-bit
               libpcap
               libunwind
+              libsodium
               rabbitmq-c
               rdkafka
               cyrus_sasl
