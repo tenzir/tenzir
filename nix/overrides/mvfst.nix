@@ -10,6 +10,9 @@ let
 in
 mvfst.overrideAttrs (orig: {
   version = facebookNetworkStack.release;
+  cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
+    "-DBUILD_TESTS=OFF"
+  ];
   src = fetchFromGitHub {
     inherit (facebookNetworkStack.mvfst)
       owner
