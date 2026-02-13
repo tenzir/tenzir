@@ -86,6 +86,10 @@ stdenv.mkDerivation (finalAttrs: {
     fi
 
     sed -i '/find_package(folly REQUIRED)/i find_package(glog CONFIG REQUIRED)' CMakeLists.txt
+
+    patchShebangs \
+      proxygen/lib/http/gen_HTTPCommonHeaders.sh \
+      proxygen/lib/stats/gen_StatsWrapper.sh
   '';
 
   doCheck = false;
