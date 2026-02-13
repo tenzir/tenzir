@@ -9,7 +9,7 @@
 #include "kafka/configuration.hpp"
 #include "kafka/operator.hpp"
 #include "tenzir/aws_iam.hpp"
-#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
@@ -114,7 +114,7 @@ public:
   }
 
   static auto try_make_json_printer(ast::expression const& expr)
-    -> std::optional<json_printer> {
+    -> std::optional<json_printer2> {
     auto const* const call = try_as<ast::function_call>(expr);
     if (not call) {
       return std::nullopt;
@@ -175,7 +175,7 @@ public:
         return std::nullopt;
       }
     }
-    return json_printer{json_printer_options{
+    return json_printer2{json_printer_options{
       .style = no_style(),
       .oneline = compact,
       .omit_null_fields = strip_null_fields or strip,
@@ -226,13 +226,11 @@ public:
 
   auto send_optimized(table_slice const& slice) -> void {
     TENZIR_ASSERT(printer_);
-    auto buff = std::string{};
+
     for (auto row : values3(slice)) {
-      buff.clear();
-      auto it = std::back_inserter(buff);
-      printer_->print(it, row);
+      printer_->load_new(row);
       if (auto e
-          = producer_.produce(args_.topic, as_bytes(buff), key_, timestamp_);
+          = producer_.produce(args_.topic, printer_->bytes(), key_, timestamp_);
           e.valid()) {
         diagnostic::error(std::move(e)).primary(args_.op).emit(dh_);
       }
@@ -254,7 +252,7 @@ private:
   diagnostic_handler& dh_;
   std::string key_;
   time timestamp_;
-  std::optional<json_printer> printer_;
+  std::optional<json_printer2> printer_;
 };
 
 class to_kafka_operator final : public crtp_operator<to_kafka_operator> {
