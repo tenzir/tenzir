@@ -1,12 +1,16 @@
+ARG BUILD_JOBS=2
+
 FROM public.ecr.aws/docker/library/debian:trixie-slim AS runtime-base
 
 FROM gcc:15-trixie AS build-base
+ARG BUILD_JOBS
 
 ENV CC="gcc" \
     CXX="g++" \
     CMAKE_C_COMPILER_LAUNCHER=ccache \
     CCACHE_DIR=/ccache \
     CMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    BUILD_JOBS="${BUILD_JOBS}" \
     CMAKE_INSTALL_PREFIX=/usr/local
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
@@ -145,6 +149,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_FOLLY:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
+      -D TENZIR_ENABLE_PROXYGEN:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
     ${TENZIR_BUILD_OPTIONS} && \

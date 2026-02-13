@@ -312,6 +312,7 @@ let
               "-DTENZIR_ENABLE_MANPAGES=OFF"
               "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
               "-DTENZIR_ENABLE_BUNDLED_FOLLY=OFF"
+              "-DTENZIR_ENABLE_PROXYGEN=ON"
               "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
               "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
