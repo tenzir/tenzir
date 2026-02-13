@@ -972,47 +972,57 @@ endif ()
 
 # -- proxygen ------------------------------------------------------------------
 
-option(TENZIR_ENABLE_PROXYGEN "Build the Proxygen submodule and integrate it"
-       OFF)
+option(TENZIR_ENABLE_PROXYGEN "Build and integrate Proxygen" OFF)
+option(TENZIR_ENABLE_BUNDLED_PROXYGEN "Use the Proxygen submodule" ON)
 if (TENZIR_ENABLE_PROXYGEN)
-  if (NOT EXISTS
-      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen/CMakeLists.txt")
-    message(
-      FATAL_ERROR
-        "proxygen not found, either use -DTENZIR_ENABLE_PROXYGEN=OFF or"
-        " initialize the libtenzir/aux/proxygen submodule")
-  endif ()
-  # Keep Proxygen from pulling bundled dependencies so it can stay versioned and
-  # dependency-matched with the separate Folly submodule.
-  set(PROXYGEN_USE_BUNDLED_FOLLY
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_WANGLE
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_FIZZ
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_MVFST
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_ZLIB
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_ZSTD
-      OFF
-      CACHE BOOL "")
-  set(BUILD_TESTS
-      OFF
-      CACHE BOOL "" FORCE)
-  set(_TENZIR_CMAKE_SKIP_INSTALL_RULES "${CMAKE_SKIP_INSTALL_RULES}")
-  set(CMAKE_SKIP_INSTALL_RULES ON)
-  add_subdirectory(libtenzir/aux/proxygen SYSTEM)
-  set(CMAKE_SKIP_INSTALL_RULES "${_TENZIR_CMAKE_SKIP_INSTALL_RULES}")
   set(_tenzir_proxygen_target "")
-  foreach (_tenzir_candidate IN
-           ITEMS "proxygen" "Proxygen::proxygen" "proxygenhttpserver"
-                 "Proxygen::proxygenhttpserver")
+  if (TENZIR_ENABLE_BUNDLED_PROXYGEN)
+    if (NOT EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen/CMakeLists.txt")
+      message(
+        FATAL_ERROR
+          "proxygen not found, either use -DTENZIR_ENABLE_BUNDLED_PROXYGEN=OFF"
+          " or initialize the libtenzir/aux/proxygen submodule")
+    endif ()
+    # Keep Proxygen from pulling bundled dependencies so it can stay versioned and
+    # dependency-matched with the separate Folly package.
+    set(PROXYGEN_USE_BUNDLED_FOLLY
+        OFF
+        CACHE BOOL "")
+    set(PROXYGEN_USE_BUNDLED_WANGLE
+        OFF
+        CACHE BOOL "")
+    set(PROXYGEN_USE_BUNDLED_FIZZ
+        OFF
+        CACHE BOOL "")
+    set(PROXYGEN_USE_BUNDLED_MVFST
+        OFF
+        CACHE BOOL "")
+    set(PROXYGEN_USE_BUNDLED_ZLIB
+        OFF
+        CACHE BOOL "")
+    set(PROXYGEN_USE_BUNDLED_ZSTD
+        OFF
+        CACHE BOOL "")
+    set(BUILD_TESTS
+        OFF
+        CACHE BOOL "" FORCE)
+    set(_TENZIR_CMAKE_SKIP_INSTALL_RULES "${CMAKE_SKIP_INSTALL_RULES}")
+    set(CMAKE_SKIP_INSTALL_RULES ON)
+    add_subdirectory(libtenzir/aux/proxygen SYSTEM)
+    set(CMAKE_SKIP_INSTALL_RULES "${_TENZIR_CMAKE_SKIP_INSTALL_RULES}")
+    dependency_summary(
+      "proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen"
+      "Dependencies")
+  else ()
+    find_package(proxygen REQUIRED CONFIG)
+    dependency_summary("proxygen" proxygen::proxygen "Dependencies")
+  endif ()
+  foreach (
+    _tenzir_candidate IN
+    ITEMS "proxygen" "proxygen::proxygen" "Proxygen::proxygen"
+          "proxygenhttpserver" "proxygen::proxygenhttpserver"
+          "Proxygen::proxygenhttpserver")
     if (TARGET ${_tenzir_candidate})
       set(_tenzir_proxygen_target "${_tenzir_candidate}")
       break()
@@ -1024,10 +1034,6 @@ if (TENZIR_ENABLE_PROXYGEN)
                   " the candidate list in CMakeLists.txt.")
   endif ()
   message(STATUS "Using Proxygen target: ${_tenzir_proxygen_target}")
-  set(_tenzir_bundled_proxygen "${_tenzir_proxygen_target}")
-  dependency_summary(
-    "proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen"
-    "Dependencies")
 endif ()
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
