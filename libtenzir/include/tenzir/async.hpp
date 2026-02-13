@@ -55,6 +55,7 @@
 #include "tenzir/tql2/eval.hpp"
 
 #include <caf/actor_cast.hpp>
+#include <caf/actor_companion.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/mailbox_element.hpp>
@@ -92,6 +93,9 @@ void mail_with_callback(Handle receiver, caf::message msg, F f) {
     if (ptr->payload.match_elements<caf::error>()) {
       std::invoke(std::move(*f),
                   caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+    } else if constexpr (std::is_void_v<Result>) {
+      // CAF void responses have an empty payload.
+      std::invoke(std::move(*f), caf::expected<Result>{});
     } else if (ptr->payload.match_element<Result>(0)) {
       std::invoke(std::move(*f),
                   caf::expected<Result>{ptr->payload.get_as<Result>(0)});
