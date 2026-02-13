@@ -110,7 +110,10 @@ endif ()
 # -- aws sdk (for direct S3 object deletion) -----------------------------------
 
 if (ARROW_S3)
-  find_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)
+  find_package(
+    AWSSDK
+    COMPONENTS s3
+    REQUIRED CONFIG)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST
          "\nfind_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)")
   dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
@@ -128,7 +131,15 @@ endif ()
 
 # -- boost ---------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)
+find_package(
+  Boost REQUIRED
+  COMPONENTS headers
+             filesystem
+             url
+             context
+             program_options
+             regex
+             thread)
 
 # -- re2 -----------------------------------------------------------------------
 
@@ -153,7 +164,8 @@ provide_find_module(c-ares)
 # Use MODULE mode to avoid broken CMake config in static Nix builds
 
 find_package(EXPAT REQUIRED MODULE)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED MODULE)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(EXPAT REQUIRED MODULE)")
 dependency_summary("expat" EXPAT::EXPAT "Dependencies")
 
 # -- jemalloc ------------------------------------------------------------------
@@ -475,12 +487,20 @@ if (ARROW_AZURE)
 endif ()
 
 # Link against Boost.
-target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
-                                       Boost::url Boost::context
-                                       Boost::program_options Boost::regex
-                                       Boost::thread)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)")
+target_link_libraries(
+  libtenzir
+  PUBLIC Boost::headers
+         Boost::filesystem
+         Boost::url
+         Boost::context
+         Boost::program_options
+         Boost::regex
+         Boost::thread)
+string(
+  APPEND
+  TENZIR_FIND_DEPENDENCY_LIST
+  "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)"
+)
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
@@ -496,7 +516,8 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   get_target_property(_tenzir_folly_include_dirs Folly::folly
                       INTERFACE_INCLUDE_DIRECTORIES)
   if (_tenzir_folly_include_dirs)
-    target_include_directories(libtenzir BEFORE PRIVATE ${_tenzir_folly_include_dirs})
+    target_include_directories(libtenzir BEFORE
+                               PRIVATE ${_tenzir_folly_include_dirs})
   endif ()
 endif ()
 if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
@@ -504,23 +525,26 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
 endif ()
 if (TENZIR_ENABLE_PROXYGEN)
   if (DEFINED _tenzir_bundled_proxygen AND TARGET ${_tenzir_bundled_proxygen})
-    get_target_property(_tenzir_proxygen_include_dirs
-                        ${_tenzir_bundled_proxygen}
-                        INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(
+      _tenzir_proxygen_include_dirs ${_tenzir_bundled_proxygen}
+      INTERFACE_INCLUDE_DIRECTORIES)
     if (_tenzir_proxygen_include_dirs)
-      target_include_directories(libtenzir PRIVATE ${_tenzir_proxygen_include_dirs})
+      target_include_directories(libtenzir
+                                 PRIVATE ${_tenzir_proxygen_include_dirs})
     endif ()
     target_link_libraries(
       libtenzir
       PRIVATE
-        $<$<BOOL:${_tenzir_bundled_proxygen}>:$<TARGET_FILE:${_tenzir_bundled_proxygen}>>)
+        $<$<BOOL:${_tenzir_bundled_proxygen}>:$<TARGET_FILE:${_tenzir_bundled_proxygen}>>
+    )
     if (DEFINED _tenzir_bundled_proxygen)
       message(VERBOSE "Linking Proxygen target: ${_tenzir_bundled_proxygen}")
     endif ()
   else ()
     message(
       WARNING
-      "TENZIR_ENABLE_PROXYGEN is set but no known Proxygen target was detected.")
+        "TENZIR_ENABLE_PROXYGEN is set but no known Proxygen target was detected."
+    )
   endif ()
 endif ()
 # gflags is a transitive dependency of glog (used by folly). We must re-export

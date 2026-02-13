@@ -5,8 +5,6 @@
 
 set -euo pipefail
 
-BUILD_JOBS="${BUILD_JOBS:-$(nproc --all 2>/dev/null || echo 2)}"
-
 apt-get -qq update
 apt-get install --no-install-recommends -y \
   g++-14 \
@@ -37,7 +35,7 @@ export CMAKE_INSTALL_PREFIX
   --disable-cxx \
   --disable-libdl
 
-make -j "${BUILD_JOBS}"
+make -j "$(nproc || true)"
 
 checkinstall \
   --fstrans=no \

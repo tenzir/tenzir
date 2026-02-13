@@ -8,8 +8,6 @@ export CMAKE_INSTALL_PREFIX
 
 set -euo pipefail
 
-BUILD_JOBS="${BUILD_JOBS:-$(nproc --all 2>/dev/null || echo 2)}"
-
 apt-get update
 apt-get -y --no-install-recommends install \
   build-essential \
@@ -40,7 +38,7 @@ cmake -B build \
   -DCUSTOM_MEMORY_MANAGEMENT=OFF \
   "${EXTRA_CMAKE_ARGS[@]}"
 
-cmake --build build --parallel "${BUILD_JOBS}"
+cmake --build build --parallel "$(nproc --all)"
 
 checkinstall \
   --fstrans=no \

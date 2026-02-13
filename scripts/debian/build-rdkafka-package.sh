@@ -48,7 +48,7 @@ cmake -B build -G Ninja \
   -DWITH_ZSTD=ON \
   -DWITH_LZ4_EXT=ON
 
-cmake --build build --parallel "${BUILD_JOBS:-2}"
+cmake --build build --parallel
 
 checkinstall \
   --fstrans=no \
