@@ -491,7 +491,37 @@ dependency_summary("re2" re2::re2 "Dependencies")
 # Link against folly.
 target_link_libraries(libtenzir PUBLIC Folly::folly)
 if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+  # Ensure Folly's own headers are preferred over system includes to avoid
+  # ABI/constructor mismatches from mixed folly installations.
+  get_target_property(_tenzir_folly_include_dirs Folly::folly
+                      INTERFACE_INCLUDE_DIRECTORIES)
+  if (_tenzir_folly_include_dirs)
+    target_include_directories(libtenzir BEFORE PRIVATE ${_tenzir_folly_include_dirs})
+  endif ()
+endif ()
+if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
+endif ()
+if (TENZIR_ENABLE_PROXYGEN)
+  if (DEFINED _tenzir_bundled_proxygen AND TARGET ${_tenzir_bundled_proxygen})
+    get_target_property(_tenzir_proxygen_include_dirs
+                        ${_tenzir_bundled_proxygen}
+                        INTERFACE_INCLUDE_DIRECTORIES)
+    if (_tenzir_proxygen_include_dirs)
+      target_include_directories(libtenzir PRIVATE ${_tenzir_proxygen_include_dirs})
+    endif ()
+    target_link_libraries(
+      libtenzir
+      PRIVATE
+        $<$<BOOL:${_tenzir_bundled_proxygen}>:$<TARGET_FILE:${_tenzir_bundled_proxygen}>>)
+    if (DEFINED _tenzir_bundled_proxygen)
+      message(VERBOSE "Linking Proxygen target: ${_tenzir_bundled_proxygen}")
+    endif ()
+  else ()
+    message(
+      WARNING
+      "TENZIR_ENABLE_PROXYGEN is set but no known Proxygen target was detected.")
+  endif ()
 endif ()
 # gflags is a transitive dependency of glog (used by folly). We must re-export
 # find_package(gflags) so that plugins can resolve the gflags_shared cmake
