@@ -1,11 +1,14 @@
 {
   fizz,
   fetchFromGitHub,
+  lib,
+  stdenv,
+  xz,
 }:
 let
   facebookNetworkStack = import ../facebook-network-stack.nix;
 in
-fizz.overrideAttrs (_: {
+fizz.overrideAttrs (orig: {
   version = facebookNetworkStack.release;
   src = fetchFromGitHub {
     inherit (facebookNetworkStack.fizz)
@@ -15,4 +18,12 @@ fizz.overrideAttrs (_: {
       hash
       ;
   };
+  env =
+    let
+      origEnv = orig.env or { };
+    in
+    origEnv
+    // {
+      NIX_LDFLAGS = (origEnv.NIX_LDFLAGS or "") + lib.optionalString stdenv.hostPlatform.isStatic " -L${xz.out}/lib -llzma";
+    };
 })
