@@ -40,7 +40,7 @@ COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=azure-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY scripts/debian/build-arrow-package.sh .
-COPY nix/overrides/arrow-cpp-fields-race.patch /patches/
+COPY nix/overrides/arrow-cpp-eager-struct-fields.patch /patches/
 RUN apt-get update && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     ./build-arrow-package.sh
