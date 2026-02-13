@@ -114,6 +114,9 @@ template <class Input, class Output>
 struct exec_node_state;
 
 template <class Input, class Output>
+struct exec_node_control_plane;
+
+template <class Input, class Output>
 struct exec_node_diagnostic_handler final : public diagnostic_handler {
   exec_node_diagnostic_handler(exec_node_state<Input, Output>& state,
                                receiver_actor<diagnostic> handle)
@@ -128,15 +131,7 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   }
 
   void emit(diagnostic diag) override {
-    if (not censor.is_noop()) {
-      diag.message = censor.censor(std::move(diag.message));
-      for (auto& annotation : diag.annotations) {
-        annotation.text = censor.censor(std::move(annotation.text));
-      }
-      for (auto& note : diag.notes) {
-        note.message = censor.censor(std::move(note.message));
-      }
-    }
+    diag = censor.censor(std::move(diag));
     TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
                  diag);
     switch (state.op->strictness()) {
@@ -156,10 +151,6 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     }
   }
 
-  void add_to_censor(ecc::cleansing_blob v) {
-    censor.secrets.emplace(std::move(v));
-  }
-
   exec_node_diagnostic_handler(const exec_node_diagnostic_handler&) = delete;
   exec_node_diagnostic_handler& operator=(const exec_node_diagnostic_handler&)
     = delete;
@@ -176,6 +167,9 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   ~exec_node_diagnostic_handler() {
     deduplicator_disposable_.dispose();
   }
+
+  template <class, class>
+  friend struct exec_node_control_plane;
 
 private:
   exec_node_state<Input, Output>& state;
@@ -261,120 +255,6 @@ struct exec_node_control_plane final : public operator_control_plane {
     }
   }
 
-  struct located_resolved_secret {
-    location loc;
-    ecc::cleansing_blob value;
-
-    located_resolved_secret(location loc) : loc{loc} {
-    }
-  };
-
-  using request_map_t
-    = std::unordered_map<std::string, located_resolved_secret>;
-
-  struct secret_finisher {
-    class secret secret;
-    secret_request_callback callback;
-    location loc;
-
-    static auto apply_transformation(ecc::cleansing_blob blob,
-                                     fbs::data::SecretTransformations operation,
-                                     diagnostic_handler& dh, location loc)
-      -> failure_or<ecc::cleansing_blob> {
-#define X_ENCODE(OPERATION, FUNCTION)                                          \
-  case OPERATION: {                                                            \
-    const auto encoded = FUNCTION(std::string_view{                            \
-      reinterpret_cast<const char*>(blob.data()),                              \
-      reinterpret_cast<const char*>(blob.data() + blob.size()),                \
-    });                                                                        \
-    const auto enc_bytes = as_bytes(encoded);                                  \
-    blob.assign(enc_bytes.begin(), enc_bytes.end());                           \
-    return blob;                                                               \
-  }
-
-#define X_DECODE(OPERATION, FUNCTION)                                          \
-  case OPERATION: {                                                            \
-    const auto decoded = FUNCTION(std::string_view{                            \
-      reinterpret_cast<const char*>(blob.data()),                              \
-      reinterpret_cast<const char*>(blob.data() + blob.size()),                \
-    });                                                                        \
-    if (not decoded) {                                                         \
-      diagnostic::error("failed to `" #OPERATION "` secret value")             \
-        .primary(loc)                                                          \
-        .emit(dh);                                                             \
-      return failure::promise();                                               \
-    }                                                                          \
-    const auto dec_bytes = as_bytes(*decoded);                                 \
-    blob.assign(dec_bytes.begin(), dec_bytes.end());                           \
-    return blob;                                                               \
-  }
-      switch (operation) {
-        using enum fbs::data::SecretTransformations;
-        X_ENCODE(encode_base64, detail::base64::encode)
-        X_DECODE(decode_base64, detail::base64::try_decode)
-        X_ENCODE(encode_url, curl::escape)
-        X_DECODE(decode_url, curl::try_unescape)
-        X_ENCODE(encode_base58, detail::base58::encode)
-        X_DECODE(decode_base58, detail::base58::decode)
-        X_ENCODE(encode_hex, detail::hex::encode)
-        X_DECODE(decode_hex, detail::hex::decode)
-      }
-#undef X_ENCODE
-#undef X_DECODE
-      TENZIR_UNREACHABLE();
-    }
-
-    // Helper struct to work around GCC 15 ICE in lambda_expr_this_capture
-    // when using explicit object parameters with captures.
-    struct secret_resolver {
-      const request_map_t& requested;
-      tenzir::diagnostic_handler& dh;
-      location loc;
-
-      using ret_t = failure_or<ecc::cleansing_blob>;
-
-      auto operator()(const fbs::data::SecretLiteral& l) const -> ret_t {
-        const auto& v = detail::secrets::deref(l.value());
-        const auto v_bytes = as_bytes(v);
-        return ecc::cleansing_blob{v_bytes.begin(), v_bytes.end()};
-      }
-
-      auto operator()(const fbs::data::SecretName& l) const -> ret_t {
-        const auto it = requested.find(detail::secrets::deref(l.value()).str());
-        TENZIR_ASSERT(it != requested.end());
-        return it->second.value;
-      }
-
-      auto operator()(const fbs::data::SecretConcatenation& concat) const
-        -> ret_t {
-        auto res = ecc::cleansing_blob{};
-        for (auto* p : detail::secrets::deref(concat.secrets())) {
-          TRY(auto part, match(detail::secrets::deref(p), *this));
-          res.insert(res.end(), part.begin(), part.end());
-        }
-        return res;
-      }
-
-      auto operator()(const fbs::data::SecretTransformed& trafo) const
-        -> ret_t {
-        TRY(auto nested, match(detail::secrets::deref(trafo.secret()), *this));
-        return apply_transformation(std::move(nested), trafo.transformation(),
-                                    dh, loc);
-      }
-    };
-
-    auto finish(const request_map_t& requested,
-                exec_node_diagnostic_handler<Input, Output>& dh) const
-      -> failure_or<void> {
-      // For every element in the original secret
-      bool all_literal = true;
-      const auto f = secret_resolver{requested, dh, this->loc};
-      TRY(auto res, match(secret, f));
-      // Finally, we invoke the callback
-      return callback(resolved_secret_value{std::move(res), all_literal});
-    }
-  };
-
   auto resolve_secrets_must_yield(std::vector<secret_request> requests,
                                   final_callback_t final_callback)
     -> secret_resolution_sentinel override {
@@ -409,8 +289,8 @@ struct exec_node_control_plane final : public operator_control_plane {
       /// Finish all secrets via the respective finisher.
       auto success = true;
       for (const auto& f : finishers) {
-        success &= static_cast<bool>(
-          f.finish(*requested_secrets, *diagnostic_handler));
+        success &= static_cast<bool>(f.finish(
+          *requested_secrets, diagnostic_handler->censor, *diagnostic_handler));
       }
       success &= static_cast<bool>(final_callback(true));
       // We want to avoid re-scheduling in the error case, so we set_waiting
@@ -437,8 +317,9 @@ struct exec_node_control_plane final : public operator_control_plane {
           /// Finish all secrets via the respective finisher.
           bool success = true;
           for (const auto& f : finishers) {
-            success &= static_cast<bool>(
-              f.finish(*requested_secrets, *diagnostic_handler));
+            success &= static_cast<bool>(f.finish(*requested_secrets,
+                                                  diagnostic_handler->censor,
+                                                  *diagnostic_handler));
           }
           success &= static_cast<bool>(final_callback(success));
           /// We do not want to re-schedule ourselves in the error case.

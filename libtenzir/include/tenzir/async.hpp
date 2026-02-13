@@ -56,6 +56,8 @@
 #include "tenzir/try.hpp"
 
 #include <caf/actor_cast.hpp>
+#include <caf/actor_companion.hpp>
+#include <caf/actor_registry.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/mailbox_element.hpp>
@@ -398,70 +400,39 @@ private:
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
                                 OpenPipeline<table_slice>>;
 
-class OpCtxImpl {
-public:
-  virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline>
-    = 0;
-
-  virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
-
-  // TODO: Change `void` to `Any`.
-  virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
-
-protected:
-  ~OpCtxImpl() = default;
-};
-
 class OpCtx {
 public:
-  OpCtx(caf::actor_system& sys, diagnostic_handler& dh, OpCtxImpl& impl)
-    : sys_{sys}, dh_{dh}, reg_{global_registry()}, impl_{impl} {
-  }
-
   virtual ~OpCtx() = default;
 
   explicit(false) operator diagnostic_handler&() {
-    return dh_;
+    return dh();
   }
 
   explicit(false) operator base_ctx() {
-    return base_ctx{dh_, *reg_};
+    return base_ctx{dh(), reg()};
   }
 
-  auto actor_system() -> caf::actor_system& {
-    return sys_;
-  }
-
-  auto dh() -> diagnostic_handler& {
-    return dh_;
-  }
+  virtual auto actor_system() -> caf::actor_system& = 0;
+  virtual auto dh() -> diagnostic_handler& = 0;
+  virtual auto reg() -> const registry& = 0;
+  virtual auto fetch_node() -> Task<failure_or<node_actor>> = 0;
+  virtual auto resolve_secrets(std::vector<secret_request> requests)
+    -> Task<failure_or<void>>
+    = 0;
+  virtual auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
+    -> Task<AnyOpenPipeline>
+    = 0;
+  virtual auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> = 0;
+  // TODO: Change `void` to `Any`.
+  virtual auto spawn_task(Task<void> task) -> AsyncHandle<void> = 0;
+  virtual auto save(chunk_ptr chunk) -> Task<void> = 0;
+  virtual auto load() -> Task<chunk_ptr> = 0;
+  virtual auto flush() -> Task<void> = 0;
 
   template <class... Ts>
   auto mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
     return AsyncMail<std::decay_t<Ts>...>{
       caf::make_message(std::forward<Ts>(xs)...)};
-  }
-
-  auto save(chunk_ptr chunk) -> Task<void> {
-    co_return;
-  }
-
-  auto load() -> Task<chunk_ptr> {
-    co_return {};
-  }
-
-  auto flush() -> Task<void> {
-    co_return;
-  }
-
-  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnyOpenPipeline>;
-
-  auto get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline>;
-
-  auto spawn_task(Task<void> task) -> AsyncHandle<void> {
-    return impl_.spawn_task(std::move(task));
   }
 
   template <class Awaitable>
@@ -479,12 +450,6 @@ public:
   auto spawn_task(F f) -> AsyncHandle<void> {
     return spawn_task(folly::coro::co_invoke(std::move(f)));
   }
-
-private:
-  caf::actor_system& sys_;
-  diagnostic_handler& dh_;
-  std::shared_ptr<const registry> reg_;
-  OpCtxImpl& impl_;
 };
 
 enum class OperatorState {
@@ -573,6 +538,7 @@ public:
   }
 
   virtual auto finalize(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
     co_return;
   }
 

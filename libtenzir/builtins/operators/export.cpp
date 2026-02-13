@@ -49,22 +49,6 @@ namespace tenzir::plugins::export_ {
 
 namespace {
 
-/// Diagnostic handler that writes to an unbounded queue for async-safe usage.
-class queued_diagnostic_handler final : public diagnostic_handler {
-public:
-  explicit queued_diagnostic_handler(
-    std::shared_ptr<UnboundedQueue<diagnostic>> queue)
-    : queue_{std::move(queue)} {
-  }
-
-  auto emit(diagnostic diag) -> void override {
-    queue_->enqueue(std::move(diag));
-  }
-
-private:
-  std::shared_ptr<UnboundedQueue<diagnostic>> queue_;
-};
-
 struct ExportArgs {
   bool live = false;
   bool retro = false;
@@ -72,39 +56,6 @@ struct ExportArgs {
   uint64_t parallel = 3;
   ir::optimize_filter filter;
 };
-
-auto connect_to_node(caf::actor_system& sys, bool internal_connection = false)
-  -> Task<node_actor> {
-  // Fast path: check local registry for existing node.
-  if (auto node = sys.registry().get<node_actor>("tenzir.node")) {
-    co_return node;
-  }
-  // Get configuration.
-  const auto& opts = content(sys.config());
-  auto node_endpoint = detail::get_node_endpoint(opts);
-  if (not node_endpoint) {
-    throw std::runtime_error(
-      fmt::format("failed to get node endpoint: {}", node_endpoint.error()));
-  }
-  auto timeout = detail::node_connection_timeout(opts);
-  auto retry_delay = detail::get_retry_delay(opts);
-  auto deadline = detail::get_deadline(timeout);
-  // Spawn connector and request connection.
-  auto connector_actor
-    = sys.spawn(connector, retry_delay, deadline, internal_connection);
-  auto request = connect_request{
-    .port = node_endpoint->port->number(),
-    .host = node_endpoint->host,
-  };
-  auto result = co_await async_mail(atom::connect_v, std::move(request))
-                  .request(connector_actor);
-  caf::anon_send_exit(connector_actor, caf::exit_reason::user_shutdown);
-  if (not result) {
-    throw std::runtime_error(
-      fmt::format("failed to connect to node: {}", result.error()));
-  }
-  co_return std::move(*result);
-}
 
 class Export final : public Operator<void, table_slice> {
 public:
@@ -118,7 +69,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
-    auto node = co_await connect_to_node(ctx.actor_system());
+    auto node = co_await ctx.fetch_node();
+    if (not node) {
+      co_return;
+    }
     diag_queue_ = std::make_shared<UnboundedQueue<diagnostic>>();
     // TODO: Figure out whether this makes sense.
     auto legacy_conjunction = conjunction{};
@@ -126,7 +80,6 @@ public:
     for (auto& filter : args_.filter) {
       auto [legacy, remainder] = split_legacy_expression(args_.filter[0]);
     }
-
     auto expr = expression{
       predicate{
         meta_extractor{meta_extractor::internal},
@@ -137,7 +90,7 @@ public:
     auto mode = export_mode{args_.live ? args_.retro : true, args_.live,
                             args_.internal, args_.parallel};
     auto result
-      = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(node);
+      = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(*node);
     if (not result) {
       throw std::runtime_error(
         fmt::format("failed to spawn export bridge: {}", result.error()));

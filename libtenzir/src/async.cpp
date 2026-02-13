@@ -11,9 +11,12 @@
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/connect_to_node.hpp"
+#include "tenzir/connector.hpp"
 #include "tenzir/ir.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
+#include <caf/actor_registry.hpp>
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
@@ -179,8 +182,37 @@ struct SubPipeline {
 using AnySubpipeline
   = variant<SubPipeline<void>, SubPipeline<chunk_ptr>, SubPipeline<table_slice>>;
 
+class MutexDiagnosticHandler final : public diagnostic_handler {
+public:
+  MutexDiagnosticHandler(diagnostic_handler& dh) : dh_{dh} {
+  }
+
+  auto emit(diagnostic diag) -> void override {
+    auto lock = std::scoped_lock{mut_};
+    dh_.emit(std::move(diag));
+  }
+
+private:
+  diagnostic_handler& dh_;
+  std::mutex mut_;
+};
+
 template <class Input, class Output>
-class Runner final : private OpCtxImpl {
+class Runner final : public OpCtx {
+  class DiagnosticHandler : public diagnostic_handler {
+  public:
+    DiagnosticHandler(diagnostic_handler& dh) : dh_{dh} {
+    }
+    auto emit(diagnostic diag) -> void override {
+      dh_.emit(censor_.censor(diag));
+    }
+
+  private:
+    friend class Runner;
+    diagnostic_handler& dh_;
+    secret_censor censor_;
+  };
+
 public:
   Runner(Box<Operator<Input, Output>> op,
          Box<Pull<OperatorMsg<Input>>> pull_upstream,
@@ -192,14 +224,15 @@ public:
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
-      ctx_{sys, dh, *this} {
+      dh_{dh},
+      sys_{sys} {
   }
 
   Runner(Runner&&) = delete;
   Runner& operator=(Runner&&) = delete;
   Runner(const Runner&) = delete;
   Runner& operator=(const Runner&) = delete;
-  ~Runner() = default;
+  ~Runner() override = default;
 
   auto run_to_completion() && -> Task<void> {
     auto guard = detail::scope_guard{[] noexcept {
@@ -222,6 +255,182 @@ public:
   }
 
 private:
+  auto actor_system() -> caf::actor_system& override {
+    return sys_;
+  }
+
+  auto reg() -> const registry& override {
+    return *reg_;
+  }
+
+  auto save(chunk_ptr chunk) -> Task<void> override {
+    TENZIR_UNUSED(chunk);
+    co_return;
+  }
+
+  auto load() -> Task<chunk_ptr> override {
+    co_return {};
+  }
+
+  auto flush() -> Task<void> override {
+    co_return;
+  }
+
+  auto fetch_node() -> Task<failure_or<node_actor>> override {
+    // Fast path: check local registry for existing node.
+    if (auto node = sys_.registry().get<node_actor>("tenzir.node")) {
+      co_return node;
+    }
+    static auto mut = RawMutex{};
+    const auto lock = co_await mut.lock();
+    if (auto node = sys_.registry().get<node_actor>("tenzir.node")) {
+      co_return node;
+    }
+    // Get configuration.
+    const auto& opts = content(sys_.config());
+    const auto node_endpoint = detail::get_node_endpoint(opts);
+    if (not node_endpoint) {
+      diagnostic::error("failed to get node endpoint: {}",
+                        node_endpoint.error())
+        .emit(dh_);
+      co_return failure::promise();
+    }
+    const auto timeout = detail::node_connection_timeout(opts);
+    const auto retry_delay = detail::get_retry_delay(opts);
+    const auto deadline = detail::get_deadline(timeout);
+    // Spawn connector and request connection.
+    auto connector_actor = sys_.spawn(connector, retry_delay, deadline, false);
+    auto request = connect_request{
+      .port = node_endpoint->port->number(),
+      .host = node_endpoint->host,
+    };
+    auto result = co_await async_mail(atom::connect_v, std::move(request))
+                    .request(connector_actor);
+    caf::anon_send_exit(connector_actor, caf::exit_reason::user_shutdown);
+    if (not result) {
+      diagnostic::error("failed to connect to node: {}", result.error())
+        .emit(dh_);
+      co_return failure::promise();
+    }
+    // Put the actor into the local registry for process-wide fast pathing.
+    sys_.registry().put("tenzir.node", *result);
+    co_return std::move(*result);
+  }
+
+  auto dh() -> diagnostic_handler& override {
+    return dh_;
+  }
+
+  auto resolve_secrets(std::vector<secret_request> requests)
+    -> Task<failure_or<void>> override {
+    // All secrets that must be resolved by the node/platform.
+    auto requested_secrets = request_map_t();
+    // The finishers (operations) that must be performed after the value is known.
+    auto finishers = std::vector<secret_finisher>{};
+    // First, iterate all requests we got to see if any need to be looked up
+    // remotely and to build the finisher list.
+    for (auto& req : requests) {
+      const auto collect = detail::overload{
+        [](const fbs::data::SecretLiteral&) -> void {
+          ; /* noop */
+        },
+        [&requested_secrets,
+         loc = req.location](const fbs::data::SecretName& n) -> void {
+          requested_secrets.try_emplace(detail::secrets::deref(n.value()).str(),
+                                        loc);
+        },
+        [](this const auto& self,
+           const fbs::data::SecretConcatenation& concat) -> void {
+          for (const auto* p : detail::secrets::deref(concat.secrets())) {
+            match(detail::secrets::deref(p), self);
+          }
+        },
+        [](this const auto& self,
+           const fbs::data::SecretTransformed& trafo) -> void {
+          match(detail::secrets::deref(trafo.secret()), self);
+        },
+      };
+      match(req.secret, collect);
+      finishers.emplace_back(std::move(req.secret), std::move(req.callback),
+                             req.location);
+    }
+    if (requested_secrets.empty()) {
+      /// Finish all secrets via the respective finisher.
+      auto success = true;
+      for (const auto& f : finishers) {
+        success
+          &= static_cast<bool>(f.finish(requested_secrets, dh_.censor_, dh_));
+      }
+      if (not success) {
+        co_return failure::promise();
+      }
+      co_return {};
+    }
+    auto node = co_await fetch_node();
+    if (not node or not *node) {
+      co_return failure::promise();
+    }
+    // All futures for requests we send to the node
+    auto futures
+      = std::vector<folly::SemiFuture<caf::expected<secret_resolution_result>>>{};
+    // Key pairs used for the request encryption per request
+    auto keys = std::vector<ecc::string_keypair>{};
+    for (auto& [name, out] : requested_secrets) {
+      auto key_pair = ecc::generate_keypair();
+      TENZIR_ASSERT(key_pair);
+      auto public_key = key_pair->public_key;
+      futures.push_back(mail(atom::resolve_v, name, public_key).request(*node));
+      keys.push_back(std::move(*key_pair));
+    }
+    const auto results = co_await folly::collectAll(std::move(futures));
+    // We use a bool here to be able to validate all secrets instead of early
+    // exiting.
+    auto success = true;
+    for (auto&& [result, key, secret] :
+         std::views::zip(results, std::as_const(keys), requested_secrets)) {
+      auto& [name, out] = secret;
+      auto& expected = result.value();
+      if (not expected) {
+        diagnostic::error(expected.error())
+          .primary(out.loc, "secret `{}` failed", name)
+          .emit(dh_);
+        success = false;
+        continue;
+      }
+      match(
+        *expected,
+        [&](const encrypted_secret_value& v) {
+          auto decrypted = ecc::decrypt(v.value, key);
+          if (not decrypted) {
+            diagnostic::error("failed to decrypt secret: {}", decrypted.error())
+              .primary(out.loc, "secret `{}` failed", name)
+              .emit(dh_);
+            success = false;
+            return;
+          }
+          out.value = std::move(*decrypted);
+        },
+        [&](const secret_resolution_error& e) {
+          diagnostic::error("could not get secret value: {}", e.message)
+            .primary(out.loc, "secret `{}` failed", name)
+            .emit(dh_);
+          success = false;
+        });
+    }
+    if (not success) {
+      co_return failure::promise();
+    }
+    /// Finish all secrets via the respective finisher.
+    for (const auto& f : finishers) {
+      success
+        &= static_cast<bool>(f.finish(requested_secrets, dh_.censor_, dh_));
+    }
+    if (not success) {
+      co_return failure::promise();
+    }
+    co_return {};
+  }
+
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
     auto spawned = std::move(pipe).spawn(input);
@@ -252,8 +461,7 @@ private:
         auto runner = run_chain(std::move(chain), std::move(pull_upstream),
                                 std::move(push_downstream),
                                 std::move(from_control_receiver),
-                                std::move(to_control_sender),
-                                ctx_.actor_system(), ctx_.dh());
+                                std::move(to_control_sender), sys_, dh_);
         // TODO: What do we do here? Do we need to react to it finishing?
         auto handle = queue_.scope().spawn(std::move(runner));
         return std::move(push_upstream);
@@ -273,21 +481,21 @@ private:
             [&](table_slice output) -> Task<void> {
               if constexpr (std::same_as<Output, void>) {
                 co_await op_->process_sub(make_view(key), std::move(output),
-                                          ctx_);
+                                          *this);
               } else {
                 auto push = OpPushWrapper{push_downstream_};
                 co_await op_->process_sub(make_view(key), std::move(output),
-                                          push, ctx_);
+                                          push, *this);
               }
             },
             [&](Signal output) -> Task<void> {
               switch (output) {
                 case Signal::end_of_data: {
                   if constexpr (std::same_as<Output, void>) {
-                    co_await op_->finish_sub(make_view(key), ctx_);
+                    co_await op_->finish_sub(make_view(key), *this);
                   } else {
                     auto push = OpPushWrapper{push_downstream_};
-                    co_await op_->finish_sub(make_view(key), push, ctx_);
+                    co_await op_->finish_sub(make_view(key), push, *this);
                   }
                   // TODO(tobim): Too early?
                   subpipelines_.erase(key);
@@ -367,13 +575,13 @@ private:
     try {
       TENZIR_INFO("-> pre start");
       if constexpr (std::same_as<Output, void>) {
-        co_await op_->start(ctx_);
+        co_await op_->start(*this);
       } else {
-        co_await op_->start(ctx_);
+        co_await op_->start(*this);
       }
       TENZIR_INFO("-> post start");
       queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task(ctx_.dh())};
+        co_return AnyWrapper{co_await op_->await_task(*this)};
       });
       queue_.spawn(pull_upstream_());
       queue_.spawn(from_control_.receive());
@@ -417,16 +625,16 @@ private:
     // The task provided by the inner implementation completed.
     TENZIR_VERBOSE("got future result in {}", typeid(*op_).name());
     if constexpr (std::same_as<Output, void>) {
-      co_await op_->process_task(std::move(message.value), ctx_);
+      co_await op_->process_task(std::move(message.value), *this);
     } else {
       auto push = OpPushWrapper{push_downstream_};
-      co_await op_->process_task(std::move(message.value), push, ctx_);
+      co_await op_->process_task(std::move(message.value), push, *this);
     }
     if (op_->state() == OperatorState::done) {
       co_await handle_done();
     } else {
       queue_.spawn([this] -> Task<AnyWrapper> {
-        co_return AnyWrapper{co_await op_->await_task(ctx_.dh())};
+        co_return AnyWrapper{co_await op_->await_task(*this)};
       });
     }
     TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
@@ -446,10 +654,10 @@ private:
             co_return;
           }
           if constexpr (std::same_as<Output, void>) {
-            co_await op_->process(input, ctx_);
+            co_await op_->process(input, *this);
           } else {
             auto push = OpPushWrapper{push_downstream_};
-            co_await op_->process(input, push, ctx_);
+            co_await op_->process(input, push, *this);
           }
         }
       },
@@ -467,9 +675,9 @@ private:
           case Signal::checkpoint:
             TENZIR_VERBOSE("got checkpoint in {}", typeid(*op_).name());
             to_control_.send(ToControl::checkpoint_begin);
-            co_await op_->checkpoint(ctx_);
+            co_await op_->checkpoint(*this);
             to_control_.send(ToControl::checkpoint_ready);
-            co_await ctx_.flush();
+            co_await flush();
             to_control_.send(ToControl::checkpoint_done);
             co_await push_downstream_(Signal::checkpoint);
             co_return;
@@ -511,10 +719,10 @@ private:
     }
     // Then finalize the operator, which can still produce output.
     if constexpr (std::same_as<Output, void>) {
-      co_await op_->finalize(ctx_);
+      co_await op_->finalize(*this);
     } else {
       auto push = OpPushWrapper{push_downstream_};
-      co_await op_->finalize(push, ctx_);
+      co_await op_->finalize(push, *this);
     }
     // Afterwards, finish all subpipelines. Note that the previous step could
     // have still pushed data into them.
@@ -542,7 +750,9 @@ private:
   Box<Push<OperatorMsg<Output>>> push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
-  OpCtx ctx_;
+  DiagnosticHandler dh_;
+  caf::actor_system& sys_;
+  std::shared_ptr<const registry> reg_ = global_registry();
 
   // TODO: Better map type.
   std::unordered_map<data, AnySubpipeline> subpipelines_;
@@ -591,7 +801,7 @@ public:
               Box<Pull<OperatorMsg<Input>>> pull_upstream,
               Box<Push<OperatorMsg<Output>>> push_downstream,
               Receiver<FromControl> from_control, Sender<ToControl> to_control,
-              caf::actor_system& sys, diagnostic_handler& dh)
+              caf::actor_system& sys, MutexDiagnosticHandler& dh)
     : operators_{std::move(chain).unwrap()},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
@@ -760,7 +970,7 @@ private:
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   caf::actor_system& sys_;
-  diagnostic_handler& dh_;
+  MutexDiagnosticHandler& dh_;
 
   std::vector<Sender<FromControl>> operator_ctrl_;
 
@@ -786,6 +996,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                caf::actor_system& sys, diagnostic_handler& dh) -> Task<void> {
+  auto mdh = MutexDiagnosticHandler{dh};
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain),
@@ -794,7 +1005,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
     std::move(from_control),
     std::move(to_control),
     sys,
-    dh,
+    mdh,
   }
     .run_to_completion();
   TENZIR_INFO("chain runner finished");
@@ -808,15 +1019,6 @@ auto run_open_pipeline(OperatorChain<void, Output> pipeline,
   -> AsyncGenerator<Output> {
   TENZIR_UNUSED(pipeline, sys, dh);
   TENZIR_TODO();
-}
-
-auto OpCtx::spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
-  -> Task<AnyOpenPipeline> {
-  return impl_.spawn_sub(std::move(key), std::move(pipe), input);
-}
-
-auto OpCtx::get_sub(SubKeyView key) -> std::optional<AnyOpenPipeline> {
-  return impl_.get_sub(key);
 }
 
 template <class T>

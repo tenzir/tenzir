@@ -10,6 +10,7 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/secret.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 
@@ -419,6 +420,10 @@ public:
               return failure::promise();
             }
             value = detail::narrow<uint64_t>(*integer);
+          }
+          if (auto* str = try_as<std::string>(value);
+              str and is<Setter<located<secret>>>(setter)) {
+            value = secret::make_literal(*str);
           }
           auto result = match(
             setter,
