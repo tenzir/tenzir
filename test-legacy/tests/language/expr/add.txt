@@ -35,6 +35,7 @@ warning: binary operator `add` not implemented for `string` and `int64`
 13 | x11 = "a" + 123
    |       ~~~~~~~~~ 
    |
+   = hint: the result of this expression is `null`
 
 warning: integer overflow
   --> tests/language/expr/add.tql:15:7
@@ -49,3 +50,4 @@ warning: binary operator `add` not implemented for `null` and `int64`
 16 | x13 = null + 1
    |       ~~~~~~~~ 
    |
+   = hint: the result of this expression is `null`
