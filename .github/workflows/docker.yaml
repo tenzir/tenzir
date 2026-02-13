@@ -47,6 +47,11 @@ jobs:
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir
+          if [[ ! -f libtenzir/aux/proxygen/CMakeLists.txt ]]; then
+            echo "::error Missing libtenzir/aux/proxygen/CMakeLists.txt after submodule checkout."
+            echo "::error Run: git submodule update --init --recursive libtenzir/aux/proxygen"
+            exit 1
+          fi
       - name: Tailscale
         if: false
         uses: tailscale/github-action@v3
