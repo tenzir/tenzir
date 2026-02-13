@@ -36,6 +36,11 @@ auto parameter_default_string(const ast::expression& expr)
   return std::nullopt;
 }
 
+auto is_null_constant_expression(const ast::expression& expr) -> bool {
+  const auto* constant = try_as<ast::constant>(expr);
+  return constant && is<caf::none_t>(constant->value);
+}
+
 auto make_usage_string(std::string_view op_name,
                        const user_defined_operator& udo) -> std::string {
   auto usage = std::string{op_name};
@@ -223,7 +228,11 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
                                        operator_factory_plugin::invocation& inv,
                                        session ctx, udo_diagnostic_handler& dh)
   -> failure_or<ast::pipeline> {
-  auto positional_values = std::vector<ast::expression>{};
+  struct positional_value {
+    ast::expression expr;
+    bool is_default;
+  };
+  auto positional_values = std::vector<positional_value>{};
   positional_values.reserve(udo.positional_params.size());
   auto named_values
     = std::vector<std::optional<ast::expression>>(udo.named_params.size());
@@ -251,7 +260,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       = next_arg >= inv.args.size()
         || try_as<ast::assignment>(inv.args[next_arg]);
     if (not missing_argument) {
-      positional_values.push_back(std::move(inv.args[next_arg]));
+      positional_values.push_back({std::move(inv.args[next_arg]), false});
       ++next_arg;
       return std::nullopt;
     }
@@ -262,7 +271,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
         .emit(dh);
       return failure::promise();
     }
-    positional_values.push_back(*param.default_value);
+    positional_values.push_back({*param.default_value, true});
     return std::nullopt;
   };
   for (const auto& positional_param : udo.positional_params) {
@@ -386,13 +395,20 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   };
 
   for (size_t i = 0; i < udo.positional_params.size(); ++i) {
-    auto& expr = positional_values[i];
+    auto& [expr, is_default] = positional_values[i];
     const auto& param = udo.positional_params[i];
     if (param.type_hint == "field") {
-      auto copy = ast::expression{expr};
-      if (not ast::selector::try_from(std::move(copy))) {
-        diagnostic::error("expected a selector").primary(expr).emit(dh);
-        return failure::promise();
+      if (is_null_constant_expression(expr)) {
+        if (not is_default) {
+          diagnostic::error("expected a selector").primary(expr).emit(dh);
+          return failure::promise();
+        }
+      } else {
+        auto copy = ast::expression{expr};
+        if (not ast::selector::try_from(std::move(copy))) {
+          diagnostic::error("expected a selector").primary(expr).emit(dh);
+          return failure::promise();
+        }
       }
     }
     coerce_const_string_to_secret(param, expr);
@@ -409,16 +425,23 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
     auto value = std::move(*named_values[i]);
     if (param.type_hint == "field") {
-      auto copy = ast::expression{value};
-      if (not ast::selector::try_from(std::move(copy))) {
-        if (named_value_locations[i]) {
-          diagnostic::error("expected a selector")
-            .primary(*named_value_locations[i])
-            .emit(dh);
+      if (is_null_constant_expression(value) && named_value_locations[i]) {
+        diagnostic::error("expected a selector")
+          .primary(*named_value_locations[i])
+          .emit(dh);
+        return failure::promise();
+      } else if (not is_null_constant_expression(value)) {
+        auto copy = ast::expression{value};
+        if (not ast::selector::try_from(std::move(copy))) {
+          if (named_value_locations[i]) {
+            diagnostic::error("expected a selector")
+              .primary(*named_value_locations[i])
+              .emit(dh);
+            return failure::promise();
+          }
+          diagnostic::error("expected a selector").primary(inv.self).emit(dh);
           return failure::promise();
         }
-        diagnostic::error("expected a selector").primary(inv.self).emit(dh);
-        return failure::promise();
       }
     }
     coerce_const_string_to_secret(param, value);

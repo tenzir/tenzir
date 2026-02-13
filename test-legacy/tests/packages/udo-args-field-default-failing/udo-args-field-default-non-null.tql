@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {a: 42}
+argspkg_field_default_failing::bad_field_default

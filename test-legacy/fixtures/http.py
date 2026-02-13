@@ -82,12 +82,15 @@ def _make_handler(capture_path: Path):
             capture_path.write_text("\n".join(parts), encoding="utf-8")
 
         def _reply(
-            self, payload: bytes, extra_headers: list[tuple[str, str]] | None = None
+            self,
+            payload: bytes,
+            extra_headers: list[tuple[str, str]] | None = None,
+            status: HTTPStatus = HTTPStatus.OK,
         ) -> None:
             content_type = self.headers.get("Content-Type", "application/json")
             if not content_type:
                 content_type = "application/json"
-            self.send_response(HTTPStatus.OK)
+            self.send_response(status)
             self.send_header("Content-Type", content_type)
             if extra_headers:
                 for key, value in extra_headers:
@@ -106,7 +109,7 @@ def _make_handler(capture_path: Path):
             if path == _LINK_BASIC_PAGE_1:
                 self._reply(
                     self._page_payload(1),
-                    [("Link", f"<{_LINK_BASIC_PAGE_2}>; rel=\"next\"")],
+                    [("Link", f'<{_LINK_BASIC_PAGE_2}>; rel="next"')],
                 )
                 return
             if path == _LINK_BASIC_PAGE_2:
@@ -120,7 +123,10 @@ def _make_handler(capture_path: Path):
                         headers: list[tuple[str, str]] | None = None
                         if page < _LINK_CHAIN_LAST:
                             headers = [
-                                ("Link", f"<{_LINK_CHAIN_PREFIX}{page + 1}>; rel=\"next\"")
+                                (
+                                    "Link",
+                                    f'<{_LINK_CHAIN_PREFIX}{page + 1}>; rel="next"',
+                                )
                             ]
                         self._reply(self._page_payload(page), headers)
                         return
@@ -130,9 +136,9 @@ def _make_handler(capture_path: Path):
                     [
                         (
                             "Link",
-                            f"<{_LINK_EDGE_PAGE_2}>; rel=\"prev next\"; "
-                            "title=\"a\\\"b,c;d\", "
-                            "</link-pagination/edge/ignored>; rel=\"last\"",
+                            f'<{_LINK_EDGE_PAGE_2}>; rel="prev next"; '
+                            'title="a\\"b,c;d", '
+                            '</link-pagination/edge/ignored>; rel="last"',
                         ),
                     ],
                 )
@@ -141,24 +147,29 @@ def _make_handler(capture_path: Path):
                 self._reply(self._page_payload(2))
                 return
             if path == _LINK_UNREACHABLE_PAGE_1:
+                # Return an empty body so that only the Link header matters.
+                # This avoids a race between the page-1 parse subpipeline and
+                # the immediate connection-refused from the unreachable next
+                # URL, which produces non-deterministic output across platforms.
                 self._reply(
-                    self._page_payload(1),
+                    b"",
                     [
                         (
                             "Link",
                             "<http://127.0.0.1:9/link-pagination/unreachable/next>;"
-                            " rel=\"next\"",
+                            ' rel="next"',
                         ),
                     ],
+                    status=HTTPStatus.NO_CONTENT,
                 )
                 return
             if path == _LINK_MULTI_SINGLE_PAGE_1:
                 self._reply(
                     self._page_payload(1),
                     [
-                        ("Link", "</link-pagination/multi-single/ignored>; rel=\"prev\""),
-                        ("Link", f"<{_LINK_MULTI_SINGLE_PAGE_2}>; rel=\"next\""),
-                        ("Link", "</link-pagination/multi-single/ignored>; rel=\"last\""),
+                        ("Link", '</link-pagination/multi-single/ignored>; rel="prev"'),
+                        ("Link", f'<{_LINK_MULTI_SINGLE_PAGE_2}>; rel="next"'),
+                        ("Link", '</link-pagination/multi-single/ignored>; rel="last"'),
                     ],
                 )
                 return
@@ -169,8 +180,8 @@ def _make_handler(capture_path: Path):
                 self._reply(
                     self._page_payload(1),
                     [
-                        ("Link", f"<{_LINK_MULTI_MULTI_PAGE_2}>; rel=\"next\""),
-                        ("Link", f"<{_LINK_MULTI_MULTI_PAGE_3}>; rel=\"next\""),
+                        ("Link", f'<{_LINK_MULTI_MULTI_PAGE_2}>; rel="next"'),
+                        ("Link", f'<{_LINK_MULTI_MULTI_PAGE_3}>; rel="next"'),
                     ],
                 )
                 return
@@ -204,7 +215,9 @@ def _make_handler(capture_path: Path):
 
 @fixture(name="http")
 def run() -> Iterator[dict[str, str]]:
-    capture_fd, capture_path_str = tempfile.mkstemp(prefix="http-fixture-", suffix=".log")
+    capture_fd, capture_path_str = tempfile.mkstemp(
+        prefix="http-fixture-", suffix=".log"
+    )
     os.close(capture_fd)
     capture_path = Path(capture_path_str)
     handler = _make_handler(capture_path)

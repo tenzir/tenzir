@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {input: "value"}
+argspkg::optional_field_indicator field=null

@@ -332,7 +332,18 @@ auto package_operator_parameter::parse(const view<record>& data,
     TRY_ASSIGN_STRING_TO_RESULT(name)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(type)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    TRY_CONVERT_TO_STRING(default, default_);
+    if (key == "default") {
+      // Keep explicit `default: null` for operator parameters, because this is
+      // distinct from omitting the default altogether.
+      auto maybe_string = to_yaml(materialize(value));
+      if (not maybe_string) {
+        return diagnostic::error("failed to convert default to string")
+          .note("due to error: {}", maybe_string.error())
+          .to_error();
+      }
+      result.default_ = *maybe_string;
+      continue;
+    }
     TENZIR_WARN("ignoring unknown key `{}` in `parameter` entry in package {} "
                 "definition",
                 key, package_path);
@@ -1238,16 +1249,13 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
         .emit(dh);
       return failure::promise();
     }
-    auto expr = make_constant_expression(std::move(*yaml_data));
-    if (is_field_path_type(param)) {
-      auto copy = ast::expression{expr};
-      if (not ast::field_path::try_from(std::move(copy))) {
-        diagnostic::error("default value for parameter `{}` must be a selector",
-                          param.name)
-          .emit(dh);
-        return failure::promise();
-      }
+    if (is_field_path_type(param) && not is<caf::none_t>(*yaml_data)) {
+      diagnostic::error("default value for field parameter `{}` must be `null`",
+                        param.name)
+        .emit(dh);
+      return failure::promise();
     }
+    auto expr = make_constant_expression(std::move(*yaml_data));
     return std::optional<ast::expression>{std::move(expr)};
   };
   for (const auto& [op_name, op] : pkg.operators) {
