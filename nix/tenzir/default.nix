@@ -380,8 +380,8 @@ let
             ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure = (
-            if isReleaseBuild then
+          preConfigure =
+            (if isReleaseBuild then
               ''
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
               ''
@@ -389,8 +389,23 @@ let
               ''
                 version_build_metadata=$(basename $out | cut -d'-' -f 1)
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              ''
-          );
+              '')
+            + lib.optionalString isStatic ''
+              mkdir -p "$PWD/cmake/sodium"
+              cat > "$PWD/cmake/sodium/SodiumConfig.cmake" <<EOF
+              if(NOT TARGET Sodium::Sodium)
+                add_library(Sodium::Sodium UNKNOWN IMPORTED)
+                set_target_properties(Sodium::Sodium PROPERTIES
+                  IMPORTED_LOCATION "${libsodium}/lib/libsodium.a"
+                  INTERFACE_INCLUDE_DIRECTORIES "${lib.getDev libsodium}/include"
+                )
+              endif()
+              set(Sodium_FOUND TRUE)
+              set(Sodium_INCLUDE_DIR "${lib.getDev libsodium}/include")
+              set(Sodium_LIBRARY "${libsodium}/lib/libsodium.a")
+              EOF
+              cmakeFlagsArray+=("-DSodium_DIR=$PWD/cmake/sodium")
+            '';
 
           hardeningDisable =
             lib.optionals isStatic [
