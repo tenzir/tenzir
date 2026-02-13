@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Checkout submodules
         run: |
-          git submodule update --init --recursive libtenzir
+          git submodule update --init --recursive libtenzir/aux/proxygen
       - name: Tailscale
         if: false
         uses: tailscale/github-action@a392da0a182bba0e9613b6243ebd69529b1878aa  # v4.1.0

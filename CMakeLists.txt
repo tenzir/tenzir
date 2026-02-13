@@ -853,7 +853,8 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
     set(_tenzir_folly_version "")
   endif ()
   if (_tenzir_folly_version)
-    string(REGEX REPLACE "-.*$" "" _tenzir_folly_version "${_tenzir_folly_version}")
+    string(REGEX REPLACE "-.*$" "" _tenzir_folly_version
+                         "${_tenzir_folly_version}")
     if (_tenzir_folly_version VERSION_LESS "${TENZIR_FOLLY_MINIMUM_VERSION}")
       message(
         FATAL_ERROR
@@ -863,7 +864,8 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
   else ()
     message(
       WARNING
-      "Found Folly without a version string; skipping minimum version verification.")
+        "Found Folly without a version string; skipping minimum version verification."
+    )
   endif ()
   find_package(glog REQUIRED)
   dependency_summary("folly" Folly::folly "Dependencies")
@@ -970,7 +972,8 @@ endif ()
 
 # -- proxygen ------------------------------------------------------------------
 
-option(TENZIR_ENABLE_PROXYGEN "Build the Proxygen submodule and integrate it" OFF)
+option(TENZIR_ENABLE_PROXYGEN "Build the Proxygen submodule and integrate it"
+       OFF)
 if (TENZIR_ENABLE_PROXYGEN)
   if (NOT EXISTS
       "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen/CMakeLists.txt")
@@ -981,23 +984,35 @@ if (TENZIR_ENABLE_PROXYGEN)
   endif ()
   # Keep Proxygen from pulling bundled dependencies so it can stay versioned and
   # dependency-matched with the separate Folly submodule.
-  set(PROXYGEN_USE_BUNDLED_FOLLY OFF CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_WANGLE OFF CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_FIZZ OFF CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_MVFST OFF CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_ZLIB OFF CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_ZSTD OFF CACHE BOOL "")
-  set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(PROXYGEN_USE_BUNDLED_FOLLY
+      OFF
+      CACHE BOOL "")
+  set(PROXYGEN_USE_BUNDLED_WANGLE
+      OFF
+      CACHE BOOL "")
+  set(PROXYGEN_USE_BUNDLED_FIZZ
+      OFF
+      CACHE BOOL "")
+  set(PROXYGEN_USE_BUNDLED_MVFST
+      OFF
+      CACHE BOOL "")
+  set(PROXYGEN_USE_BUNDLED_ZLIB
+      OFF
+      CACHE BOOL "")
+  set(PROXYGEN_USE_BUNDLED_ZSTD
+      OFF
+      CACHE BOOL "")
+  set(BUILD_TESTS
+      OFF
+      CACHE BOOL "" FORCE)
   set(_TENZIR_CMAKE_SKIP_INSTALL_RULES "${CMAKE_SKIP_INSTALL_RULES}")
   set(CMAKE_SKIP_INSTALL_RULES ON)
   add_subdirectory(libtenzir/aux/proxygen SYSTEM)
   set(CMAKE_SKIP_INSTALL_RULES "${_TENZIR_CMAKE_SKIP_INSTALL_RULES}")
   set(_tenzir_proxygen_target "")
-  foreach (_tenzir_candidate IN ITEMS
-                                  "proxygen"
-                                  "Proxygen::proxygen"
-                                  "proxygenhttpserver"
-                                  "Proxygen::proxygenhttpserver")
+  foreach (_tenzir_candidate IN
+           ITEMS "proxygen" "Proxygen::proxygen" "proxygenhttpserver"
+                 "Proxygen::proxygenhttpserver")
     if (TARGET ${_tenzir_candidate})
       set(_tenzir_proxygen_target "${_tenzir_candidate}")
       break()
@@ -1005,15 +1020,14 @@ if (TENZIR_ENABLE_PROXYGEN)
   endforeach ()
   if (NOT _tenzir_proxygen_target)
     message(
-      FATAL_ERROR
-        "Could not determine the Proxygen CMake target name; extend"
-        " the candidate list in CMakeLists.txt.")
+      FATAL_ERROR "Could not determine the Proxygen CMake target name; extend"
+                  " the candidate list in CMakeLists.txt.")
   endif ()
   message(STATUS "Using Proxygen target: ${_tenzir_proxygen_target}")
   set(_tenzir_bundled_proxygen "${_tenzir_proxygen_target}")
-  dependency_summary("proxygen"
-                     "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen"
-                     "Dependencies")
+  dependency_summary(
+    "proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen"
+    "Dependencies")
 endif ()
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS

@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-BUILD_JOBS="${BUILD_JOBS:-$(nproc --all 2>/dev/null || echo 2)}"
-
 : "${GOOGLE_CLOUD_CPP_TAG=v2.36.0}"
 : "${GOOGLE_CLOUD_CPP_VERSION=$(printf '%s' "$GOOGLE_CLOUD_CPP_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
@@ -48,7 +46,7 @@ cmake -B build -S . \
   -DCRC32C_BUILD_BENCHMARKS=OFF \
   -DCMAKE_CXX_STANDARD=20
 
-cmake --build build --parallel "${BUILD_JOBS}"
+cmake --build build --parallel "$(nproc --all)"
 
 checkinstall \
   --fstrans=no \
@@ -83,7 +81,7 @@ cmake -B build -S . \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
   -DCMAKE_CXX_STANDARD=20
 
-cmake --build build --parallel "${BUILD_JOBS}"
+cmake --build build --parallel "$(nproc --all)"
 
 checkinstall \
   --fstrans=no \

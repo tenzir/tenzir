@@ -1,16 +1,12 @@
-ARG BUILD_JOBS=2
-
 FROM public.ecr.aws/docker/library/debian:trixie-slim AS runtime-base
 
 FROM gcc:15-trixie AS build-base
-ARG BUILD_JOBS
 
 ENV CC="gcc" \
     CXX="g++" \
     CMAKE_C_COMPILER_LAUNCHER=ccache \
     CCACHE_DIR=/ccache \
     CMAKE_CXX_COMPILER_LAUNCHER=ccache \
-    BUILD_JOBS="${BUILD_JOBS}" \
     CMAKE_INSTALL_PREFIX=/usr/local
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean

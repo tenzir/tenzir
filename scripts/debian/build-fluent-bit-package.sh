@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-BUILD_JOBS="${BUILD_JOBS:-$(nproc --all 2>/dev/null || echo 2)}"
-
 apt-get -qq update
 apt-get install --no-install-recommends -y \
   bison \
@@ -38,7 +36,7 @@ cmake -B build \
   -DFLB_PREFER_SYSTEM_LIB_KAFKA=ON \
   "${EXTRA_CMAKE_ARGS[@]}"
 
-cmake --build build --parallel "${BUILD_JOBS}"
+cmake --build build --parallel "$(nproc --all)"
 
 cd build
 cpack -G DEB -D CPACK_STRIP_FILES=ON
