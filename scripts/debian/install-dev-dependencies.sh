@@ -12,6 +12,7 @@ apt-get -y --no-install-recommends install \
   cppzmq-dev \
   curl \
   flatbuffers-compiler-dev \
+  gperf \
   git-core \
   gnupg2 gnupg-agent jq \
   libboost-context-dev \
