@@ -44,8 +44,9 @@ auto producer::make(configuration config) -> caf::expected<producer> {
   return result;
 }
 
-auto producer::produce(std::string topic, std::span<const std::byte> bytes,
-                       std::string_view key, time timestamp) -> caf::error {
+auto producer::produce(const std::string& topic,
+                       std::span<const std::byte> bytes, std::string_view key,
+                       time timestamp) -> caf::error {
   TENZIR_ASSERT(producer_);
   auto ms = int64_t{0};
   if (timestamp != time{}) {
@@ -56,7 +57,7 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
   while (true) {
     auto result = producer_->produce(
       /// The message topic.
-      std::move(topic),
+      topic,
       // Any partition.
       RdKafka::Topic::PARTITION_UA,
       // Make a copy of the buffer.
