@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${ARROW_TAG=apache-arrow-21.0.0}"
+: "${ARROW_TAG=apache-arrow-23.0.0}"
 : "${ARROW_VERSION=$(printf '%s' "$ARROW_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
@@ -43,7 +43,7 @@ pushd "${SOURCE_TREE}"
 curl -L "https://github.com/apache/arrow/archive/refs/tags/${ARROW_TAG}.tar.gz" | tar -xz --strip-components=1
 cd cpp
 
-patch -p1 </patches/arrow-cpp-fields-race.patch
+patch -p1 </patches/arrow-cpp-eager-struct-fields.patch
 
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \

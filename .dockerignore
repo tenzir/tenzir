@@ -12,7 +12,7 @@ CMakeUserPresets.json
 build/
 compile_commands.json
 nix/
-!/nix/overrides/arrow-cpp-fields-race.patch
+!/nix/overrides/arrow-cpp-eager-struct-fields.patch
 !README.md
 !VERSIONING.md
 cmake-build-*/
