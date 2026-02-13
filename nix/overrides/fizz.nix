@@ -26,4 +26,7 @@ fizz.overrideAttrs (orig: {
     // {
       NIX_LDFLAGS = (origEnv.NIX_LDFLAGS or "") + lib.optionalString stdenv.hostPlatform.isStatic " -L${xz.out}/lib -llzma";
     };
+  cmakeFlags = (orig.cmakeFlags or [ ]) ++ [
+    (lib.cmakeBool "BUILD_TESTS" false)
+  ];
 })
