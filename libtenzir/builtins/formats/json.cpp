@@ -1776,6 +1776,9 @@ public:
 
   auto print_slice(table_slice const& input) -> chunk_ptr {
     auto printer = tenzir::json_printer{opts_};
+    // TODO: Since this printer is per-schema we can write an optimized
+    // version of it that gets the schema ahead of time and only expects
+    // data corresponding to exactly that schema.
     auto buffer = std::vector<char>{};
     auto resolved_slice = resolve_enumerations(input);
     auto out_iter = std::back_inserter(buffer);
