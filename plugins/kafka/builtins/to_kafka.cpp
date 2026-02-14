@@ -14,8 +14,8 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/entity_path.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <librdkafka/rdkafkacpp.h>
@@ -37,12 +37,12 @@ auto sink_global_defaults() -> record& {
 
 /// Builds the default `message=` expression used by `to_kafka`.
 auto default_message_expression() -> ast::expression {
-  auto function = ast::entity{{ast::identifier{"print_ndjson",
-                                               location::unknown}}};
+  auto function
+    = ast::entity{{ast::identifier{"print_ndjson", location::unknown}}};
   // Invariant: defaults bypass parser resolution in `OperatorPlugin`, so the
   // entity reference must be pre-resolved here.
-  function.ref = entity_path{std::string{entity_pkg_std},
-                             {"print_ndjson"}, entity_ns::fn};
+  function.ref
+    = entity_path{std::string{entity_pkg_std}, {"print_ndjson"}, entity_ns::fn};
   return ast::function_call{
     std::move(function),
     {ast::this_{location::unknown}},

@@ -43,8 +43,9 @@ public:
 
   /// Appends a Kafka message payload to the builder.
   auto append(const RdKafka::Message& message) -> void {
-    auto status = builder_->Append(reinterpret_cast<const char*>(message.payload()),
-                                   tenzir::detail::narrow<int32_t>(message.len()));
+    auto status
+      = builder_->Append(reinterpret_cast<const char*>(message.payload()),
+                         tenzir::detail::narrow<int32_t>(message.len()));
     if (not status.ok()) {
       panic("failed to append kafka payload: {}", status.ToString());
     }
@@ -64,7 +65,8 @@ public:
   [[nodiscard]] auto finish() -> table_slice {
     const auto length = builder_->length();
     return table_slice{
-      arrow::RecordBatch::Make(arrow_schema_, length, {tenzir::finish(*builder_)}),
+      arrow::RecordBatch::Make(arrow_schema_, length,
+                               {tenzir::finish(*builder_)}),
       kafka_message_schema(),
     };
   }

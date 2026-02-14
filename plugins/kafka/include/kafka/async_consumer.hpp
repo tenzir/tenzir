@@ -24,8 +24,8 @@
 #include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafkacpp.h>
 
-#include <chrono>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -241,9 +241,8 @@ public:
   auto operator=(AsyncConsumerQueue&&) -> AsyncConsumerQueue& = delete;
 
   /// Retrieves the next message without blocking the caller thread.
-  [[nodiscard]] auto next(
-    std::optional<std::chrono::milliseconds> timeout = std::nullopt)
-    -> folly::coro::Task<NextResult> {
+  [[nodiscard]] auto next(std::optional<std::chrono::milliseconds> timeout
+                          = std::nullopt) -> folly::coro::Task<NextResult> {
     while (not is_stopped()) {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
