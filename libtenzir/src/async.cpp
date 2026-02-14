@@ -309,12 +309,12 @@ private:
 
   auto fetch_node() -> Task<failure_or<node_actor>> override {
     // Fast path: check local registry for existing node.
-    if (auto node = sys_.registry().get<node_actor>("tenzir.node")) {
+    if (auto node = sys_.registry().template get<node_actor>("tenzir.node")) {
       co_return node;
     }
     static auto mut = RawMutex{};
     const auto lock = co_await mut.lock();
-    if (auto node = sys_.registry().get<node_actor>("tenzir.node")) {
+    if (auto node = sys_.registry().template get<node_actor>("tenzir.node")) {
       co_return node;
     }
     // Get configuration.
