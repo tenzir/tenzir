@@ -23,6 +23,7 @@
 #include <cmath>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace tenzir {
 
@@ -60,10 +61,42 @@ struct json_printer : printer_base<json_printer> {
     // nop
   }
 
+  using prepared_record_fields = std::vector<std::string>;
+
+  auto prepare_record_fields(const record_type& schema) const
+    -> prepared_record_fields {
+    auto result = prepared_record_fields{};
+    result.reserve(schema.num_fields());
+    for (const auto& field : schema.fields()) {
+      auto rendered = std::string{};
+      auto out = std::back_inserter(rendered);
+      if (options_.tql) {
+        const auto tokens = tokenize_permissive(field.name);
+        if (tokens.size() == 1 and tokens.front().kind == token_kind::identifier) {
+          out = fmt::format_to(out, options_.style.field, "{}", field.name);
+        } else {
+          out = fmt::format_to(out, options_.style.string, "{}",
+                               json_string_fmt_wrapper{field.name});
+        }
+      } else {
+        out = fmt::format_to(out, options_.style.field, "{}",
+                             json_string_fmt_wrapper{field.name});
+      }
+      if (options_.oneline) {
+        out = fmt::format_to(out, options_.style.colon, ":");
+      } else {
+        out = fmt::format_to(out, options_.style.colon, ": ");
+      }
+      result.push_back(std::move(rendered));
+    }
+    return result;
+  }
+
   template <class Iterator>
   struct print_visitor {
-    print_visitor(Iterator& out, const json_printer_options& options)
-      : out_{out}, options_{options} {
+    print_visitor(Iterator& out, const json_printer_options& options,
+                  const prepared_record_fields* prepared_fields = nullptr)
+      : out_{out}, options_{options}, prepared_fields_{prepared_fields} {
       // nop
     }
 
@@ -222,48 +255,61 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view3<record> x) -> bool {
-      bool printed_once = false;
-      out_ = fmt::format_to(out_, options_.style.object, "{{");
-      for (const auto& [key, value] : x) {
-        if (should_skip(value, false)) {
-          continue;
-        }
-        if (not printed_once) {
-          indent();
-          newline();
-          printed_once = true;
-        } else {
-          list_separator();
-          newline();
-        }
-        if (options_.tql) {
-          auto x = tokenize_permissive(key);
-          if (x.size() == 1 and x.front().kind == token_kind::identifier) {
-            out_ = fmt::format_to(out_, options_.style.field, "{}", key);
+      ++record_depth_;
+      auto result = [&]() -> bool {
+        bool printed_once = false;
+        auto field_index = size_t{0};
+        auto use_prepared = prepared_fields_ && record_depth_ == 1;
+        out_ = fmt::format_to(out_, options_.style.object, "{{");
+        for (const auto& [key, value] : x) {
+          auto current_index = field_index++;
+          if (should_skip(value, false)) {
+            continue;
+          }
+          if (not printed_once) {
+            indent();
+            newline();
+            printed_once = true;
           } else {
-            out_ = fmt::format_to(out_, options_.style.string, "{}",
+            list_separator();
+            newline();
+          }
+          if (use_prepared and current_index < prepared_fields_->size()) {
+            const auto& rendered = (*prepared_fields_)[current_index];
+            out_ = std::copy(rendered.begin(), rendered.end(), out_);
+          } else if (options_.tql) {
+            auto tokens = tokenize_permissive(key);
+            if (tokens.size() == 1 and tokens.front().kind == token_kind::identifier) {
+              out_ = fmt::format_to(out_, options_.style.field, "{}", key);
+            } else {
+              out_ = fmt::format_to(out_, options_.style.string, "{}",
+                                    json_string_fmt_wrapper{key});
+            }
+          } else {
+            out_ = fmt::format_to(out_, options_.style.field, "{}",
                                   json_string_fmt_wrapper{key});
           }
-        } else {
-          out_ = fmt::format_to(out_, options_.style.field, "{}",
-                                json_string_fmt_wrapper{key});
+          if (not use_prepared) {
+            if (options_.oneline) {
+              out_ = fmt::format_to(out_, options_.style.colon, ":");
+            } else {
+              out_ = fmt::format_to(out_, options_.style.colon, ": ");
+            }
+          }
+          if (not match(value, *this)) {
+            return false;
+          }
         }
-        if (options_.oneline) {
-          out_ = fmt::format_to(out_, options_.style.colon, ":");
-        } else {
-          out_ = fmt::format_to(out_, options_.style.colon, ": ");
+        if (printed_once) {
+          trailing_comma();
+          dedent();
+          newline();
         }
-        if (not match(value, *this)) {
-          return false;
-        }
-      }
-      if (printed_once) {
-        trailing_comma();
-        dedent();
-        newline();
-      }
-      out_ = fmt::format_to(out_, options_.style.object, "}}");
-      return true;
+        out_ = fmt::format_to(out_, options_.style.object, "}}");
+        return true;
+      }();
+      --record_depth_;
+      return result;
     }
 
   private:
@@ -323,7 +369,9 @@ struct json_printer : printer_base<json_printer> {
 
     Iterator& out_;
     const json_printer_options& options_;
+    const prepared_record_fields* prepared_fields_ = nullptr;
     uint32_t indentation_ = 0;
+    size_t record_depth_ = 0;
   };
 
   template <class Iterator>
@@ -334,6 +382,12 @@ struct json_printer : printer_base<json_printer> {
   template <class Iterator, class T>
   auto print(Iterator& out, view3<T> v) const -> bool {
     return print_visitor{out, options_}(v);
+  }
+
+  template <class Iterator>
+  auto print(Iterator& out, view3<record> r,
+             const prepared_record_fields& prepared_fields) const -> bool {
+    return print_visitor{out, options_, &prepared_fields}(r);
   }
 
   template <class Iterator, class T>

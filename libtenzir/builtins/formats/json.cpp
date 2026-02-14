@@ -1781,6 +1781,11 @@ public:
     // data corresponding to exactly that schema.
     auto buffer = std::vector<char>{};
     auto resolved_slice = resolve_enumerations(input);
+    auto schema = as<record_type>(resolved_slice.schema());
+    if (not cached_schema_ or *cached_schema_ != schema) {
+      cached_schema_ = schema;
+      cached_prepared_fields_ = printer.prepare_record_fields(schema);
+    }
     auto out_iter = std::back_inserter(buffer);
     auto rows = values3(resolved_slice);
     auto row = rows.begin();
@@ -1796,7 +1801,7 @@ public:
       }
     }
     if (row != rows.end()) {
-      auto const ok = printer.print(out_iter, *row);
+      auto const ok = printer.print(out_iter, *row, cached_prepared_fields_);
       TENZIR_ASSERT(ok);
       ++row;
     }
@@ -1809,7 +1814,7 @@ public:
       } else {
         out_iter = fmt::format_to(out_iter, "\n");
       }
-      auto const ok = printer.print(out_iter, *row);
+      auto const ok = printer.print(out_iter, *row, cached_prepared_fields_);
       TENZIR_ASSERT(ok);
     }
     if (not args_.arrays_of_objects) {
@@ -1845,6 +1850,8 @@ public:
 private:
   WriteJsonArgs args_;
   json_printer_options opts_ = {};
+  std::optional<record_type> cached_schema_ = {};
+  tenzir::json_printer::prepared_record_fields cached_prepared_fields_ = {};
   bool array_open_written_ = false;
 };
 
