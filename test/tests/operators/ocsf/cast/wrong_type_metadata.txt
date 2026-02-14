@@ -1,0 +1,1 @@
+warning: dropping events where `metadata` is not a record

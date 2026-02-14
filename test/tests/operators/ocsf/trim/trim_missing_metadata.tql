@@ -1,0 +1,8 @@
+from {
+  class_uid: 4001,
+  activity_id: 1,
+  severity_id: 1,
+  time: 1640995200000000,
+  type_uid: 400101,
+}
+ocsf::trim

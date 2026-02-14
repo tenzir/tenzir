@@ -1,0 +1,16 @@
+// Test enum derivation in nested records
+// This test verifies that the derive operator works recursively through nested record structures
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,
+  actor: {
+    user: {
+      type_id: 1,  // Should derive type based on user enum
+    },
+  },
+}
+ocsf::derive

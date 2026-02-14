@@ -1,0 +1,13 @@
+// Test conflicting integer and string enum values
+// This test verifies that the derive operator handles conflicts between enum and string values
+// Expected behavior: emit warning and preserve both original conflicting values
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,  // Should be "Create"
+  activity_name: "Delete",  // Conflicts with activity_id=1, should be activity_id=4
+}
+ocsf::derive

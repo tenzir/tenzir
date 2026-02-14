@@ -1,0 +1,12 @@
+// Test bidirectional enum derivation - both fields present
+// This test verifies that the derive operator validates consistency when both enum and string fields are present
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 3,
+  activity_name: "Update",  // Should be consistent with activity_id = 3
+}
+ocsf::derive

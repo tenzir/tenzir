@@ -1,0 +1,1 @@
+warning: dropping events where `metadata.version` does not exist

@@ -1,0 +1,10 @@
+// Test that derived enum is inserted immediately before sibling when only
+// sibling is present in input.
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_name: "Create",
+}
+| ocsf::derive

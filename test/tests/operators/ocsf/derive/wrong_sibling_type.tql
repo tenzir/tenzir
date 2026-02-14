@@ -1,0 +1,12 @@
+// Test sibling field with wrong type
+// This test verifies that the derive operator handles sibling fields with incorrect types
+// Expected behavior: emit warning when sibling field is not string type
+
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_name: 123,  // Should be string, but provided int
+}
+ocsf::derive
