@@ -20,6 +20,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <chrono>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -31,8 +32,10 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
+/// Maximum delay before flushing a partial commit batch.
 constexpr auto commit_timeout = 10s;
 
+/// Stores process-wide `from_kafka` defaults from `kafka.yaml`.
 auto source_global_defaults() -> record& {
   static auto defaults = record{};
   return defaults;
@@ -75,6 +78,12 @@ auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
       return false;
     });
 }
+
+/// Result envelope for await_task() to distinguish idle timeouts from EOF.
+struct FromKafkaTaskResult {
+  std::shared_ptr<RdKafka::Message> message;
+  bool idle_timeout = false;
+};
 
 class FromKafkaOperator final : public Operator<void, table_slice> {
 public:
@@ -207,25 +216,42 @@ public:
       TENZIR_UNREACHABLE();
     }
     if (not queue_) {
-      co_return std::shared_ptr<RdKafka::Message>{};
+      co_return FromKafkaTaskResult{};
     }
     try {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         (*queue_)->request_stop();
-        co_return std::shared_ptr<RdKafka::Message>{};
+        co_return FromKafkaTaskResult{};
       }
-      auto message = co_await (*queue_)->next();
-      co_return message;
+      auto timeout = std::optional<std::chrono::milliseconds>{};
+      // Invariant: idle timeouts are only relevant while we hold unflushed
+      // records, otherwise we can sleep until a real queue event arrives.
+      if (messages_since_batch_commit_ > 0) {
+        timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+          commit_timeout);
+      }
+      auto result = co_await (*queue_)->next(timeout);
+      co_return FromKafkaTaskResult{
+        .message = std::move(result.message),
+        .idle_timeout = result.timed_out,
+      };
     } catch (const folly::OperationCancelled&) {
       (*queue_)->request_stop();
-      co_return std::shared_ptr<RdKafka::Message>{};
+      co_return FromKafkaTaskResult{};
     }
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto message = std::move(result).as<std::shared_ptr<RdKafka::Message>>();
+    auto task_result = std::move(result).as<FromKafkaTaskResult>();
+    if (task_result.idle_timeout) {
+      co_await flush_pending(push);
+      messages_since_batch_commit_ = 0;
+      last_batch_time_ = time::clock::now();
+      co_return;
+    }
+    auto message = std::move(task_result.message);
     if (not message) {
       done_ = true;
       co_return;
@@ -341,6 +367,7 @@ public:
   }
 
 private:
+  /// Advances the commit checkpoint to include all flushed offsets.
   auto move_current_to_checkpoint() -> void {
     for (const auto& [partition, offset] : current_uncommitted_offsets_) {
       checkpoint_pending_offsets_[partition] = offset + 1;
@@ -348,6 +375,7 @@ private:
     current_uncommitted_offsets_.clear();
   }
 
+  /// Emits the current slice batch and marks offsets for post-commit.
   auto flush_pending(Push<table_slice>& push) -> Task<void> {
     if (builder_.empty()) {
       co_return;
@@ -363,10 +391,13 @@ private:
   KafkaMessageBuilder builder_;
   // Number of records emitted so far; used for `count=` resumption.
   size_t emitted_messages_ = 0;
-  // Batch-local cadence state for commit scheduling; intentionally ephemeral.
+  // Invariant: this counts unflushed records in `builder_` only.
   size_t messages_since_batch_commit_ = 0;
+  // Invariant: tracks the last successful flush decision point.
   time last_batch_time_ = time::clock::now();
+  // Invariant: highest consumed offset per partition since last flush.
   std::unordered_map<int32_t, int64_t> current_uncommitted_offsets_;
+  // Invariant: committed offsets are stored as "next offset to consume".
   std::unordered_map<int32_t, int64_t> checkpoint_pending_offsets_;
   std::optional<std::unordered_set<int32_t>> assigned_partitions_;
   std::unordered_set<int32_t> eof_partitions_;

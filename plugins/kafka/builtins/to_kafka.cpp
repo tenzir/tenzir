@@ -15,6 +15,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <librdkafka/rdkafkacpp.h>
@@ -28,19 +29,32 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
+/// Stores process-wide `to_kafka` defaults from `kafka.yaml`.
 auto sink_global_defaults() -> record& {
   static auto defaults = record{};
   return defaults;
 }
 
-struct ToKafkaArgs {
-  std::string topic;
-  ast::expression message = ast::function_call{
-    ast::entity{{ast::identifier{"print_ndjson", location::unknown}}},
+/// Builds the default `message=` expression used by `to_kafka`.
+auto default_message_expression() -> ast::expression {
+  auto function = ast::entity{{ast::identifier{"print_ndjson",
+                                               location::unknown}}};
+  // Invariant: defaults bypass parser resolution in `OperatorPlugin`, so the
+  // entity reference must be pre-resolved here.
+  function.ref = entity_path{std::string{entity_pkg_std},
+                             {"print_ndjson"}, entity_ns::fn};
+  return ast::function_call{
+    std::move(function),
     {ast::this_{location::unknown}},
     location::unknown,
     true,
   };
+}
+
+/// Parsed arguments for `to_kafka`.
+struct ToKafkaArgs {
+  std::string topic;
+  ast::expression message = default_message_expression();
   std::optional<located<std::string>> key;
   std::optional<located<time>> timestamp;
   located<record> options;
@@ -48,6 +62,7 @@ struct ToKafkaArgs {
   std::optional<located<record>> aws_iam;
 };
 
+/// Streaming sink operator that serializes events and produces Kafka messages.
 class ToKafkaOperator final : public Operator<table_slice, void> {
 public:
   explicit ToKafkaOperator(ToKafkaArgs args) : args_{std::move(args)} {
@@ -175,6 +190,7 @@ public:
   }
 
 private:
+  /// Produces one Kafka record and retries while the client queue is full.
   auto produce(std::span<const std::byte> bytes, std::string_view key,
                time timestamp, OpCtx& ctx) -> bool {
     TENZIR_ASSERT(producer_);
@@ -208,6 +224,7 @@ private:
     }
   }
 
+  /// Flushes buffered messages and tears down producer resources.
   auto flush_and_close() -> void {
     if (not producer_) {
       cfg_.reset();
@@ -235,6 +252,7 @@ private:
   bool done_ = false;
 };
 
+/// Plugin entrypoint that parses `to_kafka` arguments and creates operators.
 class ToKafkaPlugin final : public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,

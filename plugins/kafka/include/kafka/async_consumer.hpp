@@ -24,10 +24,12 @@
 #include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <chrono>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -42,11 +44,13 @@ namespace tenzir::plugins::kafka {
 
 namespace detail {
 
+/// File descriptors used to wake the queue waiter from librdkafka callbacks.
 struct WakeupFd {
   int read = -1;
   int write = -1;
 };
 
+/// RAII wrapper for a raw librdkafka queue handle.
 class QueueHandle {
 public:
   static auto from_consumer(rd_kafka_t* client) -> QueueHandle {
@@ -100,11 +104,13 @@ private:
   rd_kafka_queue_t* queue_ = nullptr;
 };
 
+/// Formats a readable POSIX error string for diagnostics.
 inline auto posix_error(std::string_view operation, int err) -> std::string {
   auto const code = std::error_code(err, std::generic_category());
   return fmt::format("{}: {}", operation, code.message());
 }
 
+/// Creates a non-blocking wakeup fd (eventfd on Linux, pipe elsewhere).
 inline auto make_wakeup_fd() -> Result<WakeupFd, std::string> {
 #if defined(__linux__)
   auto const fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
@@ -144,7 +150,12 @@ inline auto make_wakeup_fd() -> Result<WakeupFd, std::string> {
 #endif
 }
 
+/// Closes wakeup descriptors once; Linux eventfd uses the same descriptor twice.
 inline auto close_wakeup_fd(WakeupFd const& fd) -> void {
+  if (fd.read != -1 and fd.read == fd.write) {
+    ::close(fd.read);
+    return;
+  }
   if (fd.read != -1) {
     ::close(fd.read);
   }
@@ -153,6 +164,7 @@ inline auto close_wakeup_fd(WakeupFd const& fd) -> void {
   }
 }
 
+/// Drains all pending bytes from the wakeup fd.
 inline auto drain_fd(int fd) noexcept -> void {
   if (fd == -1) {
     return;
@@ -178,6 +190,15 @@ inline auto drain_fd(int fd) noexcept -> void {
 /// Integrates librdkafka queue wakeups with folly coroutines.
 class AsyncConsumerQueue final : private folly::EventHandler {
 public:
+  /// Result of waiting for the next message.
+  struct NextResult {
+    std::shared_ptr<RdKafka::Message> message;
+    bool timed_out = false;
+  };
+
+  /// Returns how a queue-notification wait completed.
+  enum class NotificationWaitResult { notified, timed_out, stopped };
+
   // Construction stays funneled through this factory: it performs fallible
   // setup (consumer handle lookup, queue acquisition, and wakeup-fd creation)
   // before constructing the object. Keeping the constructor non-public avoids
@@ -220,34 +241,44 @@ public:
   auto operator=(AsyncConsumerQueue&&) -> AsyncConsumerQueue& = delete;
 
   /// Retrieves the next message without blocking the caller thread.
-  [[nodiscard]] auto next()
-    -> folly::coro::Task<std::shared_ptr<RdKafka::Message>> {
-    while (not stopped_) {
+  [[nodiscard]] auto next(
+    std::optional<std::chrono::milliseconds> timeout = std::nullopt)
+    -> folly::coro::Task<NextResult> {
+    while (not is_stopped()) {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         request_stop();
         break;
       }
       if (auto message = try_consume()) {
-        co_return message;
+        co_return NextResult{.message = std::move(message)};
       }
-      co_await wait_for_notification();
-      if (stopped_) {
+      auto wait_result = co_await wait_for_notification(timeout);
+      if (wait_result == NotificationWaitResult::timed_out) {
+        co_return NextResult{.message = nullptr, .timed_out = true};
+      }
+      if (wait_result == NotificationWaitResult::stopped) {
         break;
       }
     }
-    co_return nullptr;
+    co_return NextResult{.message = nullptr, .timed_out = false};
   }
 
   auto request_stop() -> void {
-    if (stopped_) {
-      return;
+    auto promise = std::optional<folly::Promise<folly::Unit>>{};
+    {
+      auto guard = std::scoped_lock{state_mutex_};
+      if (stopped_) {
+        return;
+      }
+      stopped_ = true;
+      if (waiter_) {
+        promise = std::move(waiter_);
+        waiter_.reset();
+      }
     }
-    stopped_ = true;
-    if (waiter_) {
-      auto promise = std::move(*waiter_);
-      waiter_.reset();
-      promise.setValue(folly::Unit{});
+    if (promise) {
+      promise->setValue(folly::Unit{});
     }
     disable_events();
   }
@@ -274,36 +305,74 @@ private:
     detail::drain_fd(wakeup_fd_.read);
     // NOTE: Do not call rd_kafka_poll() here. With the high-level consumer,
     // recursive queue serving can assert in librdkafka.
-    if (stopped_) {
-      return;
+    auto promise = std::optional<folly::Promise<folly::Unit>>{};
+    {
+      auto guard = std::scoped_lock{state_mutex_};
+      if (stopped_) {
+        return;
+      }
+      if (waiter_) {
+        promise = std::move(waiter_);
+        waiter_.reset();
+      } else {
+        ++pending_notifications_;
+      }
     }
-    if (waiter_) {
-      auto promise = std::move(*waiter_);
-      waiter_.reset();
-      promise.setValue(folly::Unit{});
-    } else {
-      ++pending_notifications_;
+    if (promise) {
+      promise->setValue(folly::Unit{});
     }
   }
 
-  auto wait_for_notification() -> folly::coro::Task<void> {
-    while (not stopped_) {
-      if (pending_notifications_ > 0) {
-        --pending_notifications_;
-        co_return;
+  /// Waits for a queue wakeup, optionally timing out to unblock idle flushes.
+  auto wait_for_notification(std::optional<std::chrono::milliseconds> timeout)
+    -> folly::coro::Task<NotificationWaitResult> {
+    while (true) {
+      auto future = folly::SemiFuture<folly::Unit>{};
+      {
+        auto guard = std::scoped_lock{state_mutex_};
+        if (stopped_) {
+          co_return NotificationWaitResult::stopped;
+        }
+        if (pending_notifications_ > 0) {
+          --pending_notifications_;
+          co_return NotificationWaitResult::notified;
+        }
+        waiter_.emplace();
+        future = waiter_->getSemiFuture();
       }
-      waiter_.emplace();
-      auto future = waiter_->getSemiFuture();
-      co_await std::move(future);
-      if (not waiter_) {
-        co_return;
+      if (timeout) {
+        try {
+          co_await std::move(future).within(*timeout);
+        } catch (const folly::FutureTimeout&) {
+          auto guard = std::scoped_lock{state_mutex_};
+          if (stopped_) {
+            co_return NotificationWaitResult::stopped;
+          }
+          if (waiter_) {
+            waiter_.reset();
+            co_return NotificationWaitResult::timed_out;
+          }
+          // A concurrent wakeup consumed `waiter_` while timeout fired.
+          co_return NotificationWaitResult::notified;
+        }
+      } else {
+        co_await std::move(future);
       }
-      waiter_.reset();
-      co_return;
+      auto guard = std::scoped_lock{state_mutex_};
+      if (stopped_) {
+        co_return NotificationWaitResult::stopped;
+      }
+      co_return NotificationWaitResult::notified;
     }
-    co_return;
   }
 
+  /// Returns whether a stop was requested.
+  auto is_stopped() const -> bool {
+    auto guard = std::scoped_lock{state_mutex_};
+    return stopped_;
+  }
+
+  /// Polls librdkafka without blocking and wraps a returned message.
   [[nodiscard]] auto try_consume() -> std::shared_ptr<RdKafka::Message> {
     auto* message = consumer_->consume(0);
     if (not message) {
@@ -317,6 +386,7 @@ private:
     return guard;
   }
 
+  /// Unhooks librdkafka queue wakeups from the eventfd.
   auto disable_events() noexcept -> void {
     if (queue_ != nullptr) {
       rd_kafka_queue_io_event_enable(queue_, -1, nullptr, 0);
@@ -326,6 +396,9 @@ private:
   RdKafka::KafkaConsumer* consumer_ = nullptr;
   rd_kafka_queue_t* queue_ = nullptr;
   detail::WakeupFd wakeup_fd_{};
+  // Invariant: `waiter_` and `pending_notifications_` are protected by
+  // `state_mutex_`, and at most one waiter exists at a time.
+  mutable std::mutex state_mutex_;
   bool stopped_ = false;
   std::size_t pending_notifications_ = 0;
   std::optional<folly::Promise<folly::Unit>> waiter_;
