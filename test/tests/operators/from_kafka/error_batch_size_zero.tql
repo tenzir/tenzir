@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_kafka "unused",
+           batch_size=0

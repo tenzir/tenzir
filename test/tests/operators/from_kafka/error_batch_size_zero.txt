@@ -1,0 +1,6 @@
+error: `batch_size` must be greater than zero
+ --> tests/operators/from_kafka/error_batch_size_zero.tql:6:23
+  |
+6 |            batch_size=0
+  |                       ^ 
+  |

@@ -32,8 +32,8 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
-/// Maximum delay before flushing a partial commit batch.
-constexpr auto commit_timeout = 10s;
+/// Default delay before flushing a partial batch.
+constexpr auto default_batch_timeout = 10s;
 
 /// Stores process-wide `from_kafka` defaults from `kafka.yaml`.
 auto source_global_defaults() -> record& {
@@ -41,17 +41,20 @@ auto source_global_defaults() -> record& {
   return defaults;
 }
 
+/// Parsed arguments for `from_kafka`.
 struct FromKafkaArgs {
   std::string topic;
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<data>> offset;
-  uint64_t commit_batch_size = 1000;
+  uint64_t batch_size = 1000;
+  duration batch_timeout = default_batch_timeout;
   located<record> options;
   std::optional<located<std::string>> aws_region;
   std::optional<located<record>> aws_iam;
 };
 
+/// Parses `offset=` values, including symbolic names and tail offsets.
 auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
   return match(
     input.inner,
@@ -85,6 +88,7 @@ struct FromKafkaTaskResult {
   bool idle_timeout = false;
 };
 
+/// Streaming source operator that consumes Kafka records asynchronously.
 class FromKafkaOperator final : public Operator<void, table_slice> {
 public:
   explicit FromKafkaOperator(FromKafkaArgs args) : args_{std::move(args)} {
@@ -227,9 +231,9 @@ public:
       auto timeout = std::optional<std::chrono::milliseconds>{};
       // Invariant: idle timeouts are only relevant while we hold unflushed
       // records, otherwise we can sleep until a real queue event arrives.
-      if (messages_since_batch_commit_ > 0) {
+      if (messages_since_batch_flush_ > 0) {
         timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
-          commit_timeout);
+          args_.batch_timeout);
       }
       auto result = co_await (*queue_)->next(timeout);
       co_return FromKafkaTaskResult{
@@ -247,7 +251,7 @@ public:
     auto task_result = std::move(result).as<FromKafkaTaskResult>();
     if (task_result.idle_timeout) {
       co_await flush_pending(push);
-      messages_since_batch_commit_ = 0;
+      messages_since_batch_flush_ = 0;
       last_batch_time_ = time::clock::now();
       co_return;
     }
@@ -257,20 +261,19 @@ public:
       co_return;
     }
     const auto now = time::clock::now();
-    const auto timed_out = now - last_batch_time_ >= commit_timeout;
+    const auto timed_out = now - last_batch_time_ >= args_.batch_timeout;
     switch (message->err()) {
       case RdKafka::ERR_NO_ERROR: {
         builder_.append(*message);
         current_uncommitted_offsets_[message->partition()] = message->offset();
         ++emitted_messages_;
-        ++messages_since_batch_commit_;
+        ++messages_since_batch_flush_;
         const auto reached_count
           = args_.count and args_.count->inner == emitted_messages_;
-        const auto full_batch
-          = messages_since_batch_commit_ >= args_.commit_batch_size;
+        const auto full_batch = messages_since_batch_flush_ >= args_.batch_size;
         if (full_batch or timed_out or reached_count) {
           co_await flush_pending(push);
-          messages_since_batch_commit_ = 0;
+          messages_since_batch_flush_ = 0;
           last_batch_time_ = now;
           if (reached_count) {
             done_ = true;
@@ -392,18 +395,21 @@ private:
   // Number of records emitted so far; used for `count=` resumption.
   size_t emitted_messages_ = 0;
   // Invariant: this counts unflushed records in `builder_` only.
-  size_t messages_since_batch_commit_ = 0;
+  size_t messages_since_batch_flush_ = 0;
   // Invariant: tracks the last successful flush decision point.
   time last_batch_time_ = time::clock::now();
   // Invariant: highest consumed offset per partition since last flush.
   std::unordered_map<int32_t, int64_t> current_uncommitted_offsets_;
   // Invariant: committed offsets are stored as "next offset to consume".
   std::unordered_map<int32_t, int64_t> checkpoint_pending_offsets_;
+  // Invariant: when set, this is the latest assignment for `args_.topic`.
   std::optional<std::unordered_set<int32_t>> assigned_partitions_;
+  // Invariant: contains only partitions from `assigned_partitions_`.
   std::unordered_set<int32_t> eof_partitions_;
   bool done_ = false;
 };
 
+/// Plugin entrypoint that parses `from_kafka` arguments and builds operators.
 class FromKafkaPlugin final : public virtual OperatorPlugin {
 public:
   auto initialize(const record& unused_plugin_config,
@@ -458,14 +464,25 @@ public:
     auto options_arg = d.named_optional("options", &FromKafkaArgs::options);
     auto aws_region_arg = d.named("aws_region", &FromKafkaArgs::aws_region);
     auto aws_iam_arg = d.named("aws_iam", &FromKafkaArgs::aws_iam);
-    auto batch_size_arg = d.named_optional("commit_batch_size",
-                                           &FromKafkaArgs::commit_batch_size);
+    auto batch_size_arg
+      = d.named_optional("batch_size", &FromKafkaArgs::batch_size);
+    auto batch_timeout_arg
+      = d.named_optional("batch_timeout", &FromKafkaArgs::batch_timeout);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      if (auto commit_batch_size = ctx.get(batch_size_arg); commit_batch_size) {
-        if (*commit_batch_size == 0) {
-          diagnostic::error("`commit_batch_size` must be greater than zero")
+      if (auto batch_size = ctx.get(batch_size_arg); batch_size) {
+        if (*batch_size == 0) {
+          diagnostic::error("`batch_size` must be greater than zero")
             .primary(
               ctx.get_location(batch_size_arg).value_or(location::unknown))
+            .emit(ctx);
+          return {};
+        }
+      }
+      if (auto batch_timeout = ctx.get(batch_timeout_arg); batch_timeout) {
+        if (*batch_timeout <= duration::zero()) {
+          diagnostic::error("`batch_timeout` must be a positive duration")
+            .primary(
+              ctx.get_location(batch_timeout_arg).value_or(location::unknown))
             .emit(ctx);
           return {};
         }

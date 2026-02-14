@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_kafka "unused",
+           batch_timeout=0s

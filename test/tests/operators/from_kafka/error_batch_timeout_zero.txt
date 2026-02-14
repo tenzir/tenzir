@@ -1,0 +1,6 @@
+error: `batch_timeout` must be a positive duration
+ --> tests/operators/from_kafka/error_batch_timeout_zero.tql:6:26
+  |
+6 |            batch_timeout=0s
+  |                          ^^ 
+  |
