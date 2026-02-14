@@ -12,6 +12,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/value_path.hpp"
 #include "tenzir/view3.hpp"
@@ -658,6 +659,222 @@ auto get_ocsf_schema(std::optional<std::string_view> version,
   };
 }
 
+auto process_trim_slice(const table_slice& slice, location self,
+                        diagnostic_handler& dh, bool drop_optional,
+                        bool drop_recommended) -> std::vector<table_slice> {
+  auto result = std::vector<table_slice>{};
+  if (slice.rows() == 0) {
+    result.emplace_back();
+    return result;
+  }
+  auto metadata = extract_metadata(slice, self, dh);
+  if (not metadata) {
+    result.emplace_back();
+    return result;
+  }
+  auto& version_array = metadata->version_array;
+  auto& class_array = metadata->class_array;
+  // Figure out longest slices that share:
+  // - metadata.version
+  // - class_uid
+  // We do not take profiles or extensions into account here because that is
+  // not strictly needed for trimming.
+  auto begin = int64_t{0};
+  auto end = begin;
+  auto version = view_at(*version_array, begin);
+  auto class_uid = view_at(*class_array, begin);
+  auto process = [&]() {
+    auto schema = get_ocsf_schema(version, class_uid, self, dh);
+    if (not schema) {
+      result.emplace_back();
+      return;
+    }
+    result.push_back(trimmer{drop_optional, drop_recommended}.trim(
+      subslice(slice, begin, end), schema->type));
+  };
+  for (; end < class_array->length(); ++end) {
+    auto next_version = view_at(*version_array, end);
+    auto next_class_uid = view_at(*class_array, end);
+    if (next_version == version and next_class_uid == class_uid) {
+      continue;
+    }
+    process();
+    begin = end;
+    version = next_version;
+    class_uid = next_class_uid;
+  }
+  process();
+  return result;
+}
+
+auto process_derive_slice(const table_slice& slice, location self,
+                          diagnostic_handler& dh) -> std::vector<table_slice>;
+
+auto process_cast_slice(const table_slice& slice, location self,
+                        diagnostic_handler& dh, bool preserve_variants,
+                        bool null_fill, bool timestamp_to_ms)
+  -> std::vector<table_slice> {
+  auto result = std::vector<table_slice>{};
+  if (slice.rows() == 0) {
+    result.emplace_back();
+    return result;
+  }
+  auto metadata = extract_metadata(slice, self, dh);
+  if (not metadata) {
+    result.emplace_back();
+    return result;
+  }
+  auto& version_array = metadata->version_array;
+  auto& class_array = metadata->class_array;
+  auto& metadata_array = metadata->metadata_array;
+  auto profiles_at = std::invoke([&]() {
+    auto profiles_index = metadata_array->struct_type()->GetFieldIndex(
+      "profiles");
+    if (profiles_index == -1) {
+      return make_string_list_function(nullptr);
+    }
+    auto profiles_array = check(metadata_array->GetFlattenedField(
+      profiles_index, tenzir::arrow_memory_pool()));
+    if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
+      return make_string_list_function(nullptr);
+    };
+    auto profiles_lists = std::dynamic_pointer_cast<arrow::ListArray>(
+      std::move(profiles_array));
+    if (not profiles_lists) {
+      diagnostic::warning("ignoring profiles for events where "
+                          "`metadata.profiles` is not a list")
+        .primary(self)
+        .emit(dh);
+      return make_string_list_function(nullptr);
+    }
+    if (dynamic_cast<arrow::NullArray*>(&*profiles_lists->values())) {
+      return make_string_list_function(nullptr);
+    }
+    if (not dynamic_cast<arrow::StringArray*>(&*profiles_lists->values())) {
+      diagnostic::warning("ignoring profiles for events where "
+                          "`metadata.profiles` is not a list of strings")
+        .primary(self)
+        .emit(dh);
+      return make_string_list_function(nullptr);
+    }
+    // Optimize the case where we know that all lists are trivially empty.
+    if (profiles_lists->value_offset(0)
+        == profiles_lists->value_offset(profiles_lists->length())) {
+      return make_string_list_function(nullptr);
+    }
+    return make_string_list_function(profiles_lists);
+  });
+  auto extensions_at = std::invoke([&] {
+    auto extensions_index = metadata_array->struct_type()->GetFieldIndex(
+      "extensions");
+    if (extensions_index == -1) {
+      return make_string_list_function(nullptr);
+    }
+    auto extensions_array = check(metadata_array->GetFlattenedField(
+      extensions_index, tenzir::arrow_memory_pool()));
+    if (dynamic_cast<arrow::NullArray*>(&*extensions_array)) {
+      return make_string_list_function(nullptr);
+    };
+    auto extensions_lists = std::dynamic_pointer_cast<arrow::ListArray>(
+      std::move(extensions_array));
+    if (not extensions_lists) {
+      diagnostic::warning("ignoring extensions for events where "
+                          "`metadata.extensions` is not a list")
+        .primary(self)
+        .emit(dh);
+      return make_string_list_function(nullptr);
+    }
+    if (dynamic_cast<arrow::NullArray*>(&*extensions_lists->values())) {
+      return make_string_list_function(nullptr);
+    }
+    auto* extensions_structs
+      = dynamic_cast<arrow::StructArray*>(&*extensions_lists->values());
+    if (not extensions_structs) {
+      diagnostic::warning("ignoring extensions for events where "
+                          "`metadata.extensions` is not a list of records")
+        .primary(self)
+        .emit(dh);
+      return make_string_list_function(nullptr);
+    }
+    auto name_index = extensions_structs->struct_type()->GetFieldIndex("name");
+    if (name_index == -1) {
+      diagnostic::warning("ignoring extensions for events where "
+                          "`metadata.extensions[].name` does not exist")
+        .primary(self)
+        .emit(dh);
+      return make_string_list_function(nullptr);
+    }
+    auto name_array = check(extensions_structs->GetFlattenedField(
+      name_index, tenzir::arrow_memory_pool()));
+    if (not dynamic_cast<arrow::StringArray*>(&*name_array)) {
+      diagnostic::warning("ignoring extensions for events where "
+                          "`metadata.extensions[].name` is not a string")
+        .primary(self)
+        .emit(dh);
+      return make_string_list_function(nullptr);
+    }
+    auto name_lists = make_list_series(series{string_type{}, name_array},
+                                       *extensions_lists);
+    return make_string_list_function(std::move(name_lists.array));
+  });
+  // Figure out longest slices that share:
+  // - metadata.version
+  // - metadata.profiles
+  // - class_uid
+  // - metadata.extensions[].name
+  // Since we only support extensions that are served by the OCSF server
+  // for the corresponding version, we know that they have a
+  // non-conflicting name and there is no need to take their version into
+  // account (although we could check for consistency with the event).
+  auto begin = int64_t{0};
+  auto end = begin;
+  auto version = view_at(*version_array, begin);
+  auto class_uid = view_at(*class_array, begin);
+  auto profiles = profiles_at(begin);
+  auto extensions = extensions_at(begin);
+  auto process = [&]() {
+    auto schema = get_ocsf_schema(version, class_uid, self, dh);
+    if (not schema) {
+      result.emplace_back();
+      return;
+    }
+    auto extension = schema->type.attribute("extension");
+    if (extension and not extensions.contains(*extension)) {
+      diagnostic::warning("dropping event for class {:?} because extension "
+                          "{:?} is not enabled",
+                          schema->class_name, *extension)
+        .primary(self)
+        .emit(dh);
+      result.emplace_back();
+      return;
+    }
+    auto type_name = "ocsf." + schema->mangled_class_name;
+    result.push_back(caster{self,           dh, profiles,
+                            extensions,     preserve_variants, null_fill,
+                            timestamp_to_ms}
+                       .cast(subslice(slice, begin, end), schema->type,
+                             type_name));
+  };
+  for (; end < class_array->length(); ++end) {
+    auto next_version = view_at(*version_array, end);
+    auto next_class_uid = view_at(*class_array, end);
+    auto next_profiles = profiles_at(end);
+    auto next_extensions = extensions_at(end);
+    if (next_version == version and next_class_uid == class_uid
+        and next_profiles == profiles and extensions == next_extensions) {
+      continue;
+    }
+    process();
+    begin = end;
+    version = next_version;
+    class_uid = next_class_uid;
+    profiles = next_profiles;
+    extensions = next_extensions;
+  }
+  process();
+  return result;
+}
+
 class trim_operator final : public crtp_operator<trim_operator> {
 public:
   trim_operator() = default;
@@ -676,48 +893,11 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
+      auto output = process_trim_slice(slice, self_, ctrl.diagnostics(),
+                                       drop_optional_, drop_recommended_);
+      for (auto&& out : output) {
+        co_yield std::move(out);
       }
-      // Get the required columns `metadata.version` and `class_uid`.
-      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
-      if (not metadata) {
-        co_yield {};
-        continue;
-      }
-      auto& version_array = metadata->version_array;
-      auto& class_array = metadata->class_array;
-      // Figure out longest slices that share:
-      // - metadata.version
-      // - class_uid
-      // We do not take profiles or extensions into account here because that is
-      // not strictly needed for trimming.
-      auto begin = int64_t{0};
-      auto end = begin;
-      auto version = view_at(*version_array, begin);
-      auto class_uid = view_at(*class_array, begin);
-      auto process = [&]() -> table_slice {
-        auto schema
-          = get_ocsf_schema(version, class_uid, self_, ctrl.diagnostics());
-        if (not schema) {
-          return {};
-        }
-        return trimmer{drop_optional_, drop_recommended_}.trim(slice,
-                                                               schema->type);
-      };
-      for (; end < class_array->length(); ++end) {
-        auto next_version = view_at(*version_array, end);
-        auto next_class_uid = view_at(*class_array, end);
-        if (next_version == version and next_class_uid == class_uid) {
-          continue;
-        }
-        co_yield process();
-        begin = end;
-        version = next_version;
-        class_uid = next_class_uid;
-      }
-      co_yield process();
     }
   }
 
@@ -1167,6 +1347,51 @@ private:
   diagnostic_handler& dh_;
 };
 
+auto process_derive_slice(const table_slice& slice, location self,
+                          diagnostic_handler& dh) -> std::vector<table_slice> {
+  auto result = std::vector<table_slice>{};
+  if (slice.rows() == 0) {
+    result.emplace_back();
+    return result;
+  }
+  auto metadata = extract_metadata(slice, self, dh);
+  if (not metadata) {
+    result.emplace_back();
+    return result;
+  }
+  auto& version_array = metadata->version_array;
+  auto& class_array = metadata->class_array;
+  // Figure out longest slices that share:
+  // - metadata.version
+  // - class_uid
+  auto begin = int64_t{0};
+  auto end = begin;
+  auto version = view_at(*version_array, begin);
+  auto class_uid = view_at(*class_array, begin);
+  auto process = [&]() {
+    auto schema = get_ocsf_schema(version, class_uid, self, dh);
+    if (not schema) {
+      result.emplace_back();
+      return;
+    }
+    result.push_back(deriver{self, dh}.derive(subslice(slice, begin, end),
+                                              schema->type));
+  };
+  for (; end < class_array->length(); ++end) {
+    auto next_version = view_at(*version_array, end);
+    auto next_class_uid = view_at(*class_array, end);
+    if (next_version == version and next_class_uid == class_uid) {
+      continue;
+    }
+    process();
+    begin = end;
+    version = next_version;
+    class_uid = next_class_uid;
+  }
+  process();
+  return result;
+}
+
 class derive_operator final : public crtp_operator<derive_operator> {
 public:
   derive_operator() = default;
@@ -1182,46 +1407,10 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
+      auto output = process_derive_slice(slice, self_, ctrl.diagnostics());
+      for (auto&& out : output) {
+        co_yield std::move(out);
       }
-      // Get the required columns `metadata.version` and `class_uid`.
-      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
-      if (not metadata) {
-        co_yield {};
-        continue;
-      }
-      auto& version_array = metadata->version_array;
-      auto& class_array = metadata->class_array;
-      // Figure out longest slices that share:
-      // - metadata.version
-      // - class_uid
-      auto begin = int64_t{0};
-      auto end = begin;
-      auto version = view_at(*version_array, begin);
-      auto class_uid = view_at(*class_array, begin);
-      auto process = [&]() -> table_slice {
-        auto schema
-          = get_ocsf_schema(version, class_uid, self_, ctrl.diagnostics());
-        if (not schema) {
-          return {};
-        }
-        return deriver{self_, ctrl.diagnostics()}.derive(
-          subslice(slice, begin, end), schema->type);
-      };
-      for (; end < class_array->length(); ++end) {
-        auto next_version = view_at(*version_array, end);
-        auto next_class_uid = view_at(*class_array, end);
-        if (next_version == version and next_class_uid == class_uid) {
-          continue;
-        }
-        co_yield process();
-        begin = end;
-        version = next_version;
-        class_uid = next_class_uid;
-      }
-      co_yield process();
     }
   }
 
@@ -1254,164 +1443,12 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
+      auto output = process_cast_slice(slice, self_, ctrl.diagnostics(),
+                                       preserve_variants_, null_fill_,
+                                       timestamp_to_ms_);
+      for (auto&& out : output) {
+        co_yield std::move(out);
       }
-      // Get the required columns `metadata.version` and `class_uid`.
-      auto metadata = extract_metadata(slice, self_, ctrl.diagnostics());
-      if (not metadata) {
-        co_yield {};
-        continue;
-      }
-      auto& version_array = metadata->version_array;
-      auto& class_array = metadata->class_array;
-      auto& metadata_array = metadata->metadata_array;
-      auto profiles_at = std::invoke([&]() {
-        auto profiles_index
-          = metadata_array->struct_type()->GetFieldIndex("profiles");
-        if (profiles_index == -1) {
-          return make_string_list_function(nullptr);
-        }
-        auto profiles_array = check(metadata_array->GetFlattenedField(
-          profiles_index, tenzir::arrow_memory_pool()));
-        if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
-          return make_string_list_function(nullptr);
-        };
-        auto profiles_lists = std::dynamic_pointer_cast<arrow::ListArray>(
-          std::move(profiles_array));
-        if (not profiles_lists) {
-          diagnostic::warning("ignoring profiles for events where "
-                              "`metadata.profiles` is not a list")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return make_string_list_function(nullptr);
-        }
-        if (dynamic_cast<arrow::NullArray*>(&*profiles_lists->values())) {
-          return make_string_list_function(nullptr);
-        }
-        if (not dynamic_cast<arrow::StringArray*>(&*profiles_lists->values())) {
-          diagnostic::warning("ignoring profiles for events where "
-                              "`metadata.profiles` is not a list of strings")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return make_string_list_function(nullptr);
-        }
-        // Optimize the case where we know that all lists are trivially empty.
-        if (profiles_lists->value_offset(0)
-            == profiles_lists->value_offset(profiles_lists->length())) {
-          return make_string_list_function(nullptr);
-        }
-        return make_string_list_function(profiles_lists);
-      });
-      auto extensions_at = std::invoke([&] {
-        auto extensions_index
-          = metadata_array->struct_type()->GetFieldIndex("extensions");
-        if (extensions_index == -1) {
-          return make_string_list_function(nullptr);
-        }
-        auto extensions_array = check(metadata_array->GetFlattenedField(
-          extensions_index, tenzir::arrow_memory_pool()));
-        if (dynamic_cast<arrow::NullArray*>(&*extensions_array)) {
-          return make_string_list_function(nullptr);
-        };
-        auto extensions_lists = std::dynamic_pointer_cast<arrow::ListArray>(
-          std::move(extensions_array));
-        if (not extensions_lists) {
-          diagnostic::warning("ignoring extensions for events where "
-                              "`metadata.extensions` is not a list")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return make_string_list_function(nullptr);
-        }
-        if (dynamic_cast<arrow::NullArray*>(&*extensions_lists->values())) {
-          return make_string_list_function(nullptr);
-        }
-        auto* extensions_structs
-          = dynamic_cast<arrow::StructArray*>(&*extensions_lists->values());
-        if (not extensions_structs) {
-          diagnostic::warning("ignoring extensions for events where "
-                              "`metadata.extensions` is not a list of records")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return make_string_list_function(nullptr);
-        }
-        auto name_index
-          = extensions_structs->struct_type()->GetFieldIndex("name");
-        if (name_index == -1) {
-          diagnostic::warning("ignoring extensions for events where "
-                              "`metadata.extensions[].name` does not exist")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return make_string_list_function(nullptr);
-        }
-        auto name_array = check(extensions_structs->GetFlattenedField(
-          name_index, tenzir::arrow_memory_pool()));
-        if (not dynamic_cast<arrow::StringArray*>(&*name_array)) {
-          diagnostic::warning("ignoring extensions for events where "
-                              "`metadata.extensions[].name` is not a string")
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return make_string_list_function(nullptr);
-        }
-        auto name_lists = make_list_series(series{string_type{}, name_array},
-                                           *extensions_lists);
-        return make_string_list_function(std::move(name_lists.array));
-      });
-      // Figure out longest slices that share:
-      // - metadata.version
-      // - metadata.profiles
-      // - class_uid
-      // - metadata.extensions[].name
-      // Since we only support extensions that are served by the OCSF server
-      // for the corresponding version, we know that they have a
-      // non-conflicting name and there is no need to take their version into
-      // account (although we could check for consistency with the event).
-      auto begin = int64_t{0};
-      auto end = begin;
-      auto version = view_at(*version_array, begin);
-      auto class_uid = view_at(*class_array, begin);
-      auto profiles = profiles_at(begin);
-      auto extensions = extensions_at(begin);
-      auto process = [&]() -> table_slice {
-        auto schema
-          = get_ocsf_schema(version, class_uid, self_, ctrl.diagnostics());
-        if (not schema) {
-          return {};
-        }
-        auto extension = schema->type.attribute("extension");
-        if (extension and not extensions.contains(*extension)) {
-          diagnostic::warning("dropping event for class {:?} because "
-                              "extension "
-                              "{:?} is not enabled",
-                              schema->class_name, *extension)
-            .primary(self_)
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        auto type_name = "ocsf." + schema->mangled_class_name;
-        return caster{self_,           ctrl.diagnostics(), profiles,
-                      extensions,      preserve_variants_, null_fill_,
-                      timestamp_to_ms_}
-          .cast(subslice(slice, begin, end), schema->type, type_name);
-      };
-      for (; end < class_array->length(); ++end) {
-        auto next_version = view_at(*version_array, end);
-        auto next_class_uid = view_at(*class_array, end);
-        auto next_profiles = profiles_at(end);
-        auto next_extensions = extensions_at(end);
-        if (next_version == version and next_class_uid == class_uid
-            and next_profiles == profiles and extensions == next_extensions) {
-          continue;
-        }
-        co_yield process();
-        begin = end;
-        version = next_version;
-        class_uid = next_class_uid;
-        profiles = next_profiles;
-        extensions = next_extensions;
-      }
-      co_yield process();
     }
   }
 
@@ -1439,6 +1476,83 @@ private:
   bool timestamp_to_ms_{};
 };
 
+struct CastArgs {
+  bool encode_variants = false;
+  bool null_fill = false;
+  bool timestamp_to_ms = false;
+};
+
+class Cast final : public Operator<table_slice, table_slice> {
+public:
+  explicit Cast(CastArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto output = process_cast_slice(input, location::unknown, ctx.dh(),
+                                     not args_.encode_variants,
+                                     args_.null_fill, args_.timestamp_to_ms);
+    for (auto&& out : output) {
+      if (out.rows() == 0) {
+        continue;
+      }
+      co_await push(std::move(out));
+    }
+  }
+
+private:
+  CastArgs args_;
+};
+
+struct TrimArgs {
+  bool drop_optional = true;
+  bool drop_recommended = false;
+};
+
+class Trim final : public Operator<table_slice, table_slice> {
+public:
+  explicit Trim(TrimArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto output = process_trim_slice(input, location::unknown, ctx.dh(),
+                                     args_.drop_optional,
+                                     args_.drop_recommended);
+    for (auto&& out : output) {
+      if (out.rows() == 0) {
+        continue;
+      }
+      co_await push(std::move(out));
+    }
+  }
+
+private:
+  TrimArgs args_;
+};
+
+struct DeriveArgs {};
+
+class Derive final : public Operator<table_slice, table_slice> {
+public:
+  explicit Derive(DeriveArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto output = process_derive_slice(input, location::unknown, ctx.dh());
+    for (auto&& out : output) {
+      if (out.rows() == 0) {
+        continue;
+      }
+      co_await push(std::move(out));
+    }
+  }
+
+private:
+  DeriveArgs args_;
+};
+
 class apply_plugin final : public operator_factory_plugin {
 public:
   auto name() const -> std::string override {
@@ -1461,7 +1575,8 @@ public:
   }
 };
 
-class cast_plugin final : public operator_plugin2<cast_operator> {
+class cast_plugin final : public virtual operator_plugin2<cast_operator>,
+                          public virtual OperatorPlugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -1476,9 +1591,18 @@ public:
     return std::make_unique<cast_operator>(
       inv.self.get_location(), not encode_variants, null_fill, timestamp_to_ms);
   }
+
+  auto describe() const -> Description override {
+    auto d = Describer<CastArgs, Cast>{};
+    d.named("encode_variants", &CastArgs::encode_variants);
+    d.named("null_fill", &CastArgs::null_fill);
+    d.named("timestamp_to_ms", &CastArgs::timestamp_to_ms);
+    return d.without_optimize();
+  }
 };
 
-class trim_plugin final : public operator_plugin2<trim_operator> {
+class trim_plugin final : public virtual operator_plugin2<trim_operator>,
+                          public virtual OperatorPlugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -1494,14 +1618,27 @@ public:
     return std::make_unique<trim_operator>(inv.self.get_location(),
                                            drop_optional, drop_recommended);
   }
+
+  auto describe() const -> Description override {
+    auto d = Describer<TrimArgs, Trim>{};
+    d.named("drop_optional", &TrimArgs::drop_optional);
+    d.named("drop_recommended", &TrimArgs::drop_recommended);
+    return d.without_optimize();
+  }
 };
 
-class derive_plugin final : public operator_plugin2<derive_operator> {
+class derive_plugin final : public virtual operator_plugin2<derive_operator>,
+                            public virtual OperatorPlugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_(name()).parse(inv, ctx).ignore();
     return std::make_unique<derive_operator>(inv.self.get_location());
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<DeriveArgs, Derive>{};
+    return d.without_optimize();
   }
 };
 
