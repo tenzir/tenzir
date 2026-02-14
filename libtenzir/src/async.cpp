@@ -209,6 +209,10 @@ struct SubPipelineInfo {
   bool wants_commit = false;
 };
 
+struct SubPipelineFinished {
+  data key;
+};
+
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
   MutexDiagnosticHandler(diagnostic_handler& dh) : dh_{dh} {
@@ -516,21 +520,16 @@ private:
               }
             },
             [&](Signal signal) -> Task<void> {
-              // FIXME: What should we do here?
               co_await co_match(
                 signal,
                 [&](EndOfData) -> Task<void> {
-                  if constexpr (std::same_as<Output, void>) {
-                    co_await op_->finish_sub(make_view(key), *this);
-                  } else {
-                    auto push = OpPushWrapper{push_downstream_};
-                    co_await op_->finish_sub(make_view(key), push, *this);
-                  }
-                  // TODO(tobim): Too early?
-                  subpipelines_.erase(key);
+                  queue_.spawn([key] -> Task<SubPipelineFinished> {
+                    co_return SubPipelineFinished{key};
+                  });
+                  co_return;
                 },
                 [&](Checkpoint) -> Task<void> {
-                  //
+                  // TODO: Handle checkpoint.
                   co_return;
                 });
             });
@@ -793,6 +792,17 @@ private:
     queue_.spawn(from_control_.receive());
   }
 
+  auto process(SubPipelineFinished message) -> Task<void> {
+    if constexpr (std::same_as<Output, void>) {
+      co_await op_->finish_sub(make_view(message.key), *this);
+    } else {
+      auto push = OpPushWrapper{push_downstream_};
+      co_await op_->finish_sub(make_view(message.key), push, *this);
+    }
+    subpipelines_.erase(message.key);
+    co_await try_finish_done();
+  }
+
   auto handle_done() -> Task<void> {
     // We want to run this code once.
     if (is_done_) {
@@ -811,8 +821,10 @@ private:
       auto push = OpPushWrapper{push_downstream_};
       co_await op_->finalize(push, *this);
     }
-    // Afterwards, finish all subpipelines. Note that the previous step could
-    // have still pushed data into them.
+    // Tell all subpipelines to shut down. Note that the previous step could
+    // have still pushed data into them. The main loop continues running to
+    // drain remaining subpipeline output and collect SubPipelineFinished
+    // messages. `try_finish_done()` completes the shutdown once all are gone.
     for (auto& [key, sub] : subpipelines_) {
       co_await co_match(sub.handle,
                         []<class In>(SubPipeline<In>& sub) -> Task<void> {
@@ -821,9 +833,14 @@ private:
                             co_await sub.push(EndOfData{});
                             sub.from_control.send(Shutdown{});
                           }
-                          // TODO: Do we need to do anything else? Do we need
-                          // to wait for them to finish?
                         });
+    }
+    co_await try_finish_done();
+  }
+
+  auto try_finish_done() -> Task<void> {
+    if (not is_done_ or not subpipelines_.empty()) {
+      co_return;
     }
     if constexpr (not std::same_as<Output, void>) {
       co_await push_downstream_(EndOfData{});
@@ -850,7 +867,9 @@ private:
   /// framing is even kept alive after the operator itself finished.
   AsyncScope* operator_scope_ = nullptr;
 
-  QueueScope<variant<ExplicitAny, OperatorMsg<Input>, FromControl>> queue_;
+  QueueScope<
+    variant<ExplicitAny, OperatorMsg<Input>, FromControl, SubPipelineFinished>>
+    queue_;
   bool got_shutdown_request_ = false;
   bool is_done_ = false;
   // TODO: Expose this?
@@ -1319,6 +1338,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
         co_return std::monostate{};
       });
       // TODO: We just have this right now to simulate checkpointing.
+#if 0
       queue.spawn([&] -> Task<std::monostate> {
         while (true) {
           auto checkpoint = Checkpoint{uuid::random()};
@@ -1327,6 +1347,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
           co_await folly::coro::sleep(std::chrono::seconds{1});
         }
       });
+#endif
       queue.spawn(pull_output());
       queue.spawn(to_control_receiver.receive());
       auto is_running = true;

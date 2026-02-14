@@ -333,7 +333,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "IfElse";
+    return "If";
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
