@@ -728,8 +728,8 @@ auto process_cast_slice(const table_slice& slice, location self,
   auto& class_array = metadata->class_array;
   auto& metadata_array = metadata->metadata_array;
   auto profiles_at = std::invoke([&]() {
-    auto profiles_index = metadata_array->struct_type()->GetFieldIndex(
-      "profiles");
+    auto profiles_index
+      = metadata_array->struct_type()->GetFieldIndex("profiles");
     if (profiles_index == -1) {
       return make_string_list_function(nullptr);
     }
@@ -738,8 +738,8 @@ auto process_cast_slice(const table_slice& slice, location self,
     if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
       return make_string_list_function(nullptr);
     };
-    auto profiles_lists = std::dynamic_pointer_cast<arrow::ListArray>(
-      std::move(profiles_array));
+    auto profiles_lists
+      = std::dynamic_pointer_cast<arrow::ListArray>(std::move(profiles_array));
     if (not profiles_lists) {
       diagnostic::warning("ignoring profiles for events where "
                           "`metadata.profiles` is not a list")
@@ -765,8 +765,8 @@ auto process_cast_slice(const table_slice& slice, location self,
     return make_string_list_function(profiles_lists);
   });
   auto extensions_at = std::invoke([&] {
-    auto extensions_index = metadata_array->struct_type()->GetFieldIndex(
-      "extensions");
+    auto extensions_index
+      = metadata_array->struct_type()->GetFieldIndex("extensions");
     if (extensions_index == -1) {
       return make_string_list_function(nullptr);
     }
@@ -813,8 +813,8 @@ auto process_cast_slice(const table_slice& slice, location self,
         .emit(dh);
       return make_string_list_function(nullptr);
     }
-    auto name_lists = make_list_series(series{string_type{}, name_array},
-                                       *extensions_lists);
+    auto name_lists
+      = make_list_series(series{string_type{}, name_array}, *extensions_lists);
     return make_string_list_function(std::move(name_lists.array));
   });
   // Figure out longest slices that share:
@@ -849,11 +849,10 @@ auto process_cast_slice(const table_slice& slice, location self,
       return;
     }
     auto type_name = "ocsf." + schema->mangled_class_name;
-    result.push_back(caster{self,           dh, profiles,
-                            extensions,     preserve_variants, null_fill,
-                            timestamp_to_ms}
-                       .cast(subslice(slice, begin, end), schema->type,
-                             type_name));
+    result.push_back(
+      caster{self, dh, profiles, extensions, preserve_variants, null_fill,
+             timestamp_to_ms}
+        .cast(subslice(slice, begin, end), schema->type, type_name));
   };
   for (; end < class_array->length(); ++end) {
     auto next_version = view_at(*version_array, end);
@@ -1374,8 +1373,8 @@ auto process_derive_slice(const table_slice& slice, location self,
       result.emplace_back();
       return;
     }
-    result.push_back(deriver{self, dh}.derive(subslice(slice, begin, end),
-                                              schema->type));
+    result.push_back(
+      deriver{self, dh}.derive(subslice(slice, begin, end), schema->type));
   };
   for (; end < class_array->length(); ++end) {
     auto next_version = view_at(*version_array, end);
@@ -1443,9 +1442,9 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      auto output = process_cast_slice(slice, self_, ctrl.diagnostics(),
-                                       preserve_variants_, null_fill_,
-                                       timestamp_to_ms_);
+      auto output
+        = process_cast_slice(slice, self_, ctrl.diagnostics(),
+                             preserve_variants_, null_fill_, timestamp_to_ms_);
       for (auto&& out : output) {
         co_yield std::move(out);
       }
@@ -1490,8 +1489,8 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     auto output = process_cast_slice(input, location::unknown, ctx.dh(),
-                                     not args_.encode_variants,
-                                     args_.null_fill, args_.timestamp_to_ms);
+                                     not args_.encode_variants, args_.null_fill,
+                                     args_.timestamp_to_ms);
     for (auto&& out : output) {
       if (out.rows() == 0) {
         continue;
@@ -1516,9 +1515,9 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto output = process_trim_slice(input, location::unknown, ctx.dh(),
-                                     args_.drop_optional,
-                                     args_.drop_recommended);
+    auto output
+      = process_trim_slice(input, location::unknown, ctx.dh(),
+                           args_.drop_optional, args_.drop_recommended);
     for (auto&& out : output) {
       if (out.rows() == 0) {
         continue;
