@@ -1,0 +1,8 @@
+// Verify the forwarded message is readable from the target topic.
+from_kafka "to_kafka_forwarded",
+           count=1,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-to-kafka-verify"
+           }

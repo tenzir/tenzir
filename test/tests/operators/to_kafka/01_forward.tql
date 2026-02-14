@@ -1,0 +1,13 @@
+// Forward one seeded message into a different topic.
+from_kafka env("KAFKA_TOPIC"),
+           count=1,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-to-kafka-forward"
+           }
+to_kafka "to_kafka_forwarded",
+         message=this.message,
+         options={
+           "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS")
+         }

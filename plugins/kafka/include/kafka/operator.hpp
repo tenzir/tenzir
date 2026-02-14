@@ -35,10 +35,14 @@
 using namespace std::chrono_literals;
 namespace tenzir::plugins::kafka {
 
+// NOTE: This header implements legacy executor operators (`load_kafka` and
+// `save_kafka`) and their supporting abstractions.
+// Scheduled for removal once the new executor is the default and the old
+// executor path has been removed.
 inline auto validate_options(const located<record>& r, diagnostic_handler& dh)
   -> failure_or<void> {
   for (const auto& [key, value] : r.inner) {
-    const auto f = detail::overload{
+    const auto f = tenzir::detail::overload{
       [](const concepts::arithmetic auto&) -> failure_or<void> {
         return {};
       },
@@ -500,7 +504,7 @@ public:
       TENZIR_ERROR(client.error());
       diagnostic::error(client.error()).emit(dh);
     };
-    auto guard = detail::scope_guard([client = *client]() mutable noexcept {
+    auto guard = tenzir::detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
       if (auto err = client.flush(10s); err.valid()) {
         TENZIR_WARN(err);

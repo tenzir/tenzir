@@ -1,0 +1,9 @@
+suite: to-kafka
+fixtures:
+  - kafka:
+      topic: to_kafka_source
+      partitions: 1
+      seed_messages: 1
+timeout: 180
+skip:
+  on: fixture-unavailable

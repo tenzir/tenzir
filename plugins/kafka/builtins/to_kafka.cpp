@@ -3,161 +3,240 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/configuration.hpp"
 #include "kafka/operator.hpp"
 #include "tenzir/aws_iam.hpp"
-#include "tenzir/generator.hpp"
-#include "tenzir/operator_control_plane.hpp"
-#include "tenzir/pipeline.hpp"
-#include "tenzir/tql2/eval.hpp"
-#include "tenzir/tql2/resolve.hpp"
 
+#include <tenzir/as_bytes.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <variant>
+#include <librdkafka/rdkafkacpp.h>
+
+#include <memory>
+#include <optional>
+#include <span>
+#include <string_view>
 
 namespace tenzir::plugins::kafka {
+
 namespace {
 
-struct to_kafka_args {
-  location op;
+auto sink_global_defaults() -> record& {
+  static auto defaults = record{};
+  return defaults;
+}
+
+struct ToKafkaArgs {
   std::string topic;
   ast::expression message = ast::function_call{
     ast::entity{{ast::identifier{"print_ndjson", location::unknown}}},
     {ast::this_{location::unknown}},
     location::unknown,
-    true // method call
+    true,
   };
   std::optional<located<std::string>> key;
   std::optional<located<time>> timestamp;
   located<record> options;
   std::optional<located<std::string>> aws_region;
-  std::optional<tenzir::aws_iam_options> aws;
-
-  friend auto inspect(auto& f, to_kafka_args& x) -> bool {
-    return f.object(x).fields(
-      f.field("op", x.op), f.field("topic", x.topic),
-      f.field("message", x.message), f.field("key", x.key),
-      f.field("timestamp", x.timestamp), f.field("options", x.options),
-      f.field("aws_region", x.aws_region), f.field("aws", x.aws));
-  }
+  std::optional<located<record>> aws_iam;
 };
 
-class to_kafka_operator final : public crtp_operator<to_kafka_operator> {
+class ToKafkaOperator final : public Operator<table_slice, void> {
 public:
-  to_kafka_operator() = default;
+  explicit ToKafkaOperator(ToKafkaArgs args) : args_{std::move(args)} {
+  }
+  ToKafkaOperator(ToKafkaOperator&&) = default;
+  auto operator=(ToKafkaOperator&&) -> ToKafkaOperator& = default;
+  ToKafkaOperator(const ToKafkaOperator&) = delete;
+  auto operator=(const ToKafkaOperator&) -> ToKafkaOperator& = delete;
 
-  to_kafka_operator(to_kafka_args args, record config)
-    : args_{std::move(args)}, config_{std::move(config)} {
+  ~ToKafkaOperator() override {
+    flush_and_close();
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
-    auto& dh = ctrl.diagnostics();
-    // Resolve secrets if explicit credentials or role are provided.
-    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-    if (args_.aws
-        and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
-      resolved_creds.emplace();
-      auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
-      co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto aws = std::optional<aws_iam_options>{};
+    if (args_.aws_iam) {
+      auto parsed = aws_iam_options::from_record(*args_.aws_iam, ctx.dh());
+      if (not parsed) {
+        done_ = true;
+        co_return;
+      }
+      aws = std::move(*parsed);
+      if (not args_.aws_region and not aws->region) {
+        diagnostic::error(
+          "`aws_region` is required for Kafka MSK authentication")
+          .primary(args_.aws_iam->source)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      }
     }
-    // Use top-level aws_region if provided, otherwise fall back to aws_iam.
+    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    if (aws and (aws->has_explicit_credentials() or aws->role)) {
+      resolved_creds.emplace();
+      auto requests = aws->make_secret_requests(*resolved_creds, ctx.dh());
+      if (auto ok = co_await ctx.resolve_secrets(std::move(requests)); not ok) {
+        done_ = true;
+        co_return;
+      }
+    }
     if (args_.aws_region) {
       if (not resolved_creds) {
         resolved_creds.emplace();
       }
       resolved_creds->region = args_.aws_region->inner;
     }
-    co_yield {};
-    auto config = configuration::make(config_, args_.aws, resolved_creds, dh);
-    if (not config) {
-      diagnostic::error(std::move(config).error()).primary(args_.op).emit(dh);
+    auto config = sink_global_defaults();
+    auto cfg = configuration::make(config, aws, resolved_creds, ctx.dh());
+    if (not cfg) {
+      diagnostic::error("failed to create kafka configuration: {}", cfg.error())
+        .emit(ctx);
+      done_ = true;
       co_return;
     }
-    co_yield ctrl.resolve_secrets_must_yield(
-      configure_or_request(args_.options, *config, ctrl.diagnostics()));
-    auto p = producer::make(std::move(*config));
-    if (not p) {
-      diagnostic::error(std::move(p).error()).primary(args_.op).emit(dh);
+    cfg_ = std::move(*cfg);
+    auto user_options = args_.options;
+    if (aws) {
+      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    }
+    if (auto ok = co_await ctx.resolve_secrets(
+          configure_or_request(user_options, *cfg_, ctx.dh()));
+        not ok) {
+      done_ = true;
       co_return;
     }
-    const auto guard = detail::scope_guard([&] noexcept {
-      TENZIR_DEBUG("[to_kafka] waiting 10 seconds to flush pending messages");
-      if (const auto err = p->flush(10s); err.valid()) {
-        TENZIR_WARN(err);
-      }
-      const auto num_messages = p->queue_size();
-      if (num_messages > 0) {
-        TENZIR_ERROR("[to_kafka] {} messages were not delivered", num_messages);
-      }
-    });
+    auto error = std::string{};
+    auto* raw_producer = RdKafka::Producer::create(cfg_->underlying(), error);
+    if (raw_producer == nullptr) {
+      diagnostic::error("failed to create kafka producer: {}", error).emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    producer_.emplace(Box<RdKafka::Producer>::from_unique_ptr(
+      std::unique_ptr<RdKafka::Producer>{raw_producer}));
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (done_ or not producer_ or input.rows() == 0) {
+      co_return;
+    }
+    auto failed = false;
     const auto key = args_.key ? args_.key->inner : "";
     const auto timestamp = args_.timestamp ? args_.timestamp->inner : time{};
-    for (const auto& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      const auto& ms = eval(args_.message, slice, dh);
-      for (const auto& s : ms) {
-        match(
-          *s.array,
-          [&](const concepts::one_of<arrow::BinaryArray,
-                                     arrow::StringArray> auto& array) {
-            for (auto i = int64_t{}; i < array.length(); ++i) {
-              if (array.IsNull(i)) {
-                diagnostic::warning("expected `string` or `blob`, got `null`")
-                  .primary(args_.message)
-                  .emit(dh);
-                continue;
-              }
-              if (auto e = p->produce(args_.topic, as_bytes(array.Value(i)),
-                                      key, timestamp);
-                  e.valid()) {
-                diagnostic::error(std::move(e)).primary(args_.op).emit(dh);
-              }
+    const auto& messages = eval(args_.message, input, ctx.dh());
+    for (const auto& series : messages) {
+      match(
+        *series.array,
+        [&](const concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto&
+              array) {
+          for (auto row = int64_t{0}; row < array.length(); ++row) {
+            if (array.IsNull(row)) {
+              diagnostic::warning("expected `string` or `blob`, got `null`")
+                .primary(args_.message)
+                .emit(ctx);
+              continue;
             }
-          },
-          [&](const auto&) {
-            diagnostic::warning("expected `string` or `blob`, got `{}`",
-                                s.type.kind())
-              .primary(args_.message)
-              .emit(dh);
-          });
+            if (not produce(as_bytes(array.Value(row)), key, timestamp, ctx)) {
+              done_ = true;
+              failed = true;
+              return;
+            }
+          }
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected `string` or `blob`, got `{}`",
+                              series.type.kind())
+            .primary(args_.message)
+            .emit(ctx);
+        });
+      if (failed) {
+        co_return;
       }
-      p->poll(0ms);
     }
+    (*producer_)->poll(0);
+    co_return;
   }
 
-  auto name() const -> std::string override {
-    return "to_kafka";
+  auto finalize(OpCtx&) -> Task<void> override {
+    flush_and_close();
+    co_return;
   }
 
-  auto detached() const -> bool override {
-    return true;
-  }
-
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, to_kafka_operator& x) -> bool {
-    return f.object(x).fields(f.field("args_", x.args_),
-                              f.field("config_", x.config_));
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
   }
 
 private:
-  to_kafka_args args_;
-  record config_;
+  auto produce(std::span<const std::byte> bytes, std::string_view key,
+               time timestamp, OpCtx& ctx) -> bool {
+    TENZIR_ASSERT(producer_);
+    auto timestamp_ms = int64_t{0};
+    if (timestamp != time{}) {
+      timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       timestamp.time_since_epoch())
+                       .count();
+    }
+    while (true) {
+      auto result
+        = (*producer_)
+            ->produce(
+              args_.topic, RdKafka::Topic::PARTITION_UA,
+              RdKafka::Producer::RK_MSG_COPY,
+              const_cast<char*>(reinterpret_cast<const char*>(bytes.data())),
+              bytes.size(), key.empty() ? nullptr : key.data(), key.size(),
+              timestamp_ms, nullptr);
+      switch (result) {
+        case RdKafka::ERR_NO_ERROR:
+          return true;
+        case RdKafka::ERR__QUEUE_FULL:
+          (*producer_)->poll(1000);
+          continue;
+        default:
+          diagnostic::error("failed to produce kafka message: {}",
+                            RdKafka::err2str(result))
+            .emit(ctx);
+          return false;
+      }
+    }
+  }
+
+  auto flush_and_close() -> void {
+    if (not producer_) {
+      cfg_.reset();
+      return;
+    }
+    const auto timeout_ms = detail::narrow_cast<int>(10000);
+    auto result = (*producer_)->flush(timeout_ms);
+    if (result == RdKafka::ERR__TIMED_OUT) {
+      TENZIR_WARN("to_kafka: producer flush timed out");
+    } else if (result != RdKafka::ERR_NO_ERROR) {
+      TENZIR_WARN("to_kafka: producer flush failed: {}",
+                  RdKafka::err2str(result));
+    }
+    const auto pending = (*producer_)->outq_len();
+    if (pending > 0) {
+      TENZIR_ERROR("to_kafka: {} messages were not delivered", pending);
+    }
+    producer_.reset();
+    cfg_.reset();
+  }
+
+  ToKafkaArgs args_;
+  std::optional<configuration> cfg_;
+  std::optional<Box<RdKafka::Producer>> producer_;
+  bool done_ = false;
 };
 
-class to_kafka final : public operator_plugin2<to_kafka_operator> {
+class ToKafkaPlugin final : public virtual OperatorPlugin {
+public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
@@ -165,6 +244,7 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
                                this->name())
         .to_error();
     }
+    auto defaults = record{};
     [&] {
       auto ptr = global_config.find("plugins");
       if (ptr == global_config.end()) {
@@ -182,56 +262,65 @@ class to_kafka final : public operator_plugin2<to_kafka_operator> {
       if (not kafka_config or kafka_config->empty()) {
         return;
       }
-      config_ = flatten(*kafka_config);
+      defaults = flatten(*kafka_config);
     }();
-    if (not config_.contains("bootstrap.servers")) {
-      config_["bootstrap.servers"] = "localhost";
+    if (not defaults.contains("bootstrap.servers")) {
+      defaults["bootstrap.servers"] = "localhost";
     }
-    if (not config_.contains("client.id")) {
-      config_["client.id"] = "tenzir";
+    if (not defaults.contains("client.id")) {
+      defaults["client.id"] = "tenzir";
     }
+    sink_global_defaults() = std::move(defaults);
     return caf::none;
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = to_kafka_args{};
-    TRY(resolve_entities(args.message, ctx));
-    auto iam_opts = std::optional<located<record>>{};
-    TRY(argument_parser2::operator_(name())
-          .positional("topic", args.topic)
-          .named_optional("message", args.message, "blob|string")
-          .named("key", args.key)
-          .named("timestamp", args.timestamp)
-          .named("aws_region", args.aws_region)
-          .named("aws_iam", iam_opts)
-          .named_optional("options", args.options)
-          .parse(inv, ctx));
-    if (iam_opts) {
-      TRY(check_sasl_mechanism(args.options, ctx));
-      TRY(check_sasl_mechanism(located{config_, iam_opts->source}, ctx));
-      args.options.inner["sasl.mechanism"] = "OAUTHBEARER";
-      TRY(args.aws, tenzir::aws_iam_options::from_record(
-                      std::move(iam_opts).value(), ctx));
-      // Region is required for Kafka MSK authentication.
-      // Use top-level aws_region if provided, otherwise require aws_iam.region.
-      if (not args.aws_region and not args.aws->region) {
-        diagnostic::error(
-          "`aws_region` is required for Kafka MSK authentication")
-          .primary(args.aws->loc)
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
-    TRY(validate_options(args.options, ctx));
-    return std::make_unique<to_kafka_operator>(std::move(args), config_);
+  auto name() const -> std::string override {
+    return "to_kafka";
   }
 
-private:
-  record config_;
+  auto describe() const -> Description override {
+    auto initial = ToKafkaArgs{};
+    initial.options = located{record{}, location::unknown};
+    auto d = Describer<ToKafkaArgs, ToKafkaOperator>{std::move(initial)};
+    d.positional("topic", &ToKafkaArgs::topic);
+    d.named_optional("message", &ToKafkaArgs::message, "blob|string");
+    d.named("key", &ToKafkaArgs::key);
+    d.named("timestamp", &ToKafkaArgs::timestamp);
+    auto options_arg = d.named_optional("options", &ToKafkaArgs::options);
+    auto aws_region_arg = d.named("aws_region", &ToKafkaArgs::aws_region);
+    auto aws_iam_arg = d.named("aws_iam", &ToKafkaArgs::aws_iam);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      if (auto options = ctx.get(options_arg); options) {
+        if (not validate_options(*options, ctx)) {
+          return {};
+        }
+      }
+      if (auto iam = ctx.get(aws_iam_arg); iam) {
+        if (auto options = ctx.get(options_arg); options) {
+          if (not check_sasl_mechanism(*options, ctx)) {
+            return {};
+          }
+        }
+        auto aws = aws_iam_options::from_record(*iam, ctx);
+        if (not aws) {
+          return {};
+        }
+        if (not ctx.get(aws_region_arg) and not aws->region) {
+          diagnostic::error(
+            "`aws_region` is required for Kafka MSK authentication")
+            .primary(iam->source)
+            .emit(ctx);
+          return {};
+        }
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
 };
 
 } // namespace
+
 } // namespace tenzir::plugins::kafka
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::kafka::to_kafka)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kafka::ToKafkaPlugin)

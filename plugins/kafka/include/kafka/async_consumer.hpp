@@ -8,13 +8,14 @@
 
 #pragma once
 
-#include <tenzir/error.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/box.hpp>
+#include <tenzir/logger.hpp>
 
-#include <caf/expected.hpp>
 #include <fmt/format.h>
 #include <folly/Unit.h>
-#include <folly/experimental/coro/SemiFutureAwaitable.h>
-#include <folly/experimental/coro/Task.h>
+#include <folly/coro/Task.h>
+#include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
@@ -31,41 +32,92 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 
 #if defined(__linux__)
 #  include <sys/eventfd.h>
 #endif
 
-#if FOLLY_HAS_COROUTINES
-
 namespace tenzir::plugins::kafka {
 
 namespace detail {
 
-struct wakeup_fd {
+struct WakeupFd {
   int read = -1;
   int write = -1;
 };
 
-inline caf::error posix_error(std::string_view operation, int err) {
-  const auto code = std::error_code(err, std::generic_category());
-  return caf::make_error(ec::unspecified,
-                         fmt::format("{}: {}", operation, code.message()));
+class QueueHandle {
+public:
+  static auto from_consumer(rd_kafka_t* client) -> QueueHandle {
+    return QueueHandle{rd_kafka_queue_get_consumer(client)};
+  }
+
+  QueueHandle() = default;
+  explicit QueueHandle(rd_kafka_queue_t* queue) : queue_{queue} {
+  }
+
+  ~QueueHandle() {
+    reset();
+  }
+
+  QueueHandle(QueueHandle const&) = delete;
+  auto operator=(QueueHandle const&) -> QueueHandle& = delete;
+
+  QueueHandle(QueueHandle&& other) noexcept
+    : queue_{std::exchange(other.queue_, nullptr)} {
+  }
+
+  auto operator=(QueueHandle&& other) noexcept -> QueueHandle& {
+    if (this == &other) {
+      return *this;
+    }
+    reset();
+    queue_ = std::exchange(other.queue_, nullptr);
+    return *this;
+  }
+
+  explicit operator bool() const {
+    return queue_ != nullptr;
+  }
+
+  [[nodiscard]] auto get() const -> rd_kafka_queue_t* {
+    return queue_;
+  }
+
+  [[nodiscard]] auto release() -> rd_kafka_queue_t* {
+    return std::exchange(queue_, nullptr);
+  }
+
+private:
+  auto reset() -> void {
+    if (queue_ != nullptr) {
+      rd_kafka_queue_destroy(queue_);
+      queue_ = nullptr;
+    }
+  }
+
+  rd_kafka_queue_t* queue_ = nullptr;
+};
+
+inline auto posix_error(std::string_view operation, int err) -> std::string {
+  auto const code = std::error_code(err, std::generic_category());
+  return fmt::format("{}: {}", operation, code.message());
 }
 
-inline caf::expected<wakeup_fd> make_wakeup_fd() {
-#  if defined(__linux__)
-  const auto fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+inline auto make_wakeup_fd() -> Result<WakeupFd, std::string> {
+#if defined(__linux__)
+  auto const fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
   if (fd == -1) {
-    return posix_error("eventfd", errno);
+    return Err{posix_error("eventfd", errno)};
   }
-  return wakeup_fd{fd, -1};
-#  else
+  return WakeupFd{fd, fd};
+#else
   int fds[2] = {-1, -1};
   if (::pipe(fds) == -1) {
-    return posix_error("pipe", errno);
+    return Err{posix_error("pipe", errno)};
   }
-  auto set_non_blocking = [](int fd) -> caf::error {
+  auto set_non_blocking = [](int fd) -> std::string {
     auto flags = ::fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
       return posix_error("fcntl(F_GETFL)", errno);
@@ -76,23 +128,23 @@ inline caf::expected<wakeup_fd> make_wakeup_fd() {
     if (::fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) {
       return posix_error("fcntl(F_SETFD)", errno);
     }
-    return caf::error{};
+    return std::string{};
   };
-  if (auto err = set_non_blocking(fds[0])) {
+  if (auto err = set_non_blocking(fds[0]); not err.empty()) {
     ::close(fds[0]);
     ::close(fds[1]);
-    return err;
+    return Err{std::move(err)};
   }
-  if (auto err = set_non_blocking(fds[1])) {
+  if (auto err = set_non_blocking(fds[1]); not err.empty()) {
     ::close(fds[0]);
     ::close(fds[1]);
-    return err;
+    return Err{std::move(err)};
   }
-  return wakeup_fd{fds[0], fds[1]};
-#  endif
+  return WakeupFd{fds[0], fds[1]};
+#endif
 }
 
-inline void close_wakeup_fd(const wakeup_fd& fd) {
+inline auto close_wakeup_fd(WakeupFd const& fd) -> void {
   if (fd.read != -1) {
     ::close(fd.read);
   }
@@ -101,20 +153,20 @@ inline void close_wakeup_fd(const wakeup_fd& fd) {
   }
 }
 
-inline void drain_fd(int fd) noexcept {
+inline auto drain_fd(int fd) noexcept -> void {
   if (fd == -1) {
     return;
   }
   std::uint8_t buffer[64];
   for (;;) {
-    const auto n = ::read(fd, buffer, sizeof(buffer));
+    auto const n = ::read(fd, buffer, sizeof(buffer));
     if (n > 0) {
       continue;
     }
     if (n == 0) {
       break;
     }
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN or errno == EWOULDBLOCK) {
       break;
     }
     break;
@@ -123,39 +175,36 @@ inline void drain_fd(int fd) noexcept {
 
 } // namespace detail
 
-/// Integrates librdkafka's I/O events with folly coroutines.
-///
-/// The class forwards wakeups from the consumer queue to a folly::EventBase
-/// and exposes a coroutine interface that returns the next message without
-/// blocking the event loop.
-class async_consumer_queue final : private folly::EventHandler {
+/// Integrates librdkafka queue wakeups with folly coroutines.
+class AsyncConsumerQueue final : private folly::EventHandler {
 public:
-  /// Creates an asynchronous queue helper for the given consumer.
-  ///
-  /// The caller must invoke this on the same thread that owns `event_base`.
-  static caf::expected<std::unique_ptr<async_consumer_queue>>
-  make(folly::EventBase& event_base, RdKafka::KafkaConsumer& consumer) {
-    const auto client = consumer.c_ptr();
+  // Construction stays funneled through this factory: it performs fallible
+  // setup (consumer handle lookup, queue acquisition, and wakeup-fd creation)
+  // before constructing the object. Keeping the constructor non-public avoids
+  // bypassing these checks and creating a partially initialized queue wrapper.
+  static auto
+  make(folly::EventBase& event_base, RdKafka::KafkaConsumer& consumer)
+    -> Result<Box<AsyncConsumerQueue>, std::string> {
+    auto const client = consumer.c_ptr();
     if (client == nullptr) {
-      return caf::make_error(ec::unspecified,
-                             "kafka consumer is missing underlying handle");
+      return Err{std::string{"kafka consumer is missing underlying handle"}};
     }
-    auto* queue = rd_kafka_queue_get_consumer(client);
-    if (queue == nullptr) {
-      return caf::make_error(ec::unspecified,
-                             "failed to acquire consumer queue");
+    auto queue = detail::QueueHandle::from_consumer(client);
+    if (not queue) {
+      return Err{std::string{"failed to acquire consumer queue"}};
     }
     auto fds = detail::make_wakeup_fd();
-    if (! fds) {
-      rd_kafka_queue_destroy(queue);
-      return std::move(fds.error());
+    if (fds.is_err()) {
+      return Err{std::move(fds).unwrap_err()};
     }
-    auto result = std::unique_ptr<async_consumer_queue>{
-      new async_consumer_queue(event_base, consumer, client, queue, *fds)};
+    auto wakeup_fd = std::move(fds).unwrap();
+    auto result = Box<AsyncConsumerQueue>::from_unique_ptr(
+      std::unique_ptr<AsyncConsumerQueue>{new AsyncConsumerQueue(
+        event_base, consumer, queue.release(), wakeup_fd)});
     return result;
   }
 
-  ~async_consumer_queue() override {
+  ~AsyncConsumerQueue() override {
     request_stop();
     unregisterHandler();
     disable_events();
@@ -165,16 +214,20 @@ public:
     }
   }
 
-  async_consumer_queue(const async_consumer_queue&) = delete;
-  async_consumer_queue& operator=(const async_consumer_queue&) = delete;
-  async_consumer_queue(async_consumer_queue&&) = delete;
-  async_consumer_queue& operator=(async_consumer_queue&&) = delete;
+  AsyncConsumerQueue(AsyncConsumerQueue const&) = delete;
+  auto operator=(AsyncConsumerQueue const&) -> AsyncConsumerQueue& = delete;
+  AsyncConsumerQueue(AsyncConsumerQueue&&) = delete;
+  auto operator=(AsyncConsumerQueue&&) -> AsyncConsumerQueue& = delete;
 
-  /// Retrieves the next message without blocking the calling thread.
-  ///
-  /// When the queue is stopped or shut down this returns nullptr.
-  [[nodiscard]] folly::coro::Task<std::unique_ptr<RdKafka::Message>> next() {
-    while (! stopped_) {
+  /// Retrieves the next message without blocking the caller thread.
+  [[nodiscard]] auto next()
+    -> folly::coro::Task<std::shared_ptr<RdKafka::Message>> {
+    while (not stopped_) {
+      auto token = co_await folly::coro::co_current_cancellation_token;
+      if (token.isCancellationRequested()) {
+        request_stop();
+        break;
+      }
       if (auto message = try_consume()) {
         co_return message;
       }
@@ -186,8 +239,7 @@ public:
     co_return nullptr;
   }
 
-  /// Requests shutdown and releases outstanding waiters.
-  void request_stop() {
+  auto request_stop() -> void {
     if (stopped_) {
       return;
     }
@@ -201,26 +253,27 @@ public:
   }
 
 private:
-  async_consumer_queue(folly::EventBase& event_base,
-                       RdKafka::KafkaConsumer& consumer, rd_kafka_t* client,
-                       rd_kafka_queue_t* queue, detail::wakeup_fd wakeup_fd)
+  AsyncConsumerQueue(folly::EventBase& event_base,
+                     RdKafka::KafkaConsumer& consumer, rd_kafka_queue_t* queue,
+                     detail::WakeupFd wakeup_fd)
     : folly::EventHandler(&event_base),
       consumer_{&consumer},
-      client_{client},
       queue_{queue},
       wakeup_fd_{wakeup_fd} {
-    static constexpr std::uint64_t token = 1;
-    rd_kafka_queue_io_event_enable(queue_, wakeup_fd_.read, &token,
+    static constexpr auto token = std::uint64_t{1};
+    rd_kafka_queue_io_event_enable(queue_, wakeup_fd_.write, &token,
                                    sizeof(token));
+    initHandler(&event_base, folly::NetworkSocket::fromFd(wakeup_fd_.read));
     registerHandler(EventHandler::READ | EventHandler::PERSIST);
   }
 
-  void handlerReady(uint16_t events) noexcept override {
+  auto handlerReady(uint16_t events) noexcept -> void override {
     if ((events & EventHandler::READ) == 0) {
       return;
     }
     detail::drain_fd(wakeup_fd_.read);
-    rd_kafka_poll(client_, 0);
+    // NOTE: Do not call rd_kafka_poll() here. With the high-level consumer,
+    // recursive queue serving can assert in librdkafka.
     if (stopped_) {
       return;
     }
@@ -233,8 +286,8 @@ private:
     }
   }
 
-  folly::coro::Task<void> wait_for_notification() {
-    while (! stopped_) {
+  auto wait_for_notification() -> folly::coro::Task<void> {
+    while (not stopped_) {
       if (pending_notifications_ > 0) {
         --pending_notifications_;
         co_return;
@@ -242,8 +295,7 @@ private:
       waiter_.emplace();
       auto future = waiter_->getSemiFuture();
       co_await std::move(future);
-      // The waiter may have been satisfied by a stop request.
-      if (! waiter_) {
+      if (not waiter_) {
         co_return;
       }
       waiter_.reset();
@@ -252,12 +304,12 @@ private:
     co_return;
   }
 
-  [[nodiscard]] std::unique_ptr<RdKafka::Message> try_consume() {
+  [[nodiscard]] auto try_consume() -> std::shared_ptr<RdKafka::Message> {
     auto* message = consumer_->consume(0);
-    if (! message) {
+    if (not message) {
       return nullptr;
     }
-    std::unique_ptr<RdKafka::Message> guard{message};
+    auto guard = std::shared_ptr<RdKafka::Message>{message};
     if (message->err() == RdKafka::ERR__TIMED_OUT) {
       guard.reset();
       return nullptr;
@@ -265,21 +317,18 @@ private:
     return guard;
   }
 
-  void disable_events() noexcept {
+  auto disable_events() noexcept -> void {
     if (queue_ != nullptr) {
       rd_kafka_queue_io_event_enable(queue_, -1, nullptr, 0);
     }
   }
 
   RdKafka::KafkaConsumer* consumer_ = nullptr;
-  rd_kafka_t* client_ = nullptr;
   rd_kafka_queue_t* queue_ = nullptr;
-  detail::wakeup_fd wakeup_fd_{};
+  detail::WakeupFd wakeup_fd_{};
   bool stopped_ = false;
   std::size_t pending_notifications_ = 0;
   std::optional<folly::Promise<folly::Unit>> waiter_;
 };
 
 } // namespace tenzir::plugins::kafka
-
-#endif // FOLLY_HAS_COROUTINES

@@ -24,6 +24,9 @@ namespace tenzir::plugins::kafka {
 
 class message;
 
+// NOTE: Legacy executor abstraction.
+// Scheduled for removal once the new executor is the default and the old
+// executor path has been removed.
 /// Wraps a producer in a friendly interface.
 class producer {
 public:

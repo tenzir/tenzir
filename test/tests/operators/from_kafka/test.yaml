@@ -1,0 +1,9 @@
+suite: from-kafka
+fixtures:
+  - kafka:
+      topic: from_kafka_test
+      partitions: 1
+      seed_messages: 3
+timeout: 180
+skip:
+  on: fixture-unavailable

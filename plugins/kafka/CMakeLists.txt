@@ -38,6 +38,24 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE)
 endif ()
 
 dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
+# TODO: After the new executor is the default and the old executor is removed,
+# drop the C++ librdkafka dependency and keep only the C API linkage.
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)
+
+if (TARGET RdKafka::rdkafka)
+  target_link_libraries(kafka PUBLIC RdKafka::rdkafka)
+else ()
+  get_target_property(_rdkafka_pp_location RdKafka::rdkafka++ IMPORTED_LOCATION)
+  get_filename_component(_rdkafka_pp_dir "${_rdkafka_pp_location}" DIRECTORY)
+  find_library(
+    RDKAFKA_C_LIBRARY
+    NAMES rdkafka
+    HINTS "${_rdkafka_pp_dir}")
+  if (NOT RDKAFKA_C_LIBRARY)
+    message(
+      FATAL_ERROR "Unable to locate librdkafka C library for kafka plugin")
+  endif ()
+  target_link_libraries(kafka PUBLIC "${RDKAFKA_C_LIBRARY}")
+endif ()
 
 target_link_libraries(kafka PUBLIC ${AWSSDK_LINK_LIBRARIES})
