@@ -206,7 +206,7 @@ auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
 /// Represents one fetched Kafka batch plus control metadata.
 struct FetchedBatch {
   uint64_t seq = 0;
-  std::vector<AsyncConsumerQueue::Message> payloads;
+  std::vector<AsyncConsumerQueue::Message> messages;
   std::vector<int32_t> eof_partitions;
   std::optional<std::string> fatal_error;
   bool reached_count = false;
@@ -761,16 +761,17 @@ private:
   }
 
   /// Converts consumed Kafka messages into one fetch-stage payload batch.
-  auto to_fetched_batch(std::vector<AsyncConsumerQueue::Message> messages) const
+  auto to_fetched_batch(
+    std::vector<AsyncConsumerQueue::Message> fetched_messages) const
     -> std::optional<FetchedBatch> {
     auto batch = FetchedBatch{};
-    batch.payloads.reserve(messages.size());
+    batch.messages.reserve(fetched_messages.size());
     auto reached_count = false;
-    for (auto& message : messages) {
+    for (auto& message : fetched_messages) {
       switch (message.err()) {
         case RD_KAFKA_RESP_ERR_NO_ERROR: {
           batch.payload_bytes += message.len();
-          batch.payloads.push_back(std::move(message));
+          batch.messages.push_back(std::move(message));
           ++scheduled_messages_;
           if (args_.count and scheduled_messages_ >= args_.count->inner) {
             reached_count = true;
@@ -798,7 +799,7 @@ private:
       }
     }
     batch.reached_count = reached_count;
-    if (batch.payloads.empty() and batch.eof_partitions.empty()
+    if (batch.messages.empty() and batch.eof_partitions.empty()
         and not batch.fatal_error) {
       return std::nullopt;
     }
@@ -897,7 +898,7 @@ private:
         if (perf_enabled_) {
           add_perf_counter(perf_.fetched_batches);
           add_perf_counter(perf_.fetched_messages,
-                           static_cast<uint64_t>(fetched->payloads.size()));
+                           static_cast<uint64_t>(fetched->messages.size()));
           add_perf_counter(perf_.fetched_payload_bytes, fetched->payload_bytes);
         }
         auto reserved_bytes = fetched->payload_bytes;
@@ -959,11 +960,11 @@ private:
     built.seq = fetched.seq;
     built.eof_partitions = std::move(fetched.eof_partitions);
     built.fatal_error = std::move(fetched.fatal_error);
-    if (fetched.payloads.empty()) {
+    if (fetched.messages.empty()) {
       return built;
     }
     auto builder = KafkaMessageBuilder{};
-    for (auto& message : fetched.payloads) {
+    for (auto& message : fetched.messages) {
       auto payload_bytes = message.payload();
       if (payload_bytes.is_err()) {
         built.fatal_error = fmt::format("invalid kafka payload in partition {} "
