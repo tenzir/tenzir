@@ -764,7 +764,6 @@ private:
   auto to_fetched_batch(std::vector<AsyncConsumerQueue::Message> messages) const
     -> std::optional<FetchedBatch> {
     auto batch = FetchedBatch{};
-    batch.seq = next_fetch_seq_++;
     batch.payloads.reserve(messages.size());
     auto reached_count = false;
     for (auto& message : messages) {
@@ -803,6 +802,7 @@ private:
         and not batch.fatal_error) {
       return std::nullopt;
     }
+    batch.seq = next_fetch_seq_++;
     return batch;
   }
 
