@@ -24,6 +24,7 @@
 #include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -193,9 +194,103 @@ inline auto drain_fd(int fd) noexcept -> void {
 /// Integrates librdkafka queue wakeups with folly coroutines.
 class AsyncConsumerQueue final : private folly::EventHandler {
 public:
+  /// Move-only ownership wrapper for one `rd_kafka_message_t*`.
+  class Message {
+  public:
+    Message() = default;
+
+    explicit Message(rd_kafka_message_t* message) : message_{message} {
+    }
+
+    ~Message() {
+      reset();
+    }
+
+    Message(Message const&) = delete;
+    auto operator=(Message const&) -> Message& = delete;
+
+    Message(Message&& other) noexcept
+      : message_{std::exchange(other.message_, nullptr)} {
+    }
+
+    auto operator=(Message&& other) noexcept -> Message& {
+      if (this == &other) {
+        return *this;
+      }
+      reset();
+      message_ = std::exchange(other.message_, nullptr);
+      return *this;
+    }
+
+    /// Returns true when a message handle is present.
+    explicit operator bool() const {
+      return message_ != nullptr;
+    }
+
+    /// Returns the librdkafka message error code.
+    [[nodiscard]] auto err() const -> rd_kafka_resp_err_t {
+      if (not message_) {
+        return RD_KAFKA_RESP_ERR__BAD_MSG;
+      }
+      return message_->err;
+    }
+
+    /// Returns a readable error string for the current message state.
+    [[nodiscard]] auto errstr() const -> std::string {
+      if (not message_) {
+        return "invalid kafka message handle";
+      }
+      return std::string{rd_kafka_message_errstr(message_)};
+    }
+
+    /// Returns payload bytes, or an error when the message is malformed.
+    [[nodiscard]] auto payload() const
+      -> Result<std::span<const std::byte>, std::string> {
+      if (not message_) {
+        return Err{std::string{"missing kafka message handle"}};
+      }
+      if (message_->len == 0) {
+        return std::span<const std::byte>{};
+      }
+      if (message_->payload == nullptr) {
+        return Err{
+          std::string{"kafka message payload is null with non-zero length"},
+        };
+      }
+      auto* data = static_cast<const std::byte*>(message_->payload);
+      return std::span<const std::byte>{data, message_->len};
+    }
+
+    /// Returns the message payload length in bytes.
+    [[nodiscard]] auto len() const -> size_t {
+      return message_ ? message_->len : 0;
+    }
+
+    /// Returns the source partition id.
+    [[nodiscard]] auto partition() const -> int32_t {
+      return message_ ? message_->partition : -1;
+    }
+
+    /// Returns the source offset for this message.
+    [[nodiscard]] auto offset() const -> int64_t {
+      return message_ ? message_->offset : 0;
+    }
+
+  private:
+    /// Destroys the wrapped librdkafka message handle if present.
+    auto reset() noexcept -> void {
+      if (message_ != nullptr) {
+        rd_kafka_message_destroy(message_);
+        message_ = nullptr;
+      }
+    }
+
+    rd_kafka_message_t* message_ = nullptr;
+  };
+
   /// Result of waiting for and draining a message batch.
   struct BatchResult {
-    std::vector<std::shared_ptr<RdKafka::Message>> messages;
+    std::vector<Message> messages;
     bool timed_out = false;
   };
 
@@ -223,8 +318,8 @@ public:
     }
     auto wakeup_fd = std::move(fds).unwrap();
     auto result = Box<AsyncConsumerQueue>::from_unique_ptr(
-      std::unique_ptr<AsyncConsumerQueue>{new AsyncConsumerQueue(
-        event_base, consumer, queue.release(), wakeup_fd)});
+      std::unique_ptr<AsyncConsumerQueue>{
+        new AsyncConsumerQueue(event_base, queue.release(), wakeup_fd)});
     return result;
   }
 
@@ -263,18 +358,18 @@ public:
         };
       }
       if (timeout) {
-        auto first = try_consume_blocking(*timeout);
-        if (first.timed_out) {
+        auto blocking = consume_batch(max_messages, *timeout);
+        if (blocking.timed_out) {
           co_return BatchResult{
             .messages = {},
             .timed_out = true,
           };
         }
-        if (first.message) {
-          messages.push_back(std::move(first.message));
+        if (not blocking.messages.empty()) {
+          messages = std::move(blocking.messages);
           if (messages.size() < max_messages) {
             auto tail = consume_available(max_messages - messages.size());
-            std::move(tail.begin(), tail.end(), std::back_inserter(messages));
+            std::ranges::move(tail, std::back_inserter(messages));
           }
           co_return BatchResult{
             .messages = std::move(messages),
@@ -320,13 +415,9 @@ public:
   }
 
 private:
-  AsyncConsumerQueue(folly::EventBase& event_base,
-                     RdKafka::KafkaConsumer& consumer, rd_kafka_queue_t* queue,
+  AsyncConsumerQueue(folly::EventBase& event_base, rd_kafka_queue_t* queue,
                      detail::WakeupFd wakeup_fd)
-    : folly::EventHandler(&event_base),
-      consumer_{&consumer},
-      queue_{queue},
-      wakeup_fd_{wakeup_fd} {
+    : folly::EventHandler(&event_base), queue_{queue}, wakeup_fd_{wakeup_fd} {
     static constexpr auto token = std::uint64_t{1};
     rd_kafka_queue_io_event_enable(queue_, wakeup_fd_.write, &token,
                                    sizeof(token));
@@ -408,54 +499,81 @@ private:
     return stopped_;
   }
 
-  /// Polls librdkafka without blocking and wraps a returned message.
-  [[nodiscard]] auto try_consume() -> std::shared_ptr<RdKafka::Message> {
-    return try_consume_blocking(std::chrono::milliseconds{0}).message;
-  }
-
-  /// Result of a single `consume(timeout)` attempt.
-  struct ConsumeAttempt {
-    std::shared_ptr<RdKafka::Message> message;
+  /// Result of one `rd_kafka_consume_batch_queue` attempt.
+  struct ConsumeBatchAttempt {
+    std::vector<Message> messages;
     bool timed_out = false;
   };
 
-  /// Polls librdkafka for one message with a bounded timeout.
-  [[nodiscard]] auto try_consume_blocking(std::chrono::milliseconds timeout)
-    -> ConsumeAttempt {
+  /// Consumes up to `max_messages` in one librdkafka batch call.
+  [[nodiscard]] auto
+  consume_batch(size_t max_messages, std::chrono::milliseconds timeout)
+    -> ConsumeBatchAttempt {
+    TENZIR_ASSERT(max_messages > 0);
+    if (queue_ == nullptr) {
+      return {};
+    }
+    if (batch_consume_buffer_.size() < max_messages) {
+      batch_consume_buffer_.resize(max_messages, nullptr);
+    }
     auto timeout_ms = timeout.count();
     if (timeout_ms < 0) {
       timeout_ms = 0;
     }
     auto timeout_i = static_cast<int>(
       std::min<int64_t>(timeout_ms, std::numeric_limits<int>::max()));
-    auto* raw = consumer_->consume(timeout_i);
-    if (not raw) {
-      return {};
-    }
-    auto guard = std::shared_ptr<RdKafka::Message>{raw};
-    if (raw->err() == RdKafka::ERR__TIMED_OUT) {
-      return ConsumeAttempt{
-        .message = nullptr,
+    auto consumed = rd_kafka_consume_batch_queue(
+      queue_, timeout_i, batch_consume_buffer_.data(), max_messages);
+    if (consumed == 0) {
+      return ConsumeBatchAttempt{
+        .messages = {},
         .timed_out = true,
       };
     }
-    return ConsumeAttempt{
-      .message = std::move(guard),
+    if (consumed < 0) {
+      auto* fallback = rd_kafka_consume_queue(queue_, 0);
+      if (fallback == nullptr) {
+        return {};
+      }
+      auto messages = std::vector<Message>{};
+      messages.emplace_back(fallback);
+      return ConsumeBatchAttempt{
+        .messages = std::move(messages),
+        .timed_out = false,
+      };
+    }
+    auto count = static_cast<size_t>(consumed);
+    auto messages = std::vector<Message>{};
+    messages.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      auto* raw = batch_consume_buffer_[i];
+      if (raw == nullptr) {
+        continue;
+      }
+      messages.emplace_back(raw);
+      batch_consume_buffer_[i] = nullptr;
+    }
+    return ConsumeBatchAttempt{
+      .messages = std::move(messages),
       .timed_out = false,
     };
   }
 
   /// Drains all immediately available messages up to `max_messages`.
   [[nodiscard]] auto consume_available(size_t max_messages)
-    -> std::vector<std::shared_ptr<RdKafka::Message>> {
-    auto messages = std::vector<std::shared_ptr<RdKafka::Message>>{};
+    -> std::vector<Message> {
+    if (max_messages == 0) {
+      return {};
+    }
+    auto messages = std::vector<Message>{};
     messages.reserve(max_messages);
     while (messages.size() < max_messages) {
-      auto message = try_consume();
-      if (not message) {
+      auto remaining = max_messages - messages.size();
+      auto attempt = consume_batch(remaining, std::chrono::milliseconds{0});
+      if (attempt.messages.empty()) {
         break;
       }
-      messages.push_back(std::move(message));
+      std::ranges::move(attempt.messages, std::back_inserter(messages));
     }
     return messages;
   }
@@ -467,9 +585,11 @@ private:
     }
   }
 
-  RdKafka::KafkaConsumer* consumer_ = nullptr;
   rd_kafka_queue_t* queue_ = nullptr;
   detail::WakeupFd wakeup_fd_{};
+  // Invariant: `next_batch()` is single-consumer in the current operator
+  // pipeline, so this scratch storage is never touched concurrently.
+  mutable std::vector<rd_kafka_message_t*> batch_consume_buffer_;
   // Invariant: `waiter_` and `pending_notifications_` are protected by
   // `state_mutex_`, and at most one waiter exists at a time.
   mutable std::mutex state_mutex_;

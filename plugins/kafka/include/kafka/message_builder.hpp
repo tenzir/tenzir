@@ -18,7 +18,9 @@
 #include <arrow/record_batch.h>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <cstddef>
 #include <memory>
+#include <span>
 
 namespace tenzir::plugins::kafka {
 
@@ -41,14 +43,20 @@ public:
       builder_{string_type::make_arrow_builder(arrow_memory_pool())} {
   }
 
-  /// Appends a Kafka message payload to the builder.
-  auto append(const RdKafka::Message& message) -> void {
-    auto status
-      = builder_->Append(reinterpret_cast<const char*>(message.payload()),
-                         tenzir::detail::narrow<int32_t>(message.len()));
+  /// Appends one payload buffer to the builder.
+  auto append(std::span<const std::byte> payload) -> void {
+    auto* chars = reinterpret_cast<const char*>(payload.data());
+    auto status = builder_->Append(
+      chars, tenzir::detail::narrow<int32_t>(payload.size()));
     if (not status.ok()) {
       panic("failed to append kafka payload: {}", status.ToString());
     }
+  }
+
+  /// Appends a Kafka message payload to the builder.
+  auto append(const RdKafka::Message& message) -> void {
+    auto* payload = static_cast<const std::byte*>(message.payload());
+    append(std::span<const std::byte>{payload, message.len()});
   }
 
   /// Returns the number of messages currently in the builder.

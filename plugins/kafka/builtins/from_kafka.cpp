@@ -171,7 +171,7 @@ auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
 /// Represents one fetched Kafka batch plus control metadata.
 struct FetchedBatch {
   uint64_t seq = 0;
-  std::vector<std::shared_ptr<RdKafka::Message>> payloads;
+  std::vector<AsyncConsumerQueue::Message> payloads;
   std::vector<int32_t> eof_partitions;
   std::optional<std::string> fatal_error;
   bool reached_count = false;
@@ -717,17 +717,16 @@ private:
   }
 
   /// Converts consumed Kafka messages into one fetch-stage payload batch.
-  auto
-  to_fetched_batch(std::vector<std::shared_ptr<RdKafka::Message>> messages) const
+  auto to_fetched_batch(std::vector<AsyncConsumerQueue::Message> messages) const
     -> std::optional<FetchedBatch> {
     auto batch = FetchedBatch{};
     batch.seq = next_fetch_seq_++;
     batch.payloads.reserve(messages.size());
     auto reached_count = false;
     for (auto& message : messages) {
-      switch (message->err()) {
-        case RdKafka::ERR_NO_ERROR: {
-          batch.payload_bytes += message->len();
+      switch (message.err()) {
+        case RD_KAFKA_RESP_ERR_NO_ERROR: {
+          batch.payload_bytes += message.len();
           batch.payloads.push_back(std::move(message));
           ++scheduled_messages_;
           if (args_.count and scheduled_messages_ >= args_.count->inner) {
@@ -735,15 +734,15 @@ private:
           }
           break;
         }
-        case RdKafka::ERR__PARTITION_EOF: {
+        case RD_KAFKA_RESP_ERR__PARTITION_EOF: {
           if (args_.exit) {
-            batch.eof_partitions.push_back(message->partition());
+            batch.eof_partitions.push_back(message.partition());
           }
           break;
         }
         default: {
           batch.fatal_error
-            = fmt::format("unexpected kafka error: `{}`", message->errstr());
+            = fmt::format("unexpected kafka error: `{}`", message.errstr());
           request_pipeline_stop();
           break;
         }
@@ -775,8 +774,7 @@ private:
           request_pipeline_stop();
           break;
         }
-        auto pending_messages
-          = std::vector<std::shared_ptr<RdKafka::Message>>{};
+        auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
         pending_messages.reserve(max_messages);
         auto min_wait = std::chrono::duration_cast<duration>(1ms);
         auto poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
@@ -822,8 +820,8 @@ private:
             }
             break;
           }
-          std::move(result.messages.begin(), result.messages.end(),
-                    std::back_inserter(pending_messages));
+          std::ranges::move(result.messages,
+                            std::back_inserter(pending_messages));
           if (not batch_deadline) {
             batch_deadline = std::chrono::steady_clock::now()
                              + std::max(args_.batch_timeout, min_wait);
@@ -909,8 +907,16 @@ private:
     }
     auto builder = KafkaMessageBuilder{};
     for (auto& message : fetched.payloads) {
-      builder.append(*message);
-      built.max_offsets[message->partition()] = message->offset();
+      auto payload_bytes = message.payload();
+      if (payload_bytes.is_err()) {
+        built.fatal_error = fmt::format("invalid kafka payload in partition {} "
+                                        "at offset {}: {}",
+                                        message.partition(), message.offset(),
+                                        std::move(payload_bytes).unwrap_err());
+        break;
+      }
+      builder.append(std::move(payload_bytes).unwrap());
+      built.max_offsets[message.partition()] = message.offset();
       ++built.message_count;
     }
     if (not builder.empty()) {
