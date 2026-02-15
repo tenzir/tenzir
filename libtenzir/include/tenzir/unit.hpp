@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <utility>
 #include <type_traits>
+#include <variant>
 
 namespace tenzir {
 
