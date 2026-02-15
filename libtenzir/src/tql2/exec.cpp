@@ -680,17 +680,28 @@ auto make_op_channel(ChannelId id, size_t limit) -> PushPull<OperatorMsg<T>> {
 class TestChannelFactory : public ChannelFactory {
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_op_channel<void>(std::move(id), 10);
+    return make_op_channel<void>(std::move(id), void_limit);
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_op_channel<table_slice>(std::move(id), 10);
+    return make_op_channel<table_slice>(std::move(id), events_limit);
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_op_channel<chunk_ptr>(std::move(id), 10);
+    return make_op_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
+
+private:
+#if TENZIR_DEBUG_ASYNC
+  static constexpr auto void_limit = 1;
+  static constexpr auto events_limit = 1;
+  static constexpr auto bytes_limit = 1;
+#else
+  static constexpr auto void_limit = 1'000;
+  static constexpr auto events_limit = 100'000;
+  static constexpr auto bytes_limit = 16 * 1024 * 1024;
+#endif
 };
 
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,

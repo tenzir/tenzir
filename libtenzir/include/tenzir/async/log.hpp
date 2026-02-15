@@ -9,7 +9,8 @@
 #pragma once
 
 // This is just a temporary debugging solution.
-#if 0
+#define TENZIR_DEBUG_ASYNC 0
+#if TENZIR_DEBUG_ASYNC
 #  define LOGV(...) TENZIR_VERBOSE(__VA_ARGS__)
 #  define LOGD(...) TENZIR_DEBUG(__VA_ARGS__)
 #  define LOGI(...) TENZIR_INFO(__VA_ARGS__)
