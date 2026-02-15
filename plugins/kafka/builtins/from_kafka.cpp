@@ -83,7 +83,7 @@ auto from_kafka_throughput_defaults() {
 /// Adds throughput defaults unless explicitly configured via `kafka.yaml`.
 /// User-supplied `from_kafka options={...}` are still applied afterwards.
 auto apply_from_kafka_throughput_defaults(record& config) -> void {
-  for (const auto& [key, value] : from_kafka_throughput_defaults()) {
+  for (auto const& [key, value] : from_kafka_throughput_defaults()) {
     auto key_string = std::string{key};
     if (config.contains(key_string)) {
       continue;
@@ -176,10 +176,10 @@ auto default_worker_concurrency() -> uint64_t {
 }
 
 /// Parses `offset=` values, including symbolic names and tail offsets.
-auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
+auto parse_offset_value(located<data> const& input, int64_t& offset) -> bool {
   return match(
     input.inner,
-    [&](const std::string& value) -> bool {
+    [&](std::string const& value) -> bool {
       return offset_parser()(value, offset);
     },
     [&](int64_t value) -> bool {
@@ -198,7 +198,7 @@ auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
       offset = static_cast<int64_t>(value);
       return true;
     },
-    [&](const auto&) -> bool {
+    [&](auto const&) -> bool {
       return false;
     });
 }
@@ -263,8 +263,8 @@ public:
     pipeline_stop_requested_.store(other.pipeline_stop_requested_.load());
   }
   auto operator=(FromKafkaOperator&&) -> FromKafkaOperator& = delete;
-  FromKafkaOperator(const FromKafkaOperator&) = delete;
-  auto operator=(const FromKafkaOperator&) -> FromKafkaOperator& = delete;
+  FromKafkaOperator(FromKafkaOperator const&) = delete;
+  auto operator=(FromKafkaOperator const&) -> FromKafkaOperator& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
@@ -450,7 +450,7 @@ public:
       co_return FromKafkaTaskResult{
         .batch = std::move(*next),
       };
-    } catch (const folly::OperationCancelled&) {
+    } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
       emit_perf_summary("cancelled");
       co_return FromKafkaTaskResult{.end_of_stream = true};
@@ -518,7 +518,7 @@ public:
     }
     auto offsets = std::vector<RdKafka::TopicPartition*>{};
     offsets.reserve(checkpoint_pending_offsets_.size());
-    for (const auto& [partition, offset] : checkpoint_pending_offsets_) {
+    for (auto const& [partition, offset] : checkpoint_pending_offsets_) {
       offsets.push_back(
         RdKafka::TopicPartition::create(args_.topic, partition, offset));
     }
@@ -605,7 +605,7 @@ private:
   }
 
   /// Emits a one-time, compact stage timing summary for benchmarking runs.
-  auto emit_perf_summary(const char* reason) const -> void {
+  auto emit_perf_summary(char const* reason) const -> void {
     if (not perf_enabled_ or not perf_started_) {
       return;
     }
@@ -614,7 +614,7 @@ private:
                                                    std::memory_order_relaxed)) {
       return;
     }
-    auto load = [](const std::atomic<uint64_t>& counter) {
+    auto load = [](std::atomic<uint64_t> const& counter) {
       return counter.load(std::memory_order_relaxed);
     };
     auto elapsed_ns = std::max<uint64_t>(
@@ -948,7 +948,7 @@ private:
           break;
         }
       }
-    } catch (const folly::OperationCancelled&) {
+    } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
     co_await close_fetched_queue();
@@ -1036,7 +1036,7 @@ private:
             as_ns(std::chrono::steady_clock::now() - enqueue_started));
         }
       }
-    } catch (const folly::OperationCancelled&) {
+    } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
     if (live_builders_.fetch_sub(1) == 1 and built_queue_) {
@@ -1090,7 +1090,7 @@ private:
   /// Moves per-partition offsets from one emitted batch into checkpoint state.
   auto advance_checkpoint(std::unordered_map<int32_t, int64_t> const& offsets)
     -> void {
-    for (const auto& [partition, offset] : offsets) {
+    for (auto const& [partition, offset] : offsets) {
       checkpoint_pending_offsets_[partition] = offset + 1;
     }
   }
@@ -1170,8 +1170,8 @@ private:
 /// Plugin entrypoint that parses `from_kafka` arguments and builds operators.
 class FromKafkaPlugin final : public virtual OperatorPlugin {
 public:
-  auto initialize(const record& unused_plugin_config,
-                  const record& global_config) -> caf::error override {
+  auto initialize(record const& unused_plugin_config,
+                  record const& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
       return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
                                this->name())
@@ -1183,7 +1183,7 @@ public:
       if (ptr == global_config.end()) {
         return;
       }
-      const auto* plugin_config = try_as<record>(&ptr->second);
+      auto const* plugin_config = try_as<record>(&ptr->second);
       if (not plugin_config) {
         return;
       }
@@ -1191,7 +1191,7 @@ public:
       if (kafka_config_ptr == plugin_config->end()) {
         return;
       }
-      const auto* kafka_config = try_as<record>(&kafka_config_ptr->second);
+      auto const* kafka_config = try_as<record>(&kafka_config_ptr->second);
       if (not kafka_config or kafka_config->empty()) {
         return;
       }
