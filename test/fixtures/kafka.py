@@ -14,16 +14,23 @@ Environment variables yielded:
 from __future__ import annotations
 
 import logging
-import subprocess
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Iterator
 
 from tenzir_test import fixture
 from tenzir_test.fixtures import FixtureUnavailable, current_options
+from tenzir_test.fixtures.container_runtime import (
+    ContainerCommandError,
+    ContainerReadinessTimeout,
+    ManagedContainer,
+    RuntimeSpec,
+    detect_runtime,
+    start_detached,
+    wait_until_ready,
+)
 
-from ._utils import find_container_runtime, find_free_port
+from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +47,10 @@ class KafkaOptions:
     image: str = KAFKA_IMAGE
 
 
-def _start_kafka(runtime: str, port: int, image: str) -> str:
-    """Start Kafka container and return container ID."""
+def _start_kafka(runtime: RuntimeSpec, port: int, image: str) -> ManagedContainer:
+    """Start Kafka container and return a managed container."""
     container_name = f"tenzir-test-kafka-{uuid.uuid4().hex[:8]}"
-    cmd = [
-        runtime,
-        "run",
-        "-d",
+    run_args = [
         "--rm",
         "--name",
         container_name,
@@ -74,71 +78,68 @@ def _start_kafka(runtime: str, port: int, image: str) -> str:
         "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1",
         image,
     ]
-    logger.info("Starting Kafka container with %s: %s", runtime, " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    container_id = result.stdout.strip()
-    logger.info("Kafka container started: %s", container_id[:12])
-    return container_id
+    logger.info("Starting Kafka container with %s", runtime.binary)
+    container = start_detached(runtime, run_args)
+    logger.info("Kafka container started: %s", container.container_id[:12])
+    return container
 
 
-def _stop_kafka(runtime: str, container_id: str) -> None:
+def _stop_kafka(container: ManagedContainer) -> None:
     """Stop and remove Kafka container."""
-    logger.info("Stopping Kafka container: %s", container_id[:12])
-    subprocess.run(
-        [runtime, "stop", container_id],
-        capture_output=True,
-        check=False,
-    )
+    logger.info("Stopping Kafka container: %s", container.container_id[:12])
+    result = container.stop()
+    if result.returncode != 0:
+        logger.warning(
+            "Failed to stop Kafka container %s: %s",
+            container.container_id[:12],
+            (result.stderr or result.stdout or "").strip() or "no output",
+        )
 
 
-def _wait_for_kafka(runtime: str, container_id: str, timeout: float) -> bool:
+def _wait_for_kafka(container: ManagedContainer, timeout: float) -> None:
     """Wait for Kafka to become ready."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        running = subprocess.run(
-            [runtime, "inspect", "-f", "{{.State.Running}}", container_id],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if running.returncode != 0 or running.stdout.strip() != "true":
+    def _probe() -> tuple[bool, dict[str, str]]:
+        if not container.is_running():
             logger.debug("Kafka container not running yet")
-            time.sleep(HEALTH_CHECK_INTERVAL)
-            continue
-        ready = subprocess.run(
-            [
-                runtime,
-                "exec",
-                container_id,
-                "/opt/kafka/bin/kafka-topics.sh",
-                "--bootstrap-server",
-                "localhost:9092",
-                "--list",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
+            return False, {"running": "false"}
+        try:
+            result = container.exec(
+                [
+                    "/opt/kafka/bin/kafka-topics.sh",
+                    "--bootstrap-server",
+                    "localhost:9092",
+                    "--list",
+                ]
+            )
+        except ContainerCommandError as exc:
+            logger.debug("Kafka readiness probe command failed: %s", exc)
+            return False, {"running": "true", "probe_error": str(exc)}
+        if result.returncode == 0:
+            return True, {"running": "true", "probe_returncode": "0"}
+        stderr = result.stderr.strip()
+        logger.debug("Kafka not ready yet: %s", stderr)
+        return False, {
+            "running": "true",
+            "probe_returncode": str(result.returncode),
+            "probe_stderr": stderr,
+        }
+
+    try:
+        wait_until_ready(
+            _probe,
+            timeout_seconds=timeout,
+            poll_interval_seconds=HEALTH_CHECK_INTERVAL,
+            timeout_context="Kafka startup",
         )
-        if ready.returncode == 0:
-            logger.info("Kafka is ready")
-            return True
-        logger.debug("Kafka not ready yet: %s", ready.stderr.strip())
-        time.sleep(HEALTH_CHECK_INTERVAL)
-    return False
+    except ContainerReadinessTimeout as exc:
+        raise RuntimeError(str(exc)) from exc
+    logger.info("Kafka is ready")
 
 
-def _create_topic(
-    runtime: str,
-    container_id: str,
-    topic: str,
-    partitions: int,
-) -> None:
+def _create_topic(container: ManagedContainer, topic: str, partitions: int) -> None:
     """Create topic for tests."""
-    result = subprocess.run(
+    result = container.exec(
         [
-            runtime,
-            "exec",
-            container_id,
             "/opt/kafka/bin/kafka-topics.sh",
             "--bootstrap-server",
             "localhost:9092",
@@ -151,25 +152,18 @@ def _create_topic(
             "--replication-factor",
             "1",
         ],
-        capture_output=True,
-        text=True,
-        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to create topic: {result.stderr}")
 
 
-def _seed_topic(runtime: str, container_id: str, topic: str, count: int) -> None:
+def _seed_topic(container: ManagedContainer, topic: str, count: int) -> None:
     """Seed a topic with deterministic messages."""
     if count <= 0:
         return
     payload = "".join(f"message-{index:04d}\n" for index in range(1, count + 1))
-    result = subprocess.run(
+    result = container.exec(
         [
-            runtime,
-            "exec",
-            "-i",
-            container_id,
             "/opt/kafka/bin/kafka-console-producer.sh",
             "--bootstrap-server",
             "localhost:9092",
@@ -177,9 +171,6 @@ def _seed_topic(runtime: str, container_id: str, topic: str, count: int) -> None
             topic,
         ],
         input=payload,
-        capture_output=True,
-        text=True,
-        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to seed topic: {result.stderr}")
@@ -189,7 +180,7 @@ def _seed_topic(runtime: str, container_id: str, topic: str, count: int) -> None
 def kafka() -> Iterator[dict[str, str]]:
     """Start Kafka and yield environment variables for broker access."""
     opts = current_options("kafka")
-    runtime = find_container_runtime()
+    runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
             "container runtime (docker/podman) required but not found"
@@ -199,25 +190,22 @@ def kafka() -> Iterator[dict[str, str]]:
     if opts.seed_messages < 0:
         raise RuntimeError("kafka fixture option `seed_messages` must be >= 0")
     port = find_free_port()
-    container_id = None
+    container: ManagedContainer | None = None
     try:
-        container_id = _start_kafka(runtime, port, opts.image)
-        if not _wait_for_kafka(runtime, container_id, STARTUP_TIMEOUT):
-            raise RuntimeError(
-                f"Kafka failed to start within {STARTUP_TIMEOUT} seconds"
-            )
-        _create_topic(runtime, container_id, opts.topic, opts.partitions)
-        _seed_topic(runtime, container_id, opts.topic, opts.seed_messages)
+        container = _start_kafka(runtime, port, opts.image)
+        _wait_for_kafka(container, STARTUP_TIMEOUT)
+        _create_topic(container, opts.topic, opts.partitions)
+        _seed_topic(container, opts.topic, opts.seed_messages)
         bootstrap = f"127.0.0.1:{port}"
         env: dict[str, str] = {
             "KAFKA_HOST": "127.0.0.1",
             "KAFKA_PORT": str(port),
             "KAFKA_BOOTSTRAP_SERVERS": bootstrap,
             "KAFKA_TOPIC": opts.topic,
-            "KAFKA_CONTAINER_ID": container_id,
-            "KAFKA_CONTAINER_RUNTIME": runtime,
+            "KAFKA_CONTAINER_ID": container.container_id,
+            "KAFKA_CONTAINER_RUNTIME": runtime.binary,
         }
         yield env
     finally:
-        if container_id:
-            _stop_kafka(runtime, container_id)
+        if container is not None:
+            _stop_kafka(container)
