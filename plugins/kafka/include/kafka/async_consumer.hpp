@@ -289,7 +289,7 @@ public:
   };
 
   /// Result of waiting for and draining a message batch.
-  struct BatchResult {
+  struct MessageBatch {
     std::vector<Message> messages;
     bool timed_out = false;
   };
@@ -342,7 +342,7 @@ public:
   [[nodiscard]] auto
   next_batch(size_t max_messages,
              std::optional<std::chrono::milliseconds> timeout = std::nullopt)
-    -> folly::coro::Task<BatchResult> {
+    -> folly::coro::Task<MessageBatch> {
     TENZIR_ASSERT(max_messages > 0);
     while (not is_stopped()) {
       auto token = co_await folly::coro::co_current_cancellation_token;
@@ -352,7 +352,7 @@ public:
       }
       auto messages = consume_available(max_messages);
       if (not messages.empty()) {
-        co_return BatchResult{
+        co_return MessageBatch{
           .messages = std::move(messages),
           .timed_out = false,
         };
@@ -360,7 +360,7 @@ public:
       if (timeout) {
         auto blocking = consume_batch(max_messages, *timeout);
         if (blocking.timed_out) {
-          co_return BatchResult{
+          co_return MessageBatch{
             .messages = {},
             .timed_out = true,
           };
@@ -371,7 +371,7 @@ public:
             auto tail = consume_available(max_messages - messages.size());
             std::ranges::move(tail, std::back_inserter(messages));
           }
-          co_return BatchResult{
+          co_return MessageBatch{
             .messages = std::move(messages),
             .timed_out = false,
           };
@@ -380,7 +380,7 @@ public:
       }
       auto wait_result = co_await wait_for_notification(std::nullopt);
       if (wait_result == NotificationWaitResult::timed_out) {
-        co_return BatchResult{
+        co_return MessageBatch{
           .messages = {},
           .timed_out = true,
         };
@@ -389,7 +389,7 @@ public:
         break;
       }
     }
-    co_return BatchResult{
+    co_return MessageBatch{
       .messages = {},
       .timed_out = false,
     };

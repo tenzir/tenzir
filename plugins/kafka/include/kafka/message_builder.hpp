@@ -25,7 +25,7 @@
 namespace tenzir::plugins::kafka {
 
 /// Returns the schema for Kafka message table slices.
-inline auto kafka_message_schema() -> const type& {
+inline auto KafkaMessageSchema() -> const type& {
   static const auto schema = type{
     "tenzir.kafka",
     record_type{
@@ -39,7 +39,7 @@ inline auto kafka_message_schema() -> const type& {
 class KafkaMessageBuilder {
 public:
   KafkaMessageBuilder()
-    : arrow_schema_{kafka_message_schema().to_arrow_schema()},
+    : arrow_schema_{KafkaMessageSchema().to_arrow_schema()},
       builder_{string_type::make_arrow_builder(arrow_memory_pool())} {
   }
 
@@ -75,7 +75,7 @@ public:
     return table_slice{
       arrow::RecordBatch::Make(arrow_schema_, length,
                                {tenzir::finish(*builder_)}),
-      kafka_message_schema(),
+      KafkaMessageSchema(),
     };
   }
 

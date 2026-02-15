@@ -31,12 +31,12 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
-#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -143,26 +143,48 @@ auto as_ns(Duration d) -> uint64_t {
 }
 
 /// Aggregates opt-in runtime counters for stage-level `from_kafka` analysis.
+/// Note: `*_ns` values are cumulative nanoseconds across concurrent coroutines
+/// and can exceed end-to-end wall-clock time.
 struct FromKafkaPerfCounters {
+  /// Number of fetch-loop polls (`AsyncConsumerQueue::next_batch`) started.
   std::atomic<uint64_t> fetch_next_batch_calls = 0;
+  /// Total time spent awaiting `next_batch` in the fetch loop.
   std::atomic<uint64_t> fetch_next_batch_wait_ns = 0;
+  /// Number of empty polls that ended due to timeout.
   std::atomic<uint64_t> fetch_timeouts = 0;
+  /// Number of non-empty fetch batches produced by the fetch stage.
   std::atomic<uint64_t> fetched_batches = 0;
+  /// Number of Kafka messages received from the fetch stage.
   std::atomic<uint64_t> fetched_messages = 0;
+  /// Sum of fetched payload bytes before build-stage parsing.
   std::atomic<uint64_t> fetched_payload_bytes = 0;
+  /// Time spent waiting for prefetch-byte budget before enqueueing fetch batches.
   std::atomic<uint64_t> prefetch_wait_ns = 0;
+  /// Time spent waiting to enqueue into `fetched_queue_`.
   std::atomic<uint64_t> fetched_enqueue_wait_ns = 0;
+  /// Worker time spent waiting to dequeue from `fetched_queue_`.
   std::atomic<uint64_t> build_dequeue_wait_ns = 0;
+  /// Worker CPU time spent in `build_batch`.
   std::atomic<uint64_t> build_compute_ns = 0;
+  /// Worker time spent waiting to enqueue into `built_queue_`.
   std::atomic<uint64_t> build_enqueue_wait_ns = 0;
+  /// Number of batches processed by build workers.
   std::atomic<uint64_t> built_batches = 0;
+  /// Number of messages processed by build workers.
   std::atomic<uint64_t> built_messages = 0;
+  /// Runner time spent waiting to dequeue from `built_queue_`.
   std::atomic<uint64_t> runner_dequeue_wait_ns = 0;
+  /// Time spent waiting on downstream backpressure in `push(...)`.
   std::atomic<uint64_t> push_wait_ns = 0;
+  /// Number of non-empty built batches emitted downstream.
   std::atomic<uint64_t> emitted_batches = 0;
+  /// Number of messages emitted downstream.
   std::atomic<uint64_t> emitted_messages = 0;
+  /// Number of `table_slice` objects pushed downstream.
   std::atomic<uint64_t> emitted_slices = 0;
+  /// Number of EOF partition markers observed.
   std::atomic<uint64_t> eof_events = 0;
+  /// Number of fatal-error events observed in fetch/build/process stages.
   std::atomic<uint64_t> fatal_errors = 0;
 };
 
@@ -204,7 +226,7 @@ auto parse_offset_value(located<data> const& input, int64_t& offset) -> bool {
 }
 
 /// Represents one fetched Kafka batch plus control metadata.
-struct FetchedBatch {
+struct MessageBatch {
   uint64_t seq = 0;
   std::vector<AsyncConsumerQueue::Message> messages;
   std::vector<int32_t> eof_partitions;
@@ -214,7 +236,7 @@ struct FetchedBatch {
 };
 
 /// Represents one built table-slice batch plus commit metadata.
-struct BuiltBatch {
+struct TableSliceEnvelope {
   uint64_t seq = 0;
   std::optional<table_slice> slice;
   std::unordered_map<int32_t, int64_t> max_offsets;
@@ -224,8 +246,8 @@ struct BuiltBatch {
 };
 
 /// Result envelope returned by `await_task()` to `process_task()`.
-struct FromKafkaTaskResult {
-  std::optional<BuiltBatch> batch;
+struct TableSliceResult {
+  std::optional<TableSliceEnvelope> slice;
   bool end_of_stream = false;
 };
 
@@ -245,7 +267,7 @@ public:
       queue_{std::move(other.queue_)},
       fetched_queue_{std::move(other.fetched_queue_)},
       built_queue_{std::move(other.built_queue_)},
-      ordered_batches_{std::move(other.ordered_batches_)},
+      ordered_slices_{std::move(other.ordered_slices_)},
       in_flight_fetch_bytes_{other.in_flight_fetch_bytes_},
       next_fetch_seq_{other.next_fetch_seq_},
       next_emit_seq_{other.next_emit_seq_},
@@ -397,7 +419,7 @@ public:
     TENZIR_ASSERT(fetch_capacity > 0);
     fetched_queue_ = std::make_shared<FetchedQueue>(fetch_capacity);
     built_queue_ = std::make_shared<BuiltQueue>(fetch_capacity);
-    ordered_batches_.clear();
+    ordered_slices_.clear();
     next_emit_seq_ = 0;
     next_fetch_seq_ = 0;
     scheduled_messages_ = emitted_messages_;
@@ -422,13 +444,13 @@ public:
       TENZIR_UNREACHABLE();
     }
     if (not built_queue_) {
-      co_return FromKafkaTaskResult{.end_of_stream = true};
+      co_return TableSliceResult{.end_of_stream = true};
     }
     try {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         request_pipeline_stop();
-        co_return FromKafkaTaskResult{.end_of_stream = true};
+        co_return TableSliceResult{.end_of_stream = true};
       }
       if (optimization_mode_ == OptimizationMode::ordered) {
         co_return co_await await_ordered_batch();
@@ -445,29 +467,29 @@ public:
       }
       if (not next) {
         emit_perf_summary("end_of_stream");
-        co_return FromKafkaTaskResult{.end_of_stream = true};
+        co_return TableSliceResult{.end_of_stream = true};
       }
-      co_return FromKafkaTaskResult{
-        .batch = std::move(*next),
+      co_return TableSliceResult{
+        .slice = std::move(*next),
       };
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
       emit_perf_summary("cancelled");
-      co_return FromKafkaTaskResult{.end_of_stream = true};
+      co_return TableSliceResult{.end_of_stream = true};
     }
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto task_result = std::move(result).as<FromKafkaTaskResult>();
+    auto task_result = std::move(result).as<TableSliceResult>();
     if (task_result.end_of_stream) {
       done_ = true;
       emit_perf_summary("end_of_stream");
       request_pipeline_stop();
       co_return;
     }
-    TENZIR_ASSERT(task_result.batch);
-    auto batch = std::move(*task_result.batch);
+    TENZIR_ASSERT(task_result.slice);
+    auto batch = std::move(*task_result.slice);
     if (batch.slice) {
       auto push_started = std::chrono::steady_clock::time_point{};
       if (perf_enabled_) {
@@ -516,12 +538,13 @@ public:
     if (checkpoint_pending_offsets_.empty() or not consumer_) {
       co_return;
     }
-    auto offsets = std::vector<RdKafka::TopicPartition*>{};
-    offsets.reserve(checkpoint_pending_offsets_.size());
-    for (auto const& [partition, offset] : checkpoint_pending_offsets_) {
-      offsets.push_back(
-        RdKafka::TopicPartition::create(args_.topic, partition, offset));
-    }
+    auto offsets = checkpoint_pending_offsets_
+                   | std::views::transform([this](auto const& entry) {
+                       auto const& [partition, offset] = entry;
+                       return RdKafka::TopicPartition::create(
+                         args_.topic, partition, offset);
+                     })
+                   | std::ranges::to<std::vector<RdKafka::TopicPartition*>>();
     if (auto err = (*consumer_)->commitSync(offsets);
         err != RdKafka::ERR_NO_ERROR) {
       TENZIR_WARN("from_kafka: failed to commit offsets: {}",
@@ -550,10 +573,11 @@ public:
 
 private:
   /// Queue item type for fetch-stage handoff.
-  using FetchedQueue = folly::coro::BoundedQueue<std::optional<FetchedBatch>>;
+  using FetchedQueue = folly::coro::BoundedQueue<std::optional<MessageBatch>>;
 
   /// Queue item type for build-stage handoff.
-  using BuiltQueue = folly::coro::BoundedQueue<std::optional<BuiltBatch>>;
+  using BuiltQueue
+    = folly::coro::BoundedQueue<std::optional<TableSliceEnvelope>>;
 
   /// Concurrent stage layout (executor domains on the right):
   ///
@@ -562,7 +586,7 @@ private:
   ///   │   next_batch, to_fetched_batch│
   ///   └───────────────────────────────┘
   ///                   │
-  ///                   │ FetchedBatch
+  ///                   │ MessageBatch
   ///                   ▼
   ///            fetched_queue_                          [bounded queue]
   ///                   │
@@ -573,7 +597,7 @@ private:
   ///   │   build_batch → table_slice   │
   ///   └───────────────────────────────┘
   ///                   │
-  ///                   │ BuiltBatch
+  ///                   │ TableSliceEnvelope
   ///                   ▼
   ///             built_queue_                           [bounded queue]
   ///                   │
@@ -764,8 +788,8 @@ private:
   /// Converts consumed Kafka messages into one fetch-stage payload batch.
   auto to_fetched_batch(
     std::vector<AsyncConsumerQueue::Message> fetched_messages) const
-    -> std::optional<FetchedBatch> {
-    auto batch = FetchedBatch{};
+    -> std::optional<MessageBatch> {
+    auto batch = MessageBatch{};
     batch.messages.reserve(fetched_messages.size());
     auto reached_count = false;
     for (auto& message : fetched_messages) {
@@ -856,15 +880,15 @@ private:
             add_perf_counter(perf_.fetch_next_batch_calls);
             next_batch_started = std::chrono::steady_clock::now();
           }
-          auto result = co_await (*queue_)->next_batch(
+          auto batch = co_await (*queue_)->next_batch(
             max_messages - pending_messages.size(), wait);
           if (perf_enabled_) {
             add_perf_counter(
               perf_.fetch_next_batch_wait_ns,
               as_ns(std::chrono::steady_clock::now() - next_batch_started));
           }
-          if (result.messages.empty()) {
-            if (result.timed_out) {
+          if (batch.messages.empty()) {
+            if (batch.timed_out) {
               add_perf_counter(perf_.fetch_timeouts);
               if (not pending_messages.empty()) {
                 break;
@@ -879,8 +903,7 @@ private:
           }
           consecutive_empty_timeouts = 0;
           poll_wait = base_poll_wait;
-          std::ranges::move(result.messages,
-                            std::back_inserter(pending_messages));
+          pending_messages.append_range(batch.messages | std::views::as_rvalue);
           if (not batch_deadline) {
             batch_deadline = std::chrono::steady_clock::now()
                              + std::max(args_.batch_timeout, min_wait);
@@ -931,7 +954,7 @@ private:
           enqueue_started = std::chrono::steady_clock::now();
         }
         co_await fetched_queue_->enqueue(
-          std::optional<FetchedBatch>{std::move(*fetched)});
+          std::optional<MessageBatch>{std::move(*fetched)});
         if (perf_enabled_) {
           add_perf_counter(
             perf_.fetched_enqueue_wait_ns,
@@ -956,8 +979,8 @@ private:
   }
 
   /// Converts one fetched payload batch into a `table_slice`.
-  auto build_batch(FetchedBatch fetched) const -> BuiltBatch {
-    auto built = BuiltBatch{};
+  auto build_batch(MessageBatch fetched) const -> TableSliceEnvelope {
+    auto built = TableSliceEnvelope{};
     built.seq = fetched.seq;
     built.eof_partitions = std::move(fetched.eof_partitions);
     built.fatal_error = std::move(fetched.fatal_error);
@@ -1028,7 +1051,7 @@ private:
         if (perf_enabled_) {
           enqueue_started = std::chrono::steady_clock::now();
         }
-        co_await built_queue_->enqueue(std::optional<BuiltBatch>{
+        co_await built_queue_->enqueue(std::optional<TableSliceEnvelope>{
           std::move(built),
         });
         if (perf_enabled_) {
@@ -1046,16 +1069,16 @@ private:
   }
 
   /// Waits for the next in-order built batch from worker output.
-  auto await_ordered_batch() const -> Task<FromKafkaTaskResult> {
+  auto await_ordered_batch() const -> Task<TableSliceResult> {
     TENZIR_ASSERT(built_queue_);
     while (true) {
-      auto ready = ordered_batches_.find(next_emit_seq_);
-      if (ready != ordered_batches_.end()) {
+      auto ready = ordered_slices_.find(next_emit_seq_);
+      if (ready != ordered_slices_.end()) {
         auto batch = std::move(ready->second);
-        ordered_batches_.erase(ready);
+        ordered_slices_.erase(ready);
         ++next_emit_seq_;
-        co_return FromKafkaTaskResult{
-          .batch = std::move(batch),
+        co_return TableSliceResult{
+          .slice = std::move(batch),
         };
       }
       auto dequeue_started = std::chrono::steady_clock::time_point{};
@@ -1069,21 +1092,20 @@ private:
           as_ns(std::chrono::steady_clock::now() - dequeue_started));
       }
       if (not next) {
-        if (ordered_batches_.empty()) {
-          co_return FromKafkaTaskResult{.end_of_stream = true};
+        if (ordered_slices_.empty()) {
+          co_return TableSliceResult{.end_of_stream = true};
         }
-        auto contiguous = ordered_batches_.find(next_emit_seq_);
-        TENZIR_ASSERT(contiguous != ordered_batches_.end());
+        auto contiguous = ordered_slices_.find(next_emit_seq_);
+        TENZIR_ASSERT(contiguous != ordered_slices_.end());
         continue;
       }
       if (next->seq == next_emit_seq_) {
         ++next_emit_seq_;
-        co_return FromKafkaTaskResult{
-          .batch = std::move(*next),
+        co_return TableSliceResult{
+          .slice = std::move(*next),
         };
       }
-      auto [_, inserted]
-        = ordered_batches_.emplace(next->seq, std::move(*next));
+      auto [_, inserted] = ordered_slices_.emplace(next->seq, std::move(*next));
       TENZIR_ASSERT(inserted);
     }
   }
@@ -1109,12 +1131,13 @@ private:
       done_ = true;
       return;
     }
-    auto assignment = std::unordered_set<int32_t>{};
-    for (auto* candidate : partitions) {
-      if (candidate and candidate->topic() == args_.topic) {
-        assignment.insert(candidate->partition());
-      }
-    }
+    auto assignment = partitions | std::views::filter([this](auto* candidate) {
+                        return candidate and candidate->topic() == args_.topic;
+                      })
+                      | std::views::transform([](auto* candidate) {
+                          return candidate->partition();
+                        })
+                      | std::ranges::to<std::unordered_set<int32_t>>();
     RdKafka::TopicPartition::destroy(partitions);
     if (assignment.empty()) {
       return;
@@ -1141,7 +1164,7 @@ private:
   mutable std::optional<Box<AsyncConsumerQueue>> queue_;
   std::shared_ptr<FetchedQueue> fetched_queue_;
   std::shared_ptr<BuiltQueue> built_queue_;
-  mutable std::map<uint64_t, BuiltBatch> ordered_batches_;
+  mutable std::map<uint64_t, TableSliceEnvelope> ordered_slices_;
   mutable std::atomic<bool> fetched_queue_closed_ = false;
   mutable std::atomic<size_t> live_builders_ = 0;
   mutable std::atomic<bool> pipeline_stop_requested_ = false;
