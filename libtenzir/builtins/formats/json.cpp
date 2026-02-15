@@ -1297,12 +1297,12 @@ public:
       parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts),
                       args_.arrays_of_objects);
     }
+    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
     parser_->parse(as_bytes(input));
     if (parser_->abort_requested) {
       co_return;
-    }
-    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
-      co_await push(std::move(slice));
     }
   }
 
@@ -1338,6 +1338,9 @@ public:
     if (not parser_) {
       auto opts = make_msb_options(args_);
       parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts));
+    }
+    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
+      co_await push(std::move(slice));
     }
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
@@ -1384,9 +1387,6 @@ public:
     }
     // Buffer remaining data for the next chunk.
     buffer_.append(begin, end);
-    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
-      co_await push(std::move(slice));
-    }
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
