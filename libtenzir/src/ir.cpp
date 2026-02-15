@@ -269,12 +269,11 @@ public:
     auto true_events = std::vector<table_slice>{};
     auto false_events = std::vector<table_slice>{};
     auto end = int64_t{0};
-    for (const auto& [predicate] :
-         split_multi_series(eval(args_.condition, input, ctx))) {
-      const auto start = std::exchange(end, end + predicate.length());
+    for (auto const& predicate : eval(args_.condition, input, ctx)) {
+      auto const start = std::exchange(end, end + predicate.length());
       TENZIR_ASSERT(end > start);
-      const auto sliced_input = subslice(input, start, end);
-      const auto typed_predicate = predicate.as<bool_type>();
+      auto const sliced_input = subslice(input, start, end);
+      auto const typed_predicate = predicate.as<bool_type>();
       if (not typed_predicate) {
         diagnostic::warning("expected `bool`, but got `{}`",
                             predicate.type.kind())
@@ -313,10 +312,6 @@ public:
         }
       }
     }
-  }
-
-  auto snapshot(Serde& serde) -> void {
-    serde("args", args_);
   }
 
 private:
