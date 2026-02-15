@@ -481,6 +481,7 @@ public:
         add_perf_counter(perf_.emitted_slices);
       }
       advance_checkpoint(batch.max_offsets);
+      co_await commit_pending_offsets();
       emitted_messages_ += batch.message_count;
       add_perf_counter(perf_.emitted_batches);
       add_perf_counter(perf_.emitted_messages,
@@ -508,6 +509,10 @@ public:
   }
 
   auto post_commit() -> Task<void> override {
+    co_await commit_pending_offsets();
+  }
+
+  auto commit_pending_offsets() -> Task<void> {
     if (checkpoint_pending_offsets_.empty() or not consumer_) {
       co_return;
     }
