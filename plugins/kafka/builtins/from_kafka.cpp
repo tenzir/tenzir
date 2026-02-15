@@ -67,20 +67,17 @@ auto source_global_defaults() -> record& {
 }
 
 /// Returns throughput defaults for librdkafka consumer-side queueing/fetching.
-auto from_kafka_throughput_defaults()
-  -> std::span<const std::pair<std::string_view, std::string_view>> {
+auto from_kafka_throughput_defaults() {
   using entry = std::pair<std::string_view, std::string_view>;
   // Performance note: these defaults intentionally bias towards low broker-side
   // holdback (`fetch.min.bytes=1`, `fetch.wait.max.ms=500`) while increasing
   // client queue depth. Local 10M-message fixture runs showed this combination
   // avoids source stalls better than aggressive "large fetch" defaults.
-  static constexpr auto defaults
-    = std::to_array<entry>({{"fetch.min.bytes", "1"},
+  return std::to_array<entry>({{"fetch.min.bytes", "1"},
                             {"fetch.wait.max.ms", "500"},
                             {"max.partition.fetch.bytes", "1048576"},
                             {"queued.min.messages", "200000"},
                             {"queued.max.messages.kbytes", "262144"}});
-  return defaults;
 }
 
 /// Adds throughput defaults unless explicitly configured via `kafka.yaml`.
