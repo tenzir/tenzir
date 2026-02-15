@@ -28,6 +28,8 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -260,7 +262,28 @@ public:
           .timed_out = false,
         };
       }
-      auto wait_result = co_await wait_for_notification(timeout);
+      if (timeout) {
+        auto first = try_consume_blocking(*timeout);
+        if (first.timed_out) {
+          co_return BatchResult{
+            .messages = {},
+            .timed_out = true,
+          };
+        }
+        if (first.message) {
+          messages.push_back(std::move(first.message));
+          if (messages.size() < max_messages) {
+            auto tail = consume_available(max_messages - messages.size());
+            std::move(tail.begin(), tail.end(), std::back_inserter(messages));
+          }
+          co_return BatchResult{
+            .messages = std::move(messages),
+            .timed_out = false,
+          };
+        }
+        continue;
+      }
+      auto wait_result = co_await wait_for_notification(std::nullopt);
       if (wait_result == NotificationWaitResult::timed_out) {
         co_return BatchResult{
           .messages = {},
@@ -387,16 +410,39 @@ private:
 
   /// Polls librdkafka without blocking and wraps a returned message.
   [[nodiscard]] auto try_consume() -> std::shared_ptr<RdKafka::Message> {
-    auto* message = consumer_->consume(0);
-    if (not message) {
-      return nullptr;
+    return try_consume_blocking(std::chrono::milliseconds{0}).message;
+  }
+
+  /// Result of a single `consume(timeout)` attempt.
+  struct ConsumeAttempt {
+    std::shared_ptr<RdKafka::Message> message;
+    bool timed_out = false;
+  };
+
+  /// Polls librdkafka for one message with a bounded timeout.
+  [[nodiscard]] auto try_consume_blocking(std::chrono::milliseconds timeout)
+    -> ConsumeAttempt {
+    auto timeout_ms = timeout.count();
+    if (timeout_ms < 0) {
+      timeout_ms = 0;
     }
-    auto guard = std::shared_ptr<RdKafka::Message>{message};
-    if (message->err() == RdKafka::ERR__TIMED_OUT) {
-      guard.reset();
-      return nullptr;
+    auto timeout_i = static_cast<int>(
+      std::min<int64_t>(timeout_ms, std::numeric_limits<int>::max()));
+    auto* raw = consumer_->consume(timeout_i);
+    if (not raw) {
+      return {};
     }
-    return guard;
+    auto guard = std::shared_ptr<RdKafka::Message>{raw};
+    if (raw->err() == RdKafka::ERR__TIMED_OUT) {
+      return ConsumeAttempt{
+        .message = nullptr,
+        .timed_out = true,
+      };
+    }
+    return ConsumeAttempt{
+      .message = std::move(guard),
+      .timed_out = false,
+    };
   }
 
   /// Drains all immediately available messages up to `max_messages`.

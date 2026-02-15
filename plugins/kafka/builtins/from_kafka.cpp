@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -46,6 +47,9 @@ namespace {
 
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
+
+/// Default upper bound for one Kafka notification wait while fetching.
+constexpr auto default_fetch_wait_timeout = 1ms;
 
 /// Stores process-wide `from_kafka` defaults from `kafka.yaml`.
 auto source_global_defaults() -> record& {
@@ -66,6 +70,7 @@ struct FromKafkaArgs {
   uint64_t prefetch_batches = 8;
   uint64_t prefetch_bytes = 256ull * 1024ull * 1024ull;
   duration batch_timeout = default_batch_timeout;
+  duration fetch_wait_timeout = default_fetch_wait_timeout;
   located<record> options;
   std::optional<located<std::string>> aws_region;
   std::optional<located<record>> aws_iam;
@@ -543,6 +548,8 @@ private:
   ///    `prefetch_bytes` accounting (`in_flight_fetch_bytes_`).
   /// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
   ///    that order before emitting slices.
+  /// 3. Fetch polling (`fetch_wait_timeout`) is independent from slice
+  ///    flush latency (`batch_timeout`) to avoid timeout-coupling stalls.
 
   /// Adds `delta` to one instrumentation counter when perf stats are enabled.
   auto add_perf_counter(std::atomic<uint64_t>& counter, uint64_t delta
@@ -768,27 +775,67 @@ private:
           request_pipeline_stop();
           break;
         }
-        auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
-          args_.batch_timeout);
-        auto next_batch_started = std::chrono::steady_clock::time_point{};
-        if (perf_enabled_) {
-          add_perf_counter(perf_.fetch_next_batch_calls);
-          next_batch_started = std::chrono::steady_clock::now();
-        }
-        auto result = co_await (*queue_)->next_batch(max_messages, timeout);
-        if (perf_enabled_) {
-          add_perf_counter(
-            perf_.fetch_next_batch_wait_ns,
-            as_ns(std::chrono::steady_clock::now() - next_batch_started));
-        }
-        if (result.messages.empty()) {
-          if (result.timed_out) {
-            add_perf_counter(perf_.fetch_timeouts);
-            continue;
+        auto pending_messages
+          = std::vector<std::shared_ptr<RdKafka::Message>>{};
+        pending_messages.reserve(max_messages);
+        auto min_wait = std::chrono::duration_cast<duration>(1ms);
+        auto poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
+        auto batch_deadline
+          = std::optional<std::chrono::steady_clock::time_point>{};
+        while (pending_messages.size() < max_messages
+               and not is_pipeline_stopping()) {
+          auto wait
+            = std::chrono::duration_cast<std::chrono::milliseconds>(poll_wait);
+          if (not pending_messages.empty()) {
+            TENZIR_ASSERT(batch_deadline);
+            auto now = std::chrono::steady_clock::now();
+            if (now >= *batch_deadline) {
+              break;
+            }
+            auto remaining = *batch_deadline - now;
+            wait = std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::min<std::chrono::steady_clock::duration>(remaining,
+                                                            poll_wait));
+            if (wait <= 0ms) {
+              wait = 1ms;
+            }
           }
-          break;
+          auto next_batch_started = std::chrono::steady_clock::time_point{};
+          if (perf_enabled_) {
+            add_perf_counter(perf_.fetch_next_batch_calls);
+            next_batch_started = std::chrono::steady_clock::now();
+          }
+          auto result = co_await (*queue_)->next_batch(
+            max_messages - pending_messages.size(), wait);
+          if (perf_enabled_) {
+            add_perf_counter(
+              perf_.fetch_next_batch_wait_ns,
+              as_ns(std::chrono::steady_clock::now() - next_batch_started));
+          }
+          if (result.messages.empty()) {
+            if (result.timed_out) {
+              add_perf_counter(perf_.fetch_timeouts);
+              if (not pending_messages.empty()) {
+                break;
+              }
+              continue;
+            }
+            break;
+          }
+          std::move(result.messages.begin(), result.messages.end(),
+                    std::back_inserter(pending_messages));
+          if (not batch_deadline) {
+            batch_deadline = std::chrono::steady_clock::now()
+                             + std::max(args_.batch_timeout, min_wait);
+          }
         }
-        auto fetched = to_fetched_batch(std::move(result.messages));
+        if (pending_messages.empty()) {
+          if (is_pipeline_stopping()) {
+            break;
+          }
+          continue;
+        }
+        auto fetched = to_fetched_batch(std::move(pending_messages));
         if (not fetched) {
           continue;
         }
@@ -1125,6 +1172,8 @@ public:
       = d.named_optional("prefetch_bytes", &FromKafkaArgs::prefetch_bytes);
     auto batch_timeout_arg
       = d.named_optional("batch_timeout", &FromKafkaArgs::batch_timeout);
+    auto fetch_wait_timeout_arg = d.named_optional(
+      "fetch_wait_timeout", &FromKafkaArgs::fetch_wait_timeout);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto mode = OptimizationMode::ordered;
       if (auto optimization = ctx.get(optimization_arg); optimization) {
@@ -1192,6 +1241,16 @@ public:
           diagnostic::error("`batch_timeout` must be a positive duration")
             .primary(
               ctx.get_location(batch_timeout_arg).value_or(location::unknown))
+            .emit(ctx);
+          return {};
+        }
+      }
+      if (auto fetch_wait_timeout = ctx.get(fetch_wait_timeout_arg);
+          fetch_wait_timeout) {
+        if (*fetch_wait_timeout <= duration::zero()) {
+          diagnostic::error("`fetch_wait_timeout` must be a positive duration")
+            .primary(ctx.get_location(fetch_wait_timeout_arg)
+                       .value_or(location::unknown))
             .emit(ctx);
           return {};
         }
