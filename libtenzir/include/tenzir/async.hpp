@@ -72,6 +72,20 @@
 #include <folly/coro/Traits.h>
 #include <folly/futures/Future.h>
 
+#if 0
+#  define LOGV(...) TENZIR_VERBOSE(__VA_ARGS__)
+#  define LOGD(...) TENZIR_DEBUG(__VA_ARGS__)
+#  define LOGI(...) TENZIR_INFO(__VA_ARGS__)
+#  define LOGW(...) TENZIR_WARN(__VA_ARGS__)
+#  define LOGE(...) TENZIR_ERROR(__VA_ARGS__)
+#else
+#  define LOGV(...)
+#  define LOGD(...)
+#  define LOGI(...)
+#  define LOGW(...)
+#  define LOGE(...)
+#endif
+
 namespace tenzir {
 
 template <class T>
@@ -392,9 +406,9 @@ public:
   auto push(In input) -> Task<Result<void, In>> {
     // FIXME: What to do when closed?
     if constexpr (std::same_as<Input, table_slice>) {
-      TENZIR_WARN("pushing {} rows to subpipeline", input.rows());
+      LOGW("pushing {} rows to subpipeline", input.rows());
     } else {
-      TENZIR_WARN("pushing data to subpipeline");
+      LOGW("pushing {} bytes to subpipeline", input ? input->size() : 0);
     }
     co_await push_(std::move(input));
     co_return {};

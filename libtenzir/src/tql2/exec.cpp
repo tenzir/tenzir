@@ -547,7 +547,7 @@ public:
 
   auto send(OperatorMsg<T> x) -> Task<void> {
     auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_ERROR("CANCELLED");
+      LOGE("CANCELLED");
     }};
     auto lock = co_await mutex_.lock();
     while (true) {
@@ -557,14 +557,13 @@ public:
       if (cost(x, limit_) <= lock->remaining) {
         break;
       }
-      TENZIR_VERBOSE("SPINNING BECAUSE {} > {}", cost(x, limit_),
-                     lock->remaining);
+      LOGV("SPINNING BECAUSE {} > {}", cost(x, limit_), lock->remaining);
       lock.unlock();
       co_await notify_send_.wait();
       lock = co_await mutex_.lock();
     }
     lock->remaining -= cost(x, limit_);
-    TENZIR_VERBOSE("SENDING {:?} OVER {}", x, id_);
+    LOGV("SENDING {:?} OVER {}", x, id_);
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
     guard.disable();
@@ -572,7 +571,7 @@ public:
 
   auto receive() -> Task<OperatorMsg<T>> {
     auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_DEBUG("CANCELLED");
+      LOGD("CANCELLED");
     }};
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
@@ -588,7 +587,7 @@ public:
     lock->remaining += cost(result, limit_);
     notify_send_.notify_one();
     guard.disable();
-    TENZIR_VERBOSE("RECEIVED {:?} OVER {}", result, id_);
+    LOGV("RECEIVED {:?} OVER {}", result, id_);
     co_return result;
   }
 
@@ -696,14 +695,14 @@ protected:
 
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
               diagnostic_handler& dh) -> Task<failure_or<void>> {
-  TENZIR_WARN("spawning plan with {} operators", ops.size());
+  LOGW("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
   auto channel_factory = TestChannelFactory{};
-  TENZIR_WARN("blocking on pipeline");
+  LOGW("blocking on pipeline");
   co_await run_pipeline(std::move(*chain), channel_factory, sys, dh);
-  TENZIR_WARN("blocking on pipeline done");
+  LOGW("blocking on pipeline done");
   co_return {};
 }
 
@@ -728,17 +727,17 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
                        diagnostic_handler& dh) -> failure_or<void> {
   // TODO: Decide where the deduplication should happen and move this.
   auto dedup = DeduplicatingDiagnosticHandler{dh};
-  TENZIR_INFO("begin blocking");
+  LOGI("begin blocking");
 #if 1
-  TENZIR_WARN("running pipeline on a single thread");
+  LOGW("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup));
 #else
-  TENZIR_WARN("running pipeline on {} threads",
-              folly::getGlobalCPUExecutorCounters().numThreads);
+  LOGW("running pipeline on {} threads",
+       folly::getGlobalCPUExecutorCounters().numThreads);
   auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
     folly::getGlobalCPUExecutor(), run_plan(std::move(ops), sys, dedup)));
 #endif
-  TENZIR_INFO("end blocking");
+  LOGI("end blocking");
   return result;
 }
 

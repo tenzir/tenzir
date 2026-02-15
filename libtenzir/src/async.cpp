@@ -90,15 +90,15 @@ public:
 
   auto receive() -> Task<T> {
     auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_DEBUG("CANCELLED");
+      LOGD("CANCELLED");
     }};
     folly::CancellationToken token
       = co_await folly::coro::co_current_cancellation_token;
-    TENZIR_VERBOSE("waiting for queue in receiver ({}): {}",
-                   fmt::ptr(queue_.get()), token.isCancellationRequested());
+    LOGV("waiting for queue in receiver ({}): {}", fmt::ptr(queue_.get()),
+         token.isCancellationRequested());
     TENZIR_ASSERT(queue_);
     auto result = co_await queue_->dequeue();
-    TENZIR_WARN("got item for queue in receiver");
+    LOGW("got item for queue in receiver");
     guard.disable();
     co_return result;
   }
@@ -106,12 +106,12 @@ public:
   auto into_generator() && -> AsyncGenerator<T> {
     return folly::coro::co_invoke(
       [self = std::move(*this)] mutable -> AsyncGenerator<T> {
-        TENZIR_VERBOSE("starting receiver generator");
+        LOGV("starting receiver generator");
         while (true) {
           auto result = co_await self.receive();
-          TENZIR_VERBOSE("got item in receiver generator");
+          LOGV("got item in receiver generator");
           co_yield std::move(result);
-          TENZIR_VERBOSE("continuing in result generator");
+          LOGV("continuing in result generator");
         }
       });
   }
@@ -270,7 +270,7 @@ public:
 
   auto run_to_completion() && -> Task<void> {
     auto guard = detail::scope_guard{[&] noexcept {
-      TENZIR_WARN("returning from operator runner {}", id_);
+      LOGW("returning from operator runner {}", id_);
     }};
     co_await queue_.activate([&] -> Task<void> {
       // TODO: Figure out where exactly the operator scope is and move this.
@@ -600,21 +600,21 @@ private:
   auto run() -> Task<void> {
     // co_await folly::coro::co_scope_exit(
     //   [](Runner* self) -> Task<void> {
-    //     TENZIR_WARN("shutting down operator {} with {} pending",
+    //     LOGW("shutting down operator {} with {} pending",
     //                 typeid(*self->op_).name(), self->queue_.pending());
     //     // TODO: Can we always do this here?
     //     co_await self->queue_.cancel_and_join();
-    //     TENZIR_WARN("shutdown done for {}", typeid(*self->op_).name());
+    //     LOGW("shutdown done for {}", typeid(*self->op_).name());
     //   },
     //   this);
     try {
-      TENZIR_INFO("-> pre start");
+      LOGI("-> pre start");
       if constexpr (std::same_as<Output, void>) {
         co_await op_->start(*this);
       } else {
         co_await op_->start(*this);
       }
-      TENZIR_INFO("-> post start");
+      LOGI("-> post start");
       queue_.spawn([this] -> Task<ExplicitAny> {
         co_return ExplicitAny{co_await op_->await_task(*this)};
       });
@@ -625,23 +625,22 @@ private:
         co_await tick();
       }
     } catch (folly::OperationCancelled) {
-      TENZIR_VERBOSE("shutting down operator after cancellation");
+      LOGV("shutting down operator after cancellation");
       throw;
     } catch (std::exception& e) {
-      TENZIR_ERROR("shutting down operator after uncaught exception: {}",
-                   e.what());
+      LOGE("shutting down operator after uncaught exception: {}", e.what());
       throw;
     } catch (...) {
-      TENZIR_ERROR("shutting down operator after uncaught exception");
+      LOGE("shutting down operator after uncaught exception");
       throw;
     }
-    TENZIR_WARN("CANCELING queue");
+    LOGW("CANCELING queue");
     queue_.cancel();
   }
 
   auto tick() -> Task<void> {
     ticks_ += 1;
-    TENZIR_INFO("tick {} in {} ({})", ticks_, id_, typeid(*op_).name());
+    LOGI("tick {} in {} ({})", ticks_, id_, typeid(*op_).name());
     switch (op_->state()) {
       case OperatorState::done:
         co_await handle_done();
@@ -649,7 +648,7 @@ private:
       case OperatorState::unspecified:
         break;
     }
-    TENZIR_VERBOSE("waiting in {} for message", typeid(*op_).name());
+    LOGV("waiting in {} for message", typeid(*op_).name());
     auto message = check(co_await queue_.next());
     co_await co_match(std::move(message), [&](auto message) {
       return process(std::move(message));
@@ -658,7 +657,7 @@ private:
 
   auto process(ExplicitAny message) -> Task<void> {
     // The task provided by the inner implementation completed.
-    TENZIR_VERBOSE("got future result in {}", typeid(*op_).name());
+    LOGV("got future result in {}", typeid(*op_).name());
     if constexpr (std::same_as<Output, void>) {
       co_await op_->process_task(std::move(message.value), *this);
     } else {
@@ -672,7 +671,7 @@ private:
         co_return ExplicitAny{co_await op_->await_task(*this)};
       });
     }
-    TENZIR_VERBOSE("handled future result in {}", typeid(*op_).name());
+    LOGV("handled future result in {}", typeid(*op_).name());
   }
 
   auto process(OperatorMsg<Input> message) -> Task<void> {
@@ -683,7 +682,7 @@ private:
         if constexpr (std::same_as<Input, void>) {
           TENZIR_UNREACHABLE();
         } else {
-          TENZIR_VERBOSE("got input in {}", typeid(*op_).name());
+          LOGV("got input in {}", typeid(*op_).name());
           if (is_done_) {
             // No need to forward the input.
             co_return;
@@ -700,7 +699,7 @@ private:
         co_await co_match(
           signal,
           [&](EndOfData) -> Task<void> {
-            TENZIR_VERBOSE("got end of data in {}", typeid(*op_).name());
+            LOGV("got end of data in {}", typeid(*op_).name());
             if constexpr (std::same_as<Input, void>) {
               TENZIR_UNREACHABLE();
             } else {
@@ -761,19 +760,19 @@ private:
   /// subpipelines that already existed when we started the checkpoint. In the
   /// meantime, we must take care to not destroy those subpipelines.
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
-    TENZIR_INFO("got checkpoint {} in {}", checkpoint.id, typeid(*op_).name());
+    LOGI("got checkpoint {} in {}", checkpoint.id, typeid(*op_).name());
     to_control_.send(ToControl::checkpoint_begin);
     co_await op_->checkpoint(*this);
     // TODO: Also checkpoint `subpipelines_`. What else?
     if (subpipelines_.empty()) {
-      TENZIR_INFO("finishing checkpoint with no subpipelines in {} ",
-                  typeid(*op_).name());
+      LOGI("finishing checkpoint with no subpipelines in {} ",
+           typeid(*op_).name());
       to_control_.send(ToControl::checkpoint_done);
       co_await push_downstream_(std::move(checkpoint));
       co_return;
     }
-    TENZIR_INFO("checkpointing {} subpipelines in {}", subpipelines_.size(),
-                typeid(*op_).name());
+    LOGI("checkpointing {} subpipelines in {}", subpipelines_.size(),
+         typeid(*op_).name());
     for (auto& [_, sub] : subpipelines_) {
       co_await sub.handle.send(checkpoint);
       sub.wants_commit = true;
@@ -782,20 +781,20 @@ private:
   }
 
   auto process(FromControl message) -> Task<void> {
-    auto overloads = detail::overload{
-      [&](PostCommit) -> Task<void> {
-        TENZIR_VERBOSE("got post commit in {}", typeid(*op_).name());
-        co_await op_->post_commit();
-      },
-      [&](Shutdown) -> Task<void> {
-        // FIXME: Cleanup on shutdown?
-        TENZIR_VERBOSE("got shutdown in {}", typeid(*op_).name());
-        got_shutdown_request_ = true;
-        co_return;
-      },
-      [&](Stop) -> Task<void> {
-        co_await handle_done();
-      }};
+    auto overloads
+      = detail::overload{[&](PostCommit) -> Task<void> {
+                           LOGV("got post commit in {}", typeid(*op_).name());
+                           co_await op_->post_commit();
+                         },
+                         [&](Shutdown) -> Task<void> {
+                           // FIXME: Cleanup on shutdown?
+                           LOGV("got shutdown in {}", typeid(*op_).name());
+                           got_shutdown_request_ = true;
+                           co_return;
+                         },
+                         [&](Stop) -> Task<void> {
+                           co_await handle_done();
+                         }};
     co_await match(std::move(message), overloads);
     queue_.spawn(from_control_.receive());
   }
@@ -816,7 +815,7 @@ private:
     if (is_done_) {
       co_return;
     }
-    TENZIR_VERBOSE("running done in {}", typeid(*op_).name());
+    LOGV("running done in {}", typeid(*op_).name());
     is_done_ = true;
     // Immediately inform control that we want no more data.
     if constexpr (not std::same_as<Input, void>) {
@@ -853,7 +852,7 @@ private:
     if constexpr (not std::same_as<Output, void>) {
       co_await push_downstream_(EndOfData{});
     }
-    TENZIR_WARN("sending ready to shutdown from {}", id_);
+    LOGW("sending ready to shutdown from {}", id_);
     to_control_.send(ToControl::ready_for_shutdown);
   }
 
@@ -937,14 +936,14 @@ public:
 
   auto run_to_completion() && -> Task<void> {
     co_await queue_.activate([&] -> Task<void> {
-      TENZIR_WARN("beginning chain setup of {}", id_);
+      LOGW("beginning chain setup of {}", id_);
       spawn_operators();
-      TENZIR_WARN("entering main loop of {}", id_);
+      LOGW("entering main loop of {}", id_);
       co_await run_until_shutdown();
-      TENZIR_WARN("cancelling queue of {}", id_);
+      LOGW("cancelling queue of {}", id_);
       queue_.cancel();
     });
-    TENZIR_INFO("chain runner {} finished", id_);
+    LOGI("chain runner {} finished", id_);
   }
 
 private:
@@ -956,7 +955,7 @@ private:
     for (auto& op : operators_) {
       auto index = detail::narrow<size_t>(&op - operators_.data());
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
-        TENZIR_INFO("got {}", typeid(*op).name());
+        LOGI("got {}", typeid(*op).name());
         auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
         auto [output_sender, output_receiver]
           = channel_factory_.make<Out>(id_.op(index).to(id_.op(index + 1)));
@@ -980,14 +979,14 @@ private:
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), id_.op(index),
                                  channel_factory_, sys_, dh_);
-        TENZIR_INFO("spawning operator task");
+        LOGI("spawning operator task");
         queue_.spawn([task = std::move(task),
                       index] mutable -> Task<std::pair<size_t, Shutdown>> {
           co_await std::move(task);
-          TENZIR_INFO("got termination from operator {}", index);
+          LOGI("got termination from operator {}", index);
           co_return {index, Shutdown{}};
         });
-        TENZIR_INFO("inserting control receiver task");
+        LOGI("inserting control receiver task");
         queue_.spawn(
           [to_control_receiver = std::move(to_control_receiver), index] mutable
             -> folly::coro::AsyncGenerator<std::pair<size_t, ToControl>> {
@@ -995,7 +994,7 @@ private:
               co_yield {index, co_await to_control_receiver.receive()};
             }
           });
-        TENZIR_INFO("done with operator");
+        LOGI("done with operator");
       });
     }
   }
@@ -1008,7 +1007,7 @@ private:
     queue_.spawn(from_control_.receive());
     auto keep_running = true;
     while (keep_running) {
-      TENZIR_WARN("waiting for next info in chain runner");
+      LOGW("waiting for next info in chain runner");
       auto next = co_await queue_.next();
       // We should never be done here...
       // TODO: Cancellation?
@@ -1024,7 +1023,7 @@ private:
               }
             },
             [&](Shutdown) {
-              TENZIR_WARN("sending shutdown to all operators of {}", id_);
+              LOGW("sending shutdown to all operators of {}", id_);
               for (auto& sender : operator_ctrl_) {
                 sender.send(Shutdown{});
               }
@@ -1044,16 +1043,16 @@ private:
               // TODO: What if we didn't send shutdown signal?
               TENZIR_ASSERT(shutdown_count < operators_.size());
               shutdown_count += 1;
-              TENZIR_WARN("got shutdown from {} ({} remaining)", id_.op(index),
-                          operators_.size() - shutdown_count);
+              LOGW("got shutdown from {} ({} remaining)", id_.op(index),
+                   operators_.size() - shutdown_count);
               if (shutdown_count == operators_.size()) {
                 // All operators shut down successfully.
                 keep_running = false;
               }
             },
             [&](ToControl to_control) {
-              TENZIR_WARN("got control message from operator {}: {}",
-                          id_.op(index), to_control);
+              LOGW("got control message from operator {}: {}", id_.op(index),
+                   to_control);
               switch (to_control) {
                 case ToControl::ready_for_shutdown:
                   TENZIR_ASSERT(ready_for_shutdown < operators_.size());
@@ -1079,15 +1078,15 @@ private:
                   return;
                 case ToControl::checkpoint_begin:
                 case ToControl::checkpoint_done:
-                  TENZIR_INFO("chain got {} from operator {}", to_control,
-                              id_.op(index));
+                  LOGI("chain got {} from operator {}", to_control,
+                       id_.op(index));
                   return;
               }
               TENZIR_UNREACHABLE();
             });
         });
     }
-    TENZIR_WARN("left main loop of {}", id_);
+    LOGW("left main loop of {}", id_);
     TENZIR_ASSERT(ready_for_shutdown == operators_.size());
     TENZIR_ASSERT(shutdown_count == operators_.size());
   }
@@ -1192,7 +1191,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
       queue.spawn([&] -> Task<std::monostate> {
         while (true) {
           auto checkpoint = Checkpoint{uuid::random()};
-          TENZIR_INFO("injecting checkpoint {} into pipeline", checkpoint.id);
+          LOGI("injecting checkpoint {} into pipeline", checkpoint.id);
           co_await push_input(std::move(checkpoint));
           co_await folly::coro::sleep(std::chrono::seconds{1});
         }
@@ -1208,13 +1207,13 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
           std::move(*next),
           [&](std::monostate) {
             // TODO: The pipeline terminated?
-            TENZIR_INFO("run_pipeline got info that chain terminated");
+            LOGI("run_pipeline got info that chain terminated");
             is_running = false;
           },
           [&](ToControl to_control) {
             // TODO
             TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
-            TENZIR_INFO("got shutdown request from outermost subpipeline");
+            LOGI("got shutdown request from outermost subpipeline");
             from_control_sender.send(Shutdown{});
             queue.spawn(to_control_receiver.receive());
           },
@@ -1223,11 +1222,10 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
               co_match(
                 signal,
                 [&](EndOfData) {
-                  TENZIR_INFO("end of data is leaving pipeline");
+                  LOGI("end of data is leaving pipeline");
                 },
                 [&](Checkpoint checkpoint) {
-                  TENZIR_INFO("checkpoint {} is leaving pipeline",
-                              checkpoint.id);
+                  LOGI("checkpoint {} is leaving pipeline", checkpoint.id);
                 });
             });
             queue.spawn(pull_output());
