@@ -35,6 +35,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #if defined(__linux__)
 #  include <sys/eventfd.h>
@@ -190,9 +191,9 @@ inline auto drain_fd(int fd) noexcept -> void {
 /// Integrates librdkafka queue wakeups with folly coroutines.
 class AsyncConsumerQueue final : private folly::EventHandler {
 public:
-  /// Result of waiting for the next message.
-  struct NextResult {
-    std::shared_ptr<RdKafka::Message> message;
+  /// Result of waiting for and draining a message batch.
+  struct BatchResult {
+    std::vector<std::shared_ptr<RdKafka::Message>> messages;
     bool timed_out = false;
   };
 
@@ -240,27 +241,40 @@ public:
   AsyncConsumerQueue(AsyncConsumerQueue&&) = delete;
   auto operator=(AsyncConsumerQueue&&) -> AsyncConsumerQueue& = delete;
 
-  /// Retrieves the next message without blocking the caller thread.
-  [[nodiscard]] auto next(std::optional<std::chrono::milliseconds> timeout
-                          = std::nullopt) -> folly::coro::Task<NextResult> {
+  /// Waits for queue activity and drains up to `max_messages` without blocking.
+  [[nodiscard]] auto
+  next_batch(size_t max_messages,
+             std::optional<std::chrono::milliseconds> timeout = std::nullopt)
+    -> folly::coro::Task<BatchResult> {
+    TENZIR_ASSERT(max_messages > 0);
     while (not is_stopped()) {
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         request_stop();
         break;
       }
-      if (auto message = try_consume()) {
-        co_return NextResult{.message = std::move(message)};
+      auto messages = consume_available(max_messages);
+      if (not messages.empty()) {
+        co_return BatchResult{
+          .messages = std::move(messages),
+          .timed_out = false,
+        };
       }
       auto wait_result = co_await wait_for_notification(timeout);
       if (wait_result == NotificationWaitResult::timed_out) {
-        co_return NextResult{.message = nullptr, .timed_out = true};
+        co_return BatchResult{
+          .messages = {},
+          .timed_out = true,
+        };
       }
       if (wait_result == NotificationWaitResult::stopped) {
         break;
       }
     }
-    co_return NextResult{.message = nullptr, .timed_out = false};
+    co_return BatchResult{
+      .messages = {},
+      .timed_out = false,
+    };
   }
 
   auto request_stop() -> void {
@@ -383,6 +397,21 @@ private:
       return nullptr;
     }
     return guard;
+  }
+
+  /// Drains all immediately available messages up to `max_messages`.
+  [[nodiscard]] auto consume_available(size_t max_messages)
+    -> std::vector<std::shared_ptr<RdKafka::Message>> {
+    auto messages = std::vector<std::shared_ptr<RdKafka::Message>>{};
+    messages.reserve(max_messages);
+    while (messages.size() < max_messages) {
+      auto message = try_consume();
+      if (not message) {
+        break;
+      }
+      messages.push_back(std::move(message));
+    }
+    return messages;
   }
 
   /// Unhooks librdkafka queue wakeups from the eventfd.

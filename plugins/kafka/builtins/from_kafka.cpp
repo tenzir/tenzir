@@ -20,6 +20,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <algorithm>
 #include <chrono>
 #include <limits>
 #include <memory>
@@ -84,7 +85,7 @@ auto parse_offset_value(const located<data>& input, int64_t& offset) -> bool {
 
 /// Result envelope for await_task() to distinguish idle timeouts from EOF.
 struct FromKafkaTaskResult {
-  std::shared_ptr<RdKafka::Message> message;
+  std::vector<std::shared_ptr<RdKafka::Message>> messages;
   bool idle_timeout = false;
 };
 
@@ -235,9 +236,13 @@ public:
         timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
           args_.batch_timeout);
       }
-      auto result = co_await (*queue_)->next(timeout);
+      auto max_messages = task_batch_size_limit();
+      if (max_messages == 0) {
+        co_return FromKafkaTaskResult{};
+      }
+      auto result = co_await (*queue_)->next_batch(max_messages, timeout);
       co_return FromKafkaTaskResult{
-        .message = std::move(result.message),
+        .messages = std::move(result.messages),
         .idle_timeout = result.timed_out,
       };
     } catch (const folly::OperationCancelled&) {
@@ -255,44 +260,86 @@ public:
       last_batch_time_ = time::clock::now();
       co_return;
     }
-    auto message = std::move(task_result.message);
-    if (not message) {
+    if (task_result.messages.empty()) {
       done_ = true;
       co_return;
     }
     const auto now = time::clock::now();
-    const auto timed_out = now - last_batch_time_ >= args_.batch_timeout;
-    switch (message->err()) {
-      case RdKafka::ERR_NO_ERROR: {
-        builder_.append(*message);
-        current_uncommitted_offsets_[message->partition()] = message->offset();
-        ++emitted_messages_;
-        ++messages_since_batch_flush_;
-        const auto reached_count
-          = args_.count and args_.count->inner == emitted_messages_;
-        const auto full_batch = messages_since_batch_flush_ >= args_.batch_size;
-        if (full_batch or timed_out or reached_count) {
-          co_await flush_pending(push);
-          messages_since_batch_flush_ = 0;
-          last_batch_time_ = now;
-          if (reached_count) {
+    for (auto& message : task_result.messages) {
+      if (done_) {
+        break;
+      }
+      const auto timed_out = now - last_batch_time_ >= args_.batch_timeout;
+      switch (message->err()) {
+        case RdKafka::ERR_NO_ERROR: {
+          builder_.append(*message);
+          current_uncommitted_offsets_[message->partition()]
+            = message->offset();
+          ++emitted_messages_;
+          ++messages_since_batch_flush_;
+          const auto reached_count
+            = args_.count and args_.count->inner == emitted_messages_;
+          const auto full_batch
+            = messages_since_batch_flush_ >= args_.batch_size;
+          if (full_batch or timed_out or reached_count) {
+            co_await flush_pending(push);
+            messages_since_batch_flush_ = 0;
+            last_batch_time_ = now;
+            if (reached_count) {
+              done_ = true;
+              if (queue_) {
+                (*queue_)->request_stop();
+              }
+            }
+          }
+          break;
+        }
+        case RdKafka::ERR__PARTITION_EOF: {
+          if (not args_.exit) {
+            break;
+          }
+          auto partitions = std::vector<RdKafka::TopicPartition*>{};
+          if (auto err = (*consumer_)->assignment(partitions);
+              err != RdKafka::ERR_NO_ERROR) {
+            diagnostic::error("failed to get assignment: {}",
+                              RdKafka::err2str(err))
+              .emit(ctx);
+            done_ = true;
+            if (queue_) {
+              (*queue_)->request_stop();
+            }
+            break;
+          }
+          auto assignment = std::unordered_set<int32_t>{};
+          for (auto* partition : partitions) {
+            if (partition and partition->topic() == args_.topic) {
+              assignment.insert(partition->partition());
+            }
+          }
+          RdKafka::TopicPartition::destroy(partitions);
+          if (assignment.empty()) {
+            break;
+          }
+          if (not assigned_partitions_ or *assigned_partitions_ != assignment) {
+            assigned_partitions_ = std::move(assignment);
+            eof_partitions_.clear();
+          }
+          if (not assigned_partitions_->contains(message->partition())) {
+            break;
+          }
+          eof_partitions_.insert(message->partition());
+          if (eof_partitions_.size() == assigned_partitions_->size()) {
+            co_await flush_pending(push);
             done_ = true;
             if (queue_) {
               (*queue_)->request_stop();
             }
           }
-        }
-        break;
-      }
-      case RdKafka::ERR__PARTITION_EOF: {
-        if (not args_.exit) {
           break;
         }
-        auto partitions = std::vector<RdKafka::TopicPartition*>{};
-        if (auto err = (*consumer_)->assignment(partitions);
-            err != RdKafka::ERR_NO_ERROR) {
-          diagnostic::error("failed to get assignment: {}",
-                            RdKafka::err2str(err))
+        default: {
+          co_await flush_pending(push);
+          diagnostic::error("unexpected kafka error: `{}`", message->errstr())
             .emit(ctx);
           done_ = true;
           if (queue_) {
@@ -300,42 +347,6 @@ public:
           }
           break;
         }
-        auto assignment = std::unordered_set<int32_t>{};
-        for (auto* partition : partitions) {
-          if (partition and partition->topic() == args_.topic) {
-            assignment.insert(partition->partition());
-          }
-        }
-        RdKafka::TopicPartition::destroy(partitions);
-        if (assignment.empty()) {
-          break;
-        }
-        if (not assigned_partitions_ or *assigned_partitions_ != assignment) {
-          assigned_partitions_ = std::move(assignment);
-          eof_partitions_.clear();
-        }
-        if (not assigned_partitions_->contains(message->partition())) {
-          break;
-        }
-        eof_partitions_.insert(message->partition());
-        if (eof_partitions_.size() == assigned_partitions_->size()) {
-          co_await flush_pending(push);
-          done_ = true;
-          if (queue_) {
-            (*queue_)->request_stop();
-          }
-        }
-        break;
-      }
-      default: {
-        co_await flush_pending(push);
-        diagnostic::error("unexpected kafka error: `{}`", message->errstr())
-          .emit(ctx);
-        done_ = true;
-        if (queue_) {
-          (*queue_)->request_stop();
-        }
-        break;
       }
     }
   }
@@ -370,6 +381,23 @@ public:
   }
 
 private:
+  /// Caps per-task Kafka pulls while preserving `count=` semantics.
+  auto task_batch_size_limit() const -> size_t {
+    auto limit = args_.batch_size;
+    if (limit == 0) {
+      limit = 1;
+    }
+    if (args_.count) {
+      if (static_cast<uint64_t>(emitted_messages_) >= args_.count->inner) {
+        return 0;
+      }
+      auto remaining
+        = args_.count->inner - static_cast<uint64_t>(emitted_messages_);
+      limit = std::min(limit, remaining);
+    }
+    return static_cast<size_t>(limit);
+  }
+
   /// Advances the commit checkpoint to include all flushed offsets.
   auto move_current_to_checkpoint() -> void {
     for (const auto& [partition, offset] : current_uncommitted_offsets_) {
