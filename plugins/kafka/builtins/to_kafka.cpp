@@ -29,6 +29,15 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
+/// Number of successfully enqueued records between non-blocking producer polls.
+constexpr auto producer_poll_interval = size_t{4096};
+
+/// Short poll interval used while draining producer state after queue saturation.
+constexpr auto queue_full_short_poll_ms = 10;
+
+/// Long poll interval used after repeated queue-full retries.
+constexpr auto queue_full_long_poll_ms = 100;
+
 /// Stores process-wide `to_kafka` defaults from `kafka.yaml`.
 auto sink_global_defaults() -> record& {
   static auto defaults = record{};
@@ -145,7 +154,12 @@ public:
     }
     auto failed = false;
     const auto key = args_.key ? args_.key->inner : "";
-    const auto timestamp = args_.timestamp ? args_.timestamp->inner : time{};
+    auto timestamp_ms = int64_t{0};
+    if (args_.timestamp and args_.timestamp->inner != time{}) {
+      timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       args_.timestamp->inner.time_since_epoch())
+                       .count();
+    }
     const auto& messages = eval(args_.message, input, ctx.dh());
     for (const auto& series : messages) {
       match(
@@ -159,7 +173,8 @@ public:
                 .emit(ctx);
               continue;
             }
-            if (not produce(as_bytes(array.Value(row)), key, timestamp, ctx)) {
+            if (not produce(as_bytes(array.Value(row)), key, timestamp_ms,
+                            ctx)) {
               done_ = true;
               failed = true;
               return;
@@ -176,7 +191,10 @@ public:
         co_return;
       }
     }
-    (*producer_)->poll(0);
+    if (produced_since_poll_ > 0) {
+      (*producer_)->poll(0);
+      produced_since_poll_ = 0;
+    }
     co_return;
   }
 
@@ -190,16 +208,16 @@ public:
   }
 
 private:
-  /// Produces one Kafka record and retries while the client queue is full.
+  // High-level send pattern:
+  // 1) enqueue in bursts and defer poll() to amortize per-message overhead,
+  // 2) on ERR__QUEUE_FULL, drain delivery reports with short polls first and
+  //    escalate only after repeated backpressure,
+  // 3) perform a final flush on shutdown to preserve delivery semantics.
+  /// Produces one Kafka record and drains delivery state on backpressure.
   auto produce(std::span<const std::byte> bytes, std::string_view key,
-               time timestamp, OpCtx& ctx) -> bool {
+               int64_t timestamp_ms, OpCtx& ctx) -> bool {
     TENZIR_ASSERT(producer_);
-    auto timestamp_ms = int64_t{0};
-    if (timestamp != time{}) {
-      timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       timestamp.time_since_epoch())
-                       .count();
-    }
+    auto queue_full_retries = size_t{0};
     while (true) {
       auto result
         = (*producer_)
@@ -210,11 +228,23 @@ private:
               bytes.size(), key.empty() ? nullptr : key.data(), key.size(),
               timestamp_ms, nullptr);
       switch (result) {
-        case RdKafka::ERR_NO_ERROR:
+        case RdKafka::ERR_NO_ERROR: {
+          ++produced_since_poll_;
+          if (produced_since_poll_ >= producer_poll_interval) {
+            (*producer_)->poll(0);
+            produced_since_poll_ = 0;
+          }
           return true;
-        case RdKafka::ERR__QUEUE_FULL:
-          (*producer_)->poll(1000);
+        }
+        case RdKafka::ERR__QUEUE_FULL: {
+          auto poll_ms = queue_full_short_poll_ms;
+          if (queue_full_retries >= 100) {
+            poll_ms = queue_full_long_poll_ms;
+          }
+          (*producer_)->poll(poll_ms);
+          ++queue_full_retries;
           continue;
+        }
         default:
           diagnostic::error("failed to produce kafka message: {}",
                             RdKafka::err2str(result))
@@ -249,6 +279,7 @@ private:
   ToKafkaArgs args_;
   std::optional<configuration> cfg_;
   std::optional<Box<RdKafka::Producer>> producer_;
+  size_t produced_since_poll_ = 0;
   bool done_ = false;
 };
 
