@@ -269,8 +269,8 @@ public:
   ~Runner() override = default;
 
   auto run_to_completion() && -> Task<void> {
-    auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_WARN("returning from operator runner");
+    auto guard = detail::scope_guard{[&] noexcept {
+      TENZIR_WARN("returning from operator runner {}", id_);
     }};
     co_await queue_.activate([&] -> Task<void> {
       // TODO: Figure out where exactly the operator scope is and move this.
@@ -853,7 +853,7 @@ private:
     if constexpr (not std::same_as<Output, void>) {
       co_await push_downstream_(EndOfData{});
     }
-    TENZIR_WARN("sending ready to shutdown");
+    TENZIR_WARN("sending ready to shutdown from {}", id_);
     to_control_.send(ToControl::ready_for_shutdown);
   }
 
@@ -937,18 +937,18 @@ public:
 
   auto run_to_completion() && -> Task<void> {
     co_await queue_.activate([&] -> Task<void> {
+      TENZIR_WARN("beginning chain setup of {}", id_);
       spawn_operators();
+      TENZIR_WARN("entering main loop of {}", id_);
       co_await run_until_shutdown();
-      TENZIR_WARN("cancelling all queue items in chain");
+      TENZIR_WARN("cancelling queue of {}", id_);
       queue_.cancel();
-      TENZIR_WARN("waiting for chain queue tasks to finish");
     });
     TENZIR_INFO("chain runner {} finished", id_);
   }
 
 private:
   auto spawn_operators() -> void {
-    TENZIR_WARN("beginning chain setup of {}", id_);
     auto next_input
       = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
                 Box<Pull<OperatorMsg<table_slice>>>>{std::move(pull_upstream_)};
@@ -1001,7 +1001,6 @@ private:
   }
 
   auto run_until_shutdown() -> Task<void> {
-    TENZIR_WARN("waiting for all run operators to finish");
     // TODO: Or do we want to continue listening for control responses during
     // shutdown? That would require some additional coordination.
     auto ready_for_shutdown = size_t{0};
@@ -1025,7 +1024,7 @@ private:
               }
             },
             [&](Shutdown) {
-              TENZIR_WARN("sending shutdown to all operators");
+              TENZIR_WARN("sending shutdown to all operators of {}", id_);
               for (auto& sender : operator_ctrl_) {
                 sender.send(Shutdown{});
               }
@@ -1042,18 +1041,19 @@ private:
           co_match(
             kind,
             [&](Shutdown) {
-              TENZIR_WARN("got shutdown from operator {}", index);
               // TODO: What if we didn't send shutdown signal?
               TENZIR_ASSERT(shutdown_count < operators_.size());
               shutdown_count += 1;
+              TENZIR_WARN("got shutdown from {} ({} remaining)", id_.op(index),
+                          operators_.size() - shutdown_count);
               if (shutdown_count == operators_.size()) {
                 // All operators shut down successfully.
                 keep_running = false;
               }
             },
             [&](ToControl to_control) {
-              TENZIR_WARN("got control message from operator {}: {}", index,
-                          to_control);
+              TENZIR_WARN("got control message from operator {}: {}",
+                          id_.op(index), to_control);
               switch (to_control) {
                 case ToControl::ready_for_shutdown:
                   TENZIR_ASSERT(ready_for_shutdown < operators_.size());
@@ -1080,13 +1080,14 @@ private:
                 case ToControl::checkpoint_begin:
                 case ToControl::checkpoint_done:
                   TENZIR_INFO("chain got {} from operator {}", to_control,
-                              index);
+                              id_.op(index));
                   return;
               }
               TENZIR_UNREACHABLE();
             });
         });
     }
+    TENZIR_WARN("left main loop of {}", id_);
     TENZIR_ASSERT(ready_for_shutdown == operators_.size());
     TENZIR_ASSERT(shutdown_count == operators_.size());
   }

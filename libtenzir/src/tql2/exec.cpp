@@ -730,15 +730,13 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
   auto dedup = DeduplicatingDiagnosticHandler{dh};
   TENZIR_INFO("begin blocking");
 #if 1
+  TENZIR_WARN("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup));
 #else
-  TENZIR_WARN("running {}/{} threads",
-              folly::getGlobalCPUExecutorCounters().numActiveThreads,
+  TENZIR_WARN("running pipeline on {} threads",
               folly::getGlobalCPUExecutorCounters().numThreads);
-  auto result
-    = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup)
-                                  .semi()
-                                  .via(folly::getGlobalCPUExecutor()));
+  auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
+    folly::getGlobalCPUExecutor(), run_plan(std::move(ops), sys, dedup)));
 #endif
   TENZIR_INFO("end blocking");
   return result;
