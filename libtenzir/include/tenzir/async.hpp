@@ -41,356 +41,44 @@
 
 #pragma once
 
+#include "tenzir/actors.hpp"
 #include "tenzir/any.hpp"
-#include "tenzir/async/log.hpp"
-#include "tenzir/async/mutex.hpp"
-#include "tenzir/async/notify.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
-#include "tenzir/async/task.hpp"
 #include "tenzir/base_ctx.hpp"
-#include "tenzir/box.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/ref.hpp"
+#include "tenzir/result.hpp"
+#include "tenzir/secret_resolution.hpp"
 #include "tenzir/table_slice.hpp"
-#include "tenzir/tql2/ast.hpp"
-#include "tenzir/try.hpp"
-#include "tenzir/unit.hpp"
 
-#include <caf/actor_cast.hpp>
-#include <caf/actor_companion.hpp>
-#include <caf/actor_registry.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
-#include <caf/mailbox_element.hpp>
-#include <caf/response_type.hpp>
-#include <folly/CancellationToken.h>
-#include <folly/coro/Baton.h>
-#include <folly/coro/Collect.h>
-#include <folly/coro/Mutex.h>
-#include <folly/coro/Sleep.h>
-#include <folly/coro/Synchronized.h>
-#include <folly/coro/Task.h>
-#include <folly/coro/Traits.h>
-#include <folly/futures/Future.h>
 
 namespace tenzir {
 
-template <class T>
-using AsyncGenerator = folly::coro::AsyncGenerator<T&&>;
+namespace ir {
+struct pipeline;
+} // namespace ir
 
-template <class Result, class Handle, class F>
-void mail_with_callback(Handle receiver, caf::message msg, F f) {
-  auto companion = receiver->home_system().make_companion();
-  auto& registry = companion->home_system().registry();
-  auto companion_id = companion->id();
-  // We need to wrap non-copyable functions because CAF wants a copy...
-  auto handled = std::make_shared<bool>(false);
-  companion->on_enqueue([f = std::make_shared<F>(std::move(f)), handled,
-                         &registry,
-                         companion_id](caf::mailbox_element_ptr ptr) {
-    // Only process the first message (the response).
-    if (*handled) {
-      return;
-    }
-    *handled = true;
-    if (ptr->payload.match_elements<caf::error>()) {
-      std::invoke(std::move(*f),
-                  caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
-    } else if (ptr->payload.match_element<Result>(0)) {
-      std::invoke(std::move(*f),
-                  caf::expected<Result>{ptr->payload.get_as<Result>(0)});
-    } else {
-      // TODO: Apparently we cannot throw here?
-      TENZIR_ERROR("OH NO");
-    }
-    // Serializing the companion for network transmission registers it.
-    // Erase it to release that reference and allow cleanup.
-    registry.erase(companion_id);
-  });
-  companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
-}
-
-template <class Handle, class... Args>
-using AsyncMailResult = caf::expected<caf::detail::tl_head_t<
-  caf::response_type_t<typename Handle::signatures, std::decay_t<Args>...>>>;
-
-template <class... Args>
-class AsyncMail {
-public:
-  explicit AsyncMail(caf::message msg) : msg_{std::move(msg)} {
-  }
-
-  template <class Handle, class Result = AsyncMailResult<Handle, Args...>>
-  auto request(Handle receiver) && -> folly::SemiFuture<Result> {
-    auto [promise, future] = folly::makePromiseContract<Result>();
-    mail_with_callback<typename Result::value_type>(
-      receiver, std::move(msg_),
-      [promise = std::move(promise)](Result result) mutable {
-        promise.setValue(std::move(result));
-      });
-    return std::move(future);
-  }
-
-private:
-  caf::message msg_;
-};
-
-template <class... Ts>
-auto async_mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
-  return AsyncMail<std::decay_t<Ts>...>{
-    caf::make_message(std::forward<Ts>(xs)...)};
-}
-
-/// Returns a task that never completes.
-inline auto wait_forever() -> Task<void> {
-  // We want to stop this when cancellation occurs, but `Baton` is not
-  // cancelable by default.
-  auto baton = folly::coro::Baton{};
-  auto token = co_await folly::coro::co_current_cancellation_token;
-  auto callback = folly::CancellationCallback{token, [&]() noexcept {
-                                                baton.post();
-                                              }};
-  co_await baton;
-  if (token.isCancellationRequested()) {
-    co_yield folly::coro::co_cancelled;
-  }
-}
-
-#if 1
 // TODO: User proper types for this?
 using SubKey = data;
 using SubKeyView = data_view;
-#else
-/// A type-erased subpipeline identifier that is serializable and hashable.
-class SubKey {
-public:
-  // FIXME
-  SubKey() : impl_{Impl{42}} {
-  }
-
-  template <class T>
-  explicit(false) SubKey(T value) : impl_{Impl<T>{std::move(value)}} {
-  }
-
-  template <class T>
-  auto get() -> T& {
-    return impl_->as<T>();
-  }
-
-  auto operator==(const SubKey& other) const -> bool {
-    return impl_->equals(other.impl_);
-  }
-
-private:
-  template <class T>
-  class Impl;
-
-  class ImplBase {
-  public:
-    virtual ~ImplBase() = default;
-
-    virtual auto equals(const ImplBase& other) const -> bool = 0;
-
-    template <class T>
-    auto try_as() -> Impl<T>* {
-      return dynamic_cast<Impl<T>*>(this);
-    }
-
-    template <class T>
-    auto try_as() const -> const Impl<T>* {
-      return dynamic_cast<const Impl<T>*>(this);
-    }
-
-    template <class T>
-    auto as() -> Impl<T>& {
-      auto ptr = try_as<T>();
-      TENZIR_ASSERT(ptr);
-      return *ptr;
-    }
-  };
-
-  template <class T>
-  class Impl final : public ImplBase {
-  public:
-    explicit Impl(T value) : value_{std::move(value)} {
-    }
-
-    auto equals(const ImplBase& other) const -> bool override {
-      auto ptr = other.try_as<T>();
-      if (not ptr) {
-        return false;
-      }
-      return value_ == ptr->value_;
-    }
-
-  private:
-    T value_;
-  };
-
-  Box<ImplBase> impl_;
-};
-
-class SubKeyView {
-public:
-  SubKeyView() = default;
-
-  template <class T>
-  explicit(false) SubKeyView(T x) {
-    TENZIR_UNUSED(x);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::SubKey> {
-  auto operator()(const tenzir::SubKey& x) const {
-    TENZIR_UNUSED(x);
-    // FIXME
-    return tenzir::hash(42);
-  }
-};
-
-template <>
-struct std::hash<tenzir::SubKeyView> {
-  auto operator()(const tenzir::SubKey& x) const {
-    TENZIR_UNUSED(x);
-    // FIXME
-    return tenzir::hash(42);
-  }
-};
-
-namespace tenzir {
-#endif
 
 template <class T>
-class Err {
-public:
-  explicit Err(T value) : value_{std::move(value)} {
-  }
-
-  auto unwrap() && -> T {
-    return std::move(value_);
-  }
-
-private:
-  T value_;
-};
-
-template <class Value, class Error>
-class [[nodiscard]] Result {
-public:
-  using ValueRef = std::add_lvalue_reference_t<Value>;
-
-  Result() = default;
-
-  template <class T>
-    requires std::constructible_from<Value, T>
-  explicit(false) Result(T value) : value_{std::move(value)} {
-  }
-
-  explicit(false) Result(Err<Error> err) : value_{std::move(err)} {
-  }
-
-  auto expect(std::string_view msg) -> ValueRef {
-    TENZIR_UNUSED(msg);
-    if (is_err()) {
-      TENZIR_TODO();
-    }
-  };
-
-  auto is_err() const -> bool {
-    return is<Err<Error>>(value_);
-  }
-
-  auto unwrap() & -> ValueRef {
-    return std::get<VoidToUnit<Value>>(value_);
-  }
-
-  auto unwrap() && -> Value {
-    return unit_to_void<Value>(std::move(std::get<VoidToUnit<Value>>(value_)));
-  }
-
-  auto unwrap_err() && -> Error {
-    return std::move(std::get<Err<Error>>(value_)).unwrap();
-  }
-
-private:
-  variant<VoidToUnit<Value>, Err<Error>> value_;
-};
-
-} // namespace tenzir
-
-template <class V, class E>
-struct tenzir::tryable<tenzir::Result<V, E>> {
-  static auto is_success(tenzir::Result<V, E> const& x) -> bool {
-    return not x.is_err();
-  }
-
-  static auto get_success(tenzir::Result<V, E>&& x) -> tenzir::VoidToUnit<V> {
-    if constexpr (std::is_void_v<V>) {
-      return {};
-    } else {
-      return std::move(x).unwrap();
-    }
-  }
-
-  static auto get_error(tenzir::Result<V, E>&& x) -> tenzir::Err<E> {
-    return tenzir::Err{std::move(x).unwrap_err()};
-  }
-};
-
-namespace tenzir {
-
-/// No more data will come after this signal. Will never be sent over `void`.
-struct EndOfData {
-  friend auto inspect(auto& f, EndOfData& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
-/// Request to perform a checkpoint. To be forwarded downstream afterwards.
-struct Checkpoint {
-  uuid id;
-
-  friend auto inspect(auto& f, Checkpoint& x) -> bool {
-    return f.apply(x);
-  }
-};
-
-/// A non-data message sent to an operator by its upstream.
-using Signal = variant<EndOfData, Checkpoint>;
-
-template <class T>
-struct OperatorMsg : variant<T, Signal> {
-  using variant<T, Signal>::variant;
-};
+struct OperatorMsg;
 
 template <class Input>
 class OpenPipeline {
 public:
-  explicit OpenPipeline(Push<OperatorMsg<Input>>& push) : push_{push} {
-  }
+  explicit OpenPipeline(Push<OperatorMsg<Input>>& push);
 
-  // TODO: What if the pipeline starts with a source?
   template <std::same_as<Input> In>
-  auto push(In input) -> Task<Result<void, In>> {
-    // FIXME: What to do when closed?
-    if constexpr (std::same_as<Input, table_slice>) {
-      LOGW("pushing {} rows to subpipeline", input.rows());
-    } else {
-      LOGW("pushing {} bytes to subpipeline", input ? input->size() : 0);
-    }
-    co_await push_(std::move(input));
-    co_return {};
-  }
-
-  auto close() -> Task<void> {
-    co_await push_(EndOfData{});
-  }
+  auto push(In input) -> Task<Result<void, In>>;
+  auto close() -> Task<void>;
 
 private:
-  std::reference_wrapper<Push<OperatorMsg<Input>>> push_;
+  Ref<Push<OperatorMsg<Input>>> push_;
 };
 
 using AnyOpenPipeline = variant<OpenPipeline<void>, OpenPipeline<chunk_ptr>,
@@ -425,12 +113,6 @@ public:
   virtual auto load_checkpoint() -> Task<chunk_ptr> = 0;
   virtual auto flush() -> Task<void> = 0;
 
-  template <class... Ts>
-  auto mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
-    return AsyncMail<std::decay_t<Ts>...>{
-      caf::make_message(std::forward<Ts>(xs)...)};
-  }
-
   template <class Awaitable>
     requires std::is_void_v<folly::coro::semi_await_result_t<Awaitable>>
   auto spawn_task(Awaitable&& awaitable) -> AsyncHandle<void> {
@@ -454,8 +136,6 @@ enum class OperatorState {
   /// The operator wants to finalize.
   done,
 };
-
-class CheckpointId {};
 
 template <class Input, class Output>
 class OperatorInputOutputBase {
@@ -568,35 +248,21 @@ public:
   template <class T>
   auto operator()(std::string_view name, T& value) {
     auto success = match(f_, [&](auto& f) {
-      return f.get().field(name, value)(f.get());
+      return f->field(name, value)(*f);
     });
     TENZIR_ASSERT(success);
   }
 
 private:
-  variant<std::reference_wrapper<caf::binary_serializer>,
-          std::reference_wrapper<caf::binary_deserializer>>
-    f_;
+  variant<Ref<caf::binary_serializer>, Ref<caf::binary_deserializer>> f_;
   chunk_ptr chunk_;
 };
 
 class OperatorBase {
 public:
   virtual auto start(OpCtx& ctx) -> Task<void> {
-    // TODO: What if we don't restore? No data? Flag?
-    auto data = co_await ctx.load_checkpoint();
-    if (not data) {
-      co_return;
-    }
-    auto f = caf::binary_deserializer{
-      caf::const_byte_span{data->data(), data->size()}};
-    auto ok = f.begin_object(caf::invalid_type_id, "");
-    TENZIR_ASSERT(ok);
-    auto serde = Serde{f};
-    snapshot(serde);
-    ok = f.end_object();
-    TENZIR_ASSERT(ok);
-    // TODO: Assert we read everything?
+    TENZIR_UNUSED(ctx);
+    co_return;
   }
 
   /// Serialize/deserialize state for checkpointing. See file-level docs.
@@ -609,18 +275,6 @@ public:
     TENZIR_UNUSED(dh);
     co_await wait_forever();
     TENZIR_UNREACHABLE();
-  }
-
-  virtual auto checkpoint(OpCtx& ctx) -> Task<void> {
-    auto buffer = caf::byte_buffer{};
-    auto f = caf::binary_serializer{buffer};
-    auto ok = f.begin_object(caf::invalid_type_id, "");
-    TENZIR_ASSERT(ok);
-    auto serde = Serde{f};
-    snapshot(serde);
-    ok = f.end_object();
-    TENZIR_ASSERT(ok);
-    co_await ctx.save_checkpoint(chunk::make(std::move(buffer)));
   }
 
   virtual auto post_commit() -> Task<void> {
@@ -655,224 +309,5 @@ using AnyOperator = variant<
   Box<Operator<chunk_ptr, chunk_ptr>>, Box<Operator<chunk_ptr, table_slice>>,
   Box<Operator<table_slice, chunk_ptr>>, Box<Operator<table_slice, table_slice>>,
   Box<Operator<table_slice, void>>, Box<Operator<chunk_ptr, void>>>;
-
-template <class SemiAwaitable, class F>
-auto map_awaitable(SemiAwaitable&& awaitable, F&& f) -> Task<
-  std::invoke_result_t<F, folly::coro::semi_await_result_t<SemiAwaitable>>> {
-  co_return std::invoke(f, co_await std::forward<SemiAwaitable>(awaitable));
-}
-
-// TODO: This might not be cancellation safe?
-template <class... SemiAwaitable>
-auto select_into_variant(SemiAwaitable&&... awaitable)
-  -> Task<variant<folly::coro::semi_await_result_t<SemiAwaitable>...>> {
-  using result_t = variant<folly::coro::semi_await_result_t<SemiAwaitable>...>;
-  auto [_, result] = co_await folly::coro::collectAny(
-    map_awaitable(std::forward<SemiAwaitable>(awaitable), []<class T>(T&& x) {
-      return result_t{std::forward<T>(x)};
-    })...);
-  TENZIR_ASSERT(result.hasValue());
-  co_return std::move(*result);
-}
-
-/// A sequence of operators with the given input and output.
-template <class Input, class Output>
-class OperatorChain {
-public:
-  OperatorChain(const OperatorChain&) = delete;
-  OperatorChain& operator=(const OperatorChain&) = delete;
-  OperatorChain(OperatorChain&&) = default;
-  OperatorChain& operator=(OperatorChain&&) = default;
-  ~OperatorChain() = default;
-
-  static auto try_from(std::vector<AnyOperator>&& operators)
-    -> std::optional<OperatorChain<Input, Output>> {
-    auto input = operator_type{tag_v<Input>};
-    for (auto& op : operators) {
-      TRY(input, match(op,
-                       [&]<class In, class Out>(Box<Operator<In, Out>>&)
-                         -> std::optional<operator_type> {
-                         if (not input.is<In>()) {
-                           return std::nullopt;
-                         }
-                         return tag_v<Out>;
-                       }));
-    }
-    if (not input.is<Output>()) {
-      return std::nullopt;
-    }
-    return OperatorChain{std::move(operators)};
-  }
-
-  auto size() const -> size_t {
-    return operators_.size();
-  }
-
-  auto operator[](size_t index) const -> const AnyOperator& {
-    return operators_[index];
-  }
-
-  auto unwrap() && -> std::vector<AnyOperator> {
-    return std::move(operators_);
-  }
-
-private:
-  explicit OperatorChain(std::vector<AnyOperator> operators)
-    : operators_{std::move(operators)} {
-  }
-
-  std::vector<AnyOperator> operators_;
-};
-
-template <class T>
-inline constexpr auto enable_default_formatter<OperatorMsg<T>> = true;
-
-template <>
-struct OperatorMsg<void> : variant<Signal> {
-  using variant<Signal>::variant;
-};
-
-struct PostCommit {};
-struct Shutdown {};
-struct Stop {};
-
-using FromControl = variant<PostCommit, Shutdown, Stop>;
-
-TENZIR_ENUM(
-  /// A message sent from an operator to the controller.
-  ToControl,
-  /// Notify the host that we are ready to shutdown. After emitting
-  /// this, the operator is no longer allowed to send data, so it
-  /// should tell its previous operator to stop and its subsequent
-  /// operator that it will not get any more input.
-  ready_for_shutdown,
-  /// Say that we do not want any more input. This will also notify our
-  /// preceding operator.
-  no_more_input,
-  // TODO: Checkpoint messages need data, move into variant.
-  /// Inform the controller what checkpoint state we are in.
-  checkpoint_begin, checkpoint_done);
-
-// TODO: Where to place this?
-template <class T>
-class Receiver;
-template <class T>
-class Sender;
-
-class Never {
-private:
-  Never() = default;
-};
-
-template <class T>
-using VoidToNever = std::conditional_t<std::same_as<T, void>, Never, T>;
-
-struct PipeId;
-struct ChannelId;
-
-struct OpId {
-  std::string value;
-
-  auto sub(size_t index) const -> PipeId;
-
-  auto to(OpId other) const -> ChannelId;
-
-  friend auto format_as(OpId const& self) -> std::string_view {
-    return self.value;
-  }
-};
-
-struct PipeId {
-  std::string value;
-
-  auto op(size_t index) const -> OpId {
-    return OpId{fmt::format("{}/{}", value, index)};
-  }
-
-  friend auto format_as(PipeId const& self) -> std::string_view {
-    return self.value;
-  }
-};
-
-struct ChannelId {
-  std::string value;
-
-  static auto first(OpId id) -> ChannelId {
-    return ChannelId{fmt::format("_ -> {}", id.value)};
-  }
-
-  static auto last(OpId id) -> ChannelId {
-    return ChannelId{fmt::format("{} -> _", id.value)};
-  }
-
-  friend auto format_as(ChannelId const& self) -> std::string_view {
-    return self.value;
-  }
-};
-
-inline auto OpId::sub(size_t index) const -> PipeId {
-  return PipeId{fmt::format("{}-{}", value, index)};
-}
-
-inline auto OpId::to(OpId other) const -> ChannelId {
-  return ChannelId{fmt::format("{} -> {}", value, other.value)};
-}
-
-/// Factory for the channels between operators.
-///
-/// Implementations need to be thread-safe.
-class ChannelFactory {
-public:
-  virtual ~ChannelFactory() = default;
-
-  template <class T>
-  auto make(ChannelId id) -> PushPull<OperatorMsg<T>> {
-    if constexpr (std::same_as<T, void>) {
-      return make_void(std::move(id));
-    } else if constexpr (std::same_as<T, table_slice>) {
-      return make_events(std::move(id));
-    } else if constexpr (std::same_as<T, chunk_ptr>) {
-      return make_bytes(std::move(id));
-    } else {
-      static_assert(false, "unknown type");
-    }
-  }
-
-protected:
-  virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
-
-  virtual auto make_events(ChannelId id) -> PushPull<OperatorMsg<table_slice>>
-    = 0;
-
-  virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
-};
-
-/// Run a closed pipeline without external control.
-auto run_pipeline(OperatorChain<void, void> pipeline,
-                  ChannelFactory& channel_factory, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void>;
-
-/// Run a right-open pipeline without external control.
-template <class Output>
-  requires(not std::same_as<Output, void>)
-auto run_pipeline(OperatorChain<void, Output> pipeline, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> AsyncGenerator<Output>;
-
-/// Run an open pipeline without external control.
-template <class Input, class Output>
-  requires(not std::same_as<Output, void> and not std::same_as<Input, void>)
-auto run_pipeline_with_input(AsyncGenerator<Input> input,
-                             OperatorChain<Input, Output> pipeline,
-                             caf::actor_system& sys, diagnostic_handler& dh)
-  -> AsyncGenerator<Output>;
-
-/// Run a pipeline with external control.
-template <class Input, class Output>
-auto run_chain(OperatorChain<Input, Output> chain,
-               Box<Pull<OperatorMsg<Input>>> pull_upstream,
-               Box<Push<OperatorMsg<Output>>> push_downstream,
-               Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               PipeId id, ChannelFactory& channel_factory,
-               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void>;
 
 } // namespace tenzir

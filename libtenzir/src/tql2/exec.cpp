@@ -8,6 +8,8 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/async/executor.hpp"
+#include "tenzir/async/mutex.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"

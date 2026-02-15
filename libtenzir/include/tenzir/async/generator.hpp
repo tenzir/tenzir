@@ -8,14 +8,11 @@
 
 #pragma once
 
-#include <folly/coro/Task.h>
+#include <folly/coro/AsyncGenerator.h>
 
 namespace tenzir {
 
 template <class T>
-using Task = folly::coro::Task<T>;
-
-/// Returns a task that never completes (but can be cancelled).
-auto wait_forever() -> Task<void>;
+using AsyncGenerator = folly::coro::AsyncGenerator<T&&>;
 
 } // namespace tenzir

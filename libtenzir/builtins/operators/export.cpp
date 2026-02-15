@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/mail.hpp"
 #include "tenzir/connect_to_node.hpp"
 
 #include <tenzir/actors.hpp>
@@ -68,7 +69,6 @@ public:
   Export& operator=(Export&&) = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     auto node = co_await ctx.fetch_node();
     if (not node) {
       co_return;

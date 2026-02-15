@@ -6,8 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async.hpp"
+#include "tenzir/async/executor.hpp"
 
+#include "tenzir/async/mail.hpp"
+#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
@@ -216,7 +218,7 @@ struct SubPipelineFinished {
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
-  MutexDiagnosticHandler(diagnostic_handler& dh) : dh_{dh} {
+  explicit MutexDiagnosticHandler(diagnostic_handler& dh) : dh_{dh} {
   }
 
   auto emit(diagnostic diag) -> void override {
@@ -416,7 +418,8 @@ private:
       auto key_pair = ecc::generate_keypair();
       TENZIR_ASSERT(key_pair);
       auto public_key = key_pair->public_key;
-      futures.push_back(mail(atom::resolve_v, name, public_key).request(*node));
+      futures.push_back(
+        async_mail(atom::resolve_v, name, public_key).request(*node));
       keys.push_back(std::move(*key_pair));
     }
     const auto results = co_await folly::collectAll(std::move(futures));
@@ -613,11 +616,21 @@ private:
     //   this);
     try {
       LOGI("-> pre start");
-      if constexpr (std::same_as<Output, void>) {
-        co_await op_->start(*this);
-      } else {
-        co_await op_->start(*this);
+      {
+        // TODO: What if we don't restore? No data? Flag?
+        auto data = co_await this->load_checkpoint();
+        if (data) {
+          auto f = caf::binary_deserializer{
+            caf::const_byte_span{data->data(), data->size()}};
+          auto ok = f.begin_object(caf::invalid_type_id, "");
+          TENZIR_ASSERT(ok);
+          auto serde = Serde{f};
+          op_->snapshot(serde);
+          ok = f.end_object();
+          TENZIR_ASSERT(ok);
+        }
       }
+      co_await op_->start(*this);
       LOGI("-> post start");
       queue_.spawn([this] -> Task<ExplicitAny> {
         co_return ExplicitAny{co_await op_->await_task(*this)};
@@ -766,7 +779,17 @@ private:
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
     LOGI("got checkpoint {} in {}", checkpoint.id, typeid(*op_).name());
     to_control_.send(ToControl::checkpoint_begin);
-    co_await op_->checkpoint(*this);
+    {
+      auto buffer = caf::byte_buffer{};
+      auto f = caf::binary_serializer{buffer};
+      auto ok = f.begin_object(caf::invalid_type_id, "");
+      TENZIR_ASSERT(ok);
+      auto serde = Serde{f};
+      op_->snapshot(serde);
+      ok = f.end_object();
+      TENZIR_ASSERT(ok);
+      co_await this->save_checkpoint(chunk::make(std::move(buffer)));
+    }
     // TODO: Also checkpoint `subpipelines_`. What else?
     if (subpipelines_.empty()) {
       LOGI("finishing checkpoint with no subpipelines in {} ",

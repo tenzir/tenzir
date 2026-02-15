@@ -30,7 +30,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     // Resolve the secret using the new async API
     auto result = resolved_secret_value{};
     auto requests = std::vector<secret_request>{};
