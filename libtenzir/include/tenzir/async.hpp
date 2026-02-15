@@ -747,9 +747,6 @@ struct OperatorMsg<void> : variant<Signal> {
   using variant<Signal>::variant;
 };
 
-template <class T>
-auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>>;
-
 struct PostCommit {};
 struct Shutdown {};
 struct Stop {};
@@ -785,8 +782,89 @@ private:
 template <class T>
 using VoidToNever = std::conditional_t<std::same_as<T, void>, Never, T>;
 
+struct PipeId;
+struct ChannelId;
+
+struct OpId {
+  std::string value;
+
+  auto sub(size_t index) const -> PipeId;
+
+  auto to(OpId other) const -> ChannelId;
+
+  friend auto format_as(OpId const& self) -> std::string_view {
+    return self.value;
+  }
+};
+
+struct PipeId {
+  std::string value;
+
+  auto op(size_t index) const -> OpId {
+    return OpId{fmt::format("{}/{}", value, index)};
+  }
+
+  friend auto format_as(PipeId const& self) -> std::string_view {
+    return self.value;
+  }
+};
+
+struct ChannelId {
+  std::string value;
+
+  static auto first(OpId id) -> ChannelId {
+    return ChannelId{fmt::format("_ -> {}", id.value)};
+  }
+
+  static auto last(OpId id) -> ChannelId {
+    return ChannelId{fmt::format("{} -> _", id.value)};
+  }
+
+  friend auto format_as(ChannelId const& self) -> std::string_view {
+    return self.value;
+  }
+};
+
+inline auto OpId::sub(size_t index) const -> PipeId {
+  return PipeId{fmt::format("{}-{}", value, index)};
+}
+
+inline auto OpId::to(OpId other) const -> ChannelId {
+  return ChannelId{fmt::format("{} -> {}", value, other.value)};
+}
+
+/// Factory for the channels between operators.
+///
+/// Implementations need to be thread-safe.
+class ChannelFactory {
+public:
+  virtual ~ChannelFactory() = default;
+
+  template <class T>
+  auto make(ChannelId id) -> PushPull<OperatorMsg<T>> {
+    if constexpr (std::same_as<T, void>) {
+      return make_void(std::move(id));
+    } else if constexpr (std::same_as<T, table_slice>) {
+      return make_events(std::move(id));
+    } else if constexpr (std::same_as<T, chunk_ptr>) {
+      return make_bytes(std::move(id));
+    } else {
+      static_assert(false, "unknown type");
+    }
+  }
+
+protected:
+  virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
+
+  virtual auto make_events(ChannelId id) -> PushPull<OperatorMsg<table_slice>>
+    = 0;
+
+  virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
+};
+
 /// Run a closed pipeline without external control.
-auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
+auto run_pipeline(OperatorChain<void, void> pipeline,
+                  ChannelFactory& channel_factory, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void>;
 
 /// Run a right-open pipeline without external control.
@@ -809,6 +887,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
+               PipeId id, ChannelFactory& channel_factory,
                caf::actor_system& sys, diagnostic_handler& dh) -> Task<void>;
 
 } // namespace tenzir

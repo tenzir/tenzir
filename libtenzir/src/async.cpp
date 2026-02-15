@@ -249,12 +249,15 @@ public:
          Box<Pull<OperatorMsg<Input>>> pull_upstream,
          Box<Push<OperatorMsg<Output>>> push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-         caf::actor_system& sys, diagnostic_handler& dh)
+         OpId id, ChannelFactory& channel_factory, caf::actor_system& sys,
+         diagnostic_handler& dh)
     : op_{std::move(op)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
+      id_{std::move(id)},
+      channel_factory_{channel_factory},
       dh_{dh},
       sys_{sys} {
   }
@@ -464,6 +467,8 @@ private:
 
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input)
     -> Task<AnyOpenPipeline> override {
+    auto sub_id = id_.sub(next_subpipeline_id_);
+    next_subpipeline_id_ += 1;
     auto spawned = std::move(pipe).spawn(input);
     // TODO: Run chain in async scope?
     auto chain = match(
@@ -477,7 +482,7 @@ private:
         return std::move(*result);
       });
     auto [push_downstream, pull_downstream]
-      = make_op_channel<table_slice>(1000);
+      = channel_factory_.make<table_slice>(id_.to(sub_id.op(0)));
     auto [from_control_sender, from_control_receiver]
       = make_unbounded_channel<FromControl>();
     auto [to_control_sender, to_control_receiver]
@@ -488,12 +493,15 @@ private:
         -> variant<Box<Push<OperatorMsg<void>>>,
                    Box<Push<OperatorMsg<table_slice>>>,
                    Box<Push<OperatorMsg<chunk_ptr>>>> {
-        auto [push_upstream, pull_upstream] = make_op_channel<In>(1000);
+        auto [push_upstream, pull_upstream]
+          = channel_factory_.make<In>(sub_id.op(chain.size()).to(id_));
         auto runner = run_chain(std::move(chain), std::move(pull_upstream),
                                 std::move(push_downstream),
                                 std::move(from_control_receiver),
-                                std::move(to_control_sender), sys_, dh_);
-        // TODO: What do we do here? Do we need to react to it finishing?
+                                std::move(to_control_sender), std::move(sub_id),
+                                channel_factory_, sys_, dh_);
+        // TODO: What do we do here? Do we need to react to it
+        // finishing?
         auto handle = queue_.scope().spawn(std::move(runner));
         return std::move(push_upstream);
       });
@@ -633,7 +641,7 @@ private:
 
   auto tick() -> Task<void> {
     ticks_ += 1;
-    TENZIR_INFO("tick {} in {}", ticks_, typeid(*op_).name());
+    TENZIR_INFO("tick {} in {} ({})", ticks_, id_, typeid(*op_).name());
     switch (op_->state()) {
       case OperatorState::done:
         co_await handle_done();
@@ -854,9 +862,13 @@ private:
   Box<Push<OperatorMsg<Output>>> push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
+  OpId id_;
+  ChannelFactory& channel_factory_;
   DiagnosticHandler dh_;
   caf::actor_system& sys_;
   std::shared_ptr<const registry> reg_ = global_registry();
+
+  size_t next_subpipeline_id_ = 0;
 
   // TODO: Better map type.
   std::unordered_map<data, SubPipelineInfo> subpipelines_;
@@ -883,7 +895,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Box<Pull<OperatorMsg<Input>>> pull_upstream,
                   Box<Push<OperatorMsg<Output>>> push_downstream,
                   Receiver<FromControl> from_control,
-                  Sender<ToControl> to_control, caf::actor_system& sys,
+                  Sender<ToControl> to_control, OpId id,
+                  ChannelFactory& channel_factory, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await Runner<Input, Output>{
@@ -892,6 +905,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
     std::move(push_downstream),
     std::move(from_control),
     std::move(to_control),
+    std::move(id),
+    channel_factory,
     sys,
     dh,
   }
@@ -907,29 +922,33 @@ public:
               Box<Pull<OperatorMsg<Input>>> pull_upstream,
               Box<Push<OperatorMsg<Output>>> push_downstream,
               Receiver<FromControl> from_control, Sender<ToControl> to_control,
+              PipeId id, ChannelFactory& channel_factory,
               caf::actor_system& sys, MutexDiagnosticHandler& dh)
     : operators_{std::move(chain).unwrap()},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
+      id_{std::move(id)},
+      channel_factory_{channel_factory},
       sys_{sys},
       dh_{dh} {
   }
 
   auto run_to_completion() && -> Task<void> {
-    return queue_.activate([&] -> Task<void> {
+    co_await queue_.activate([&] -> Task<void> {
       spawn_operators();
       co_await run_until_shutdown();
       TENZIR_WARN("cancelling all queue items in chain");
       queue_.cancel();
       TENZIR_WARN("waiting for chain queue tasks to finish");
     });
+    TENZIR_INFO("chain runner {} finished", id_);
   }
 
 private:
   auto spawn_operators() -> void {
-    TENZIR_WARN("beginning chain setup");
+    TENZIR_WARN("beginning chain setup of {}", id_);
     auto next_input
       = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
                 Box<Pull<OperatorMsg<table_slice>>>>{std::move(pull_upstream_)};
@@ -939,8 +958,8 @@ private:
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         TENZIR_INFO("got {}", typeid(*op).name());
         auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
-        // TODO: This should be parameterized from the outside, right?
-        auto [output_sender, output_receiver] = make_op_channel<Out>(1);
+        auto [output_sender, output_receiver]
+          = channel_factory_.make<Out>(id_.op(index).to(id_.op(index + 1)));
         // TODO: This is a horrible hack.
         auto last = index == operators_.size() - 1;
         if (last) {
@@ -959,7 +978,8 @@ private:
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
-                                 std::move(to_control_sender), sys_, dh_);
+                                 std::move(to_control_sender), id_.op(index),
+                                 channel_factory_, sys_, dh_);
         TENZIR_INFO("spawning operator task");
         queue_.spawn([task = std::move(task),
                       index] mutable -> Task<std::pair<size_t, Shutdown>> {
@@ -1076,6 +1096,8 @@ private:
   Box<Push<OperatorMsg<Output>>> push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
+  PipeId id_;
+  ChannelFactory& channel_factory_;
   caf::actor_system& sys_;
   MutexDiagnosticHandler& dh_;
 
@@ -1102,6 +1124,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
+               PipeId id, ChannelFactory& channel_factory,
                caf::actor_system& sys, diagnostic_handler& dh) -> Task<void> {
   auto mdh = MutexDiagnosticHandler{dh};
   co_await folly::coro::co_safe_point;
@@ -1111,11 +1134,12 @@ auto run_chain(OperatorChain<Input, Output> chain,
     std::move(push_downstream),
     std::move(from_control),
     std::move(to_control),
+    std::move(id),
+    channel_factory,
     sys,
     mdh,
   }
     .run_to_completion();
-  TENZIR_INFO("chain runner finished");
 }
 
 /// Run a potentially-open pipeline without external control.
@@ -1128,200 +1152,24 @@ auto run_open_pipeline(OperatorChain<void, Output> pipeline,
   TENZIR_TODO();
 }
 
-template <class T>
-static auto cost(const OperatorMsg<T>& item, size_t limit) -> size_t {
-  return std::min(co_match(
-                    item,
-                    [](const table_slice& slice) -> size_t {
-                      return slice.rows();
-                    },
-                    [](const chunk_ptr& chunk) -> size_t {
-                      return chunk ? chunk->size() : 0;
-                    },
-                    [](const Signal&) {
-                      return size_t{1};
-                    }),
-                  limit);
-};
+namespace {
 
-/// Data channel between two operators.
-template <class T>
-struct OpChannel {
-public:
-  explicit OpChannel(size_t limit) : mutex_{Locked{limit}}, limit_{limit} {
-    // If we want to allow `limit == 0`, then the logic needs to be adapted to
-    // perform a direct transfer if `send` and `receive` are both active.
-    TENZIR_ASSERT(limit_ > 0);
-  }
-
-  auto send(OperatorMsg<T> x) -> Task<void> {
-    TENZIR_VERBOSE("SENDING {:?}", x);
-    auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_ERROR("CANCELLED");
-    }};
-    auto lock = co_await mutex_.lock();
-    TENZIR_VERBOSE("SENDING {:?} MUTEX", x);
-    while (true) {
-      if (lock->closed) {
-        panic("tried to send to closed channel");
-      }
-      if (cost(x, limit_) <= lock->remaining) {
-        break;
-      }
-      TENZIR_VERBOSE("SPINNING BECAUSE {} > {}", cost(x, limit_),
-                     lock->remaining);
-      lock.unlock();
-      co_await notify_send_.wait();
-      lock = co_await mutex_.lock();
-    }
-    lock->remaining -= cost(x, limit_);
-    TENZIR_VERBOSE("SENDING {:?} NOW", x);
-    lock->queue.push_back(std::move(x));
-    notify_receive_.notify_one();
-    guard.disable();
-  }
-
-  auto receive() -> Task<OperatorMsg<T>> {
-    auto guard = detail::scope_guard{[] noexcept {
-      TENZIR_DEBUG("CANCELLED");
-    }};
-    auto lock = co_await mutex_.lock();
-    while (lock->queue.empty()) {
-      if (lock->closed) {
-        panic("tried to receive from empty closed channel");
-      }
-      lock.unlock();
-      co_await notify_receive_.wait();
-      lock = co_await mutex_.lock();
-    }
-    auto result = std::move(lock->queue.front());
-    lock->queue.pop_front();
-    lock->remaining += cost(result, limit_);
-    notify_send_.notify_one();
-    guard.disable();
-    TENZIR_VERBOSE("RECEIVED {:?}", result);
-    co_return result;
-  }
-
-  /// Close the channel.
-  ///
-  /// After closing, sending to the channel will fail with a panic. Receiving
-  /// from a closed channel will only panic if the channel is empty.
-  auto close() -> Task<void> {
-    auto lock = co_await mutex_.lock();
-    lock->closed = true;
-  }
-
-private:
-  struct Locked {
-    explicit Locked(size_t limit) : remaining{limit} {
-    }
-
-    size_t remaining;
-    bool closed = false;
-    std::deque<OperatorMsg<T>> queue;
-  };
-
-  // TODO: This can surely be written better?
-  Mutex<Locked> mutex_;
-  size_t limit_;
-  Notify notify_send_;
-  Notify notify_receive_;
-};
-
-template <class T>
-class OpPush final : public Push<OperatorMsg<T>> {
-public:
-  explicit OpPush(std::shared_ptr<OpChannel<T>> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  ~OpPush() override {
-    if (shared_) {
-      // shared_->close();
-    }
-  }
-  OpPush(OpPush&&) = default;
-  OpPush& operator=(OpPush&&) = default;
-  OpPush(const OpPush&) = delete;
-  OpPush& operator=(const OpPush&) = delete;
-
-  auto operator()(OperatorMsg<T> x) -> Task<void> override {
-    // TENZIR_TODO();
-    TENZIR_ASSERT(shared_);
-    return shared_->send(std::move(x));
-  }
-
-private:
-  std::shared_ptr<OpChannel<T>> shared_;
-};
-
-template <class T>
-class OpPull final : public Pull<OperatorMsg<T>> {
-public:
-  explicit OpPull(std::shared_ptr<OpChannel<T>> shared)
-    : shared_{std::move(shared)} {
-  }
-
-  ~OpPull() override {
-    if (shared_) {
-      // shared_->close();
-    }
-  }
-  OpPull(OpPull&&) = default;
-  OpPull& operator=(OpPull&&) = default;
-  OpPull(const OpPull&) = delete;
-  OpPull& operator=(const OpPull&) = delete;
-
-  auto operator()() -> Task<OperatorMsg<T>> override {
-    TENZIR_ASSERT(shared_);
-    return shared_->receive();
-  }
-
-private:
-  std::shared_ptr<OpChannel<T>> shared_;
-};
-
-template <class T>
-auto make_op_channel(size_t limit) -> PushPull<OperatorMsg<T>> {
-  auto shared = std::make_shared<OpChannel<T>>(limit);
-  return {OpPush<T>{shared}, OpPull<T>{shared}};
+auto new_pipe_id() -> PipeId {
+  static auto next = std::atomic<size_t>{0};
+  auto id = next.fetch_add(1, std::memory_order::relaxed);
+  return PipeId{fmt::to_string(id)};
 }
 
-template auto make_op_channel<void>(size_t limit)
-  -> PushPull<OperatorMsg<void>>;
+} // namespace
 
-class RunPipelineSettings {
-public:
-  virtual ~RunPipelineSettings() = default;
-
-  template <class T>
-  auto make_operator_channel() -> PushPull<OperatorMsg<T>> {
-    if constexpr (std::same_as<T, void>) {
-      return make_operator_channel_void();
-    } else if constexpr (std::same_as<T, table_slice>) {
-      return make_operator_channel_events();
-    } else if constexpr (std::same_as<T, chunk_ptr>) {
-      return make_operator_channel_bytes();
-    } else {
-      static_assert(false, "unknown type");
-    }
-  }
-
-  virtual auto make_operator_channel_void() -> PushPull<OperatorMsg<void>> = 0;
-
-  virtual auto make_operator_channel_events()
-    -> PushPull<OperatorMsg<table_slice>>
-    = 0;
-
-  virtual auto make_operator_channel_bytes() -> PushPull<OperatorMsg<chunk_ptr>>
-    = 0;
-};
-
-auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
+auto run_pipeline(OperatorChain<void, void> pipeline,
+                  ChannelFactory& channel_factory, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
-  auto [push_input, pull_input] = make_op_channel<void>(10);
-  auto [push_output, pull_output] = make_op_channel<void>(10);
+  auto id = new_pipe_id();
+  auto [push_input, pull_input]
+    = channel_factory.make<void>(ChannelId::first(id.op(0)));
+  auto [push_output, pull_output]
+    = channel_factory.make<void>(ChannelId::last(id.op(pipeline.size() + 1)));
   try {
     auto [from_control_sender, from_control_receiver]
       = make_unbounded_channel<FromControl>();
@@ -1334,7 +1182,8 @@ auto run_pipeline(OperatorChain<void, void> pipeline, caf::actor_system& sys,
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
                            std::move(from_control_receiver),
-                           std::move(to_control_sender), sys, dh);
+                           std::move(to_control_sender), id, channel_factory,
+                           sys, dh);
         co_return std::monostate{};
       });
       // TODO: We just have this right now to simulate checkpointing.

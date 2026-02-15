@@ -518,19 +518,191 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 
 namespace {
 
+template <class T>
+auto cost(const OperatorMsg<T>& item, size_t limit) -> size_t {
+  return std::min(match(
+                    item,
+                    [](const table_slice& slice) -> size_t {
+                      return slice.rows();
+                    },
+                    [](const chunk_ptr& chunk) -> size_t {
+                      return chunk ? chunk->size() : 0;
+                    },
+                    [](const Signal&) {
+                      return size_t{1};
+                    }),
+                  limit);
+};
+
+/// Data channel between two operators.
+template <class T>
+struct OpChannel {
+public:
+  explicit OpChannel(ChannelId id, size_t limit)
+    : id_{std::move(id)}, limit_{limit}, mutex_{Locked{limit}} {
+    // If we want to allow `limit == 0`, then the logic needs to be adapted to
+    // perform a direct transfer if `send` and `receive` are both active.
+    TENZIR_ASSERT(limit_ > 0);
+  }
+
+  auto send(OperatorMsg<T> x) -> Task<void> {
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_ERROR("CANCELLED");
+    }};
+    auto lock = co_await mutex_.lock();
+    while (true) {
+      if (lock->closed) {
+        panic("tried to send to closed channel");
+      }
+      if (cost(x, limit_) <= lock->remaining) {
+        break;
+      }
+      TENZIR_VERBOSE("SPINNING BECAUSE {} > {}", cost(x, limit_),
+                     lock->remaining);
+      lock.unlock();
+      co_await notify_send_.wait();
+      lock = co_await mutex_.lock();
+    }
+    lock->remaining -= cost(x, limit_);
+    TENZIR_VERBOSE("SENDING {:?} OVER {}", x, id_);
+    lock->queue.push_back(std::move(x));
+    notify_receive_.notify_one();
+    guard.disable();
+  }
+
+  auto receive() -> Task<OperatorMsg<T>> {
+    auto guard = detail::scope_guard{[] noexcept {
+      TENZIR_DEBUG("CANCELLED");
+    }};
+    auto lock = co_await mutex_.lock();
+    while (lock->queue.empty()) {
+      if (lock->closed) {
+        panic("tried to receive from empty closed channel");
+      }
+      lock.unlock();
+      co_await notify_receive_.wait();
+      lock = co_await mutex_.lock();
+    }
+    auto result = std::move(lock->queue.front());
+    lock->queue.pop_front();
+    lock->remaining += cost(result, limit_);
+    notify_send_.notify_one();
+    guard.disable();
+    TENZIR_VERBOSE("RECEIVED {:?} OVER {}", result, id_);
+    co_return result;
+  }
+
+  /// Close the channel.
+  ///
+  /// After closing, sending to the channel will fail with a panic. Receiving
+  /// from a closed channel will only panic if the channel is empty.
+  auto close() -> Task<void> {
+    auto lock = co_await mutex_.lock();
+    lock->closed = true;
+  }
+
+private:
+  struct Locked {
+    explicit Locked(size_t limit) : remaining{limit} {
+    }
+
+    size_t remaining;
+    bool closed = false;
+    std::deque<OperatorMsg<T>> queue;
+  };
+
+  ChannelId id_;
+  size_t limit_;
+  // TODO: This can surely be written better?
+  Mutex<Locked> mutex_;
+  Notify notify_send_;
+  Notify notify_receive_;
+};
+
+template <class T>
+class OpPush final : public Push<OperatorMsg<T>> {
+public:
+  explicit OpPush(std::shared_ptr<OpChannel<T>> shared)
+    : shared_{std::move(shared)} {
+  }
+
+  ~OpPush() override {
+    if (shared_) {
+      // shared_->close();
+    }
+  }
+  OpPush(OpPush&&) = default;
+  OpPush& operator=(OpPush&&) = default;
+  OpPush(const OpPush&) = delete;
+  OpPush& operator=(const OpPush&) = delete;
+
+  auto operator()(OperatorMsg<T> x) -> Task<void> override {
+    // TENZIR_TODO();
+    TENZIR_ASSERT(shared_);
+    return shared_->send(std::move(x));
+  }
+
+private:
+  std::shared_ptr<OpChannel<T>> shared_;
+};
+
+template <class T>
+class OpPull final : public Pull<OperatorMsg<T>> {
+public:
+  explicit OpPull(std::shared_ptr<OpChannel<T>> shared)
+    : shared_{std::move(shared)} {
+  }
+
+  ~OpPull() override {
+    if (shared_) {
+      // shared_->close();
+    }
+  }
+  OpPull(OpPull&&) = default;
+  OpPull& operator=(OpPull&&) = default;
+  OpPull(const OpPull&) = delete;
+  OpPull& operator=(const OpPull&) = delete;
+
+  auto operator()() -> Task<OperatorMsg<T>> override {
+    TENZIR_ASSERT(shared_);
+    return shared_->receive();
+  }
+
+private:
+  std::shared_ptr<OpChannel<T>> shared_;
+};
+
+template <class T>
+auto make_op_channel(ChannelId id, size_t limit) -> PushPull<OperatorMsg<T>> {
+  auto shared = std::make_shared<OpChannel<T>>(std::move(id), limit);
+  return {OpPush<T>{shared}, OpPull<T>{shared}};
+}
+
+class TestChannelFactory : public ChannelFactory {
+protected:
+  auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
+    return make_op_channel<void>(std::move(id), 10);
+  }
+
+  auto make_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return make_op_channel<table_slice>(std::move(id), 10);
+  }
+
+  auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
+    return make_op_channel<chunk_ptr>(std::move(id), 10);
+  }
+};
+
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
               diagnostic_handler& dh) -> Task<failure_or<void>> {
   TENZIR_WARN("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  // auto [push_input, pull_input] = make_op_channel<void>(10);
-  // auto [push_output, pull_output] = make_op_channel<void>(10);
-  // co_await push_input(Signal::checkpoint);
+  auto channel_factory = TestChannelFactory{};
   TENZIR_WARN("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain),
-                        // std::move(pull_input), std::move(push_output),
-                        sys, dh);
+  co_await run_pipeline(std::move(*chain), channel_factory, sys, dh);
   TENZIR_WARN("blocking on pipeline done");
   co_return {};
 }
@@ -554,21 +726,22 @@ private:
 
 auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
                        diagnostic_handler& dh) -> failure_or<void> {
-#if 1
   // TODO: Decide where the deduplication should happen and move this.
   auto dedup = DeduplicatingDiagnosticHandler{dh};
   TENZIR_INFO("begin blocking");
+#if 1
   auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup));
-  TENZIR_INFO("end blocking");
-  return result;
 #else
   TENZIR_WARN("running {}/{} threads",
               folly::getGlobalCPUExecutorCounters().numActiveThreads,
               folly::getGlobalCPUExecutorCounters().numThreads);
-  return folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup)
-                                     .semi()
-                                     .via(folly::getGlobalCPUExecutor()));
+  auto result
+    = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup)
+                                  .semi()
+                                  .via(folly::getGlobalCPUExecutor()));
 #endif
+  TENZIR_INFO("end blocking");
+  return result;
 }
 
 // TODO: failure_or<bool> is bad
