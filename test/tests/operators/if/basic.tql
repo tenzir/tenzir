@@ -4,3 +4,4 @@ if x > 2 {
 } else {
   y = "small"
 }
+sort x

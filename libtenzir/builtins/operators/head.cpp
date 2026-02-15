@@ -22,9 +22,6 @@ public:
   explicit Head(HeadArgs args) : remaining_{args.count} {
   }
 
-  explicit Head(uint64_t count) : remaining_{count} {
-  }
-
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     // TODO: Do we want to guarantee this?
