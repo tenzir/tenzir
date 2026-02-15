@@ -13,6 +13,7 @@
 #include "tenzir/async/notify.hpp"
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 
 #include <tenzir/operator_plugin.hpp>
@@ -27,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <limits>
 #include <map>
@@ -71,6 +73,58 @@ struct FromKafkaArgs {
 
 /// Enumerates batching behavior for emitting processed Kafka records.
 TENZIR_ENUM(OptimizationMode, ordered, unordered);
+
+/// Parses a boolean-like environment flag (`1`, `true`, `yes`, `on`).
+auto parse_bool_flag(std::string value) -> bool {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) -> char {
+                   return static_cast<char>(std::tolower(c));
+                 });
+  return value == "1" or value == "true" or value == "yes" or value == "on";
+}
+
+/// Returns whether opt-in `from_kafka` perf counters should be collected.
+auto from_kafka_perf_stats_enabled() -> bool {
+  static auto enabled = [] {
+    auto value = tenzir::detail::getenv("TENZIR_KAFKA_FROM_PERF_STATS");
+    if (not value) {
+      return false;
+    }
+    return parse_bool_flag(*value);
+  }();
+  return enabled;
+}
+
+/// Converts any chrono duration to integer nanoseconds.
+template <class Duration>
+auto as_ns(Duration d) -> uint64_t {
+  return static_cast<uint64_t>(
+    std::chrono::duration_cast<std::chrono::nanoseconds>(d).count());
+}
+
+/// Aggregates opt-in runtime counters for stage-level `from_kafka` analysis.
+struct FromKafkaPerfCounters {
+  std::atomic<uint64_t> fetch_next_batch_calls = 0;
+  std::atomic<uint64_t> fetch_next_batch_wait_ns = 0;
+  std::atomic<uint64_t> fetch_timeouts = 0;
+  std::atomic<uint64_t> fetched_batches = 0;
+  std::atomic<uint64_t> fetched_messages = 0;
+  std::atomic<uint64_t> fetched_payload_bytes = 0;
+  std::atomic<uint64_t> prefetch_wait_ns = 0;
+  std::atomic<uint64_t> fetched_enqueue_wait_ns = 0;
+  std::atomic<uint64_t> build_dequeue_wait_ns = 0;
+  std::atomic<uint64_t> build_compute_ns = 0;
+  std::atomic<uint64_t> build_enqueue_wait_ns = 0;
+  std::atomic<uint64_t> built_batches = 0;
+  std::atomic<uint64_t> built_messages = 0;
+  std::atomic<uint64_t> runner_dequeue_wait_ns = 0;
+  std::atomic<uint64_t> push_wait_ns = 0;
+  std::atomic<uint64_t> emitted_batches = 0;
+  std::atomic<uint64_t> emitted_messages = 0;
+  std::atomic<uint64_t> emitted_slices = 0;
+  std::atomic<uint64_t> eof_events = 0;
+  std::atomic<uint64_t> fatal_errors = 0;
+};
 
 /// Picks a bounded worker count for the CPU-side builder stage.
 auto default_worker_concurrency() -> uint64_t {
@@ -139,6 +193,7 @@ struct FromKafkaTaskResult {
 class FromKafkaOperator final : public Operator<void, table_slice> {
 public:
   explicit FromKafkaOperator(FromKafkaArgs args) : args_{std::move(args)} {
+    perf_enabled_ = from_kafka_perf_stats_enabled();
   }
   FromKafkaOperator(FromKafkaOperator&& other) noexcept
     : args_{std::move(other.args_)},
@@ -159,6 +214,9 @@ public:
       checkpoint_pending_offsets_{std::move(other.checkpoint_pending_offsets_)},
       assigned_partitions_{std::move(other.assigned_partitions_)},
       eof_partitions_{std::move(other.eof_partitions_)},
+      perf_enabled_{other.perf_enabled_},
+      perf_started_{other.perf_started_},
+      perf_start_{other.perf_start_},
       done_{other.done_} {
     fetched_queue_closed_.store(other.fetched_queue_closed_.load());
     live_builders_.store(other.live_builders_.load());
@@ -172,6 +230,11 @@ public:
     co_await OperatorBase::start(ctx);
     if (done_) {
       co_return;
+    }
+    if (perf_enabled_) {
+      perf_started_ = true;
+      perf_start_ = std::chrono::steady_clock::now();
+      perf_reported_.store(false, std::memory_order_relaxed);
     }
     auto aws = std::optional<aws_iam_options>{};
     if (args_.aws_iam) {
@@ -329,8 +392,18 @@ public:
       if (optimization_mode_ == OptimizationMode::ordered) {
         co_return co_await await_ordered_batch();
       }
+      auto dequeue_started = std::chrono::steady_clock::time_point{};
+      if (perf_enabled_) {
+        dequeue_started = std::chrono::steady_clock::now();
+      }
       auto next = co_await built_queue_->dequeue();
+      if (perf_enabled_) {
+        add_perf_counter(
+          perf_.runner_dequeue_wait_ns,
+          as_ns(std::chrono::steady_clock::now() - dequeue_started));
+      }
       if (not next) {
+        emit_perf_summary("end_of_stream");
         co_return FromKafkaTaskResult{.end_of_stream = true};
       }
       co_return FromKafkaTaskResult{
@@ -338,6 +411,7 @@ public:
       };
     } catch (const folly::OperationCancelled&) {
       request_pipeline_stop();
+      emit_perf_summary("cancelled");
       co_return FromKafkaTaskResult{.end_of_stream = true};
     }
   }
@@ -347,30 +421,47 @@ public:
     auto task_result = std::move(result).as<FromKafkaTaskResult>();
     if (task_result.end_of_stream) {
       done_ = true;
+      emit_perf_summary("end_of_stream");
       request_pipeline_stop();
       co_return;
     }
     TENZIR_ASSERT(task_result.batch);
     auto batch = std::move(*task_result.batch);
     if (batch.slice) {
+      auto push_started = std::chrono::steady_clock::time_point{};
+      if (perf_enabled_) {
+        push_started = std::chrono::steady_clock::now();
+      }
       co_await push(std::move(*batch.slice));
+      if (perf_enabled_) {
+        add_perf_counter(
+          perf_.push_wait_ns,
+          as_ns(std::chrono::steady_clock::now() - push_started));
+        add_perf_counter(perf_.emitted_slices);
+      }
       advance_checkpoint(batch.max_offsets);
       emitted_messages_ += batch.message_count;
+      add_perf_counter(perf_.emitted_batches);
+      add_perf_counter(perf_.emitted_messages,
+                       static_cast<uint64_t>(batch.message_count));
     }
     for (auto partition : batch.eof_partitions) {
       if (done_) {
         break;
       }
+      add_perf_counter(perf_.eof_events);
       mark_partition_eof(partition, ctx);
     }
     if (batch.fatal_error) {
       diagnostic::error("{}", *batch.fatal_error).emit(ctx);
       done_ = true;
+      add_perf_counter(perf_.fatal_errors);
     }
     if (args_.count and emitted_messages_ >= args_.count->inner) {
       done_ = true;
     }
     if (done_) {
+      emit_perf_summary("done");
       request_pipeline_stop();
     }
   }
@@ -403,6 +494,7 @@ public:
   /// Stops background tasks as soon as the runner asks this source to stop.
   auto stop(OpCtx&) -> Task<void> override {
     request_pipeline_stop();
+    emit_perf_summary("stop");
     co_return;
   }
 
@@ -451,6 +543,61 @@ private:
   ///    `prefetch_bytes` accounting (`in_flight_fetch_bytes_`).
   /// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
   ///    that order before emitting slices.
+
+  /// Adds `delta` to one instrumentation counter when perf stats are enabled.
+  auto add_perf_counter(std::atomic<uint64_t>& counter, uint64_t delta
+                                                        = 1) const -> void {
+    if (not perf_enabled_) {
+      return;
+    }
+    counter.fetch_add(delta, std::memory_order_relaxed);
+  }
+
+  /// Emits a one-time, compact stage timing summary for benchmarking runs.
+  auto emit_perf_summary(const char* reason) const -> void {
+    if (not perf_enabled_ or not perf_started_) {
+      return;
+    }
+    auto expected = false;
+    if (not perf_reported_.compare_exchange_strong(expected, true,
+                                                   std::memory_order_relaxed)) {
+      return;
+    }
+    auto load = [](const std::atomic<uint64_t>& counter) {
+      return counter.load(std::memory_order_relaxed);
+    };
+    auto elapsed_ns = std::max<uint64_t>(
+      1, as_ns(std::chrono::steady_clock::now() - perf_start_));
+    auto elapsed_s = static_cast<double>(elapsed_ns) / 1'000'000'000.0;
+    auto emitted_messages = load(perf_.emitted_messages);
+    auto eps = static_cast<double>(emitted_messages) / elapsed_s;
+    TENZIR_WARN(
+      "from_kafka perf: reason={} topic={} elapsed_ms={} eps={:.0f} "
+      "emitted_messages={} emitted_batches={} emitted_slices={} "
+      "fetch_calls={} fetch_wait_ms={} fetch_timeouts={} fetched_batches={} "
+      "fetched_messages={} fetched_mb={:.2f} prefetch_wait_ms={} "
+      "fetched_enqueue_wait_ms={} build_dequeue_wait_ms_total={} "
+      "build_compute_ms_total={} build_enqueue_wait_ms_total={} "
+      "built_batches={} built_messages={} "
+      "runner_dequeue_wait_ms={} push_wait_ms={} eof_events={} fatal_errors={}",
+      reason, args_.topic, elapsed_ns / 1'000'000, eps, emitted_messages,
+      load(perf_.emitted_batches), load(perf_.emitted_slices),
+      load(perf_.fetch_next_batch_calls),
+      load(perf_.fetch_next_batch_wait_ns) / 1'000'000,
+      load(perf_.fetch_timeouts), load(perf_.fetched_batches),
+      load(perf_.fetched_messages),
+      static_cast<double>(load(perf_.fetched_payload_bytes))
+        / (1024.0 * 1024.0),
+      load(perf_.prefetch_wait_ns) / 1'000'000,
+      load(perf_.fetched_enqueue_wait_ns) / 1'000'000,
+      load(perf_.build_dequeue_wait_ns) / 1'000'000,
+      load(perf_.build_compute_ns) / 1'000'000,
+      load(perf_.build_enqueue_wait_ns) / 1'000'000, load(perf_.built_batches),
+      load(perf_.built_messages),
+      load(perf_.runner_dequeue_wait_ns) / 1'000'000,
+      load(perf_.push_wait_ns) / 1'000'000, load(perf_.eof_events),
+      load(perf_.fatal_errors));
+  }
 
   /// Computes the configured worker-side batch size.
   auto resolve_worker_batch_size() const -> size_t {
@@ -623,9 +770,20 @@ private:
         }
         auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
           args_.batch_timeout);
+        auto next_batch_started = std::chrono::steady_clock::time_point{};
+        if (perf_enabled_) {
+          add_perf_counter(perf_.fetch_next_batch_calls);
+          next_batch_started = std::chrono::steady_clock::now();
+        }
         auto result = co_await (*queue_)->next_batch(max_messages, timeout);
+        if (perf_enabled_) {
+          add_perf_counter(
+            perf_.fetch_next_batch_wait_ns,
+            as_ns(std::chrono::steady_clock::now() - next_batch_started));
+        }
         if (result.messages.empty()) {
           if (result.timed_out) {
+            add_perf_counter(perf_.fetch_timeouts);
             continue;
           }
           break;
@@ -634,9 +792,24 @@ private:
         if (not fetched) {
           continue;
         }
+        if (perf_enabled_) {
+          add_perf_counter(perf_.fetched_batches);
+          add_perf_counter(perf_.fetched_messages,
+                           static_cast<uint64_t>(fetched->payloads.size()));
+          add_perf_counter(perf_.fetched_payload_bytes, fetched->payload_bytes);
+        }
         auto reserved_bytes = fetched->payload_bytes;
         if (reserved_bytes > 0) {
+          auto budget_started = std::chrono::steady_clock::time_point{};
+          if (perf_enabled_) {
+            budget_started = std::chrono::steady_clock::now();
+          }
           co_await acquire_prefetch_budget(reserved_bytes);
+          if (perf_enabled_) {
+            add_perf_counter(
+              perf_.prefetch_wait_ns,
+              as_ns(std::chrono::steady_clock::now() - budget_started));
+          }
           if (is_pipeline_stopping()) {
             release_prefetch_budget(reserved_bytes);
             break;
@@ -649,10 +822,22 @@ private:
         };
         auto has_fatal = fetched->fatal_error.has_value();
         auto reached_count = fetched->reached_count;
+        auto enqueue_started = std::chrono::steady_clock::time_point{};
+        if (perf_enabled_) {
+          enqueue_started = std::chrono::steady_clock::now();
+        }
         co_await fetched_queue_->enqueue(
           std::optional<FetchedBatch>{std::move(*fetched)});
+        if (perf_enabled_) {
+          add_perf_counter(
+            perf_.fetched_enqueue_wait_ns,
+            as_ns(std::chrono::steady_clock::now() - enqueue_started));
+        }
         release_budget.disable();
         if (has_fatal or reached_count) {
+          if (has_fatal) {
+            add_perf_counter(perf_.fatal_errors);
+          }
           request_pipeline_stop();
           break;
         }
@@ -694,7 +879,16 @@ private:
     }
     try {
       while (true) {
+        auto dequeue_started = std::chrono::steady_clock::time_point{};
+        if (perf_enabled_) {
+          dequeue_started = std::chrono::steady_clock::now();
+        }
         auto next = co_await fetched_queue_->dequeue();
+        if (perf_enabled_) {
+          add_perf_counter(
+            perf_.build_dequeue_wait_ns,
+            as_ns(std::chrono::steady_clock::now() - dequeue_started));
+        }
         if (not next) {
           break;
         }
@@ -704,11 +898,32 @@ private:
             release_prefetch_budget(bytes);
           },
         };
+        auto build_started = std::chrono::steady_clock::time_point{};
+        if (perf_enabled_) {
+          build_started = std::chrono::steady_clock::now();
+        }
         auto built = build_batch(std::move(fetched));
+        if (perf_enabled_) {
+          add_perf_counter(
+            perf_.build_compute_ns,
+            as_ns(std::chrono::steady_clock::now() - build_started));
+          add_perf_counter(perf_.built_batches);
+          add_perf_counter(perf_.built_messages,
+                           static_cast<uint64_t>(built.message_count));
+        }
         release_budget.trigger();
+        auto enqueue_started = std::chrono::steady_clock::time_point{};
+        if (perf_enabled_) {
+          enqueue_started = std::chrono::steady_clock::now();
+        }
         co_await built_queue_->enqueue(std::optional<BuiltBatch>{
           std::move(built),
         });
+        if (perf_enabled_) {
+          add_perf_counter(
+            perf_.build_enqueue_wait_ns,
+            as_ns(std::chrono::steady_clock::now() - enqueue_started));
+        }
       }
     } catch (const folly::OperationCancelled&) {
       request_pipeline_stop();
@@ -731,7 +946,16 @@ private:
           .batch = std::move(batch),
         };
       }
+      auto dequeue_started = std::chrono::steady_clock::time_point{};
+      if (perf_enabled_) {
+        dequeue_started = std::chrono::steady_clock::now();
+      }
       auto next = co_await built_queue_->dequeue();
+      if (perf_enabled_) {
+        add_perf_counter(
+          perf_.runner_dequeue_wait_ns,
+          as_ns(std::chrono::steady_clock::now() - dequeue_started));
+      }
       if (not next) {
         if (ordered_batches_.empty()) {
           co_return FromKafkaTaskResult{.end_of_stream = true};
@@ -823,6 +1047,12 @@ private:
   std::optional<std::unordered_set<int32_t>> assigned_partitions_;
   // Invariant: contains only partitions from `assigned_partitions_`.
   std::unordered_set<int32_t> eof_partitions_;
+  // Optional counters for benchmarking; enabled via env flag.
+  mutable FromKafkaPerfCounters perf_;
+  mutable std::atomic<bool> perf_reported_ = false;
+  bool perf_enabled_ = false;
+  bool perf_started_ = false;
+  std::chrono::steady_clock::time_point perf_start_{};
   bool done_ = false;
 };
 
