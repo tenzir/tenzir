@@ -27,6 +27,7 @@
 #include <librdkafka/rdkafkacpp.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -36,6 +37,8 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -51,10 +54,41 @@ constexpr auto default_batch_timeout = 100ms;
 /// Default upper bound for one Kafka notification wait while fetching.
 constexpr auto default_fetch_wait_timeout = 1ms;
 
+/// Maximum adaptive wait used after repeated empty fetch timeouts.
+constexpr auto fetch_wait_backoff_cap = 16ms;
+
+/// Number of consecutive idle timeouts before doubling fetch wait.
+constexpr auto fetch_wait_backoff_after = 8uz;
+
 /// Stores process-wide `from_kafka` defaults from `kafka.yaml`.
 auto source_global_defaults() -> record& {
   static auto defaults = record{};
   return defaults;
+}
+
+/// Returns throughput defaults for librdkafka consumer-side queueing/fetching.
+auto from_kafka_throughput_defaults()
+  -> std::span<const std::pair<std::string_view, std::string_view>> {
+  using entry = std::pair<std::string_view, std::string_view>;
+  static constexpr auto defaults
+    = std::to_array<entry>({{"fetch.min.bytes", "1"},
+                            {"fetch.wait.max.ms", "500"},
+                            {"max.partition.fetch.bytes", "1048576"},
+                            {"queued.min.messages", "200000"},
+                            {"queued.max.messages.kbytes", "262144"}});
+  return defaults;
+}
+
+/// Adds throughput defaults unless explicitly configured via `kafka.yaml`.
+/// User-supplied `from_kafka options={...}` are still applied afterwards.
+auto apply_from_kafka_throughput_defaults(record& config) -> void {
+  for (const auto& [key, value] : from_kafka_throughput_defaults()) {
+    auto key_string = std::string{key};
+    if (config.contains(key_string)) {
+      continue;
+    }
+    config[key_string] = std::string{value};
+  }
 }
 
 /// Parsed arguments for `from_kafka`.
@@ -277,6 +311,7 @@ public:
     if (not config.contains("group.id")) {
       config["group.id"] = "tenzir";
     }
+    apply_from_kafka_throughput_defaults(config);
     auto cfg = configuration::make(config, aws, resolved_creds, ctx.dh());
     if (not cfg) {
       diagnostic::error("failed to create kafka configuration: {}", cfg.error())
@@ -777,7 +812,12 @@ private:
         auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
         pending_messages.reserve(max_messages);
         auto min_wait = std::chrono::duration_cast<duration>(1ms);
-        auto poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
+        auto base_poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
+        auto poll_wait = base_poll_wait;
+        auto poll_wait_cap
+          = std::max(base_poll_wait, std::chrono::duration_cast<duration>(
+                                       fetch_wait_backoff_cap));
+        auto consecutive_empty_timeouts = size_t{0};
         auto batch_deadline
           = std::optional<std::chrono::steady_clock::time_point>{};
         while (pending_messages.size() < max_messages
@@ -816,10 +856,16 @@ private:
               if (not pending_messages.empty()) {
                 break;
               }
+              ++consecutive_empty_timeouts;
+              if (consecutive_empty_timeouts >= fetch_wait_backoff_after) {
+                poll_wait = std::min(poll_wait_cap, poll_wait * 2);
+              }
               continue;
             }
             break;
           }
+          consecutive_empty_timeouts = 0;
+          poll_wait = base_poll_wait;
           std::ranges::move(result.messages,
                             std::back_inserter(pending_messages));
           if (not batch_deadline) {
