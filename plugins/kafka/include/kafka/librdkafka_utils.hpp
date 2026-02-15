@@ -1,0 +1,48 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
+#include <tenzir/aws_iam.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/location.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution.hpp>
+
+#include <caf/expected.hpp>
+#include <librdkafka/rdkafkacpp.h>
+
+#include <memory>
+#include <optional>
+#include <vector>
+
+namespace tenzir::plugins::kafka {
+
+/// Owns librdkafka consumer config and callback objects with shared lifetime.
+struct consumer_configuration {
+  std::shared_ptr<RdKafka::Conf> conf;
+  std::shared_ptr<RdKafka::OAuthBearerTokenRefreshCb> oauth_callback;
+  std::shared_ptr<RdKafka::EventCb> event_callback;
+  std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
+};
+
+/// Creates a consumer configuration from static options plus callback setup.
+auto make_consumer_configuration(record const& options,
+                                 std::optional<aws_iam_options> aws,
+                                 std::optional<resolved_aws_credentials> creds,
+                                 int64_t offset, diagnostic_handler& dh)
+  -> caf::expected<consumer_configuration>;
+
+/// Applies plain options and returns secret requests for deferred resolution.
+[[nodiscard]] auto
+configure_consumer_or_request_secrets(consumer_configuration& cfg,
+                                      located<record> const& options,
+                                      diagnostic_handler& dh)
+  -> std::vector<secret_request>;
+
+} // namespace tenzir::plugins::kafka

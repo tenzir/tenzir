@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/async_consumer.hpp"
-#include "kafka/configuration.hpp"
+#include "kafka/librdkafka_utils.hpp"
 #include "kafka/message_builder.hpp"
-#include "kafka/operator.hpp"
+#include "kafka/operator_args.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/detail/enum.hpp"
@@ -47,6 +47,8 @@
 namespace tenzir::plugins::kafka {
 
 namespace {
+
+using namespace std::chrono_literals;
 
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
@@ -160,19 +162,19 @@ struct FromKafkaPerfCounters {
   std::atomic<uint64_t> fetched_payload_bytes = 0;
   /// Time spent waiting for prefetch-byte budget before enqueueing fetch batches.
   std::atomic<uint64_t> prefetch_wait_ns = 0;
-  /// Time spent waiting to enqueue into `fetched_queue_`.
+  /// Time spent waiting to enqueue into `runtime_.fetched_queue`.
   std::atomic<uint64_t> fetched_enqueue_wait_ns = 0;
-  /// Worker time spent waiting to dequeue from `fetched_queue_`.
+  /// Worker time spent waiting to dequeue from `runtime_.fetched_queue`.
   std::atomic<uint64_t> build_dequeue_wait_ns = 0;
   /// Worker CPU time spent in `build_batch`.
   std::atomic<uint64_t> build_compute_ns = 0;
-  /// Worker time spent waiting to enqueue into `built_queue_`.
+  /// Worker time spent waiting to enqueue into `runtime_.built_queue`.
   std::atomic<uint64_t> build_enqueue_wait_ns = 0;
   /// Number of batches processed by build workers.
   std::atomic<uint64_t> built_batches = 0;
   /// Number of messages processed by build workers.
   std::atomic<uint64_t> built_messages = 0;
-  /// Runner time spent waiting to dequeue from `built_queue_`.
+  /// Runner time spent waiting to dequeue from `runtime_.built_queue`.
   std::atomic<uint64_t> runner_dequeue_wait_ns = 0;
   /// Time spent waiting on downstream backpressure in `push(...)`.
   std::atomic<uint64_t> push_wait_ns = 0;
@@ -262,16 +264,8 @@ public:
       optimization_mode_{other.optimization_mode_},
       worker_count_{other.worker_count_},
       worker_batch_size_{other.worker_batch_size_},
-      cfg_{std::move(other.cfg_)},
+      consumer_cfg_{std::move(other.consumer_cfg_)},
       consumer_{std::move(other.consumer_)},
-      queue_{std::move(other.queue_)},
-      fetched_queue_{std::move(other.fetched_queue_)},
-      built_queue_{std::move(other.built_queue_)},
-      ordered_slices_{std::move(other.ordered_slices_)},
-      in_flight_fetch_bytes_{other.in_flight_fetch_bytes_},
-      next_fetch_seq_{other.next_fetch_seq_},
-      next_emit_seq_{other.next_emit_seq_},
-      scheduled_messages_{other.scheduled_messages_},
       emitted_messages_{other.emitted_messages_},
       checkpoint_pending_offsets_{std::move(other.checkpoint_pending_offsets_)},
       assigned_partitions_{std::move(other.assigned_partitions_)},
@@ -280,9 +274,19 @@ public:
       perf_started_{other.perf_started_},
       perf_start_{other.perf_start_},
       done_{other.done_} {
-    fetched_queue_closed_.store(other.fetched_queue_closed_.load());
-    live_builders_.store(other.live_builders_.load());
-    pipeline_stop_requested_.store(other.pipeline_stop_requested_.load());
+    runtime_.queue = std::move(other.runtime_.queue);
+    runtime_.fetched_queue = std::move(other.runtime_.fetched_queue);
+    runtime_.built_queue = std::move(other.runtime_.built_queue);
+    runtime_.ordered_slices = std::move(other.runtime_.ordered_slices);
+    runtime_.fetched_queue_closed.store(
+      other.runtime_.fetched_queue_closed.load());
+    runtime_.live_builders.store(other.runtime_.live_builders.load());
+    runtime_.pipeline_stop_requested.store(
+      other.runtime_.pipeline_stop_requested.load());
+    runtime_.in_flight_fetch_bytes = other.runtime_.in_flight_fetch_bytes;
+    runtime_.next_fetch_seq = other.runtime_.next_fetch_seq;
+    runtime_.next_emit_seq = other.runtime_.next_emit_seq;
+    runtime_.scheduled_messages = other.runtime_.scheduled_messages;
   }
   auto operator=(FromKafkaOperator&&) -> FromKafkaOperator& = delete;
   FromKafkaOperator(FromKafkaOperator const&) = delete;
@@ -293,149 +297,23 @@ public:
     if (done_) {
       co_return;
     }
-    if (perf_enabled_) {
-      perf_started_ = true;
-      perf_start_ = std::chrono::steady_clock::now();
-      perf_reported_.store(false, std::memory_order_relaxed);
-    }
-    auto aws = std::optional<aws_iam_options>{};
-    if (args_.aws_iam) {
-      auto parsed = aws_iam_options::from_record(*args_.aws_iam, ctx.dh());
-      if (not parsed) {
-        done_ = true;
-        co_return;
-      }
-      aws = std::move(*parsed);
-      if (not args_.aws_region and not aws->region) {
-        diagnostic::error(
-          "`aws_region` is required for Kafka MSK authentication")
-          .primary(args_.aws_iam->source)
-          .emit(ctx);
-        done_ = true;
-        co_return;
-      }
-    }
-    auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (aws and (aws->has_explicit_credentials() or aws->role)) {
-      resolved_creds.emplace();
-      auto requests = aws->make_secret_requests(*resolved_creds, ctx.dh());
-      if (auto ok = co_await ctx.resolve_secrets(std::move(requests)); not ok) {
-        done_ = true;
-        co_return;
-      }
-    }
-    if (args_.aws_region) {
-      if (not resolved_creds) {
-        resolved_creds.emplace();
-      }
-      resolved_creds->region = args_.aws_region->inner;
-    }
-    auto config = source_global_defaults();
-    if (not config.contains("group.id")) {
-      config["group.id"] = "tenzir";
-    }
-    apply_from_kafka_throughput_defaults(config);
-    auto cfg = configuration::make(config, aws, resolved_creds, ctx.dh());
-    if (not cfg) {
-      diagnostic::error("failed to create kafka configuration: {}", cfg.error())
-        .emit(ctx);
+    initialize_perf_tracking();
+    auto auth = co_await resolve_aws_auth(ctx);
+    if (not auth) {
       done_ = true;
       co_return;
     }
-    cfg_ = std::move(*cfg);
-    auto user_options = args_.options;
-    if (aws) {
-      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
-    }
-    if (auto ok = co_await ctx.resolve_secrets(
-          configure_or_request(user_options, *cfg_, ctx.dh()));
-        not ok) {
+    auto offset = resolve_start_offset(ctx);
+    if (not offset) {
       done_ = true;
       co_return;
     }
-    if (args_.exit) {
-      if (auto err = cfg_->set("enable.partition.eof", "true"); err) {
-        diagnostic::error("failed to enable partition EOF: {}", err).emit(ctx);
-        done_ = true;
-        co_return;
-      }
-    }
-    if (auto err = cfg_->set("enable.auto.commit", "false"); err) {
-      diagnostic::error("failed to disable auto-commit: {}", err).emit(ctx);
+    if (not co_await make_consumer_and_queue(ctx, std::move(*auth), *offset)) {
       done_ = true;
       co_return;
     }
-    auto offset = int64_t{RdKafka::Topic::OFFSET_STORED};
-    if (args_.offset and not parse_offset_value(*args_.offset, offset)) {
-      diagnostic::error("invalid `offset` value")
-        .primary(args_.offset->source)
-        .note(
-          "must be `beginning`, `end`, `stored`, `<offset>`, or `-<offset>`")
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    if (auto err = cfg_->set_rebalance_cb(offset); err) {
-      diagnostic::error("failed to set rebalance callback: {}", err).emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    auto error = std::string{};
-    auto* raw_consumer
-      = RdKafka::KafkaConsumer::create(cfg_->underlying(), error);
-    if (raw_consumer == nullptr) {
-      diagnostic::error("failed to create kafka consumer: {}", error).emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    consumer_.emplace(Box<RdKafka::KafkaConsumer>::from_unique_ptr(
-      std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}));
-    if (auto err = (*consumer_)->subscribe({args_.topic});
-        err != RdKafka::ERR_NO_ERROR) {
-      diagnostic::error("failed to subscribe to topic: {}",
-                        RdKafka::err2str(err))
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    auto* evb = folly::getGlobalIOExecutor()->getEventBase();
-    auto queue = AsyncConsumerQueue::make(*evb, **consumer_);
-    if (queue.is_err()) {
-      diagnostic::error("failed to create async consumer queue: {}",
-                        std::move(queue).unwrap_err())
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    queue_.emplace(std::move(queue).unwrap());
-    auto parsed_optimization
-      = from_string<OptimizationMode>(args_.optimization);
-    TENZIR_ASSERT(parsed_optimization);
-    optimization_mode_ = *parsed_optimization;
-    worker_batch_size_ = resolve_worker_batch_size();
-    worker_count_ = resolve_worker_concurrency();
-    auto fetch_capacity = static_cast<uint32_t>(std::min<uint64_t>(
-      args_.prefetch_batches, std::numeric_limits<uint32_t>::max()));
-    TENZIR_ASSERT(fetch_capacity > 0);
-    fetched_queue_ = std::make_shared<FetchedQueue>(fetch_capacity);
-    built_queue_ = std::make_shared<BuiltQueue>(fetch_capacity);
-    ordered_slices_.clear();
-    next_emit_seq_ = 0;
-    next_fetch_seq_ = 0;
-    scheduled_messages_ = emitted_messages_;
-    fetched_queue_closed_.store(false);
-    live_builders_.store(worker_count_);
-    pipeline_stop_requested_.store(false);
-    {
-      auto guard = std::scoped_lock{prefetch_budget_mutex_};
-      in_flight_fetch_bytes_ = 0;
-    }
-    ctx.spawn_task(
-      folly::coro::co_withExecutor(folly::getGlobalIOExecutor(), fetch_loop()));
-    for (size_t i = 0; i < worker_count_; ++i) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                                  build_loop()));
-    }
+    initialize_runtime_state();
+    spawn_pipeline_tasks(ctx);
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -443,7 +321,7 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    if (not built_queue_) {
+    if (not runtime_.built_queue) {
       co_return TableSliceResult{.end_of_stream = true};
     }
     try {
@@ -459,7 +337,7 @@ public:
       if (perf_enabled_) {
         dequeue_started = std::chrono::steady_clock::now();
       }
-      auto next = co_await built_queue_->dequeue();
+      auto next = co_await runtime_.built_queue->dequeue();
       if (perf_enabled_) {
         add_perf_counter(
           perf_.runner_dequeue_wait_ns,
@@ -579,6 +457,37 @@ private:
   using BuiltQueue
     = folly::coro::BoundedQueue<std::optional<TableSliceEnvelope>>;
 
+  /// Holds resolved AWS IAM settings used for consumer configuration.
+  struct AwsAuthState {
+    std::optional<aws_iam_options> aws;
+    std::optional<resolved_aws_credentials> creds;
+  };
+
+  /// Owns mutable runtime state for fetch/build/emit stages.
+  struct RuntimeState {
+    std::optional<Box<AsyncConsumerQueue>> queue;
+    std::shared_ptr<FetchedQueue> fetched_queue;
+    std::shared_ptr<BuiltQueue> built_queue;
+    std::map<uint64_t, TableSliceEnvelope> ordered_slices;
+    std::atomic<bool> fetched_queue_closed = false;
+    std::atomic<size_t> live_builders = 0;
+    std::atomic<bool> pipeline_stop_requested = false;
+    std::mutex prefetch_budget_mutex;
+    size_t in_flight_fetch_bytes = 0;
+    Notify prefetch_budget_notify;
+    uint64_t next_fetch_seq = 0;
+    uint64_t next_emit_seq = 0;
+    uint64_t scheduled_messages = 0;
+  };
+
+  /// Tracks adaptive polling state while collecting one fetched batch.
+  struct FetchPollState {
+    duration base_poll_wait = default_fetch_wait_timeout;
+    duration poll_wait = default_fetch_wait_timeout;
+    size_t consecutive_empty_timeouts = 0;
+    std::optional<std::chrono::steady_clock::time_point> batch_deadline;
+  };
+
   /// Concurrent stage layout (executor domains on the right):
   ///
   ///   ┌───────────────────────────────┐
@@ -588,7 +497,7 @@ private:
   ///                   │
   ///                   │ MessageBatch
   ///                   ▼
-  ///            fetched_queue_                          [bounded queue]
+  ///            runtime_.fetched_queue                          [bounded queue]
   ///                   │
   ///                   │ ×N workers
   ///                   ▼
@@ -599,7 +508,7 @@ private:
   ///                   │
   ///                   │ TableSliceEnvelope
   ///                   ▼
-  ///             built_queue_                           [bounded queue]
+  ///             runtime_.built_queue                           [bounded queue]
   ///                   │
   ///                   ▼
   ///   ┌───────────────────────────────┐
@@ -610,8 +519,8 @@ private:
   ///       unordered: push as received
   ///
   /// Invariants:
-  /// 1. Backpressure is bounded by both `fetched_queue_` capacity and
-  ///    `prefetch_bytes` accounting (`in_flight_fetch_bytes_`).
+  /// 1. Backpressure is bounded by both `runtime_.fetched_queue` capacity and
+  ///    `prefetch_bytes` accounting (`runtime_.in_flight_fetch_bytes`).
   /// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
   ///    that order before emitting slices.
   /// 3. Fetch polling (`fetch_wait_timeout`) is independent from slice
@@ -619,6 +528,158 @@ private:
   /// 4. Source ingress is typically the bottleneck. Raising worker concurrency
   ///    helps mostly in `optimization="unordered"` mode but does not remove
   ///    fetch-side wait on its own.
+
+  /// Starts opt-in perf timing at operator startup.
+  auto initialize_perf_tracking() -> void {
+    if (not perf_enabled_) {
+      return;
+    }
+    perf_started_ = true;
+    perf_start_ = std::chrono::steady_clock::now();
+    perf_reported_.store(false, std::memory_order_relaxed);
+  }
+
+  /// Resolves and validates AWS IAM configuration for Kafka auth.
+  auto resolve_aws_auth(OpCtx& ctx) const -> Task<std::optional<AwsAuthState>> {
+    auto auth = AwsAuthState{};
+    if (not args_.aws_iam) {
+      co_return auth;
+    }
+    auto parsed = aws_iam_options::from_record(*args_.aws_iam, ctx.dh());
+    if (not parsed) {
+      co_return std::nullopt;
+    }
+    auth.aws = std::move(*parsed);
+    if (not args_.aws_region and not auth.aws->region) {
+      diagnostic::error("`aws_region` is required for Kafka MSK authentication")
+        .primary(args_.aws_iam->source)
+        .emit(ctx);
+      co_return std::nullopt;
+    }
+    if (auth.aws->has_explicit_credentials() or auth.aws->role) {
+      auth.creds.emplace();
+      auto requests = auth.aws->make_secret_requests(*auth.creds, ctx.dh());
+      if (auto ok = co_await ctx.resolve_secrets(std::move(requests)); not ok) {
+        co_return std::nullopt;
+      }
+    }
+    if (args_.aws_region) {
+      if (not auth.creds) {
+        auth.creds.emplace();
+      }
+      auth.creds->region = args_.aws_region->inner;
+    }
+    co_return auth;
+  }
+
+  /// Parses and validates the configured consumer start offset.
+  auto resolve_start_offset(OpCtx& ctx) const -> std::optional<int64_t> {
+    auto offset = int64_t{RdKafka::Topic::OFFSET_STORED};
+    if (args_.offset and not parse_offset_value(*args_.offset, offset)) {
+      diagnostic::error("invalid `offset` value")
+        .primary(args_.offset->source)
+        .note("must be `beginning`, `end`, `stored`, `<offset>`, or "
+              "`-<offset>`")
+        .emit(ctx);
+      return std::nullopt;
+    }
+    return offset;
+  }
+
+  /// Creates the Kafka consumer plus async queue with resolved config inputs.
+  auto make_consumer_and_queue(OpCtx& ctx, AwsAuthState auth, int64_t offset)
+    -> Task<bool> {
+    auto config = source_global_defaults();
+    if (not config.contains("group.id")) {
+      config["group.id"] = "tenzir";
+    }
+    apply_from_kafka_throughput_defaults(config);
+    config["enable.auto.commit"] = "false";
+    if (args_.exit) {
+      config["enable.partition.eof"] = "true";
+    }
+    auto cfg = make_consumer_configuration(config, auth.aws, auth.creds, offset,
+                                           ctx.dh());
+    if (not cfg) {
+      diagnostic::error("failed to create kafka configuration: {}", cfg.error())
+        .emit(ctx);
+      co_return false;
+    }
+    consumer_cfg_ = std::move(*cfg);
+    auto user_options = args_.options;
+    if (auth.aws) {
+      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    }
+    if (auto ok
+        = co_await ctx.resolve_secrets(configure_consumer_or_request_secrets(
+          *consumer_cfg_, user_options, ctx.dh()));
+        not ok) {
+      co_return false;
+    }
+    TENZIR_ASSERT(consumer_cfg_->conf);
+    auto error = std::string{};
+    auto* raw_consumer
+      = RdKafka::KafkaConsumer::create(consumer_cfg_->conf.get(), error);
+    if (raw_consumer == nullptr) {
+      diagnostic::error("failed to create kafka consumer: {}", error).emit(ctx);
+      co_return false;
+    }
+    consumer_.emplace(Box<RdKafka::KafkaConsumer>::from_unique_ptr(
+      std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}));
+    if (auto err = (*consumer_)->subscribe({args_.topic});
+        err != RdKafka::ERR_NO_ERROR) {
+      diagnostic::error("failed to subscribe to topic: {}",
+                        RdKafka::err2str(err))
+        .emit(ctx);
+      co_return false;
+    }
+    auto* evb = folly::getGlobalIOExecutor()->getEventBase();
+    auto queue = AsyncConsumerQueue::make(*evb, **consumer_);
+    if (queue.is_err()) {
+      diagnostic::error("failed to create async consumer queue: {}",
+                        std::move(queue).unwrap_err())
+        .emit(ctx);
+      co_return false;
+    }
+    runtime_.queue.emplace(std::move(queue).unwrap());
+    co_return true;
+  }
+
+  /// Initializes per-run runtime queues, counters, and stage parameters.
+  auto initialize_runtime_state() -> void {
+    auto parsed_optimization
+      = from_string<OptimizationMode>(args_.optimization);
+    TENZIR_ASSERT(parsed_optimization);
+    optimization_mode_ = *parsed_optimization;
+    worker_batch_size_ = resolve_worker_batch_size();
+    worker_count_ = resolve_worker_concurrency();
+    auto fetch_capacity = static_cast<uint32_t>(std::min<uint64_t>(
+      args_.prefetch_batches, std::numeric_limits<uint32_t>::max()));
+    TENZIR_ASSERT(fetch_capacity > 0);
+    runtime_.fetched_queue = std::make_shared<FetchedQueue>(fetch_capacity);
+    runtime_.built_queue = std::make_shared<BuiltQueue>(fetch_capacity);
+    runtime_.ordered_slices.clear();
+    runtime_.next_emit_seq = 0;
+    runtime_.next_fetch_seq = 0;
+    runtime_.scheduled_messages = emitted_messages_;
+    runtime_.fetched_queue_closed.store(false);
+    runtime_.live_builders.store(worker_count_);
+    runtime_.pipeline_stop_requested.store(false);
+    {
+      auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
+      runtime_.in_flight_fetch_bytes = 0;
+    }
+  }
+
+  /// Spawns fetch and build coroutines on their executor domains.
+  auto spawn_pipeline_tasks(OpCtx& ctx) const -> void {
+    ctx.spawn_task(
+      folly::coro::co_withExecutor(folly::getGlobalIOExecutor(), fetch_loop()));
+    for (size_t i = 0; i < worker_count_; ++i) {
+      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
+                                                  build_loop()));
+    }
+  }
 
   /// Adds `delta` to one instrumentation counter when perf stats are enabled.
   auto add_perf_counter(std::atomic<uint64_t>& counter, uint64_t delta
@@ -703,10 +764,10 @@ private:
   auto fetch_batch_size_limit() const -> size_t {
     auto limit = static_cast<uint64_t>(worker_batch_size_);
     if (args_.count) {
-      if (scheduled_messages_ >= args_.count->inner) {
+      if (runtime_.scheduled_messages >= args_.count->inner) {
         return 0;
       }
-      auto remaining = args_.count->inner - scheduled_messages_;
+      auto remaining = args_.count->inner - runtime_.scheduled_messages;
       limit = std::min(limit, remaining);
     }
     if (limit == 0) {
@@ -717,18 +778,18 @@ private:
 
   /// Requests all pipeline stages to stop and wakes budget waiters.
   auto request_pipeline_stop() const -> void {
-    if (pipeline_stop_requested_.exchange(true)) {
+    if (runtime_.pipeline_stop_requested.exchange(true)) {
       return;
     }
-    if (queue_) {
-      (*queue_)->request_stop();
+    if (runtime_.queue) {
+      (*runtime_.queue)->request_stop();
     }
-    prefetch_budget_notify_.notify_one();
+    runtime_.prefetch_budget_notify.notify_one();
   }
 
   /// Returns whether any pipeline stage requested shutdown.
   auto is_pipeline_stopping() const -> bool {
-    return pipeline_stop_requested_.load();
+    return runtime_.pipeline_stop_requested.load();
   }
 
   /// Waits until enough byte budget is available for one fetched batch.
@@ -738,20 +799,21 @@ private:
     }
     while (not is_pipeline_stopping()) {
       {
-        auto guard = std::scoped_lock{prefetch_budget_mutex_};
+        auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
         // Never block forever on one oversized fetch batch. Allow exactly one
         // oversized in-flight batch at a time when no other batch is tracked.
         if (bytes > args_.prefetch_bytes) {
-          if (in_flight_fetch_bytes_ == 0) {
-            in_flight_fetch_bytes_ = bytes;
+          if (runtime_.in_flight_fetch_bytes == 0) {
+            runtime_.in_flight_fetch_bytes = bytes;
             co_return;
           }
-        } else if (in_flight_fetch_bytes_ + bytes <= args_.prefetch_bytes) {
-          in_flight_fetch_bytes_ += bytes;
+        } else if (runtime_.in_flight_fetch_bytes + bytes
+                   <= args_.prefetch_bytes) {
+          runtime_.in_flight_fetch_bytes += bytes;
           co_return;
         }
       }
-      co_await prefetch_budget_notify_.wait();
+      co_await runtime_.prefetch_budget_notify.wait();
     }
   }
 
@@ -761,27 +823,28 @@ private:
       return;
     }
     {
-      auto guard = std::scoped_lock{prefetch_budget_mutex_};
-      if (bytes >= in_flight_fetch_bytes_) {
-        in_flight_fetch_bytes_ = 0;
+      auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
+      if (bytes >= runtime_.in_flight_fetch_bytes) {
+        runtime_.in_flight_fetch_bytes = 0;
       } else {
-        in_flight_fetch_bytes_ -= bytes;
+        runtime_.in_flight_fetch_bytes -= bytes;
       }
     }
-    prefetch_budget_notify_.notify_one();
+    runtime_.prefetch_budget_notify.notify_one();
   }
 
   /// Enqueues exactly one shutdown sentinel per builder worker.
   auto close_fetched_queue() const -> Task<void> {
-    if (not fetched_queue_) {
+    if (not runtime_.fetched_queue) {
       co_return;
     }
     auto expected = false;
-    if (not fetched_queue_closed_.compare_exchange_strong(expected, true)) {
+    if (not runtime_.fetched_queue_closed.compare_exchange_strong(expected,
+                                                                  true)) {
       co_return;
     }
     for (size_t i = 0; i < worker_count_; ++i) {
-      co_await fetched_queue_->enqueue(std::nullopt);
+      co_await runtime_.fetched_queue->enqueue(std::nullopt);
     }
   }
 
@@ -797,8 +860,9 @@ private:
         case RD_KAFKA_RESP_ERR_NO_ERROR: {
           batch.payload_bytes += message.len();
           batch.messages.push_back(std::move(message));
-          ++scheduled_messages_;
-          if (args_.count and scheduled_messages_ >= args_.count->inner) {
+          ++runtime_.scheduled_messages;
+          if (args_.count
+              and runtime_.scheduled_messages >= args_.count->inner) {
             reached_count = true;
           }
           break;
@@ -828,13 +892,134 @@ private:
         and not batch.fatal_error) {
       return std::nullopt;
     }
-    batch.seq = next_fetch_seq_++;
+    batch.seq = runtime_.next_fetch_seq++;
     return batch;
+  }
+
+  /// Collects one fetch window with adaptive timeout/backoff behavior.
+  auto collect_fetch_window(size_t max_messages) const
+    -> Task<std::vector<AsyncConsumerQueue::Message>> {
+    auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
+    pending_messages.reserve(max_messages);
+    auto min_wait = std::chrono::duration_cast<duration>(1ms);
+    auto state = FetchPollState{};
+    state.base_poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
+    state.poll_wait = state.base_poll_wait;
+    auto poll_wait_cap
+      = std::max(state.base_poll_wait,
+                 std::chrono::duration_cast<duration>(fetch_wait_backoff_cap));
+    while (pending_messages.size() < max_messages
+           and not is_pipeline_stopping()) {
+      auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(
+        state.poll_wait);
+      if (not pending_messages.empty()) {
+        TENZIR_ASSERT(state.batch_deadline);
+        auto now = std::chrono::steady_clock::now();
+        if (now >= *state.batch_deadline) {
+          break;
+        }
+        auto remaining = *state.batch_deadline - now;
+        wait = std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::min<std::chrono::steady_clock::duration>(remaining,
+                                                        state.poll_wait));
+        if (wait <= 0ms) {
+          wait = 1ms;
+        }
+      }
+      auto next_batch_started = std::chrono::steady_clock::time_point{};
+      if (perf_enabled_) {
+        add_perf_counter(perf_.fetch_next_batch_calls);
+        next_batch_started = std::chrono::steady_clock::now();
+      }
+      auto batch = co_await (*runtime_.queue)
+                     ->next_batch(max_messages - pending_messages.size(), wait);
+      if (perf_enabled_) {
+        add_perf_counter(
+          perf_.fetch_next_batch_wait_ns,
+          as_ns(std::chrono::steady_clock::now() - next_batch_started));
+      }
+      if (batch.messages.empty()) {
+        if (batch.timed_out) {
+          add_perf_counter(perf_.fetch_timeouts);
+          if (not pending_messages.empty()) {
+            break;
+          }
+          ++state.consecutive_empty_timeouts;
+          if (state.consecutive_empty_timeouts >= fetch_wait_backoff_after) {
+            state.poll_wait = std::min(poll_wait_cap, state.poll_wait * 2);
+          }
+          continue;
+        }
+        break;
+      }
+      state.consecutive_empty_timeouts = 0;
+      state.poll_wait = state.base_poll_wait;
+      pending_messages.append_range(batch.messages | std::views::as_rvalue);
+      if (not state.batch_deadline) {
+        state.batch_deadline = std::chrono::steady_clock::now()
+                               + std::max(args_.batch_timeout, min_wait);
+      }
+    }
+    co_return pending_messages;
+  }
+
+  /// Enqueues one fetched batch while honoring prefetch-byte budget.
+  auto enqueue_fetched_batch(MessageBatch fetched) const -> Task<bool> {
+    if (perf_enabled_) {
+      add_perf_counter(perf_.fetched_batches);
+      add_perf_counter(perf_.fetched_messages,
+                       static_cast<uint64_t>(fetched.messages.size()));
+      add_perf_counter(perf_.fetched_payload_bytes, fetched.payload_bytes);
+    }
+    auto reserved_bytes = fetched.payload_bytes;
+    if (reserved_bytes > 0) {
+      auto budget_started = std::chrono::steady_clock::time_point{};
+      if (perf_enabled_) {
+        budget_started = std::chrono::steady_clock::now();
+      }
+      co_await acquire_prefetch_budget(reserved_bytes);
+      if (perf_enabled_) {
+        add_perf_counter(
+          perf_.prefetch_wait_ns,
+          as_ns(std::chrono::steady_clock::now() - budget_started));
+      }
+      if (is_pipeline_stopping()) {
+        release_prefetch_budget(reserved_bytes);
+        co_return false;
+      }
+    }
+    auto release_budget = tenzir::detail::scope_guard{
+      [this, reserved_bytes]() noexcept {
+        release_prefetch_budget(reserved_bytes);
+      },
+    };
+    auto has_fatal = fetched.fatal_error.has_value();
+    auto reached_count = fetched.reached_count;
+    auto enqueue_started = std::chrono::steady_clock::time_point{};
+    if (perf_enabled_) {
+      enqueue_started = std::chrono::steady_clock::now();
+    }
+    co_await runtime_.fetched_queue->enqueue(
+      std::optional<MessageBatch>{std::move(fetched)});
+    if (perf_enabled_) {
+      add_perf_counter(
+        perf_.fetched_enqueue_wait_ns,
+        as_ns(std::chrono::steady_clock::now() - enqueue_started));
+    }
+    release_budget.disable();
+    if (has_fatal or reached_count) {
+      if (has_fatal) {
+        add_perf_counter(perf_.fatal_errors);
+      }
+      request_pipeline_stop();
+      co_return false;
+    }
+    co_return not is_pipeline_stopping();
   }
 
   /// Fetches Kafka batches and hands them to worker coroutines.
   auto fetch_loop() const -> Task<void> {
-    if (not queue_ or not fetched_queue_) {
+    if (not runtime_.queue or not runtime_.fetched_queue) {
       co_return;
     }
     try {
@@ -844,71 +1029,7 @@ private:
           request_pipeline_stop();
           break;
         }
-        auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
-        pending_messages.reserve(max_messages);
-        auto min_wait = std::chrono::duration_cast<duration>(1ms);
-        auto base_poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
-        auto poll_wait = base_poll_wait;
-        // Backoff invariant: only idle (empty) timeout streaks increase
-        // `poll_wait`. Any fetched message resets to `base_poll_wait`.
-        auto poll_wait_cap
-          = std::max(base_poll_wait, std::chrono::duration_cast<duration>(
-                                       fetch_wait_backoff_cap));
-        auto consecutive_empty_timeouts = size_t{0};
-        auto batch_deadline
-          = std::optional<std::chrono::steady_clock::time_point>{};
-        while (pending_messages.size() < max_messages
-               and not is_pipeline_stopping()) {
-          auto wait
-            = std::chrono::duration_cast<std::chrono::milliseconds>(poll_wait);
-          if (not pending_messages.empty()) {
-            TENZIR_ASSERT(batch_deadline);
-            auto now = std::chrono::steady_clock::now();
-            if (now >= *batch_deadline) {
-              break;
-            }
-            auto remaining = *batch_deadline - now;
-            wait = std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::min<std::chrono::steady_clock::duration>(remaining,
-                                                            poll_wait));
-            if (wait <= 0ms) {
-              wait = 1ms;
-            }
-          }
-          auto next_batch_started = std::chrono::steady_clock::time_point{};
-          if (perf_enabled_) {
-            add_perf_counter(perf_.fetch_next_batch_calls);
-            next_batch_started = std::chrono::steady_clock::now();
-          }
-          auto batch = co_await (*queue_)->next_batch(
-            max_messages - pending_messages.size(), wait);
-          if (perf_enabled_) {
-            add_perf_counter(
-              perf_.fetch_next_batch_wait_ns,
-              as_ns(std::chrono::steady_clock::now() - next_batch_started));
-          }
-          if (batch.messages.empty()) {
-            if (batch.timed_out) {
-              add_perf_counter(perf_.fetch_timeouts);
-              if (not pending_messages.empty()) {
-                break;
-              }
-              ++consecutive_empty_timeouts;
-              if (consecutive_empty_timeouts >= fetch_wait_backoff_after) {
-                poll_wait = std::min(poll_wait_cap, poll_wait * 2);
-              }
-              continue;
-            }
-            break;
-          }
-          consecutive_empty_timeouts = 0;
-          poll_wait = base_poll_wait;
-          pending_messages.append_range(batch.messages | std::views::as_rvalue);
-          if (not batch_deadline) {
-            batch_deadline = std::chrono::steady_clock::now()
-                             + std::max(args_.batch_timeout, min_wait);
-          }
-        }
+        auto pending_messages = co_await collect_fetch_window(max_messages);
         if (pending_messages.empty()) {
           if (is_pipeline_stopping()) {
             break;
@@ -919,56 +1040,7 @@ private:
         if (not fetched) {
           continue;
         }
-        if (perf_enabled_) {
-          add_perf_counter(perf_.fetched_batches);
-          add_perf_counter(perf_.fetched_messages,
-                           static_cast<uint64_t>(fetched->messages.size()));
-          add_perf_counter(perf_.fetched_payload_bytes, fetched->payload_bytes);
-        }
-        auto reserved_bytes = fetched->payload_bytes;
-        if (reserved_bytes > 0) {
-          auto budget_started = std::chrono::steady_clock::time_point{};
-          if (perf_enabled_) {
-            budget_started = std::chrono::steady_clock::now();
-          }
-          co_await acquire_prefetch_budget(reserved_bytes);
-          if (perf_enabled_) {
-            add_perf_counter(
-              perf_.prefetch_wait_ns,
-              as_ns(std::chrono::steady_clock::now() - budget_started));
-          }
-          if (is_pipeline_stopping()) {
-            release_prefetch_budget(reserved_bytes);
-            break;
-          }
-        }
-        auto release_budget = tenzir::detail::scope_guard{
-          [this, reserved_bytes]() noexcept {
-            release_prefetch_budget(reserved_bytes);
-          },
-        };
-        auto has_fatal = fetched->fatal_error.has_value();
-        auto reached_count = fetched->reached_count;
-        auto enqueue_started = std::chrono::steady_clock::time_point{};
-        if (perf_enabled_) {
-          enqueue_started = std::chrono::steady_clock::now();
-        }
-        co_await fetched_queue_->enqueue(
-          std::optional<MessageBatch>{std::move(*fetched)});
-        if (perf_enabled_) {
-          add_perf_counter(
-            perf_.fetched_enqueue_wait_ns,
-            as_ns(std::chrono::steady_clock::now() - enqueue_started));
-        }
-        release_budget.disable();
-        if (has_fatal or reached_count) {
-          if (has_fatal) {
-            add_perf_counter(perf_.fatal_errors);
-          }
-          request_pipeline_stop();
-          break;
-        }
-        if (is_pipeline_stopping()) {
+        if (not co_await enqueue_fetched_batch(std::move(*fetched))) {
           break;
         }
       }
@@ -1009,7 +1081,7 @@ private:
 
   /// Runs one CPU-stage worker that builds slices from fetched batches.
   auto build_loop() const -> Task<void> {
-    if (not fetched_queue_ or not built_queue_) {
+    if (not runtime_.fetched_queue or not runtime_.built_queue) {
       co_return;
     }
     try {
@@ -1018,7 +1090,7 @@ private:
         if (perf_enabled_) {
           dequeue_started = std::chrono::steady_clock::now();
         }
-        auto next = co_await fetched_queue_->dequeue();
+        auto next = co_await runtime_.fetched_queue->dequeue();
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_dequeue_wait_ns,
@@ -1051,9 +1123,10 @@ private:
         if (perf_enabled_) {
           enqueue_started = std::chrono::steady_clock::now();
         }
-        co_await built_queue_->enqueue(std::optional<TableSliceEnvelope>{
-          std::move(built),
-        });
+        co_await runtime_.built_queue->enqueue(
+          std::optional<TableSliceEnvelope>{
+            std::move(built),
+          });
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_enqueue_wait_ns,
@@ -1063,20 +1136,20 @@ private:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
-    if (live_builders_.fetch_sub(1) == 1 and built_queue_) {
-      co_await built_queue_->enqueue(std::nullopt);
+    if (runtime_.live_builders.fetch_sub(1) == 1 and runtime_.built_queue) {
+      co_await runtime_.built_queue->enqueue(std::nullopt);
     }
   }
 
   /// Waits for the next in-order built batch from worker output.
   auto await_ordered_batch() const -> Task<TableSliceResult> {
-    TENZIR_ASSERT(built_queue_);
+    TENZIR_ASSERT(runtime_.built_queue);
     while (true) {
-      auto ready = ordered_slices_.find(next_emit_seq_);
-      if (ready != ordered_slices_.end()) {
+      auto ready = runtime_.ordered_slices.find(runtime_.next_emit_seq);
+      if (ready != runtime_.ordered_slices.end()) {
         auto batch = std::move(ready->second);
-        ordered_slices_.erase(ready);
-        ++next_emit_seq_;
+        runtime_.ordered_slices.erase(ready);
+        ++runtime_.next_emit_seq;
         co_return TableSliceResult{
           .slice = std::move(batch),
         };
@@ -1085,27 +1158,28 @@ private:
       if (perf_enabled_) {
         dequeue_started = std::chrono::steady_clock::now();
       }
-      auto next = co_await built_queue_->dequeue();
+      auto next = co_await runtime_.built_queue->dequeue();
       if (perf_enabled_) {
         add_perf_counter(
           perf_.runner_dequeue_wait_ns,
           as_ns(std::chrono::steady_clock::now() - dequeue_started));
       }
       if (not next) {
-        if (ordered_slices_.empty()) {
+        if (runtime_.ordered_slices.empty()) {
           co_return TableSliceResult{.end_of_stream = true};
         }
-        auto contiguous = ordered_slices_.find(next_emit_seq_);
-        TENZIR_ASSERT(contiguous != ordered_slices_.end());
+        auto contiguous = runtime_.ordered_slices.find(runtime_.next_emit_seq);
+        TENZIR_ASSERT(contiguous != runtime_.ordered_slices.end());
         continue;
       }
-      if (next->seq == next_emit_seq_) {
-        ++next_emit_seq_;
+      if (next->seq == runtime_.next_emit_seq) {
+        ++runtime_.next_emit_seq;
         co_return TableSliceResult{
           .slice = std::move(*next),
         };
       }
-      auto [_, inserted] = ordered_slices_.emplace(next->seq, std::move(*next));
+      auto [_, inserted]
+        = runtime_.ordered_slices.emplace(next->seq, std::move(*next));
       TENZIR_ASSERT(inserted);
     }
   }
@@ -1159,21 +1233,9 @@ private:
   OptimizationMode optimization_mode_ = OptimizationMode::ordered;
   size_t worker_count_ = 1;
   size_t worker_batch_size_ = 1;
-  std::optional<configuration> cfg_;
+  std::optional<consumer_configuration> consumer_cfg_;
   std::optional<Box<RdKafka::KafkaConsumer>> consumer_;
-  mutable std::optional<Box<AsyncConsumerQueue>> queue_;
-  std::shared_ptr<FetchedQueue> fetched_queue_;
-  std::shared_ptr<BuiltQueue> built_queue_;
-  mutable std::map<uint64_t, TableSliceEnvelope> ordered_slices_;
-  mutable std::atomic<bool> fetched_queue_closed_ = false;
-  mutable std::atomic<size_t> live_builders_ = 0;
-  mutable std::atomic<bool> pipeline_stop_requested_ = false;
-  mutable std::mutex prefetch_budget_mutex_;
-  mutable size_t in_flight_fetch_bytes_ = 0;
-  mutable Notify prefetch_budget_notify_;
-  mutable uint64_t next_fetch_seq_ = 0;
-  mutable uint64_t next_emit_seq_ = 0;
-  mutable uint64_t scheduled_messages_ = 0;
+  mutable RuntimeState runtime_;
   // Number of records emitted so far; used for `count=` resumption.
   size_t emitted_messages_ = 0;
   // Invariant: committed offsets are stored as "next offset to consume".
