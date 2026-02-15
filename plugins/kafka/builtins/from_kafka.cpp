@@ -70,6 +70,10 @@ auto source_global_defaults() -> record& {
 auto from_kafka_throughput_defaults()
   -> std::span<const std::pair<std::string_view, std::string_view>> {
   using entry = std::pair<std::string_view, std::string_view>;
+  // Performance note: these defaults intentionally bias towards low broker-side
+  // holdback (`fetch.min.bytes=1`, `fetch.wait.max.ms=500`) while increasing
+  // client queue depth. Local 10M-message fixture runs showed this combination
+  // avoids source stalls better than aggressive "large fetch" defaults.
   static constexpr auto defaults
     = std::to_array<entry>({{"fetch.min.bytes", "1"},
                             {"fetch.wait.max.ms", "500"},
@@ -585,6 +589,9 @@ private:
   ///    that order before emitting slices.
   /// 3. Fetch polling (`fetch_wait_timeout`) is independent from slice
   ///    flush latency (`batch_timeout`) to avoid timeout-coupling stalls.
+  /// 4. Source ingress is typically the bottleneck. Raising worker concurrency
+  ///    helps mostly in `optimization="unordered"` mode but does not remove
+  ///    fetch-side wait on its own.
 
   /// Adds `delta` to one instrumentation counter when perf stats are enabled.
   auto add_perf_counter(std::atomic<uint64_t>& counter, uint64_t delta
@@ -814,6 +821,8 @@ private:
         auto min_wait = std::chrono::duration_cast<duration>(1ms);
         auto base_poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
         auto poll_wait = base_poll_wait;
+        // Backoff invariant: only idle (empty) timeout streaks increase
+        // `poll_wait`. Any fetched message resets to `base_poll_wait`.
         auto poll_wait_cap
           = std::max(base_poll_wait, std::chrono::duration_cast<duration>(
                                        fetch_wait_backoff_cap));
