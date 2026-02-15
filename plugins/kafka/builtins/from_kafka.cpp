@@ -43,7 +43,7 @@ namespace tenzir::plugins::kafka {
 namespace {
 
 /// Default delay before flushing a partial batch.
-constexpr auto default_batch_timeout = 10s;
+constexpr auto default_batch_timeout = 100ms;
 
 /// Stores process-wide `from_kafka` defaults from `kafka.yaml`.
 auto source_global_defaults() -> record& {
@@ -58,7 +58,7 @@ struct FromKafkaArgs {
   std::optional<location> exit;
   std::optional<located<data>> offset;
   std::string optimization = "ordered";
-  uint64_t batch_size = 1000;
+  uint64_t batch_size = 10'000;
   uint64_t worker_batch_size = 0;
   uint64_t worker_concurrency = 0;
   uint64_t prefetch_batches = 8;
@@ -516,7 +516,14 @@ private:
     while (not is_pipeline_stopping()) {
       {
         auto guard = std::scoped_lock{prefetch_budget_mutex_};
-        if (in_flight_fetch_bytes_ + bytes <= args_.prefetch_bytes) {
+        // Never block forever on one oversized fetch batch. Allow exactly one
+        // oversized in-flight batch at a time when no other batch is tracked.
+        if (bytes > args_.prefetch_bytes) {
+          if (in_flight_fetch_bytes_ == 0) {
+            in_flight_fetch_bytes_ = bytes;
+            co_return;
+          }
+        } else if (in_flight_fetch_bytes_ + bytes <= args_.prefetch_bytes) {
           in_flight_fetch_bytes_ += bytes;
           co_return;
         }
