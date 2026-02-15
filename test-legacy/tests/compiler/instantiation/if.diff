@@ -26,15 +26,15 @@
          
        ]
      },
-     if_ir {
-       if_kw: 21..23,
+     If {
+       if_keyword: 21..23,
        condition: binary_expr {
 -        left: dollar_var `$foo` -> 1 @ 24..28,
 +        left: constant int64 1 @ 24..28,
          op: "eq" @ 29..31,
          right: constant int64 1 @ 32..33
        },
-       then: {
+       consequence: {
          lets: [
 -          {
 -            ident: `$bar` @ 42..46,
@@ -70,9 +70,9 @@
            }
          ]
        },
-       else: {
+       alternative: {
          keyword: 89..93,
-         pipe: {
+         pipeline: {
            lets: [
 -            {
 -              ident: `$bar` @ 102..106,
