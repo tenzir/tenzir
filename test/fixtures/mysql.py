@@ -29,8 +29,17 @@ from typing import Iterator
 
 from tenzir_test import fixture
 from tenzir_test.fixtures import FixtureUnavailable, current_options
+from tenzir_test.fixtures.container_runtime import (
+    ContainerCommandError,
+    ContainerReadinessTimeout,
+    ManagedContainer,
+    RuntimeSpec,
+    detect_runtime,
+    start_detached,
+    wait_until_ready,
+)
 
-from ._utils import find_container_runtime, find_free_port
+from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +67,10 @@ class MysqlOptions:
     streaming: str = ""  # "unsigned" or "signed"; empty = disabled
 
 
-def _start_mysql(runtime: str, port: int) -> str:
-    """Start MySQL container and return container ID."""
+def _start_mysql(runtime: RuntimeSpec, port: int) -> ManagedContainer:
+    """Start MySQL container and return a managed container."""
     container_name = f"tenzir-test-mysql-{uuid.uuid4().hex[:8]}"
-    cmd = [
-        runtime,
-        "run",
-        "-d",
+    run_args = [
         "--rm",
         "--name",
         container_name,
@@ -81,67 +87,71 @@ def _start_mysql(runtime: str, port: int) -> str:
         MYSQL_IMAGE,
         "--default-authentication-plugin=mysql_native_password",
     ]
-    logger.info("Starting MySQL container with %s: %s", runtime, " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    container_id = result.stdout.strip()
-    logger.info("MySQL container started: %s", container_id[:12])
-    return container_id
+    logger.info("Starting MySQL container with %s", runtime.binary)
+    container = start_detached(runtime, run_args)
+    logger.info("MySQL container started: %s", container.container_id[:12])
+    return container
 
 
-def _stop_mysql(runtime: str, container_id: str) -> None:
+def _stop_mysql(container: ManagedContainer) -> None:
     """Stop and remove MySQL container."""
-    logger.info("Stopping MySQL container: %s", container_id[:12])
-    subprocess.run(
-        [runtime, "stop", container_id],
-        capture_output=True,
-        check=False,
-    )
+    logger.info("Stopping MySQL container: %s", container.container_id[:12])
+    result = container.stop()
+    if result.returncode != 0:
+        logger.warning(
+            "Failed to stop MySQL container %s: %s",
+            container.container_id[:12],
+            (result.stderr or result.stdout or "").strip() or "no output",
+        )
 
 
-def _wait_for_mysql(runtime: str, container_id: str, timeout: float) -> bool:
+def _wait_for_mysql(container: ManagedContainer, timeout: float) -> None:
     """Wait for MySQL to become ready."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        result = subprocess.run(
-            [runtime, "inspect", "-f", "{{.State.Running}}", container_id],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0 or result.stdout.strip() != "true":
+    def _probe() -> tuple[bool, dict[str, str]]:
+        running = container.is_running()
+        if not running:
             logger.debug("Container not running yet")
-            time.sleep(HEALTH_CHECK_INTERVAL)
-            continue
-        # Use root to check if MySQL is ready (user may not be created yet)
-        # Use TCP connection (127.0.0.1) instead of socket
-        result = subprocess.run(
-            [
-                runtime,
-                "exec",
-                container_id,
-                "mysqladmin",
-                "ping",
-                "-h",
-                "127.0.0.1",
-                "-uroot",
-                f"-p{MYSQL_ROOT_PASSWORD}",
-                "--silent",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+            return False, {"running": "false"}
+        try:
+            result = container.exec(
+                [
+                    "mysqladmin",
+                    "ping",
+                    "-h",
+                    "127.0.0.1",
+                    "-uroot",
+                    f"-p{MYSQL_ROOT_PASSWORD}",
+                    "--silent",
+                ]
+            )
+        except ContainerCommandError as exc:
+            logger.debug("MySQL readiness probe command failed: %s", exc)
+            return False, {"running": "true", "probe_error": str(exc)}
         if result.returncode == 0:
-            logger.info("MySQL is ready")
-            # Give extra time for full initialization
-            time.sleep(5)
-            return True
-        logger.debug("MySQL not ready yet: %s", result.stderr.strip())
-        time.sleep(HEALTH_CHECK_INTERVAL)
-    return False
+            return True, {"running": "true", "probe_returncode": "0"}
+        stderr = result.stderr.strip()
+        logger.debug("MySQL not ready yet: %s", stderr)
+        return False, {
+            "running": "true",
+            "probe_returncode": str(result.returncode),
+            "probe_stderr": stderr,
+        }
+
+    try:
+        wait_until_ready(
+            _probe,
+            timeout_seconds=timeout,
+            poll_interval_seconds=HEALTH_CHECK_INTERVAL,
+            timeout_context="MySQL startup",
+        )
+    except ContainerReadinessTimeout as exc:
+        raise RuntimeError(str(exc)) from exc
+    logger.info("MySQL is ready")
+    # Give extra time for full initialization
+    time.sleep(5)
 
 
-def _create_test_data(runtime: str, container_id: str) -> None:
+def _create_test_data(container: ManagedContainer) -> None:
     """Create test tables and data in the MySQL database."""
     # Grant privileges to the test user first, then create tables
     sql = f"""
@@ -221,12 +231,8 @@ def _create_test_data(runtime: str, container_id: str) -> None:
     logger.info("Creating test tables and data")
     # Use root to create tables and grant privileges
     # Use TCP connection (-h 127.0.0.1) instead of socket
-    result = subprocess.run(
+    result = container.exec(
         [
-            runtime,
-            "exec",
-            "-i",
-            container_id,
             "mysql",
             "-h",
             "127.0.0.1",
@@ -234,9 +240,6 @@ def _create_test_data(runtime: str, container_id: str) -> None:
             f"-p{MYSQL_ROOT_PASSWORD}",
         ],
         input=sql,
-        capture_output=True,
-        text=True,
-        check=False,
     )
     if result.returncode != 0:
         logger.error("Failed to create test data: %s", result.stderr)
@@ -244,9 +247,7 @@ def _create_test_data(runtime: str, container_id: str) -> None:
     logger.info("Test data created successfully")
 
 
-def _extract_tls_files(
-    runtime: str, container_id: str, dest_dir: str
-) -> dict[str, str]:
+def _extract_tls_files(container: ManagedContainer, dest_dir: str) -> dict[str, str]:
     """Extract TLS certificates and keys from the MySQL container.
 
     MySQL 8 auto-generates several TLS files in /var/lib/mysql/:
@@ -264,17 +265,7 @@ def _extract_tls_files(
     paths = {}
     for name, filename in files.items():
         local_path = str(Path(dest_dir) / filename)
-        result = subprocess.run(
-            [
-                runtime,
-                "cp",
-                f"{container_id}:/var/lib/mysql/{filename}",
-                local_path,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = container.copy_from(f"/var/lib/mysql/{filename}", local_path, check=False)
         if result.returncode != 0:
             raise RuntimeError(f"Failed to extract {filename}: {result.stderr}")
         logger.info("Extracted %s to %s", filename, local_path)
@@ -283,8 +274,7 @@ def _extract_tls_files(
 
 
 def _exec_mysql_sql(
-    runtime: str,
-    container_id: str,
+    container: ManagedContainer,
     *,
     user: str,
     password: str,
@@ -292,10 +282,6 @@ def _exec_mysql_sql(
     database: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     cmd = [
-        runtime,
-        "exec",
-        "-i",
-        container_id,
         "mysql",
         "-h",
         "127.0.0.1",
@@ -304,16 +290,10 @@ def _exec_mysql_sql(
     ]
     if database is not None:
         cmd.extend(["-D", database])
-    return subprocess.run(
-        cmd,
-        input=sql,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return container.exec(cmd, input=sql)
 
 
-def _prepare_live_stream_table(runtime: str, container_id: str) -> None:
+def _prepare_live_stream_table(container: ManagedContainer) -> None:
     sql = f"""
     CREATE TABLE IF NOT EXISTS {LIVE_STREAM_TABLE} (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -322,8 +302,7 @@ def _prepare_live_stream_table(runtime: str, container_id: str) -> None:
     TRUNCATE TABLE {LIVE_STREAM_TABLE};
     """
     result = _exec_mysql_sql(
-        runtime,
-        container_id,
+        container,
         user="root",
         password=MYSQL_ROOT_PASSWORD,
         database=MYSQL_DATABASE,
@@ -333,7 +312,7 @@ def _prepare_live_stream_table(runtime: str, container_id: str) -> None:
         raise RuntimeError(f"Failed to prepare live stream table: {result.stderr}")
 
 
-def _prepare_live_signed_stream_table(runtime: str, container_id: str) -> None:
+def _prepare_live_signed_stream_table(container: ManagedContainer) -> None:
     sql = f"""
     CREATE TABLE IF NOT EXISTS {LIVE_SIGNED_STREAM_TABLE} (
         id BIGINT PRIMARY KEY,
@@ -345,8 +324,7 @@ def _prepare_live_signed_stream_table(runtime: str, container_id: str) -> None:
         (-1, '{LIVE_SIGNED_STREAM_SEED_TOKEN}');
     """
     result = _exec_mysql_sql(
-        runtime,
-        container_id,
+        container,
         user="root",
         password=MYSQL_ROOT_PASSWORD,
         database=MYSQL_DATABASE,
@@ -358,10 +336,9 @@ def _prepare_live_signed_stream_table(runtime: str, container_id: str) -> None:
         )
 
 
-def _drop_table(runtime: str, container_id: str, table_name: str) -> None:
+def _drop_table(container: ManagedContainer, table_name: str) -> None:
     result = _exec_mysql_sql(
-        runtime,
-        container_id,
+        container,
         user="root",
         password=MYSQL_ROOT_PASSWORD,
         database=MYSQL_DATABASE,
@@ -372,8 +349,7 @@ def _drop_table(runtime: str, container_id: str, table_name: str) -> None:
 
 
 def _run_live_insert_loop(
-    runtime: str,
-    container_id: str,
+    container: ManagedContainer,
     stop_event: threading.Event,
 ) -> None:
     if stop_event.wait(LIVE_STREAM_INITIAL_DELAY):
@@ -381,8 +357,7 @@ def _run_live_insert_loop(
     sql = f"INSERT INTO {LIVE_STREAM_TABLE} (payload) VALUES ('{LIVE_STREAM_TOKEN}');"
     while not stop_event.is_set():
         result = _exec_mysql_sql(
-            runtime,
-            container_id,
+            container,
             user=MYSQL_USER,
             password=MYSQL_PASSWORD,
             database=MYSQL_DATABASE,
@@ -395,8 +370,7 @@ def _run_live_insert_loop(
 
 
 def _run_live_signed_insert_loop(
-    runtime: str,
-    container_id: str,
+    container: ManagedContainer,
     stop_event: threading.Event,
 ) -> None:
     if stop_event.wait(LIVE_STREAM_INITIAL_DELAY):
@@ -409,8 +383,7 @@ def _run_live_signed_insert_loop(
             f"({next_id}, '{LIVE_SIGNED_STREAM_TOKEN}');"
         )
         result = _exec_mysql_sql(
-            runtime,
-            container_id,
+            container,
             user=MYSQL_USER,
             password=MYSQL_PASSWORD,
             database=MYSQL_DATABASE,
@@ -427,24 +400,21 @@ def _run_live_signed_insert_loop(
 def mysql() -> Iterator[dict[str, str]]:
     """Start MySQL and yield environment variables for database access."""
     opts = current_options("mysql")
-    runtime = find_container_runtime()
+    runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
             "container runtime (docker/podman) required but not found"
         )
     port = find_free_port()
-    container_id = None
+    container: ManagedContainer | None = None
     tmp_dir = tempfile.mkdtemp(prefix="tenzir-mysql-tls-") if opts.tls else None
     stop_event = None
     inserter = None
     stream_table = None
     try:
-        container_id = _start_mysql(runtime, port)
-        if not _wait_for_mysql(runtime, container_id, STARTUP_TIMEOUT):
-            raise RuntimeError(
-                f"MySQL failed to start within {STARTUP_TIMEOUT} seconds"
-            )
-        _create_test_data(runtime, container_id)
+        container = _start_mysql(runtime, port)
+        _wait_for_mysql(container, STARTUP_TIMEOUT)
+        _create_test_data(container)
         env: dict[str, str] = {
             "MYSQL_HOST": "127.0.0.1",
             "MYSQL_PORT": str(port),
@@ -452,12 +422,12 @@ def mysql() -> Iterator[dict[str, str]]:
             "MYSQL_PASSWORD": MYSQL_PASSWORD,
             "MYSQL_ROOT_PASSWORD": MYSQL_ROOT_PASSWORD,
             "MYSQL_DATABASE": MYSQL_DATABASE,
-            "MYSQL_CONTAINER_ID": container_id,
-            "MYSQL_CONTAINER_RUNTIME": runtime,
+            "MYSQL_CONTAINER_ID": container.container_id,
+            "MYSQL_CONTAINER_RUNTIME": runtime.binary,
         }
         if opts.tls:
             assert tmp_dir is not None
-            tls_files = _extract_tls_files(runtime, container_id, tmp_dir)
+            tls_files = _extract_tls_files(container, tmp_dir)
             env.update(
                 {
                     "MYSQL_TLS_CAFILE": tls_files["ca"],
@@ -466,12 +436,12 @@ def mysql() -> Iterator[dict[str, str]]:
                 }
             )
         if opts.streaming == "unsigned":
-            _prepare_live_stream_table(runtime, container_id)
+            _prepare_live_stream_table(container)
             stream_table = LIVE_STREAM_TABLE
             stop_event = threading.Event()
             inserter = threading.Thread(
                 target=_run_live_insert_loop,
-                args=(runtime, container_id, stop_event),
+                args=(container, stop_event),
                 daemon=True,
             )
             inserter.start()
@@ -482,12 +452,12 @@ def mysql() -> Iterator[dict[str, str]]:
                 }
             )
         elif opts.streaming == "signed":
-            _prepare_live_signed_stream_table(runtime, container_id)
+            _prepare_live_signed_stream_table(container)
             stream_table = LIVE_SIGNED_STREAM_TABLE
             stop_event = threading.Event()
             inserter = threading.Thread(
                 target=_run_live_signed_insert_loop,
-                args=(runtime, container_id, stop_event),
+                args=(container, stop_event),
                 daemon=True,
             )
             inserter.start()
@@ -505,12 +475,12 @@ def mysql() -> Iterator[dict[str, str]]:
             inserter.join(timeout=5)
             if inserter.is_alive():
                 logger.warning("Live insert loop thread did not stop in time")
-        if stream_table is not None and container_id is not None:
+        if stream_table is not None and container is not None:
             try:
-                _drop_table(runtime, container_id, stream_table)
+                _drop_table(container, stream_table)
             except RuntimeError as exc:
                 logger.warning("Failed to drop stream table: %s", exc)
-        if container_id:
-            _stop_mysql(runtime, container_id)
+        if container is not None:
+            _stop_mysql(container)
         if tmp_dir:
             shutil.rmtree(tmp_dir, ignore_errors=True)
