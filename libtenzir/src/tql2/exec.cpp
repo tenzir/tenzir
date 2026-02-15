@@ -728,7 +728,7 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
   // TODO: Decide where the deduplication should happen and move this.
   auto dedup = DeduplicatingDiagnosticHandler{dh};
   LOGI("begin blocking");
-#if 1
+#if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup));
 #else
