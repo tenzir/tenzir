@@ -42,6 +42,7 @@
 #pragma once
 
 #include "tenzir/any.hpp"
+#include "tenzir/async/log.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/push_pull.hpp"
@@ -52,8 +53,8 @@
 #include "tenzir/element_type.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/eval.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/unit.hpp"
 
 #include <caf/actor_cast.hpp>
 #include <caf/actor_companion.hpp>
@@ -71,20 +72,6 @@
 #include <folly/coro/Task.h>
 #include <folly/coro/Traits.h>
 #include <folly/futures/Future.h>
-
-#if 0
-#  define LOGV(...) TENZIR_VERBOSE(__VA_ARGS__)
-#  define LOGD(...) TENZIR_DEBUG(__VA_ARGS__)
-#  define LOGI(...) TENZIR_INFO(__VA_ARGS__)
-#  define LOGW(...) TENZIR_WARN(__VA_ARGS__)
-#  define LOGE(...) TENZIR_ERROR(__VA_ARGS__)
-#else
-#  define LOGV(...)
-#  define LOGD(...)
-#  define LOGI(...)
-#  define LOGW(...)
-#  define LOGE(...)
-#endif
 
 namespace tenzir {
 
@@ -289,22 +276,6 @@ public:
 private:
   T value_;
 };
-
-using Unit = std::monostate;
-
-template <class T>
-using VoidToUnit = std::conditional_t<std::is_void_v<T>, Unit, T>;
-
-/// Converts a `VoidToUnit<T>` value back to `T`. When `T` is `void`, this
-/// discards the `Unit` value and returns `void`. Otherwise, it forwards `T`.
-template <class T>
-auto unit_to_void(VoidToUnit<T>&& value) -> T {
-  if constexpr (std::is_void_v<T>) {
-    (void)value;
-  } else {
-    return std::move(value);
-  }
-}
 
 template <class Value, class Error>
 class [[nodiscard]] Result {

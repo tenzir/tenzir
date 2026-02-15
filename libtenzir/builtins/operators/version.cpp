@@ -130,7 +130,6 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    using T = exec_node_actor::base;
     co_yield make_version(content(ctrl.self().config()));
   }
 
@@ -203,7 +202,7 @@ public:
   }
 
 private:
-  static constexpr size_t total = 5;
+  static constexpr size_t total = 1;
   size_t count_ = 0;
 };
 

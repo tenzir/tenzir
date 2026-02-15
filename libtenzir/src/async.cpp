@@ -14,6 +14,7 @@
 #include "tenzir/connect_to_node.hpp"
 #include "tenzir/connector.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/tql2/eval.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
@@ -272,8 +273,10 @@ public:
     auto guard = detail::scope_guard{[&] noexcept {
       LOGW("returning from operator runner {}", id_);
     }};
+    LOGV("creating runner scope");
     co_await queue_.activate([&] -> Task<void> {
       // TODO: Figure out where exactly the operator scope is and move this.
+      LOGV("creating operator scope");
       co_await async_scope([&](AsyncScope& operator_scope) -> Task<void> {
         TENZIR_ASSERT(not operator_scope_);
         operator_scope_ = &operator_scope;
@@ -551,6 +554,7 @@ private:
           case ToControl::no_more_input:
             // FIXME: How do we inform the operator that the subpipeline
             // doesn't want anymore input?
+            co_return;
           case ToControl::ready_for_shutdown:
             // FIXME: Send shutdown signal and then remove it from the
             // pipelines list once the task terminated.
@@ -781,21 +785,25 @@ private:
   }
 
   auto process(FromControl message) -> Task<void> {
-    auto overloads
-      = detail::overload{[&](PostCommit) -> Task<void> {
-                           LOGV("got post commit in {}", typeid(*op_).name());
-                           co_await op_->post_commit();
-                         },
-                         [&](Shutdown) -> Task<void> {
-                           // FIXME: Cleanup on shutdown?
-                           LOGV("got shutdown in {}", typeid(*op_).name());
-                           got_shutdown_request_ = true;
-                           co_return;
-                         },
-                         [&](Stop) -> Task<void> {
-                           co_await handle_done();
-                         }};
-    co_await match(std::move(message), overloads);
+    co_await co_match(
+      std::move(message),
+      [&](PostCommit) -> Task<void> {
+        LOGV("got post commit in {}", typeid(*op_).name());
+        co_await op_->post_commit();
+      },
+      [&](Shutdown) -> Task<void> {
+        // FIXME: Cleanup on shutdown?
+        LOGV("got shutdown in {}", typeid(*op_).name());
+        got_shutdown_request_ = true;
+        // TODO: Should we really just forward this here?
+        for (auto& [_, sub] : subpipelines_) {
+          sub.handle.send(Shutdown{});
+        }
+        co_return;
+      },
+      [&](Stop) -> Task<void> {
+        co_await handle_done();
+      });
     queue_.spawn(from_control_.receive());
   }
 
@@ -838,7 +846,6 @@ private:
                           // TODO: What if this is a source?
                           if constexpr (not std::same_as<In, void>) {
                             co_await sub.push(EndOfData{});
-                            sub.from_control.send(Shutdown{});
                           }
                         });
     }
@@ -935,6 +942,10 @@ public:
   }
 
   auto run_to_completion() && -> Task<void> {
+    auto guard = detail::scope_guard{[&] noexcept {
+      LOGI("returning from chain runner {}", id_);
+    }};
+    LOGV("creating chain runner scope");
     co_await queue_.activate([&] -> Task<void> {
       LOGW("beginning chain setup of {}", id_);
       spawn_operators();
@@ -943,7 +954,6 @@ public:
       LOGW("cancelling queue of {}", id_);
       queue_.cancel();
     });
-    LOGI("chain runner {} finished", id_);
   }
 
 private:
@@ -1023,7 +1033,11 @@ private:
               }
             },
             [&](Shutdown) {
-              LOGW("sending shutdown to all operators of {}", id_);
+              if (ready_for_shutdown == operators_.size()) {
+                LOGW("got shutdown after request in {}", id_);
+              } else {
+                LOGW("got shutdown without request in {}", id_);
+              }
               for (auto& sender : operator_ctrl_) {
                 sender.send(Shutdown{});
               }
@@ -1031,7 +1045,7 @@ private:
             [&](Stop) {
               // TODO: Is this correct?
               for (auto& ctrl : operator_ctrl_) {
-                ctrl.send(Shutdown{});
+                ctrl.send(Stop{});
               }
             });
         },
@@ -1177,6 +1191,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
       = make_unbounded_channel<ToControl>();
     auto queue
       = QueueScope<variant<std::monostate, ToControl, OperatorMsg<void>>>{};
+    LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
       queue.spawn([&] -> Task<std::monostate> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
