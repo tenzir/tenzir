@@ -1,0 +1,7 @@
+suite: from-kafka-1m-perf
+fixtures:
+  - kafka:
+      topic: from_kafka_perf_1m
+      partitions: 1
+      seed_messages: 1000000
+timeout: 1800

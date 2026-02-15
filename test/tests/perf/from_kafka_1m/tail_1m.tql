@@ -1,0 +1,10 @@
+from_kafka env("KAFKA_TOPIC"),
+           count=1M,
+           offset="beginning",
+           batch_size=10k,
+           batch_timeout=1s,
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-perf-1m"
+           }
+tail 1
