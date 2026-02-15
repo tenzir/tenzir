@@ -74,10 +74,10 @@ auto from_kafka_throughput_defaults() {
   // client queue depth. Local 10M-message fixture runs showed this combination
   // avoids source stalls better than aggressive "large fetch" defaults.
   return std::to_array<entry>({{"fetch.min.bytes", "1"},
-                            {"fetch.wait.max.ms", "500"},
-                            {"max.partition.fetch.bytes", "1048576"},
-                            {"queued.min.messages", "200000"},
-                            {"queued.max.messages.kbytes", "262144"}});
+                               {"fetch.wait.max.ms", "500"},
+                               {"max.partition.fetch.bytes", "1048576"},
+                               {"queued.min.messages", "200000"},
+                               {"queued.max.messages.kbytes", "262144"}});
 }
 
 /// Adds throughput defaults unless explicitly configured via `kafka.yaml`.
@@ -555,34 +555,35 @@ private:
   /// Queue item type for build-stage handoff.
   using BuiltQueue = folly::coro::BoundedQueue<std::optional<BuiltBatch>>;
 
-  /// Concurrent stage layout (executor domains shown on the right):
+  /// Concurrent stage layout (executor domains on the right):
   ///
-  ///   +----------------------+                                [I/O executor]
-  ///   | AsyncConsumerQueue   | --next_batch--> fetch_loop
-  ///   +----------------------+
-  ///                 |
-  ///                 | enqueue(FetchedBatch)
-  ///                 v
-  ///          +----------------+                               [shared queue]
-  ///          | fetched_queue_ |
-  ///          +----------------+
-  ///                 |
-  ///                 | dequeue (N workers in parallel)
-  ///                 v
-  ///      +--------------------+                              [CPU executor]
-  ///      | build_loop workers | --build_batch--> BuiltBatch
-  ///      +--------------------+
-  ///                 |
-  ///                 | enqueue(BuiltBatch)
-  ///                 v
-  ///           +--------------+                               [shared queue]
-  ///           | built_queue_ |
-  ///           +--------------+
-  ///                 |
-  ///                 | await_task/process_task
-  ///                 v
-  ///      ordered   : sequence barrier (`ordered_batches_`) -> in-order push
-  ///      unordered : push as soon as any worker finishes
+  ///   ┌───────────────────────────────┐
+  ///   │ fetch_loop                    │                [I/O executor]
+  ///   │   next_batch, to_fetched_batch│
+  ///   └───────────────────────────────┘
+  ///                   │
+  ///                   │ FetchedBatch
+  ///                   ▼
+  ///            fetched_queue_                          [bounded queue]
+  ///                   │
+  ///                   │ ×N workers
+  ///                   ▼
+  ///   ┌───────────────────────────────┐
+  ///   │ build_loop                    │                [CPU executor]
+  ///   │   build_batch → table_slice   │
+  ///   └───────────────────────────────┘
+  ///                   │
+  ///                   │ BuiltBatch
+  ///                   ▼
+  ///             built_queue_                           [bounded queue]
+  ///                   │
+  ///                   ▼
+  ///   ┌───────────────────────────────┐
+  ///   │ await_task / process_task     │                [operator]
+  ///   └───────────────────────────────┘
+  ///                   │
+  ///       ordered:   reorder → push in order
+  ///       unordered: push as received
   ///
   /// Invariants:
   /// 1. Backpressure is bounded by both `fetched_queue_` capacity and
