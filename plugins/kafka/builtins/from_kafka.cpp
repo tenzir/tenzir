@@ -101,8 +101,8 @@ constexpr auto default_batch_timeout = 100ms;
 /// Default upper bound for one Kafka notification wait in the source poll loop.
 constexpr auto default_fetch_wait_timeout = 1ms;
 
-/// Maximum adaptive wait used after repeated empty fetch timeouts.
-constexpr auto fetch_wait_backoff_cap = 16ms;
+/// Maximum adaptive wait floor for source poll timeout backoff.
+constexpr auto fetch_wait_backoff_floor = 16ms;
 
 /// Number of consecutive idle timeouts before doubling fetch wait.
 constexpr auto fetch_wait_backoff_after = 8uz;
@@ -879,9 +879,13 @@ private:
     auto state = FetchPollState{};
     state.base_poll_wait = std::max(args_._fetch_wait_timeout, min_wait);
     state.poll_wait = state.base_poll_wait;
+    // Allow backoff to grow up to the batch flush horizon, so partial batches
+    // do not spin in short timeout polls while waiting for additional records.
     auto poll_wait_cap
       = std::max(state.base_poll_wait,
-                 std::chrono::duration_cast<duration>(fetch_wait_backoff_cap));
+                 std::max(args_._batch_timeout,
+                          std::chrono::duration_cast<duration>(
+                            fetch_wait_backoff_floor)));
     while (pending_messages.size() < max_messages
            and not is_pipeline_stopping()) {
       auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -915,12 +919,21 @@ private:
       if (batch.messages.empty()) {
         if (batch.timed_out) {
           add_perf_counter(perf_.fetch_timeouts);
-          if (not pending_messages.empty()) {
-            break;
-          }
           ++state.consecutive_empty_timeouts;
-          if (state.consecutive_empty_timeouts >= fetch_wait_backoff_after) {
+          // Once we already have some data in the current source window, back
+          // off on every timeout and keep waiting until the flush deadline.
+          auto should_backoff = not pending_messages.empty()
+                                or state.consecutive_empty_timeouts
+                                     >= fetch_wait_backoff_after;
+          if (should_backoff) {
             state.poll_wait = std::min(poll_wait_cap, state.poll_wait * 2);
+          }
+          if (not pending_messages.empty()) {
+            TENZIR_ASSERT(state.batch_deadline);
+            if (std::chrono::steady_clock::now() < *state.batch_deadline) {
+              continue;
+            }
+            break;
           }
           continue;
         }
