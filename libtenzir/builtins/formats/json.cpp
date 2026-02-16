@@ -1282,13 +1282,19 @@ auto make_msb_options(ReadJsonArgs const& args)
   return {.policy = std::move(policy), .settings = std::move(settings)};
 }
 
-class ReadJson final : public Operator<chunk_ptr, table_slice> {
+auto parser_batch_timeout(ReadJsonArgs const& args) -> duration {
+  return args.batch_timeout.value_or(defaults::import::batch_timeout);
+}
+
+class ReadJson final : public PeriodicOperator<chunk_ptr, table_slice> {
 public:
-  explicit ReadJson(ReadJsonArgs args) : args_{std::move(args)} {
+  explicit ReadJson(ReadJsonArgs args)
+    : PeriodicOperator{parser_batch_timeout(args)}, args_{std::move(args)} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -1296,9 +1302,6 @@ public:
       auto opts = make_msb_options(args_);
       parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts),
                       args_.arrays_of_objects);
-    }
-    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
-      co_await push(std::move(slice));
     }
     parser_->parse(as_bytes(input));
     if (parser_->abort_requested) {
@@ -1320,27 +1323,36 @@ public:
     }
   }
 
+  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not parser_) {
+      co_return;
+    }
+    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
 private:
   ReadJsonArgs args_;
   std::optional<default_parser> parser_;
 };
 
-class ReadNdjson final : public Operator<chunk_ptr, table_slice> {
+class ReadNdjson final : public PeriodicOperator<chunk_ptr, table_slice> {
 public:
-  explicit ReadNdjson(ReadJsonArgs args) : args_{std::move(args)} {
+  explicit ReadNdjson(ReadJsonArgs args)
+    : PeriodicOperator{parser_batch_timeout(args)}, args_{std::move(args)} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
     }
     if (not parser_) {
       auto opts = make_msb_options(args_);
       parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts));
-    }
-    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
-      co_await push(std::move(slice));
     }
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
@@ -1405,6 +1417,16 @@ public:
       co_return;
     }
     for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not parser_) {
+      co_return;
+    }
+    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
       co_await push(std::move(slice));
     }
   }

@@ -304,6 +304,65 @@ public:
   virtual ~Operator() = default;
 };
 
+/// A helper base class for operators that need periodic callbacks.
+///
+/// This uses `await_task`/`process_task` to invoke `on_tick` at a fixed
+/// interval, which keeps timeout logic out of `process`.
+template <class Input, class Output>
+class PeriodicOperator : public Operator<Input, Output> {
+public:
+  explicit PeriodicOperator(duration tick_interval)
+    : tick_interval_{tick_interval} {
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<std::chrono::milliseconds>(tick_interval_));
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    co_await on_tick(push, ctx);
+  }
+
+protected:
+  virtual auto on_tick(Push<Output>& push, OpCtx& ctx) -> Task<void> = 0;
+
+private:
+  struct PeriodicTick {};
+  duration tick_interval_;
+};
+
+template <class Input>
+class PeriodicOperator<Input, void> : public Operator<Input, void> {
+public:
+  explicit PeriodicOperator(duration tick_interval)
+    : tick_interval_{tick_interval} {
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<std::chrono::milliseconds>(tick_interval_));
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    co_await on_tick(ctx);
+  }
+
+protected:
+  virtual auto on_tick(OpCtx& ctx) -> Task<void> = 0;
+
+private:
+  struct PeriodicTick {};
+  duration tick_interval_;
+};
+
 using AnyOperator = variant<
   Box<Operator<void, chunk_ptr>>, Box<Operator<void, table_slice>>,
   Box<Operator<chunk_ptr, chunk_ptr>>, Box<Operator<chunk_ptr, table_slice>>,
