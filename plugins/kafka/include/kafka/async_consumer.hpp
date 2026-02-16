@@ -15,7 +15,6 @@
 #include <fmt/format.h>
 #include <folly/Unit.h>
 #include <folly/coro/Task.h>
-#include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
@@ -378,7 +377,7 @@ public:
         }
         continue;
       }
-      auto wait_result = co_await wait_for_notification(std::nullopt);
+      auto wait_result = co_await wait_for_notification();
       if (wait_result == NotificationWaitResult::timed_out) {
         co_return MessageBatch{
           .messages = {},
@@ -450,9 +449,8 @@ private:
     }
   }
 
-  /// Waits for a queue wakeup, optionally timing out to unblock idle flushes.
-  auto wait_for_notification(std::optional<std::chrono::milliseconds> timeout)
-    -> folly::coro::Task<NotificationWaitResult> {
+  /// Waits for a queue wakeup or stop notification.
+  auto wait_for_notification() -> folly::coro::Task<NotificationWaitResult> {
     while (true) {
       auto future = folly::SemiFuture<folly::Unit>{};
       {
@@ -467,24 +465,7 @@ private:
         waiter_.emplace();
         future = waiter_->getSemiFuture();
       }
-      if (timeout) {
-        try {
-          co_await std::move(future).within(*timeout);
-        } catch (const folly::FutureTimeout&) {
-          auto guard = std::scoped_lock{state_mutex_};
-          if (stopped_) {
-            co_return NotificationWaitResult::stopped;
-          }
-          if (waiter_) {
-            waiter_.reset();
-            co_return NotificationWaitResult::timed_out;
-          }
-          // A concurrent wakeup consumed `waiter_` while timeout fired.
-          co_return NotificationWaitResult::notified;
-        }
-      } else {
-        co_await std::move(future);
-      }
+      co_await std::move(future);
       auto guard = std::scoped_lock{state_mutex_};
       if (stopped_) {
         co_return NotificationWaitResult::stopped;
