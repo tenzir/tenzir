@@ -73,7 +73,7 @@ using tenzir::detail::ascii_icase_equal;
 ///                   │
 ///                   │ TableSliceFrame
 ///                   ▼
-///             runtime_.built_queue                   [bounded queue]
+///             runtime_.table_slice_queue                   [bounded queue]
 ///                   │
 ///                   ▼
 ///   ┌───────────────────────────────┐
@@ -224,13 +224,13 @@ struct FromKafkaPerfCounters {
   std::atomic<uint64_t> build_dequeue_wait_ns = 0;
   /// Worker CPU time spent in `build_batch`.
   std::atomic<uint64_t> build_compute_ns = 0;
-  /// Worker time spent waiting to enqueue into `runtime_.built_queue`.
+  /// Worker time spent waiting to enqueue into `runtime_.table_slice_queue`.
   std::atomic<uint64_t> build_enqueue_wait_ns = 0;
   /// Number of batches processed by build workers.
   std::atomic<uint64_t> built_batches = 0;
   /// Number of messages processed by build workers.
   std::atomic<uint64_t> built_messages = 0;
-  /// Runner time spent waiting to dequeue from `runtime_.built_queue`.
+  /// Runner time spent waiting to dequeue from `runtime_.table_slice_queue`.
   std::atomic<uint64_t> runner_dequeue_wait_ns = 0;
   /// Time spent waiting on downstream backpressure in `push(...)`.
   std::atomic<uint64_t> push_wait_ns = 0;
@@ -332,7 +332,7 @@ public:
       done_{other.done_} {
     runtime_.queue = std::move(other.runtime_.queue);
     runtime_.message_queue = std::move(other.runtime_.message_queue);
-    runtime_.built_queue = std::move(other.runtime_.built_queue);
+    runtime_.table_slice_queue = std::move(other.runtime_.table_slice_queue);
     runtime_.ordered_slices = std::move(other.runtime_.ordered_slices);
     runtime_.message_queue_closed.store(
       other.runtime_.message_queue_closed.load());
@@ -384,7 +384,7 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    if (not runtime_.built_queue) {
+    if (not runtime_.table_slice_queue) {
       co_return TableSliceResult{.end_of_stream = true};
     }
     try {
@@ -400,7 +400,7 @@ public:
       if (perf_enabled_) {
         dequeue_started = std::chrono::steady_clock::now();
       }
-      auto next = co_await runtime_.built_queue->dequeue();
+      auto next = co_await runtime_.table_slice_queue->dequeue();
       if (perf_enabled_) {
         add_perf_counter(
           perf_.runner_dequeue_wait_ns,
@@ -524,7 +524,7 @@ private:
   struct RuntimeState {
     std::optional<Box<AsyncConsumerQueue>> queue;
     std::shared_ptr<MessageQueue> message_queue;
-    std::shared_ptr<TableSliceQueue> built_queue;
+    std::shared_ptr<TableSliceQueue> table_slice_queue;
     std::map<uint64_t, TableSliceFrame> ordered_slices;
     std::atomic<bool> message_queue_closed = false;
     std::atomic<size_t> live_builders = 0;
@@ -640,7 +640,8 @@ private:
       args_._prefetch_batches, std::numeric_limits<uint32_t>::max()));
     TENZIR_ASSERT(fetch_capacity > 0);
     runtime_.message_queue = std::make_shared<MessageQueue>(fetch_capacity);
-    runtime_.built_queue = std::make_shared<TableSliceQueue>(fetch_capacity);
+    runtime_.table_slice_queue
+      = std::make_shared<TableSliceQueue>(fetch_capacity);
     runtime_.ordered_slices.clear();
     runtime_.next_emit_seq = 0;
     runtime_.next_fetch_seq = 0;
@@ -1054,7 +1055,7 @@ private:
 
   /// Runs one CPU-stage worker that builds slices from source batches.
   auto build_loop() const -> Task<void> {
-    if (not runtime_.message_queue or not runtime_.built_queue) {
+    if (not runtime_.message_queue or not runtime_.table_slice_queue) {
       co_return;
     }
     try {
@@ -1096,9 +1097,10 @@ private:
         if (perf_enabled_) {
           enqueue_started = std::chrono::steady_clock::now();
         }
-        co_await runtime_.built_queue->enqueue(std::optional<TableSliceFrame>{
-          std::move(built),
-        });
+        co_await runtime_.table_slice_queue->enqueue(
+          std::optional<TableSliceFrame>{
+            std::move(built),
+          });
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_enqueue_wait_ns,
@@ -1108,14 +1110,15 @@ private:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
-    if (runtime_.live_builders.fetch_sub(1) == 1 and runtime_.built_queue) {
-      co_await runtime_.built_queue->enqueue(std::nullopt);
+    if (runtime_.live_builders.fetch_sub(1) == 1
+        and runtime_.table_slice_queue) {
+      co_await runtime_.table_slice_queue->enqueue(std::nullopt);
     }
   }
 
   /// Waits for the next in-order table-slice frame from worker output.
   auto await_ordered_batch() const -> Task<TableSliceResult> {
-    TENZIR_ASSERT(runtime_.built_queue);
+    TENZIR_ASSERT(runtime_.table_slice_queue);
     while (true) {
       auto ready = runtime_.ordered_slices.find(runtime_.next_emit_seq);
       if (ready != runtime_.ordered_slices.end()) {
@@ -1130,7 +1133,7 @@ private:
       if (perf_enabled_) {
         dequeue_started = std::chrono::steady_clock::now();
       }
-      auto next = co_await runtime_.built_queue->dequeue();
+      auto next = co_await runtime_.table_slice_queue->dequeue();
       if (perf_enabled_) {
         add_perf_counter(
           perf_.runner_dequeue_wait_ns,
