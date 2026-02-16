@@ -1,7 +1,7 @@
-# from_kafka 1M Perf Runner
+# from_kafka 10M Perf Runner
 
 This directory contains a reproducible manual benchmark for `from_kafka` using
-our canonical perf fixture settings (`1M` seeded messages).
+our canonical perf fixture settings (`10M` seeded messages).
 
 Run from repository root:
 
@@ -14,12 +14,19 @@ The runner:
 - Waits until the fixture exports `KAFKA_BOOTSTRAP_SERVERS` and `KAFKA_TOPIC`.
 - Executes `tenzir --neo` with `TENZIR_KAFKA_FROM_PERF_STATS=1`.
 - Prints wall time (`/usr/bin/time -p`) and `from_kafka` stage counters.
+- Uses `test/tests/perf/from_kafka_1m/route53_sample.ndjson` by default.
+- Seeding scale/trim is controlled by two fixture options:
+  `messages` and `payload_file`.
+  The fixture reuses payload lines as needed and emits exactly `messages`.
 
 Common overrides:
 
 ```bash
-BATCH_SIZE=50k FETCH_WAIT_TIMEOUT=16ms SINK=discard test/tests/perf/from_kafka_1m/run.sh
-PARTITIONS=8 SEED_MESSAGES=1000000 test/tests/perf/from_kafka_1m/run.sh
+PARTITIONS=1 MESSAGES=10000000 COMPRESSION=none test/tests/perf/from_kafka_1m/run.sh
+PARTITIONS=4 MESSAGES=10000000 COMPRESSION=none test/tests/perf/from_kafka_1m/run.sh
+PARTITIONS=1 MESSAGES=10000000 COMPRESSION=zstd test/tests/perf/from_kafka_1m/run.sh
+PARTITIONS=4 MESSAGES=10000000 COMPRESSION=zstd test/tests/perf/from_kafka_1m/run.sh
+PAYLOAD_FILE=test/tests/perf/from_kafka_1m/route53_sample.ndjson PARTITIONS=4 MESSAGES=10000000 test/tests/perf/from_kafka_1m/run.sh
 TENZIR_BIN=./build/xcode/relwithdebinfo/bin/tenzir test/tests/perf/from_kafka_1m/run.sh
 ```
 

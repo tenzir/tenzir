@@ -1,7 +1,8 @@
-suite: from-kafka-1m-perf
+suite: from-kafka-10m-perf
 fixtures:
   - kafka:
-      topic: from_kafka_perf_1m
+      topic: from_kafka_perf_10m
       partitions: 1
-      seed_messages: 1000000
+      messages: 10000000
+      payload_file: test/tests/perf/from_kafka_1m/route53_sample.ndjson
 timeout: 1800

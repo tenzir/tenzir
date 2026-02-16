@@ -2,25 +2,29 @@
 
 set -euo pipefail
 
-# Reproducible from_kafka 1M benchmark using the canonical perf fixture setup.
+# Reproducible from_kafka 10M benchmark using the canonical perf fixture setup.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd "$SCRIPT_DIR/../../../.." && pwd)
 
 TENZIR_BIN=${TENZIR_BIN:-tenzir}
-COUNT=${COUNT:-1M}
+COUNT=${COUNT:-10M}
 BATCH_SIZE=${BATCH_SIZE:-50k}
 BATCH_TIMEOUT=${BATCH_TIMEOUT:-1s}
 FETCH_WAIT_TIMEOUT=${FETCH_WAIT_TIMEOUT:-16ms}
 SINK=${SINK:-discard}
 PARTITIONS=${PARTITIONS:-1}
-SEED_MESSAGES=${SEED_MESSAGES:-1000000}
-TOPIC=${TOPIC:-from_kafka_perf_1m}
-GROUP_ID=${GROUP_ID:-tenzir-perf-from-kafka-1m-$(date +%s)}
+MESSAGES=${MESSAGES:-10000000}
+COMPRESSION=${COMPRESSION:-none}
+PAYLOAD_FILE=${PAYLOAD_FILE:-$SCRIPT_DIR/route53_sample.ndjson}
+TOPIC=${TOPIC:-from_kafka_perf_10m}
+GROUP_ID=${GROUP_ID:-tenzir-perf-from-kafka-10m-$(date +%s)}
 
 fixture_log=$(mktemp)
 pipeline_file=$(mktemp)
 fixture_pid=""
+KAFKA_BOOTSTRAP_SERVERS=""
+KAFKA_TOPIC=""
 
 cleanup() {
   if [[ -n "$fixture_pid" ]] && kill -0 "$fixture_pid" 2>/dev/null; then
@@ -33,8 +37,13 @@ trap cleanup EXIT INT TERM
 
 cd "$ROOT_DIR"
 
+fixture_options="kafka: {topic: $TOPIC, partitions: $PARTITIONS, messages: $MESSAGES, compression: \"$COMPRESSION\"}"
+if [[ -n "$PAYLOAD_FILE" ]]; then
+  fixture_options="kafka: {topic: $TOPIC, partitions: $PARTITIONS, messages: $MESSAGES, compression: \"$COMPRESSION\", payload_file: \"$PAYLOAD_FILE\"}"
+fi
+
 uvx tenzir-test --root test \
-  --fixture "kafka: {topic: $TOPIC, partitions: $PARTITIONS, seed_messages: $SEED_MESSAGES}" \
+  --fixture "$fixture_options" \
   --debug >"$fixture_log" 2>&1 &
 fixture_pid=$!
 
@@ -66,8 +75,8 @@ from_kafka "$KAFKA_TOPIC",
            count=$COUNT,
            offset="beginning",
            batch_size=$BATCH_SIZE,
-           batch_timeout=$BATCH_TIMEOUT,
-           fetch_wait_timeout=$FETCH_WAIT_TIMEOUT,
+           _batch_timeout=$BATCH_TIMEOUT,
+           _fetch_wait_timeout=$FETCH_WAIT_TIMEOUT,
            options={
              "bootstrap.servers": "$KAFKA_BOOTSTRAP_SERVERS",
              "group.id": "$GROUP_ID"
@@ -75,7 +84,7 @@ from_kafka "$KAFKA_TOPIC",
 $SINK
 PIPELINE
 
-echo "fixture: bootstrap=$KAFKA_BOOTSTRAP_SERVERS topic=$KAFKA_TOPIC partitions=$PARTITIONS seed_messages=$SEED_MESSAGES"
+echo "fixture: bootstrap=$KAFKA_BOOTSTRAP_SERVERS topic=$KAFKA_TOPIC partitions=$PARTITIONS messages=$MESSAGES compression=$COMPRESSION payload_file=${PAYLOAD_FILE:-none}"
 echo "bench: count=$COUNT batch_size=$BATCH_SIZE batch_timeout=$BATCH_TIMEOUT fetch_wait_timeout=$FETCH_WAIT_TIMEOUT sink=$SINK group_id=$GROUP_ID"
 
 TENZIR_KAFKA_FROM_PERF_STATS=1 /usr/bin/time -p "$TENZIR_BIN" --neo -f "$pipeline_file"
