@@ -96,20 +96,37 @@ auto apply_from_kafka_throughput_defaults(record& config) -> void {
 
 /// Parsed arguments for `from_kafka`.
 struct FromKafkaArgs {
+  /// Source topic consumed by `from_kafka <topic>`.
   std::string topic;
+  /// Optional `count=` cap; stop after emitting this many messages.
   std::optional<located<uint64_t>> count;
+  /// Optional `exit` flag; stop once all assigned partitions reach EOF.
   std::optional<location> exit;
+  /// Optional `offset=` start position (`beginning|end|stored|<n>|-<n>`).
   std::optional<located<data>> offset;
+  /// `optimization=` mode controlling downstream ordering (`ordered|unordered`).
+  /// TODO: infer from pipeline order-invariance and keep this as an override.
   std::string optimization = "ordered";
+  /// `batch_size=` target messages per fetched batch.
   uint64_t batch_size = 10'000;
+  /// `worker_batch_size=` override for build-stage batch sizing; `0` means
+  /// "inherit `batch_size`".
   uint64_t worker_batch_size = 0;
+  /// `worker_concurrency=` build-worker count; `0` selects auto-default.
   uint64_t worker_concurrency = 0;
+  /// `prefetch_batches=` bounded queue capacity between pipeline stages.
   uint64_t prefetch_batches = 8;
+  /// `prefetch_bytes=` total payload-byte budget for in-flight fetched data.
   uint64_t prefetch_bytes = 256ull * 1024ull * 1024ull;
+  /// `batch_timeout=` max wait for filling a partial fetch batch.
   duration batch_timeout = default_batch_timeout;
+  /// `fetch_wait_timeout=` base Kafka poll wait; idle polls may back off.
   duration fetch_wait_timeout = default_fetch_wait_timeout;
+  /// `options={...}` raw librdkafka overrides (secret-aware).
   located<record> options;
+  /// Optional `aws_region=` override used for MSK IAM auth.
   std::optional<located<std::string>> aws_region;
+  /// Optional `aws_iam=` config enabling OAUTHBEARER token auth.
   std::optional<located<record>> aws_iam;
 };
 
