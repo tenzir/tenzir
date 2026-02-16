@@ -1328,7 +1328,7 @@ public:
     if (not parser_) {
       co_return;
     }
-    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
   }
@@ -1426,7 +1426,7 @@ public:
     if (not parser_) {
       co_return;
     }
-    for (auto& slice : parser_->builder.yield_ready_as_table_slice()) {
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
   }
