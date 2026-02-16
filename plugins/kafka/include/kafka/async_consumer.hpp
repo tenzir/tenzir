@@ -24,6 +24,7 @@
 #include <librdkafka/rdkafkacpp.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -296,6 +297,15 @@ public:
   /// Returns how a queue-notification wait completed.
   enum class NotificationWaitResult { notified, timed_out, stopped };
 
+  /// Snapshot of low-level consume timing inside `next_batch()`.
+  struct ConsumePerfSnapshot {
+    uint64_t consume_batch_calls = 0;
+    uint64_t consume_batch_wait_ns = 0;
+    uint64_t consume_batch_wrap_ns = 0;
+    uint64_t consume_batch_timeouts = 0;
+    uint64_t consume_batch_messages = 0;
+  };
+
   // Construction stays funneled through this factory: it performs fallible
   // setup (consumer handle lookup, queue acquisition, and wakeup-fd creation)
   // before constructing the object. Keeping the constructor non-public avoids
@@ -344,12 +354,14 @@ public:
     -> folly::coro::Task<MessageBatch> {
     TENZIR_ASSERT(max_messages > 0);
     while (not is_stopped()) {
+      auto messages = std::vector<Message>{};
+      messages.reserve(max_messages);
       auto token = co_await folly::coro::co_current_cancellation_token;
       if (token.isCancellationRequested()) {
         request_stop();
         break;
       }
-      auto messages = consume_available(max_messages);
+      consume_available_into(max_messages, messages);
       if (not messages.empty()) {
         co_return MessageBatch{
           .messages = std::move(messages),
@@ -357,19 +369,15 @@ public:
         };
       }
       if (timeout) {
-        auto blocking = consume_batch(max_messages, *timeout);
+        auto blocking = consume_batch_into(max_messages, *timeout, messages);
         if (blocking.timed_out) {
           co_return MessageBatch{
             .messages = {},
             .timed_out = true,
           };
         }
-        if (not blocking.messages.empty()) {
-          messages = std::move(blocking.messages);
-          if (messages.size() < max_messages) {
-            auto tail = consume_available(max_messages - messages.size());
-            std::ranges::move(tail, std::back_inserter(messages));
-          }
+        if (not messages.empty()) {
+          consume_available_into(max_messages - messages.size(), messages);
           co_return MessageBatch{
             .messages = std::move(messages),
             .timed_out = false,
@@ -411,6 +419,22 @@ public:
       promise->setValue(folly::Unit{});
     }
     disable_events();
+  }
+
+  /// Returns current low-level consume counters for perf diagnostics.
+  [[nodiscard]] auto consume_perf_snapshot() const -> ConsumePerfSnapshot {
+    return ConsumePerfSnapshot{
+      .consume_batch_calls
+      = consume_batch_calls_.load(std::memory_order_relaxed),
+      .consume_batch_wait_ns
+      = consume_batch_wait_ns_.load(std::memory_order_relaxed),
+      .consume_batch_wrap_ns
+      = consume_batch_wrap_ns_.load(std::memory_order_relaxed),
+      .consume_batch_timeouts
+      = consume_batch_timeouts_.load(std::memory_order_relaxed),
+      .consume_batch_messages
+      = consume_batch_messages_.load(std::memory_order_relaxed),
+    };
   }
 
 private:
@@ -480,16 +504,16 @@ private:
     return stopped_;
   }
 
-  /// Result of one `rd_kafka_consume_batch_queue` attempt.
-  struct ConsumeBatchAttempt {
-    std::vector<Message> messages;
+  /// Outcome of one `rd_kafka_consume_batch_queue` attempt.
+  struct ConsumeBatchOutcome {
+    size_t message_count = 0;
     bool timed_out = false;
   };
 
-  /// Consumes up to `max_messages` in one librdkafka batch call.
+  /// Appends up to `max_messages` in one librdkafka batch call.
   [[nodiscard]] auto
-  consume_batch(size_t max_messages, std::chrono::milliseconds timeout)
-    -> ConsumeBatchAttempt {
+  consume_batch_into(size_t max_messages, std::chrono::milliseconds timeout,
+                     std::vector<Message>& messages) -> ConsumeBatchOutcome {
     TENZIR_ASSERT(max_messages > 0);
     if (queue_ == nullptr) {
       return {};
@@ -503,60 +527,82 @@ private:
     }
     auto timeout_i = static_cast<int>(
       std::min<int64_t>(timeout_ms, std::numeric_limits<int>::max()));
+    consume_batch_calls_.fetch_add(1, std::memory_order_relaxed);
+    auto wait_started = std::chrono::steady_clock::now();
     auto consumed = rd_kafka_consume_batch_queue(
       queue_, timeout_i, batch_consume_buffer_.data(), max_messages);
+    consume_batch_wait_ns_.fetch_add(
+      static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - wait_started)
+          .count()),
+      std::memory_order_relaxed);
     if (consumed == 0) {
-      return ConsumeBatchAttempt{
-        .messages = {},
+      consume_batch_timeouts_.fetch_add(1, std::memory_order_relaxed);
+      return ConsumeBatchOutcome{
+        .message_count = 0,
         .timed_out = true,
       };
     }
+    auto wrap_started = std::chrono::steady_clock::now();
     if (consumed < 0) {
       auto* fallback = rd_kafka_consume_queue(queue_, 0);
       if (fallback == nullptr) {
         return {};
       }
-      auto messages = std::vector<Message>{};
       messages.emplace_back(fallback);
-      return ConsumeBatchAttempt{
-        .messages = std::move(messages),
+      consume_batch_messages_.fetch_add(1, std::memory_order_relaxed);
+      consume_batch_wrap_ns_.fetch_add(
+        static_cast<uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - wrap_started)
+            .count()),
+        std::memory_order_relaxed);
+      return ConsumeBatchOutcome{
+        .message_count = 1,
         .timed_out = false,
       };
     }
     auto count = static_cast<size_t>(consumed);
-    auto messages = std::vector<Message>{};
-    messages.reserve(count);
+    auto appended = size_t{0};
+    messages.reserve(messages.size() + count);
     for (size_t i = 0; i < count; ++i) {
       auto* raw = batch_consume_buffer_[i];
+      batch_consume_buffer_[i] = nullptr;
       if (raw == nullptr) {
         continue;
       }
       messages.emplace_back(raw);
-      batch_consume_buffer_[i] = nullptr;
+      ++appended;
     }
-    return ConsumeBatchAttempt{
-      .messages = std::move(messages),
+    consume_batch_messages_.fetch_add(appended, std::memory_order_relaxed);
+    consume_batch_wrap_ns_.fetch_add(
+      static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - wrap_started)
+          .count()),
+      std::memory_order_relaxed);
+    return ConsumeBatchOutcome{
+      .message_count = appended,
       .timed_out = false,
     };
   }
 
-  /// Drains all immediately available messages up to `max_messages`.
-  [[nodiscard]] auto consume_available(size_t max_messages)
-    -> std::vector<Message> {
+  /// Drains all immediately available messages into `messages`.
+  auto consume_available_into(size_t max_messages,
+                              std::vector<Message>& messages) -> void {
     if (max_messages == 0) {
-      return {};
+      return;
     }
-    auto messages = std::vector<Message>{};
-    messages.reserve(max_messages);
-    while (messages.size() < max_messages) {
-      auto remaining = max_messages - messages.size();
-      auto attempt = consume_batch(remaining, std::chrono::milliseconds{0});
-      if (attempt.messages.empty()) {
+    auto target_size = messages.size() + max_messages;
+    while (messages.size() < target_size) {
+      auto remaining = target_size - messages.size();
+      auto outcome
+        = consume_batch_into(remaining, std::chrono::milliseconds{0}, messages);
+      if (outcome.message_count == 0) {
         break;
       }
-      std::ranges::move(attempt.messages, std::back_inserter(messages));
     }
-    return messages;
   }
 
   /// Unhooks librdkafka queue wakeups from the eventfd.
@@ -571,6 +617,12 @@ private:
   // Invariant: `next_batch()` is single-consumer in the current operator
   // pipeline, so this scratch storage is never touched concurrently.
   mutable std::vector<rd_kafka_message_t*> batch_consume_buffer_;
+  // Invariant: consume perf counters are monotonic and lock-free.
+  std::atomic<uint64_t> consume_batch_calls_ = 0;
+  std::atomic<uint64_t> consume_batch_wait_ns_ = 0;
+  std::atomic<uint64_t> consume_batch_wrap_ns_ = 0;
+  std::atomic<uint64_t> consume_batch_timeouts_ = 0;
+  std::atomic<uint64_t> consume_batch_messages_ = 0;
   // Invariant: `waiter_` and `pending_notifications_` are protected by
   // `state_mutex_`, and at most one waiter exists at a time.
   mutable std::mutex state_mutex_;

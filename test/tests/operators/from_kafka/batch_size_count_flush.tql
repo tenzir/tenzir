@@ -3,7 +3,7 @@ from_kafka env("KAFKA_TOPIC"),
            count=3,
            offset="beginning",
            batch_size=2,
-           batch_timeout=1s,
+           _batch_timeout=1s,
            options={
              "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
              "group.id": "tenzir-test-from-kafka-batch-size"

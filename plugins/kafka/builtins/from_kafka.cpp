@@ -56,8 +56,8 @@ using tenzir::detail::ascii_icase_equal;
 /// Concurrent stage layout (executor domains on the right):
 ///
 ///   ┌───────────────────────────────┐
-///   │ poll loop (`fetch_loop`)      │                [I/O executor]
-///   │   next_batch, to_fetched_batch│
+///   │ ×P poll loops (`fetch_loop`)  │                [I/O executor]
+///   │   1 source per partition      │
 ///   └───────────────────────────────┘
 ///                   │
 ///                   │ MessageBatch
@@ -86,14 +86,15 @@ using tenzir::detail::ascii_icase_equal;
 /// Invariants:
 /// 1. Backpressure is bounded by both `runtime_.message_queue` capacity and
 ///    `prefetch_bytes` accounting (`runtime_.in_flight_fetch_bytes`).
-/// 2. `seq` is assigned in source-poll order; only ordered mode
-///    re-establishes
-///    that order before emitting slices.
+/// 2. `seq` is assigned in source-arrival order across all partition sources;
+///    only ordered mode re-establishes that order before emitting slices.
 /// 3. Source polling (`fetch_wait_timeout`) is independent from slice
 ///    flush latency (`batch_timeout`) to avoid timeout-coupling stalls.
 /// 4. Source ingress is typically the bottleneck. Raising worker concurrency
 ///    helps mostly in `optimization="unordered"` mode but does not remove
 ///    source-side wait on its own.
+/// 5. Per-partition record order is preserved by Kafka and by each single
+///    partition source loop, but there is no global cross-partition order.
 
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
@@ -320,8 +321,6 @@ public:
       optimization_mode_{other.optimization_mode_},
       worker_count_{other.worker_count_},
       worker_batch_size_{other.worker_batch_size_},
-      consumer_cfg_{std::move(other.consumer_cfg_)},
-      consumer_{std::move(other.consumer_)},
       emitted_messages_{other.emitted_messages_},
       checkpoint_pending_offsets_{std::move(other.checkpoint_pending_offsets_)},
       assigned_partitions_{std::move(other.assigned_partitions_)},
@@ -330,19 +329,22 @@ public:
       perf_started_{other.perf_started_},
       perf_start_{other.perf_start_},
       done_{other.done_} {
-    runtime_.queue = std::move(other.runtime_.queue);
+    runtime_.partition_sources = std::move(other.runtime_.partition_sources);
+    runtime_.partition_source_by_id
+      = std::move(other.runtime_.partition_source_by_id);
     runtime_.message_queue = std::move(other.runtime_.message_queue);
     runtime_.table_slice_queue = std::move(other.runtime_.table_slice_queue);
     runtime_.ordered_slices = std::move(other.runtime_.ordered_slices);
     runtime_.message_queue_closed.store(
       other.runtime_.message_queue_closed.load());
+    runtime_.live_fetchers.store(other.runtime_.live_fetchers.load());
     runtime_.live_builders.store(other.runtime_.live_builders.load());
     runtime_.pipeline_stop_requested.store(
       other.runtime_.pipeline_stop_requested.load());
     runtime_.in_flight_fetch_bytes = other.runtime_.in_flight_fetch_bytes;
-    runtime_.next_fetch_seq = other.runtime_.next_fetch_seq;
+    runtime_.next_fetch_seq.store(other.runtime_.next_fetch_seq.load());
     runtime_.next_emit_seq = other.runtime_.next_emit_seq;
-    runtime_.scheduled_messages = other.runtime_.scheduled_messages;
+    runtime_.scheduled_messages.store(other.runtime_.scheduled_messages.load());
   }
   auto operator=(FromKafkaOperator&&) -> FromKafkaOperator& = delete;
   FromKafkaOperator(FromKafkaOperator const&) = delete;
@@ -366,13 +368,16 @@ public:
       done_ = true;
       co_return;
     }
-    if (not co_await make_consumer_and_queue(ctx, std::move(*auth), *offset)) {
+    if (not co_await make_partition_sources(ctx, *auth, *offset)) {
       done_ = true;
       co_return;
     }
     initialize_runtime_state();
-    ctx.spawn_task(
-      folly::coro::co_withExecutor(folly::getGlobalIOExecutor(), fetch_loop()));
+    for (auto source_index = size_t{0};
+         source_index < runtime_.partition_sources.size(); ++source_index) {
+      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalIOExecutor(),
+                                                  fetch_loop(source_index)));
+    }
     for (size_t i = 0; i < worker_count_; ++i) {
       ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
                                                   build_loop()));
@@ -455,7 +460,7 @@ public:
         break;
       }
       add_perf_counter(perf_.eof_events);
-      mark_partition_eof(partition, ctx);
+      mark_partition_eof(partition);
     }
     if (frame.fatal_error) {
       diagnostic::error("{}", *frame.fatal_error).emit(ctx);
@@ -476,22 +481,39 @@ public:
   }
 
   auto commit_pending_offsets() -> Task<void> {
-    if (checkpoint_pending_offsets_.empty() or not consumer_) {
+    if (checkpoint_pending_offsets_.empty()) {
       co_return;
     }
-    auto offsets = checkpoint_pending_offsets_
-                   | std::views::transform([this](auto const& entry) {
-                       auto const& [partition, offset] = entry;
-                       return RdKafka::TopicPartition::create(
-                         args_.topic, partition, offset);
-                     })
-                   | std::ranges::to<std::vector<RdKafka::TopicPartition*>>();
-    if (auto err = (*consumer_)->commitSync(offsets);
-        err != RdKafka::ERR_NO_ERROR) {
-      TENZIR_WARN("from_kafka: failed to commit offsets: {}",
-                  RdKafka::err2str(err));
+    auto offsets_by_source
+      = std::unordered_map<size_t, std::vector<RdKafka::TopicPartition*>>{};
+    for (auto const& [partition, offset] : checkpoint_pending_offsets_) {
+      auto source_it = runtime_.partition_source_by_id.find(partition);
+      if (source_it == runtime_.partition_source_by_id.end()) {
+        TENZIR_WARN("from_kafka: no source for partition {} while committing",
+                    partition);
+        continue;
+      }
+      offsets_by_source[source_it->second].push_back(
+        RdKafka::TopicPartition::create(args_.topic, partition, offset));
     }
-    RdKafka::TopicPartition::destroy(offsets);
+    for (auto& [source_index, offsets] : offsets_by_source) {
+      auto cleanup_offsets = tenzir::detail::scope_guard{[&offsets]() noexcept {
+        RdKafka::TopicPartition::destroy(offsets);
+      }};
+      if (offsets.empty()
+          or source_index >= runtime_.partition_sources.size()) {
+        continue;
+      }
+      auto& source = runtime_.partition_sources[source_index];
+      if (not source.source_consumer) {
+        continue;
+      }
+      if (auto err = source.source_consumer->consumer->commitSync(offsets);
+          err != RdKafka::ERR_NO_ERROR) {
+        TENZIR_WARN("from_kafka: failed to commit offsets for partition {}: {}",
+                    source.partition, RdKafka::err2str(err));
+      }
+    }
     checkpoint_pending_offsets_.clear();
   }
 
@@ -520,21 +542,36 @@ private:
   using TableSliceQueue
     = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
 
+  /// Bundles one configured consumer with callback-lifetime ownership.
+  struct SourceConsumer {
+    consumer_configuration consumer_cfg;
+    Box<RdKafka::KafkaConsumer> consumer;
+  };
+
+  /// Owns one partition source (consumer plus async queue wrapper).
+  struct PartitionSource {
+    int32_t partition = -1;
+    std::optional<SourceConsumer> source_consumer;
+    std::optional<Box<AsyncConsumerQueue>> queue;
+  };
+
   /// Owns mutable runtime state for source/build/emit stages.
   struct RuntimeState {
-    std::optional<Box<AsyncConsumerQueue>> queue;
+    std::vector<PartitionSource> partition_sources;
+    std::unordered_map<int32_t, size_t> partition_source_by_id;
     std::shared_ptr<MessageQueue> message_queue;
     std::shared_ptr<TableSliceQueue> table_slice_queue;
     std::map<uint64_t, TableSliceFrame> ordered_slices;
     std::atomic<bool> message_queue_closed = false;
+    std::atomic<size_t> live_fetchers = 0;
     std::atomic<size_t> live_builders = 0;
     std::atomic<bool> pipeline_stop_requested = false;
     std::mutex prefetch_budget_mutex;
     size_t in_flight_fetch_bytes = 0;
     Notify prefetch_budget_notify;
-    uint64_t next_fetch_seq = 0;
+    std::atomic<uint64_t> next_fetch_seq = 0;
     uint64_t next_emit_seq = 0;
-    uint64_t scheduled_messages = 0;
+    std::atomic<uint64_t> scheduled_messages = 0;
   };
 
   /// Tracks adaptive polling state while collecting one source batch.
@@ -569,9 +606,98 @@ private:
     return offset;
   }
 
-  /// Creates the Kafka consumer plus async queue with resolved config inputs.
-  auto make_consumer_and_queue(OpCtx& ctx, ResolvedAwsIamAuth auth,
-                               int64_t offset) -> Task<bool> {
+  /// Creates one Kafka consumer with resolved options and callback ownership.
+  auto make_source_consumer(OpCtx& ctx, record const& config,
+                            ResolvedAwsIamAuth const& auth, int64_t offset)
+    -> Task<std::optional<SourceConsumer>> {
+    auto cfg = make_consumer_configuration(config, auth.options,
+                                           auth.credentials, offset, ctx.dh());
+    if (not cfg) {
+      diagnostic::error("failed to create kafka configuration: {}", cfg.error())
+        .emit(ctx);
+      co_return std::nullopt;
+    }
+    auto source_cfg = std::move(*cfg);
+    auto user_options = args_.options;
+    if (auth.options) {
+      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
+    }
+    if (auto ok
+        = co_await ctx.resolve_secrets(configure_consumer_or_request_secrets(
+          source_cfg, user_options, ctx.dh()));
+        not ok) {
+      co_return std::nullopt;
+    }
+    TENZIR_ASSERT(source_cfg.conf);
+    auto error = std::string{};
+    auto* raw_consumer
+      = RdKafka::KafkaConsumer::create(source_cfg.conf.get(), error);
+    if (raw_consumer == nullptr) {
+      diagnostic::error("failed to create kafka consumer: {}", error).emit(ctx);
+      co_return std::nullopt;
+    }
+    auto source_consumer = SourceConsumer{
+      .consumer_cfg = std::move(source_cfg),
+      .consumer = Box<RdKafka::KafkaConsumer>::from_unique_ptr(
+        std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}),
+    };
+    co_return source_consumer;
+  }
+
+  /// Discovers all partition ids for `args_.topic` from broker metadata.
+  auto
+  discover_topic_partitions(RdKafka::KafkaConsumer& consumer, OpCtx& ctx) const
+    -> std::optional<std::vector<int32_t>> {
+    auto* metadata = static_cast<RdKafka::Metadata*>(nullptr);
+    if (auto err = consumer.metadata(false, nullptr, &metadata, 5000);
+        err != RdKafka::ERR_NO_ERROR) {
+      diagnostic::error("failed to query topic metadata: {}",
+                        RdKafka::err2str(err))
+        .emit(ctx);
+      return std::nullopt;
+    }
+    auto metadata_guard = std::unique_ptr<RdKafka::Metadata>{metadata};
+    TENZIR_ASSERT(metadata_guard);
+    auto partitions = std::vector<int32_t>{};
+    for (auto const& topic_meta : *metadata_guard->topics()) {
+      if (topic_meta == nullptr or topic_meta->topic() != args_.topic) {
+        continue;
+      }
+      if (topic_meta->err() != RdKafka::ERR_NO_ERROR) {
+        diagnostic::error("failed to get topic metadata for `{}`: {}",
+                          args_.topic, RdKafka::err2str(topic_meta->err()))
+          .emit(ctx);
+        return std::nullopt;
+      }
+      partitions.reserve(topic_meta->partitions()->size());
+      for (auto const& partition_meta : *topic_meta->partitions()) {
+        if (partition_meta == nullptr) {
+          continue;
+        }
+        if (partition_meta->err() != RdKafka::ERR_NO_ERROR) {
+          diagnostic::warning("ignoring partition {} due to metadata error: {}",
+                              partition_meta->id(),
+                              RdKafka::err2str(partition_meta->err()))
+            .emit(ctx);
+          continue;
+        }
+        partitions.push_back(partition_meta->id());
+      }
+      break;
+    }
+    if (partitions.empty()) {
+      diagnostic::error("topic `{}` has no discoverable partitions",
+                        args_.topic)
+        .emit(ctx);
+      return std::nullopt;
+    }
+    std::ranges::sort(partitions);
+    return partitions;
+  }
+
+  /// Builds one dedicated source consumer+queue pair for each topic partition.
+  auto make_partition_sources(OpCtx& ctx, ResolvedAwsIamAuth const& auth,
+                              int64_t offset) -> Task<bool> {
     auto config = source_global_defaults();
     if (not config.contains("group.id")) {
       config["group.id"] = "tenzir";
@@ -581,50 +707,67 @@ private:
     if (args_.exit) {
       config["enable.partition.eof"] = "true";
     }
-    auto cfg = make_consumer_configuration(config, auth.options,
-                                           auth.credentials, offset, ctx.dh());
-    if (not cfg) {
-      diagnostic::error("failed to create kafka configuration: {}", cfg.error())
-        .emit(ctx);
+    runtime_.partition_sources.clear();
+    runtime_.partition_source_by_id.clear();
+    assigned_partitions_.clear();
+    eof_partitions_.clear();
+    auto bootstrap_consumer
+      = co_await make_source_consumer(ctx, config, auth, offset);
+    if (not bootstrap_consumer) {
       co_return false;
     }
-    consumer_cfg_ = std::move(*cfg);
-    auto user_options = args_.options;
-    if (auth.options) {
-      user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
-    }
-    if (auto ok
-        = co_await ctx.resolve_secrets(configure_consumer_or_request_secrets(
-          *consumer_cfg_, user_options, ctx.dh()));
-        not ok) {
+    auto partitions
+      = discover_topic_partitions(*bootstrap_consumer->consumer, ctx);
+    if (not partitions) {
       co_return false;
     }
-    TENZIR_ASSERT(consumer_cfg_->conf);
-    auto error = std::string{};
-    auto* raw_consumer
-      = RdKafka::KafkaConsumer::create(consumer_cfg_->conf.get(), error);
-    if (raw_consumer == nullptr) {
-      diagnostic::error("failed to create kafka consumer: {}", error).emit(ctx);
-      co_return false;
-    }
-    consumer_.emplace(Box<RdKafka::KafkaConsumer>::from_unique_ptr(
-      std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}));
-    if (auto err = (*consumer_)->subscribe({args_.topic});
-        err != RdKafka::ERR_NO_ERROR) {
-      diagnostic::error("failed to subscribe to topic: {}",
-                        RdKafka::err2str(err))
-        .emit(ctx);
-      co_return false;
-    }
+    runtime_.partition_sources.reserve(partitions->size());
     auto* evb = folly::getGlobalIOExecutor()->getEventBase();
-    auto queue = AsyncConsumerQueue::make(*evb, **consumer_);
-    if (queue.is_err()) {
-      diagnostic::error("failed to create async consumer queue: {}",
-                        std::move(queue).unwrap_err())
+    for (auto i = size_t{0}; i < partitions->size(); ++i) {
+      auto partition = (*partitions)[i];
+      auto next_consumer = std::optional<SourceConsumer>{};
+      if (i == 0) {
+        next_consumer = std::move(*bootstrap_consumer);
+      } else {
+        next_consumer
+          = co_await make_source_consumer(ctx, config, auth, offset);
+      }
+      if (not next_consumer) {
+        co_return false;
+      }
+      auto assignment = std::vector<RdKafka::TopicPartition*>{
+        RdKafka::TopicPartition::create(args_.topic, partition, offset),
+      };
+      auto assign_err = next_consumer->consumer->assign(assignment);
+      RdKafka::TopicPartition::destroy(assignment);
+      if (assign_err != RdKafka::ERR_NO_ERROR) {
+        diagnostic::error("failed to assign partition {}: {}", partition,
+                          RdKafka::err2str(assign_err))
+          .emit(ctx);
+        co_return false;
+      }
+      auto queue = AsyncConsumerQueue::make(*evb, *next_consumer->consumer);
+      if (queue.is_err()) {
+        diagnostic::error("failed to create async consumer queue for partition "
+                          "{}: {}",
+                          partition, std::move(queue).unwrap_err())
+          .emit(ctx);
+        co_return false;
+      }
+      auto source = PartitionSource{};
+      source.partition = partition;
+      source.source_consumer = std::move(*next_consumer);
+      source.queue.emplace(std::move(queue).unwrap());
+      assigned_partitions_.insert(partition);
+      runtime_.partition_source_by_id.emplace(
+        partition, runtime_.partition_sources.size());
+      runtime_.partition_sources.emplace_back(std::move(source));
+    }
+    if (runtime_.partition_sources.empty()) {
+      diagnostic::error("topic `{}` has no assignable partitions", args_.topic)
         .emit(ctx);
       co_return false;
     }
-    runtime_.queue.emplace(std::move(queue).unwrap());
     co_return true;
   }
 
@@ -644,9 +787,10 @@ private:
       = std::make_shared<TableSliceQueue>(fetch_capacity);
     runtime_.ordered_slices.clear();
     runtime_.next_emit_seq = 0;
-    runtime_.next_fetch_seq = 0;
-    runtime_.scheduled_messages = emitted_messages_;
+    runtime_.next_fetch_seq.store(0);
+    runtime_.scheduled_messages.store(emitted_messages_);
     runtime_.message_queue_closed.store(false);
+    runtime_.live_fetchers.store(runtime_.partition_sources.size());
     runtime_.live_builders.store(worker_count_);
     runtime_.pipeline_stop_requested.store(false);
     {
@@ -682,6 +826,18 @@ private:
     auto elapsed_s = static_cast<double>(elapsed_ns) / 1'000'000'000.0;
     auto emitted_messages = load(perf_.emitted_messages);
     auto eps = static_cast<double>(emitted_messages) / elapsed_s;
+    auto queue_perf = AsyncConsumerQueue::ConsumePerfSnapshot{};
+    for (auto const& source : runtime_.partition_sources) {
+      if (not source.queue) {
+        continue;
+      }
+      auto snapshot = (*source.queue)->consume_perf_snapshot();
+      queue_perf.consume_batch_calls += snapshot.consume_batch_calls;
+      queue_perf.consume_batch_wait_ns += snapshot.consume_batch_wait_ns;
+      queue_perf.consume_batch_wrap_ns += snapshot.consume_batch_wrap_ns;
+      queue_perf.consume_batch_timeouts += snapshot.consume_batch_timeouts;
+      queue_perf.consume_batch_messages += snapshot.consume_batch_messages;
+    }
     TENZIR_WARN(
       "from_kafka perf: reason={} topic={} elapsed_ms={} eps={:.0f} "
       "emitted_messages={} emitted_batches={} emitted_slices={} "
@@ -690,7 +846,10 @@ private:
       "fetched_enqueue_wait_ms={} build_dequeue_wait_ms_total={} "
       "build_compute_ms_total={} build_enqueue_wait_ms_total={} "
       "built_batches={} built_messages={} "
-      "runner_dequeue_wait_ms={} push_wait_ms={} eof_events={} fatal_errors={}",
+      "runner_dequeue_wait_ms={} push_wait_ms={} eof_events={} fatal_errors={} "
+      "queue_consume_calls={} queue_consume_wait_ms={} "
+      "queue_consume_wrap_ms={} queue_consume_timeouts={} "
+      "queue_consume_messages={}",
       reason, args_.topic, elapsed_ns / 1'000'000, eps, emitted_messages,
       load(perf_.emitted_batches), load(perf_.emitted_slices),
       load(perf_.fetch_next_batch_calls),
@@ -707,7 +866,10 @@ private:
       load(perf_.built_messages),
       load(perf_.runner_dequeue_wait_ns) / 1'000'000,
       load(perf_.push_wait_ns) / 1'000'000, load(perf_.eof_events),
-      load(perf_.fatal_errors));
+      load(perf_.fatal_errors), queue_perf.consume_batch_calls,
+      queue_perf.consume_batch_wait_ns / 1'000'000,
+      queue_perf.consume_batch_wrap_ns / 1'000'000,
+      queue_perf.consume_batch_timeouts, queue_perf.consume_batch_messages);
   }
 
   /// Computes the configured worker-side batch size.
@@ -738,10 +900,12 @@ private:
   auto fetch_batch_size_limit() const -> size_t {
     auto limit = static_cast<uint64_t>(worker_batch_size_);
     if (args_.count) {
-      if (runtime_.scheduled_messages >= args_.count->inner) {
+      auto scheduled
+        = runtime_.scheduled_messages.load(std::memory_order_relaxed);
+      if (scheduled >= args_.count->inner) {
         return 0;
       }
-      auto remaining = args_.count->inner - runtime_.scheduled_messages;
+      auto remaining = args_.count->inner - scheduled;
       limit = std::min(limit, remaining);
     }
     if (limit == 0) {
@@ -750,13 +914,33 @@ private:
     return static_cast<size_t>(limit);
   }
 
+  /// Attempts to reserve one output-message slot under `count=` backpressure.
+  auto try_reserve_message_slot() const -> bool {
+    if (not args_.count) {
+      runtime_.scheduled_messages.fetch_add(1, std::memory_order_relaxed);
+      return true;
+    }
+    auto limit = args_.count->inner;
+    auto scheduled
+      = runtime_.scheduled_messages.load(std::memory_order_relaxed);
+    while (scheduled < limit) {
+      if (runtime_.scheduled_messages.compare_exchange_weak(
+            scheduled, scheduled + 1, std::memory_order_relaxed)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Requests all pipeline stages to stop and wakes budget waiters.
   auto request_pipeline_stop() const -> void {
     if (runtime_.pipeline_stop_requested.exchange(true)) {
       return;
     }
-    if (runtime_.queue) {
-      (*runtime_.queue)->request_stop();
+    for (auto& source : runtime_.partition_sources) {
+      if (source.queue) {
+        (*source.queue)->request_stop();
+      }
     }
     runtime_.prefetch_budget_notify.notify_one();
   }
@@ -832,13 +1016,12 @@ private:
     for (auto& message : fetched_messages) {
       switch (message.err()) {
         case RD_KAFKA_RESP_ERR_NO_ERROR: {
+          if (not try_reserve_message_slot()) {
+            reached_count = true;
+            break;
+          }
           batch.payload_bytes += message.len();
           batch.messages.push_back(std::move(message));
-          ++runtime_.scheduled_messages;
-          if (args_.count
-              and runtime_.scheduled_messages >= args_.count->inner) {
-            reached_count = true;
-          }
           break;
         }
         case RD_KAFKA_RESP_ERR__PARTITION_EOF: {
@@ -863,15 +1046,16 @@ private:
     }
     batch.reached_count = reached_count;
     if (batch.messages.empty() and batch.eof_partitions.empty()
-        and not batch.fatal_error) {
+        and not batch.fatal_error and not batch.reached_count) {
       return std::nullopt;
     }
-    batch.seq = runtime_.next_fetch_seq++;
+    batch.seq = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
     return batch;
   }
 
   /// Collects one source poll window with adaptive timeout/backoff behavior.
-  auto collect_fetch_window(size_t max_messages) const
+  auto
+  collect_fetch_window(AsyncConsumerQueue& queue, size_t max_messages) const
     -> Task<std::vector<AsyncConsumerQueue::Message>> {
     auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
     pending_messages.reserve(max_messages);
@@ -881,11 +1065,10 @@ private:
     state.poll_wait = state.base_poll_wait;
     // Allow backoff to grow up to the batch flush horizon, so partial batches
     // do not spin in short timeout polls while waiting for additional records.
-    auto poll_wait_cap
-      = std::max(state.base_poll_wait,
-                 std::max(args_._batch_timeout,
-                          std::chrono::duration_cast<duration>(
-                            fetch_wait_backoff_floor)));
+    auto poll_wait_cap = std::max(
+      state.base_poll_wait,
+      std::max(args_._batch_timeout,
+               std::chrono::duration_cast<duration>(fetch_wait_backoff_floor)));
     while (pending_messages.size() < max_messages
            and not is_pipeline_stopping()) {
       auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -909,8 +1092,8 @@ private:
         add_perf_counter(perf_.fetch_next_batch_calls);
         next_batch_started = std::chrono::steady_clock::now();
       }
-      auto batch = co_await (*runtime_.queue)
-                     ->next_batch(max_messages - pending_messages.size(), wait);
+      auto batch = co_await queue.next_batch(
+        max_messages - pending_messages.size(), wait);
       if (perf_enabled_) {
         add_perf_counter(
           perf_.fetch_next_batch_wait_ns,
@@ -922,9 +1105,9 @@ private:
           ++state.consecutive_empty_timeouts;
           // Once we already have some data in the current source window, back
           // off on every timeout and keep waiting until the flush deadline.
-          auto should_backoff = not pending_messages.empty()
-                                or state.consecutive_empty_timeouts
-                                     >= fetch_wait_backoff_after;
+          auto should_backoff
+            = not pending_messages.empty()
+              or state.consecutive_empty_timeouts >= fetch_wait_backoff_after;
           if (should_backoff) {
             state.poll_wait = std::min(poll_wait_cap, state.poll_wait * 2);
           }
@@ -1004,9 +1187,22 @@ private:
     co_return not is_pipeline_stopping();
   }
 
-  /// Polls Kafka and hands message batches to build workers.
-  auto fetch_loop() const -> Task<void> {
-    if (not runtime_.queue or not runtime_.message_queue) {
+  /// Polls one partition source and hands message batches to build workers.
+  auto fetch_loop(size_t source_index) const -> Task<void> {
+    auto finish_fetcher = [this]() -> Task<void> {
+      if (runtime_.live_fetchers.fetch_sub(1) == 1) {
+        co_await close_message_queue();
+      }
+      co_return;
+    };
+    if (not runtime_.message_queue
+        or source_index >= runtime_.partition_sources.size()) {
+      co_await finish_fetcher();
+      co_return;
+    }
+    auto& source = runtime_.partition_sources[source_index];
+    if (not source.queue) {
+      co_await finish_fetcher();
       co_return;
     }
     try {
@@ -1016,7 +1212,8 @@ private:
           request_pipeline_stop();
           break;
         }
-        auto pending_messages = co_await collect_fetch_window(max_messages);
+        auto pending_messages
+          = co_await collect_fetch_window(**source.queue, max_messages);
         if (pending_messages.empty()) {
           if (is_pipeline_stopping()) {
             break;
@@ -1034,7 +1231,7 @@ private:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
-    co_await close_message_queue();
+    co_await finish_fetcher();
   }
 
   /// Converts one message batch into a `TableSliceFrame`.
@@ -1181,38 +1378,12 @@ private:
   }
 
   /// Tracks partition EOF notifications and marks the source done if complete.
-  auto mark_partition_eof(int32_t partition, OpCtx& ctx) -> void {
-    if (not args_.exit or not consumer_) {
-      return;
-    }
-    auto partitions = std::vector<RdKafka::TopicPartition*>{};
-    if (auto err = (*consumer_)->assignment(partitions);
-        err != RdKafka::ERR_NO_ERROR) {
-      diagnostic::error("failed to get assignment: {}", RdKafka::err2str(err))
-        .emit(ctx);
-      done_ = true;
-      return;
-    }
-    auto assignment = partitions | std::views::filter([this](auto* candidate) {
-                        return candidate and candidate->topic() == args_.topic;
-                      })
-                      | std::views::transform([](auto* candidate) {
-                          return candidate->partition();
-                        })
-                      | std::ranges::to<std::unordered_set<int32_t>>();
-    RdKafka::TopicPartition::destroy(partitions);
-    if (assignment.empty()) {
-      return;
-    }
-    if (not assigned_partitions_ or *assigned_partitions_ != assignment) {
-      assigned_partitions_ = std::move(assignment);
-      eof_partitions_.clear();
-    }
-    if (not assigned_partitions_->contains(partition)) {
+  auto mark_partition_eof(int32_t partition) -> void {
+    if (not args_.exit or not assigned_partitions_.contains(partition)) {
       return;
     }
     eof_partitions_.insert(partition);
-    if (eof_partitions_.size() == assigned_partitions_->size()) {
+    if (eof_partitions_.size() == assigned_partitions_.size()) {
       done_ = true;
     }
   }
@@ -1221,15 +1392,13 @@ private:
   OptimizationMode optimization_mode_ = OptimizationMode::ordered;
   size_t worker_count_ = 1;
   size_t worker_batch_size_ = 1;
-  std::optional<consumer_configuration> consumer_cfg_;
-  std::optional<Box<RdKafka::KafkaConsumer>> consumer_;
   mutable RuntimeState runtime_;
   // Number of records emitted so far; used for `count=` resumption.
   size_t emitted_messages_ = 0;
   // Invariant: committed offsets are stored as "next offset to consume".
   std::unordered_map<int32_t, int64_t> checkpoint_pending_offsets_;
-  // Invariant: when set, this is the latest assignment for `args_.topic`.
-  std::optional<std::unordered_set<int32_t>> assigned_partitions_;
+  // Invariant: fixed partition set assigned at startup.
+  std::unordered_set<int32_t> assigned_partitions_;
   // Invariant: contains only partitions from `assigned_partitions_`.
   std::unordered_set<int32_t> eof_partitions_;
   // Optional counters for benchmarking; enabled via env flag.
