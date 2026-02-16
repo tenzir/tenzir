@@ -297,15 +297,17 @@ public:
         false_events.push_back(std::move(rhs));
       }
     }
-    if (not true_events.empty()) {
+    if (not consequence_closed_) {
       for (auto& slice : rebatch(std::move(true_events))) {
-        (co_await consequence.push(std::move(slice))).unwrap();
+        consequence_closed_
+          = (co_await consequence.push(std::move(slice))).is_err();
       }
     }
-    if (not false_events.empty()) {
+    if (not alternative_closed_) {
       for (auto& slice : rebatch(std::move(false_events))) {
         if (alternative) {
-          (co_await alternative->push(std::move(slice))).unwrap();
+          alternative_closed_
+            = (co_await alternative->push(std::move(slice))).is_err();
         } else {
           co_await push(std::move(slice));
         }
@@ -315,6 +317,8 @@ public:
 
 private:
   IfArgs args_;
+  bool consequence_closed_ = false;
+  bool alternative_closed_ = false;
 };
 
 } // namespace

@@ -23,8 +23,11 @@ auto rebatch(Rng events, size_t max_size = defaults::import::table_slice_size)
   TENZIR_ASSERT(max_size > 0);
   auto results = Container<table_slice>{};
   auto start = events.begin();
-  auto rows = start->rows();
   const auto end = events.end();
+  if (start == end) {
+    return results;
+  }
+  auto rows = start->rows();
   for (auto it = std::next(start); it < end; ++it) {
     rows += it->rows();
     if (it->schema() == start->schema() and rows < max_size) {

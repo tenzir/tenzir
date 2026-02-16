@@ -66,6 +66,10 @@ public:
     return as<Err<Error>>(std::move(value_)).unwrap();
   }
 
+  auto ignore() const -> void {
+    // Does nothing.
+  }
+
 private:
   variant<VoidToUnit<Value>, Err<Error>> value_;
 };
