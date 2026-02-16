@@ -17,6 +17,8 @@
 
 #include <folly/coro/AsyncScope.h>
 
+#include <mutex>
+
 namespace tenzir {
 
 /// Handle to an asynchronous, scoped task that was spawned.
@@ -30,7 +32,6 @@ public:
   ///
   /// This will panic if the underlying task was cancelled.
   auto join() -> Task<T> {
-    // TODO: Make this thread-safe.
     TENZIR_ASSERT(state_);
     TENZIR_ASSERT(not state_->joined);
     co_await state_->notify.wait();
@@ -73,22 +74,22 @@ public:
     LOGV("spawning task in scope {}", fmt::ptr(this));
     using Result = folly::coro::semi_await_result_t<SemiAwaitable>;
     auto state = std::make_shared<typename AsyncHandle<Result>::State>();
-    scope_.add(
+    data_.scope.add(
       folly::coro::co_withExecutor(
-        executor_,
+        data_.executor,
         folly::coro::co_invoke([this, state,
                                 awaitable = std::forward<SemiAwaitable>(
                                   awaitable)] mutable -> Task<void> {
           auto result = AsyncResult{co_await folly::coro::co_awaitTry(
-            folly::coro::co_withCancellation(cancel_token_,
+            folly::coro::co_withCancellation(data_.cancel_token,
                                              std::move(awaitable)))};
           if (result.is_exception()) {
-            // TODO: This needs to be made thread-safe!
-            if (not exception_) {
+            auto lock = std::scoped_lock{data_.exception_mutex};
+            if (not data_.exception) {
               LOGE("remembering exception for scope {}: {}", fmt::ptr(this),
                    result.exception().what());
-              exception_ = std::move(result).exception();
-              cancel_source_.requestCancellation();
+              data_.exception = std::move(result).exception();
+              data_.cancel_source.requestCancellation();
             } else {
               LOGE("dropping exception for scope {}: {}", fmt::ptr(this),
                    result.exception().what());
@@ -119,39 +120,35 @@ public:
   }
 
   /// Cancel all remaining tasks.
-  auto cancel() {
+  auto cancel() -> void {
     // TODO: Does this also cancel the main task of the scope?
-    cancel_source_.requestCancellation();
+    data_.cancel_source.requestCancellation();
   }
 
   auto is_cancelled() const -> bool {
-    return cancel_token_.isCancellationRequested();
+    return data_.cancel_token.isCancellationRequested();
   }
 
 private:
+  struct Data {
+    folly::ExecutorKeepAlive<> executor;
+    folly::coro::AsyncScope scope;
+    folly::CancellationSource cancel_source;
+    folly::CancellationToken cancel_token;
+    folly::exception_wrapper exception;
+    std::mutex exception_mutex;
+  };
+
   AsyncScope(const AsyncScope&) = delete;
   auto operator=(const AsyncScope&) -> AsyncScope& = delete;
   AsyncScope(AsyncScope&&) = delete;
   auto operator=(AsyncScope&&) -> AsyncScope& = delete;
 
-  AsyncScope(folly::ExecutorKeepAlive<> executor,
-             folly::coro::AsyncScope& scope,
-             folly::CancellationSource& cancel_source,
-             folly::CancellationToken& cancel_token,
-             folly::exception_wrapper& exception)
-    : executor_{std::move(executor)},
-      scope_{scope},
-      cancel_source_{cancel_source},
-      cancel_token_{cancel_token},
-      exception_{exception} {
+  explicit AsyncScope(Data& data) : data_{data} {
   }
   ~AsyncScope() = default;
 
-  folly::ExecutorKeepAlive<> executor_;
-  folly::coro::AsyncScope& scope_;
-  folly::CancellationSource& cancel_source_;
-  folly::CancellationToken& cancel_token_;
-  folly::exception_wrapper& exception_;
+  Data& data_;
 
   template <class F>
     requires std::invocable<F, AsyncScope&>
@@ -178,20 +175,13 @@ template <class F>
   requires std::invocable<F, AsyncScope&>
 auto async_scope(F&& f) -> Task<
   folly::coro::semi_await_result_t<std::invoke_result_t<F, AsyncScope&>>> {
-  auto exception = folly::exception_wrapper{};
-  auto cancel_source = folly::CancellationSource{};
-  auto cancel_token = folly::cancellation_token_merge(
+  auto data = AsyncScope::Data{};
+  data.cancel_token = folly::cancellation_token_merge(
     co_await folly::coro::co_current_cancellation_token,
-    cancel_source.getToken());
-  auto scope = folly::coro::AsyncScope{};
-  auto wrapper = AsyncScope{
-    co_await folly::coro::co_current_executor,
-    scope,
-    cancel_source,
-    cancel_token,
-    exception,
-  };
-  LOGV("created scope {}", fmt::ptr(&wrapper));
+    data.cancel_source.getToken());
+  data.executor = co_await folly::coro::co_current_executor;
+  auto scope = AsyncScope{data};
+  LOGV("created scope {}", fmt::ptr(&scope));
   // For memory safety, after calling the user-provided function, we must under
   // all circumstances reach the cleanup and join all spawned tasks, since they
   // may reference objects that might be destroyed once this function returns.
@@ -203,37 +193,38 @@ auto async_scope(F&& f) -> Task<
     TENZIR_ERROR("aborting because async scope join failed");
     std::terminate();
   }};
-  auto result = AsyncResult{
-    co_await folly::coro::co_awaitTry(folly::coro::co_withCancellation(
-      cancel_token, std::invoke(std::forward<F>(f), wrapper)))};
+  auto result = AsyncResult{co_await folly::coro::co_awaitTry(
+    folly::coro::co_withCancellation(data.cancel_token,
+                                     std::invoke(std::forward<F>(f), scope)))};
   // We only cancel the jobs if the given function failed or was cancelled.
   if (not result.is_value()) {
-    if (not cancel_token.isCancellationRequested()) {
+    if (not data.cancel_token.isCancellationRequested()) {
       LOGV("cancelling async scope because of exception/cancellation");
-      cancel_source.requestCancellation();
+      data.cancel_source.requestCancellation();
     }
   }
   // Provide a custom cancellation token to ensure that cancellation doesn't
   // abort the join. Because we did not ask the scope itself to store and throw
   // exceptions, this should always succeed (if it returns at all).
-  LOGV("joining scope {} (cancelled = {})", fmt::ptr(&wrapper),
-       cancel_token.isCancellationRequested());
+  LOGV("joining scope {} (cancelled = {})", fmt::ptr(&scope),
+       data.cancel_token.isCancellationRequested());
   auto join_result = AsyncResult{co_await folly::coro::co_awaitTry(
-    folly::coro::co_withCancellation({}, scope.joinAsync()))};
-  LOGV("joined scope {}", fmt::ptr(&wrapper));
+    folly::coro::co_withCancellation({}, data.scope.joinAsync()))};
+  LOGV("joined scope {}", fmt::ptr(&scope));
   // Just in case, we still check explicitly.
   if (join_result.is_value()) {
     guard.disable();
   } else {
     guard.trigger();
   }
-  // If any of the spawned tasks threw, we need to propagate the exception.
-  if (exception) {
-    LOGE("leaving scope {} with exception: {}", fmt::ptr(&wrapper),
-         exception.what());
-    exception.throw_exception();
+  // If any of the spawned tasks threw, we need to propagate the exception. No
+  // need to lock it, as the tasks are already joined.
+  if (data.exception) {
+    LOGE("leaving scope {} with exception: {}", fmt::ptr(&scope),
+         data.exception.what());
+    data.exception.throw_exception();
   }
-  LOGV("leaving scope {}", fmt::ptr(&wrapper));
+  LOGV("leaving scope {}", fmt::ptr(&scope));
   // Now return the result of the user-provided function.
   co_return std::move(result).unwrap();
 }
