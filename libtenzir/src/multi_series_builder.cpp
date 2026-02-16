@@ -581,9 +581,9 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
 }
 
 auto multi_series_builder::yield_ready_as_table_slice()
-  -> multi_series_builder::yield_ready_result {
+  -> multi_series_builder::YieldReadyResult {
   auto const now = std::chrono::steady_clock::now();
-  auto result = multi_series_builder::yield_ready_result{};
+  auto result = multi_series_builder::YieldReadyResult{};
   result.wait_for = yield_ready_wait(now);
   result.slices = detail::multi_series_builder::series_to_table_slice(
     std::exchange(ready_events_, {}), settings_.default_schema_name);

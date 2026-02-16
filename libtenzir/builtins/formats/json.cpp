@@ -1286,10 +1286,40 @@ auto parser_batch_timeout(ReadJsonArgs const& args) -> duration {
   return args.batch_timeout.value_or(defaults::import::batch_timeout);
 }
 
-class ReadJson final : public PeriodicOperator<chunk_ptr, table_slice> {
+class ReadJson final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadJson(ReadJsonArgs args)
-    : PeriodicOperator{parser_batch_timeout(args)}, args_{std::move(args)} {
+    : args_{std::move(args)}, next_tick_{parser_batch_timeout(args_)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    auto opts = make_msb_options(args_);
+    parser_ = std::make_unique<default_parser>(
+      args_.parser_name, ctx.dh(), std::move(opts), args_.arrays_of_objects);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    auto next_tick = next_tick_;
+    if (next_tick < duration::zero()) {
+      next_tick = duration::zero();
+    }
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<std::chrono::milliseconds>(next_tick));
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(parser_);
+    auto ready = parser_->builder.yield_ready_as_table_slice();
+    next_tick_ = ready.wait_for;
+    for (auto& slice : ready) {
+      co_await push(std::move(slice));
+    }
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -1298,23 +1328,17 @@ public:
     if (not input or input->size() == 0) {
       co_return;
     }
-    if (not parser_) {
-      auto opts = make_msb_options(args_);
-      parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts),
-                      args_.arrays_of_objects);
-    }
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(parser_);
     parser_->parse(as_bytes(input));
     if (parser_->abort_requested) {
       co_return;
     }
-    request_tick();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not parser_) {
-      co_return;
-    }
+    TENZIR_ASSERT(parser_);
     parser_->validate_completion();
     if (parser_->abort_requested) {
       co_return;
@@ -1324,28 +1348,48 @@ public:
     }
   }
 
-  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<duration> override {
-    TENZIR_UNUSED(ctx);
-    if (not parser_) {
-      co_return duration::max();
+private:
+  struct PeriodicTick {};
+
+  ReadJsonArgs args_;
+  duration next_tick_;
+  std::unique_ptr<default_parser> parser_;
+};
+
+class ReadNdjson final : public Operator<chunk_ptr, table_slice> {
+public:
+  explicit ReadNdjson(ReadJsonArgs args)
+    : args_{std::move(args)}, next_tick_{parser_batch_timeout(args_)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    auto opts = make_msb_options(args_);
+    parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
+                                              std::move(opts));
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    auto next_tick = next_tick_;
+    if (next_tick < duration::zero()) {
+      next_tick = duration::zero();
     }
+    co_await folly::coro::sleep(
+      std::chrono::duration_cast<std::chrono::milliseconds>(next_tick));
+    co_return PeriodicTick{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_ASSERT(result.try_as<PeriodicTick>());
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(parser_);
     auto ready = parser_->builder.yield_ready_as_table_slice();
-    auto wait_for = ready.wait_for;
+    next_tick_ = ready.wait_for;
     for (auto& slice : ready) {
       co_await push(std::move(slice));
     }
-    co_return wait_for;
-  }
-
-private:
-  ReadJsonArgs args_;
-  std::optional<default_parser> parser_;
-};
-
-class ReadNdjson final : public PeriodicOperator<chunk_ptr, table_slice> {
-public:
-  explicit ReadNdjson(ReadJsonArgs args)
-    : PeriodicOperator{parser_batch_timeout(args)}, args_{std::move(args)} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -1354,10 +1398,8 @@ public:
     if (not input or input->size() == 0) {
       co_return;
     }
-    if (not parser_) {
-      auto opts = make_msb_options(args_);
-      parser_.emplace(args_.parser_name, ctx.dh(), std::move(opts));
-    }
+    TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(parser_);
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
     // Handle case where previous chunk ended on carriage return.
@@ -1403,14 +1445,11 @@ public:
     }
     // Buffer remaining data for the next chunk.
     buffer_.append(begin, end);
-    request_tick();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not parser_) {
-      co_return;
-    }
+    TENZIR_ASSERT(parser_);
     // Flush remaining buffer as a final line.
     if (not buffer_.empty()) {
       buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
@@ -1426,22 +1465,12 @@ public:
     }
   }
 
-  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<duration> override {
-    TENZIR_UNUSED(ctx);
-    if (not parser_) {
-      co_return duration::max();
-    }
-    auto ready = parser_->builder.yield_ready_as_table_slice();
-    auto wait_for = ready.wait_for;
-    for (auto& slice : ready) {
-      co_await push(std::move(slice));
-    }
-    co_return wait_for;
-  }
-
 private:
+  struct PeriodicTick {};
+
   ReadJsonArgs args_;
-  std::optional<ndjson_parser> parser_;
+  duration next_tick_;
+  std::unique_ptr<ndjson_parser> parser_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
 };

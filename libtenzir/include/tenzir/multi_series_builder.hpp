@@ -245,7 +245,7 @@ public:
   /// @returns a vector of all currently finished series
   [[nodiscard("The result of a flush must be handled")]]
   auto yield_ready() -> std::vector<series>;
-  struct yield_ready_result {
+  struct YieldReadyResult {
     std::vector<table_slice> slices = {};
     duration wait_for = duration::max();
 
@@ -271,7 +271,7 @@ public:
   };
   /// @returns a vector of all currently finished series
   [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready_as_table_slice() -> yield_ready_result;
+  auto yield_ready_as_table_slice() -> YieldReadyResult;
 
   /// @brief Starts building a new record.
   [[nodiscard]] auto record() -> record_generator;
