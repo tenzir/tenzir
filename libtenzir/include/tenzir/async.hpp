@@ -315,7 +315,7 @@ public:
     : tick_interval_{tick_interval} {
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override final {
     TENZIR_UNUSED(dh);
     co_await folly::coro::sleep(
       std::chrono::duration_cast<std::chrono::milliseconds>(tick_interval_));
@@ -323,7 +323,7 @@ public:
   }
 
   auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
-    -> Task<void> override {
+    -> Task<void> override final {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
     co_await on_tick(push, ctx);
   }
@@ -343,14 +343,14 @@ public:
     : tick_interval_{tick_interval} {
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override final {
     TENZIR_UNUSED(dh);
     co_await folly::coro::sleep(
       std::chrono::duration_cast<std::chrono::milliseconds>(tick_interval_));
     co_return PeriodicTick{};
   }
 
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override final {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
     co_await on_tick(ctx);
   }
