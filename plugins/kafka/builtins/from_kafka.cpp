@@ -56,7 +56,7 @@ using tenzir::detail::ascii_icase_equal;
 /// Concurrent stage layout (executor domains on the right):
 ///
 ///   ┌───────────────────────────────┐
-///   │ fetch_loop                    │                [I/O executor]
+///   │ poll loop (`fetch_loop`)      │                [I/O executor]
 ///   │   next_batch, to_fetched_batch│
 ///   └───────────────────────────────┘
 ///                   │
@@ -66,10 +66,10 @@ using tenzir::detail::ascii_icase_equal;
 ///                   │
 ///                   │ ×N workers
 ///                   ▼
-///   ┌───────────────────────────────┐
-///   │ build_loop                    │                [CPU executor]
-///   │   build_batch → table_slice   │
-///   └───────────────────────────────┘
+///   ┌─────────────────────────────────┐
+///   │ build_loop                      │                [CPU executor]
+///   │   build_batch → TableSliceFrame │
+///   └─────────────────────────────────┘
 ///                   │
 ///                   │ TableSliceFrame
 ///                   ▼
@@ -86,18 +86,19 @@ using tenzir::detail::ascii_icase_equal;
 /// Invariants:
 /// 1. Backpressure is bounded by both `runtime_.message_queue` capacity and
 ///    `prefetch_bytes` accounting (`runtime_.in_flight_fetch_bytes`).
-/// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
+/// 2. `seq` is assigned in source-poll order; only ordered mode
+///    re-establishes
 ///    that order before emitting slices.
-/// 3. Fetch polling (`fetch_wait_timeout`) is independent from slice
+/// 3. Source polling (`fetch_wait_timeout`) is independent from slice
 ///    flush latency (`batch_timeout`) to avoid timeout-coupling stalls.
 /// 4. Source ingress is typically the bottleneck. Raising worker concurrency
 ///    helps mostly in `optimization="unordered"` mode but does not remove
-///    fetch-side wait on its own.
+///    source-side wait on its own.
 
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
 
-/// Default upper bound for one Kafka notification wait while fetching.
+/// Default upper bound for one Kafka notification wait in the source poll loop.
 constexpr auto default_fetch_wait_timeout = 1ms;
 
 /// Maximum adaptive wait used after repeated empty fetch timeouts.
@@ -112,14 +113,14 @@ auto source_global_defaults() -> record& {
   return defaults;
 }
 
-/// Returns high-throughput defaults for librdkafka consumer queueing/fetching.
+/// Returns high-throughput defaults for librdkafka consumer queueing/polling.
 auto from_kafka_throughput_defaults()
   -> const std::array<std::pair<std::string, std::string>, 5>& {
   using entry = std::pair<std::string, std::string>;
   // Performance note: these defaults intentionally bias towards low broker-side
   // holdback (`fetch.min.bytes=1`, `fetch.wait.max.ms=500`) while increasing
   // client queue depth. Local 10M-message fixture runs showed this combination
-  // avoids source stalls better than aggressive "large fetch" defaults.
+  // avoids source stalls better than aggressive "large batch" defaults.
   static const auto defaults = std::array<entry, 5>{
     entry{"fetch.min.bytes", std::to_string(1)},
     entry{"fetch.wait.max.ms", std::to_string(500)},
@@ -151,7 +152,7 @@ struct FromKafkaArgs {
   std::optional<location> exit;
   /// Starting position to use for partition assignment.
   std::optional<located<data>> offset;
-  /// Target number of messages per fetch batch.
+  /// Target number of messages per source batch.
   uint64_t batch_size = 10_k;
   /// Region used for MSK IAM token generation.
   std::optional<located<std::string>> aws_region;
@@ -165,11 +166,11 @@ struct FromKafkaArgs {
   uint64_t _worker_batch_size = 0;
   /// Number of concurrent build coroutines.
   uint64_t _worker_concurrency = 0;
-  /// Capacity of the queue between fetch and build stages.
+  /// Capacity of the queue between source and build stages.
   uint64_t _prefetch_batches = 8;
-  /// Byte budget for in-flight fetched payload.
+  /// Byte budget for in-flight source payload.
   uint64_t _prefetch_bytes = 256_Mi;
-  /// Maximum wait before flushing a partial fetch batch.
+  /// Maximum wait before flushing a partial source batch.
   duration _batch_timeout = default_batch_timeout;
   /// Initial broker poll wait before adaptive timeout backoff.
   duration _fetch_wait_timeout = default_fetch_wait_timeout;
@@ -203,19 +204,19 @@ auto as_ns(Duration d) -> uint64_t {
 /// Note: `*_ns` values are cumulative nanoseconds across concurrent coroutines
 /// and can exceed end-to-end wall-clock time.
 struct FromKafkaPerfCounters {
-  /// Number of fetch-loop polls (`AsyncConsumerQueue::next_batch`) started.
+  /// Number of source-loop polls (`AsyncConsumerQueue::next_batch`) started.
   std::atomic<uint64_t> fetch_next_batch_calls = 0;
-  /// Total time spent awaiting `next_batch` in the fetch loop.
+  /// Total time spent awaiting `next_batch` in the source loop.
   std::atomic<uint64_t> fetch_next_batch_wait_ns = 0;
   /// Number of empty polls that ended due to timeout.
   std::atomic<uint64_t> fetch_timeouts = 0;
-  /// Number of non-empty fetch batches produced by the fetch stage.
+  /// Number of non-empty source batches produced by the poll stage.
   std::atomic<uint64_t> fetched_batches = 0;
-  /// Number of Kafka messages received from the fetch stage.
+  /// Number of Kafka messages received from the poll stage.
   std::atomic<uint64_t> fetched_messages = 0;
-  /// Sum of fetched payload bytes before build-stage parsing.
+  /// Sum of source payload bytes before build-stage parsing.
   std::atomic<uint64_t> fetched_payload_bytes = 0;
-  /// Time spent waiting for prefetch-byte budget before enqueueing fetch batches.
+  /// Time waiting for prefetch-byte budget before enqueueing source batches.
   std::atomic<uint64_t> prefetch_wait_ns = 0;
   /// Time spent waiting to enqueue into `runtime_.message_queue`.
   std::atomic<uint64_t> fetched_enqueue_wait_ns = 0;
@@ -241,7 +242,7 @@ struct FromKafkaPerfCounters {
   std::atomic<uint64_t> emitted_slices = 0;
   /// Number of EOF partition markers observed.
   std::atomic<uint64_t> eof_events = 0;
-  /// Number of fatal-error events observed in fetch/build/process stages.
+  /// Number of fatal-error events observed in poll/build/process stages.
   std::atomic<uint64_t> fatal_errors = 0;
 };
 
@@ -282,7 +283,7 @@ auto parse_offset_value(located<data> const& input, int64_t& offset) -> bool {
     });
 }
 
-/// Represents one fetched Kafka batch plus control metadata.
+/// Represents one polled Kafka message batch plus control metadata.
 struct MessageBatch {
   uint64_t seq = 0;
   std::vector<AsyncConsumerQueue::Message> messages;
@@ -292,7 +293,7 @@ struct MessageBatch {
   size_t payload_bytes = 0;
 };
 
-/// Represents one built table-slice batch plus commit metadata.
+/// Represents one built table-slice frame plus commit metadata.
 struct TableSliceFrame {
   uint64_t seq = 0;
   std::optional<table_slice> slice;
@@ -302,7 +303,7 @@ struct TableSliceFrame {
   std::optional<std::string> fatal_error;
 };
 
-/// Result envelope returned by `await_task()` to `process_task()`.
+/// Result wrapper returned by `await_task()` to `process_task()`.
 struct TableSliceResult {
   std::optional<TableSliceFrame> slice;
   bool end_of_stream = false;
@@ -512,14 +513,14 @@ public:
   }
 
 private:
-  /// Queue item type for fetch-stage handoff.
+  /// Queue item type for source-stage handoff.
   using MessageQueue = folly::coro::BoundedQueue<std::optional<MessageBatch>>;
 
   /// Queue item type for build-stage handoff.
   using TableSliceQueue
     = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
 
-  /// Owns mutable runtime state for fetch/build/emit stages.
+  /// Owns mutable runtime state for source/build/emit stages.
   struct RuntimeState {
     std::optional<Box<AsyncConsumerQueue>> queue;
     std::shared_ptr<MessageQueue> message_queue;
@@ -536,7 +537,7 @@ private:
     uint64_t scheduled_messages = 0;
   };
 
-  /// Tracks adaptive polling state while collecting one fetched batch.
+  /// Tracks adaptive polling state while collecting one source batch.
   struct FetchPollState {
     duration base_poll_wait = default_fetch_wait_timeout;
     duration poll_wait = default_fetch_wait_timeout;
@@ -732,7 +733,7 @@ private:
     return static_cast<size_t>(concurrency);
   }
 
-  /// Returns the next fetch-batch cap, honoring any `count=` limit.
+  /// Returns the next source-batch cap, honoring any `count=` limit.
   auto fetch_batch_size_limit() const -> size_t {
     auto limit = static_cast<uint64_t>(worker_batch_size_);
     if (args_.count) {
@@ -764,7 +765,7 @@ private:
     return runtime_.pipeline_stop_requested.load();
   }
 
-  /// Waits until enough byte budget is available for one fetched batch.
+  /// Waits until enough byte budget is available for one queued source batch.
   auto acquire_prefetch_budget(size_t bytes) const -> Task<void> {
     if (bytes == 0) {
       co_return;
@@ -772,7 +773,7 @@ private:
     while (not is_pipeline_stopping()) {
       {
         auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
-        // Never block forever on one oversized fetch batch. Allow exactly one
+        // Never block forever on one oversized source batch. Allow exactly one
         // oversized in-flight batch at a time when no other batch is tracked.
         if (bytes > args_._prefetch_bytes) {
           if (runtime_.in_flight_fetch_bytes == 0) {
@@ -820,7 +821,7 @@ private:
     }
   }
 
-  /// Converts consumed Kafka messages into one fetch-stage payload batch.
+  /// Converts polled Kafka messages into one source payload batch.
   auto to_fetched_batch(
     std::vector<AsyncConsumerQueue::Message> fetched_messages) const
     -> std::optional<MessageBatch> {
@@ -868,7 +869,7 @@ private:
     return batch;
   }
 
-  /// Collects one fetch window with adaptive timeout/backoff behavior.
+  /// Collects one source poll window with adaptive timeout/backoff behavior.
   auto collect_fetch_window(size_t max_messages) const
     -> Task<std::vector<AsyncConsumerQueue::Message>> {
     auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
@@ -935,7 +936,7 @@ private:
     co_return pending_messages;
   }
 
-  /// Enqueues one fetched batch while honoring prefetch-byte budget.
+  /// Enqueues one source batch while honoring prefetch-byte budget.
   auto enqueue_fetched_batch(MessageBatch fetched) const -> Task<bool> {
     if (perf_enabled_) {
       add_perf_counter(perf_.fetched_batches);
@@ -989,7 +990,7 @@ private:
     co_return not is_pipeline_stopping();
   }
 
-  /// Fetches Kafka batches and hands them to worker coroutines.
+  /// Polls Kafka and hands message batches to build workers.
   auto fetch_loop() const -> Task<void> {
     if (not runtime_.queue or not runtime_.message_queue) {
       co_return;
@@ -1022,7 +1023,7 @@ private:
     co_await close_message_queue();
   }
 
-  /// Converts one fetched payload batch into a `table_slice`.
+  /// Converts one message batch into a `TableSliceFrame`.
   auto build_batch(MessageBatch fetched) const -> TableSliceFrame {
     auto built = TableSliceFrame{};
     built.seq = fetched.seq;
@@ -1051,7 +1052,7 @@ private:
     return built;
   }
 
-  /// Runs one CPU-stage worker that builds slices from fetched batches.
+  /// Runs one CPU-stage worker that builds slices from source batches.
   auto build_loop() const -> Task<void> {
     if (not runtime_.message_queue or not runtime_.built_queue) {
       co_return;
@@ -1112,7 +1113,7 @@ private:
     }
   }
 
-  /// Waits for the next in-order built batch from worker output.
+  /// Waits for the next in-order table-slice frame from worker output.
   auto await_ordered_batch() const -> Task<TableSliceResult> {
     TENZIR_ASSERT(runtime_.built_queue);
     while (true) {
