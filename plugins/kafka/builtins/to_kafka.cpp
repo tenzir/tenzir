@@ -86,16 +86,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto auth
-      = resolve_aws_iam_auth(args_.aws_iam, args_.aws_region, ctx.dh(),
-                             AwsIamRegionRequirement::required_with_iam);
+    auto auth = co_await resolve_aws_iam_auth(
+      args_.aws_iam, args_.aws_region, ctx,
+      AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
-      done_ = true;
-      co_return;
-    }
-    if (auto ok
-        = co_await ctx.resolve_secrets(std::move(auth->secret_requests));
-        not ok) {
       done_ = true;
       co_return;
     }

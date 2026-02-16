@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/async/task.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
@@ -19,6 +20,8 @@
 #include <vector>
 
 namespace tenzir {
+
+class OpCtx;
 
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
@@ -130,5 +133,13 @@ auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
                           AwsIamRegionRequirement requirement
                           = AwsIamRegionRequirement::optional)
   -> failure_or<ResolvedAwsIamAuth>;
+
+/// Resolves AWS IAM auth and applies secret resolution through `ctx`.
+auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          OpCtx& ctx,
+                          AwsIamRegionRequirement requirement
+                          = AwsIamRegionRequirement::optional)
+  -> Task<std::optional<ResolvedAwsIamAuth>>;
 
 } // namespace tenzir

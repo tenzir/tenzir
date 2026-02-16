@@ -353,7 +353,9 @@ public:
       co_return;
     }
     initialize_perf_tracking();
-    auto auth = co_await resolve_aws_auth_state(ctx);
+    auto auth = co_await resolve_aws_iam_auth(
+      args_.aws_iam, args_.aws_region, ctx,
+      AwsIamRegionRequirement::required_with_iam);
     if (not auth) {
       done_ = true;
       co_return;
@@ -545,23 +547,6 @@ private:
     perf_started_ = true;
     perf_start_ = std::chrono::steady_clock::now();
     perf_reported_.store(false, std::memory_order_relaxed);
-  }
-
-  /// Resolves and validates AWS IAM configuration for Kafka auth.
-  auto resolve_aws_auth_state(OpCtx& ctx) const
-    -> Task<std::optional<ResolvedAwsIamAuth>> {
-    auto auth
-      = resolve_aws_iam_auth(args_.aws_iam, args_.aws_region, ctx.dh(),
-                             AwsIamRegionRequirement::required_with_iam);
-    if (not auth) {
-      co_return std::nullopt;
-    }
-    if (auto ok
-        = co_await ctx.resolve_secrets(std::move(auth->secret_requests));
-        not ok) {
-      co_return std::nullopt;
-    }
-    co_return std::move(*auth);
   }
 
   /// Parses and validates the configured consumer start offset.

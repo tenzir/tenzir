@@ -8,6 +8,7 @@
 
 #include "tenzir/aws_iam.hpp"
 
+#include "tenzir/async.hpp"
 #include "tenzir/diagnostics.hpp"
 
 #include <algorithm>
@@ -189,10 +190,26 @@ auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
   -> failure_or<ResolvedAwsIamAuth> {
   auto parsed = std::optional<aws_iam_options>{};
   if (aws_iam) {
-    TRY(parsed, aws_iam_options::from_record(*aws_iam, dh));
+    TRY(parsed, aws_iam_options::from_record(std::move(*aws_iam), dh));
   }
   return resolve_aws_iam_auth(std::move(parsed), std::move(aws_region), dh,
                               requirement);
+}
+
+auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          OpCtx& ctx, AwsIamRegionRequirement requirement)
+  -> Task<std::optional<ResolvedAwsIamAuth>> {
+  auto auth = resolve_aws_iam_auth(std::move(aws_iam), std::move(aws_region),
+                                   ctx.dh(), requirement);
+  if (not auth) {
+    co_return std::nullopt;
+  }
+  if (auto ok = co_await ctx.resolve_secrets(std::move(auth->secret_requests));
+      not ok) {
+    co_return std::nullopt;
+  }
+  co_return std::move(*auth);
 }
 
 } // namespace tenzir
