@@ -1141,163 +1141,19 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
-  // MSB policy args.
-  std::optional<std::string> schema;
-  std::optional<std::string> selector;
-  // MSB settings args.
-  bool schema_only = false;
-  bool merge = false;
-  bool raw = false;
-  std::optional<std::string> unflatten_separator;
-  std::optional<duration> batch_timeout;
-  std::optional<uint64_t> batch_size;
-  // Preconfigured MSB defaults (for suricata/zeek).
-  std::string default_schema_name;
-  std::string unnest_separator_default;
-  // Preconfigured selector policy (for suricata/zeek).
-  std::optional<std::string> selector_field;
-  std::optional<std::string> selector_prefix;
+  multi_series_builder::options msb_options;
 };
-
-auto parse_selector_value(std::string_view x)
-  -> std::optional<multi_series_builder::policy_selector> {
-  if (x.empty()) {
-    return std::nullopt;
-  }
-  auto split = detail::split(x, ":");
-  TENZIR_ASSERT(not split.empty());
-  if (split.size() > 2 or split[0].empty()) {
-    return std::nullopt;
-  }
-  if (split.size() == 2) {
-    return multi_series_builder::policy_selector{
-      .field_name = std::string{split[0]},
-      .naming_prefix = std::string{split[1]},
-    };
-  }
-  return multi_series_builder::policy_selector{
-    .field_name = std::string{split[0]},
-  };
-}
-
-auto validate_read_msb_args(
-  diagnostic_handler& dh, std::optional<std::string> const& schema,
-  std::optional<location> schema_loc,
-  std::optional<std::string> const& selector,
-  std::optional<location> selector_loc, bool schema_only,
-  std::optional<location> schema_only_loc,
-  std::optional<std::string> const& unflatten_separator,
-  std::optional<location> unflatten_separator_loc,
-  bool schema_only_requires_schema_or_selector) -> void {
-  if (schema and selector) {
-    diagnostic::error("`schema` and `selector` cannot be combined")
-      .primary(schema_loc.value_or(location::unknown))
-      .primary(selector_loc.value_or(location::unknown))
-      .emit(dh);
-  }
-  if (schema and schema->empty()) {
-    diagnostic::error("`schema` must not be empty")
-      .primary(schema_loc.value_or(location::unknown))
-      .emit(dh);
-  }
-  if (selector) {
-    if (selector->empty()) {
-      diagnostic::error("selector must not be empty")
-        .primary(selector_loc.value_or(location::unknown))
-        .emit(dh);
-    } else if (not parse_selector_value(*selector)) {
-      diagnostic::error("invalid selector `{}`: must contain at most one `:` "
-                        "and field name must not be empty",
-                        *selector)
-        .primary(selector_loc.value_or(location::unknown))
-        .emit(dh);
-    }
-  }
-  if (unflatten_separator and unflatten_separator->empty()) {
-    diagnostic::error("`unflatten_separator` must not be empty")
-      .primary(unflatten_separator_loc.value_or(location::unknown))
-      .emit(dh);
-  }
-  if (schema_only and schema_only_requires_schema_or_selector and not schema
-      and not selector) {
-    diagnostic::error("`schema_only` requires a `schema` or `selector`")
-      .primary(schema_only_loc.value_or(location::unknown))
-      .emit(dh);
-  }
-  if (schema and not schema->empty()) {
-    if (not modules::get_schema(*schema)) {
-      if (schema_only) {
-        diagnostic::error("schema `{}` does not exist, but `schema_only` was "
-                          "specified",
-                          *schema)
-          .primary(schema_loc.value_or(location::unknown))
-          .primary(schema_only_loc.value_or(location::unknown))
-          .emit(dh);
-      } else {
-        diagnostic::warning("schema `{}` does not exist", *schema)
-          .primary(schema_loc.value_or(location::unknown))
-          .hint("if you know the input's shape, define the schema")
-          .emit(dh);
-      }
-    }
-  }
-}
-
-auto make_msb_options(ReadJsonArgs const& args)
-  -> multi_series_builder::options {
-  auto settings = multi_series_builder::settings_type{};
-  if (not args.default_schema_name.empty()) {
-    settings.default_schema_name = args.default_schema_name;
-  }
-  if (not args.unnest_separator_default.empty()) {
-    settings.unnest_separator = args.unnest_separator_default;
-  }
-  settings.schema_only = args.schema_only;
-  settings.merge = args.merge;
-  settings.raw = args.raw;
-  if (args.unflatten_separator) {
-    settings.unnest_separator = *args.unflatten_separator;
-  }
-  if (args.batch_timeout) {
-    settings.timeout = *args.batch_timeout;
-  }
-  if (args.batch_size) {
-    settings.desired_batch_size = *args.batch_size;
-  }
-  auto policy
-    = multi_series_builder::policy_type{multi_series_builder::policy_default{}};
-  if (args.selector_field) {
-    policy = multi_series_builder::policy_selector{
-      .field_name = *args.selector_field,
-      .naming_prefix = args.selector_prefix.value_or(""),
-    };
-  } else if (args.schema) {
-    policy = multi_series_builder::policy_schema{
-      .seed_schema = *args.schema,
-    };
-  } else if (args.selector) {
-    if (auto selector = parse_selector_value(*args.selector)) {
-      policy = std::move(*selector);
-    }
-  }
-  return {.policy = std::move(policy), .settings = std::move(settings)};
-}
-
-auto parser_batch_timeout(ReadJsonArgs const& args) -> duration {
-  return args.batch_timeout.value_or(defaults::import::batch_timeout);
-}
 
 class ReadJson final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadJson(ReadJsonArgs args)
-    : args_{std::move(args)}, next_tick_{parser_batch_timeout(args_)} {
+    : args_{std::move(args)}, next_tick_{args_.msb_options.settings.timeout} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    auto opts = make_msb_options(args_);
     parser_ = std::make_unique<default_parser>(
-      args_.parser_name, ctx.dh(), std::move(opts), args_.arrays_of_objects);
+      args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -1357,14 +1213,13 @@ private:
 class ReadNdjson final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadNdjson(ReadJsonArgs args)
-    : args_{std::move(args)}, next_tick_{parser_batch_timeout(args_)} {
+    : args_{std::move(args)}, next_tick_{args_.msb_options.settings.timeout} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    auto opts = make_msb_options(args_);
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
-                                              std::move(opts));
+                                              args_.msb_options);
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -1477,24 +1332,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadJson>{};
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
-    auto schema = d.named("schema", &ReadJsonArgs::schema);
-    auto selector = d.named("selector", &ReadJsonArgs::selector);
-    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
-    d.named("merge", &ReadJsonArgs::merge);
-    d.named("raw", &ReadJsonArgs::raw);
-    auto unflatten_separator
-      = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
-    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
-    d.named("_batch_size", &ReadJsonArgs::batch_size);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
-      validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
-                             ctx.get(selector), ctx.get_location(selector),
-                             ctx.get(schema_only).value_or(false),
-                             ctx.get_location(schema_only),
-                             ctx.get(unflatten_separator),
-                             ctx.get_location(unflatten_separator), true);
-      return {};
-    });
+    d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
     return d.without_optimize();
   }
 
@@ -1532,24 +1370,13 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadNdjson>{
-      ReadJsonArgs{.parser_name = "ndjson", .split_mode = split_at::newline}};
-    auto schema = d.named("schema", &ReadJsonArgs::schema);
-    auto selector = d.named("selector", &ReadJsonArgs::selector);
-    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
-    d.named("merge", &ReadJsonArgs::merge);
-    d.named("raw", &ReadJsonArgs::raw);
-    auto unflatten_separator
-      = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
-    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
-    d.named("_batch_size", &ReadJsonArgs::batch_size);
+      ReadJsonArgs{.parser_name = "ndjson",
+                   .split_mode = split_at::newline,
+                   .msb_options = {}}};
+    auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
-                             ctx.get(selector), ctx.get_location(selector),
-                             ctx.get(schema_only).value_or(false),
-                             ctx.get_location(schema_only),
-                             ctx.get(unflatten_separator),
-                             ctx.get_location(unflatten_separator), true);
+      msb(ctx);
       if (ctx.get(jobs)) {
         diagnostic::error("`_jobs` is not supported for `read_ndjson` in neo")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
@@ -1594,25 +1421,12 @@ public:
     auto d = Describer<ReadJsonArgs, ReadNdjson>{ReadJsonArgs{
       .parser_name = "gelf",
       .split_mode = split_at::null,
-      .default_schema_name = "gelf",
+      .msb_options = {.settings = {.default_schema_name = "gelf"}},
     }};
-    auto schema = d.named("schema", &ReadJsonArgs::schema);
-    auto selector = d.named("selector", &ReadJsonArgs::selector);
-    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
-    d.named("merge", &ReadJsonArgs::merge);
-    d.named("raw", &ReadJsonArgs::raw);
-    auto unflatten_separator
-      = d.named("unflatten_separator", &ReadJsonArgs::unflatten_separator);
-    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
-    d.named("_batch_size", &ReadJsonArgs::batch_size);
+    auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      validate_read_msb_args(ctx, ctx.get(schema), ctx.get_location(schema),
-                             ctx.get(selector), ctx.get_location(selector),
-                             ctx.get(schema_only).value_or(false),
-                             ctx.get_location(schema_only),
-                             ctx.get(unflatten_separator),
-                             ctx.get_location(unflatten_separator), true);
+      msb(ctx);
       if (ctx.get(jobs)) {
         diagnostic::error("`_jobs` is not supported for `read_gelf` in neo")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
@@ -1652,21 +1466,29 @@ public:
     auto d = Describer<ReadJsonArgs, ReadNdjson>{ReadJsonArgs{
       .parser_name = std::string{Name.str()},
       .split_mode = split_at::newline,
-      .default_schema_name = std::string{Prefix.str()},
-      .unnest_separator_default = std::string{Separator.str()},
-      .selector_field = std::string{Selector.str()},
-      .selector_prefix = std::string{Prefix.str()},
+      .msb_options =
+        {
+          .policy = multi_series_builder::policy_selector{
+            .field_name = std::string{Selector.str()},
+            .naming_prefix = std::string{Prefix.str()},
+          },
+          .settings =
+            {
+              .default_schema_name = std::string{Prefix.str()},
+              .unnest_separator = std::string{Separator.str()},
+            },
+        },
     }};
-    auto schema_only = d.named("schema_only", &ReadJsonArgs::schema_only);
-    d.named("raw", &ReadJsonArgs::raw);
-    d.named("_batch_timeout", &ReadJsonArgs::batch_timeout);
-    d.named("_batch_size", &ReadJsonArgs::batch_size);
+    auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options,
+                                    {.merge = merge_option::no,
+                                     .add_schema = false,
+                                     .add_selector = false,
+                                     .add_unflatten = false,
+                                     .schema_only_requires_schema_or_selector
+                                     = false});
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      validate_read_msb_args(ctx, std::nullopt, std::nullopt, std::nullopt,
-                             std::nullopt, ctx.get(schema_only).value_or(false),
-                             ctx.get_location(schema_only), std::nullopt,
-                             std::nullopt, false);
+      msb(ctx);
       if (ctx.get(jobs)) {
         diagnostic::error("`_jobs` is not supported for this operator in neo")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
