@@ -66,14 +66,14 @@ using tenzir::detail::ascii_icase_equal;
 ///                   │
 ///                   │ ×N workers
 ///                   ▼
-///   ┌─────────────────────────────────┐
-///   │ build_loop                      │                [CPU executor]
-///   │   build_batch → TableSliceFrame │
-///   └─────────────────────────────────┘
+///   ┌───────────────────────────────────────┐
+///   │ build_loop                            │        [CPU executor]
+///   │   build_table_slice → TableSliceFrame │
+///   └───────────────────────────────────────┘
 ///                   │
 ///                   │ TableSliceFrame
 ///                   ▼
-///             runtime_.table_slice_queue                   [bounded queue]
+///             runtime_.table_slice_queue             [bounded queue]
 ///                   │
 ///                   ▼
 ///   ┌───────────────────────────────┐
@@ -222,7 +222,7 @@ struct FromKafkaPerfCounters {
   std::atomic<uint64_t> fetched_enqueue_wait_ns = 0;
   /// Worker time spent waiting to dequeue from `runtime_.message_queue`.
   std::atomic<uint64_t> build_dequeue_wait_ns = 0;
-  /// Worker CPU time spent in `build_batch`.
+  /// Worker CPU time spent in `build_table_slice`.
   std::atomic<uint64_t> build_compute_ns = 0;
   /// Worker time spent waiting to enqueue into `runtime_.table_slice_queue`.
   std::atomic<uint64_t> build_enqueue_wait_ns = 0;
@@ -305,7 +305,7 @@ struct TableSliceFrame {
 
 /// Result wrapper returned by `await_task()` to `process_task()`.
 struct TableSliceResult {
-  std::optional<TableSliceFrame> slice;
+  std::optional<TableSliceFrame> frame;
   bool end_of_stream = false;
 };
 
@@ -411,7 +411,7 @@ public:
         co_return TableSliceResult{.end_of_stream = true};
       }
       co_return TableSliceResult{
-        .slice = std::move(*next),
+        .frame = std::move(*next),
       };
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
@@ -429,36 +429,36 @@ public:
       request_pipeline_stop();
       co_return;
     }
-    TENZIR_ASSERT(task_result.slice);
-    auto batch = std::move(*task_result.slice);
-    if (batch.slice) {
+    TENZIR_ASSERT(task_result.frame);
+    auto frame = std::move(*task_result.frame);
+    if (frame.slice) {
       auto push_started = std::chrono::steady_clock::time_point{};
       if (perf_enabled_) {
         push_started = std::chrono::steady_clock::now();
       }
-      co_await push(std::move(*batch.slice));
+      co_await push(std::move(*frame.slice));
       if (perf_enabled_) {
         add_perf_counter(
           perf_.push_wait_ns,
           as_ns(std::chrono::steady_clock::now() - push_started));
         add_perf_counter(perf_.emitted_slices);
       }
-      advance_checkpoint(batch.max_offsets);
+      advance_checkpoint(frame.max_offsets);
       co_await commit_pending_offsets();
-      emitted_messages_ += batch.message_count;
+      emitted_messages_ += frame.message_count;
       add_perf_counter(perf_.emitted_batches);
       add_perf_counter(perf_.emitted_messages,
-                       static_cast<uint64_t>(batch.message_count));
+                       static_cast<uint64_t>(frame.message_count));
     }
-    for (auto partition : batch.eof_partitions) {
+    for (auto partition : frame.eof_partitions) {
       if (done_) {
         break;
       }
       add_perf_counter(perf_.eof_events);
       mark_partition_eof(partition, ctx);
     }
-    if (batch.fatal_error) {
-      diagnostic::error("{}", *batch.fatal_error).emit(ctx);
+    if (frame.fatal_error) {
+      diagnostic::error("{}", *frame.fatal_error).emit(ctx);
       done_ = true;
       add_perf_counter(perf_.fatal_errors);
     }
@@ -1025,32 +1025,32 @@ private:
   }
 
   /// Converts one message batch into a `TableSliceFrame`.
-  auto build_batch(MessageBatch fetched) const -> TableSliceFrame {
-    auto built = TableSliceFrame{};
-    built.seq = fetched.seq;
-    built.eof_partitions = std::move(fetched.eof_partitions);
-    built.fatal_error = std::move(fetched.fatal_error);
+  auto build_table_slice(MessageBatch fetched) const -> TableSliceFrame {
+    auto frame = TableSliceFrame{};
+    frame.seq = fetched.seq;
+    frame.eof_partitions = std::move(fetched.eof_partitions);
+    frame.fatal_error = std::move(fetched.fatal_error);
     if (fetched.messages.empty()) {
-      return built;
+      return frame;
     }
     auto builder = KafkaMessageBuilder{};
     for (auto& message : fetched.messages) {
       auto payload_bytes = message.payload();
       if (payload_bytes.is_err()) {
-        built.fatal_error = fmt::format("invalid kafka payload in partition {} "
+        frame.fatal_error = fmt::format("invalid kafka payload in partition {} "
                                         "at offset {}: {}",
                                         message.partition(), message.offset(),
                                         std::move(payload_bytes).unwrap_err());
         break;
       }
       builder.append(std::move(payload_bytes).unwrap());
-      built.max_offsets[message.partition()] = message.offset();
-      ++built.message_count;
+      frame.max_offsets[message.partition()] = message.offset();
+      ++frame.message_count;
     }
     if (not builder.empty()) {
-      built.slice = builder.finish();
+      frame.slice = builder.finish();
     }
-    return built;
+    return frame;
   }
 
   /// Runs one CPU-stage worker that builds slices from source batches.
@@ -1083,14 +1083,14 @@ private:
         if (perf_enabled_) {
           build_started = std::chrono::steady_clock::now();
         }
-        auto built = build_batch(std::move(fetched));
+        auto frame = build_table_slice(std::move(fetched));
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_compute_ns,
             as_ns(std::chrono::steady_clock::now() - build_started));
           add_perf_counter(perf_.built_batches);
           add_perf_counter(perf_.built_messages,
-                           static_cast<uint64_t>(built.message_count));
+                           static_cast<uint64_t>(frame.message_count));
         }
         release_budget.trigger();
         auto enqueue_started = std::chrono::steady_clock::time_point{};
@@ -1099,7 +1099,7 @@ private:
         }
         co_await runtime_.table_slice_queue->enqueue(
           std::optional<TableSliceFrame>{
-            std::move(built),
+            std::move(frame),
           });
         if (perf_enabled_) {
           add_perf_counter(
@@ -1126,7 +1126,7 @@ private:
         runtime_.ordered_slices.erase(ready);
         ++runtime_.next_emit_seq;
         co_return TableSliceResult{
-          .slice = std::move(batch),
+          .frame = std::move(batch),
         };
       }
       auto dequeue_started = std::chrono::steady_clock::time_point{};
@@ -1150,7 +1150,7 @@ private:
       if (next->seq == runtime_.next_emit_seq) {
         ++runtime_.next_emit_seq;
         co_return TableSliceResult{
-          .slice = std::move(*next),
+          .frame = std::move(*next),
         };
       }
       auto [_, inserted]
