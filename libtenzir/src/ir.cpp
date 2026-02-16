@@ -315,6 +315,13 @@ public:
     }
   }
 
+  auto state() -> OperatorState override {
+    if (consequence_closed_ and alternative_closed_) {
+      return OperatorState::done;
+    }
+    return OperatorState::unspecified;
+  }
+
 private:
   IfArgs args_;
   bool consequence_closed_ = false;
