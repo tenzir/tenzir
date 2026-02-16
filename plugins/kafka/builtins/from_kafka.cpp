@@ -449,7 +449,7 @@ public:
         add_perf_counter(perf_.emitted_slices);
       }
       advance_checkpoint(frame.max_offsets);
-      co_await commit_pending_offsets();
+      co_await commit_pending_offsets(&ctx.dh());
       emitted_messages_ += frame.message_count;
       add_perf_counter(perf_.emitted_batches);
       add_perf_counter(perf_.emitted_messages,
@@ -480,7 +480,7 @@ public:
     co_await commit_pending_offsets();
   }
 
-  auto commit_pending_offsets() -> Task<void> {
+  auto commit_pending_offsets(diagnostic_handler* dh = nullptr) -> Task<void> {
     if (checkpoint_pending_offsets_.empty()) {
       co_return;
     }
@@ -489,8 +489,18 @@ public:
     for (auto const& [partition, offset] : checkpoint_pending_offsets_) {
       auto source_it = runtime_.partition_source_by_id.find(partition);
       if (source_it == runtime_.partition_source_by_id.end()) {
-        TENZIR_WARN("from_kafka: no source for partition {} while committing",
-                    partition);
+        if (dh) {
+          diagnostic::warning("from_kafka: no source for partition {} while "
+                              "committing",
+                              partition)
+            .hint("this typically means checkpointed offsets refer to a "
+                  "partition that is no longer assigned (for example after a "
+                  "topic partition-count change or stale recovery state)")
+            .emit(*dh);
+        } else {
+          TENZIR_WARN("from_kafka: no source for partition {} while committing",
+                      partition);
+        }
         continue;
       }
       offsets_by_source[source_it->second].push_back(
@@ -510,8 +520,17 @@ public:
       }
       if (auto err = source.source_consumer->consumer->commitSync(offsets);
           err != RdKafka::ERR_NO_ERROR) {
-        TENZIR_WARN("from_kafka: failed to commit offsets for partition {}: {}",
-                    source.partition, RdKafka::err2str(err));
+        if (dh) {
+          diagnostic::warning("from_kafka: failed to commit offsets for "
+                              "partition {}",
+                              source.partition)
+            .note("librdkafka error: {}", RdKafka::err2str(err))
+            .emit(*dh);
+        } else {
+          TENZIR_WARN("from_kafka: failed to commit offsets for partition {}: "
+                      "{}",
+                      source.partition, RdKafka::err2str(err));
+        }
       }
     }
     checkpoint_pending_offsets_.clear();
