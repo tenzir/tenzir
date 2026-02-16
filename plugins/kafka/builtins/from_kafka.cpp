@@ -52,6 +52,47 @@ namespace {
 using namespace std::chrono_literals;
 using namespace tenzir::si_literals;
 
+/// Concurrent stage layout (executor domains on the right):
+///
+///   ┌───────────────────────────────┐
+///   │ fetch_loop                    │                [I/O executor]
+///   │   next_batch, to_fetched_batch│
+///   └───────────────────────────────┘
+///                   │
+///                   │ MessageBatch
+///                   ▼
+///            runtime_.fetched_queue                  [bounded queue]
+///                   │
+///                   │ ×N workers
+///                   ▼
+///   ┌───────────────────────────────┐
+///   │ build_loop                    │                [CPU executor]
+///   │   build_batch → table_slice   │
+///   └───────────────────────────────┘
+///                   │
+///                   │ TableSliceFrame
+///                   ▼
+///             runtime_.built_queue                   [bounded queue]
+///                   │
+///                   ▼
+///   ┌───────────────────────────────┐
+///   │ await_task / process_task     │                [operator]
+///   └───────────────────────────────┘
+///                   │
+///       ordered:   reorder → push in order
+///       unordered: push as received
+///
+/// Invariants:
+/// 1. Backpressure is bounded by both `runtime_.fetched_queue` capacity and
+///    `prefetch_bytes` accounting (`runtime_.in_flight_fetch_bytes`).
+/// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
+///    that order before emitting slices.
+/// 3. Fetch polling (`fetch_wait_timeout`) is independent from slice
+///    flush latency (`batch_timeout`) to avoid timeout-coupling stalls.
+/// 4. Source ingress is typically the bottleneck. Raising worker concurrency
+///    helps mostly in `optimization="unordered"` mode but does not remove
+///    fetch-side wait on its own.
+
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
 
@@ -502,47 +543,6 @@ private:
     size_t consecutive_empty_timeouts = 0;
     std::optional<std::chrono::steady_clock::time_point> batch_deadline;
   };
-
-  /// Concurrent stage layout (executor domains on the right):
-  ///
-  ///   ┌───────────────────────────────┐
-  ///   │ fetch_loop                    │                [I/O executor]
-  ///   │   next_batch, to_fetched_batch│
-  ///   └───────────────────────────────┘
-  ///                   │
-  ///                   │ MessageBatch
-  ///                   ▼
-  ///            runtime_.fetched_queue                          [bounded queue]
-  ///                   │
-  ///                   │ ×N workers
-  ///                   ▼
-  ///   ┌───────────────────────────────┐
-  ///   │ build_loop                    │                [CPU executor]
-  ///   │   build_batch → table_slice   │
-  ///   └───────────────────────────────┘
-  ///                   │
-  ///                   │ TableSliceFrame
-  ///                   ▼
-  ///             runtime_.built_queue                           [bounded queue]
-  ///                   │
-  ///                   ▼
-  ///   ┌───────────────────────────────┐
-  ///   │ await_task / process_task     │                [operator]
-  ///   └───────────────────────────────┘
-  ///                   │
-  ///       ordered:   reorder → push in order
-  ///       unordered: push as received
-  ///
-  /// Invariants:
-  /// 1. Backpressure is bounded by both `runtime_.fetched_queue` capacity and
-  ///    `prefetch_bytes` accounting (`runtime_.in_flight_fetch_bytes`).
-  /// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
-  ///    that order before emitting slices.
-  /// 3. Fetch polling (`fetch_wait_timeout`) is independent from slice
-  ///    flush latency (`batch_timeout`) to avoid timeout-coupling stalls.
-  /// 4. Source ingress is typically the bottleneck. Raising worker concurrency
-  ///    helps mostly in `optimization="unordered"` mode but does not remove
-  ///    fetch-side wait on its own.
 
   /// Starts opt-in perf timing at operator startup.
   auto initialize_perf_tracking() -> void {
