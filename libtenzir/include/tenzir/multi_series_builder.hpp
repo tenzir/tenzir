@@ -245,9 +245,33 @@ public:
   /// @returns a vector of all currently finished series
   [[nodiscard("The result of a flush must be handled")]]
   auto yield_ready() -> std::vector<series>;
+  struct yield_ready_result {
+    std::vector<table_slice> slices = {};
+    duration wait_for = duration::max();
+
+    auto begin() -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    auto begin() const -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() const -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    operator std::vector<table_slice>&&() && {
+      return std::move(slices);
+    }
+  };
   /// @returns a vector of all currently finished series
   [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready_as_table_slice() -> std::vector<table_slice>;
+  auto yield_ready_as_table_slice() -> yield_ready_result;
 
   /// @brief Starts building a new record.
   [[nodiscard]] auto record() -> record_generator;
@@ -503,12 +527,14 @@ private:
   // events that have been made ready (timeout,  batch size, ordered mode
   // builder switch)
   std::vector<series> ready_events_;
-  // time at which the entire builder made its last yields
-  std::chrono::steady_clock::time_point last_yield_time_
+  // Last flush time for merge mode.
+  std::chrono::steady_clock::time_point merging_flushed_
     = std::chrono::steady_clock::now();
   // currently active builder index. used in ordered mode to check whether we
   // need to yield on builder switch
   size_t active_index_ = 0;
+
+  auto yield_ready_wait(std::chrono::steady_clock::time_point now) -> duration;
 };
 
 namespace detail::multi_series_builder {

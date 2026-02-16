@@ -306,61 +306,132 @@ public:
 
 /// A helper base class for operators that need periodic callbacks.
 ///
-/// This uses `await_task`/`process_task` to invoke `on_tick` at a fixed
-/// interval, which keeps timeout logic out of `process`.
+/// This uses `await_task`/`process_task` to invoke `on_tick`, with the next
+/// wake-up interval chosen by `on_tick`, which keeps timeout logic out of
+/// `process`.
 template <class Input, class Output>
 class PeriodicOperator : public Operator<Input, Output> {
 public:
   explicit PeriodicOperator(duration tick_interval)
-    : tick_interval_{tick_interval} {
+    : next_tick_{tick_interval} {
+  }
+
+  PeriodicOperator(const PeriodicOperator& other) : next_tick_{other.next_tick_} {
+  }
+
+  auto operator=(const PeriodicOperator& other) -> PeriodicOperator& {
+    next_tick_ = other.next_tick_;
+    return *this;
+  }
+
+  PeriodicOperator(PeriodicOperator&& other) noexcept
+    : next_tick_{other.next_tick_} {
+  }
+
+  auto operator=(PeriodicOperator&& other) noexcept -> PeriodicOperator& {
+    next_tick_ = other.next_tick_;
+    return *this;
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override final {
     TENZIR_UNUSED(dh);
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<std::chrono::milliseconds>(tick_interval_));
+    auto next_tick = next_tick_;
+    if (next_tick < duration::zero()) {
+      next_tick = duration::zero();
+    }
+    auto [_, ignored] = co_await folly::coro::collectAny(
+      folly::coro::co_invoke([next_tick] -> Task<int> {
+        co_await folly::coro::sleep(
+          std::chrono::duration_cast<std::chrono::milliseconds>(next_tick));
+        co_return 0;
+      }),
+      folly::coro::co_invoke([this] -> Task<int> {
+        co_await wakeup_.wait();
+        co_return 1;
+      }));
+    TENZIR_UNUSED(ignored);
     co_return PeriodicTick{};
   }
 
   auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> override final {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
-    co_await on_tick(push, ctx);
+    next_tick_ = co_await on_tick(push, ctx);
   }
 
 protected:
-  virtual auto on_tick(Push<Output>& push, OpCtx& ctx) -> Task<void> = 0;
+  auto request_tick() -> void {
+    wakeup_.notify_one();
+  }
+
+  virtual auto on_tick(Push<Output>& push, OpCtx& ctx) -> Task<duration> = 0;
 
 private:
   struct PeriodicTick {};
-  duration tick_interval_;
+  duration next_tick_;
+  mutable Notify wakeup_ = {};
 };
 
 template <class Input>
 class PeriodicOperator<Input, void> : public Operator<Input, void> {
 public:
   explicit PeriodicOperator(duration tick_interval)
-    : tick_interval_{tick_interval} {
+    : next_tick_{tick_interval} {
+  }
+
+  PeriodicOperator(const PeriodicOperator& other) : next_tick_{other.next_tick_} {
+  }
+
+  auto operator=(const PeriodicOperator& other) -> PeriodicOperator& {
+    next_tick_ = other.next_tick_;
+    return *this;
+  }
+
+  PeriodicOperator(PeriodicOperator&& other) noexcept
+    : next_tick_{other.next_tick_} {
+  }
+
+  auto operator=(PeriodicOperator&& other) noexcept -> PeriodicOperator& {
+    next_tick_ = other.next_tick_;
+    return *this;
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override final {
     TENZIR_UNUSED(dh);
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<std::chrono::milliseconds>(tick_interval_));
+    auto next_tick = next_tick_;
+    if (next_tick < duration::zero()) {
+      next_tick = duration::zero();
+    }
+    auto [_, ignored] = co_await folly::coro::collectAny(
+      folly::coro::co_invoke([next_tick] -> Task<int> {
+        co_await folly::coro::sleep(
+          std::chrono::duration_cast<std::chrono::milliseconds>(next_tick));
+        co_return 0;
+      }),
+      folly::coro::co_invoke([this] -> Task<int> {
+        co_await wakeup_.wait();
+        co_return 1;
+      }));
+    TENZIR_UNUSED(ignored);
     co_return PeriodicTick{};
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override final {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
-    co_await on_tick(ctx);
+    next_tick_ = co_await on_tick(ctx);
   }
 
 protected:
-  virtual auto on_tick(OpCtx& ctx) -> Task<void> = 0;
+  auto request_tick() -> void {
+    wakeup_.notify_one();
+  }
+
+  virtual auto on_tick(OpCtx& ctx) -> Task<duration> = 0;
 
 private:
   struct PeriodicTick {};
-  duration tick_interval_;
+  duration next_tick_;
+  mutable Notify wakeup_ = {};
 };
 
 using AnyOperator = variant<

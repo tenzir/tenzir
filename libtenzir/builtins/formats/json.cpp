@@ -1307,6 +1307,7 @@ public:
     if (parser_->abort_requested) {
       co_return;
     }
+    request_tick();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
@@ -1323,14 +1324,17 @@ public:
     }
   }
 
-  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<duration> override {
     TENZIR_UNUSED(ctx);
     if (not parser_) {
-      co_return;
+      co_return duration::max();
     }
-    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+    auto ready = parser_->builder.yield_ready_as_table_slice();
+    auto wait_for = ready.wait_for;
+    for (auto& slice : ready) {
       co_await push(std::move(slice));
     }
+    co_return wait_for;
   }
 
 private:
@@ -1399,6 +1403,7 @@ public:
     }
     // Buffer remaining data for the next chunk.
     buffer_.append(begin, end);
+    request_tick();
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
@@ -1421,14 +1426,17 @@ public:
     }
   }
 
-  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto on_tick(Push<table_slice>& push, OpCtx& ctx) -> Task<duration> override {
     TENZIR_UNUSED(ctx);
     if (not parser_) {
-      co_return;
+      co_return duration::max();
     }
-    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+    auto ready = parser_->builder.yield_ready_as_table_slice();
+    auto wait_for = ready.wait_for;
+    for (auto& slice : ready) {
       co_await push(std::move(slice));
     }
+    co_return wait_for;
   }
 
 private:
