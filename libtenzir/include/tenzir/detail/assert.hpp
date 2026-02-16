@@ -54,20 +54,24 @@ assertion_failure(std::string_view cond, std::source_location location) {
   }                                                                            \
   static_assert(true)
 
-#define TENZIR_ASSERT_RELATION_ALWAYS(OP, LHS, RHS, ...)                       \
-  if (not static_cast<bool>(LHS OP RHS)) [[unlikely]] {                        \
-    auto txt = std::string{};                                                  \
-    constexpr static bool formattable                                          \
-      = fmt::is_formattable<decltype(LHS)>::value                              \
-        and fmt::is_formattable<decltype(RHS)>::value;                         \
-    if constexpr (formattable) {                                               \
-      txt = fmt::format("{} (" #LHS ") " #OP " {} (" #RHS ")", LHS, RHS);      \
-    } else {                                                                   \
-      txt = #LHS " " #OP " " #RHS;                                             \
-    }                                                                          \
-    ::tenzir::detail::assertion_failure<true>(                                 \
-      txt, std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);        \
-  }                                                                            \
+#define TENZIR_ASSERT_RELATION_ALWAYS(OP, LHS, RHS, ...)                        \
+  if (not static_cast<bool>(LHS OP RHS)) [[unlikely]] {                         \
+    auto txt =                                                                  \
+      []<typename TENZIR_ASSERT_INTERNAL_L, typename TENZIR_ASSERT_INTERNAL_R>( \
+        const TENZIR_ASSERT_INTERNAL_L& lhs,                                    \
+        const TENZIR_ASSERT_INTERNAL_R& rhs) -> std::string {                   \
+      constexpr static bool formattable                                         \
+        = fmt::is_formattable<TENZIR_ASSERT_INTERNAL_L>::value                  \
+          and fmt::is_formattable<TENZIR_ASSERT_INTERNAL_R>::value;             \
+      if constexpr (formattable) {                                              \
+        return fmt::format("{} (" #LHS ") " #OP " {} (" #RHS ")", lhs, rhs);    \
+      } else {                                                                  \
+        return #LHS " " #OP " " #RHS;                                           \
+      }                                                                         \
+    }(LHS, RHS);                                                                \
+    ::tenzir::detail::assertion_failure<true>(                                  \
+      txt, std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);         \
+  }                                                                             \
   static_assert(true)
 
 #define TENZIR_ASSERT_EQ_ALWAYS(LHS, RHS, ...)                                 \
