@@ -592,6 +592,8 @@ public:
       if (batch.size() >= defaults::import::table_slice_size) {
         co_await push(concatenate(std::exchange(batch, {})));
       }
+      // TODO: This excessive slicing is quite bad for performance. We could
+      // merge consecutive entries from the same slice.
       batch.push_back(subslice(events_[slice_idx], event_idx, event_idx + 1));
     }
     if (not batch.empty()) {
