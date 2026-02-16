@@ -13,6 +13,14 @@
 using namespace tenzir;
 using namespace detail;
 
+TEST("ASCII case-insensitive equality") {
+  CHECK(ascii_icase_equal("", ""));
+  CHECK(ascii_icase_equal("tenzir", "TENZIR"));
+  CHECK(ascii_icase_equal("Kafka-123_[]", "kAfKa-123_[]"));
+  CHECK(not ascii_icase_equal("abc", "ab"));
+  CHECK(not ascii_icase_equal("abc", "abd"));
+}
+
 TEST("string byte escaping") {
   // Identities.
   CHECK_EQUAL(byte_escape(""), "");

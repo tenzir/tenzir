@@ -15,6 +15,7 @@
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/scope_guard.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/si_literals.hpp"
 
 #include <tenzir/operator_plugin.hpp>
@@ -30,7 +31,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cctype>
 #include <chrono>
 #include <limits>
 #include <map>
@@ -51,6 +51,7 @@ namespace {
 
 using namespace std::chrono_literals;
 using namespace tenzir::si_literals;
+using tenzir::detail::ascii_icase_equal;
 
 /// Concurrent stage layout (executor domains on the right):
 ///
@@ -184,12 +185,9 @@ auto from_kafka_perf_stats_enabled() -> bool {
     if (not value) {
       return false;
     }
-    std::transform(value->begin(), value->end(), value->begin(),
-                   [](unsigned char c) -> char {
-                     return static_cast<char>(std::tolower(c));
-                   });
-    return *value == "1" or *value == "true" or *value == "yes"
-           or *value == "on";
+    return *value == "1" or ascii_icase_equal(*value, "true")
+           or ascii_icase_equal(*value, "yes")
+           or ascii_icase_equal(*value, "on");
   }();
   return enabled;
 }

@@ -452,7 +452,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
   }
   const auto& headers = r.header_fields();
   const auto mit = std::ranges::find_if(headers, [](const auto& x) {
-    return caf::icase_equal(x.first, "content-type");
+    return detail::ascii_icase_equal(x.first, "content-type");
   });
   if (mit == std::ranges::end(headers) or mit->second.empty()) {
     diagnostic::error(
@@ -737,7 +737,7 @@ auto rel_contains_next(std::string_view value) -> bool {
       ++index;
     }
     const auto token = value.substr(token_begin, index - token_begin);
-    if (not token.empty() and caf::icase_equal(token, "next")) {
+    if (not token.empty() and detail::ascii_icase_equal(token, "next")) {
       return true;
     }
   }
@@ -775,7 +775,7 @@ auto next_link_target(std::string_view header) -> next_link_target_result {
     if (name.empty()) {
       continue;
     }
-    if (not caf::icase_equal(name, "rel")) {
+    if (not detail::ascii_icase_equal(name, "rel")) {
       continue;
     }
     if (eq == std::string_view::npos) {
@@ -815,7 +815,7 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
   }
   auto malformed = false;
   for (const auto& [name, value] : response.header_fields()) {
-    if (not caf::icase_equal(name, "link")) {
+    if (not detail::ascii_icase_equal(name, "link")) {
       continue;
     }
     for (const auto header : split_link_header(value)) {
@@ -1168,10 +1168,10 @@ struct from_http_args {
     auto insert_content_type = body and is<record>(body->inner);
     if (headers) {
       for (const auto& [k, v] : headers->inner) {
-        if (caf::icase_equal(k, "accept")) {
+        if (detail::ascii_icase_equal(k, "accept")) {
           insert_accept_header = false;
         }
-        if (caf::icase_equal(k, "content-type")) {
+        if (detail::ascii_icase_equal(k, "content-type")) {
           insert_content_type = false;
         }
         match(
@@ -1503,7 +1503,7 @@ public:
                      r.body().size_bytes());
         const auto& headers = r.header_fields();
         const auto eit = std::ranges::find_if(headers, [](const auto& x) {
-          return caf::icase_equal(x.first, "content-encoding");
+          return detail::ascii_icase_equal(x.first, "content-encoding");
         });
         const auto encoding
           = eit != std::ranges::end(headers) ? eit->first : "";
@@ -2022,7 +2022,7 @@ public:
             ctrl.set_waiting(false);
             const auto& headers = r.header_fields();
             const auto it = std::ranges::find_if(headers, [](const auto& x) {
-              return caf::icase_equal(x.first, "content-encoding");
+              return detail::ascii_icase_equal(x.first, "content-encoding");
             });
             const auto encoding
               = it != std::ranges::end(headers) ? it->first : "";
@@ -2213,8 +2213,8 @@ public:
             const auto has_body = args_.body.has_value();
             for (const auto& [k, v] : *val) {
               has_content_type
-                |= has_body and caf::icase_equal(k, "content-type");
-              has_accept_header |= caf::icase_equal(k, "accept");
+                |= has_body and detail::ascii_icase_equal(k, "content-type");
+              has_accept_header |= detail::ascii_icase_equal(k, "accept");
               match(
                 v,
                 [&](const std::string_view& x) {
