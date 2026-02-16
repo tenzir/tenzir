@@ -41,8 +41,8 @@ fixture_pid=$!
 # Wait until fixture prints environment variables.
 ready=0
 for _ in {1..240}; do
-  if grep -q '^KAFKA_BOOTSTRAP_SERVERS=' "$fixture_log" \
-    && grep -q '^KAFKA_TOPIC=' "$fixture_log"; then
+  if grep -q '^KAFKA_BOOTSTRAP_SERVERS=' "$fixture_log" &&
+    grep -q '^KAFKA_TOPIC=' "$fixture_log"; then
     ready=1
     break
   fi
