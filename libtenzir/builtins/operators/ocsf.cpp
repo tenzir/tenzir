@@ -1479,6 +1479,7 @@ struct CastArgs {
   bool encode_variants = false;
   bool null_fill = false;
   bool timestamp_to_ms = false;
+  location operator_location;
 };
 
 class Cast final : public Operator<table_slice, table_slice> {
@@ -1488,7 +1489,7 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto output = process_cast_slice(input, location::unknown, ctx.dh(),
+    auto output = process_cast_slice(input, args_.operator_location, ctx.dh(),
                                      not args_.encode_variants, args_.null_fill,
                                      args_.timestamp_to_ms);
     for (auto&& out : output) {
@@ -1506,6 +1507,7 @@ private:
 struct TrimArgs {
   bool drop_optional = true;
   bool drop_recommended = false;
+  location operator_location;
 };
 
 class Trim final : public Operator<table_slice, table_slice> {
@@ -1516,7 +1518,7 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     auto output
-      = process_trim_slice(input, location::unknown, ctx.dh(),
+      = process_trim_slice(input, args_.operator_location, ctx.dh(),
                            args_.drop_optional, args_.drop_recommended);
     for (auto&& out : output) {
       if (out.rows() == 0) {
@@ -1530,7 +1532,9 @@ private:
   TrimArgs args_;
 };
 
-struct DeriveArgs {};
+struct DeriveArgs {
+  location operator_location;
+};
 
 class Derive final : public Operator<table_slice, table_slice> {
 public:
@@ -1539,7 +1543,8 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto output = process_derive_slice(input, location::unknown, ctx.dh());
+    auto output
+      = process_derive_slice(input, args_.operator_location, ctx.dh());
     for (auto&& out : output) {
       if (out.rows() == 0) {
         continue;
@@ -1596,6 +1601,7 @@ public:
     d.named("encode_variants", &CastArgs::encode_variants);
     d.named("null_fill", &CastArgs::null_fill);
     d.named("timestamp_to_ms", &CastArgs::timestamp_to_ms);
+    d.operator_location(&CastArgs::operator_location);
     return d.without_optimize();
   }
 };
@@ -1622,6 +1628,7 @@ public:
     auto d = Describer<TrimArgs, Trim>{};
     d.named("drop_optional", &TrimArgs::drop_optional);
     d.named("drop_recommended", &TrimArgs::drop_recommended);
+    d.operator_location(&TrimArgs::operator_location);
     return d.without_optimize();
   }
 };
@@ -1637,6 +1644,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<DeriveArgs, Derive>{};
+    d.operator_location(&DeriveArgs::operator_location);
     return d.without_optimize();
   }
 };
