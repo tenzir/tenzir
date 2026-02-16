@@ -353,7 +353,7 @@ public:
       co_return;
     }
     initialize_perf_tracking();
-    auto auth = co_await resolve_aws_auth(ctx);
+    auto auth = co_await resolve_aws_auth_state(ctx);
     if (not auth) {
       done_ = true;
       co_return;
@@ -511,12 +511,6 @@ private:
   /// Queue item type for build-stage handoff.
   using BuiltQueue = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
 
-  /// Holds resolved AWS IAM settings used for consumer configuration.
-  struct AwsAuthState {
-    std::optional<aws_iam_options> aws;
-    std::optional<resolved_aws_credentials> creds;
-  };
-
   /// Owns mutable runtime state for fetch/build/emit stages.
   struct RuntimeState {
     std::optional<Box<AsyncConsumerQueue>> queue;
@@ -553,36 +547,20 @@ private:
   }
 
   /// Resolves and validates AWS IAM configuration for Kafka auth.
-  auto resolve_aws_auth(OpCtx& ctx) const -> Task<std::optional<AwsAuthState>> {
-    auto auth = AwsAuthState{};
-    if (not args_.aws_iam) {
-      co_return auth;
-    }
-    auto parsed = aws_iam_options::from_record(*args_.aws_iam, ctx.dh());
-    if (not parsed) {
+  auto resolve_aws_auth_state(OpCtx& ctx) const
+    -> Task<std::optional<ResolvedAwsIamAuth>> {
+    auto auth
+      = resolve_aws_iam_auth(args_.aws_iam, args_.aws_region, ctx.dh(),
+                             AwsIamRegionRequirement::required_with_iam);
+    if (not auth) {
       co_return std::nullopt;
     }
-    auth.aws = std::move(*parsed);
-    if (not args_.aws_region and not auth.aws->region) {
-      diagnostic::error("`aws_region` is required for Kafka MSK authentication")
-        .primary(args_.aws_iam->source)
-        .emit(ctx);
+    if (auto ok
+        = co_await ctx.resolve_secrets(std::move(auth->secret_requests));
+        not ok) {
       co_return std::nullopt;
     }
-    if (auth.aws->has_explicit_credentials() or auth.aws->role) {
-      auth.creds.emplace();
-      auto requests = auth.aws->make_secret_requests(*auth.creds, ctx.dh());
-      if (auto ok = co_await ctx.resolve_secrets(std::move(requests)); not ok) {
-        co_return std::nullopt;
-      }
-    }
-    if (args_.aws_region) {
-      if (not auth.creds) {
-        auth.creds.emplace();
-      }
-      auth.creds->region = args_.aws_region->inner;
-    }
-    co_return auth;
+    co_return std::move(*auth);
   }
 
   /// Parses and validates the configured consumer start offset.
@@ -600,8 +578,8 @@ private:
   }
 
   /// Creates the Kafka consumer plus async queue with resolved config inputs.
-  auto make_consumer_and_queue(OpCtx& ctx, AwsAuthState auth, int64_t offset)
-    -> Task<bool> {
+  auto make_consumer_and_queue(OpCtx& ctx, ResolvedAwsIamAuth auth,
+                               int64_t offset) -> Task<bool> {
     auto config = source_global_defaults();
     if (not config.contains("group.id")) {
       config["group.id"] = "tenzir";
@@ -611,8 +589,8 @@ private:
     if (args_.exit) {
       config["enable.partition.eof"] = "true";
     }
-    auto cfg = make_consumer_configuration(config, auth.aws, auth.creds, offset,
-                                           ctx.dh());
+    auto cfg = make_consumer_configuration(config, auth.options,
+                                           auth.credentials, offset, ctx.dh());
     if (not cfg) {
       diagnostic::error("failed to create kafka configuration: {}", cfg.error())
         .emit(ctx);
@@ -620,7 +598,7 @@ private:
     }
     consumer_cfg_ = std::move(*cfg);
     auto user_options = args_.options;
-    if (auth.aws) {
+    if (auth.options) {
       user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
     }
     if (auto ok

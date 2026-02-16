@@ -135,4 +135,64 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
   return requests;
 }
 
+namespace {
+
+/// Checks whether the current auth mode requires an explicit AWS region.
+auto check_region_requirement(
+  const std::optional<aws_iam_options>& aws_iam,
+  const std::optional<located<std::string>>& aws_region,
+  AwsIamRegionRequirement requirement, diagnostic_handler& dh)
+  -> failure_or<void> {
+  if (not aws_iam) {
+    return {};
+  }
+  if (requirement != AwsIamRegionRequirement::required_with_iam) {
+    return {};
+  }
+  if (aws_region or aws_iam->region) {
+    return {};
+  }
+  diagnostic::error("`aws_region` is required for AWS IAM authentication")
+    .primary(aws_iam->loc)
+    .emit(dh);
+  return failure::promise();
+}
+
+} // namespace
+
+auto resolve_aws_iam_auth(std::optional<aws_iam_options> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          diagnostic_handler& dh,
+                          AwsIamRegionRequirement requirement)
+  -> failure_or<ResolvedAwsIamAuth> {
+  TRY(check_region_requirement(aws_iam, aws_region, requirement, dh));
+  auto result = ResolvedAwsIamAuth{};
+  result.options = std::move(aws_iam);
+  if (result.options) {
+    result.credentials.emplace();
+    result.secret_requests
+      = result.options->make_secret_requests(*result.credentials, dh);
+  }
+  if (aws_region) {
+    if (not result.credentials) {
+      result.credentials.emplace();
+    }
+    result.credentials->region = aws_region->inner;
+  }
+  return result;
+}
+
+auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          diagnostic_handler& dh,
+                          AwsIamRegionRequirement requirement)
+  -> failure_or<ResolvedAwsIamAuth> {
+  auto parsed = std::optional<aws_iam_options>{};
+  if (aws_iam) {
+    TRY(parsed, aws_iam_options::from_record(*aws_iam, dh));
+  }
+  return resolve_aws_iam_auth(std::move(parsed), std::move(aws_region), dh,
+                              requirement);
+}
+
 } // namespace tenzir

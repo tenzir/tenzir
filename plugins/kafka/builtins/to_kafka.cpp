@@ -86,40 +86,22 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto aws = std::optional<aws_iam_options>{};
-    if (args_.aws_iam) {
-      auto parsed = aws_iam_options::from_record(*args_.aws_iam, ctx.dh());
-      if (not parsed) {
-        done_ = true;
-        co_return;
-      }
-      aws = std::move(*parsed);
-      if (not args_.aws_region and not aws->region) {
-        diagnostic::error(
-          "`aws_region` is required for Kafka MSK authentication")
-          .primary(args_.aws_iam->source)
-          .emit(ctx);
-        done_ = true;
-        co_return;
-      }
+    auto auth
+      = resolve_aws_iam_auth(args_.aws_iam, args_.aws_region, ctx.dh(),
+                             AwsIamRegionRequirement::required_with_iam);
+    if (not auth) {
+      done_ = true;
+      co_return;
     }
-    auto resolved_creds = std::optional<resolved_aws_credentials>{};
-    if (aws and (aws->has_explicit_credentials() or aws->role)) {
-      resolved_creds.emplace();
-      auto requests = aws->make_secret_requests(*resolved_creds, ctx.dh());
-      if (auto ok = co_await ctx.resolve_secrets(std::move(requests)); not ok) {
-        done_ = true;
-        co_return;
-      }
-    }
-    if (args_.aws_region) {
-      if (not resolved_creds) {
-        resolved_creds.emplace();
-      }
-      resolved_creds->region = args_.aws_region->inner;
+    if (auto ok
+        = co_await ctx.resolve_secrets(std::move(auth->secret_requests));
+        not ok) {
+      done_ = true;
+      co_return;
     }
     auto config = sink_global_defaults();
-    auto cfg = configuration::make(config, aws, resolved_creds, ctx.dh());
+    auto cfg
+      = configuration::make(config, auth->options, auth->credentials, ctx.dh());
     if (not cfg) {
       diagnostic::error("failed to create kafka configuration: {}", cfg.error())
         .emit(ctx);
@@ -128,7 +110,7 @@ public:
     }
     cfg_ = std::move(*cfg);
     auto user_options = args_.options;
-    if (aws) {
+    if (auth->options) {
       user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
     }
     if (auto ok = co_await ctx.resolve_secrets(
