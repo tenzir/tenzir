@@ -8,3 +8,8 @@
   activity_name: null,
 }
 warning: expected field `activity_id` to be `int`, but got `double`
+  --> tests/operators/ocsf/derive/derive_from_wrong_int_type.tql:12:1
+   |
+12 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |

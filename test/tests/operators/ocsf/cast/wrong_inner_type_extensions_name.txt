@@ -90,5 +90,15 @@
   unmapped: null,
 }
 warning: ignoring extensions for events where `metadata.extensions[].name` is not a string
+ --> tests/operators/ocsf/cast/wrong_inner_type_extensions_name.tql:9:1
+  |
+9 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
 
 warning: expected type `string` for `metadata.extensions[].name`, but got `int64`
+ --> tests/operators/ocsf/cast/wrong_inner_type_extensions_name.tql:9:1
+  |
+9 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

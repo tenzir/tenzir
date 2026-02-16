@@ -41,10 +41,25 @@
   },
 }
 warning: dropping field which does not exist in schema
-  = note: found `invalid`
+  --> tests/operators/ocsf/cast/timestamp_to_ms.tql:10:1
+   |
+10 | ocsf::cast timestamp_to_ms=true
+   | ~~~~~~~~~~ 
+   |
+   = note: found `invalid`
 
 warning: dropping field which does not exist in schema
-  = note: found `invalid`
+  --> tests/operators/ocsf/cast/timestamp_to_ms.tql:10:1
+   |
+10 | ocsf::cast timestamp_to_ms=true
+   | ~~~~~~~~~~ 
+   |
+   = note: found `invalid`
 
 warning: dropping field which does not exist in schema
-  = note: found `actor.session.invalid`
+  --> tests/operators/ocsf/cast/timestamp_to_ms.tql:10:1
+   |
+10 | ocsf::cast timestamp_to_ms=true
+   | ~~~~~~~~~~ 
+   |
+   = note: found `actor.session.invalid`

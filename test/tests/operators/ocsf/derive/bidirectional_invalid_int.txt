@@ -8,4 +8,9 @@
   activity_name: "Create",
 }
 warning: found invalid value for `activity_id`
-  = note: got 999
+  --> tests/operators/ocsf/derive/bidirectional_invalid_int.tql:13:1
+   |
+13 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |
+   = note: got 999

@@ -8,3 +8,8 @@
   activity_name: 123,
 }
 warning: expected field `activity_name` to be `string`, but got `int64`
+  --> tests/operators/ocsf/derive/wrong_sibling_type.tql:12:1
+   |
+12 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |

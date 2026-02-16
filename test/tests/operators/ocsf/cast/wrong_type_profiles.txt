@@ -61,5 +61,15 @@
   url: null,
 }
 warning: ignoring profiles for events where `metadata.profiles` is not a list
+ --> tests/operators/ocsf/cast/wrong_type_profiles.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
 
 warning: expected type `list` for `metadata.profiles`, but got `int64`
+ --> tests/operators/ocsf/cast/wrong_type_profiles.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

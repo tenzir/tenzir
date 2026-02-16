@@ -61,3 +61,8 @@
   url: null,
 }
 warning: expected type `string` for `activity_name`, but got `int64`
+ --> tests/operators/ocsf/cast/type_mismatch.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

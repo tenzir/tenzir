@@ -61,4 +61,9 @@
   url: null,
 }
 warning: integer in `severity_id` exceeds maximum
+ --> tests/operators/ocsf/cast/uint64_to_int64_overflow.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
   = note: found 18446744073709551615

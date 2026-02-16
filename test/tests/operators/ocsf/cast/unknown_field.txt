@@ -61,4 +61,9 @@
   url: null,
 }
 warning: dropping field which does not exist in schema
+ --> tests/operators/ocsf/cast/unknown_field.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
   = note: found `foo`

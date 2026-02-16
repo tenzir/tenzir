@@ -106,4 +106,9 @@
   unmapped: null,
 }
 warning: dropping field which does not exist in schema
-  = note: found `process.parent_process.parent_process`
+  --> tests/operators/ocsf/cast/parent_process_nested.tql:18:1
+   |
+18 | ocsf::cast null_fill=true
+   | ~~~~~~~~~~ 
+   |
+   = note: found `process.parent_process.parent_process`

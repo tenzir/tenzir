@@ -8,4 +8,9 @@
   activity_name: "InvalidAction",
 }
 warning: found invalid value for `activity_name`
-  = note: got "InvalidAction"
+  --> tests/operators/ocsf/derive/bidirectional_invalid_string.tql:13:1
+   |
+13 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |
+   = note: got "InvalidAction"

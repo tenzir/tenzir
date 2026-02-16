@@ -8,3 +8,8 @@
   activity_name: "Create",
 }
 warning: field `activity_id` must be `int`, but got `string`
+  --> tests/operators/ocsf/derive/wrong_enum_type.tql:13:1
+   |
+13 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |

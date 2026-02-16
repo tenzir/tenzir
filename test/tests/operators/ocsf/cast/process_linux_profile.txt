@@ -87,3 +87,8 @@
   unmapped: null,
 }
 warning: dropping `process.egid` because extension `linux` is not enabled
+ --> tests/operators/ocsf/cast/process_linux_profile.tql:9:1
+  |
+9 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

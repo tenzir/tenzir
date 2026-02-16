@@ -84,5 +84,15 @@
   unmapped: null,
 }
 warning: ignoring extensions for events where `metadata.extensions` is not a list
+ --> tests/operators/ocsf/cast/wrong_type_extensions.tql:9:1
+  |
+9 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
 
 warning: expected type `list` for `metadata.extensions`, but got `int64`
+ --> tests/operators/ocsf/cast/wrong_type_extensions.tql:9:1
+  |
+9 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

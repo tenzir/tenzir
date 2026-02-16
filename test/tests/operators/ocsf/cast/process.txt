@@ -84,5 +84,15 @@
   unmapped: null,
 }
 warning: dropping `process.egid` because profile `linux/linux_users` is not enabled
+ --> tests/operators/ocsf/cast/process.tql:8:1
+  |
+8 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |
 
 warning: dropping `process.egid` because extension `linux` is not enabled
+ --> tests/operators/ocsf/cast/process.tql:8:1
+  |
+8 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

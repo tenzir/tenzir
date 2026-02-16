@@ -61,3 +61,8 @@
   url: null,
 }
 warning: expected type `record` for `unmapped`, but got `string`
+ --> tests/operators/ocsf/cast/string_unmapped.tql:2:1
+  |
+2 | ocsf::cast null_fill=true
+  | ~~~~~~~~~~ 
+  |

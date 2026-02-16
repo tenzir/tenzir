@@ -8,4 +8,9 @@
   activity_name: null,
 }
 warning: found invalid value for `activity_id`
-  = note: got 999
+  --> tests/operators/ocsf/derive/unknown_values.tql:11:1
+   |
+11 | ocsf::derive
+   | ~~~~~~~~~~~~ 
+   |
+   = note: got 999
