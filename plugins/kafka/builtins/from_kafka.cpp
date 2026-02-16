@@ -370,7 +370,12 @@ public:
       co_return;
     }
     initialize_runtime_state();
-    spawn_pipeline_tasks(ctx);
+    ctx.spawn_task(
+      folly::coro::co_withExecutor(folly::getGlobalIOExecutor(), fetch_loop()));
+    for (size_t i = 0; i < worker_count_; ++i) {
+      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
+                                                  build_loop()));
+    }
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -645,16 +650,6 @@ private:
     {
       auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
       runtime_.in_flight_fetch_bytes = 0;
-    }
-  }
-
-  /// Spawns fetch and build coroutines on their executor domains.
-  auto spawn_pipeline_tasks(OpCtx& ctx) const -> void {
-    ctx.spawn_task(
-      folly::coro::co_withExecutor(folly::getGlobalIOExecutor(), fetch_loop()));
-    for (size_t i = 0; i < worker_count_; ++i) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                                  build_loop()));
     }
   }
 
