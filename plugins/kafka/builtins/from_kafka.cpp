@@ -68,7 +68,7 @@ auto source_global_defaults() -> record& {
   return defaults;
 }
 
-/// Returns throughput defaults for librdkafka consumer-side queueing/fetching.
+/// Returns high-throughput defaults for librdkafka consumer queueing/fetching.
 auto from_kafka_throughput_defaults() {
   using entry = std::pair<std::string_view, std::string_view>;
   // Performance note: these defaults intentionally bias towards low broker-side
@@ -82,7 +82,7 @@ auto from_kafka_throughput_defaults() {
                                {"queued.max.messages.kbytes", "262144"}});
 }
 
-/// Adds throughput defaults unless explicitly configured via `kafka.yaml`.
+/// Adds high-throughput defaults unless explicitly configured via `kafka.yaml`.
 /// User-supplied `from_kafka options={...}` are still applied afterwards.
 auto apply_from_kafka_throughput_defaults(record& config) -> void {
   for (auto const& [key, value] : from_kafka_throughput_defaults()) {
@@ -116,15 +116,6 @@ struct FromKafkaArgs {
 /// Enumerates batching behavior for emitting processed Kafka records.
 TENZIR_ENUM(OptimizationMode, ordered, unordered);
 
-/// Parses a boolean-like environment flag (`1`, `true`, `yes`, `on`).
-auto parse_bool_flag(std::string value) -> bool {
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) -> char {
-                   return static_cast<char>(std::tolower(c));
-                 });
-  return value == "1" or value == "true" or value == "yes" or value == "on";
-}
-
 /// Returns whether opt-in `from_kafka` perf counters should be collected.
 auto from_kafka_perf_stats_enabled() -> bool {
   static auto enabled = [] {
@@ -132,7 +123,12 @@ auto from_kafka_perf_stats_enabled() -> bool {
     if (not value) {
       return false;
     }
-    return parse_bool_flag(*value);
+    std::transform(value->begin(), value->end(), value->begin(),
+                   [](unsigned char c) -> char {
+                     return static_cast<char>(std::tolower(c));
+                   });
+    return *value == "1" or *value == "true" or *value == "yes"
+           or *value == "on";
   }();
   return enabled;
 }
@@ -238,7 +234,7 @@ struct MessageBatch {
 };
 
 /// Represents one built table-slice batch plus commit metadata.
-struct TableSliceEnvelope {
+struct TableSliceFrame {
   uint64_t seq = 0;
   std::optional<table_slice> slice;
   std::unordered_map<int32_t, int64_t> max_offsets;
@@ -249,7 +245,7 @@ struct TableSliceEnvelope {
 
 /// Result envelope returned by `await_task()` to `process_task()`.
 struct TableSliceResult {
-  std::optional<TableSliceEnvelope> slice;
+  std::optional<TableSliceFrame> slice;
   bool end_of_stream = false;
 };
 
@@ -454,8 +450,7 @@ private:
   using FetchedQueue = folly::coro::BoundedQueue<std::optional<MessageBatch>>;
 
   /// Queue item type for build-stage handoff.
-  using BuiltQueue
-    = folly::coro::BoundedQueue<std::optional<TableSliceEnvelope>>;
+  using BuiltQueue = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
 
   /// Holds resolved AWS IAM settings used for consumer configuration.
   struct AwsAuthState {
@@ -468,7 +463,7 @@ private:
     std::optional<Box<AsyncConsumerQueue>> queue;
     std::shared_ptr<FetchedQueue> fetched_queue;
     std::shared_ptr<BuiltQueue> built_queue;
-    std::map<uint64_t, TableSliceEnvelope> ordered_slices;
+    std::map<uint64_t, TableSliceFrame> ordered_slices;
     std::atomic<bool> fetched_queue_closed = false;
     std::atomic<size_t> live_builders = 0;
     std::atomic<bool> pipeline_stop_requested = false;
@@ -506,7 +501,7 @@ private:
   ///   │   build_batch → table_slice   │
   ///   └───────────────────────────────┘
   ///                   │
-  ///                   │ TableSliceEnvelope
+  ///                   │ TableSliceFrame
   ///                   ▼
   ///             runtime_.built_queue                           [bounded queue]
   ///                   │
@@ -1051,8 +1046,8 @@ private:
   }
 
   /// Converts one fetched payload batch into a `table_slice`.
-  auto build_batch(MessageBatch fetched) const -> TableSliceEnvelope {
-    auto built = TableSliceEnvelope{};
+  auto build_batch(MessageBatch fetched) const -> TableSliceFrame {
+    auto built = TableSliceFrame{};
     built.seq = fetched.seq;
     built.eof_partitions = std::move(fetched.eof_partitions);
     built.fatal_error = std::move(fetched.fatal_error);
@@ -1123,10 +1118,9 @@ private:
         if (perf_enabled_) {
           enqueue_started = std::chrono::steady_clock::now();
         }
-        co_await runtime_.built_queue->enqueue(
-          std::optional<TableSliceEnvelope>{
-            std::move(built),
-          });
+        co_await runtime_.built_queue->enqueue(std::optional<TableSliceFrame>{
+          std::move(built),
+        });
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_enqueue_wait_ns,
