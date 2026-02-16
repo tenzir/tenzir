@@ -517,66 +517,52 @@ multi_series_builder::multi_series_builder(
   // inputs
 }
 
-auto multi_series_builder::yield_ready_wait(
+auto multi_series_builder::make_events_available_on_timeout(
   std::chrono::steady_clock::time_point now) -> duration {
   auto const timeout = settings_.timeout;
-  auto const target_size = detail::narrow<int64_t>(settings_.desired_batch_size);
-  auto wait_for = duration::max();
+  auto const target_size
+    = detail::narrow<int64_t>(settings_.desired_batch_size);
   if (uses_merging_builder()) {
     complete_last_event();
-    auto length = merging_builder_.length();
+    auto const length = merging_builder_.length();
     if (length >= target_size
         or (length > 0
             and std::chrono::duration_cast<duration>(now - merging_flushed_)
                   >= timeout)) {
       flush_merging_builder();
-      length = merging_builder_.length();
+      merging_flushed_ = now;
+      return settings_.timeout;
     }
-    if (length >= target_size) {
-      wait_for = duration::zero();
-    } else if (length > 0) {
-      auto elapsed = std::chrono::duration_cast<duration>(now - merging_flushed_);
-      wait_for = elapsed >= timeout ? duration::zero() : timeout - elapsed;
-    }
-    return wait_for;
+    return now - merging_flushed_;
   }
-  make_events_available_where(
-    [now, timeout, target_size](entry_data const& e) {
-      auto const length = e.builder.length();
-      if (length >= target_size) {
-        return true;
-      }
-      if (length == 0) {
-        return false;
-      }
-      return std::chrono::duration_cast<duration>(now - e.flushed) >= timeout;
-    });
-  garbage_collect_where(
-    [now, timeout](entry_data const& e) {
-      if (e.builder.length() != 0) {
-        return false;
-      }
-      return std::chrono::duration_cast<duration>(now - e.flushed)
-             >= 10 * timeout;
-    });
-  for (auto const& entry : entries_) {
-    auto const length = entry.builder.length();
-    if (length == 0) {
+  complete_last_event();
+  auto res = duration::max();
+  for (auto& entry : entries_) {
+    if (detail::narrow<std::size_t>(entry.builder.length())
+        > settings_.desired_batch_size) {
+      append_ready_events(entry.flush());
       continue;
     }
-    if (length >= target_size) {
-      return duration::zero();
+    auto const waiting = now - entry.flushed;
+    if (waiting > settings_.timeout) {
+      append_ready_events(entry.flush());
+      continue;
     }
-    auto elapsed = std::chrono::duration_cast<duration>(now - entry.flushed);
-    auto remaining = elapsed >= timeout ? duration::zero() : timeout - elapsed;
-    wait_for = std::min(wait_for, remaining);
+    res = std::min(res, waiting);
   }
-  return wait_for;
+  garbage_collect_where([now, timeout](entry_data const& e) {
+    if (e.builder.length() != 0) {
+      return false;
+    }
+    return std::chrono::duration_cast<duration>(now - e.flushed)
+           >= 10 * timeout;
+  });
+  return res;
 }
 
 auto multi_series_builder::yield_ready() -> std::vector<series> {
   auto const now = std::chrono::steady_clock::now();
-  TENZIR_UNUSED(yield_ready_wait(now));
+  std::ignore = make_events_available_on_timeout(now);
   return std::exchange(ready_events_, {});
 }
 
@@ -584,7 +570,7 @@ auto multi_series_builder::yield_ready_as_table_slice()
   -> multi_series_builder::YieldReadyResult {
   auto const now = std::chrono::steady_clock::now();
   auto result = multi_series_builder::YieldReadyResult{};
-  result.wait_for = yield_ready_wait(now);
+  result.wait_for = make_events_available_on_timeout(now);
   result.slices = detail::multi_series_builder::series_to_table_slice(
     std::exchange(ready_events_, {}), settings_.default_schema_name);
   return result;
@@ -654,9 +640,10 @@ auto multi_series_builder::finalize() -> std::vector<series> {
   if (uses_merging_builder()) {
     flush_merging_builder();
   } else {
-    make_events_available_where([](const auto&) {
-      return true;
-    });
+    complete_last_event();
+    for (auto& entry : entries_) {
+      append_ready_events(entry.flush());
+    }
   }
   return std::exchange(ready_events_, {});
 }
@@ -827,16 +814,6 @@ auto multi_series_builder::type_for_schema(std::string_view name)
     it = schemas_.emplace(name, std::move(*schema)).first;
   }
   return &it->second;
-}
-
-void multi_series_builder::make_events_available_where(
-  std::predicate<const entry_data&> auto pred) {
-  complete_last_event();
-  for (auto& entry : entries_) {
-    if (pred(entry)) {
-      append_ready_events(entry.flush());
-    }
-  }
 }
 
 void multi_series_builder::append_ready_events(

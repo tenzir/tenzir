@@ -43,6 +43,7 @@
 #include <arrow/record_batch.h>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
+#include <folly/coro/Sleep.h>
 
 #include <deque>
 #include <simdjson.h>
@@ -1301,12 +1302,8 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    auto next_tick = next_tick_;
-    if (next_tick < duration::zero()) {
-      next_tick = duration::zero();
-    }
     co_await folly::coro::sleep(
-      std::chrono::duration_cast<std::chrono::milliseconds>(next_tick));
+      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
     co_return PeriodicTick{};
   }
 
@@ -1316,6 +1313,7 @@ public:
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
     auto ready = parser_->builder.yield_ready_as_table_slice();
+    TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
     next_tick_ = ready.wait_for;
     for (auto& slice : ready) {
       co_await push(std::move(slice));
@@ -1371,12 +1369,8 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    auto next_tick = next_tick_;
-    if (next_tick < duration::zero()) {
-      next_tick = duration::zero();
-    }
     co_await folly::coro::sleep(
-      std::chrono::duration_cast<std::chrono::milliseconds>(next_tick));
+      std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
     co_return PeriodicTick{};
   }
 
@@ -1386,6 +1380,7 @@ public:
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
     auto ready = parser_->builder.yield_ready_as_table_slice();
+    TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
     next_tick_ = ready.wait_for;
     for (auto& slice : ready) {
       co_await push(std::move(slice));
