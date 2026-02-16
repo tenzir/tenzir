@@ -210,10 +210,19 @@ struct SubPipelineInfo {
   element_type_tag input;
   /// True if this subpipeline received the last checkpoint, requiring a commit.
   bool wants_commit = false;
+  /// True if this subpipeline has sent EndOfData back to us.
+  bool finished = false;
 };
 
-struct SubPipelineFinished {
+struct SubPipelineFinished {};
+struct SubPipelineReadyForShutdown {};
+struct SubPipelineTerminated {};
+
+struct SubPipelineEvent {
   data key;
+  variant<SubPipelineFinished, SubPipelineReadyForShutdown,
+          SubPipelineTerminated>
+    event;
 };
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
@@ -506,12 +515,13 @@ private:
                                 std::move(from_control_receiver),
                                 std::move(to_control_sender), std::move(sub_id),
                                 channel_factory_, sys_, dh_);
-        // TODO: What do we do here? Do we need to react to it
-        // finishing?
-        auto handle = queue_.scope().spawn(std::move(runner));
+        queue_.spawn([key, runner = std::move(
+                             runner)]() mutable -> Task<SubPipelineEvent> {
+          co_await std::move(runner);
+          co_return SubPipelineEvent{key, SubPipelineTerminated{}};
+        });
         return std::move(push_upstream);
       });
-    // co_await handle.join();
     queue_.scope().spawn(
       [this, key,
        pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
@@ -537,8 +547,8 @@ private:
               co_await co_match(
                 signal,
                 [&](EndOfData) -> Task<void> {
-                  queue_.spawn([key] -> Task<SubPipelineFinished> {
-                    co_return SubPipelineFinished{key};
+                  queue_.spawn([key] -> Task<SubPipelineEvent> {
+                    co_return SubPipelineEvent{key, SubPipelineFinished{}};
                   });
                   co_return;
                 },
@@ -549,18 +559,21 @@ private:
             });
         }
       });
-    queue_.scope().spawn([to_control_receiver = std::move(
+    queue_.scope().spawn([this, key,
+                          to_control_receiver = std::move(
                             to_control_receiver)] mutable -> Task<void> {
       while (true) {
         auto to_control = co_await to_control_receiver.receive();
         switch (to_control) {
           case ToControl::no_more_input:
-            // FIXME: How do we inform the operator that the subpipeline
+            // TODO: How do we inform the operator that the subpipeline
             // doesn't want anymore input?
-            co_return;
+            continue;
           case ToControl::ready_for_shutdown:
-            // FIXME: Send shutdown signal and then remove it from the
-            // pipelines list once the task terminated.
+            queue_.spawn([key] -> Task<SubPipelineEvent> {
+              co_return SubPipelineEvent{key, SubPipelineReadyForShutdown{}};
+            });
+            co_return;
           case ToControl::checkpoint_begin:
           case ToControl::checkpoint_done:
             TENZIR_TODO();
@@ -830,15 +843,32 @@ private:
     queue_.spawn(from_control_.receive());
   }
 
-  auto process(SubPipelineFinished message) -> Task<void> {
-    if constexpr (std::same_as<Output, void>) {
-      co_await op_->finish_sub(make_view(message.key), *this);
-    } else {
-      auto push = OpPushWrapper{push_downstream_};
-      co_await op_->finish_sub(make_view(message.key), push, *this);
-    }
-    subpipelines_.erase(message.key);
-    co_await try_finish_done();
+  auto process(SubPipelineEvent message) -> Task<void> {
+    co_await co_match(
+      std::move(message.event),
+      [&](SubPipelineFinished) -> Task<void> {
+        if constexpr (std::same_as<Output, void>) {
+          co_await op_->finish_sub(make_view(message.key), *this);
+        } else {
+          auto push = OpPushWrapper{push_downstream_};
+          co_await op_->finish_sub(make_view(message.key), push, *this);
+        }
+        auto it = subpipelines_.find(message.key);
+        TENZIR_ASSERT(it != subpipelines_.end());
+        TENZIR_ASSERT(not it->second.finished);
+        it->second.finished = true;
+        co_await try_send_end_of_data();
+      },
+      [&](SubPipelineReadyForShutdown) -> Task<void> {
+        auto it = subpipelines_.find(message.key);
+        TENZIR_ASSERT(it != subpipelines_.end());
+        it->second.handle.send(Shutdown{});
+        co_return;
+      },
+      [&](SubPipelineTerminated) -> Task<void> {
+        subpipelines_.erase(message.key);
+        co_await try_ready_for_shutdown();
+      });
   }
 
   auto handle_done() -> Task<void> {
@@ -872,15 +902,29 @@ private:
                           }
                         });
     }
-    co_await try_finish_done();
+    co_await try_send_end_of_data();
+    co_await try_ready_for_shutdown();
   }
 
-  auto try_finish_done() -> Task<void> {
-    if (not is_done_ or not subpipelines_.empty()) {
+  auto all_subpipelines_finished() const -> bool {
+    return std::ranges::all_of(subpipelines_, [](auto const& kv) {
+      return kv.second.finished;
+    });
+  }
+
+  auto try_send_end_of_data() -> Task<void> {
+    if (not is_done_ or not all_subpipelines_finished()) {
       co_return;
     }
     if constexpr (not std::same_as<Output, void>) {
+      LOGW("sending end of data from {}", id_);
       co_await push_downstream_(EndOfData{});
+    }
+  }
+
+  auto try_ready_for_shutdown() -> Task<void> {
+    if (not is_done_ or not subpipelines_.empty()) {
+      co_return;
     }
     LOGW("sending ready to shutdown from {}", id_);
     to_control_.send(ToControl::ready_for_shutdown);
@@ -909,7 +953,7 @@ private:
   AsyncScope* operator_scope_ = nullptr;
 
   QueueScope<
-    variant<ExplicitAny, OperatorMsg<Input>, FromControl, SubPipelineFinished>>
+    variant<ExplicitAny, OperatorMsg<Input>, FromControl, SubPipelineEvent>>
     queue_;
   bool got_shutdown_request_ = false;
   bool is_done_ = false;
