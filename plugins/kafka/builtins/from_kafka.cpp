@@ -62,7 +62,7 @@ using tenzir::detail::ascii_icase_equal;
 ///                   │
 ///                   │ MessageBatch
 ///                   ▼
-///            runtime_.fetched_queue                  [bounded queue]
+///            runtime_.message_queue                  [bounded queue]
 ///                   │
 ///                   │ ×N workers
 ///                   ▼
@@ -84,7 +84,7 @@ using tenzir::detail::ascii_icase_equal;
 ///       unordered: push as received
 ///
 /// Invariants:
-/// 1. Backpressure is bounded by both `runtime_.fetched_queue` capacity and
+/// 1. Backpressure is bounded by both `runtime_.message_queue` capacity and
 ///    `prefetch_bytes` accounting (`runtime_.in_flight_fetch_bytes`).
 /// 2. `seq` is assigned in fetch order; only ordered mode re-establishes
 ///    that order before emitting slices.
@@ -217,9 +217,9 @@ struct FromKafkaPerfCounters {
   std::atomic<uint64_t> fetched_payload_bytes = 0;
   /// Time spent waiting for prefetch-byte budget before enqueueing fetch batches.
   std::atomic<uint64_t> prefetch_wait_ns = 0;
-  /// Time spent waiting to enqueue into `runtime_.fetched_queue`.
+  /// Time spent waiting to enqueue into `runtime_.message_queue`.
   std::atomic<uint64_t> fetched_enqueue_wait_ns = 0;
-  /// Worker time spent waiting to dequeue from `runtime_.fetched_queue`.
+  /// Worker time spent waiting to dequeue from `runtime_.message_queue`.
   std::atomic<uint64_t> build_dequeue_wait_ns = 0;
   /// Worker CPU time spent in `build_batch`.
   std::atomic<uint64_t> build_compute_ns = 0;
@@ -330,11 +330,11 @@ public:
       perf_start_{other.perf_start_},
       done_{other.done_} {
     runtime_.queue = std::move(other.runtime_.queue);
-    runtime_.fetched_queue = std::move(other.runtime_.fetched_queue);
+    runtime_.message_queue = std::move(other.runtime_.message_queue);
     runtime_.built_queue = std::move(other.runtime_.built_queue);
     runtime_.ordered_slices = std::move(other.runtime_.ordered_slices);
-    runtime_.fetched_queue_closed.store(
-      other.runtime_.fetched_queue_closed.load());
+    runtime_.message_queue_closed.store(
+      other.runtime_.message_queue_closed.load());
     runtime_.live_builders.store(other.runtime_.live_builders.load());
     runtime_.pipeline_stop_requested.store(
       other.runtime_.pipeline_stop_requested.load());
@@ -506,18 +506,19 @@ public:
 
 private:
   /// Queue item type for fetch-stage handoff.
-  using FetchedQueue = folly::coro::BoundedQueue<std::optional<MessageBatch>>;
+  using MessageQueue = folly::coro::BoundedQueue<std::optional<MessageBatch>>;
 
   /// Queue item type for build-stage handoff.
-  using BuiltQueue = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
+  using TableSliceQueue
+    = folly::coro::BoundedQueue<std::optional<TableSliceFrame>>;
 
   /// Owns mutable runtime state for fetch/build/emit stages.
   struct RuntimeState {
     std::optional<Box<AsyncConsumerQueue>> queue;
-    std::shared_ptr<FetchedQueue> fetched_queue;
-    std::shared_ptr<BuiltQueue> built_queue;
+    std::shared_ptr<MessageQueue> message_queue;
+    std::shared_ptr<TableSliceQueue> built_queue;
     std::map<uint64_t, TableSliceFrame> ordered_slices;
-    std::atomic<bool> fetched_queue_closed = false;
+    std::atomic<bool> message_queue_closed = false;
     std::atomic<size_t> live_builders = 0;
     std::atomic<bool> pipeline_stop_requested = false;
     std::mutex prefetch_budget_mutex;
@@ -647,13 +648,13 @@ private:
     auto fetch_capacity = static_cast<uint32_t>(std::min<uint64_t>(
       args_._prefetch_batches, std::numeric_limits<uint32_t>::max()));
     TENZIR_ASSERT(fetch_capacity > 0);
-    runtime_.fetched_queue = std::make_shared<FetchedQueue>(fetch_capacity);
-    runtime_.built_queue = std::make_shared<BuiltQueue>(fetch_capacity);
+    runtime_.message_queue = std::make_shared<MessageQueue>(fetch_capacity);
+    runtime_.built_queue = std::make_shared<TableSliceQueue>(fetch_capacity);
     runtime_.ordered_slices.clear();
     runtime_.next_emit_seq = 0;
     runtime_.next_fetch_seq = 0;
     runtime_.scheduled_messages = emitted_messages_;
-    runtime_.fetched_queue_closed.store(false);
+    runtime_.message_queue_closed.store(false);
     runtime_.live_builders.store(worker_count_);
     runtime_.pipeline_stop_requested.store(false);
     {
@@ -825,17 +826,17 @@ private:
   }
 
   /// Enqueues exactly one shutdown sentinel per builder worker.
-  auto close_fetched_queue() const -> Task<void> {
-    if (not runtime_.fetched_queue) {
+  auto close_message_queue() const -> Task<void> {
+    if (not runtime_.message_queue) {
       co_return;
     }
     auto expected = false;
-    if (not runtime_.fetched_queue_closed.compare_exchange_strong(expected,
+    if (not runtime_.message_queue_closed.compare_exchange_strong(expected,
                                                                   true)) {
       co_return;
     }
     for (size_t i = 0; i < worker_count_; ++i) {
-      co_await runtime_.fetched_queue->enqueue(std::nullopt);
+      co_await runtime_.message_queue->enqueue(std::nullopt);
     }
   }
 
@@ -990,7 +991,7 @@ private:
     if (perf_enabled_) {
       enqueue_started = std::chrono::steady_clock::now();
     }
-    co_await runtime_.fetched_queue->enqueue(
+    co_await runtime_.message_queue->enqueue(
       std::optional<MessageBatch>{std::move(fetched)});
     if (perf_enabled_) {
       add_perf_counter(
@@ -1010,7 +1011,7 @@ private:
 
   /// Fetches Kafka batches and hands them to worker coroutines.
   auto fetch_loop() const -> Task<void> {
-    if (not runtime_.queue or not runtime_.fetched_queue) {
+    if (not runtime_.queue or not runtime_.message_queue) {
       co_return;
     }
     try {
@@ -1038,7 +1039,7 @@ private:
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
     }
-    co_await close_fetched_queue();
+    co_await close_message_queue();
   }
 
   /// Converts one fetched payload batch into a `table_slice`.
@@ -1072,7 +1073,7 @@ private:
 
   /// Runs one CPU-stage worker that builds slices from fetched batches.
   auto build_loop() const -> Task<void> {
-    if (not runtime_.fetched_queue or not runtime_.built_queue) {
+    if (not runtime_.message_queue or not runtime_.built_queue) {
       co_return;
     }
     try {
@@ -1081,7 +1082,7 @@ private:
         if (perf_enabled_) {
           dequeue_started = std::chrono::steady_clock::now();
         }
-        auto next = co_await runtime_.fetched_queue->dequeue();
+        auto next = co_await runtime_.message_queue->dequeue();
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_dequeue_wait_ns,
