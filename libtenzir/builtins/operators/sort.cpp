@@ -584,17 +584,21 @@ public:
     });
     // Assemble result, rebatching for efficiency.
     auto batch = std::vector<table_slice>{};
+    auto batch_rows = size_t{0};
     for (auto const& [slice_idx, event_idx] : indices_) {
       if (not batch.empty()
           and batch.back().schema() != events_[slice_idx].schema()) {
         co_await push(concatenate(std::exchange(batch, {})));
+        batch_rows = 0;
       }
-      if (batch.size() >= defaults::import::table_slice_size) {
+      if (batch_rows >= defaults::import::table_slice_size) {
         co_await push(concatenate(std::exchange(batch, {})));
+        batch_rows = 0;
       }
       // TODO: This excessive slicing is quite bad for performance. We could
       // merge consecutive entries from the same slice.
       batch.push_back(subslice(events_[slice_idx], event_idx, event_idx + 1));
+      batch_rows += 1;
     }
     if (not batch.empty()) {
       co_await push(concatenate(std::move(batch)));
