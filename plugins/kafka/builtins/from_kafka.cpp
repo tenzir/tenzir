@@ -15,6 +15,7 @@
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/scope_guard.hpp"
+#include "tenzir/si_literals.hpp"
 
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
@@ -49,6 +50,7 @@ namespace tenzir::plugins::kafka {
 namespace {
 
 using namespace std::chrono_literals;
+using namespace tenzir::si_literals;
 
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
@@ -69,65 +71,66 @@ auto source_global_defaults() -> record& {
 }
 
 /// Returns high-throughput defaults for librdkafka consumer queueing/fetching.
-auto from_kafka_throughput_defaults() {
-  using entry = std::pair<std::string_view, std::string_view>;
+auto from_kafka_throughput_defaults()
+  -> const std::array<std::pair<std::string, std::string>, 5>& {
+  using entry = std::pair<std::string, std::string>;
   // Performance note: these defaults intentionally bias towards low broker-side
   // holdback (`fetch.min.bytes=1`, `fetch.wait.max.ms=500`) while increasing
   // client queue depth. Local 10M-message fixture runs showed this combination
   // avoids source stalls better than aggressive "large fetch" defaults.
-  return std::to_array<entry>({{"fetch.min.bytes", "1"},
-                               {"fetch.wait.max.ms", "500"},
-                               {"max.partition.fetch.bytes", "1048576"},
-                               {"queued.min.messages", "200000"},
-                               {"queued.max.messages.kbytes", "262144"}});
+  static const auto defaults = std::array<entry, 5>{
+    entry{"fetch.min.bytes", std::to_string(1)},
+    entry{"fetch.wait.max.ms", std::to_string(500)},
+    entry{"max.partition.fetch.bytes", std::to_string(1_Mi)},
+    entry{"queued.min.messages", std::to_string(200_k)},
+    entry{"queued.max.messages.kbytes", std::to_string(256_k)},
+  };
+  return defaults;
 }
 
 /// Adds high-throughput defaults unless explicitly configured via `kafka.yaml`.
 /// User-supplied `from_kafka options={...}` are still applied afterwards.
 auto apply_from_kafka_throughput_defaults(record& config) -> void {
   for (auto const& [key, value] : from_kafka_throughput_defaults()) {
-    auto key_string = std::string{key};
-    if (config.contains(key_string)) {
+    if (config.contains(key)) {
       continue;
     }
-    config[key_string] = std::string{value};
+    config[key] = value;
   }
 }
 
 /// Parsed arguments for `from_kafka`.
 struct FromKafkaArgs {
-  /// Source topic consumed by `from_kafka <topic>`.
+  /// Kafka topic to consume.
   std::string topic;
-  /// Optional `count=` cap; stop after emitting this many messages.
+  /// Maximum number of messages to emit before stopping.
   std::optional<located<uint64_t>> count;
-  /// Optional `exit` flag; stop once all assigned partitions reach EOF.
+  /// Stop after all assigned partitions reach EOF.
   std::optional<location> exit;
-  /// Optional `offset=` start position (`beginning|end|stored|<n>|-<n>`).
+  /// Starting position to use for partition assignment.
   std::optional<located<data>> offset;
-  /// `optimization=` mode controlling downstream ordering (`ordered|unordered`).
-  /// TODO: infer from pipeline order-invariance and keep this as an override.
-  std::string optimization = "ordered";
-  /// `batch_size=` target messages per fetched batch.
-  uint64_t batch_size = 10'000;
-  /// `worker_batch_size=` override for build-stage batch sizing; `0` means
-  /// "inherit `batch_size`".
-  uint64_t worker_batch_size = 0;
-  /// `worker_concurrency=` build-worker count; `0` selects auto-default.
-  uint64_t worker_concurrency = 0;
-  /// `prefetch_batches=` bounded queue capacity between pipeline stages.
-  uint64_t prefetch_batches = 8;
-  /// `prefetch_bytes=` total payload-byte budget for in-flight fetched data.
-  uint64_t prefetch_bytes = 256ull * 1024ull * 1024ull;
-  /// `batch_timeout=` max wait for filling a partial fetch batch.
-  duration batch_timeout = default_batch_timeout;
-  /// `fetch_wait_timeout=` base Kafka poll wait; idle polls may back off.
-  duration fetch_wait_timeout = default_fetch_wait_timeout;
-  /// `options={...}` raw librdkafka overrides (secret-aware).
-  located<record> options;
-  /// Optional `aws_region=` override used for MSK IAM auth.
+  /// Target number of messages per fetch batch.
+  uint64_t batch_size = 10_k;
+  /// Region used for MSK IAM token generation.
   std::optional<located<std::string>> aws_region;
-  /// Optional `aws_iam=` config enabling OAUTHBEARER token auth.
+  /// IAM authentication settings for OAUTHBEARER.
   std::optional<located<record>> aws_iam;
+  /// Raw librdkafka overrides applied to the consumer config.
+  located<record> options;
+  /// Controls output ordering guarantees.
+  std::string _optimization = "ordered";
+  /// Preferred build-stage batch size override.
+  uint64_t _worker_batch_size = 0;
+  /// Number of concurrent build coroutines.
+  uint64_t _worker_concurrency = 0;
+  /// Capacity of the queue between fetch and build stages.
+  uint64_t _prefetch_batches = 8;
+  /// Byte budget for in-flight fetched payload.
+  uint64_t _prefetch_bytes = 256_Mi;
+  /// Maximum wait before flushing a partial fetch batch.
+  duration _batch_timeout = default_batch_timeout;
+  /// Initial broker poll wait before adaptive timeout backoff.
+  duration _fetch_wait_timeout = default_fetch_wait_timeout;
 };
 
 /// Enumerates batching behavior for emitting processed Kafka records.
@@ -660,13 +663,13 @@ private:
   /// Initializes per-run runtime queues, counters, and stage parameters.
   auto initialize_runtime_state() -> void {
     auto parsed_optimization
-      = from_string<OptimizationMode>(args_.optimization);
+      = from_string<OptimizationMode>(args_._optimization);
     TENZIR_ASSERT(parsed_optimization);
     optimization_mode_ = *parsed_optimization;
     worker_batch_size_ = resolve_worker_batch_size();
     worker_count_ = resolve_worker_concurrency();
     auto fetch_capacity = static_cast<uint32_t>(std::min<uint64_t>(
-      args_.prefetch_batches, std::numeric_limits<uint32_t>::max()));
+      args_._prefetch_batches, std::numeric_limits<uint32_t>::max()));
     TENZIR_ASSERT(fetch_capacity > 0);
     runtime_.fetched_queue = std::make_shared<FetchedQueue>(fetch_capacity);
     runtime_.built_queue = std::make_shared<BuiltQueue>(fetch_capacity);
@@ -750,7 +753,7 @@ private:
 
   /// Computes the configured worker-side batch size.
   auto resolve_worker_batch_size() const -> size_t {
-    auto batch_size = args_.worker_batch_size;
+    auto batch_size = args_._worker_batch_size;
     if (batch_size == 0) {
       batch_size = args_.batch_size;
     }
@@ -762,7 +765,7 @@ private:
 
   /// Computes the number of builder workers to spawn.
   auto resolve_worker_concurrency() const -> size_t {
-    auto concurrency = args_.worker_concurrency;
+    auto concurrency = args_._worker_concurrency;
     if (concurrency == 0) {
       concurrency = default_worker_concurrency();
     }
@@ -814,13 +817,13 @@ private:
         auto guard = std::scoped_lock{runtime_.prefetch_budget_mutex};
         // Never block forever on one oversized fetch batch. Allow exactly one
         // oversized in-flight batch at a time when no other batch is tracked.
-        if (bytes > args_.prefetch_bytes) {
+        if (bytes > args_._prefetch_bytes) {
           if (runtime_.in_flight_fetch_bytes == 0) {
             runtime_.in_flight_fetch_bytes = bytes;
             co_return;
           }
         } else if (runtime_.in_flight_fetch_bytes + bytes
-                   <= args_.prefetch_bytes) {
+                   <= args_._prefetch_bytes) {
           runtime_.in_flight_fetch_bytes += bytes;
           co_return;
         }
@@ -915,7 +918,7 @@ private:
     pending_messages.reserve(max_messages);
     auto min_wait = std::chrono::duration_cast<duration>(1ms);
     auto state = FetchPollState{};
-    state.base_poll_wait = std::max(args_.fetch_wait_timeout, min_wait);
+    state.base_poll_wait = std::max(args_._fetch_wait_timeout, min_wait);
     state.poll_wait = state.base_poll_wait;
     auto poll_wait_cap
       = std::max(state.base_poll_wait,
@@ -969,7 +972,7 @@ private:
       pending_messages.append_range(batch.messages | std::views::as_rvalue);
       if (not state.batch_deadline) {
         state.batch_deadline = std::chrono::steady_clock::now()
-                               + std::max(args_.batch_timeout, min_wait);
+                               + std::max(args_._batch_timeout, min_wait);
       }
     }
     co_return pending_messages;
@@ -1317,30 +1320,30 @@ public:
     auto exit_arg = d.named("exit", &FromKafkaArgs::exit);
     auto offset_arg = d.named("offset", &FromKafkaArgs::offset);
     auto optimization_arg
-      = d.named_optional("optimization", &FromKafkaArgs::optimization);
+      = d.named_optional("_optimization", &FromKafkaArgs::_optimization);
     auto options_arg = d.named_optional("options", &FromKafkaArgs::options);
     auto aws_region_arg = d.named("aws_region", &FromKafkaArgs::aws_region);
     auto aws_iam_arg = d.named("aws_iam", &FromKafkaArgs::aws_iam);
     auto batch_size_arg
       = d.named_optional("batch_size", &FromKafkaArgs::batch_size);
     auto worker_batch_size_arg = d.named_optional(
-      "worker_batch_size", &FromKafkaArgs::worker_batch_size);
+      "_worker_batch_size", &FromKafkaArgs::_worker_batch_size);
     auto worker_concurrency_arg = d.named_optional(
-      "worker_concurrency", &FromKafkaArgs::worker_concurrency);
-    auto prefetch_batches_arg
-      = d.named_optional("prefetch_batches", &FromKafkaArgs::prefetch_batches);
+      "_worker_concurrency", &FromKafkaArgs::_worker_concurrency);
+    auto prefetch_batches_arg = d.named_optional(
+      "_prefetch_batches", &FromKafkaArgs::_prefetch_batches);
     auto prefetch_bytes_arg
-      = d.named_optional("prefetch_bytes", &FromKafkaArgs::prefetch_bytes);
+      = d.named_optional("_prefetch_bytes", &FromKafkaArgs::_prefetch_bytes);
     auto batch_timeout_arg
-      = d.named_optional("batch_timeout", &FromKafkaArgs::batch_timeout);
+      = d.named_optional("_batch_timeout", &FromKafkaArgs::_batch_timeout);
     auto fetch_wait_timeout_arg = d.named_optional(
-      "fetch_wait_timeout", &FromKafkaArgs::fetch_wait_timeout);
+      "_fetch_wait_timeout", &FromKafkaArgs::_fetch_wait_timeout);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto mode = OptimizationMode::ordered;
       if (auto optimization = ctx.get(optimization_arg); optimization) {
         auto parsed = from_string<OptimizationMode>(*optimization);
         if (not parsed) {
-          diagnostic::error("invalid `optimization` value `{}`", *optimization)
+          diagnostic::error("invalid `_optimization` value `{}`", *optimization)
             .primary(
               ctx.get_location(optimization_arg).value_or(location::unknown))
             .note("must be either `ordered` or `unordered`")
@@ -1361,7 +1364,7 @@ public:
       if (auto worker_batch_size = ctx.get(worker_batch_size_arg);
           worker_batch_size) {
         if (*worker_batch_size == 0) {
-          diagnostic::error("`worker_batch_size` must be greater than zero")
+          diagnostic::error("`_worker_batch_size` must be greater than zero")
             .primary(ctx.get_location(worker_batch_size_arg)
                        .value_or(location::unknown))
             .emit(ctx);
@@ -1371,7 +1374,7 @@ public:
       if (auto worker_concurrency = ctx.get(worker_concurrency_arg);
           worker_concurrency) {
         if (*worker_concurrency == 0) {
-          diagnostic::error("`worker_concurrency` must be greater than zero")
+          diagnostic::error("`_worker_concurrency` must be greater than zero")
             .primary(ctx.get_location(worker_concurrency_arg)
                        .value_or(location::unknown))
             .emit(ctx);
@@ -1381,7 +1384,7 @@ public:
       if (auto prefetch_batches = ctx.get(prefetch_batches_arg);
           prefetch_batches) {
         if (*prefetch_batches == 0) {
-          diagnostic::error("`prefetch_batches` must be greater than zero")
+          diagnostic::error("`_prefetch_batches` must be greater than zero")
             .primary(
               ctx.get_location(prefetch_batches_arg).value_or(location::unknown))
             .emit(ctx);
@@ -1390,7 +1393,7 @@ public:
       }
       if (auto prefetch_bytes = ctx.get(prefetch_bytes_arg); prefetch_bytes) {
         if (*prefetch_bytes == 0) {
-          diagnostic::error("`prefetch_bytes` must be greater than zero")
+          diagnostic::error("`_prefetch_bytes` must be greater than zero")
             .primary(
               ctx.get_location(prefetch_bytes_arg).value_or(location::unknown))
             .emit(ctx);
@@ -1399,7 +1402,7 @@ public:
       }
       if (auto batch_timeout = ctx.get(batch_timeout_arg); batch_timeout) {
         if (*batch_timeout <= duration::zero()) {
-          diagnostic::error("`batch_timeout` must be a positive duration")
+          diagnostic::error("`_batch_timeout` must be a positive duration")
             .primary(
               ctx.get_location(batch_timeout_arg).value_or(location::unknown))
             .emit(ctx);
@@ -1409,7 +1412,7 @@ public:
       if (auto fetch_wait_timeout = ctx.get(fetch_wait_timeout_arg);
           fetch_wait_timeout) {
         if (*fetch_wait_timeout <= duration::zero()) {
-          diagnostic::error("`fetch_wait_timeout` must be a positive duration")
+          diagnostic::error("`_fetch_wait_timeout` must be a positive duration")
             .primary(ctx.get_location(fetch_wait_timeout_arg)
                        .value_or(location::unknown))
             .emit(ctx);
@@ -1460,7 +1463,7 @@ public:
       if (mode == OptimizationMode::unordered) {
         if (ctx.get(exit_arg)) {
           diagnostic::error(
-            "`optimization=\"unordered\"` is incompatible with `exit`")
+            "`_optimization=\"unordered\"` is incompatible with `exit`")
             .primary(
               ctx.get_location(optimization_arg).value_or(location::unknown))
             .emit(ctx);
