@@ -245,8 +245,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> {
-    co_await Operator::start(ctx);
-    // Spawn subpipelines if they are not already spawned.
+    // Spawn subpipelines if they are not already spawned (due to restore).
     if (not ctx.get_sub(true).has_value()) {
       co_await ctx.spawn_sub(true, args_.consequence, tag_v<table_slice>);
       if (args_.alternative) {
