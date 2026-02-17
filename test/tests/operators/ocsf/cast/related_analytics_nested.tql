@@ -22,5 +22,5 @@ from {
   }
 }
 ocsf::cast null_fill=true
-// Verify nested related_analytics was dropped
-assert not analytic.related_analytics[0].has("related_analytics")
+// TODO: Re-enable once `assert` is ported to the new executor.
+// assert not analytic.related_analytics[0].has("related_analytics")

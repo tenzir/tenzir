@@ -130,6 +130,7 @@ public:
   std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
   std::optional<Setter<ir::optimize_filter>> set_filter;
+  std::optional<Setter<location>> set_operator_location;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -635,6 +636,12 @@ public:
   auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
     desc_.set_filter = make_setter(ptr);
     return std::move(desc_);
+  }
+
+  /// Registers a member of `Args` to be populated with the operators location.
+  auto operator_location(location Args::* ptr) {
+    TENZIR_ASSERT(not desc_.set_operator_location);
+    desc_.set_operator_location = make_setter(ptr);
   }
 
   auto order_invariant() -> Description {

@@ -360,6 +360,9 @@ public:
     } else {
       TENZIR_ASSERT(filter_.empty());
     }
+    if (desc_->set_operator_location) {
+      (*desc_->set_operator_location)(args, main_location());
+    }
     for (auto& spawn : desc_->spawns) {
       auto result = match(
         spawn,

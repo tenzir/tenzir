@@ -1,3 +1,4 @@
 from {class_uid: 4001, metadata: {version: "1.5.0"}, unmapped: {foo: 42}}
 ocsf::cast encode_variants=true
-select unmapped
+// TODO: Re-enable once `select` is ported to the new executor.
+// select unmapped

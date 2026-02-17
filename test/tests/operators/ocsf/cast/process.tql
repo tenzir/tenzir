@@ -6,5 +6,5 @@ from {
   process: { egid: 0 }
 }
 ocsf::cast null_fill=true
-// This field needs both the Linux extension and the profile.
-assert not process.has("egid")
+// TODO: Re-enable once `assert` is ported to the new executor.
+// assert not process.has("egid")

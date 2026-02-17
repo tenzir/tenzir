@@ -1,3 +1,0 @@
-{
-  name: "ocsf.network_activity",
-}
