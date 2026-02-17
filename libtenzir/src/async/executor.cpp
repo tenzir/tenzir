@@ -13,6 +13,9 @@
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/connect_to_node.hpp"
+#include "tenzir/connector.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 
@@ -21,6 +24,7 @@
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Sleep.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
@@ -339,7 +343,8 @@ class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-         OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+         OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh,
+         std::shared_ptr<pipeline_metrics> metrics)
     : op_{std::move(op)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
@@ -355,9 +360,11 @@ public:
                 return std::same_as<In, void>;
               })},
       output_is_void_{
-        match(op_, []<class In, class Out>(const Box<Operator<In, Out>>&) {
-          return std::same_as<Out, void>;
-        })} {
+        match(op_,
+              []<class In, class Out>(const Box<Operator<In, Out>>&) {
+                return std::same_as<Out, void>;
+              })},
+      metrics_{std::move(metrics)} {
   }
 
   Runner(Runner&&) = delete;
@@ -412,6 +419,18 @@ private:
 
   auto dh() -> diagnostic_handler& override {
     return dh_;
+  }
+
+  auto make_counter(metrics_label label, metrics_direction direction,
+                    metrics_visibility visibility) -> metrics_counter override {
+    if (not metrics_) {
+      return {};
+    }
+    return metrics_->make_counter(std::move(label), direction, visibility);
+  }
+
+  auto metrics() const -> std::shared_ptr<pipeline_metrics> const& override {
+    return metrics_;
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)
@@ -560,7 +579,7 @@ private:
                     std::move(push_downstream),
                     std::move(from_control_receiver),
                     std::move(to_control_sender), std::move(sub_id), exec_ctx_,
-                    sys_, dh_),
+                    sys_, dh_, metrics_),
           std::move(push_upstream),
         };
       });
@@ -1135,6 +1154,7 @@ private:
   caf::actor_system& sys_;
   bool input_is_void_;
   bool output_is_void_;
+  std::shared_ptr<pipeline_metrics> metrics_;
   std::shared_ptr<const registry> reg_ = global_registry();
   folly::Executor::KeepAlive<> io_executor_;
 
@@ -1167,7 +1187,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Box<Push<OperatorMsg<Output>>> push_downstream,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, OpId id, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+                  caf::actor_system& sys, DiagHandler& dh,
+                  std::shared_ptr<pipeline_metrics> metrics) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await Runner{
     AnyOperator{std::move(op)},
@@ -1179,6 +1200,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
     exec_ctx,
     sys,
     dh,
+    std::move(metrics),
   }
     .run_to_completion();
 }
@@ -1190,7 +1212,8 @@ public:
   ChainRunner(std::vector<AnyOperator> operators, AnyOpPull pull_upstream,
               AnyOpPush push_downstream, Receiver<FromControl> from_control,
               Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-              caf::actor_system& sys, DiagHandler& dh)
+              caf::actor_system& sys, DiagHandler& dh,
+              std::shared_ptr<pipeline_metrics> metrics)
     : operators_{std::move(operators)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
@@ -1199,7 +1222,8 @@ public:
       id_{std::move(id)},
       exec_ctx_{exec_ctx},
       sys_{sys},
-      dh_{dh} {
+      dh_{dh},
+      metrics_{std::move(metrics)} {
   }
 
   auto run_to_completion() && -> Task<void> {
@@ -1246,7 +1270,7 @@ private:
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), id_.op(index),
-                                 exec_ctx_, sys_, dh_);
+                                 exec_ctx_, sys_, dh_, metrics_);
         auto executor = exec_ctx_.make_executor(id_.op(index));
         LOGI("spawning operator task");
         queue_.spawn([task = std::move(task), index,
@@ -1388,6 +1412,7 @@ private:
   ExecCtx& exec_ctx_;
   caf::actor_system& sys_;
   DiagHandler& dh_;
+  std::shared_ptr<pipeline_metrics> metrics_;
 
   std::vector<Sender<FromControl>> operator_ctrl_;
 
@@ -1413,7 +1438,8 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-               DiagHandler& dh) -> Task<void> {
+               DiagHandler& dh, std::shared_ptr<pipeline_metrics> metrics)
+  -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain).unwrap(),
@@ -1425,6 +1451,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
     exec_ctx,
     sys,
     dh,
+    std::move(metrics),
   }
     .run_to_completion();
 }
@@ -1474,12 +1501,14 @@ auto new_pipe_id() -> PipeId {
 } // namespace
 
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+                  caf::actor_system& sys, DiagHandler& dh,
+                  metrics_callback emit_fn) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
     = exec_ctx.make<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
     = exec_ctx.make<void>(ChannelId::last(id.op(pipeline.size() - 1)));
+  auto metrics = std::make_shared<pipeline_metrics>();
   try {
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);
@@ -1489,11 +1518,24 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
+      // Spawn periodic metrics emission if a callback was provided.
+      if (emit_fn) {
+        queue.scope().spawn([metrics, emit_fn] -> Task<void> {
+          while (true) {
+            co_await folly::coro::sleep(
+              std::chrono::duration_cast<folly::HighResDuration>(
+                defaults::metrics_interval));
+            auto snapshot = metrics->take_snapshot();
+            emit_fn(snapshot);
+          }
+        });
+      }
       queue.spawn([&] -> Task<std::monostate> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
                            std::move(from_control_receiver),
-                           std::move(to_control_sender), id, exec_ctx, sys, dh);
+                           std::move(to_control_sender), id, exec_ctx, sys, dh,
+                           std::move(metrics));
         co_return std::monostate{};
       });
       // TODO: We just have this right now to simulate checkpointing.

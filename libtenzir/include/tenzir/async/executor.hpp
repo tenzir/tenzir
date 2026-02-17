@@ -236,7 +236,8 @@ public:
 
 /// Run a closed pipeline without external control.
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
+                  caf::actor_system& sys, DiagHandler& dh,
+                  metrics_callback emit_fn = {}) -> Task<void>;
 
 /// Run a right-open pipeline without external control.
 template <class Output>
@@ -259,6 +260,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-               DiagHandler& dh) -> Task<void>;
+               DiagHandler& dh, std::shared_ptr<pipeline_metrics> metrics = {})
+  -> Task<void>;
 
 } // namespace tenzir
