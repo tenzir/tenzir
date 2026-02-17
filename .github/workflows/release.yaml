@@ -60,8 +60,8 @@ jobs:
       bump: ${{ inputs.bump }}
       intro: ${{ inputs.intro }}
       title: ${{ inputs.title }}
-      post-create: |
-        VERSION_NUMBER=$(tenzir-ship release version --bare)
+      pre-publish: |
+        VERSION_NUMBER="${RELEASE_VERSION#v}"
 
         # Update tenzir-version in version.json using jq.
         jq --arg version "${VERSION_NUMBER}" '.["tenzir-version"] = $version' version.json > version.json.tmp
@@ -108,19 +108,11 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate app token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Generate SBOM artifact
         run: nix run .#generate-sbom -- /tmp/tenzir.spdx.json
 
       - name: Attach SBOM to release
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ needs.release.outputs.token }}
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: gh release upload "$RELEASE_VERSION" /tmp/tenzir.spdx.json --clobber
