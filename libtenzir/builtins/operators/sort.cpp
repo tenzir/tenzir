@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -509,7 +510,111 @@ private:
   std::vector<sort_expression> sort_exprs_ = {};
 };
 
+// -- New executor-based TQL2 implementation -----------------------------------
+
+struct SortArgs {
+  std::optional<ast::expression> expr;
+};
+
+class Sort final : public Operator<table_slice, table_slice> {
+public:
+  explicit Sort(SortArgs args) {
+    if (not args.expr) {
+      expr_ = ast::expression{ast::this_{location::unknown}};
+      return;
+    }
+    std::move(*args.expr)
+      .match(
+        [&](ast::unary_expr&& unary) {
+          if (unary.op.inner == ast::unary_op::neg) {
+            expr_ = std::move(unary.expr);
+            reverse_ = true;
+          } else {
+            expr_ = std::move(unary);
+          }
+        },
+        [&](auto&& other) {
+          expr_ = std::move(other);
+        });
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    auto const length = detail::narrow<int64_t>(input.rows());
+    indices_.reserve(indices_.size() + input.rows());
+    for (auto i = int64_t{0}; i < length; ++i) {
+      indices_.push_back({events_.size(), i});
+    }
+    keys_.push_back(eval(expr_, input, ctx.dh()));
+    events_.push_back(std::move(input));
+    co_return;
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (indices_.empty()) {
+      co_return;
+    }
+    // TODO: If all chunks evaluate to the same type, we can choose a faster
+    // path where we do not need to evaluate the key's type for each row
+    // individually.
+    std::ranges::sort(indices_, [&](std::pair<size_t, int64_t> const& lhs,
+                                    std::pair<size_t, int64_t> const& rhs) {
+      auto const& lhs_key = keys_[lhs.first];
+      auto const& rhs_key = keys_[rhs.first];
+      auto const lhs_value = lhs_key.view3_at(lhs.second);
+      auto const rhs_value = rhs_key.view3_at(rhs.second);
+      auto const lhs_null = is<caf::none_t>(lhs_value);
+      auto const rhs_null = is<caf::none_t>(rhs_value);
+      if (lhs_null and rhs_null) {
+        return false;
+      }
+      if (lhs_null) {
+        return false;
+      }
+      if (rhs_null) {
+        return true;
+      }
+      auto const relation = weak_order(lhs_value, rhs_value);
+      if (relation != std::weak_ordering::equivalent) {
+        return (relation == std::weak_ordering::less) != reverse_;
+      }
+      return false;
+    });
+    // Assemble result, rebatching for efficiency.
+    auto batch = std::vector<table_slice>{};
+    auto batch_rows = size_t{0};
+    for (auto const& [slice_idx, event_idx] : indices_) {
+      if (not batch.empty()
+          and batch.back().schema() != events_[slice_idx].schema()) {
+        co_await push(concatenate(std::exchange(batch, {})));
+        batch_rows = 0;
+      }
+      if (batch_rows >= defaults::import::table_slice_size) {
+        co_await push(concatenate(std::exchange(batch, {})));
+        batch_rows = 0;
+      }
+      // TODO: This excessive slicing is quite bad for performance. We could
+      // merge consecutive entries from the same slice.
+      batch.push_back(subslice(events_[slice_idx], event_idx, event_idx + 1));
+      batch_rows += 1;
+    }
+    if (not batch.empty()) {
+      co_await push(concatenate(std::move(batch)));
+    }
+  }
+
+private:
+  ast::expression expr_;
+  bool reverse_ = false;
+  std::vector<table_slice> events_;
+  std::vector<multi_series> keys_;
+  std::vector<std::pair<size_t, int64_t>> indices_;
+};
+
 class plugin2 final : public virtual operator_plugin2<sort_operator2>,
+                      public virtual OperatorPlugin,
                       public virtual function_plugin {
 public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
@@ -538,6 +643,12 @@ public:
     std::ranges::transform(inv.args, std::back_inserter(sort_exprs),
                            make_sort_key);
     return std::make_unique<sort_operator2>(std::move(sort_exprs));
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<SortArgs, Sort>{};
+    d.positional("expr", &SortArgs::expr, "any");
+    return d.without_optimize();
   }
 
   auto is_deterministic() const -> bool override {

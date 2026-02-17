@@ -20,6 +20,8 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
+#include <folly/coro/Sleep.h>
+
 #include <string_view>
 
 namespace tenzir::plugins::every_cron {

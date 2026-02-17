@@ -8,6 +8,7 @@
 
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/notify.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -90,7 +91,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     auto pipe = args_.pipe.inner;
     if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       diagnostic::error("failed to substitute pipeline")

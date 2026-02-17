@@ -8,12 +8,16 @@
 
 #pragma once
 
+#include "tenzir/async/log.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/result.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/unit.hpp"
 
 #include <folly/coro/AsyncScope.h>
+
+#include <mutex>
 
 namespace tenzir {
 
@@ -25,16 +29,19 @@ public:
   ///
   /// If a call to this function is cancelled, then the underlying task will not
   /// be joined and nothing happens. May be successfully awaited at most once.
-  auto join() -> Task<AsyncResult<T>> {
+  ///
+  /// This will panic if the underlying task was cancelled.
+  auto join() -> Task<T> {
     TENZIR_ASSERT(state_);
-    TENZIR_ASSERT(not state_->notified);
+    TENZIR_ASSERT(not state_->joined);
     co_await state_->notify.wait();
-    state_->notified = true;
-    if constexpr (std::same_as<T, void>) {
-      std::move(state_->value).unwrap();
-      co_return {};
-    } else {
-      co_return std::move(state_->value).unwrap();
+    TENZIR_ASSERT(not state_->joined);
+    state_->joined = true;
+    if (not state_->value) {
+      panic("joining a task that got cancelled");
+    }
+    if constexpr (not std::is_void_v<T>) {
+      co_return std::move(*state_->value);
     }
   }
 
@@ -42,9 +49,9 @@ private:
   friend class AsyncScope;
 
   struct State {
-    bool notified = false;
+    bool joined = false;
     Notify notify;
-    AsyncResult<T> value;
+    std::optional<VoidToUnit<T>> value;
   };
 
   explicit AsyncHandle(std::shared_ptr<State> state)
@@ -64,18 +71,43 @@ public:
   template <class SemiAwaitable>
   auto spawn(SemiAwaitable&& awaitable)
     -> AsyncHandle<folly::coro::semi_await_result_t<SemiAwaitable>> {
+    LOGV("spawning task in scope {}", fmt::ptr(this));
     using Result = folly::coro::semi_await_result_t<SemiAwaitable>;
     auto state = std::make_shared<typename AsyncHandle<Result>::State>();
-    scope_.add(
+    data_.scope.add(
       folly::coro::co_withExecutor(
-        executor_,
-        folly::coro::co_invoke([state, awaitable = std::forward<SemiAwaitable>(
-                                         awaitable)] mutable -> Task<void> {
-          state->value
-            = co_await folly::coro::co_awaitTry(std::move(awaitable));
+        data_.executor,
+        folly::coro::co_invoke([this, state,
+                                awaitable = std::forward<SemiAwaitable>(
+                                  awaitable)] mutable -> Task<void> {
+          auto result = AsyncResult{co_await folly::coro::co_awaitTry(
+            folly::coro::co_withCancellation(data_.cancel_token,
+                                             std::move(awaitable)))};
+          if (result.is_exception()) {
+            auto lock = std::scoped_lock{data_.exception_mutex};
+            if (not data_.exception) {
+              LOGE("remembering exception for scope {}: {}", fmt::ptr(this),
+                   result.exception().what());
+              data_.exception = std::move(result).exception();
+              data_.cancel_source.requestCancellation();
+            } else {
+              LOGE("dropping exception for scope {}: {}", fmt::ptr(this),
+                   result.exception().what());
+            }
+            co_return;
+          }
+          if (result.is_value()) {
+            if constexpr (std::is_void_v<Result>) {
+              state->value = Unit{};
+            } else {
+              state->value = std::move(result).unwrap();
+            }
+          } else {
+            LOGV("task of scope {} got cancelled", fmt::ptr(this));
+          }
           state->notify.notify_one();
         })),
-      std::nullopt, FOLLY_ASYNC_STACK_RETURN_ADDRESS());
+      FOLLY_ASYNC_STACK_RETURN_ADDRESS());
     return AsyncHandle<Result>{std::move(state)};
   }
 
@@ -88,29 +120,35 @@ public:
   }
 
   /// Cancel all remaining tasks.
-  auto cancel() {
-    // TODO: Exact behavior?
-    scope_.requestCancellation();
+  auto cancel() -> void {
+    // TODO: Does this also cancel the main task of the scope?
+    data_.cancel_source.requestCancellation();
   }
 
   auto is_cancelled() const -> bool {
-    return scope_.isScopeCancellationRequested();
+    return data_.cancel_token.isCancellationRequested();
   }
 
 private:
+  struct Data {
+    folly::ExecutorKeepAlive<> executor;
+    folly::coro::AsyncScope scope;
+    folly::CancellationSource cancel_source;
+    folly::CancellationToken cancel_token;
+    folly::exception_wrapper exception;
+    std::mutex exception_mutex;
+  };
+
   AsyncScope(const AsyncScope&) = delete;
   auto operator=(const AsyncScope&) -> AsyncScope& = delete;
   AsyncScope(AsyncScope&&) = delete;
   auto operator=(AsyncScope&&) -> AsyncScope& = delete;
 
-  AsyncScope(folly::ExecutorKeepAlive<> executor,
-             folly::coro::CancellableAsyncScope& scope)
-    : executor_{std::move(executor)}, scope_{scope} {
+  explicit AsyncScope(Data& data) : data_{data} {
   }
   ~AsyncScope() = default;
 
-  folly::ExecutorKeepAlive<> executor_;
-  folly::coro::CancellableAsyncScope& scope_;
+  Data& data_;
 
   template <class F>
     requires std::invocable<F, AsyncScope&>
@@ -122,8 +160,14 @@ private:
 ///
 /// The given function and all tasks spawned may access external objects as long
 /// as they outlive this function call. It will only return once all spawned
-/// tasks have been completed. If the function fails or is cancelled, then all
-/// spawned tasks will be cancelled.
+/// tasks have terminated.
+///
+/// If the function is cancelled, then all spawned tasks will be cancelled as
+/// well and cancellation will be propagated. If just a spawned task is
+/// cancelled, execution will continue normally.
+///
+/// If the function or a spawned tasks fails with an exception, then everything
+/// is cancelled and the exception is propagated.
 ///
 /// Fun fact: This function is one of the very few things that would not be
 /// possible in Rust, since implementing it requires async cancellation.
@@ -131,9 +175,13 @@ template <class F>
   requires std::invocable<F, AsyncScope&>
 auto async_scope(F&& f) -> Task<
   folly::coro::semi_await_result_t<std::invoke_result_t<F, AsyncScope&>>> {
-  auto scope = folly::coro::CancellableAsyncScope{folly::CancellationToken{
-    co_await folly::coro::co_current_cancellation_token}};
-  auto spawn = AsyncScope{co_await folly::coro::co_current_executor, scope};
+  auto data = AsyncScope::Data{};
+  data.cancel_token = folly::cancellation_token_merge(
+    co_await folly::coro::co_current_cancellation_token,
+    data.cancel_source.getToken());
+  data.executor = co_await folly::coro::co_current_executor;
+  auto scope = AsyncScope{data};
+  LOGV("created scope {}", fmt::ptr(&scope));
   // For memory safety, after calling the user-provided function, we must under
   // all circumstances reach the cleanup and join all spawned tasks, since they
   // may reference objects that might be destroyed once this function returns.
@@ -145,24 +193,38 @@ auto async_scope(F&& f) -> Task<
     TENZIR_ERROR("aborting because async scope join failed");
     std::terminate();
   }};
-  auto result = AsyncResult{
-    co_await folly::coro::co_awaitTry(std::invoke(std::forward<F>(f), spawn))};
+  auto result = AsyncResult{co_await folly::coro::co_awaitTry(
+    folly::coro::co_withCancellation(data.cancel_token,
+                                     std::invoke(std::forward<F>(f), scope)))};
   // We only cancel the jobs if the given function failed or was cancelled.
   if (not result.is_value()) {
-    TENZIR_DEBUG("cancelling async scope because of exception/cancellation");
-    scope.requestCancellation();
+    if (not data.cancel_token.isCancellationRequested()) {
+      LOGV("cancelling async scope because of exception/cancellation");
+      data.cancel_source.requestCancellation();
+    }
   }
   // Provide a custom cancellation token to ensure that cancellation doesn't
   // abort the join. Because we did not ask the scope itself to store and throw
   // exceptions, this should always succeed (if it returns at all).
+  LOGV("joining scope {} (cancelled = {})", fmt::ptr(&scope),
+       data.cancel_token.isCancellationRequested());
   auto join_result = AsyncResult{co_await folly::coro::co_awaitTry(
-    folly::coro::co_withCancellation({}, scope.joinAsync()))};
+    folly::coro::co_withCancellation({}, data.scope.joinAsync()))};
+  LOGV("joined scope {}", fmt::ptr(&scope));
   // Just in case, we still check explicitly.
   if (join_result.is_value()) {
     guard.disable();
   } else {
     guard.trigger();
   }
+  // If any of the spawned tasks threw, we need to propagate the exception. No
+  // need to lock it, as the tasks are already joined.
+  if (data.exception) {
+    LOGE("leaving scope {} with exception: {}", fmt::ptr(&scope),
+         data.exception.what());
+    data.exception.throw_exception();
+  }
+  LOGV("leaving scope {}", fmt::ptr(&scope));
   // Now return the result of the user-provided function.
   co_return std::move(result).unwrap();
 }

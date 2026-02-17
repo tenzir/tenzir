@@ -10,6 +10,7 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
@@ -24,6 +25,39 @@
 namespace tenzir {
 
 namespace {
+
+/// Splits a batch of events into two based on an array of bools. Treats null as
+/// false. The first element of the returned pair are the values for which the
+/// predicate returned true, and the second element are the other values.
+auto split_at_predicate(const table_slice& events,
+                        const arrow::BooleanArray& predicate)
+  -> std::pair<table_slice, table_slice> {
+  TENZIR_ASSERT(events.rows() > 0);
+  TENZIR_ASSERT(predicate.length() == detail::narrow<int64_t>(events.rows()));
+  auto lhs = std::vector<table_slice>{};
+  auto rhs = std::vector<table_slice>{};
+  const auto pred_at = [&](int64_t i) {
+    return predicate.IsValid(i) and predicate.GetView(i);
+  };
+  auto range_offset = int64_t{0};
+  auto range_value = pred_at(0);
+  const auto append = [&](int64_t i) {
+    auto& result = (range_value ? lhs : rhs);
+    result.push_back(subslice(events, range_offset, i));
+    range_offset = i;
+    range_value = not range_value;
+  };
+  for (auto i = range_offset + 1; i < predicate.length(); ++i) {
+    if (range_value != pred_at(i)) {
+      append(i);
+    }
+  }
+  append(predicate.length());
+  return {
+    concatenate(std::move(lhs)),
+    concatenate(std::move(rhs)),
+  };
+}
 
 /// Create a `where` operator with the given expression.
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
@@ -40,8 +74,6 @@ auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   return where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
     .unwrap();
 }
-
-class stateless_transform_operator {};
 
 class Set final : public Operator<table_slice, table_slice> {
 public:
@@ -183,56 +215,154 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   return set_ir{std::move(assignments)};
 }
 
-} // namespace
+struct IfArgs {
+  struct Else {
+    location else_keyword;
+    ir::pipeline pipeline;
 
-class if_ir final : public ir::Operator {
-public:
-  struct else_t {
-    location keyword;
-    ir::pipeline pipe;
-
-    friend auto inspect(auto& f, else_t& x) -> bool {
-      return f.object(x).fields(f.field("keyword", x.keyword),
-                                f.field("pipe", x.pipe));
+    friend auto inspect(auto& f, Else& x) -> bool {
+      return f.object(x).fields(f.field("keyword", x.else_keyword),
+                                f.field("pipeline", x.pipeline));
     }
   };
 
-  if_ir() = default;
+  location if_keyword;
+  ast::expression condition;
+  ir::pipeline consequence;
+  std::optional<Else> alternative;
 
-  if_ir(location if_kw, ast::expression condition, ir::pipeline then,
-        std::optional<else_t> else_)
-    : if_kw_{if_kw},
-      condition_{std::move(condition)},
-      then_{std::move(then)},
-      else_{std::move(else_)} {
+  friend auto inspect(auto& f, IfArgs& x) -> bool {
+    return f.object(x).fields(f.field("if_keyword", x.if_keyword),
+                              f.field("condition", x.condition),
+                              f.field("consequence", x.consequence),
+                              f.field("alternative", x.alternative));
+  }
+};
+
+class If final : public Operator<table_slice, table_slice> {
+public:
+  explicit If(IfArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> {
+    // Spawn subpipelines if they are not already spawned (due to restore).
+    if (not ctx.get_sub(true).has_value()) {
+      co_await ctx.spawn_sub(true, args_.consequence, tag_v<table_slice>);
+      if (args_.alternative) {
+        co_await ctx.spawn_sub(false, args_.alternative->pipeline,
+                               tag_v<table_slice>);
+      }
+    }
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> {
+    // FIXME: If the inner subpipelines terminate and get erased, this can fail.
+    auto true_sub = check(ctx.get_sub(true));
+    auto consequence = as<OpenPipeline<table_slice>>(std::move(true_sub));
+    auto false_sub = ctx.get_sub(false);
+    auto alternative
+      = false_sub
+          ? std::optional{as<OpenPipeline<table_slice>>(std::move(*false_sub))}
+          : std::nullopt;
+    TENZIR_ASSERT(alternative.has_value() == args_.alternative.has_value());
+    auto true_events = std::vector<table_slice>{};
+    auto false_events = std::vector<table_slice>{};
+    auto end = int64_t{0};
+    for (auto const& predicate : eval(args_.condition, input, ctx)) {
+      auto const start = std::exchange(end, end + predicate.length());
+      TENZIR_ASSERT(end > start);
+      auto const sliced_input = subslice(input, start, end);
+      auto const typed_predicate = predicate.as<bool_type>();
+      if (not typed_predicate) {
+        diagnostic::warning("expected `bool`, but got `{}`",
+                            predicate.type.kind())
+          .primary(args_.condition)
+          .emit(ctx);
+        TENZIR_ASSERT(sliced_input.rows() > 0);
+        false_events.push_back(sliced_input);
+        continue;
+      }
+      if (typed_predicate->array->null_count() > 0) {
+        diagnostic::warning("expected `bool`, but got `null`")
+          .primary(args_.condition)
+          .emit(ctx);
+      }
+      auto [lhs, rhs]
+        = split_at_predicate(sliced_input, *typed_predicate->array);
+      TENZIR_ASSERT(lhs.rows() + rhs.rows() == sliced_input.rows());
+      if (lhs.rows() > 0) {
+        true_events.push_back(std::move(lhs));
+      }
+      if (rhs.rows() > 0) {
+        false_events.push_back(std::move(rhs));
+      }
+    }
+    if (not consequence_closed_) {
+      for (auto& slice : rebatch(std::move(true_events))) {
+        consequence_closed_
+          = (co_await consequence.push(std::move(slice))).is_err();
+      }
+    }
+    if (not alternative_closed_) {
+      for (auto& slice : rebatch(std::move(false_events))) {
+        if (alternative) {
+          alternative_closed_
+            = (co_await alternative->push(std::move(slice))).is_err();
+        } else {
+          co_await push(std::move(slice));
+        }
+      }
+    }
+  }
+
+  auto state() -> OperatorState override {
+    if (consequence_closed_ and alternative_closed_) {
+      return OperatorState::done;
+    }
+    return OperatorState::unspecified;
+  }
+
+private:
+  IfArgs args_;
+  bool consequence_closed_ = false;
+  bool alternative_closed_ = false;
+};
+
+} // namespace
+
+class IfIr final : public ir::Operator {
+public:
+  IfIr() = default;
+
+  explicit IfIr(IfArgs args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
-    return "if_ir";
+    return "If";
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
-    TRY(condition_.substitute(ctx));
-    TRY(then_.substitute(ctx, instantiate));
-    if (else_) {
-      TRY(else_->pipe.substitute(ctx, instantiate));
+    TRY(args_.condition.substitute(ctx));
+    TRY(args_.consequence.substitute(ctx, instantiate));
+    if (args_.alternative) {
+      TRY(args_.alternative->pipeline.substitute(ctx, instantiate));
     }
     return {};
   }
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    // TODO: Implement If operator that handles subpipelines.
-    TENZIR_TODO();
+    return If{std::move(args_)};
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    TRY(auto then_ty, then_.infer_type(input, dh));
+    TRY(auto then_ty, args_.consequence.infer_type(input, dh));
     auto else_ty = std::optional{input};
-    if (else_) {
-      TRY(else_ty, else_->pipe.infer_type(input, dh));
+    if (args_.alternative) {
+      TRY(else_ty, args_.alternative->pipeline.infer_type(input, dh));
     }
     if (not then_ty) {
       return else_ty;
@@ -248,23 +378,17 @@ public:
     diagnostic::error("incompatible branch output types: {} and {}",
                       operator_type_name(*then_ty),
                       operator_type_name(*else_ty))
-      .primary(if_kw_)
+      .primary(args_.if_keyword)
       .emit(dh);
     return failure::promise();
   }
 
-  friend auto inspect(auto& f, if_ir& x) -> bool {
-    return f.object(x).fields(f.field("if_kw", x.if_kw_),
-                              f.field("condition", x.condition_),
-                              f.field("then", x.then_),
-                              f.field("else", x.else_));
+  friend auto inspect(auto& f, IfIr& x) -> bool {
+    return f.apply(x.args_);
   }
 
 private:
-  location if_kw_;
-  ast::expression condition_;
-  ir::pipeline then_;
-  std::optional<else_t> else_;
+  IfArgs args_;
 };
 
 namespace {
@@ -273,7 +397,7 @@ namespace {
 // `TENZIR_REGISTER_PLUGINS` also from `libtenzir` itself.
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
-    new inspection_plugin<ir::Operator, if_ir>{},
+    new inspection_plugin<ir::Operator, IfIr>{},
     new inspection_plugin<ir::Operator, set_ir>{},
   };
   for (auto y : x) {
@@ -375,13 +499,15 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
       [&](ast::if_stmt x) -> failure_or<void> {
         TRY(x.condition.bind(ctx));
         TRY(auto then, std::move(x.then).compile(ctx));
-        auto else_ = std::optional<if_ir::else_t>{};
+        auto args = IfArgs{};
+        args.if_keyword = x.if_kw;
+        args.condition = std::move(x.condition);
+        args.consequence = std::move(then);
         if (x.else_) {
           TRY(auto pipe, std::move(x.else_->pipe).compile(ctx));
-          else_.emplace(x.else_->kw, std::move(pipe));
+          args.alternative.emplace(x.else_->kw, std::move(pipe));
         }
-        operators.emplace_back(if_ir{x.if_kw, std::move(x.condition),
-                                     std::move(then), std::move(else_)});
+        operators.emplace_back(IfIr{std::move(args)});
         return {};
       },
       [&](ast::match_stmt x) -> failure_or<void> {

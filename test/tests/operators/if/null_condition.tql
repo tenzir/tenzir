@@ -1,0 +1,6 @@
+from {x: 1}, {x: 2}
+if null {
+  y = "yes"
+} else {
+  y = "no"
+}

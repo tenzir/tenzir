@@ -1,0 +1,14 @@
+{
+  x: 1,
+  y: "no",
+}
+{
+  x: 2,
+  y: "no",
+}
+warning: expected `bool`, but got `null`
+ --> tests/operators/if/null_condition.tql:2:4
+  |
+2 | if null {
+  |    ~~~~ 
+  |

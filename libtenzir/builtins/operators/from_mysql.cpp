@@ -9,6 +9,7 @@
 #include <tenzir/any.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/generator.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
@@ -1619,7 +1620,6 @@ private:
 
 public:
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     if (done_) {
       co_return;
     }

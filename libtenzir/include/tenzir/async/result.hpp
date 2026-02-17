@@ -62,13 +62,15 @@ public:
   }
 
   template <class Self>
-  auto exception(this Self&& self) -> decltype(auto) {
+  auto exception(this Self&& self)
+    -> ForwardLike<Self, folly::exception_wrapper> {
     TENZIR_ASSERT(not self.is_cancelled());
     return std::forward<Self>(self).value_.exception();
   }
 
   template <class Self>
-  auto exception_or_cancelled(this Self&& self) -> decltype(auto) {
+  auto exception_or_cancelled(this Self&& self)
+    -> ForwardLike<Self, folly::exception_wrapper> {
     return std::forward<Self>(self).value_.exception();
   }
 
