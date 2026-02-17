@@ -1,6 +1,0 @@
-error: invalid TLS cipher list
- --> tests/operators/from_mysql/tls/tls_ciphers_warning.tql:8:16
-  |
-8 |            tls={skip_peer_verification: true,
-  |                ^ `tls.ciphers`
-  |

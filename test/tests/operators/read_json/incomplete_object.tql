@@ -1,3 +1,6 @@
+---
+error: true
+---
 from_stdin {
   read_json
 }
