@@ -17,6 +17,11 @@ on:
           User-facing release title (auto-generated if omitted)
         required: false
         type: string
+      skip_publish:
+        description: Skip publish/tag/branch updates (dry run)
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   release:
@@ -25,4 +30,5 @@ jobs:
       bump: major
       intro: ${{ inputs.intro }}
       title: ${{ inputs.title }}
+      skip_publish: ${{ inputs.skip_publish }}
     secrets: inherit
