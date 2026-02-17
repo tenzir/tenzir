@@ -283,10 +283,11 @@ class ValidateCtx {
 public:
   ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               std::optional<const PipelineArg> pipeline,
-              const Description& /*desc*/, diagnostic_handler& dh)
+              const Description& desc, diagnostic_handler& dh)
     : args_{args},
       named_args_{named_args},
       pipeline_{std::move(pipeline)},
+      desc_{&desc},
       dh_{&dh} {
   }
 
@@ -349,6 +350,20 @@ public:
   }
 
   template <class Args, class T>
+  auto get_all(Argument<Args, T> arg) -> std::vector<std::optional<T>> {
+    auto result = std::vector<std::optional<T>>{};
+    if (arg.type() != ArgumentType::positional or not desc_->variadic_index
+        or arg.index() != *desc_->variadic_index) {
+      result.push_back(get(arg));
+      return result;
+    }
+    for (auto i = arg.index(); i < args_.size(); ++i) {
+      result.push_back(get_impl<T>(args_[i]));
+    }
+    return result;
+  }
+
+  template <class Args, class T>
   auto get_location(Argument<Args, T> arg) -> std::optional<location> {
     const Arg* value = nullptr;
     switch (arg.type()) {
@@ -391,14 +406,71 @@ public:
       });
   }
 
+  template <class Args, class T>
+  auto get_locations(Argument<Args, T> arg) -> std::vector<location> {
+    auto result = std::vector<location>{};
+    if (arg.type() != ArgumentType::positional or not desc_->variadic_index
+        or arg.index() != *desc_->variadic_index) {
+      if (auto loc = get_location(arg)) {
+        result.push_back(*loc);
+      }
+      return result;
+    }
+    for (auto i = arg.index(); i < args_.size(); ++i) {
+      if (auto loc = get_location_impl(args_[i])) {
+        result.push_back(*loc);
+      }
+    }
+    return result;
+  }
+
   explicit(false) operator diagnostic_handler&() {
     return *dh_;
   }
 
 private:
+  template <class T>
+  static auto get_impl(const Arg& value) -> std::optional<T> {
+    if (is<Incomplete>(value)) {
+      return std::nullopt;
+    }
+    return match(
+      value,
+      [](const Incomplete&) -> std::optional<T> {
+        TENZIR_UNREACHABLE();
+      },
+      []<class U>(const located<U>& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v.inner;
+        } else if constexpr (std::same_as<T, located<U>>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
+      },
+      [](const auto&) -> std::optional<T> {
+        return std::nullopt;
+      });
+  }
+
+  static auto get_location_impl(const Arg& value) -> std::optional<location> {
+    return match(
+      value,
+      [](const Incomplete& v) -> std::optional<location> {
+        return v.expr.get_location();
+      },
+      []<class U>(const located<U>& v) -> std::optional<location> {
+        return v.source;
+      },
+      [](const auto& v) -> std::optional<location> {
+        return v.get_location();
+      });
+  }
+
   std::span<const Arg> args_;
   std::span<const NamedArg> named_args_;
   std::optional<const PipelineArg> pipeline_;
+  const Description* desc_;
   diagnostic_handler* dh_;
 };
 
