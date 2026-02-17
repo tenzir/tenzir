@@ -257,6 +257,7 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> {
+    // FIXME: If the inner subpipelines terminate and get erased, this can fail.
     auto true_sub = check(ctx.get_sub(true));
     auto consequence = as<OpenPipeline<table_slice>>(std::move(true_sub));
     auto false_sub = ctx.get_sub(false);

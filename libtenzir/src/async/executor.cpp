@@ -212,6 +212,8 @@ struct SubPipelineInfo {
   bool wants_commit = false;
   /// True if this subpipeline has sent EndOfData back to us.
   bool finished = false;
+  /// True if the subpipeline runner task has fully terminated.
+  bool terminated = false;
 };
 
 struct SubPipelineFinished {};
@@ -847,6 +849,15 @@ private:
     co_await co_match(
       std::move(message.event),
       [&](SubPipelineFinished) -> Task<void> {
+        auto maybe_cleanup_subpipeline = [this](auto it) -> Task<void> {
+          // We currently do not guarantee ordering between the Finished and
+          // Terminated messages. This should not happen once the subpipeline
+          // implementation is cleaned up.
+          if (it->second.finished and it->second.terminated) {
+            subpipelines_.erase(it);
+            co_await try_ready_for_shutdown();
+          }
+        };
         if constexpr (std::same_as<Output, void>) {
           co_await op_->finish_sub(make_view(message.key), *this);
         } else {
@@ -857,17 +868,26 @@ private:
         TENZIR_ASSERT(it != subpipelines_.end());
         TENZIR_ASSERT(not it->second.finished);
         it->second.finished = true;
+        co_await maybe_cleanup_subpipeline(it);
         co_await try_send_end_of_data();
       },
       [&](SubPipelineReadyForShutdown) -> Task<void> {
         auto it = subpipelines_.find(message.key);
         TENZIR_ASSERT(it != subpipelines_.end());
+        if (it->second.terminated) {
+          co_return;
+        }
         it->second.handle.send(Shutdown{});
         co_return;
       },
       [&](SubPipelineTerminated) -> Task<void> {
-        subpipelines_.erase(message.key);
-        co_await try_ready_for_shutdown();
+        auto it = subpipelines_.find(message.key);
+        TENZIR_ASSERT(it != subpipelines_.end());
+        it->second.terminated = true;
+        if (it->second.finished) {
+          subpipelines_.erase(it);
+          co_await try_ready_for_shutdown();
+        }
       });
   }
 
