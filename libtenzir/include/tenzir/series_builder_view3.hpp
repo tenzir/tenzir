@@ -24,19 +24,19 @@ template <data_view3_type T>
 auto add_to_builder(builder_ref b, T v) -> void {
   b.data(v);
 }
-auto add_to_builder(builder_ref b, view3<record> r) -> void {
+inline auto add_to_builder(builder_ref b, view3<record> r) -> void {
   auto rb = b.record();
   for (const auto& [k, v] : r) {
     add_to_builder(rb.field(k), v);
   }
 }
-auto add_to_builder(builder_ref b, view3<tenzir::list> l) -> void {
+inline auto add_to_builder(builder_ref b, view3<tenzir::list> l) -> void {
   auto lb = b.list();
   for (const auto& v : l) {
     add_to_builder(lb, v);
   }
 }
-auto add_to_builder(builder_ref b, data_view3 v) -> void {
+inline auto add_to_builder(builder_ref b, data_view3 v) -> void {
   match(v, [&b](const auto& x) {
     add_to_builder(b, x);
   });
