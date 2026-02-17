@@ -68,16 +68,14 @@ private:
   std::vector<ast::field_path> captures_;
 };
 
-auto ensure_unary_lambda(const ast::lambda_expr& lambda, diagnostic_handler& dh)
-  -> bool {
+auto ensure_unary_lambda(const ast::lambda_expr& lambda) -> void {
   if (lambda.is_unary()) {
-    return true;
+    return;
   }
   diagnostic::error("expected unary lambda")
     .primary(lambda)
     .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
-    .emit(dh);
-  return false;
+    .throw_();
 }
 
 } // namespace
@@ -198,9 +196,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
   return trace_panic(lambda, [&] -> multi_series {
     TENZIR_ASSERT(input.array);
     TENZIR_ASSERT(input.array->values());
-    if (not ensure_unary_lambda(lambda, dh)) {
-      return series::null(null_type{}, input.array->values()->length());
-    }
+    ensure_unary_lambda(lambda);
     TENZIR_ASSERT(std::cmp_equal(slice.rows(), input.length()));
     auto visitor = capture_extractor{};
     visitor.visit(lambda.right);
@@ -249,9 +245,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
 auto eval(const ast::lambda_expr& lambda, const multi_series& input,
           diagnostic_handler& dh) -> multi_series {
   return trace_panic(lambda, [&] -> multi_series {
-    if (not ensure_unary_lambda(lambda, dh)) {
-      return series::null(null_type{}, input.length());
-    }
+    ensure_unary_lambda(lambda);
     auto result = multi_series{};
     for (const auto& part : input) {
       if (part.length() == 0) {
@@ -281,9 +275,7 @@ auto eval(const ast::lambda_expr& lambda, const multi_series& input,
 auto eval(const ast::lambda_expr& lambda, const data& input,
           diagnostic_handler& dh) -> data {
   return trace_panic(lambda, [&] -> data {
-    if (not ensure_unary_lambda(lambda, dh)) {
-      return data{caf::none};
-    }
+    ensure_unary_lambda(lambda);
     const auto result = eval(lambda, data_to_series(input, int64_t{1}), dh);
     TENZIR_ASSERT(result.parts().size() == 1);
     TENZIR_ASSERT(result.part(0).length() == 1);
