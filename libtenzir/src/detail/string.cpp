@@ -72,8 +72,9 @@ auto quoting_escaping_policy::is_inside_of_quotes(std::string_view text,
   return false;
 }
 
-auto quoting_escaping_policy::find_opening_quote(
-  std::string_view text, size_t start) const -> std::string_view::size_type {
+auto quoting_escaping_policy::find_opening_quote(std::string_view text,
+                                                 size_t start) const
+  -> std::string_view::size_type {
   auto active_escape = false;
   for (; start < text.size(); ++start) {
     const auto character = text[start];
@@ -90,8 +91,9 @@ auto quoting_escaping_policy::find_opening_quote(
   return text.npos;
 }
 
-auto quoting_escaping_policy::find_closing_quote(
-  std::string_view text, size_t opening) const -> std::string_view::size_type {
+auto quoting_escaping_policy::find_closing_quote(std::string_view text,
+                                                 size_t opening) const
+  -> std::string_view::size_type {
   auto active_escape = false;
   TENZIR_ASSERT(is_quote_character(text[opening]));
   for (size_t i = opening + 1; i < text.size(); ++i) {
@@ -161,16 +163,18 @@ auto quoting_escaping_policy::find_first_of_not_in_quotes(
   return text.npos;
 };
 
-auto quoting_escaping_policy::find_not_in_quotes(
-  std::string_view text, char target, size_t start,
-  bool consider_escaping) const -> std::string_view::size_type {
+auto quoting_escaping_policy::find_not_in_quotes(std::string_view text,
+                                                 char target, size_t start,
+                                                 bool consider_escaping) const
+  -> std::string_view::size_type {
   return find_first_of_not_in_quotes(text, std::string_view{&target, 1}, start,
                                      consider_escaping);
 }
 
-auto quoting_escaping_policy::find_not_in_quotes(
-  std::string_view text, std::string_view target,
-  size_t start) const -> std::string_view::size_type {
+auto quoting_escaping_policy::find_not_in_quotes(std::string_view text,
+                                                 std::string_view target,
+                                                 size_t start) const
+  -> std::string_view::size_type {
   auto quote_start = text.npos;
   auto active_escape = false;
   for (size_t i = start; i < text.size(); ++i) {
@@ -313,22 +317,25 @@ std::string control_char_escape(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
   auto out = std::back_inserter(result);
-  while (f != l)
+  while (f != l) {
     control_character_escaper(f, out);
+  }
   return result;
 }
 
 std::string json_escape(std::string_view str) {
-  if (str.empty())
+  if (str.empty()) {
     return "\"\"";
+  }
   std::string result;
   result.reserve(str.size() + 2);
   result += '"';
   auto f = str.begin();
   auto l = str.end();
   auto out = std::back_inserter(result);
-  while (f != l)
+  while (f != l) {
     json_escaper(f, out);
+  }
   result += '"';
   return result;
 }
@@ -338,17 +345,21 @@ std::string json_unescape(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
   // Need at least two delimiting double quotes.
-  if (f == l || l - f < 2)
+  if (f == l || l - f < 2) {
     return {};
+  }
   // Only consider double-quoted strings.
-  if (!(*f++ == '"' && (*--l == '"')))
+  if (! (*f++ == '"' && (*--l == '"'))) {
     return {};
+  }
   std::string result;
   result.reserve(str.size());
   auto out = std::back_inserter(result);
-  while (f != l)
-    if (!json_unescaper(f, l, out))
+  while (f != l) {
+    if (! json_unescaper(f, l, out)) {
       return {};
+    }
+  }
   return result;
 }
 
@@ -380,9 +391,10 @@ std::string replace_all(std::string str, std::string_view search,
 
 std::vector<std::string_view>
 split(std::string_view str, std::string_view sep, size_t max_splits) {
-  TENZIR_ASSERT(!sep.empty());
-  if (str.empty())
+  TENZIR_ASSERT(! sep.empty());
+  if (str.empty()) {
     return {""};
+  }
   std::vector<std::string_view> out;
   auto it = str.begin();
   size_t splits = 0;
@@ -392,11 +404,13 @@ split(std::string_view str, std::string_view sep, size_t max_splits) {
     it = next_sep.end();
     // Final char in `str` is a separator ->
     // add empty element
-    if (!next_sep.empty() && it == str.end())
+    if (! next_sep.empty() && it == str.end()) {
       out.emplace_back("");
+    }
   }
-  if (it != str.end())
+  if (it != str.end()) {
     out.emplace_back(it, str.end());
+  }
   return out;
 }
 
@@ -414,10 +428,11 @@ split_once(std::string_view str, std::string_view sep) {
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits) {
-  TENZIR_ASSERT(!sep.empty());
-  TENZIR_ASSERT(!esc.empty());
-  if (str.empty())
+  TENZIR_ASSERT(! sep.empty());
+  TENZIR_ASSERT(! esc.empty());
+  if (str.empty()) {
     return {""};
+  }
   std::vector<std::string> out;
   auto it = str.begin();
   std::string current{};
@@ -439,22 +454,26 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
     out.emplace_back(std::move(current));
     current = {};
     it = next_sep.end();
-    if (!next_sep.empty() && it == str.end())
+    if (! next_sep.empty() && it == str.end()) {
       out.emplace_back("");
+    }
     ++splits;
   }
-  if (it != str.end())
+  if (it != str.end()) {
     current.append(std::string_view{it, str.end()});
-  if (not current.empty())
+  }
+  if (not current.empty()) {
     out.emplace_back(std::move(current));
+  }
   return out;
 }
 
 std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {
   std::vector<std::string> strs;
   strs.resize(v.size());
-  for (size_t i = 0; i < v.size(); ++i)
+  for (size_t i = 0; i < v.size(); ++i) {
     strs[i] = v[i];
+  }
   return strs;
 }
 

@@ -83,6 +83,11 @@ public:
   /// Sets a rebalance callback.
   auto set_rebalance_cb(int64_t offset) -> caf::error;
 
+  /// Returns the underlying librdkafka configuration handle.
+  auto underlying() const -> RdKafka::Conf* {
+    return conf_.get();
+  }
+
 private:
   class rebalancer : public RdKafka::RebalanceCb {
   public:

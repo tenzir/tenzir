@@ -22,7 +22,6 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <string_view>
 #include <type_traits>
 #include <unordered_set>
@@ -419,16 +418,8 @@ auto parse_operator_parameter_list(std::string_view field_name,
   return result;
 }
 
-auto ascii_iequals(std::string_view lhs, std::string_view rhs) -> bool {
-  return lhs.size() == rhs.size()
-         && std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
-                       [](char l, char r) {
-                         return std::tolower(l) == std::tolower(r);
-                       });
-}
-
 auto is_field_path_type(const package_operator_parameter& param) -> bool {
-  return param.type && ascii_iequals(*param.type, "field");
+  return param.type && detail::ascii_icase_equal(*param.type, "field");
 }
 
 auto normalize_basic_type_name(std::string_view name) -> std::string {

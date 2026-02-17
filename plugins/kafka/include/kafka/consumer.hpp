@@ -23,6 +23,9 @@
 
 namespace tenzir::plugins::kafka {
 
+// NOTE: Legacy executor abstraction.
+// Scheduled for removal once the new executor is the default and the old
+// executor path has been removed.
 /// Wraps a `RdKafka::Consumer` in a friendly interface.
 class consumer {
 public:

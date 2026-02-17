@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/async/task.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
@@ -19,6 +20,8 @@
 #include <vector>
 
 namespace tenzir {
+
+class OpCtx;
 
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
@@ -94,5 +97,49 @@ struct aws_iam_options {
     return access_key_id.has_value();
   }
 };
+
+/// Describes whether `aws_region` is mandatory for a configured IAM block.
+/// Kafka MSK IAM auth needs an explicit region because SigV4 token signing
+/// includes the region in the signing scope.
+enum class AwsIamRegionRequirement {
+  optional,
+  required_with_iam,
+};
+
+/// Holds parsed IAM options, credential slots, and pending secret requests.
+struct ResolvedAwsIamAuth {
+  std::optional<aws_iam_options> options;
+  std::optional<resolved_aws_credentials> credentials;
+  std::vector<secret_request> secret_requests;
+};
+
+/// Resolves already-parsed AWS IAM options into runtime auth state.
+///
+/// This function:
+/// 1. validates region requirements,
+/// 2. allocates a credential container when needed,
+/// 3. collects secret requests for later resolution by the caller.
+auto resolve_aws_iam_auth(std::optional<aws_iam_options> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          diagnostic_handler& dh,
+                          AwsIamRegionRequirement requirement
+                          = AwsIamRegionRequirement::optional)
+  -> failure_or<ResolvedAwsIamAuth>;
+
+/// Parses optional `aws_iam` input and then resolves runtime auth state.
+auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          diagnostic_handler& dh,
+                          AwsIamRegionRequirement requirement
+                          = AwsIamRegionRequirement::optional)
+  -> failure_or<ResolvedAwsIamAuth>;
+
+/// Resolves AWS IAM auth and applies secret resolution through `ctx`.
+auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
+                          std::optional<located<std::string>> aws_region,
+                          OpCtx& ctx,
+                          AwsIamRegionRequirement requirement
+                          = AwsIamRegionRequirement::optional)
+  -> Task<std::optional<ResolvedAwsIamAuth>>;
 
 } // namespace tenzir

@@ -1,0 +1,8 @@
+// Smoke-test the fixture by consuming one seeded message.
+from_kafka env("KAFKA_TOPIC"),
+           count=1,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-kafka-fixture"
+           }

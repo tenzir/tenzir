@@ -19,14 +19,41 @@
 namespace tenzir::detail {
 
 constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
+
+/// Keep this implementation in the header so callers can use it in constant
+/// evaluation across translation units.
+/// Folds an ASCII byte to lowercase without locale-dependent behavior.
+[[nodiscard]] inline constexpr auto ascii_tolower(unsigned char c) noexcept
+  -> unsigned char {
+  if (c >= 'A' and c <= 'Z') {
+    return static_cast<unsigned char>(c + ('a' - 'A'));
+  }
+  return c;
+}
+
+/// Compares two strings case-insensitively for ASCII letters.
+[[nodiscard]] inline constexpr auto
+ascii_icase_equal(std::string_view lhs, std::string_view rhs) noexcept -> bool {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (ascii_tolower(static_cast<unsigned char>(lhs[i]))
+        != ascii_tolower(static_cast<unsigned char>(rhs[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// Trims leading whitespace of string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without leading whitespace
-inline auto
-trim_front(std::string_view value, const std::string_view whitespace
-                                   = ascii_whitespace) -> std::string_view {
+inline auto trim_front(std::string_view value, const std::string_view whitespace
+                                               = ascii_whitespace)
+  -> std::string_view {
   if (value.empty()) {
     return value;
   }
@@ -42,9 +69,9 @@ trim_front(std::string_view value, const std::string_view whitespace
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without trailing whitespace
-inline auto
-trim_back(std::string_view value, const std::string_view whitespace
-                                  = ascii_whitespace) -> std::string_view {
+inline auto trim_back(std::string_view value, const std::string_view whitespace
+                                              = ascii_whitespace)
+  -> std::string_view {
   if (value.empty()) {
     return value;
   }
@@ -60,9 +87,9 @@ trim_back(std::string_view value, const std::string_view whitespace
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without leading or trailing whitespace
-inline auto
-trim(std::string_view value, const std::string_view whitespace
-                             = ascii_whitespace) -> std::string_view {
+inline auto trim(std::string_view value, const std::string_view whitespace
+                                         = ascii_whitespace)
+  -> std::string_view {
   value = trim_front(value, whitespace);
   value = trim_back(value, whitespace);
   return value;
@@ -84,9 +111,11 @@ struct quoting_escaping_policy {
   // * """\n""", """\r""" => '\n'
   // * """\t""" => '\t'
   // * """\\""" => '\\'
-  static auto basic_unescape_operation(
-    std::string_view::iterator begin, std::string_view::iterator end,
-    std::back_insert_iterator<std::string> out) -> std::string_view::iterator;
+  static auto
+  basic_unescape_operation(std::string_view::iterator begin,
+                           std::string_view::iterator end,
+                           std::back_insert_iterator<std::string> out)
+    -> std::string_view::iterator;
 
   /// Checks whether position `idx` in the whole string `text` is enclosed in
   /// quotes. That is: There is an opening quote before `idx` and a closing
@@ -106,17 +135,16 @@ struct quoting_escaping_policy {
   /// @param start the index to start at
   /// @returns the index of the next opening quote character that is not
   /// escaped; `npos` otherwise
-  auto
-  find_opening_quote(std::string_view text,
-                     size_t start = 0) const -> std::string_view::size_type;
+  auto find_opening_quote(std::string_view text, size_t start = 0) const
+    -> std::string_view::size_type;
 
   /// Finds the closing quote matching the opening at `opening`
   /// @param text The text to search
   /// @param opening The index where the quote starts
   /// @pre `is_quote_character(text[opening])` holds
   /// @returns the index where the quote is closed `npos` otherwise
-  auto find_closing_quote(std::string_view text,
-                          size_t opening) const -> std::string_view::size_type;
+  auto find_closing_quote(std::string_view text, size_t opening) const
+    -> std::string_view::size_type;
 
   /// Finds the index of the first occurrence that is not enclosed my matching
   /// quotes. Quotes that are not closed are not considered quoting anything
@@ -127,11 +155,10 @@ struct quoting_escaping_policy {
   /// @pre there must not be any intersection between `quotes` and `targets`
   /// @returns index of the first occurrence of a character from `find` that
   /// is`not enclosed by matching `quotes`; `npos` otherwise
-  auto
-  find_first_of_not_in_quotes(std::string_view text, std::string_view targets,
-                              size_t start = 0,
-                              bool consider_escaping
-                              = false) const -> std::string_view::size_type;
+  auto find_first_of_not_in_quotes(std::string_view text,
+                                   std::string_view targets, size_t start = 0,
+                                   bool consider_escaping = false) const
+    -> std::string_view::size_type;
 
   /// Finds the index of the first occurrence of a character that is not
   /// enclosed my matching quotes. Quotes that are not closed are not considered
@@ -144,8 +171,8 @@ struct quoting_escaping_policy {
   /// @returns index of the first occurrence of character `find` that is`not
   /// enclosed by matching `quotes`; `npos` otherwise
   auto find_not_in_quotes(std::string_view text, char target, size_t start = 0,
-                          bool consider_escaping
-                          = false) const -> std::string_view::size_type;
+                          bool consider_escaping = false) const
+    -> std::string_view::size_type;
 
   /// Finds the index of the first occurrence of a character that is not
   /// enclosed my matching quotes. Quotes that are not closed are not considered
@@ -156,9 +183,9 @@ struct quoting_escaping_policy {
   /// @pre there must not be any intersection between `quotes` and `target`
   /// @returns index of the first occurrence of character `find` that is`not
   /// enclosed by matching `quotes`; `npos` otherwise
-  auto
-  find_not_in_quotes(std::string_view text, std::string_view target,
-                     size_t start = 0) const -> std::string_view::size_type;
+  auto find_not_in_quotes(std::string_view text, std::string_view target,
+                          size_t start = 0) const
+    -> std::string_view::size_type;
 
   /// Check whether `text` is quoted, that is it starts with a quote character
   /// and the quote is by the final character
@@ -216,7 +243,7 @@ std::string unescape(std::string_view str, Unescaper unescaper) {
   auto l = str.end();
   auto out = std::back_inserter(result);
   while (f != l) {
-    if (!unescaper(f, l, out)) {
+    if (! unescaper(f, l, out)) {
       return {};
     }
   }

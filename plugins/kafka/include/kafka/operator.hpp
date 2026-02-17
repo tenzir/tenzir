@@ -10,15 +10,13 @@
 
 #include "kafka/configuration.hpp"
 #include "kafka/consumer.hpp"
+#include "kafka/operator_args.hpp"
 #include "kafka/producer.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/chunk.hpp>
-#include <tenzir/concept/parseable/numeric.hpp>
-#include <tenzir/concept/parseable/string.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
-#include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -35,104 +33,10 @@
 using namespace std::chrono_literals;
 namespace tenzir::plugins::kafka {
 
-inline auto validate_options(const located<record>& r, diagnostic_handler& dh)
-  -> failure_or<void> {
-  for (const auto& [key, value] : r.inner) {
-    const auto f = detail::overload{
-      [](const concepts::arithmetic auto&) -> failure_or<void> {
-        return {};
-      },
-      [](const std::string&) -> failure_or<void> {
-        return {};
-      },
-      [](const secret&) -> failure_or<void> {
-        return {};
-      },
-      [](const tenzir::pattern&) -> failure_or<void> {
-        TENZIR_UNREACHABLE();
-      },
-      [&]<typename T>(const T&) -> failure_or<void> {
-        diagnostic::error("options must be a record `{{ "
-                          "string: number|string }}`")
-          .primary(r.source, "key `{}` is `{}", key,
-                   type_kind{tag_v<data_to_type_t<T>>})
-          .emit(dh);
-        return failure::promise();
-      }};
-    TRY(match(value, f));
-  }
-  return {};
-}
-
-inline auto check_sasl_mechanism(const located<record>& options,
-                                 diagnostic_handler& dh) -> failure_or<void> {
-  const auto it = options.inner.find("sasl.mechanism");
-  if (it != options.inner.end()) {
-    const auto* mechanism = try_as<std::string>(it->second);
-    if (not mechanism) {
-      diagnostic::error("option `sasl.mechanism` must be `string`")
-        .primary(options)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (*mechanism != "OAUTHBEARER") {
-      diagnostic::error("conflicting `sasl.mechanism`: `{}` "
-                        "`but `aws_iam` requires `OAUTHBEARER`",
-                        *mechanism)
-        .primary(options)
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  const auto it_ms = options.inner.find("sasl.mechanisms");
-  if (it_ms != options.inner.end()) {
-    const auto* mechanisms = try_as<std::string>(it_ms->second);
-    if (not mechanisms) {
-      diagnostic::error("option `sasl.mechanisms` must be `string`")
-        .primary(options)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (*mechanisms != "OAUTHBEARER") {
-      diagnostic::error("conflicting `sasl.mechanisms`: `{}` "
-                        "but `aws_iam` requires `OAUTHBEARER`",
-                        *mechanisms)
-        .primary(options)
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  return {};
-}
-
-// Valid values:
-// - beginning | end | stored
-// - <value>  (absolute offset)
-// - -<value> (relative offset from end)
-// - s@<value> (timestamp in ms to start at)
-// - e@<value> (timestamp in ms to stop at (not included))
-inline auto offset_parser() {
-  using namespace parsers;
-  using namespace parser_literals;
-  auto beginning = "beginning"_p->*[] {
-    return RdKafka::Topic::OFFSET_BEGINNING;
-  };
-  auto end = "end"_p->*[] {
-    return RdKafka::Topic::OFFSET_END;
-  };
-  auto stored = "stored"_p->*[] {
-    return RdKafka::Topic::OFFSET_STORED;
-  };
-  auto value = i64->*[](int64_t x) {
-    return x >= 0 ? x : RdKafka::Consumer::OffsetTail(-x);
-  };
-  // TODO: support start and stop
-  // auto start = "s@" >> i64;
-  // auto stop = "3@" >> i64;
-  // return beginning | end | stored | value | start | stop;
-  return beginning | end | stored | value;
-}
-
+// NOTE: This header implements legacy executor operators (`load_kafka` and
+// `save_kafka`) and their supporting abstractions.
+// Scheduled for removal once the new executor is the default and the old
+// executor path has been removed.
 inline void
 set_or_fail(const std::string& key, const std::string& value, location loc,
             kafka::configuration& cfg, diagnostic_handler& dh) {
@@ -500,16 +404,17 @@ public:
       TENZIR_ERROR(client.error());
       diagnostic::error(client.error()).emit(dh);
     };
-    auto guard = detail::scope_guard([client = *client]() mutable noexcept {
-      TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
-      if (auto err = client.flush(10s); err.valid()) {
-        TENZIR_WARN(err);
-      }
-      auto num_messages = client.queue_size();
-      if (num_messages > 0) {
-        TENZIR_ERROR("{} messages were not delivered", num_messages);
-      }
-    });
+    auto guard
+      = tenzir::detail::scope_guard([client = *client]() mutable noexcept {
+          TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
+          if (auto err = client.flush(10s); err.valid()) {
+            TENZIR_WARN(err);
+          }
+          auto num_messages = client.queue_size();
+          if (num_messages > 0) {
+            TENZIR_ERROR("{} messages were not delivered", num_messages);
+          }
+        });
     auto topics = std::vector<std::string>{args_.topic};
     auto key = std::string{};
     if (args_.key) {

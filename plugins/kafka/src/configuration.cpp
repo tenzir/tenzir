@@ -275,8 +275,8 @@ auto configuration::rebalancer::rebalance_cb(
     }
     if (consumer->rebalance_protocol() == "COOPERATIVE") {
       if (auto* err = consumer->incremental_assign(partitions)) {
-        TENZIR_ERROR("failed to assign incrementally: {}", err->str());
-        delete err;
+        auto err_guard = std::unique_ptr<RdKafka::Error>{err};
+        TENZIR_ERROR("failed to assign incrementally: {}", err_guard->str());
       };
     } else {
       auto err = consumer->assign(partitions);
@@ -289,8 +289,8 @@ auto configuration::rebalancer::rebalance_cb(
     // if auto.commit.enable=false
     if (consumer->rebalance_protocol() == "COOPERATIVE") {
       if (auto* err = consumer->incremental_unassign(partitions)) {
-        TENZIR_ERROR("failed to unassign incrementally: {}", err->str());
-        delete err;
+        auto err_guard = std::unique_ptr<RdKafka::Error>{err};
+        TENZIR_ERROR("failed to unassign incrementally: {}", err_guard->str());
       };
     } else {
       auto err = consumer->unassign();
