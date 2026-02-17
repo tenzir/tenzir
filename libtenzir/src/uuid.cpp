@@ -21,22 +21,23 @@ namespace tenzir {
 namespace {
 
 class random_generator {
-  using number_type = unsigned long;
-  using distribution = std::uniform_int_distribution<number_type>;
-
 public:
-  random_generator()
-    : unif_{std::numeric_limits<number_type>::min(),
-            std::numeric_limits<number_type>::max()} {
+  random_generator() {
+    auto rd = std::random_device{};
+    auto seed_data = std::array<std::random_device::result_type,
+                                std::mt19937_64::state_size>{};
+    std::generate(seed_data.begin(), seed_data.end(), std::ref(rd));
+    auto seq = std::seed_seq(seed_data.begin(), seed_data.end());
+    engine_.seed(seq);
   }
 
   uuid operator()() {
     uuid result;
-    auto r = unif_(rd_);
+    auto r = engine_();
     int i = 0;
     for (auto& x : result) {
-      if (i == sizeof(number_type)) {
-        r = unif_(rd_);
+      if (i == sizeof(uint64_t)) {
+        r = engine_();
         i = 0;
       }
       x = detail::narrow_cast<std::byte>((r >> (i * 8)) & 0xff);
@@ -52,14 +53,14 @@ public:
   }
 
 private:
-  std::random_device rd_;
-  distribution unif_;
+  std::mt19937_64 engine_;
 };
 
 } // namespace
 
 uuid uuid::random() {
-  return random_generator{}();
+  static thread_local random_generator gen;
+  return gen();
 }
 
 uuid uuid::null() {
