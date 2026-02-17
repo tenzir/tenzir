@@ -183,8 +183,8 @@ public:
   GenericIr() = default;
 
   static auto make(SharedDescription desc, ast::entity op,
-                   std::vector<ast::expression> args,
-                   compile_ctx ctx) -> failure_or<GenericIr> {
+                   std::vector<ast::expression> args, compile_ctx ctx)
+    -> failure_or<GenericIr> {
     auto result = GenericIr{};
     result.op_ = std::move(op);
     // Bind non-pipeline arguments.
@@ -410,8 +410,8 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto substitute(substitute_ctx ctx,
-                  bool instantiate) -> failure_or<void> override {
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
     // Helper to substitute an argument using its setter.
     auto substitute_arg = [&](Arg& arg, const AnySetter& setter,
                               bool is_named) -> failure_or<void> {
