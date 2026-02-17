@@ -255,6 +255,19 @@ private:
 template <class T>
 OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
+/// A type-erased upstream message: either data or a signal.
+using AnyOperatorMsg = variant<table_slice, chunk_ptr, Signal>;
+
+/// Type-erased upstream pull.
+using AnyOpPull
+  = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
+            Box<Pull<OperatorMsg<table_slice>>>>;
+
+/// Type-erased downstream push.
+using AnyOpPush
+  = variant<Box<Push<OperatorMsg<void>>>, Box<Push<OperatorMsg<chunk_ptr>>>,
+            Box<Push<OperatorMsg<table_slice>>>>;
+
 // Wraps an `Any` but without the implicit construction from values.
 struct ExplicitAny {
   explicit ExplicitAny(Any value) : value{std::move(value)} {
@@ -341,7 +354,6 @@ private:
   std::mutex mut_;
 };
 
-template <class Input, class Output>
 class Runner final : public OpCtx {
   class DiagnosticHandler : public diagnostic_handler {
   public:
@@ -358,9 +370,7 @@ class Runner final : public OpCtx {
   };
 
 public:
-  Runner(Box<Operator<Input, Output>> op,
-         Box<Pull<OperatorMsg<Input>>> pull_upstream,
-         Box<Push<OperatorMsg<Output>>> push_downstream,
+  Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
          OpId id, ChannelFactory& channel_factory, caf::actor_system& sys,
          diagnostic_handler& dh)
@@ -372,7 +382,16 @@ public:
       id_{std::move(id)},
       channel_factory_{channel_factory},
       dh_{dh},
-      sys_{sys} {
+      sys_{sys},
+      input_is_void_{
+        match(op_,
+              []<class In, class Out>(const Box<Operator<In, Out>>&) {
+                return std::same_as<In, void>;
+              })},
+      output_is_void_{
+        match(op_, []<class In, class Out>(const Box<Operator<In, Out>>&) {
+          return std::same_as<Out, void>;
+        })} {
   }
 
   Runner(Runner&&) = delete;
@@ -636,14 +655,7 @@ private:
           co_await co_match(
             std::move(*output),
             [&](table_slice output) -> Task<void> {
-              if constexpr (std::same_as<Output, void>) {
-                co_await op_->process_sub(make_view(key), std::move(output),
-                                          *this);
-              } else {
-                auto push = OpPushWrapper{push_downstream_};
-                co_await op_->process_sub(make_view(key), std::move(output),
-                                          push, *this);
-              }
+              co_await call_process_sub(make_view(key), std::move(output));
             },
             [&](Signal signal) -> Task<void> {
               co_await co_match(
@@ -737,6 +749,113 @@ private:
     return operator_scope_->spawn(std::move(task));
   }
 
+  /// Access the OperatorBase interface.
+  auto base_op() -> OperatorBase& {
+    return match(op_, [](auto& op) -> OperatorBase& {
+      return *op;
+    });
+  }
+
+  /// Pull one message from upstream, converting to AnyOperatorMsg.
+  auto pull_upstream() -> Task<Option<AnyOperatorMsg>> {
+    return co_match(
+      pull_upstream_, [](auto& pull) -> Task<Option<AnyOperatorMsg>> {
+        auto result = co_await (*pull)();
+        if (not result) {
+          co_return {};
+        }
+        co_return match(std::move(*result), [](auto x) -> AnyOperatorMsg {
+          return std::move(x);
+        });
+      });
+  }
+
+  /// Push a signal downstream, regardless of output type.
+  auto push_signal(Signal signal) -> Task<void> {
+    co_await co_match(
+      push_downstream_,
+      [&]<class T>(Box<Push<OperatorMsg<T>>>& push) -> Task<void> {
+        co_await push(std::move(signal));
+      });
+  }
+
+  /// Get the operator's type name for logging.
+  auto op_name() const -> const char* {
+    return match(op_, [](const auto& op) {
+      return typeid(*op).name();
+    });
+  }
+
+  auto call_process_task(Any result) -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->process_task(std::move(result), *this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->process_task(std::move(result), wrapper, *this);
+        }
+      });
+  }
+
+  auto call_finalize() -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->finalize(*this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->finalize(wrapper, *this);
+        }
+      });
+  }
+
+  auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->process_sub(key, std::move(slice), *this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->process_sub(key, std::move(slice), wrapper, *this);
+        }
+      });
+  }
+
+  auto call_finish_sub(SubKeyView key) -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->finish_sub(key, *this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->finish_sub(key, wrapper, *this);
+        }
+      });
+  }
+
+  template <class DataInput>
+  auto call_process(DataInput input) -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<In, DataInput>) {
+          if constexpr (std::same_as<Out, void>) {
+            co_await op->process(input, *this);
+          } else {
+            auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+            auto wrapper = OpPushWrapper{push};
+            co_await op->process(input, wrapper, *this);
+          }
+        } else {
+          TENZIR_UNREACHABLE();
+        }
+      });
+  }
+
   auto run() -> Task<void> {
     // co_await folly::coro::co_scope_exit(
     //   [](Runner* self) -> Task<void> {
@@ -758,17 +877,17 @@ private:
           auto ok = f.begin_object(caf::invalid_type_id, "");
           TENZIR_ASSERT(ok);
           auto serde = Serde{f};
-          op_->snapshot(serde);
+          base_op().snapshot(serde);
           ok = f.end_object();
           TENZIR_ASSERT(ok);
         }
       }
-      co_await op_->start(*this);
+      co_await base_op().start(*this);
       LOGI("-> post start");
       queue_.spawn([this] -> Task<ExplicitAny> {
-        co_return ExplicitAny{co_await op_->await_task(*this)};
+        co_return ExplicitAny{co_await base_op().await_task(*this)};
       });
-      queue_.spawn(pull_upstream_());
+      queue_.spawn(pull_upstream());
       queue_.spawn(from_control_.recv());
       // Process until we got a shutdown request and the upstream channel
       // closed. The upstream closure cascades: each operator waits for its
@@ -793,15 +912,15 @@ private:
 
   auto tick() -> Task<void> {
     ticks_ += 1;
-    LOGI("tick {} in {} ({})", ticks_, id_, typeid(*op_).name());
-    switch (op_->state()) {
+    LOGI("tick {} in {} ({})", ticks_, id_, op_name());
+    switch (base_op().state()) {
       case OperatorState::done:
         co_await handle_done();
         break;
       case OperatorState::unspecified:
         break;
     }
-    LOGV("waiting in {} for message", typeid(*op_).name());
+    LOGV("waiting in {} for message", op_name());
     auto message = (co_await queue_.next()).unwrap();
     co_await co_match(std::move(message), [&](auto message) {
       return process(std::move(message));
@@ -810,67 +929,52 @@ private:
 
   auto process(ExplicitAny message) -> Task<void> {
     // The task provided by the inner implementation completed.
-    LOGV("got future result in {}", typeid(*op_).name());
-    if constexpr (std::same_as<Output, void>) {
-      co_await op_->process_task(std::move(message.value), *this);
-    } else {
-      auto push = OpPushWrapper{push_downstream_};
-      co_await op_->process_task(std::move(message.value), push, *this);
-    }
-    if (op_->state() == OperatorState::done) {
+    LOGV("got future result in {}", op_name());
+    co_await call_process_task(std::move(message.value));
+    if (base_op().state() == OperatorState::done) {
       co_await handle_done();
     } else {
       queue_.spawn([this] -> Task<ExplicitAny> {
-        co_return ExplicitAny{co_await op_->await_task(*this)};
+        co_return ExplicitAny{co_await base_op().await_task(*this)};
       });
     }
-    LOGV("handled future result in {}", typeid(*op_).name());
+    LOGV("handled future result in {}", op_name());
   }
 
-  auto process(Option<OperatorMsg<Input>> message) -> Task<void> {
+  auto process(Option<AnyOperatorMsg> message) -> Task<void> {
     if (not message) {
       upstream_done_ = true;
       co_return;
     }
     co_await co_match(
       std::move(*message),
-      // The template indirection is necessary to prevent a `void` parameter.
-      [&]<std::same_as<Input> Input2>(Input2 input) -> Task<void> {
-        if constexpr (std::same_as<Input, void>) {
-          TENZIR_UNREACHABLE();
-        } else {
-          LOGV("got input in {}", typeid(*op_).name());
-          if (is_done_) {
-            // No need to forward the input.
-            co_return;
-          }
-          if constexpr (std::same_as<Output, void>) {
-            co_await op_->process(input, *this);
-          } else {
-            auto push = OpPushWrapper{push_downstream_};
-            co_await op_->process(input, push, *this);
-          }
+      [&](table_slice input) -> Task<void> {
+        LOGV("got input in {}", op_name());
+        if (is_done_) {
+          co_return;
         }
+        co_await call_process(std::move(input));
+      },
+      [&](chunk_ptr input) -> Task<void> {
+        LOGV("got input in {}", op_name());
+        if (is_done_) {
+          co_return;
+        }
+        co_await call_process(std::move(input));
       },
       [&](Signal signal) -> Task<void> {
         co_await co_match(
           signal,
           [&](EndOfData) -> Task<void> {
-            LOGV("got end of data in {}", typeid(*op_).name());
-            if constexpr (std::same_as<Input, void>) {
-              TENZIR_UNREACHABLE();
-            } else {
-              // TODO: The default behavior is to transition to done?
-              co_await handle_done();
-            }
-            co_return;
+            LOGV("got end of data in {}", op_name());
+            TENZIR_ASSERT(not input_is_void_);
+            co_await handle_done();
           },
           [&](Checkpoint checkpoint) -> Task<void> {
             co_await begin_checkpoint(checkpoint);
-            co_return;
           });
       });
-    queue_.spawn(pull_upstream_());
+    queue_.spawn(pull_upstream());
   }
 
   /// Checkpoint the operator and all of its subpipelines.
@@ -917,7 +1021,7 @@ private:
   /// subpipelines that already existed when we started the checkpoint. In the
   /// meantime, we must take care to not destroy those subpipelines.
   auto begin_checkpoint(Checkpoint checkpoint) -> Task<void> {
-    LOGI("got checkpoint {} in {}", checkpoint.id, typeid(*op_).name());
+    LOGI("got checkpoint {} in {}", checkpoint.id, op_name());
     co_await to_control_.send(ToControl::checkpoint_begin);
     {
       auto buffer = caf::byte_buffer{};
@@ -925,21 +1029,20 @@ private:
       auto ok = f.begin_object(caf::invalid_type_id, "");
       TENZIR_ASSERT(ok);
       auto serde = Serde{f};
-      op_->snapshot(serde);
+      base_op().snapshot(serde);
       ok = f.end_object();
       TENZIR_ASSERT(ok);
       co_await this->save_checkpoint(chunk::make(std::move(buffer)));
     }
     // TODO: Also checkpoint `subpipelines_`. What else?
     if (subpipelines_.empty()) {
-      LOGI("finishing checkpoint with no subpipelines in {} ",
-           typeid(*op_).name());
+      LOGI("finishing checkpoint with no subpipelines in {} ", op_name());
       co_await to_control_.send(ToControl::checkpoint_done);
-      co_await push_downstream_(std::move(checkpoint));
+      co_await push_signal(Signal{std::move(checkpoint)});
       co_return;
     }
     LOGI("checkpointing {} subpipelines in {}", subpipelines_.size(),
-         typeid(*op_).name());
+         op_name());
     for (auto& [_, sub] : subpipelines_) {
       co_await sub.handle.send(checkpoint);
       sub.wants_commit = true;
@@ -956,12 +1059,12 @@ private:
     co_await co_match(
       std::move(*message),
       [&](PostCommit) -> Task<void> {
-        LOGV("got post commit in {}", typeid(*op_).name());
-        co_await op_->post_commit();
+        LOGV("got post commit in {}", op_name());
+        co_await base_op().post_commit();
       },
       [&](Shutdown) -> Task<void> {
         // FIXME: Cleanup on shutdown?
-        LOGV("got shutdown in {}", typeid(*op_).name());
+        LOGV("got shutdown in {}", op_name());
         got_shutdown_request_ = true;
         // TODO: Should we really just forward this here?
         for (auto& [_, sub] : subpipelines_) {
@@ -991,12 +1094,7 @@ private:
             co_await try_ready_for_shutdown();
           }
         };
-        if constexpr (std::same_as<Output, void>) {
-          co_await op_->finish_sub(make_view(message.key), *this);
-        } else {
-          auto push = OpPushWrapper{push_downstream_};
-          co_await op_->finish_sub(make_view(message.key), push, *this);
-        }
+        co_await call_finish_sub(make_view(message.key));
         auto it = subpipelines_.find(message.key);
         TENZIR_ASSERT(it != subpipelines_.end());
         TENZIR_ASSERT(not it->second.finished);
@@ -1029,19 +1127,14 @@ private:
     if (is_done_) {
       co_return;
     }
-    LOGV("running done in {}", typeid(*op_).name());
+    LOGV("running done in {}", op_name());
     is_done_ = true;
     // Immediately inform control that we want no more data.
-    if constexpr (not std::same_as<Input, void>) {
+    if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
     // Then finalize the operator, which can still produce output.
-    if constexpr (std::same_as<Output, void>) {
-      co_await op_->finalize(*this);
-    } else {
-      auto push = OpPushWrapper{push_downstream_};
-      co_await op_->finalize(push, *this);
-    }
+    co_await call_finalize();
     // Tell all subpipelines to shut down. Note that the previous step could
     // have still pushed data into them. The main loop continues running to
     // drain remaining subpipeline output and collect SubPipelineFinished
@@ -1078,9 +1171,9 @@ private:
     if (not is_done_ or not all_subpipelines_finished()) {
       co_return;
     }
-    if constexpr (not std::same_as<Output, void>) {
+    if (not output_is_void_) {
       LOGW("sending end of data from {}", id_);
-      co_await push_downstream_(EndOfData{});
+      co_await push_signal(EndOfData{});
     }
   }
 
@@ -1092,15 +1185,17 @@ private:
     co_await to_control_.send(ToControl::ready_for_shutdown);
   }
 
-  Box<Operator<Input, Output>> op_;
-  Box<Pull<OperatorMsg<Input>>> pull_upstream_;
-  Box<Push<OperatorMsg<Output>>> push_downstream_;
+  AnyOperator op_;
+  AnyOpPull pull_upstream_;
+  AnyOpPush push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   OpId id_;
   ChannelFactory& channel_factory_;
   DiagnosticHandler dh_;
   caf::actor_system& sys_;
+  bool input_is_void_;
+  bool output_is_void_;
   std::shared_ptr<const registry> reg_ = global_registry();
 
   size_t next_subpipeline_id_ = 0;
@@ -1114,8 +1209,8 @@ private:
   /// framing is even kept alive after the operator itself finished.
   AsyncScope* operator_scope_ = nullptr;
 
-  QueueScope<variant<ExplicitAny, Option<OperatorMsg<Input>>,
-                     Option<FromControl>, SubPipelineEvent>>
+  QueueScope<variant<ExplicitAny, Option<AnyOperatorMsg>, Option<FromControl>,
+                     SubPipelineEvent>>
     queue_;
   bool got_shutdown_request_ = false;
   bool upstream_done_ = false;
@@ -1135,10 +1230,10 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   ChannelFactory& channel_factory, caf::actor_system& sys,
                   diagnostic_handler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
-  co_await Runner<Input, Output>{
-    std::move(op),
-    std::move(pull_upstream),
-    std::move(push_downstream),
+  co_await Runner{
+    AnyOperator{std::move(op)},
+    AnyOpPull{std::move(pull_upstream)},
+    AnyOpPush{std::move(push_downstream)},
     std::move(from_control),
     std::move(to_control),
     std::move(id),
@@ -1151,16 +1246,14 @@ auto run_operator(Box<Operator<Input, Output>> op,
 
 } // namespace
 
-template <class Input, class Output>
 class ChainRunner {
 public:
-  ChainRunner(OperatorChain<Input, Output> chain,
-              Box<Pull<OperatorMsg<Input>>> pull_upstream,
-              Box<Push<OperatorMsg<Output>>> push_downstream,
-              Receiver<FromControl> from_control, Sender<ToControl> to_control,
-              PipeId id, ChannelFactory& channel_factory,
-              caf::actor_system& sys, MutexDiagnosticHandler& dh)
-    : operators_{std::move(chain).unwrap()},
+  ChainRunner(std::vector<AnyOperator> operators, AnyOpPull pull_upstream,
+              AnyOpPush push_downstream, Receiver<FromControl> from_control,
+              Sender<ToControl> to_control, PipeId id,
+              ChannelFactory& channel_factory, caf::actor_system& sys,
+              MutexDiagnosticHandler& dh)
+    : operators_{std::move(operators)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
@@ -1188,25 +1281,20 @@ public:
 
 private:
   auto spawn_operators() -> void {
-    auto next_input
-      = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
-                Box<Pull<OperatorMsg<table_slice>>>>{std::move(pull_upstream_)};
+    auto next_input = std::move(pull_upstream_);
     // TODO: Polish this.
     for (auto& op : operators_) {
       auto index = detail::narrow<size_t>(&op - operators_.data());
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         LOGI("got {}", typeid(*op).name());
-        auto input = as<Box<Pull<OperatorMsg<In>>>>(std::move(next_input));
+        auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(next_input));
         auto [output_sender, output_receiver]
           = channel_factory_.make<Out>(id_.op(index).to(id_.op(index + 1)));
         // TODO: This is a horrible hack.
         auto last = index == operators_.size() - 1;
         if (last) {
-          if constexpr (std::same_as<Out, Output>) {
-            output_sender = std::move(push_downstream_);
-          } else {
-            TENZIR_UNREACHABLE();
-          }
+          output_sender
+            = std::move(as<Box<Push<OperatorMsg<Out>>>>(push_downstream_));
         }
         auto [from_control_sender, from_control_receiver]
           = bounded_channel<FromControl>(16);
@@ -1349,8 +1437,8 @@ private:
   }
 
   std::vector<AnyOperator> operators_;
-  Box<Pull<OperatorMsg<Input>>> pull_upstream_;
-  Box<Push<OperatorMsg<Output>>> push_downstream_;
+  AnyOpPull pull_upstream_;
+  AnyOpPush push_downstream_;
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   PipeId id_;
@@ -1386,9 +1474,9 @@ auto run_chain(OperatorChain<Input, Output> chain,
   auto mdh = MutexDiagnosticHandler{dh};
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
-    std::move(chain),
-    std::move(pull_upstream),
-    std::move(push_downstream),
+    std::move(chain).unwrap(),
+    AnyOpPull{std::move(pull_upstream)},
+    AnyOpPush{std::move(push_downstream)},
     std::move(from_control),
     std::move(to_control),
     std::move(id),
