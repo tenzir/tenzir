@@ -410,27 +410,12 @@ private:
 
 } // namespace
 
-class read_lines_plugin final : public virtual operator_parser_plugin,
-                                public virtual operator_factory_plugin,
-                                public virtual OperatorPlugin {
+class read_lines_plugin final
+  : public virtual operator_plugin2<parser_adapter<lines_parser>>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_lines";
-  }
-
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"read_lines", "https://docs.tenzir.com/"
-                                                "operators/read_lines"};
-    auto args = ReadLinesArgs{};
-    parser.add("-b,--binary", args.binary);
-    parser.add("-s,--skip-empty", args.skip_empty);
-    parser.parse(p);
-    return std::make_unique<parser_adapter<lines_parser>>(
-      lines_parser{parser_args{}});
   }
 
   auto make(invocation inv, session ctx) const
