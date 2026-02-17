@@ -229,14 +229,24 @@ public:
     auto d = Describer<DropArgs, Drop>{};
     auto fields = d.variadic("fields", &DropArgs::fields, "field");
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      TRY(auto value, ctx.get(fields));
-      auto fp = ast::field_path::try_from(value);
-      if (! fp) {
+      auto values = ctx.get_all(fields);
+      auto locations = ctx.get_locations(fields);
+      TENZIR_ASSERT(values.size() == locations.size());
+      for (auto i = size_t{0}; i < values.size(); ++i) {
+        if (not values[i]) {
+          diagnostic::error("value must be a valid field path")
+            .primary(locations[i])
+            .emit(ctx);
+          continue;
+        }
+        auto fp = ast::field_path::try_from(*values[i]);
+        if (fp) {
+          continue;
+        }
         diagnostic::error("value must be a valid field path")
-          .primary(ctx.get_location(fields).value())
-          .note("value was {:?}", value)
+          .primary(locations[i])
+          .note("value was {:?}", *values[i])
           .emit(ctx);
-        // TODO: map string -> field_path here
       }
       return {};
     });
