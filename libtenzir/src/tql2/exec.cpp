@@ -1156,6 +1156,14 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   // TODO
   TENZIR_ASSERT(chain);
   auto exec_ctx = TestExecCtx{profile_path.has_value()};
+  auto emit_fn = [](std::span<const metrics_snapshot_entry> entries) {
+    for (auto const& e : entries) {
+      TENZIR_INFO("metrics: key={} value={} direction={} bytes={}", e.label.key,
+                  e.label.value,
+                  e.direction == metrics_direction::read ? "read" : "write",
+                  e.value);
+    }
+  };
   // Profiling: sample channel and executor stats periodically if requested.
   auto samples = std::vector<ProfileSample>{};
   auto stop_flag = std::atomic<bool>{false};
@@ -1199,7 +1207,8 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
     });
   }
   LOGW("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain), exec_ctx, sys, dh);
+  co_await run_pipeline(std::move(*chain), exec_ctx, sys, dh,
+                        std::move(emit_fn));
   LOGW("blocking on pipeline done");
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
