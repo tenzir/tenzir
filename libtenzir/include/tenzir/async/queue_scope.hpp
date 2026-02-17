@@ -9,11 +9,10 @@
 #pragma once
 
 #include "tenzir/async/scope.hpp"
+#include "tenzir/option.hpp"
 
 #include <folly/coro/AsyncGenerator.h>
 #include <folly/coro/BoundedQueue.h>
-
-#include <optional>
 
 namespace tenzir {
 
@@ -90,7 +89,7 @@ public:
           co_await results_.enqueue(AsyncResult<T>{std::move(*next)});
         }
         // We still need to enqueue something to give `next` a chance to resume.
-        co_await results_.enqueue(std::nullopt);
+        co_await results_.enqueue(None{});
       });
   }
 
@@ -125,8 +124,16 @@ public:
         co_await results_.enqueue(AsyncResult<T>{std::move(*next)});
       }
       // We still need to enqueue something to give `next` a chance to resume.
-      co_await results_.enqueue(std::nullopt);
+      co_await results_.enqueue(None{});
     });
+  }
+
+  /// Directly insert something into the queue without a task.
+  ///
+  /// Use this if you need to ensure that some item is ordered before others.
+  auto insert(T x) -> Task<void> {
+    remaining_ += 1;
+    co_await results_.enqueue(std::move(x));
   }
 
   /// Cancel all remaining tasks.
@@ -140,15 +147,13 @@ public:
     return scope_ != nullptr and scope_->is_cancelled();
   }
 
-  using Next = std::conditional_t<std::is_same_v<T, void>, std::monostate, T>;
-
-  /// Retrieve the next task result or return `nullopt` if none remain.
+  /// Retrieve the next task result or return `None` if none remain.
   ///
   /// This function can be called while the scope is active, but also when it
   /// already got deactivated. If a task failed, we rethrow the exception.
   /// TODO: What if it got cancelled?
   /// TODO: Is this itself cancel-safe?
-  auto next() -> Task<std::optional<Next>> {
+  auto next() -> Task<Option<VoidToUnit<T>>> {
     while (remaining_ > 0) {
       auto result = co_await results_.dequeue();
       remaining_ -= 1;
@@ -165,12 +170,12 @@ public:
       }
       if constexpr (std::same_as<T, void>) {
         std::move(*result).unwrap();
-        co_return std::monostate{};
+        co_return Unit{};
       } else {
         co_return std::move(*result).unwrap();
       }
     }
-    co_return std::nullopt;
+    co_return None{};
   }
 
   auto scope() -> AsyncScope& {
@@ -180,7 +185,7 @@ public:
 
 private:
   std::atomic<size_t> remaining_ = 0;
-  folly::coro::BoundedQueue<std::optional<AsyncResult<T>>> results_{1};
+  folly::coro::BoundedQueue<Option<AsyncResult<T>>> results_{1};
   AsyncScope* scope_ = nullptr;
 };
 
