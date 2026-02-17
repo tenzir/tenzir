@@ -1,0 +1,7 @@
+error: expected unary lambda for `where`
+ --> tests/functions/sort/binary_lambda_rejected_elsewhere.tql:6:23
+  |
+6 | select ys = xs.where((left, right) => left > right)
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = hint: binary lambdas are only supported for `sort(..., cmp=...)`

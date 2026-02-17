@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {xs: [1, 2, 3]}
+select ys = xs.where((left, right) => left > right)

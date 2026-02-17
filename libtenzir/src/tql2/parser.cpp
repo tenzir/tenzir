@@ -399,8 +399,11 @@ public:
             diagnostic::error("expected identifier").primary(expr).throw_();
           }
           auto right = parse_expression();
-          expr = lambda_expr{std::move(left->id), arrow.location,
-                             std::move(right)};
+          expr = lambda_expr{
+            std::vector<identifier>{std::move(left->id)},
+            arrow.location,
+            std::move(right),
+          };
           continue;
         }
       }
@@ -597,6 +600,24 @@ public:
   auto parse_primary_expression() -> ast::expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
+      auto stash = next_;
+      if (silent_peek(tk::identifier)) {
+        auto params = std::vector<identifier>{};
+        params.push_back(expect(tk::identifier).as_identifier());
+        while (accept(tk::comma)) {
+          params.push_back(expect(tk::identifier).as_identifier());
+        }
+        if (accept(tk::rpar) and peek(tk::fat_arrow)) {
+          auto arrow = expect(tk::fat_arrow);
+          auto right = parse_expression();
+          return lambda_expr{
+            std::move(params),
+            arrow.location,
+            std::move(right),
+          };
+        }
+      }
+      next_ = stash;
       auto result = parse_expression();
       expect(tk::rpar);
       return result;

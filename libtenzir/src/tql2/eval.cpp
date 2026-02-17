@@ -68,6 +68,18 @@ private:
   std::vector<ast::field_path> captures_;
 };
 
+auto ensure_unary_lambda(const ast::lambda_expr& lambda, diagnostic_handler& dh)
+  -> bool {
+  if (lambda.is_unary()) {
+    return true;
+  }
+  diagnostic::error("expected unary lambda")
+    .primary(lambda)
+    .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+    .emit(dh);
+  return false;
+}
+
 } // namespace
 
 auto resolve(const ast::field_path& sel, const table_slice& slice)
@@ -186,6 +198,9 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
   return trace_panic(lambda, [&] -> multi_series {
     TENZIR_ASSERT(input.array);
     TENZIR_ASSERT(input.array->values());
+    if (not ensure_unary_lambda(lambda, dh)) {
+      return series::null(null_type{}, input.array->values()->length());
+    }
     TENZIR_ASSERT(std::cmp_equal(slice.rows(), input.length()));
     auto visitor = capture_extractor{};
     visitor.visit(lambda.right);
@@ -200,7 +215,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
       = input.array->values()->Slice(values_start, values_end - values_start);
     auto capture_offsets = std::vector<offset>{};
     for (const auto& capture : captures) {
-      if (capture.path().front().id.name == lambda.left.name) {
+      if (capture.path().front().id.name == lambda.param(0).name) {
         continue;
       }
       auto resolved = resolve(capture, slice.schema());
@@ -211,8 +226,8 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
     if (capture_offsets.empty()) {
       return eval(lambda, series{ty, values}, dh);
     }
-    const auto to
-      = check(ast::field_path::try_from(ast::root_field{lambda.left, false}));
+    const auto to = check(
+      ast::field_path::try_from(ast::root_field{lambda.param(0), false}));
     auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
     check(b.Reserve(values->length()));
     for (auto i = int64_t{}; i < input.array->length(); ++i) {
@@ -234,6 +249,9 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
 auto eval(const ast::lambda_expr& lambda, const multi_series& input,
           diagnostic_handler& dh) -> multi_series {
   return trace_panic(lambda, [&] -> multi_series {
+    if (not ensure_unary_lambda(lambda, dh)) {
+      return series::null(null_type{}, input.length());
+    }
     auto result = multi_series{};
     for (const auto& part : input) {
       if (part.length() == 0) {
@@ -245,7 +263,7 @@ auto eval(const ast::lambda_expr& lambda, const multi_series& input,
       auto schema = type{
         "lambda",
         record_type{
-          {lambda.left.name, part.type},
+          {lambda.param(0).name, part.type},
         },
       };
       auto arrow_schema = schema.to_arrow_schema();
@@ -263,6 +281,9 @@ auto eval(const ast::lambda_expr& lambda, const multi_series& input,
 auto eval(const ast::lambda_expr& lambda, const data& input,
           diagnostic_handler& dh) -> data {
   return trace_panic(lambda, [&] -> data {
+    if (not ensure_unary_lambda(lambda, dh)) {
+      return data{caf::none};
+    }
     const auto result = eval(lambda, data_to_series(input, int64_t{1}), dh);
     TENZIR_ASSERT(result.parts().size() == 1);
     TENZIR_ASSERT(result.part(0).length() == 1);

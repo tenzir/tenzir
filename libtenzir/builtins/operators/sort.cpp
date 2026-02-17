@@ -24,6 +24,8 @@
 #include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 
+#include <algorithm>
+#include <optional>
 #include <ranges>
 #include <string_view>
 
@@ -31,8 +33,71 @@ namespace tenzir::plugins::sort {
 
 namespace {
 
-auto sort_list(const series& input) -> series {
+struct comparator_warning_state {
+  bool invalid_result_length = false;
+  bool null_result = false;
+  bool non_boolean_result = false;
+};
+
+auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& left,
+                         const data& right,
+                         comparator_warning_state& warning_state, session ctx)
+  -> bool {
+  TENZIR_ASSERT(cmp.is_binary());
+  auto left_series = data_to_series(left, int64_t{1});
+  auto right_series = data_to_series(right, int64_t{1});
+  auto schema = type{
+    "cmp",
+    record_type{
+      {cmp.param(0).name, left_series.type},
+      {cmp.param(1).name, right_series.type},
+    },
+  };
+  auto slice = table_slice{
+    arrow::RecordBatch::Make(schema.to_arrow_schema(), int64_t{1},
+                             arrow::ArrayVector{
+                               left_series.array,
+                               right_series.array,
+                             }),
+    schema,
+  };
+  auto result = eval(cmp.right, slice, ctx.dh());
+  if (result.length() != 1) {
+    if (not warning_state.invalid_result_length) {
+      diagnostic::warning("`cmp` lambda must return exactly one value")
+        .primary(cmp.right)
+        .emit(ctx);
+      warning_state.invalid_result_length = true;
+    }
+    return false;
+  }
+  auto value = materialize(result.value_at(0));
+  if (auto* boolean = try_as<bool>(&value)) {
+    return *boolean;
+  }
+  if (is<caf::none_t>(value)) {
+    if (not warning_state.null_result) {
+      diagnostic::warning("`cmp` lambda must return `bool`, got `null`")
+        .primary(cmp.right)
+        .emit(ctx);
+      warning_state.null_result = true;
+    }
+    return false;
+  }
+  if (not warning_state.non_boolean_result) {
+    diagnostic::warning("`cmp` lambda must return `bool`")
+      .primary(cmp.right)
+      .emit(ctx);
+    warning_state.non_boolean_result = true;
+  }
+  return false;
+}
+
+auto sort_list(const series& input, bool descending,
+               const std::optional<ast::lambda_expr>& cmp, session ctx)
+  -> series {
   auto builder = series_builder{input.type};
+  auto warning_state = comparator_warning_state{};
   for (const auto& value :
        values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
     if (not value) {
@@ -40,7 +105,25 @@ auto sort_list(const series& input) -> series {
       continue;
     }
     auto materialized = materialize(*value);
-    std::ranges::sort(materialized);
+    if (cmp) {
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [&](const data& lhs, const data& rhs) {
+                         const auto& left = descending ? rhs : lhs;
+                         const auto& right = descending ? lhs : rhs;
+                         return eval_sort_predicate(*cmp, left, right,
+                                                    warning_state, ctx);
+                       });
+    } else if (descending) {
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [](const data& lhs, const data& rhs) {
+                         return rhs < lhs;
+                       });
+    } else {
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [](const data& lhs, const data& rhs) {
+                         return lhs < rhs;
+                       });
+    }
     builder.data(materialized);
   }
   return builder.finish_assert_one_array();
@@ -658,20 +741,51 @@ public:
   auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
+    auto order = std::string{"asc"};
+    auto cmp = std::optional<ast::lambda_expr>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "list|record")
+          .named_optional("order", order, "asc|desc")
+          .named("cmp", cmp, "(left, right) => bool")
           .parse(inv, ctx));
-    return function_use::make([call = inv.call,
-                               expr = std::move(expr)](auto eval, session ctx) {
+    bool descending = false;
+    if (order == "asc") {
+      descending = false;
+    } else if (order == "desc") {
+      descending = true;
+    } else {
+      diagnostic::error("unsupported `order`: {}", order)
+        .primary(inv.call)
+        .hint("`order` must be either `asc` or `desc`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (cmp and not cmp->is_binary()) {
+      diagnostic::error("`cmp` must be a binary lambda")
+        .primary(*cmp)
+        .hint("provide `cmp=(left, right) => ...`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([call = inv.call, expr = std::move(expr),
+                               descending,
+                               cmp = std::move(cmp)](auto eval, session ctx) {
       return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{
           [&](const arrow::NullArray&) {
             return arg;
           },
           [&](const arrow::ListArray&) {
-            return sort_list(arg);
+            return sort_list(arg, descending, cmp, ctx);
           },
           [&](const arrow::StructArray&) {
+            if (descending or cmp) {
+              diagnostic::warning(
+                "`order` and `cmp` are only applied when sorting lists")
+                .primary(call)
+                .note("record fields are always sorted ascending by key")
+                .emit(ctx);
+            }
             return sort_record(arg);
           },
           [&](const auto&) {

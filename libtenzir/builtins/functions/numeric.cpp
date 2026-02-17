@@ -132,7 +132,7 @@ public:
   explicit count_instance(std::optional<ast::expression> expr,
                           std::optional<ast::lambda_expr> lambda)
     : expr_{std::move(expr)}, lambda_{std::move(lambda)} {
-    if (lambda_) {
+    if (lambda_ and lambda_->is_unary()) {
       // Aggregation functions do not evaluate their arguments for null values,
       // so we patch the lambda expression from `left => right` to `left =>
       // right if left != null else false`
@@ -248,6 +248,13 @@ public:
           .positional("x", expr, "any")
           .positional("predicate", lambda, "any => bool")
           .parse(inv, ctx));
+    if (not lambda.is_unary()) {
+      diagnostic::error("expected unary lambda for `count_if`")
+        .primary(lambda)
+        .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::make_unique<count_instance>(std::move(expr), std::move(lambda));
   }
 };

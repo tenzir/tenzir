@@ -1,0 +1,7 @@
+error: `cmp` must be a binary lambda
+ --> tests/functions/sort/cmp_requires_binary_lambda.tql:6:26
+  |
+6 | select ys = sort(xs, cmp=x => x < x)
+  |                          ^^^^^^^^^^ 
+  |
+  = hint: provide `cmp=(left, right) => ...`

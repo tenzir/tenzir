@@ -382,25 +382,46 @@ struct lambda_expr {
   lambda_expr() = default;
 
   lambda_expr(identifier left, location arrow, expression right)
-    : left{std::move(left)}, arrow{arrow}, right{std::move(right)} {
+    : params{std::move(left)}, arrow{arrow}, right{std::move(right)} {
   }
 
-  identifier left;
+  lambda_expr(std::vector<identifier> params, location arrow, expression right)
+    : params{std::move(params)}, arrow{arrow}, right{std::move(right)} {
+  }
+
+  std::vector<identifier> params;
   location arrow;
   expression right;
 
   friend auto inspect(auto& f, lambda_expr& x) -> bool {
-    return f.object(x).fields(f.field("left", x.left),
+    return f.object(x).fields(f.field("params", x.params),
                               f.field("arrow", x.arrow),
                               f.field("right", x.right));
   }
 
+  auto is_unary() const -> bool {
+    return params.size() == 1;
+  }
+
+  auto is_binary() const -> bool {
+    return params.size() == 2;
+  }
+
+  auto param(size_t idx) const -> const identifier& {
+    TENZIR_ASSERT(idx < params.size());
+    return params[idx];
+  }
+
   auto left_as_field_path() const -> field_path {
-    return check(field_path::try_from(root_field{left, false}));
+    TENZIR_ASSERT(is_unary());
+    return check(field_path::try_from(root_field{params.front(), false}));
   }
 
   auto get_location() const -> location {
-    return left.get_location().combine(right);
+    if (params.empty()) {
+      return arrow.combine(right);
+    }
+    return params.front().get_location().combine(right);
   }
 };
 
@@ -913,7 +934,7 @@ protected:
   }
 
   void enter(lambda_expr& x) {
-    go(x.left);
+    go(x.params);
     go(x.right);
   }
 

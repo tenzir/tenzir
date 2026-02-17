@@ -334,6 +334,13 @@ struct arguments {
           .positional("list", args.field, "list")
           .positional(lambda_name, args.lambda, lambda_hint)
           .parse(inv, sp.as_session())) {
+      if (not args.lambda.is_unary()) {
+        diagnostic::error("expected unary lambda for `{}`", name)
+          .primary(args.lambda)
+          .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+          .emit(ctx);
+        return failure::promise();
+      }
       std::move(dh).forward_to(ctx);
       return args;
     }
@@ -354,7 +361,7 @@ struct arguments {
         diagnostic::error("expected identifier").primary(expr).emit(ctx);
         return failure::promise();
       }
-      args.lambda.left = std::move(field->id);
+      args.lambda.params = {std::move(field->id)};
       return args;
     }
     for (auto& diag : diags) {
