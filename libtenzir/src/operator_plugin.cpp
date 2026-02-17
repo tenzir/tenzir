@@ -463,6 +463,18 @@ public:
                          and not is<Setter<ast::field_path>>(setter);
       if (is_constant) {
         if (instantiate or expr.is_deterministic(ctx)) {
+          if (is<Setter<ast::field_path>>(setter)) {
+            auto selector = ast::field_path::try_from(expr);
+            if (not selector) {
+              diagnostic::error("expected field path")
+                .primary(expr)
+                .docs(desc_->docs)
+                .emit(ctx);
+              return failure::promise();
+            }
+            arg = std::move(*selector);
+            return {};
+          }
           // Handle boolean flags for named arguments.
           if (is_named and is<Setter<located<bool>>>(setter)) {
             TRY(auto value, const_eval(expr, ctx));
