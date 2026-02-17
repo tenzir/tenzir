@@ -290,6 +290,13 @@ public:
       return self.from_control.send(std::move(from_control));
     });
   }
+
+  /// Destroy the push handle to close the subpipeline's upstream channel.
+  void close_push() {
+    co_match(*this, [&]<class Input>(SubPipeline<Input>& self) {
+      auto _ = std::move(self.push);
+    });
+  }
 };
 
 struct SubPipelineInfo {
@@ -623,8 +630,11 @@ private:
         // backpressure, we need to pull from it.
         while (true) {
           auto output = co_await pull_downstream();
+          if (not output) {
+            break;
+          }
           co_await co_match(
-            std::move(output),
+            std::move(*output),
             [&](table_slice output) -> Task<void> {
               if constexpr (std::same_as<Output, void>) {
                 co_await op_->process_sub(make_view(key), std::move(output),
@@ -650,6 +660,7 @@ private:
                 });
             });
         }
+        end_of_data->notify_one();
       });
     // TODO: Should this even be a concurrent task?
     auto control_handle
@@ -759,7 +770,10 @@ private:
       });
       queue_.spawn(pull_upstream_());
       queue_.spawn(from_control_.recv());
-      while (not got_shutdown_request_) {
+      // Process until we got a shutdown request and the upstream channel
+      // closed. The upstream closure cascades: each operator waits for its
+      // predecessor to shut down and drop its push handle first.
+      while (not got_shutdown_request_ or not upstream_done_) {
         co_await folly::coro::co_safe_point;
         co_await tick();
       }
@@ -813,9 +827,13 @@ private:
     LOGV("handled future result in {}", typeid(*op_).name());
   }
 
-  auto process(OperatorMsg<Input> message) -> Task<void> {
+  auto process(Option<OperatorMsg<Input>> message) -> Task<void> {
+    if (not message) {
+      upstream_done_ = true;
+      co_return;
+    }
     co_await co_match(
-      std::move(message),
+      std::move(*message),
       // The template indirection is necessary to prevent a `void` parameter.
       [&]<std::same_as<Input> Input2>(Input2 input) -> Task<void> {
         if constexpr (std::same_as<Input, void>) {
@@ -948,6 +966,9 @@ private:
         // TODO: Should we really just forward this here?
         for (auto& [_, sub] : subpipelines_) {
           co_await sub.handle.send(Shutdown{});
+          // Close upstream push so the subpipeline's first operator
+          // observes None, unless handle_done() already did this.
+          sub.handle.close_push();
         }
         co_return;
       },
@@ -1025,14 +1046,23 @@ private:
     // have still pushed data into them. The main loop continues running to
     // drain remaining subpipeline output and collect SubPipelineFinished
     // messages. `try_finish_done()` completes the shutdown once all are gone.
-    for (auto& [key, sub] : subpipelines_) {
-      co_await co_match(sub.handle,
-                        []<class In>(SubPipeline<In>& sub) -> Task<void> {
-                          // TODO: What if this is a source?
-                          if constexpr (not std::same_as<In, void>) {
-                            co_await sub.push(EndOfData{});
-                          }
-                        });
+    // If we already got a shutdown request, the Shutdown handler already
+    // closed the subpipeline push handles, so skip sending EndOfData.
+    if (not got_shutdown_request_) {
+      for (auto& [key, sub] : subpipelines_) {
+        co_await co_match(sub.handle,
+                          []<class In>(SubPipeline<In>& sub) -> Task<void> {
+                            // TODO: What if this is a source?
+                            if constexpr (not std::same_as<In, void>) {
+                              co_await sub.push(EndOfData{});
+                            }
+                          });
+      }
+      // Close all subpipeline upstream pushes so their first operators
+      // observe None after the EndOfData, enabling orderly shutdown.
+      for (auto& [key, sub] : subpipelines_) {
+        sub.handle.close_push();
+      }
     }
     co_await try_send_end_of_data();
     co_await try_ready_for_shutdown();
@@ -1084,10 +1114,11 @@ private:
   /// framing is even kept alive after the operator itself finished.
   AsyncScope* operator_scope_ = nullptr;
 
-  QueueScope<variant<ExplicitAny, OperatorMsg<Input>, Option<FromControl>,
-                     SubPipelineEvent>>
+  QueueScope<variant<ExplicitAny, Option<OperatorMsg<Input>>,
+                     Option<FromControl>, SubPipelineEvent>>
     queue_;
   bool got_shutdown_request_ = false;
+  bool upstream_done_ = false;
   bool is_done_ = false;
   // TODO: Expose this?
   std::atomic<size_t> ticks_ = 0;
@@ -1402,7 +1433,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
     auto [to_control_sender, to_control_receiver]
       = bounded_channel<ToControl>(16);
     auto queue = QueueScope<
-      variant<std::monostate, Option<ToControl>, OperatorMsg<void>>>{};
+      variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
       queue.spawn([&] -> Task<std::monostate> {
@@ -1449,10 +1480,18 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
             TENZIR_ASSERT(to_control == ToControl::ready_for_shutdown);
             LOGI("got shutdown request from outermost subpipeline");
             co_await from_control_sender.send(Shutdown{});
+            // Close the input channel so that operator 0 observes None from
+            // its upstream pull, enabling orderly sequential shutdown.
+            {
+              auto _ = std::move(push_input);
+            }
             queue.spawn(to_control_receiver.recv());
           },
-          [&](OperatorMsg<void> msg) -> Task<void> {
-            co_match(msg, [&](Signal signal) {
+          [&](Option<OperatorMsg<void>> msg) -> Task<void> {
+            if (not msg) {
+              co_return;
+            }
+            co_match(*msg, [&](Signal signal) {
               co_match(
                 signal,
                 [&](EndOfData) {
