@@ -9,11 +9,13 @@
 #pragma once
 
 #include "tenzir/any.hpp"
+#include "tenzir/argument_parser2.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/let_id.hpp"
+#include "tenzir/tql2/plugin.hpp"
 
 #include <mutex>
 #include <span>

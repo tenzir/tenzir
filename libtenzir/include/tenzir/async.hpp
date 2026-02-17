@@ -41,11 +41,9 @@
 
 #pragma once
 
-#include "tenzir/actors.hpp"
 #include "tenzir/any.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
-#include "tenzir/base_ctx.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/result.hpp"
@@ -56,6 +54,8 @@
 #include <caf/binary_serializer.hpp>
 
 namespace tenzir {
+
+class base_ctx;
 
 namespace ir {
 struct pipeline;
@@ -92,14 +92,11 @@ public:
     return dh();
   }
 
-  explicit(false) operator base_ctx() {
-    return base_ctx{dh(), reg()};
-  }
+  explicit(false) operator base_ctx();
 
   virtual auto actor_system() -> caf::actor_system& = 0;
   virtual auto dh() -> diagnostic_handler& = 0;
   virtual auto reg() -> const registry& = 0;
-  virtual auto fetch_node() -> Task<failure_or<node_actor>> = 0;
   virtual auto resolve_secrets(std::vector<secret_request> requests)
     -> Task<failure_or<void>>
     = 0;

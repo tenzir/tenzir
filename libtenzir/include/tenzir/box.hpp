@@ -8,9 +8,6 @@
 
 #include "tenzir/detail/assert.hpp"
 
-// FIXME: Don't include this here.
-#include "tenzir/plugin.hpp"
-
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -18,6 +15,10 @@
 #pragma once
 
 namespace tenzir {
+
+// Forward declaration of `plugin_inspect` to avoid including `plugin.hpp`.
+template <class Inspector, class Base>
+auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool;
 
 // Forward declaration for the concept
 template <class T>

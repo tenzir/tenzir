@@ -11,6 +11,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/component_registry.hpp"
 #include "tenzir/endpoint.hpp"
+#include "tenzir/http_api.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <caf/actor.hpp>
