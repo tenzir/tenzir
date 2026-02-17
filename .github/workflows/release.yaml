@@ -24,11 +24,6 @@ on:
           User-facing release title (auto-generated if omitted)
         required: false
         type: string
-      skip_publish:
-        description: Skip publish/tag/branch updates (dry run)
-        required: false
-        type: boolean
-        default: false
   workflow_call:
     inputs:
       bump:
@@ -44,11 +39,6 @@ on:
         required: false
         default: ""
         type: string
-      skip_publish:
-        description: Skip publish/tag/branch updates (dry run)
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   release:
@@ -83,7 +73,6 @@ jobs:
 
         echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
         echo "Updated Python package versions to: ${VERSION_NUMBER}"
-      skip-publish: ${{ inputs.skip_publish }}
       publish-no-latest-on-non-main: true
       copy-release-to-main-on-non-main: true
       update-latest-branch-on-main: true
@@ -91,7 +80,6 @@ jobs:
 
   sbom:
     name: Attach SBOM
-    if: ${{ !inputs.skip_publish }}
     needs: release
     runs-on: ubuntu-latest
     permissions:
