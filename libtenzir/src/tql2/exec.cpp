@@ -553,9 +553,6 @@ public:
     }};
     auto lock = co_await mutex_.lock();
     while (true) {
-      if (lock->closed) {
-        panic("tried to send to closed channel");
-      }
       if (cost(x, limit_) <= lock->remaining) {
         break;
       }
@@ -571,14 +568,14 @@ public:
     guard.disable();
   }
 
-  auto receive() -> Task<OperatorMsg<T>> {
+  auto receive() -> Task<Option<OperatorMsg<T>>> {
     auto guard = detail::scope_guard{[] noexcept {
       LOGD("CANCELLED");
     }};
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
-      if (lock->closed) {
-        panic("tried to receive from empty closed channel");
+      if (sender_closed_.load(std::memory_order::acquire)) {
+        co_return None{};
       }
       lock.unlock();
       co_await notify_receive_.wait();
@@ -593,13 +590,13 @@ public:
     co_return result;
   }
 
-  /// Close the channel.
+  /// Close the sending side of the channel synchronously.
   ///
-  /// After closing, sending to the channel will fail with a panic. Receiving
-  /// from a closed channel will only panic if the channel is empty.
-  auto close() -> Task<void> {
-    auto lock = co_await mutex_.lock();
-    lock->closed = true;
+  /// Safe to call from destructors. Wakes up any waiting receiver so that it
+  /// can observe the closure.
+  void close_sender() {
+    sender_closed_.store(true, std::memory_order::release);
+    notify_receive_.notify_one();
   }
 
 private:
@@ -608,7 +605,6 @@ private:
     }
 
     size_t remaining;
-    bool closed = false;
     std::deque<OperatorMsg<T>> queue;
   };
 
@@ -618,6 +614,7 @@ private:
   Mutex<Locked> mutex_;
   Notify notify_send_;
   Notify notify_receive_;
+  std::atomic<bool> sender_closed_ = false;
 };
 
 template <class T>
@@ -629,7 +626,7 @@ public:
 
   ~OpPush() override {
     if (shared_) {
-      // shared_->close();
+      shared_->close_sender();
     }
   }
   OpPush(OpPush&&) = default;
@@ -654,17 +651,13 @@ public:
     : shared_{std::move(shared)} {
   }
 
-  ~OpPull() override {
-    if (shared_) {
-      // shared_->close();
-    }
-  }
+  ~OpPull() override = default;
   OpPull(OpPull&&) = default;
   OpPull& operator=(OpPull&&) = default;
   OpPull(const OpPull&) = delete;
   OpPull& operator=(const OpPull&) = delete;
 
-  auto operator()() -> Task<OperatorMsg<T>> override {
+  auto operator()() -> Task<Option<OperatorMsg<T>>> override {
     TENZIR_ASSERT(shared_);
     return shared_->receive();
   }

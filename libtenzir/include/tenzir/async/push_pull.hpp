@@ -10,6 +10,7 @@
 
 #include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
+#include "tenzir/option.hpp"
 
 namespace tenzir {
 
@@ -28,7 +29,8 @@ class Pull {
 public:
   virtual ~Pull() = default;
 
-  virtual auto operator()() -> Task<T> = 0;
+  /// When this returns `None`, the channel is closed.
+  virtual auto operator()() -> Task<Option<T>> = 0;
 };
 
 /// A pair of a type-erased, asynchronous sender and receiver.
