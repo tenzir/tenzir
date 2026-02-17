@@ -535,55 +535,67 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
          "\nfind_package(glog CONFIG REQUIRED)")
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
 endif ()
-if (TENZIR_ENABLE_PROXYGEN)
-  if (DEFINED _tenzir_proxygen_target AND TARGET ${_tenzir_proxygen_target})
-    target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
-    if (NOT TENZIR_ENABLE_BUNDLED_PROXYGEN)
-      set(_tenzir_find_sodium_module "${CMAKE_CURRENT_BINARY_DIR}/FindSodium.cmake")
-      if (TARGET Sodium::Sodium)
-        get_target_property(_tenzir_sodium_library Sodium::Sodium
-                            IMPORTED_LOCATION)
-        get_target_property(_tenzir_sodium_includes Sodium::Sodium
-                            INTERFACE_INCLUDE_DIRECTORIES)
-      endif ()
-      if (_tenzir_sodium_library AND _tenzir_sodium_includes)
-        file(
-          WRITE "${_tenzir_find_sodium_module}"
-          "if (NOT TARGET Sodium::Sodium)\n"
-          "  add_library(Sodium::Sodium UNKNOWN IMPORTED)\n"
-          "  set_target_properties(Sodium::Sodium PROPERTIES IMPORTED_LOCATION \"${_tenzir_sodium_library}\" INTERFACE_INCLUDE_DIRECTORIES \"${_tenzir_sodium_includes}\")\n"
-          "endif ()\n"
-          "set(Sodium_FOUND TRUE)\n")
-      else ()
-        file(
-          WRITE "${_tenzir_find_sodium_module}"
-          "find_package(PkgConfig QUIET)\n"
-          "if (PKG_CONFIG_FOUND)\n"
-          "  pkg_check_modules(PC_SODIUM QUIET libsodium)\n"
-          "endif ()\n"
-          "find_path(Sodium_INCLUDE_DIR NAMES sodium.h HINTS \${PC_SODIUM_INCLUDEDIR})\n"
-          "find_library(Sodium_LIBRARY NAMES sodium libsodium HINTS \${PC_SODIUM_LIBDIR})\n"
-          "if (Sodium_LIBRARY AND Sodium_INCLUDE_DIR AND NOT TARGET Sodium::Sodium)\n"
-          "  add_library(Sodium::Sodium UNKNOWN IMPORTED)\n"
-          "  set_target_properties(Sodium::Sodium PROPERTIES IMPORTED_LOCATION \"\${Sodium_LIBRARY}\" INTERFACE_INCLUDE_DIRECTORIES \"\${Sodium_INCLUDE_DIR}\")\n"
-          "endif ()\n"
-          "set(Sodium_FOUND \${Sodium_LIBRARY} AND \${Sodium_INCLUDE_DIR})\n")
-      endif ()
-      install(
-        FILES "${_tenzir_find_sodium_module}"
-        DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
-        COMPONENT Development)
-      string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-             "\nfind_package(proxygen REQUIRED CONFIG)")
-    endif ()
-    message(VERBOSE "Linking Proxygen target: ${_tenzir_proxygen_target}")
-  else ()
-    message(
-      WARNING
-        "TENZIR_ENABLE_PROXYGEN is set but no known Proxygen target was detected."
-    )
+set(_tenzir_proxygen_httpserver_target "")
+foreach (
+  _tenzir_candidate IN
+  ITEMS "proxygenhttpserver" "proxygen::proxygenhttpserver"
+        "Proxygen::proxygenhttpserver")
+  if (TARGET ${_tenzir_candidate})
+    set(_tenzir_proxygen_httpserver_target "${_tenzir_candidate}")
+    break()
   endif ()
+endforeach ()
+if (NOT (DEFINED _tenzir_proxygen_target AND TARGET ${_tenzir_proxygen_target}))
+  message(
+    FATAL_ERROR "Proxygen is mandatory but no known Proxygen target was detected."
+  )
 endif ()
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
+target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
+if (_tenzir_proxygen_httpserver_target)
+  target_link_libraries(libtenzir_builtins
+                        PRIVATE ${_tenzir_proxygen_httpserver_target})
+endif ()
+if (NOT TENZIR_ENABLE_BUNDLED_PROXYGEN)
+  set(_tenzir_find_sodium_module "${CMAKE_CURRENT_BINARY_DIR}/FindSodium.cmake")
+  if (TARGET Sodium::Sodium)
+    get_target_property(_tenzir_sodium_library Sodium::Sodium IMPORTED_LOCATION)
+    get_target_property(_tenzir_sodium_includes Sodium::Sodium
+                        INTERFACE_INCLUDE_DIRECTORIES)
+  endif ()
+  if (_tenzir_sodium_library AND _tenzir_sodium_includes)
+    file(
+      WRITE "${_tenzir_find_sodium_module}"
+      "if (NOT TARGET Sodium::Sodium)\n"
+      "  add_library(Sodium::Sodium UNKNOWN IMPORTED)\n"
+      "  set_target_properties(Sodium::Sodium PROPERTIES IMPORTED_LOCATION \"${_tenzir_sodium_library}\" INTERFACE_INCLUDE_DIRECTORIES \"${_tenzir_sodium_includes}\")\n"
+      "endif ()\n"
+      "set(Sodium_FOUND TRUE)\n")
+  else ()
+    file(
+      WRITE "${_tenzir_find_sodium_module}"
+      "find_package(PkgConfig QUIET)\n"
+      "if (PKG_CONFIG_FOUND)\n"
+      "  pkg_check_modules(PC_SODIUM QUIET libsodium)\n"
+      "endif ()\n"
+      "find_path(Sodium_INCLUDE_DIR NAMES sodium.h HINTS \${PC_SODIUM_INCLUDEDIR})\n"
+      "find_library(Sodium_LIBRARY NAMES sodium libsodium HINTS \${PC_SODIUM_LIBDIR})\n"
+      "if (Sodium_LIBRARY AND Sodium_INCLUDE_DIR AND NOT TARGET Sodium::Sodium)\n"
+      "  add_library(Sodium::Sodium UNKNOWN IMPORTED)\n"
+      "  set_target_properties(Sodium::Sodium PROPERTIES IMPORTED_LOCATION \"\${Sodium_LIBRARY}\" INTERFACE_INCLUDE_DIRECTORIES \"\${Sodium_INCLUDE_DIR}\")\n"
+      "endif ()\n"
+      "set(Sodium_FOUND \${Sodium_LIBRARY} AND \${Sodium_INCLUDE_DIR})\n")
+  endif ()
+  install(
+    FILES "${_tenzir_find_sodium_module}"
+    DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
+    COMPONENT Development)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(proxygen REQUIRED CONFIG)")
+endif ()
+message(VERBOSE "Linking Proxygen target: ${_tenzir_proxygen_target}")
+target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1)
+target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_HAS_PROXYGEN=1)
 # gflags is a transitive dependency of glog (used by folly). We must re-export
 # find_package(gflags) so that plugins can resolve the gflags_shared cmake
 # target that appears in the exported transitive link libraries.
@@ -755,6 +767,7 @@ endif ()
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
           ${_tenzir_bundled_pfs} ${_tenzir_bundled_folly}
+          ${_tenzir_bundled_proxygen}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
