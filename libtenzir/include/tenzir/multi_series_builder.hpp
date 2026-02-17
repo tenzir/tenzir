@@ -242,12 +242,38 @@ public:
   using record_generator = detail::multi_series_builder::record_generator;
   using list_generator = detail::multi_series_builder::list_generator;
 
-  /// @returns a vector of all currently finished series
+  /// @returns a vector of all currently ready (based on timeout or size) series
   [[nodiscard("The result of a flush must be handled")]]
   auto yield_ready() -> std::vector<series>;
-  /// @returns a vector of all currently finished series
+
+  struct YieldReadyResult {
+    std::vector<table_slice> slices = {};
+    duration wait_for = duration::max();
+
+    auto begin() -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    auto begin() const -> decltype(slices.begin()) {
+      return slices.begin();
+    }
+
+    auto end() const -> decltype(slices.end()) {
+      return slices.end();
+    }
+
+    operator std::vector<table_slice>&&() && {
+      return std::move(slices);
+    }
+  };
+  /// @returns all currently ready (based on timeout or size)table slices as
+  /// well as a duration after which the next would be ready.
   [[nodiscard("The result of a flush must be handled")]]
-  auto yield_ready_as_table_slice() -> std::vector<table_slice>;
+  auto yield_ready_as_table_slice() -> YieldReadyResult;
 
   /// @brief Starts building a new record.
   [[nodiscard]] auto record() -> record_generator;
@@ -446,14 +472,12 @@ private:
     bool unused = false;
   };
 
-  /// @brief Finishes all events that satisfy the predicate.
-  /// These events are moved out of their respective series_builders and into
-  /// `ready_events_`.
-  /// the implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions.
-  /// @ref `ready_events_`
-  /// @ref `yield_ready`
-  void make_events_available_where(std::predicate<const entry_data&> auto pred);
+  /// @brief Makes all currently ready (based on timeout or size)  events
+  /// available in `ready_events_` and returns a duration after which the
+  /// builder expects to have more events ready.
+  auto
+  make_events_available_on_timeout(std::chrono::steady_clock::time_point now)
+    -> duration;
 
   /// @brief appends `new_events` to `ready_events_`
   void append_ready_events(std::vector<series>&& new_events);
@@ -503,8 +527,8 @@ private:
   // events that have been made ready (timeout,  batch size, ordered mode
   // builder switch)
   std::vector<series> ready_events_;
-  // time at which the entire builder made its last yields
-  std::chrono::steady_clock::time_point last_yield_time_
+  // Last flush time for merge mode.
+  std::chrono::steady_clock::time_point merging_flushed_
     = std::chrono::steady_clock::now();
   // currently active builder index. used in ordered mode to check whether we
   // need to yield on builder switch

@@ -61,3 +61,12 @@ code should follow the new conventions.
 - Use `std::optional<Box<T>>` for a `std::unique_ptr<T>` that may be null
 - Use the current year in the copyright notice when creating new files. Do not
   update the copyright notice on existing files.
+
+## Unused Variables and Unreachable Code
+
+- Use `TENZIR_UNUSED(arg...)` ONLY for unused function arguments.
+  Do not use this macro for ignoring return values
+- Use `std::ignore = func()` to ignore a functions return value.
+- Use `TENZIR_TODO()` to mark a code path as to-be-implemented
+- Use `TENZIR_UNREACHABLE()` to mark a code path as truly unreachable.
+  Use this after switch statements that handle all cases.

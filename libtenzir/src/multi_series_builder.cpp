@@ -517,35 +517,63 @@ multi_series_builder::multi_series_builder(
   // inputs
 }
 
-auto multi_series_builder::yield_ready() -> std::vector<series> {
-  const auto now = std::chrono::steady_clock::now();
-  if (now - last_yield_time_ < settings_.timeout) {
-    return {};
-  }
-  last_yield_time_ = now;
+auto multi_series_builder::make_events_available_on_timeout(
+  std::chrono::steady_clock::time_point now) -> duration {
+  auto const timeout = settings_.timeout;
+  auto const target_size
+    = detail::narrow<int64_t>(settings_.desired_batch_size);
   if (uses_merging_builder()) {
-    flush_merging_builder();
-  } else {
-    make_events_available_where(
-      [now, timeout = settings_.timeout,
-       target_size = settings_.desired_batch_size](const entry_data& e) {
-        return e.builder.length()
-                 >= static_cast<int64_t>(target_size) // batch size hit
-               or now - e.flushed >= timeout;         // timeout hit
-      });
-    garbage_collect_where(
-      [now, timeout = settings_.timeout](const entry_data& e) {
-        return now - e.flushed >= 10 * timeout;
-      });
+    complete_last_event();
+    auto const length = merging_builder_.length();
+    if (length >= target_size
+        or (length > 0
+            and std::chrono::duration_cast<duration>(now - merging_flushed_)
+                  >= timeout)) {
+      flush_merging_builder();
+      merging_flushed_ = now;
+      return settings_.timeout;
+    }
+    return now - merging_flushed_;
   }
+  complete_last_event();
+  auto res = duration::max();
+  for (auto& entry : entries_) {
+    if (detail::narrow<std::size_t>(entry.builder.length())
+        > settings_.desired_batch_size) {
+      append_ready_events(entry.flush());
+      continue;
+    }
+    auto const waiting = now - entry.flushed;
+    if (waiting > settings_.timeout) {
+      append_ready_events(entry.flush());
+      continue;
+    }
+    res = std::min(res, waiting);
+  }
+  garbage_collect_where([now, timeout](entry_data const& e) {
+    if (e.builder.length() != 0) {
+      return false;
+    }
+    return std::chrono::duration_cast<duration>(now - e.flushed)
+           >= 10 * timeout;
+  });
+  return res;
+}
 
+auto multi_series_builder::yield_ready() -> std::vector<series> {
+  auto const now = std::chrono::steady_clock::now();
+  std::ignore = make_events_available_on_timeout(now);
   return std::exchange(ready_events_, {});
 }
 
 auto multi_series_builder::yield_ready_as_table_slice()
-  -> std::vector<table_slice> {
-  return detail::multi_series_builder::series_to_table_slice(
-    yield_ready(), settings_.default_schema_name);
+  -> multi_series_builder::YieldReadyResult {
+  auto const now = std::chrono::steady_clock::now();
+  auto result = multi_series_builder::YieldReadyResult{};
+  result.wait_for = make_events_available_on_timeout(now);
+  result.slices = detail::multi_series_builder::series_to_table_slice(
+    std::exchange(ready_events_, {}), settings_.default_schema_name);
+  return result;
 }
 
 auto multi_series_builder::data(tenzir::data value) -> void {
@@ -612,9 +640,10 @@ auto multi_series_builder::finalize() -> std::vector<series> {
   if (uses_merging_builder()) {
     flush_merging_builder();
   } else {
-    make_events_available_where([](const auto&) {
-      return true;
-    });
+    complete_last_event();
+    for (auto& entry : entries_) {
+      append_ready_events(entry.flush());
+    }
   }
   return std::exchange(ready_events_, {});
 }
@@ -787,16 +816,6 @@ auto multi_series_builder::type_for_schema(std::string_view name)
   return &it->second;
 }
 
-void multi_series_builder::make_events_available_where(
-  std::predicate<const entry_data&> auto pred) {
-  complete_last_event();
-  for (auto& entry : entries_) {
-    if (pred(entry)) {
-      append_ready_events(entry.flush());
-    }
-  }
-}
-
 void multi_series_builder::append_ready_events(
   std::vector<series>&& new_events) {
   ready_events_.insert(ready_events_.end(),
@@ -824,6 +843,7 @@ void multi_series_builder::garbage_collect_where(
 }
 
 void multi_series_builder::flush_merging_builder() {
+  merging_flushed_ = std::chrono::steady_clock::now();
   auto result = merging_builder_.finish();
   if (ready_events_.empty()) {
     ready_events_ = std::move(result);

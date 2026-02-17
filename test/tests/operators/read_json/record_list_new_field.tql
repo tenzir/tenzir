@@ -1,0 +1,3 @@
+from_stdin {
+  read_json arrays_of_objects=true, merge=true
+}

@@ -620,6 +620,35 @@ public:
     return Argument<Args, bool>{ArgumentType::named, index};
   }
 
+  /// Low-level named arg registration with a custom setter.
+  template <ArgType T>
+  auto
+  named_with_setter(std::string name, Setter<located<T>> setter,
+                    bool required = false, std::string type = type_default<T>)
+    -> Argument<Args, T> {
+    auto index = desc_.named.size();
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::move(type),
+      std::move(setter),
+      required,
+    });
+    return Argument<Args, T>{ArgumentType::named, index};
+  }
+
+  /// Low-level boolean flag registration with a custom setter.
+  auto named_flag_with_setter(std::string name, Setter<located<bool>> setter)
+    -> Argument<Args, bool> {
+    auto index = desc_.named.size();
+    desc_.named.push_back(Named{
+      std::move(name),
+      std::string{},
+      std::move(setter),
+      false,
+    });
+    return Argument<Args, bool>{ArgumentType::named, index};
+  }
+
   auto validate(Validator validator) -> void {
     desc_.validator = std::move(validator);
   }
@@ -655,6 +684,7 @@ private:
 
 } // namespace _::operator_plugin
 
+using _::operator_plugin::Argument;
 using _::operator_plugin::Describer;
 using _::operator_plugin::Description;
 using _::operator_plugin::Empty;

@@ -44,9 +44,30 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
 }
 } // namespace
 
+auto parse_selector_value(std::string_view x)
+  -> std::optional<multi_series_builder::policy_selector> {
+  if (x.empty()) {
+    return std::nullopt;
+  }
+  auto split = detail::split(x, ":");
+  TENZIR_ASSERT(not split.empty());
+  if (split.size() > 2 or split[0].empty()) {
+    return std::nullopt;
+  }
+  if (split.size() == 2) {
+    return multi_series_builder::policy_selector{
+      .field_name = std::string{split[0]},
+      .naming_prefix = std::string{split[1]},
+    };
+  }
+  return multi_series_builder::policy_selector{
+    .field_name = std::string{split[0]},
+  };
+}
+
 auto multi_series_builder_argument_parser::add_settings_to_parser(
-  argument_parser& parser, bool add_unflatten_option,
-  bool add_merge_option) -> void {
+  argument_parser& parser, bool add_unflatten_option, bool add_merge_option)
+  -> void {
   is_tql1_ = true;
   parser.add("--schema-only", schema_only_);
   if (add_merge_option) {
