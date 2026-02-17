@@ -58,9 +58,10 @@ inline auto trim_front(std::string_view value, const std::string_view whitespace
     return value;
   }
   const auto first_character = value.find_first_not_of(whitespace);
-  if (first_character != value.npos) {
-    value.remove_prefix(first_character);
+  if (first_character == value.npos) {
+    return {};
   }
+  value.remove_prefix(first_character);
   return value;
 }
 
@@ -76,9 +77,10 @@ inline auto trim_back(std::string_view value, const std::string_view whitespace
     return value;
   }
   const auto last_character = value.find_last_not_of(whitespace);
-  if (last_character != value.npos) {
-    value.remove_suffix(value.size() - last_character - 1);
+  if (last_character == value.npos) {
+    return {};
   }
+  value.remove_suffix(value.size() - last_character - 1);
   return value;
 }
 
