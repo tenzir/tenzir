@@ -37,6 +37,7 @@
 
 #include <charconv>
 #include <ranges>
+#include <unordered_set>
 #include <utility>
 
 namespace tenzir::plugins::http {
@@ -506,28 +507,35 @@ public:
     if (not sub_result) {
       co_return;
     }
-    active_sub_ = std::move(request);
-    auto sub = co_await ctx.spawn_sub(caf::none, std::move(pipeline),
+    auto sub_key = data{next_sub_key_++};
+    active_sub_keys_.insert(sub_key);
+    auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
                                       tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     auto push_result = co_await open_pipeline.push(std::move(payload));
     if (push_result.is_err()) {
+      active_sub_keys_.erase(sub_key);
       done_ = true;
       co_return;
     }
     co_await open_pipeline.close();
   }
 
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push, OpCtx&)
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (not active_sub_ or slice.rows() == 0) {
+    auto sub_key = materialize(key);
+    if (active_sub_keys_.find(sub_key) == active_sub_keys_.end()) {
+      co_return;
+    }
+    if (slice.rows() == 0) {
       co_return;
     }
     co_await push(std::move(slice));
   }
 
-  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&) -> Task<void> override {
-    active_sub_ = std::nullopt;
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    auto sub_key = materialize(key);
+    active_sub_keys_.erase(sub_key);
     co_return;
   }
 
@@ -585,11 +593,12 @@ private:
   std::shared_ptr<AcceptHTTPServerState> server_state_;
   std::shared_ptr<UnboundedQueue<std::optional<ProxygenRequestData>>> queue_
     = std::make_shared<UnboundedQueue<std::optional<ProxygenRequestData>>>();
-  std::optional<ProxygenRequestData> active_sub_;
+  std::unordered_set<data> active_sub_keys_;
   std::optional<Box<folly::coro::ServerSocket>> server_;
   std::shared_ptr<AcceptHTTPHandler> handler_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   let_id request_let_id_;
+  uint64_t next_sub_key_ = 0;
   tls_options tls_options_{{.tls_default = false, .is_server = true}};
   bool stopping_ = false;
   bool done_ = false;

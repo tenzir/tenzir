@@ -737,6 +737,10 @@ auto normalize_http_url(std::string& url, bool tls_enabled) -> void {
   }
 }
 
+auto infer_tls_default(std::string_view const url) -> bool {
+  return url.starts_with("https://");
+}
+
 auto queue_executor_request(
   std::deque<ExecutorHTTPRequest>& queue,
   std::unordered_map<std::string, std::string> const& headers,
@@ -814,8 +818,9 @@ public:
       done_ = true;
       co_return;
     }
-    tls_options_ = args_.tls ? tls_options{*args_.tls, {.tls_default = false}}
-                             : tls_options{{.tls_default = false}};
+    auto const tls_default = infer_tls_default(resolved_url_);
+    tls_options_ = args_.tls ? tls_options{*args_.tls, {.tls_default = tls_default}}
+                             : tls_options{{.tls_default = tls_default}};
     auto validate_tls
       = tls_options_.validate(resolved_url_, args_.url.source, dh);
     if (not validate_tls) {
