@@ -242,8 +242,6 @@ public:
         auto buffer = std::vector<char>{};
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
-        auto input_schema = resolved_slice.schema();
-        const auto& input_type = as<record_type>(input_schema);
         auto array = check(to_record_batch(resolved_slice)->ToStructArray());
         for (const auto& row : values3(*array)) {
           TENZIR_ASSERT(row);
@@ -475,13 +473,63 @@ public:
   }
 };
 
+struct WriteLinesArgs {
+  // write_lines takes no arguments.
+};
+
+class WriteLinesOperator final : public Operator<table_slice, chunk_ptr> {
+public:
+  explicit WriteLinesOperator(WriteLinesArgs args) : args_{args} {
+  }
+
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (input.rows() == 0) {
+      co_return;
+    }
+    auto printer = lines_printer_impl{};
+    auto buffer = std::vector<char>{};
+    auto const expected_size
+      = total_size_written / total_rows_written * input.rows();
+    buffer.reserve(expected_size);
+    auto out_iter = std::back_inserter(buffer);
+    auto resolved_slice = flatten(resolve_enumerations(input)).slice;
+    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+    for (const auto& row : values3(*array)) {
+      TENZIR_ASSERT(row);
+      const auto ok = printer.print_values(out_iter, *row);
+      TENZIR_ASSERT(ok);
+      out_iter = fmt::format_to(out_iter, "\n");
+    }
+    auto chunk = chunk::make(std::move(buffer),
+                             chunk_metadata{.content_type = "text/plain"});
+    total_size_written += buffer.size();
+    total_rows_written += input.rows();
+    co_await push(std::move(chunk));
+  }
+
+private:
+  /// The total size the operator has written
+  std::size_t total_size_written = 0;
+  /// The total number of events the operator has written
+  std::size_t total_rows_written = 1;
+  [[maybe_unused, no_unique_address]] WriteLinesArgs args_;
+};
+
 class write_lines final
-  : public virtual operator_plugin2<writer_adapter<lines_printer>> {
+  : public virtual operator_plugin2<writer_adapter<lines_printer>>,
+    public virtual OperatorPlugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
     return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
+  }
+
+  auto describe() const -> Description override {
+    auto d = Describer<WriteLinesArgs, WriteLinesOperator>{};
+    return d.without_optimize();
   }
 };
 
