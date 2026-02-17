@@ -344,8 +344,12 @@ public:
           return std::nullopt;
         }
       },
-      [](const auto&) -> std::optional<T> {
-        return std::nullopt;
+      []<class U>(const U& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
       });
   }
 
@@ -448,8 +452,12 @@ private:
           return std::nullopt;
         }
       },
-      [](const auto&) -> std::optional<T> {
-        return std::nullopt;
+      []<class U>(const U& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
       });
   }
 
@@ -749,8 +757,8 @@ public:
   template <ArgType T>
   auto
   named_with_setter(std::string name, Setter<located<T>> setter,
-                    bool required = false, std::string type = type_default<T>)
-    -> Argument<Args, T> {
+                    bool required = false,
+                    std::string type = type_default<T>) -> Argument<Args, T> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
@@ -762,8 +770,9 @@ public:
   }
 
   /// Low-level boolean flag registration with a custom setter.
-  auto named_flag_with_setter(std::string name, Setter<located<bool>> setter)
-    -> Argument<Args, bool> {
+  auto
+  named_flag_with_setter(std::string name,
+                         Setter<located<bool>> setter) -> Argument<Args, bool> {
     auto index = desc_.named.size();
     desc_.named.push_back(Named{
       std::move(name),
@@ -793,7 +802,7 @@ public:
   }
 
   /// Registers a member of `Args` to be populated with the operators location.
-  auto operator_location(location Args::* ptr) {
+  auto operator_location(location Args::*ptr) {
     TENZIR_ASSERT(not desc_.set_operator_location);
     desc_.set_operator_location = make_setter(ptr);
   }

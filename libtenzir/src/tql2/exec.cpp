@@ -782,6 +782,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // Instantiate the IR.
   auto sub_ctx = substitute_ctx{c_ctx, nullptr};
   TRY(ir.substitute(sub_ctx, true));
+  // Treat emitted diagnostics during instantiation as a hard barrier.
+  if (ctx.has_failure()) {
+    return false;
+  }
   if (cfg.dump_inst_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
