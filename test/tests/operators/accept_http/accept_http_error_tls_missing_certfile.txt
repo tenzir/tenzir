@@ -1,0 +1,7 @@
+error: `tls.certfile` is required when `tls.keyfile` is set
+ --> tests/operators/accept_http/accept_http_error_tls_missing_certfile.tql:6:17
+  |
+6 |             tls={keyfile: "tests/operators/from_tcp/test.yaml"} {
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = hint: set both `tls.certfile` and `tls.keyfile`

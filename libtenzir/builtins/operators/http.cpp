@@ -18,6 +18,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
@@ -25,12 +26,16 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/tls_options.hpp"
+#include "tenzir/async.hpp"
+#include "tenzir/async/notify.hpp"
+#include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/set.hpp"
 
 #include <arrow/util/compression.h>
+#include <boost/url/parse_query.hpp>
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 #include <caf/action.hpp>
@@ -48,11 +53,32 @@
 #include <caf/net/ssl/context.hpp>
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/timespan.hpp>
+#include <folly/coro/Baton.h>
+#include <folly/coro/Sleep.h>
+#include <folly/coro/Task.h>
+#include <folly/executors/GlobalExecutor.h>
+// quic/common/Expected.h in Homebrew Proxygen defaults to std::expected in
+// C++23, but still exports compatibility aliases for expected-lite only.
+#ifndef nsel_CONFIG_SELECT_EXPECTED
+#define nsel_CONFIG_SELECT_EXPECTED 1
+#endif
+#include <proxygen/httpserver/HTTPServer.h>
+#include <proxygen/httpserver/RequestHandler.h>
+#include <proxygen/httpserver/RequestHandlerFactory.h>
+#include <proxygen/httpserver/ResponseBuilder.h>
+#include <proxygen/lib/http/HTTPConnector.h>
+#include <proxygen/lib/http/HTTPMessage.h>
+#include <proxygen/lib/http/HTTPMethod.h>
+#include <proxygen/lib/http/session/HTTPUpstreamSession.h>
+#include <proxygen/lib/utils/URL.h>
 #include <openssl/ssl.h>
 
 #include <cctype>
 #include <charconv>
+#include <deque>
+#include <mutex>
 #include <ranges>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -64,6 +90,7 @@ namespace {
 
 namespace http = caf::net::http;
 namespace ssl = caf::net::ssl;
+namespace phttp = proxygen;
 using namespace std::literals;
 
 template <typename T>
@@ -1740,6 +1767,1205 @@ private:
   from_http_args args_;
 };
 
+//-------------------------------- executor http ------------------------------
+
+struct proxygen_response_data {
+  uint16_t status_code = 0;
+  std::vector<std::pair<std::string, std::string>> headers;
+  blob body;
+};
+
+struct proxygen_request_data {
+  std::string method;
+  std::string path;
+  std::string fragment;
+  std::string version;
+  std::vector<std::pair<std::string, std::string>> headers;
+  std::vector<std::pair<std::string, std::string>> query;
+  blob body;
+};
+
+template <class T>
+using http_result = Result<T, std::string>;
+
+auto to_proxygen_method(http::method method) -> std::optional<phttp::HTTPMethod> {
+  switch (method) {
+    case http::method::get:
+      return phttp::HTTPMethod::GET;
+    case http::method::head:
+      return phttp::HTTPMethod::HEAD;
+    case http::method::post:
+      return phttp::HTTPMethod::POST;
+    case http::method::put:
+      return phttp::HTTPMethod::PUT;
+    case http::method::del:
+      return phttp::HTTPMethod::DELETE;
+    case http::method::connect:
+      return phttp::HTTPMethod::CONNECT;
+    case http::method::options:
+      return phttp::HTTPMethod::OPTIONS;
+    case http::method::trace:
+      return phttp::HTTPMethod::TRACE;
+    default:
+      return std::nullopt;
+  }
+}
+
+auto to_chrono(duration d) -> std::chrono::milliseconds {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(d);
+}
+
+auto decode_query_string(std::string_view query)
+  -> std::vector<std::pair<std::string, std::string>> {
+  auto result = std::vector<std::pair<std::string, std::string>>{};
+  if (query.empty()) {
+    return result;
+  }
+  auto parsed = boost::urls::parse_query(query);
+  if (not parsed) {
+    return result;
+  }
+  for (const auto& param : *parsed) {
+    result.emplace_back(std::string{param.key}, std::string{param.value});
+  }
+  return result;
+}
+
+auto find_header_value(
+  const std::vector<std::pair<std::string, std::string>>& headers,
+  std::string_view name) -> std::string_view {
+  const auto it = std::ranges::find_if(headers, [&](const auto& kv) {
+    return detail::ascii_icase_equal(kv.first, name);
+  });
+  if (it == headers.end()) {
+    return {};
+  }
+  return it->second;
+}
+
+auto make_metadata(const proxygen_response_data& response, uint64_t len)
+  -> series_builder {
+  auto sb = series_builder{};
+  for (auto i = uint64_t{}; i < len; ++i) {
+    auto rb = sb.record();
+    rb.field("code", static_cast<uint64_t>(response.status_code));
+    auto hb = rb.field("headers").record();
+    for (const auto& [k, v] : response.headers) {
+      hb.field(k, v);
+    }
+  }
+  return sb;
+}
+
+auto make_metadata(const proxygen_request_data& request, uint64_t len) -> series {
+  auto sb = series_builder{};
+  for (auto i = uint64_t{}; i < len; ++i) {
+    auto rb = sb.record();
+    auto hb = rb.field("headers").record();
+    for (const auto& [k, v] : request.headers) {
+      hb.field(k, v);
+    }
+    auto qb = rb.field("query").record();
+    for (const auto& [k, v] : request.query) {
+      qb.field(k, v);
+    }
+    rb.field("path", request.path);
+    rb.field("fragment", request.fragment);
+    rb.field("method", request.method);
+    rb.field("version", request.version);
+  }
+  return sb.finish_assert_one_array();
+}
+
+auto next_url_from_link_headers(const std::optional<located<std::string>>& paginate,
+                                const proxygen_response_data& response,
+                                std::string_view request_uri,
+                                diagnostic_handler& dh)
+  -> std::optional<std::string> {
+  const auto link_pagination = paginate and paginate->inner == "link";
+  if (not link_pagination) {
+    return std::nullopt;
+  }
+  const auto base_uri = boost::urls::parse_uri_reference(request_uri);
+  if (not base_uri) {
+    diagnostic::warning("failed to parse request URI for link pagination: {}",
+                        base_uri.error().message())
+      .primary(paginate->source)
+      .note("stopping pagination")
+      .emit(dh);
+    return std::nullopt;
+  }
+  auto malformed = false;
+  for (const auto& [name, value] : response.headers) {
+    if (not detail::ascii_icase_equal(name, "link")) {
+      continue;
+    }
+    for (const auto header : split_link_header(value)) {
+      const auto parsed = next_link_target(header);
+      if (parsed.target) {
+        auto ref = boost::urls::parse_uri_reference(*parsed.target);
+        if (not ref) {
+          diagnostic::warning("invalid `rel=next` URL in Link header: {}",
+                              ref.error().message())
+            .primary(paginate->source)
+            .note("stopping pagination")
+            .emit(dh);
+          return std::nullopt;
+        }
+        auto resolved = boost::urls::url{};
+        if (auto result = boost::urls::resolve(*base_uri, *ref, resolved);
+            not result) {
+          diagnostic::warning("failed to resolve `rel=next` URL: {}",
+                              result.error().message())
+            .primary(paginate->source)
+            .note("stopping pagination")
+            .emit(dh);
+          return std::nullopt;
+        }
+        return std::string{resolved.buffer()};
+      }
+      if (parsed.malformed) {
+        malformed = true;
+      }
+    }
+  }
+  if (malformed) {
+    diagnostic::warning("failed to parse Link header for pagination")
+      .primary(paginate->source)
+      .note("stopping pagination")
+      .emit(dh);
+  }
+  return std::nullopt;
+}
+
+struct proxygen_request_config {
+  std::string url;
+  phttp::HTTPMethod method = phttp::HTTPMethod::GET;
+  std::string body;
+  std::unordered_map<std::string, std::string> headers;
+  std::chrono::milliseconds connect_timeout = std::chrono::seconds{5};
+  size_t response_limit = size_t{max_response_size};
+  std::shared_ptr<folly::SSLContext> ssl_context;
+};
+
+class proxygen_client_request final : public phttp::HTTPConnector::Callback,
+                                      public phttp::HTTPTransactionHandler {
+public:
+  proxygen_client_request(proxygen_request_config config, folly::EventBase* evb)
+    : config_{std::move(config)}, evb_{evb} {
+  }
+
+  auto run() -> Task<http_result<proxygen_response_data>> {
+    auto url = phttp::URL{config_.url};
+    if (not url.isValid() or not url.hasHost()) {
+      co_return Err{fmt::format("failed to parse uri `{}`", config_.url)};
+    }
+    url_ = std::move(url);
+    auto timeout = phttp::WheelTimerInstance{config_.connect_timeout, evb_};
+    connector_ = std::make_unique<phttp::HTTPConnector>(
+      static_cast<phttp::HTTPConnector::Callback*>(this), timeout);
+    auto addr = folly::SocketAddress{url_.getHost(), url_.getPort(), true};
+    if (url_.isSecure()) {
+      if (not config_.ssl_context) {
+        co_return Err{
+          std::string{"TLS is enabled for URL but no TLS context is available"}};
+      }
+      connector_->connectSSL(evb_, addr, config_.ssl_context, nullptr,
+                             config_.connect_timeout, folly::emptySocketOptionMap,
+                             folly::AsyncSocket::anyAddress(), url_.getHost());
+    } else {
+      connector_->connect(evb_, addr, config_.connect_timeout);
+    }
+    co_await done_.wait();
+    TENZIR_ASSERT(result_);
+    co_return std::move(*result_);
+  }
+
+  void connectSuccess(phttp::HTTPUpstreamSession* session) override {
+    session_ = session;
+    auto* txn = session_->newTransaction(
+      static_cast<phttp::HTTPTransaction::Handler*>(this));
+    if (not txn) {
+      finish(Err{std::string{"failed to create http transaction"}});
+      return;
+    }
+    auto request = phttp::HTTPMessage{};
+    request.setMethod(config_.method);
+    request.setHTTPVersion(1, 1);
+    request.setURL(url_.makeRelativeURL());
+    request.setSecure(url_.isSecure());
+    request.getHeaders().add("Host", url_.getHostAndPort());
+    for (const auto& [k, v] : config_.headers) {
+      request.getHeaders().add(k, v);
+    }
+    txn->sendHeaders(request);
+    if (not config_.body.empty()) {
+      txn->sendBody(folly::IOBuf::copyBuffer(config_.body));
+    }
+    txn->sendEOM();
+    session_->closeWhenIdle();
+  }
+
+  void connectError(const folly::AsyncSocketException& ex) override {
+    finish(Err{fmt::format("cannot_connect_to_node: {}", ex.what())});
+  }
+
+  void setTransaction(phttp::HTTPTransaction* txn) noexcept override {
+    txn_ = txn;
+  }
+
+  void detachTransaction() noexcept override {
+    txn_ = nullptr;
+  }
+
+  void onHeadersComplete(std::unique_ptr<phttp::HTTPMessage> msg) noexcept override {
+    response_.status_code = msg->getStatusCode();
+    msg->getHeaders().forEach([&](const std::string& name,
+                                  const std::string& value) {
+      response_.headers.emplace_back(name, value);
+    });
+  }
+
+  void onBody(std::unique_ptr<folly::IOBuf> chain) noexcept override {
+    if (not chain) {
+      return;
+    }
+    auto bytes = chain->computeChainDataLength();
+    if (response_.body.size() + bytes > config_.response_limit) {
+      finish(Err{fmt::format("response size exceeds configured limit of {} bytes",
+                             config_.response_limit)});
+      if (txn_) {
+        txn_->sendAbort();
+      }
+      return;
+    }
+    for (const auto& range : *chain) {
+      const auto* begin = reinterpret_cast<const std::byte*>(range.data());
+      response_.body.insert(response_.body.end(), begin, begin + range.size());
+    }
+  }
+
+  void onEOM() noexcept override {
+    finish(http_result<proxygen_response_data>{std::move(response_)});
+  }
+
+  void onError(const phttp::HTTPException& error) noexcept override {
+    finish(Err{fmt::format("request failed: {}", error.what())});
+  }
+
+  void onTrailers(std::unique_ptr<phttp::HTTPHeaders>) noexcept override {
+  }
+
+  void onUpgrade(phttp::UpgradeProtocol) noexcept override {
+  }
+
+  void onEgressPaused() noexcept override {
+  }
+
+  void onEgressResumed() noexcept override {
+  }
+
+private:
+  auto finish(http_result<proxygen_response_data> result) -> void {
+    if (result_) {
+      return;
+    }
+    result_ = std::move(result);
+    done_.notify_one();
+  }
+
+  proxygen_request_config config_;
+  folly::EventBase* evb_ = nullptr;
+  phttp::URL url_;
+  std::unique_ptr<phttp::HTTPConnector> connector_;
+  phttp::HTTPUpstreamSession* session_ = nullptr;
+  phttp::HTTPTransaction* txn_ = nullptr;
+  proxygen_response_data response_;
+  std::optional<http_result<proxygen_response_data>> result_;
+  Notify done_;
+};
+
+struct from_http_executor_args {
+  location op = location::unknown;
+  located<secret> url;
+  std::optional<located<std::string>> method;
+  std::optional<located<data>> body;
+  std::optional<located<std::string>> encode;
+  std::optional<located<record>> headers;
+  std::optional<ast::field_path> metadata_field;
+  std::optional<ast::field_path> error_field;
+  std::optional<located<std::string>> paginate;
+  located<duration> paginate_delay{0s, location::unknown};
+  located<duration> connection_timeout{5s, location::unknown};
+  located<uint64_t> max_retry_count{0, location::unknown};
+  located<duration> retry_delay{1s, location::unknown};
+  std::optional<located<data>> tls;
+  std::optional<located<ir::pipeline>> parse;
+
+  auto validate(diagnostic_handler& dh) const -> failure_or<void> {
+    if (error_field and metadata_field) {
+      auto ep = std::views::transform(error_field->path(),
+                                      &ast::field_path::segment::id)
+                | std::views::transform(&ast::identifier::name);
+      auto mp = std::views::transform(metadata_field->path(),
+                                      &ast::field_path::segment::id)
+                | std::views::transform(&ast::identifier::name);
+      auto [ei, mi] = std::ranges::mismatch(ep, mp);
+      if (ei == end(ep) or mi == end(mp)) {
+        diagnostic::error("`error_field` and `metadata_field` must not "
+                          "point to same or nested field")
+          .primary(*error_field)
+          .primary(*metadata_field)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (headers) {
+      for (const auto& [_, v] : headers->inner) {
+        if (not is<std::string>(v) and not is<secret>(v)) {
+          diagnostic::error("header values must be of type `string`")
+            .primary(*headers)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+    }
+    if (body) {
+      TRY(match(
+        body->inner,
+        [](const concepts::one_of<blob, std::string, record> auto&)
+          -> failure_or<void> {
+          return {};
+        },
+        [&](const auto&) -> failure_or<void> {
+          diagnostic::error("`body` must be `blob`, `record` or `string`")
+            .primary(body->source)
+            .emit(dh);
+          return failure::promise();
+        }));
+    }
+    if (encode) {
+      if (not body) {
+        diagnostic::error("encoding specified without a `body`")
+          .primary(encode->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (encode->inner != "json" and encode->inner != "form") {
+        diagnostic::error("unsupported encoding: `{}`", encode->inner)
+          .primary(encode->source)
+          .hint("must be `json` or `form`")
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (method and method->inner.empty()) {
+      diagnostic::error("`method` must not be empty").primary(*method).emit(dh);
+      return failure::promise();
+    }
+    if (not make_method()) {
+      diagnostic::error("invalid http method: `{}`", method->inner)
+        .primary(*method)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (retry_delay.inner < duration::zero()) {
+      diagnostic::error("`retry_delay` must be a positive duration")
+        .primary(retry_delay)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (paginate_delay.inner < duration::zero()) {
+      diagnostic::error("`paginate_delay` must be a positive duration")
+        .primary(paginate_delay)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (connection_timeout.inner < duration::zero()) {
+      diagnostic::error("`connection_timeout` must be a positive duration")
+        .primary(connection_timeout)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (paginate and paginate->inner != "link") {
+      diagnostic::error("unsupported pagination mode: `{}`", paginate->inner)
+        .primary(paginate->source)
+        .hint("`paginate` must be `\"link\"`")
+        .emit(dh);
+      return failure::promise();
+    }
+    if (parse) {
+      auto output = parse->inner.infer_type(tag_v<chunk_ptr>, dh);
+      if (not output) {
+        return failure::promise();
+      }
+      if (*output and not (*output)->is_any<void, table_slice>()) {
+        diagnostic::error("pipeline must return events or be a sink")
+          .primary(*parse)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    auto tls_opts = tls ? tls_options{*tls, {.tls_default = false}}
+                        : tls_options{{.tls_default = false}};
+    TRY(tls_opts.validate(dh));
+    return {};
+  }
+
+  auto make_method() const -> std::optional<phttp::HTTPMethod> {
+    auto method_name = std::string{};
+    if (not method) {
+      method_name = body ? "post" : "get";
+    } else {
+      method_name = method->inner;
+    }
+    auto caf_method = http::method{};
+    if (not http::from_string(method_name, caf_method)) {
+      return std::nullopt;
+    }
+    return to_proxygen_method(caf_method);
+  }
+
+  auto make_headers() const
+    -> std::pair<std::unordered_map<std::string, std::string>,
+                 detail::stable_map<std::string, secret>> {
+    auto hdrs = std::unordered_map<std::string, std::string>{};
+    auto secrets = detail::stable_map<std::string, secret>{};
+    auto insert_accept_header = true;
+    auto insert_content_type = body and is<record>(body->inner);
+    if (headers) {
+      for (const auto& [k, v] : headers->inner) {
+        if (detail::ascii_icase_equal(k, "accept")) {
+          insert_accept_header = false;
+        }
+        if (detail::ascii_icase_equal(k, "content-type")) {
+          insert_content_type = false;
+        }
+        match(
+          v,
+          [&](const std::string& x) {
+            hdrs.emplace(k, x);
+          },
+          [&](const secret& x) {
+            secrets.emplace(k, x);
+          },
+          [](const auto&) {
+            TENZIR_UNREACHABLE();
+          });
+      }
+    }
+    if (insert_content_type) {
+      hdrs.emplace("Content-Type", encode and encode->inner == "form"
+                                     ? "application/x-www-form-urlencoded"
+                                     : "application/json");
+    }
+    if (insert_accept_header) {
+      hdrs.emplace("Accept", "application/json, */*;q=0.5");
+    }
+    return std::pair{hdrs, secrets};
+  }
+};
+
+struct accept_http_executor_args {
+  location op = location::unknown;
+  located<secret> url;
+  std::optional<ast::field_path> metadata_field;
+  std::optional<located<record>> responses;
+  std::optional<located<uint64_t>> max_request_size;
+  std::optional<located<uint64_t>> max_connections;
+  std::optional<located<data>> tls;
+  std::optional<located<ir::pipeline>> parse;
+
+  auto validate(diagnostic_handler& dh) const -> failure_or<void> {
+    if (max_request_size and max_request_size->inner == 0) {
+      diagnostic::error("`max_request_size` must not be zero")
+        .primary(max_request_size->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (max_connections and max_connections->inner == 0) {
+      diagnostic::error("`max_connections` must not be zero")
+        .primary(max_connections->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (responses) {
+      if (responses->inner.empty()) {
+        diagnostic::error("`responses` must not be empty")
+          .primary(*responses)
+          .emit(dh);
+        return failure::promise();
+      }
+      for (const auto& [_, value] : responses->inner) {
+        const auto* rec = try_as<record>(value);
+        if (not rec) {
+          diagnostic::error("field must be `record`")
+            .primary(*responses)
+            .emit(dh);
+          return failure::promise();
+        }
+        if (rec->find("code") == rec->end() or rec->find("content_type") == rec->end()
+            or rec->find("body") == rec->end()) {
+          diagnostic::error("`responses` record must contain `code`, `content_type`, `body`")
+            .primary(*responses)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+    }
+    if (parse) {
+      auto output = parse->inner.infer_type(tag_v<chunk_ptr>, dh);
+      if (not output) {
+        return failure::promise();
+      }
+      if (*output and not (*output)->is_any<void, table_slice>()) {
+        diagnostic::error("pipeline must return events or be a sink")
+          .primary(*parse)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    auto tls_opts = tls ? tls_options{*tls, {.tls_default = false, .is_server = true}}
+                        : tls_options{{.tls_default = false, .is_server = true}};
+    TRY(tls_opts.validate(dh));
+    return {};
+  }
+};
+
+struct executor_http_request {
+  std::string url;
+  std::unordered_map<std::string, std::string> headers;
+  bool is_pagination = false;
+};
+
+auto queue_executor_request(
+  std::deque<executor_http_request>& queue,
+  const std::unordered_map<std::string, std::string>& headers,
+  std::string next_url, bool tls_enabled, const location& op,
+  diagnostic_handler& dh, severity diag_severity, std::string_view note = {})
+  -> bool {
+  normalize_http_url(next_url, tls_enabled);
+  auto url = phttp::URL{next_url};
+  if (not url.isValid()) {
+    if (diag_severity == severity::warning) {
+      if (note.empty()) {
+        diagnostic::warning("failed to parse uri: {}", next_url).primary(op).emit(dh);
+      } else {
+        diagnostic::warning("failed to parse uri: {}", next_url)
+          .primary(op)
+          .note("{}", note)
+          .emit(dh);
+      }
+    } else {
+      if (note.empty()) {
+        diagnostic::error("failed to parse uri: {}", next_url).primary(op).emit(dh);
+      } else {
+        diagnostic::error("failed to parse uri: {}", next_url)
+          .primary(op)
+          .note("{}", note)
+          .emit(dh);
+      }
+    }
+    return false;
+  }
+  queue.push_back({std::move(next_url), headers, true});
+  return true;
+}
+
+struct from_http_task_event {
+  std::optional<executor_http_request> request;
+  std::optional<http_result<proxygen_response_data>> response;
+};
+
+class from_http_executor_operator final : public Operator<void, table_slice> {
+public:
+  explicit from_http_executor_operator(from_http_executor_args args)
+    : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto& dh = ctx.dh();
+    auto requests = std::vector<secret_request>{};
+    auto [headers, secrets] = args_.make_headers();
+    requests.emplace_back(make_secret_request("url", args_.url, resolved_url_, dh));
+    if (not secrets.empty()) {
+      const auto& loc = args_.headers->source;
+      for (auto& [name, secret] : secrets) {
+        auto request = secret_request{
+          std::move(secret),
+          loc,
+          [&, name](const resolved_secret_value& value) -> failure_or<void> {
+            TRY(auto str, value.utf8_view(name, loc, dh));
+            headers.emplace(name, std::string{str});
+            return {};
+          },
+        };
+        requests.emplace_back(std::move(request));
+      }
+    }
+    if (not requests.empty()) {
+      auto resolved = co_await ctx.resolve_secrets(std::move(requests));
+      if (not resolved) {
+        done_ = true;
+        co_return;
+      }
+    }
+    if (resolved_url_.empty()) {
+      diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
+      done_ = true;
+      co_return;
+    }
+    tls_options_ = args_.tls ? tls_options{*args_.tls, {.tls_default = false}}
+                             : tls_options{{.tls_default = false}};
+    auto validate_tls
+      = tls_options_.validate(resolved_url_, args_.url.source, dh);
+    if (not validate_tls) {
+      done_ = true;
+      co_return;
+    }
+    auto ssl_result = tls_options_.make_folly_ssl_context(dh);
+    if (not ssl_result) {
+      done_ = true;
+      co_return;
+    }
+    ssl_context_ = std::move(*ssl_result);
+    tls_enabled_ = tls_options_.get_tls(nullptr).inner;
+    normalize_http_url(resolved_url_, tls_enabled_);
+    pending_.push_back({resolved_url_, std::move(headers), false});
+    if (args_.body) {
+      match(
+        args_.body->inner,
+        [&](const blob& x) {
+          request_body_.append(reinterpret_cast<const char*>(x.data()), x.size());
+        },
+        [&](const std::string& x) {
+          request_body_ = x;
+        },
+        [&](const record& x) {
+          if (args_.encode and args_.encode->inner == "form") {
+            request_body_ = curl::escape(flatten(x));
+            return;
+          }
+          auto printer = json_printer{{}};
+          auto it = std::back_inserter(request_body_);
+          printer.print(it, x);
+        },
+        [](const auto&) {
+          TENZIR_UNREACHABLE();
+        });
+    }
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (done_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    if (not active_sub_ and not pending_.empty()) {
+      auto request = std::move(pending_.front());
+      pending_.pop_front();
+      if (request.is_pagination and args_.paginate_delay.inner > duration::zero()) {
+        co_await folly::coro::sleep(
+          std::chrono::duration_cast<folly::HighResDuration>(
+            to_chrono(args_.paginate_delay.inner)));
+      }
+      auto result = co_await perform_request(request);
+      co_return from_http_task_event{
+        std::optional<executor_http_request>{std::move(request)},
+        std::optional<http_result<proxygen_response_data>>{std::move(result)},
+      };
+    }
+    co_await notify_->wait();
+    co_return from_http_task_event{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto event = std::move(result).as<from_http_task_event>();
+    if (not event.response) {
+      if (not active_sub_ and pending_.empty()) {
+        done_ = true;
+      }
+      co_return;
+    }
+    TENZIR_ASSERT(event.request);
+    auto request = std::move(*event.request);
+    auto response_result = std::move(*event.response);
+    if (response_result.is_err()) {
+      diagnostic::error("{}", std::move(response_result).unwrap_err())
+        .primary(args_.op)
+        .emit(ctx);
+      if (pending_.empty() and not active_sub_) {
+        done_ = true;
+      }
+      co_return;
+    }
+    auto response = std::move(response_result).unwrap();
+    if (const auto code = response.status_code; code < 200 or code > 399) {
+      if (not args_.error_field) {
+        diagnostic::error("received erroneous http status code: `{}`", code)
+          .primary(args_.op)
+          .hint("specify `error_field` to keep the event")
+          .emit(ctx);
+      } else {
+        auto sb = series_builder{};
+        std::ignore = sb.record();
+        auto error = series_builder{};
+        error.data(response.body);
+        auto slice = assign(*args_.error_field, error.finish_assert_one_array(),
+                            sb.finish_assert_one_slice(), ctx.dh());
+        if (args_.metadata_field) {
+          auto metadata = make_metadata(response, slice.rows());
+          slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                         slice, ctx.dh());
+        }
+        co_await push(std::move(slice));
+      }
+      if (pending_.empty() and not active_sub_) {
+        done_ = true;
+      }
+      co_return;
+    }
+    if (args_.paginate and args_.paginate->inner == "link") {
+      if (auto url = next_url_from_link_headers(args_.paginate, response, request.url,
+                                                ctx.dh())) {
+        std::ignore = queue_executor_request(pending_, request.headers, std::move(*url),
+                                             tls_enabled_, args_.op, ctx.dh(),
+                                             severity::error);
+      }
+    }
+    if (response.body.empty()) {
+      if (pending_.empty() and not active_sub_) {
+        done_ = true;
+      } else {
+        notify_->notify_one();
+      }
+      co_return;
+    }
+    if (not args_.parse) {
+      diagnostic::error("`from_http` in the new executor requires an explicit parsing pipeline")
+        .primary(args_.op)
+        .emit(ctx);
+      if (pending_.empty() and not active_sub_) {
+        done_ = true;
+      }
+      co_return;
+    }
+    auto response_body = std::move(response.body);
+    auto chunk_data = std::span<const std::byte>{response_body.data(),
+                                                 response_body.size()};
+    auto encoding = find_header_value(response.headers, "content-encoding");
+    auto payload = chunk_ptr{};
+    if (auto decompressed = try_decompress_body(encoding, chunk_data, ctx.dh())) {
+      payload = chunk::make(std::move(*decompressed));
+    } else {
+      payload = chunk::make(std::move(response_body));
+    }
+    auto sub_key = next_sub_key_++;
+    auto sub = co_await ctx.spawn_sub(data{sub_key}, args_.parse->inner,
+                                      tag_v<chunk_ptr>);
+    auto pipeline = as<OpenPipeline<chunk_ptr>>(sub);
+    auto push_result = co_await pipeline.push(std::move(payload));
+    if (push_result.is_err()) {
+      done_ = true;
+      co_return;
+    }
+    co_await pipeline.close();
+    active_sub_ = active_sub_context{
+      .key = sub_key,
+      .response = std::move(response),
+      .headers = std::move(request.headers),
+    };
+  }
+
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx)
+    -> Task<void> override {
+    if (not active_sub_) {
+      co_return;
+    }
+    if (materialize(key) != data{active_sub_->key}) {
+      co_return;
+    }
+    if (slice.rows() == 0) {
+      co_return;
+    }
+    if (args_.metadata_field) {
+      auto metadata = make_metadata(active_sub_->response, slice.rows());
+      slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                     slice, ctx.dh());
+    }
+    co_await push(std::move(slice));
+  }
+
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    if (not active_sub_) {
+      co_return;
+    }
+    if (materialize(key) != data{active_sub_->key}) {
+      co_return;
+    }
+    active_sub_ = std::nullopt;
+    if (pending_.empty()) {
+      done_ = true;
+    } else {
+      notify_->notify_one();
+    }
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  struct active_sub_context {
+    uint64_t key = 0;
+    proxygen_response_data response;
+    std::unordered_map<std::string, std::string> headers;
+  };
+
+  auto perform_request(const executor_http_request& request) const
+    -> Task<http_result<proxygen_response_data>> {
+    auto attempts = uint64_t{};
+    auto max_attempts = args_.max_retry_count.inner + 1;
+    auto request_method = args_.make_method();
+    TENZIR_ASSERT(request_method);
+    while (attempts < max_attempts) {
+      auto config = proxygen_request_config{
+        .url = request.url,
+        .method = *request_method,
+        .body = request_body_,
+        .headers = request.headers,
+        .connect_timeout = to_chrono(args_.connection_timeout.inner),
+        .response_limit = size_t{max_response_size},
+        .ssl_context = ssl_context_,
+      };
+      auto* evb = folly::getGlobalIOExecutor()->getEventBase();
+      TENZIR_ASSERT(evb);
+      auto request_task = Box<proxygen_client_request>{std::in_place,
+                                                       std::move(config), evb};
+      auto result = co_await folly::coro::co_withExecutor(evb, request_task->run());
+      if (not result.is_err()) {
+        co_return result;
+      }
+      ++attempts;
+      if (attempts >= max_attempts) {
+        co_return result;
+      }
+      if (args_.retry_delay.inner > duration::zero()) {
+        co_await folly::coro::sleep(
+          std::chrono::duration_cast<folly::HighResDuration>(
+            to_chrono(args_.retry_delay.inner)));
+      }
+    }
+    co_return Err{std::string{"request failed"}};
+  }
+
+  from_http_executor_args args_;
+  mutable std::string resolved_url_;
+  mutable std::string request_body_;
+  mutable std::shared_ptr<folly::SSLContext> ssl_context_;
+  mutable tls_options tls_options_{{.tls_default = false}};
+  mutable std::deque<executor_http_request> pending_;
+  mutable std::optional<active_sub_context> active_sub_;
+  uint64_t next_sub_key_ = 0;
+  mutable std::shared_ptr<Notify> notify_ = std::make_shared<Notify>();
+  mutable bool tls_enabled_ = false;
+  bool done_ = false;
+};
+
+struct accept_http_server_state {
+  std::shared_ptr<UnboundedQueue<std::optional<proxygen_request_data>>> queue;
+  std::optional<record> responses;
+  size_t max_request_size = 10 * 1024 * 1024;
+};
+
+class accept_http_request_handler final : public phttp::RequestHandler {
+public:
+  explicit accept_http_request_handler(std::shared_ptr<accept_http_server_state> state)
+    : state_{std::move(state)} {
+  }
+
+  void onRequest(std::unique_ptr<phttp::HTTPMessage> headers) noexcept override {
+    request_.method = headers->getMethodString();
+    request_.path = headers->getPath();
+    request_.query = decode_query_string(headers->getQueryString());
+    auto [major, minor] = headers->getHTTPVersion();
+    request_.version = fmt::format("{}.{}", major, minor);
+    auto parsed = boost::urls::parse_uri_reference(headers->getURL());
+    if (parsed) {
+      request_.fragment = std::string{parsed->fragment()};
+    }
+    headers->getHeaders().forEach([&](const std::string& name,
+                                      const std::string& value) {
+      request_.headers.emplace_back(name, value);
+    });
+  }
+
+  void onBody(std::unique_ptr<folly::IOBuf> body) noexcept override {
+    if (not body or body_too_large_) {
+      return;
+    }
+    auto bytes = body->computeChainDataLength();
+    if (request_.body.size() + bytes > state_->max_request_size) {
+      body_too_large_ = true;
+      return;
+    }
+    for (const auto& range : *body) {
+      auto* begin = reinterpret_cast<const std::byte*>(range.data());
+      request_.body.insert(request_.body.end(), begin, begin + range.size());
+    }
+  }
+
+  void onUpgrade(phttp::UpgradeProtocol) noexcept override {
+  }
+
+  void onEOM() noexcept override {
+    if (body_too_large_) {
+      phttp::ResponseBuilder(downstream_)
+        .status(413, "Payload Too Large")
+        .sendWithEOM();
+      return;
+    }
+    state_->queue->enqueue(std::optional<proxygen_request_data>{std::move(request_)});
+    auto response_code = uint16_t{200};
+    auto content_type = std::string{};
+    auto body = std::string{};
+    if (state_->responses) {
+      const auto it = state_->responses->find(request_.path);
+      if (it != state_->responses->end()) {
+        auto rec = as<record>(it->second);
+        response_code = static_cast<uint16_t>(as<uint64_t>(rec["code"]));
+        content_type = as<std::string>(rec["content_type"]);
+        body = as<std::string>(rec["body"]);
+      }
+    }
+    auto builder = phttp::ResponseBuilder(downstream_);
+    builder.status(response_code, response_code == 200 ? "OK" : "");
+    if (not content_type.empty()) {
+      builder.header("Content-Type", content_type);
+    }
+    if (not body.empty()) {
+      builder.body(body);
+    }
+    builder.sendWithEOM();
+  }
+
+  void requestComplete() noexcept override {
+    delete this;
+  }
+
+  void onError(phttp::ProxygenError) noexcept override {
+    delete this;
+  }
+
+private:
+  std::shared_ptr<accept_http_server_state> state_;
+  proxygen_request_data request_;
+  bool body_too_large_ = false;
+};
+
+class accept_http_handler_factory final : public phttp::RequestHandlerFactory {
+public:
+  explicit accept_http_handler_factory(
+    std::shared_ptr<accept_http_server_state> state)
+    : state_{std::move(state)} {
+  }
+
+  void onServerStart(folly::EventBase*) noexcept override {
+  }
+
+  void onServerStop() noexcept override {
+  }
+
+  auto onRequest(phttp::RequestHandler*, phttp::HTTPMessage*) noexcept
+    -> phttp::RequestHandler* override {
+    return new accept_http_request_handler{state_};
+  }
+
+private:
+  std::shared_ptr<accept_http_server_state> state_;
+};
+
+struct accept_http_task_event {
+  std::optional<proxygen_request_data> request;
+};
+
+class accept_http_executor_operator final : public Operator<void, table_slice> {
+public:
+  explicit accept_http_executor_operator(accept_http_executor_args args)
+    : args_{std::move(args)} {
+  }
+
+  accept_http_executor_operator(const accept_http_executor_operator&) = delete;
+  auto operator=(const accept_http_executor_operator&)
+    -> accept_http_executor_operator& = delete;
+  accept_http_executor_operator(accept_http_executor_operator&&) noexcept
+    = default;
+  auto operator=(accept_http_executor_operator&&) noexcept
+    -> accept_http_executor_operator& = default;
+
+  ~accept_http_executor_operator() override {
+    stop_server();
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    auto& dh = ctx.dh();
+    auto request = make_secret_request("url", args_.url, resolved_url_, dh);
+    auto resolved = co_await ctx.resolve_secrets({std::move(request)});
+    if (not resolved) {
+      done_ = true;
+      co_return;
+    }
+    if (resolved_url_.empty()) {
+      diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
+      done_ = true;
+      co_return;
+    }
+    auto colon = resolved_url_.rfind(':');
+    if (colon == 0 or colon == std::string::npos) {
+      diagnostic::error("`url` must have the form `<host>:<port>`")
+        .primary(args_.url)
+        .emit(dh);
+      done_ = true;
+      co_return;
+    }
+    auto host = resolved_url_.substr(0, colon);
+    auto port = uint16_t{};
+    auto* end = resolved_url_.data() + resolved_url_.size();
+    auto [ptr, ec] = std::from_chars(resolved_url_.data() + colon + 1, end, port);
+    if (ec != std::errc{} or ptr != end) {
+      diagnostic::error("`url` must have the form `<host>:<port>`")
+        .primary(args_.url)
+        .emit(dh);
+      done_ = true;
+      co_return;
+    }
+    tls_options_ = args_.tls
+                     ? tls_options{*args_.tls,
+                                   {.tls_default = false, .is_server = true}}
+                     : tls_options{{.tls_default = false, .is_server = true}};
+    if (tls_options_.get_tls(nullptr).inner) {
+      diagnostic::error("`accept_http` currently supports only plaintext HTTP")
+        .primary(args_.op)
+        .emit(dh);
+      done_ = true;
+      co_return;
+    }
+    server_state_ = std::make_shared<accept_http_server_state>();
+    server_state_->queue = queue_;
+    server_state_->responses = args_.responses.transform([](auto const& x) {
+      return x.inner;
+    });
+    server_state_->max_request_size = inner(args_.max_request_size).value_or(10 * 1024 * 1024);
+    auto options = phttp::HTTPServerOptions{};
+    options.threads = inner(args_.max_connections).value_or(1);
+    options.handlerFactories
+      = phttp::RequestHandlerChain()
+          .addThen(std::make_unique<accept_http_handler_factory>(server_state_))
+          .build();
+    server_ = Box<phttp::HTTPServer>{std::in_place, std::move(options)};
+    auto cfg
+      = phttp::HTTPServer::IPConfig{folly::SocketAddress{host, port, true},
+                                    phttp::HTTPServer::Protocol::HTTP};
+    (*server_)->bind(std::vector<phttp::HTTPServer::IPConfig>{cfg});
+    server_thread_ = std::thread([this] {
+      try {
+        (*server_)->start();
+      } catch (...) {
+        queue_->enqueue(std::nullopt);
+      }
+    });
+    co_await folly::coro::sleep(std::chrono::milliseconds{100});
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    if (done_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    auto request = co_await queue_->dequeue();
+    co_return accept_http_task_event{std::move(request)};
+  }
+
+  auto process_task(Any result, Push<table_slice>&, OpCtx& ctx) -> Task<void> override {
+    auto event = std::move(result).as<accept_http_task_event>();
+    if (not event.request) {
+      done_ = true;
+      co_return;
+    }
+    if (event.request->body.empty()) {
+      co_return;
+    }
+    if (not args_.parse) {
+      diagnostic::error("`accept_http` in the new executor requires an explicit parsing pipeline")
+        .primary(args_.op)
+        .emit(ctx);
+      co_return;
+    }
+    auto body = std::move(event.request->body);
+    auto encoding = find_header_value(event.request->headers, "content-encoding");
+    auto payload = chunk_ptr{};
+    auto body_span = std::span<const std::byte>{body.data(), body.size()};
+    if (auto decompressed = try_decompress_body(encoding, body_span, ctx.dh())) {
+      payload = chunk::make(std::move(*decompressed));
+    } else {
+      payload = chunk::make(std::move(body));
+    }
+    active_sub_ = std::move(*event.request);
+    auto sub = co_await ctx.spawn_sub(caf::none, args_.parse->inner, tag_v<chunk_ptr>);
+    auto pipeline = as<OpenPipeline<chunk_ptr>>(sub);
+    auto push_result = co_await pipeline.push(std::move(payload));
+    if (push_result.is_err()) {
+      done_ = true;
+      co_return;
+    }
+    co_await pipeline.close();
+  }
+
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not active_sub_ or slice.rows() == 0) {
+      co_return;
+    }
+    if (args_.metadata_field) {
+      slice = assign(*args_.metadata_field,
+                     make_metadata(*active_sub_, slice.rows()), slice, ctx.dh());
+    }
+    co_await push(std::move(slice));
+  }
+
+  auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    active_sub_ = std::nullopt;
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+private:
+  auto stop_server() -> void {
+    if (server_) {
+      (*server_)->stop();
+    }
+    if (server_thread_.joinable()) {
+      server_thread_.join();
+    }
+  }
+
+  accept_http_executor_args args_;
+  std::string resolved_url_;
+  std::shared_ptr<accept_http_server_state> server_state_;
+  std::shared_ptr<UnboundedQueue<std::optional<proxygen_request_data>>> queue_
+    = std::make_shared<UnboundedQueue<std::optional<proxygen_request_data>>>();
+  std::optional<proxygen_request_data> active_sub_;
+  std::optional<Box<phttp::HTTPServer>> server_;
+  std::thread server_thread_;
+  tls_options tls_options_{{.tls_default = false, .is_server = true}};
+  bool done_ = false;
+};
 void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
                              session ctx) {
   for (const auto& arg : inv.args) {
@@ -1759,61 +2985,167 @@ void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
   }
 }
 
-struct from_http final : public virtual operator_factory_plugin {
-  auto name() const -> std::string override {
-    return "tql2.from_http";
-  }
+auto describe_from_http_executor_impl() -> Description {
+  auto d = Describer<from_http_executor_args, from_http_executor_operator>{};
+  d.operator_location(&from_http_executor_args::op);
+  auto url = d.positional("url", &from_http_executor_args::url);
+  auto method = d.named("method", &from_http_executor_args::method);
+  auto body = d.named("body", &from_http_executor_args::body);
+  auto encode = d.named("encode", &from_http_executor_args::encode);
+  auto headers = d.named("headers", &from_http_executor_args::headers);
+  auto metadata_field
+    = d.named("metadata_field", &from_http_executor_args::metadata_field);
+  auto error_field
+    = d.named("error_field", &from_http_executor_args::error_field);
+  auto paginate = d.named("paginate", &from_http_executor_args::paginate);
+  auto paginate_delay
+    = d.named_optional("paginate_delay", &from_http_executor_args::paginate_delay);
+  auto connection_timeout = d.named_optional(
+    "connection_timeout", &from_http_executor_args::connection_timeout);
+  auto max_retry_count
+    = d.named_optional("max_retry_count", &from_http_executor_args::max_retry_count);
+  auto retry_delay
+    = d.named_optional("retry_delay", &from_http_executor_args::retry_delay);
+  auto tls = d.named("tls", &from_http_executor_args::tls);
+  auto parse = d.pipeline(&from_http_executor_args::parse);
+  d.validate([=](ValidateCtx& ctx) -> Empty {
+    auto args = from_http_executor_args{};
+    args.op = ctx.get_location(url).value_or(location::unknown);
+    if (auto x = ctx.get(url)) {
+      args.url = *x;
+    }
+    if (auto x = ctx.get(method)) {
+      args.method = *x;
+    }
+    if (auto x = ctx.get(body)) {
+      args.body = *x;
+    }
+    if (auto x = ctx.get(encode)) {
+      args.encode = *x;
+    }
+    if (auto x = ctx.get(headers)) {
+      args.headers = *x;
+    }
+    if (auto x = ctx.get(metadata_field)) {
+      args.metadata_field = *x;
+    }
+    if (auto x = ctx.get(error_field)) {
+      args.error_field = *x;
+    }
+    if (auto x = ctx.get(paginate)) {
+      args.paginate = *x;
+    }
+    if (auto x = ctx.get(paginate_delay)) {
+      args.paginate_delay = *x;
+    }
+    if (auto x = ctx.get(connection_timeout)) {
+      args.connection_timeout = *x;
+    }
+    if (auto x = ctx.get(max_retry_count)) {
+      args.max_retry_count = *x;
+    }
+    if (auto x = ctx.get(retry_delay)) {
+      args.retry_delay = *x;
+    }
+    if (auto x = ctx.get(tls)) {
+      args.tls = *x;
+    }
+    if (auto x = ctx.get(parse)) {
+      args.parse = *x;
+    }
+    std::ignore = args.validate(ctx);
+    return {};
+  });
+  return d.without_optimize();
+}
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = from_http_args{};
-    args.op = inv.self.get_location();
-    auto p = argument_parser2::operator_(name());
-    args.add_to(p);
-    TRY(p.parse(inv, ctx));
-    TRY(args.paginate, validate_paginate(std::move(args.paginate_expr), ctx));
-    TRY(args.validate(ctx));
-    warn_deprecated_payload(inv, ctx);
-    // Check if the subpipeline is a sink
-    bool subpipeline_is_sink = false;
-    if (args.parse) {
-      auto ty = args.parse->inner.infer_type(tag_v<chunk_ptr>);
-      if (ty and ty->is<void>()) {
-        subpipeline_is_sink = true;
-      }
+auto describe_accept_http_executor_impl() -> Description {
+  auto d = Describer<accept_http_executor_args, accept_http_executor_operator>{};
+  d.operator_location(&accept_http_executor_args::op);
+  auto url = d.positional("url", &accept_http_executor_args::url);
+  auto metadata_field
+    = d.named("metadata_field", &accept_http_executor_args::metadata_field);
+  auto responses = d.named("responses", &accept_http_executor_args::responses);
+  auto max_request_size
+    = d.named("max_request_size", &accept_http_executor_args::max_request_size);
+  auto max_connections
+    = d.named("max_connections", &accept_http_executor_args::max_connections);
+  auto tls = d.named("tls", &accept_http_executor_args::tls);
+  auto parse = d.pipeline(&accept_http_executor_args::parse);
+  d.validate([=](ValidateCtx& ctx) -> Empty {
+    auto args = accept_http_executor_args{};
+    args.op = ctx.get_location(url).value_or(location::unknown);
+    if (auto x = ctx.get(url)) {
+      args.url = *x;
     }
-    auto op = operator_ptr{};
-    if (args.server) {
-      op = std::make_unique<from_http_server_operator>(std::move(args));
-    } else {
-      op = std::make_unique<from_http_client_operator>(std::move(args));
+    if (auto x = ctx.get(metadata_field)) {
+      args.metadata_field = *x;
     }
-    // If the subpipeline is a sink, the `from_http` parent operator would not
-    // never produce any events. It would be effectively a sink. To remain
-    // consistent with other parts in the codebase, we explicitly append a
-    // discard operator for such scenarios.
-    if (subpipeline_is_sink) {
-      auto pipe = std::make_unique<pipeline>();
-      pipe->append(std::move(op));
-      const auto* discard_plugin
-        = plugins::find<operator_factory_plugin>("discard");
-      TENZIR_ASSERT(discard_plugin);
-      TRY(auto discard_op, discard_plugin->make({inv.self, {}}, ctx));
-      pipe->append(std::move(discard_op));
-      return pipe;
+    if (auto x = ctx.get(responses)) {
+      args.responses = *x;
     }
-    return op;
-  }
+    if (auto x = ctx.get(max_request_size)) {
+      args.max_request_size = *x;
+    }
+    if (auto x = ctx.get(max_connections)) {
+      args.max_connections = *x;
+    }
+    if (auto x = ctx.get(tls)) {
+      args.tls = *x;
+    }
+    if (auto x = ctx.get(parse)) {
+      args.parse = *x;
+    }
+    std::ignore = args.validate(ctx);
+    return {};
+  });
+  return d.without_optimize();
+}
 
-  auto load_properties() const -> load_properties_t override {
-    return {
-      .schemes = {"http", "https"},
-      .default_format = plugins::find<operator_factory_plugin>("read_json"),
-      .accepts_pipeline = true,
-      .events = true,
-    };
+auto make_from_http_legacy_impl(operator_factory_plugin::invocation inv, session ctx)
+  -> failure_or<operator_ptr> {
+  auto args = from_http_args{};
+  args.op = inv.self.get_location();
+  auto p = argument_parser2::operator_("tql2.from_http");
+  args.add_to(p);
+  TRY(p.parse(inv, ctx));
+  TRY(args.paginate, validate_paginate(std::move(args.paginate_expr), ctx));
+  TRY(args.validate(ctx));
+  warn_deprecated_payload(inv, ctx);
+  auto subpipeline_is_sink = false;
+  if (args.parse) {
+    auto ty = args.parse->inner.infer_type(tag_v<chunk_ptr>);
+    if (ty and ty->is<void>()) {
+      subpipeline_is_sink = true;
+    }
   }
-};
+  auto op = operator_ptr{};
+  if (args.server) {
+    op = std::make_unique<from_http_server_operator>(std::move(args));
+  } else {
+    op = std::make_unique<from_http_client_operator>(std::move(args));
+  }
+  if (subpipeline_is_sink) {
+    auto pipe = std::make_unique<pipeline>();
+    pipe->append(std::move(op));
+    const auto* discard_plugin = plugins::find<operator_factory_plugin>("discard");
+    TENZIR_ASSERT(discard_plugin);
+    TRY(auto discard_op, discard_plugin->make({inv.self, {}}, ctx));
+    pipe->append(std::move(discard_op));
+    return pipe;
+  }
+  return op;
+}
+
+auto from_http_legacy_load_properties_impl()
+  -> operator_factory_plugin::load_properties_t {
+  return {
+    .schemes = {"http", "https"},
+    .default_format = plugins::find<operator_factory_plugin>("read_json"),
+    .accepts_pipeline = true,
+    .events = true,
+  };
+}
 
 //------------------------------------ http ------------------------------------
 
@@ -2553,9 +3885,26 @@ using from_http_client = operator_inspection_plugin<from_http_client_operator>;
 using from_http_server = operator_inspection_plugin<from_http_server_operator>;
 
 } // namespace
+
+auto make_from_http_legacy(operator_factory_plugin::invocation inv, session ctx)
+  -> failure_or<operator_ptr> {
+  return make_from_http_legacy_impl(std::move(inv), std::move(ctx));
+}
+
+auto from_http_legacy_load_properties()
+  -> operator_factory_plugin::load_properties_t {
+  return from_http_legacy_load_properties_impl();
+}
+
+auto describe_from_http_executor() -> Description {
+  return describe_from_http_executor_impl();
+}
+
+auto describe_accept_http_executor() -> Description {
+  return describe_accept_http_executor_impl();
+}
 } // namespace tenzir::plugins::http
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_client)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_server)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::http_plugin)

@@ -1,0 +1,6 @@
+error: cannot_connect_to_node: AsyncSocketException: connect failed, type = Socket not open, errno = 61 (Connection refused)
+ --> tests/operators/from_http/from_http_paginate_link_unreachable.tql:6:1
+  |
+6 | from_http env("HTTP_FIXTURE_LINK_UNREACHABLE_URL"),
+  | ^^^^^^^^^ 
+  |

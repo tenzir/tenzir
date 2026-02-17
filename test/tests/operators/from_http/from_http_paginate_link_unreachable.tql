@@ -1,0 +1,12 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_LINK_UNREACHABLE_URL"),
+          paginate="link",
+          connection_timeout=200ms,
+          max_retry_count=0,
+          retry_delay=0s {
+  read_json
+}

@@ -1,0 +1,13 @@
+---
+fixtures:
+  - http:
+      tls: true
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_URL"),
+          method="post",
+          body={tls: "ok"},
+          tls={skip_peer_verification: true} {
+  read_json
+}

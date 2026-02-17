@@ -1,6 +1,0 @@
-error: failed to make http request: !! cannot_connect_to_node: 127.0.0.1:9
- --> tests/operators/from_http/from_http_paginate_link_unreachable.tql:7:1
-  |
-7 | from_http env("HTTP_FIXTURE_LINK_UNREACHABLE_URL"), paginate="link", connection_timeout=200ms, max_retry_count=0, retry_delay=0s { read_json }
-  | ^^^^^^^^^ 
-  |

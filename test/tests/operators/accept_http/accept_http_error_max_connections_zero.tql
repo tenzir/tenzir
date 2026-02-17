@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+accept_http "127.0.0.1:31337", max_connections=0 {
+  read_json
+}

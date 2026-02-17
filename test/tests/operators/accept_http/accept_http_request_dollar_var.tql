@@ -1,0 +1,16 @@
+---
+fixtures:
+  - http:
+      mode: client
+      path: /dollar
+      body: '{"x":1}'
+timeout: 60
+---
+
+accept_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT") {
+  read_json
+  where $request.path == "/dollar" and $request.method == "POST"
+  request=$request
+  request.headers.Host = replace_regex(request.headers.Host, ":[0-9]+$", ":*")
+}
+head 1
