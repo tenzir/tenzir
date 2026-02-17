@@ -1,0 +1,5 @@
+suite: from-file-lifecycle-rename
+fixtures:
+  - local_files:
+      verify_rename: true
+timeout: 30

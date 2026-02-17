@@ -1,0 +1,4 @@
+from_gcs env("GCS_BUCKET") + "/single/data.json?endpoint_override=" + env("GCS_ENDPOINT") + "&scheme=http",
+         anonymous=true {
+  read_json
+}

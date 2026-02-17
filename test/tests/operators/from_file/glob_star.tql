@@ -1,0 +1,4 @@
+from_file env("FILE_ROOT") + "/multi/*.json" {
+  read_json
+}
+sort filename

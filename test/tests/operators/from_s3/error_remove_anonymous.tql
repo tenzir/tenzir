@@ -1,0 +1,7 @@
+// Anonymous users can read from the public bucket but cannot delete objects.
+// The read succeeds, then remove fails with an access denied warning.
+from_s3 env("S3_PUBLIC_BUCKET") + "/data-remove.json?endpoint_override=" + env("S3_ENDPOINT") + "&scheme=http",
+        anonymous=true,
+        remove=true {
+  read_json
+}

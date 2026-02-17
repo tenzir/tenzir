@@ -1,0 +1,3 @@
+{
+  filename: "lifecycle/remove-target.json",
+}

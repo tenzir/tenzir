@@ -1,0 +1,6 @@
+{
+  filename: "nested/subdir-a/data.json",
+}
+{
+  filename: "nested/subdir-b/data.json",
+}

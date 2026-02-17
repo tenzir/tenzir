@@ -1,0 +1,3 @@
+from_file env("FILE_ROOT") + "/single/data.json" {
+  read_json
+}

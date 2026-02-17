@@ -1,0 +1,5 @@
+suite: from-abs
+fixtures: [abs]
+timeout: 30
+skip:
+  on: fixture-unavailable
