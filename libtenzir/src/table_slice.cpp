@@ -33,6 +33,7 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
+#include <arrow/util/byte_size.h>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
@@ -1788,6 +1789,25 @@ auto table_slice::approx_bytes() const -> uint64_t {
     },
   };
   return visit(f, as_flatbuffer(chunk_));
+}
+
+auto table_slice::total_buffer_size() const -> uint64_t {
+  if (not chunk_) {
+    return 0;
+  }
+  auto chunk_bytes = static_cast<uint64_t>(chunk_->size());
+  auto batch = to_record_batch(*this);
+  auto arrow_bytes
+    = static_cast<uint64_t>(arrow::util::TotalBufferSize(*batch));
+  if (is_serialized()) {
+    // Arrow buffers are zero-copy views into the chunk's IPC data, so
+    // the chunk size covers the Arrow data. Use max to account for
+    // FlatBuffers framing overhead around the IPC buffer.
+    return std::max(chunk_bytes, arrow_bytes);
+  }
+  // Arrow buffers are independently allocated; the chunk only holds a
+  // small FlatBuffers stub. No overlap.
+  return chunk_bytes + arrow_bytes;
 }
 
 auto table_slice::memory_stats() noexcept -> struct memory_stats {
