@@ -61,7 +61,6 @@ let
       double-conversion,
       libevent,
       liburing,
-      libsodium,
       snappy,
       expat,
       # Defaults to null because it is omitted for the developer edition build.
@@ -240,7 +239,6 @@ let
               fluent-bit
               libpcap
               libunwind
-              libsodium
               rabbitmq-c
               rdkafka
               cyrus_sasl
@@ -274,7 +272,6 @@ let
               proxygen
               double-conversion
               libevent
-              libsodium
               snappy
               google-cloud-cpp-tenzir
               grpc
@@ -388,23 +385,7 @@ let
               ''
                 version_build_metadata=$(basename $out | cut -d'-' -f 1)
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              '')
-            + lib.optionalString isStatic ''
-              mkdir -p "$PWD/cmake/sodium"
-              cat > "$PWD/cmake/sodium/SodiumConfig.cmake" <<EOF
-              if(NOT TARGET Sodium::Sodium)
-                add_library(Sodium::Sodium UNKNOWN IMPORTED)
-                set_target_properties(Sodium::Sodium PROPERTIES
-                  IMPORTED_LOCATION "${libsodium}/lib/libsodium.a"
-                  INTERFACE_INCLUDE_DIRECTORIES "${lib.getDev libsodium}/include"
-                )
-              endif()
-              set(Sodium_FOUND TRUE)
-              set(Sodium_INCLUDE_DIR "${lib.getDev libsodium}/include")
-              set(Sodium_LIBRARY "${libsodium}/lib/libsodium.a")
-              EOF
-              cmakeFlagsArray+=("-DSodium_DIR=$PWD/cmake/sodium")
-            '';
+              '');
 
           hardeningDisable =
             lib.optionals isStatic [

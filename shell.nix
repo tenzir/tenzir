@@ -19,6 +19,7 @@ pkgs.mkShell (
         pkgs.ccache
         pkgs.clang-tools
         pkgs.cmake-format
+        pkgs.gperf
         pkgs.nixfmt-rfc-style
         pkgs.speeve
         pkgs.shfmt

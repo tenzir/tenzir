@@ -983,6 +983,33 @@ if (TENZIR_ENABLE_BUNDLED_PROXYGEN)
         "proxygen not found, either use -DTENZIR_ENABLE_BUNDLED_PROXYGEN=OFF"
         " or initialize the libtenzir/aux/proxygen submodule")
   endif ()
+  find_package(glog REQUIRED)
+  set(_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
+  if (TENZIR_ENABLE_SSE_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse")
+  endif ()
+  if (TENZIR_ENABLE_SSE2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse2")
+  endif ()
+  if (TENZIR_ENABLE_SSE3_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse3")
+  endif ()
+  if (TENZIR_ENABLE_SSSE3_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mssse3")
+  endif ()
+  if (TENZIR_ENABLE_SSE4_1_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse4.1")
+  endif ()
+  if (TENZIR_ENABLE_SSE4_2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -msse4.2")
+  endif ()
+  if (TENZIR_ENABLE_AVX_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mavx")
+  endif ()
+  if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
+    string(APPEND CMAKE_CXX_FLAGS " -mavx2")
+  endif ()
+  message(STATUS "Proxygen CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
   # Keep Proxygen from pulling bundled dependencies so it can stay versioned and
   # dependency-matched with the separate Folly package.
   set(PROXYGEN_USE_BUNDLED_FOLLY
@@ -1010,11 +1037,18 @@ if (TENZIR_ENABLE_BUNDLED_PROXYGEN)
   set(CMAKE_SKIP_INSTALL_RULES ON)
   add_subdirectory(libtenzir/aux/proxygen SYSTEM)
   set(CMAKE_SKIP_INSTALL_RULES "${_TENZIR_CMAKE_SKIP_INSTALL_RULES}")
+  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
+  TenzirSystemizeTarget(proxygenhttpserver)
+  add_library(proxygen::proxygenhttpserver ALIAS proxygenhttpserver)
   foreach (_tenzir_proxygen_export_target IN ITEMS proxygen proxygenhttpserver)
     if (TARGET ${_tenzir_proxygen_export_target})
       list(APPEND _tenzir_bundled_proxygen ${_tenzir_proxygen_export_target})
     endif ()
   endforeach ()
+  #export(
+  #  EXPORT proxygenTargets
+  #  FILE proxygen-config.cmake
+  #  NAMESPACE proxygen::)
   dependency_summary(
     "proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen"
     "Dependencies")
@@ -1022,22 +1056,22 @@ else ()
   find_package(proxygen REQUIRED CONFIG)
   dependency_summary("proxygen" proxygen::proxygen "Dependencies")
 endif ()
-foreach (
-  _tenzir_candidate IN
-  ITEMS "proxygen" "proxygen::proxygen" "Proxygen::proxygen"
-        "proxygenhttpserver" "proxygen::proxygenhttpserver"
-        "Proxygen::proxygenhttpserver")
-  if (TARGET ${_tenzir_candidate})
-    set(_tenzir_proxygen_target "${_tenzir_candidate}")
-    break()
-  endif ()
-endforeach ()
-if (NOT _tenzir_proxygen_target)
-  message(
-    FATAL_ERROR "Could not determine the Proxygen CMake target name; extend"
-                " the candidate list in CMakeLists.txt.")
-endif ()
-message(STATUS "Using Proxygen target: ${_tenzir_proxygen_target}")
+#foreach (
+#  _tenzir_candidate IN
+#  ITEMS "proxygen" "proxygen::proxygen" "Proxygen::proxygen"
+#        "proxygenhttpserver" "proxygen::proxygenhttpserver"
+#        "Proxygen::proxygenhttpserver")
+#  if (TARGET ${_tenzir_candidate})
+#    set(_tenzir_proxygen_target "${_tenzir_candidate}")
+#    break()
+#  endif ()
+#endforeach ()
+#if (NOT _tenzir_proxygen_target)
+#  message(
+#    FATAL_ERROR "Could not determine the Proxygen CMake target name; extend"
+#                " the candidate list in CMakeLists.txt.")
+#endif ()
+#message(STATUS "Using Proxygen target: ${_tenzir_proxygen_target}")
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS

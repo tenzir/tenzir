@@ -34,4 +34,10 @@ fizz.overrideAttrs (orig: {
     + lib.optionalString stdenv.hostPlatform.isx86_64 ''
       cmakeFlagsArray+=("-DCMAKE_CXX_FLAGS=-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2")
     '';
+  postInstall =
+    (orig.postInstall or "")
+    + ''
+    cp ../build/fbcode_builder/CMake/FindSodium.cmake $dev/lib/cmake/fizz/
+    sed -i '/include(CMakeFindDependencyMacro)/a list(APPEND CMAKE_MODULE_PATH "''${CMAKE_CURRENT_LIST_DIR}")' $dev/lib/cmake/fizz/fizz-config.cmake
+  '';
 })

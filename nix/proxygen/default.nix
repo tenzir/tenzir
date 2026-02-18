@@ -43,20 +43,6 @@ stdenv.mkDerivation (finalAttrs: {
     python3
   ];
 
-  buildInputs = [
-    fmt
-    folly
-    fizz
-    wangle
-    mvfst
-    zstd
-    zlib
-    openssl
-    c-ares
-    boost
-    glog
-  ];
-
   propagatedBuildInputs = [
     fmt
     folly
@@ -90,6 +76,9 @@ stdenv.mkDerivation (finalAttrs: {
     patchShebangs \
       proxygen/lib/http/gen_HTTPCommonHeaders.sh \
       proxygen/lib/stats/gen_StatsWrapper.sh
+
+
+    cmakeFlagsArray+=("-DCMAKE_CXX_FLAGS=-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2")
   '';
 
   doCheck = false;
