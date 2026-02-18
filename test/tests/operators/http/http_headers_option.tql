@@ -1,0 +1,12 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_HEADER_URL"),
+  h: {"X-Test": "alpha"},
+}
+http u, headers=h {
+  read_json
+}

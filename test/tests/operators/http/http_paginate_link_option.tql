@@ -1,0 +1,11 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_LINK_CHAIN_URL"),
+}
+http u, paginate="link" {
+  read_json
+}

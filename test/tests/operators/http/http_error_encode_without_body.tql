@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+http "https://example.org/data.json", encode="json" {
+  read_json
+}

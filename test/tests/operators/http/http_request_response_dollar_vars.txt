@@ -1,0 +1,16 @@
+{
+  method: "PUT",
+  request: {
+    u: "http://127.0.0.1:*/options/method",
+    m: "put",
+  },
+  response: {
+    code: 200,
+    headers: {
+      Server: "BaseHTTP/0.6 Python/*.*.*",
+      Date: "*",
+      "Content-Type": "application/json",
+      "Content-Length": "17",
+    },
+  },
+}

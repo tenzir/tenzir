@@ -18,7 +18,9 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/http.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
@@ -30,9 +32,7 @@
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/set.hpp"
 
-#include <arrow/util/compression.h>
 #include <boost/url/parse.hpp>
-#include <boost/url/url.hpp>
 #include <caf/action.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
@@ -50,7 +50,6 @@
 #include <caf/timespan.hpp>
 #include <openssl/ssl.h>
 
-#include <cctype>
 #include <charconv>
 #include <ranges>
 #include <unordered_map>
@@ -59,10 +58,14 @@
 
 constexpr auto max_response_size = std::numeric_limits<int32_t>::max();
 
+namespace tenzir::plugins {
+auto describe_http_executor() -> Description;
+}
+
 namespace tenzir::plugins::http {
 namespace {
 
-namespace http = caf::net::http;
+namespace caf_http = caf::net::http;
 namespace ssl = caf::net::ssl;
 using namespace std::literals;
 
@@ -76,72 +79,7 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
 auto try_decompress_body(const std::string_view encoding,
                          const std::span<const std::byte> body,
                          diagnostic_handler& dh) -> std::optional<blob> {
-  if (encoding.empty()) {
-    return std::nullopt;
-  }
-  const auto compression_type
-    = arrow::util::Codec::GetCompressionType(std::string{encoding});
-  if (not compression_type.ok()) {
-    diagnostic::warning("invalid compression type: {}", encoding)
-      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
-      .note("skipping decompression")
-      .emit(dh);
-    return std::nullopt;
-  }
-  auto out = blob{};
-  out.resize(body.size_bytes() * 2);
-  const auto codec = arrow::util::Codec::Create(
-    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
-  TENZIR_ASSERT(codec.ok());
-  if (not codec.ValueUnsafe()) {
-    return std::nullopt;
-  }
-  const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
-  auto written = size_t{};
-  auto read = size_t{};
-  while (read != body.size_bytes()) {
-    const auto result = decompressor->Decompress(
-      detail::narrow<int64_t>(body.size_bytes() - read),
-      reinterpret_cast<const uint8_t*>(body.data() + read),
-      detail::narrow<int64_t>(out.size() - written),
-      reinterpret_cast<uint8_t*>(out.data() + written));
-    if (not result.ok()) {
-      diagnostic::warning("failed to decompress: {}",
-                          result.status().ToString())
-        .note("emitting compressed body")
-        .emit(dh);
-      return std::nullopt;
-    }
-    TENZIR_ASSERT(std::cmp_less_equal(result->bytes_written, out.size()));
-    written += result->bytes_written;
-    read += result->bytes_read;
-    if (result->need_more_output) {
-      if (out.size() == out.max_size()) [[unlikely]] {
-        diagnostic::error("failed to resize buffer").emit(dh);
-        return std::nullopt;
-      }
-      if (out.size() < out.max_size() / 2) {
-        out.resize(out.size() * 2);
-      } else [[unlikely]] {
-        out.resize(out.max_size());
-      }
-    }
-    // In case the input contains multiple concatenated compressed streams,
-    // we gracefully reset the decompressor.
-    if (decompressor->IsFinished()) {
-      const auto result = decompressor->Reset();
-      if (not result.ok()) {
-        diagnostic::warning("failed to reset decompressor: {}",
-                            result.ToString())
-          .note("emitting compressed body")
-          .emit(dh);
-        return std::nullopt;
-      }
-    }
-  }
-  TENZIR_ASSERT(written != 0);
-  out.resize(written);
-  return out;
+  return tenzir::http::try_decompress_body(encoding, body, dh);
 }
 
 struct http_actor_traits final {
@@ -414,7 +352,7 @@ auto find_plugin_for_mime(std::string_view mime, location op,
 }
 
 auto make_pipeline(const std::optional<located<pipeline>>& pipe,
-                   const caf::uri& uri, const http::response& r, location oploc,
+                   const caf::uri& uri, const caf_http::response& r, location oploc,
                    diagnostic_handler& dh) -> failure_or<located<pipeline>> {
   if (pipe) {
     return *pipe;
@@ -469,7 +407,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
 }
 
 auto make_pipeline(const std::optional<located<pipeline>>& pipe,
-                   const http::request& r, location oploc,
+                   const caf_http::request& r, location oploc,
                    diagnostic_handler& dh) -> failure_or<located<pipeline>> {
   if (pipe) {
     return *pipe;
@@ -631,170 +569,8 @@ auto is_link_pagination(const std::optional<pagination_spec>& paginate)
   return true;
 }
 
-// Splits a raw HTTP Link header value into individual link-value items.
-//
-// Implements a minimal subset of RFC 8288 by splitting only at top-level
-// commas, i.e., commas that are not inside URI references (`<...>`) and not
-// inside quoted strings.
-auto split_link_header(std::string_view value)
-  -> std::vector<std::string_view> {
-  auto result = std::vector<std::string_view>{};
-  auto start = size_t{0};
-  auto in_angle = false;
-  auto in_quotes = false;
-  auto escaped = false;
-  for (auto i = size_t{}; i < value.size(); ++i) {
-    const auto c = value[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (c == '\\' and in_quotes) {
-      escaped = true;
-      continue;
-    }
-    if (c == '"' and not in_angle) {
-      in_quotes = not in_quotes;
-      continue;
-    }
-    if (c == '<' and not in_quotes) {
-      in_angle = true;
-      continue;
-    }
-    if (c == '>' and not in_quotes) {
-      in_angle = false;
-      continue;
-    }
-    if (c == ',' and not in_quotes and not in_angle) {
-      auto item = detail::trim(value.substr(start, i - start));
-      if (not item.empty()) {
-        result.push_back(item);
-      }
-      start = i + 1;
-    }
-  }
-  auto item = detail::trim(value.substr(start));
-  if (not item.empty()) {
-    result.push_back(item);
-  }
-  return result;
-}
-
-// Splits link-value parameters into semicolon-separated parts.
-//
-// This follows RFC 8288-style quoting semantics for delimiters by ignoring
-// semicolons inside quoted strings and tracking backslash escapes.
-auto split_link_params(std::string_view value)
-  -> std::pair<std::vector<std::string_view>, bool> {
-  auto result = std::vector<std::string_view>{};
-  auto start = size_t{0};
-  auto in_quotes = false;
-  auto escaped = false;
-  for (auto i = size_t{}; i < value.size(); ++i) {
-    const auto c = value[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (c == '\\' and in_quotes) {
-      escaped = true;
-      continue;
-    }
-    if (c == '"') {
-      in_quotes = not in_quotes;
-      continue;
-    }
-    if (c == ';' and not in_quotes) {
-      auto item = detail::trim(value.substr(start, i - start));
-      if (not item.empty()) {
-        result.push_back(item);
-      }
-      start = i + 1;
-    }
-  }
-  auto item = detail::trim(value.substr(start));
-  if (not item.empty()) {
-    result.push_back(item);
-  }
-  return {std::move(result), not in_quotes};
-}
-
-auto rel_contains_next(std::string_view value) -> bool {
-  value = detail::trim(value);
-  if (value.size() >= 2 and value.front() == '"' and value.back() == '"') {
-    value.remove_prefix(1);
-    value.remove_suffix(1);
-  }
-  auto index = size_t{};
-  while (index < value.size()) {
-    while (index < value.size()
-           and std::isspace(static_cast<unsigned char>(value[index])) != 0) {
-      ++index;
-    }
-    const auto token_begin = index;
-    while (index < value.size()
-           and std::isspace(static_cast<unsigned char>(value[index])) == 0) {
-      ++index;
-    }
-    const auto token = value.substr(token_begin, index - token_begin);
-    if (not token.empty() and detail::ascii_icase_equal(token, "next")) {
-      return true;
-    }
-  }
-  return false;
-}
-
-struct next_link_target_result {
-  std::optional<std::string_view> target;
-  bool malformed = false;
-};
-
-// Parses a single RFC 8288 link-value and extracts its `rel=next` target.
-auto next_link_target(std::string_view header) -> next_link_target_result {
-  auto item = detail::trim(header);
-  if (item.empty()) {
-    return {};
-  }
-  if (item.front() != '<') {
-    return {.malformed = true};
-  }
-  const auto uri_end = item.find('>');
-  if (uri_end == std::string_view::npos) {
-    return {.malformed = true};
-  }
-  auto target = item.substr(1, uri_end - 1);
-  auto params = item.substr(uri_end + 1);
-  auto [param_parts, ok] = split_link_params(params);
-  if (not ok) {
-    return {.malformed = true};
-  }
-  auto has_next = false;
-  for (const auto part : param_parts) {
-    const auto eq = part.find('=');
-    auto name = detail::trim(part.substr(0, eq));
-    if (name.empty()) {
-      continue;
-    }
-    if (not detail::ascii_icase_equal(name, "rel")) {
-      continue;
-    }
-    if (eq == std::string_view::npos) {
-      continue;
-    }
-    const auto value = detail::trim(part.substr(eq + 1));
-    if (rel_contains_next(value)) {
-      has_next = true;
-      break;
-    }
-  }
-  if (has_next) {
-    return {.target = target};
-  }
-  return {};
-}
-
 auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
-                                const http::response& response,
+                                const caf_http::response& response,
                                 const caf::uri& request_uri,
                                 diagnostic_handler& dh)
   -> std::optional<std::string> {
@@ -803,74 +579,35 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
   if (not link_pagination) {
     return std::nullopt;
   }
-  auto request_uri_str = request_uri.str();
-  const auto base_uri = boost::urls::parse_uri_reference(request_uri_str);
-  if (not base_uri) {
-    diagnostic::warning("failed to parse request URI for link pagination: {}",
-                        base_uri.error().message())
-      .primary(*paginate)
-      .note("stopping pagination")
-      .emit(dh);
-    return std::nullopt;
-  }
-  auto malformed = false;
+  auto response_data = tenzir::http::ResponseData{};
+  response_data.headers.reserve(response.header_fields().size());
   for (const auto& [name, value] : response.header_fields()) {
-    if (not detail::ascii_icase_equal(name, "link")) {
-      continue;
-    }
-    for (const auto header : split_link_header(value)) {
-      const auto parsed = next_link_target(header);
-      if (parsed.target) {
-        auto ref = boost::urls::parse_uri_reference(*parsed.target);
-        if (not ref) {
-          diagnostic::warning("invalid `rel=next` URL in Link header: {}",
-                              ref.error().message())
-            .primary(*paginate)
-            .note("stopping pagination")
-            .emit(dh);
-          return std::nullopt;
-        }
-        auto resolved = boost::urls::url{};
-        if (auto result = boost::urls::resolve(*base_uri, *ref, resolved);
-            not result) {
-          diagnostic::warning("failed to resolve `rel=next` URL: {}",
-                              result.error().message())
-            .primary(*paginate)
-            .note("stopping pagination")
-            .emit(dh);
-          return std::nullopt;
-        }
-        return std::string{resolved.buffer()};
-      }
-      if (parsed.malformed) {
-        malformed = true;
-      }
-    }
+    response_data.headers.emplace_back(name, value);
   }
-  if (malformed) {
-    diagnostic::warning("failed to parse Link header for pagination")
-      .primary(*paginate)
-      .note("stopping pagination")
-      .emit(dh);
-  }
-  return std::nullopt;
+  auto request_uri_str = request_uri.str();
+  return tenzir::http::next_url_from_link_headers(
+    response_data, request_uri_str, std::optional<location>{paginate->source},
+    dh);
 }
 
-auto make_metadata(const http::response& r, const uint64_t len)
+auto make_metadata(const caf_http::response& r, const uint64_t len)
   -> series_builder {
+  auto response_data = tenzir::http::ResponseData{};
+  response_data.status_code = detail::narrow<uint16_t>(
+    std::to_underlying(r.code()));
+  response_data.headers.reserve(r.header_fields().size());
+  for (const auto& [name, value] : r.header_fields()) {
+    response_data.headers.emplace_back(name, value);
+  }
+  auto metadata = tenzir::http::make_response_record(response_data);
   auto sb = series_builder{};
   for (auto i = uint64_t{}; i < len; ++i) {
-    auto rb = sb.record();
-    rb.field("code", static_cast<uint64_t>(r.code()));
-    auto hb = rb.field("headers").record();
-    for (const auto& [k, v] : r.header_fields()) {
-      hb.field(k, v);
-    }
+    sb.data(metadata);
   }
   return sb;
 }
 
-auto make_metadata(const http::request& r, const uint64_t len) -> series {
+auto make_metadata(const caf_http::request& r, const uint64_t len) -> series {
   auto sb = series_builder{};
   for (auto i = uint64_t{}; i < len; ++i) {
     auto rb = sb.record();
@@ -1115,9 +852,9 @@ struct from_http_args {
         TRY(has_typed_key<std::string>(*rec, "body", responses->source, dh));
         const auto code = as<uint64_t>(rec->at("code"));
         const auto ucode
-          = detail::narrow<std::underlying_type_t<http::status>>(code);
-        auto status = http::status{};
-        if (not http::from_integer(ucode, status)) {
+          = detail::narrow<std::underlying_type_t<caf_http::status>>(code);
+        auto status = caf_http::status{};
+        if (not caf_http::from_integer(ucode, status)) {
           diagnostic::error("got invalid http status code `{}`", code)
             .primary(responses->source)
             .emit(dh);
@@ -1148,12 +885,12 @@ struct from_http_args {
     return {};
   }
 
-  auto make_method() const -> std::optional<http::method> {
+  auto make_method() const -> std::optional<caf_http::method> {
     if (not method) {
-      return body ? http::method::post : http::method::get;
+      return body ? caf_http::method::post : caf_http::method::get;
     }
-    auto m = http::method{};
-    if (http::from_string(method->inner, m)) {
+    auto m = caf_http::method{};
+    if (caf_http::from_string(method->inner, m)) {
       return m;
     }
     return std::nullopt;
@@ -1229,7 +966,7 @@ struct from_http_args {
 
 struct inreq_queue_item {
   http_actor actor;
-  http::request req;
+  caf_http::request req;
   table_slice slice;
 };
 
@@ -1250,7 +987,7 @@ public:
         return std::move(diag).modify().severity(severity::warning).done();
       },
     };
-    auto pull = std::optional<caf::async::consumer_resource<http::request>>{};
+    auto pull = std::optional<caf::async::consumer_resource<caf_http::request>>{};
     auto url = std::string{};
     auto port = uint16_t{};
     auto req = make_secret_request("url", args_.url, url, dh);
@@ -1280,14 +1017,14 @@ public:
     }
     url.resize(col);
     auto server
-      = http::with(ctrl.self().system())
+      = caf_http::with(ctrl.self().system())
           .context(args_.make_ssl_context(ctrl))
           .accept(port, url)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
           .max_connections(inner(args_.max_connections).value_or(10))
           .max_request_size(
             inner(args_.max_request_size).value_or(10 * 1024 * 1024))
-          .start([&](caf::async::consumer_resource<http::request> cr) {
+          .start([&](caf::async::consumer_resource<caf_http::request> cr) {
             TENZIR_ASSERT(not pull);
             pull = std::move(cr);
           });
@@ -1299,7 +1036,7 @@ public:
     }
     TENZIR_ASSERT(pull);
     auto active = std::deque<inreq_queue_item>{};
-    const auto respond = [&](const http::request& r) {
+    const auto respond = [&](const caf_http::request& r) {
       if (args_.responses) {
         const auto it = args_.responses->inner.find(r.header().path());
         if (it != args_.responses->inner.end()) {
@@ -1307,14 +1044,14 @@ public:
           auto code = as<uint64_t>(rec["code"]);
           auto ty = as<std::string>(rec["content_type"]);
           auto body = as<std::string>(rec["body"]);
-          r.respond(static_cast<http::status>(code), ty, body);
+          r.respond(static_cast<caf_http::status>(code), ty, body);
         }
       } else {
-        r.respond(http::status::ok, "", "");
+        r.respond(caf_http::status::ok, "", "");
       }
     };
     const auto request_slice
-      = [&](const http_actor& actor, const http::request& r) {
+      = [&](const http_actor& actor, const caf_http::request& r) {
           ctrl.self()
             .mail(atom::pull_v)
             .request(actor, caf::infinite)
@@ -1341,7 +1078,7 @@ public:
     ctrl.self()
       .make_observable()
       .from_resource(std::move(*pull))
-      .for_each([&](const http::request& r) mutable {
+      .for_each([&](const caf_http::request& r) mutable {
         TENZIR_TRACE("[http] handling request with size: {}B",
                      r.body().size_bytes());
         if (r.body().empty()) {
@@ -1408,21 +1145,13 @@ struct pagination_request {
   std::unordered_map<std::string, std::string> headers;
 };
 
-auto normalize_http_url(std::string& url, bool tls_enabled) -> void {
-  if (not url.starts_with("http://") and not url.starts_with("https://")) {
-    url.insert(0, tls_enabled ? "https://" : "http://");
-  } else if (tls_enabled and url.starts_with("http://")) {
-    url.insert(4, "s");
-  }
-}
-
 auto queue_pagination_request(
   std::vector<pagination_request>& queue,
   const std::unordered_map<std::string, std::string>& headers,
   std::string next_url, bool tls_enabled, const location& op,
   diagnostic_handler& dh, severity diag_severity, std::string_view note = {})
   -> bool {
-  normalize_http_url(next_url, tls_enabled);
+  tenzir::http::normalize_http_url(next_url, tls_enabled);
   auto next_uri = caf::make_uri(next_url);
   if (not next_uri) {
     if (diag_severity == severity::warning) {
@@ -1494,10 +1223,10 @@ public:
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
       co_return;
     }
-    normalize_http_url(url, tls_enabled);
+    tenzir::http::normalize_http_url(url, tls_enabled);
     const auto handle_response = [&](caf::uri uri) {
       return [&, hdrs = headers,
-              uri = std::move(uri)](const http::response& r) {
+              uri = std::move(uri)](const caf_http::response& r) {
         ctrl.set_waiting(false);
         TENZIR_TRACE("[http] handling response with size: {}B",
                      r.body().size_bytes());
@@ -1633,7 +1362,7 @@ public:
           TENZIR_UNREACHABLE();
         });
     }
-    http::with(ctrl.self().system())
+    caf_http::with(ctrl.self().system())
       .context(args_.make_ssl_context(*uri, ctrl))
       .connect(*uri)
       .max_response_size(max_response_size)
@@ -1650,7 +1379,7 @@ public:
       .transform([](auto&& x) {
         return std::move(x.first);
       })
-      .transform([&](const caf::async::future<http::response>& fut) {
+      .transform([&](const caf::async::future<caf_http::response>& fut) {
         ++awaiting;
         fut.bind_to(ctrl.self())
           .then(handle_response(std::move(*uri)), [&](const caf::error& e) {
@@ -1675,7 +1404,7 @@ public:
           args_.paginate_delay->inner,
           [&, preq = std::move(paginate_queue[i])] mutable {
             auto& [uri, hdrs] = preq;
-            http::with(ctrl.self().system())
+            caf_http::with(ctrl.self().system())
               .context(args_.make_ssl_context(uri, ctrl))
               .connect(uri)
               .max_response_size(max_response_size)
@@ -1694,7 +1423,7 @@ public:
               .transform([](auto&& x) {
                 return x.first;
               })
-              .transform([&](const caf::async::future<http::response>& fut) {
+              .transform([&](const caf::async::future<caf_http::response>& fut) {
                 fut.bind_to(ctrl.self())
                   .then(handle_response(std::move(uri)),
                         [&](const caf::error& e) {
@@ -1949,15 +1678,15 @@ struct http_args {
   }
 
   auto make_method(const std::string_view method) const
-    -> std::optional<http::method> {
+    -> std::optional<caf_http::method> {
     if (method.empty()) {
       if (not this->method and body) {
-        return http::method::post;
+        return caf_http::method::post;
       }
-      return http::method::get;
+      return caf_http::method::get;
     }
-    auto m = http::method{};
-    if (http::from_string(method, m)) {
+    auto m = caf_http::method{};
+    if (caf_http::from_string(method, m)) {
       return m;
     }
     return std::nullopt;
@@ -2016,7 +1745,7 @@ public:
       = [&](view<record> og, caf::uri uri,
             std::unordered_map<std::string, std::string> hdrs) {
           return [&, hdrs = std::move(hdrs), uri = std::move(uri),
-                  og = materialize(std::move(og))](const http::response& r) {
+                  og = materialize(std::move(og))](const caf_http::response& r) {
             TENZIR_TRACE("[http] handling response with size: {}B",
                          r.body().size_bytes());
             ctrl.set_waiting(false);
@@ -2264,7 +1993,7 @@ public:
             .emit(dh);
           continue;
         }
-        normalize_http_url(url, tls_enabled);
+        tenzir::http::normalize_http_url(url, tls_enabled);
         const auto m = args_.make_method(method);
         if (not m) {
           diagnostic::warning("invalid http method: `{}`", method)
@@ -2288,7 +2017,7 @@ public:
         if (not has_accept_header) {
           headers.emplace("Accept", "application/json, */*;q=0.5");
         }
-        http::with(ctrl.self().system())
+        caf_http::with(ctrl.self().system())
           .context(args_.make_ssl_context(*caf_uri, ctrl))
           .connect(*caf_uri)
           .max_response_size(max_response_size)
@@ -2305,7 +2034,7 @@ public:
           .transform([](auto&& x) {
             return std::move(x.first);
           })
-          .transform([&](const caf::async::future<http::response>& fut) {
+          .transform([&](const caf::async::future<caf_http::response>& fut) {
             ++awaiting;
             fut.bind_to(ctrl.self())
               .then(handle_response(row, std::move(*caf_uri),
@@ -2338,7 +2067,7 @@ public:
             args_.paginate_delay.inner,
             [&, preq = std::move(pagination_queue[i])] mutable {
               auto& [uri, hdrs] = preq;
-              http::with(ctrl.self().system())
+              caf_http::with(ctrl.self().system())
                 .context(args_.make_ssl_context(uri, ctrl))
                 .connect(uri)
                 .max_response_size(max_response_size)
@@ -2356,7 +2085,7 @@ public:
                 .transform([](auto&& x) {
                   return x.first;
                 })
-                .transform([&](const caf::async::future<http::response>& fut) {
+                .transform([&](const caf::async::future<caf_http::response>& fut) {
                   fut.bind_to(ctrl.self())
                     .then(handle_response(row, std::move(uri), std::move(hdrs)),
                           [&](const caf::error& e) {
@@ -2532,7 +2261,12 @@ private:
   http_args args_;
 };
 
-struct http_plugin final : public operator_plugin2<http_operator> {
+struct HttpPlugin final : public virtual operator_plugin2<http_operator>,
+                          public virtual OperatorPlugin {
+  auto name() const -> std::string override {
+    return "tql2.http";
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = http_args{};
@@ -2544,6 +2278,10 @@ struct http_plugin final : public operator_plugin2<http_operator> {
     TRY(args.validate(ctx));
     warn_deprecated_payload(inv, ctx);
     return std::make_unique<http_operator>(std::move(args));
+  }
+
+  auto describe() const -> Description override {
+    return tenzir::plugins::describe_http_executor();
   }
 };
 
@@ -2557,6 +2295,6 @@ using from_http_server = operator_inspection_plugin<from_http_server_operator>;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_client)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_server)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::http_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::HttpPlugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::internal_source_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::internal_sink_plugin)

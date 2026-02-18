@@ -1,0 +1,21 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_METHOD_URL"),
+  m: "put",
+}
+http u, method=m {
+  read_json
+  request=$request
+  response=$response
+  request.u = replace_regex(request.u, ":[0-9]+/", ":*/")
+  response.headers.Server = replace_regex(
+    response.headers.Server,
+    "Python/[0-9.]+",
+    "Python/*.*.*"
+  )
+  response.headers.Date = "*"
+}

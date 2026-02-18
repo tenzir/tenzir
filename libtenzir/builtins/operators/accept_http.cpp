@@ -15,6 +15,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
@@ -24,9 +25,7 @@
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/set.hpp"
 
-#include <arrow/util/compression.h>
 #include <boost/url/parse.hpp>
-#include <boost/url/parse_query.hpp>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/ServerSocket.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
@@ -36,14 +35,12 @@
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 
 #include <charconv>
-#include <ranges>
 #include <unordered_set>
 #include <utility>
 
-namespace tenzir::plugins::http {
+namespace tenzir::plugins {
 namespace {
 
-namespace phttp = proxygen;
 using namespace tenzir::si_literals;
 
 constexpr auto default_max_request_size = 10_Mi;
@@ -55,141 +52,6 @@ constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
     return x.inner;
   });
 };
-
-auto try_decompress_body(std::string_view const encoding,
-                         std::span<std::byte const> const body,
-                         diagnostic_handler& dh) -> std::optional<blob> {
-  if (encoding.empty()) {
-    return std::nullopt;
-  }
-  auto const compression_type
-    = arrow::util::Codec::GetCompressionType(std::string{encoding});
-  if (not compression_type.ok()) {
-    diagnostic::warning("invalid compression type: {}", encoding)
-      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
-      .note("skipping decompression")
-      .emit(dh);
-    return std::nullopt;
-  }
-  auto out = blob{};
-  out.resize(body.size_bytes() * 2);
-  auto const codec = arrow::util::Codec::Create(
-    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
-  TENZIR_ASSERT(codec.ok());
-  if (not codec.ValueUnsafe()) {
-    return std::nullopt;
-  }
-  auto const decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
-  auto written = size_t{};
-  auto read = size_t{};
-  while (read != body.size_bytes()) {
-    auto const result = decompressor->Decompress(
-      detail::narrow<int64_t>(body.size_bytes() - read),
-      reinterpret_cast<uint8_t const*>(body.data() + read),
-      detail::narrow<int64_t>(out.size() - written),
-      reinterpret_cast<uint8_t*>(out.data() + written));
-    if (not result.ok()) {
-      diagnostic::warning("failed to decompress: {}",
-                          result.status().ToString())
-        .note("emitting compressed body")
-        .emit(dh);
-      return std::nullopt;
-    }
-    TENZIR_ASSERT(std::cmp_less_equal(result->bytes_written, out.size()));
-    written += result->bytes_written;
-    read += result->bytes_read;
-    if (result->need_more_output) {
-      if (out.size() == out.max_size()) [[unlikely]] {
-        diagnostic::error("failed to resize buffer").emit(dh);
-        return std::nullopt;
-      }
-      if (out.size() < out.max_size() / 2) {
-        out.resize(out.size() * 2);
-      } else [[unlikely]] {
-        out.resize(out.max_size());
-      }
-    }
-    // In case the input contains multiple concatenated compressed streams,
-    // we gracefully reset the decompressor.
-    if (decompressor->IsFinished()) {
-      auto const result = decompressor->Reset();
-      if (not result.ok()) {
-        diagnostic::warning("failed to reset decompressor: {}",
-                            result.ToString())
-          .note("emitting compressed body")
-          .emit(dh);
-        return std::nullopt;
-      }
-    }
-  }
-  TENZIR_ASSERT(written != 0);
-  out.resize(written);
-  return out;
-}
-
-struct ProxygenRequestData {
-  std::string method;
-  std::string path;
-  std::string fragment;
-  std::string version;
-  std::vector<std::pair<std::string, std::string>> headers;
-  std::vector<std::pair<std::string, std::string>> query;
-  blob body;
-};
-
-auto decode_query_string(std::string_view query)
-  -> std::vector<std::pair<std::string, std::string>> {
-  auto result = std::vector<std::pair<std::string, std::string>>{};
-  if (query.empty()) {
-    return result;
-  }
-  auto parsed = boost::urls::parse_query(query);
-  if (not parsed) {
-    return result;
-  }
-  for (auto const& param : *parsed) {
-    result.emplace_back(std::string{param.key}, std::string{param.value});
-  }
-  return result;
-}
-
-auto find_header_value(
-  std::vector<std::pair<std::string, std::string>> const& headers,
-  std::string_view name) -> std::string_view {
-  auto const it = std::ranges::find_if(headers, [&](auto const& kv) {
-    return detail::ascii_icase_equal(kv.first, name);
-  });
-  if (it == headers.end()) {
-    return {};
-  }
-  return it->second;
-}
-
-auto make_request_record(ProxygenRequestData const& request) -> record {
-  auto headers = record{};
-  for (auto const& [k, v] : request.headers) {
-    headers.emplace(k, v);
-  }
-  auto query = record{};
-  for (auto const& [k, v] : request.query) {
-    query.emplace(k, v);
-  }
-  return record{
-    {"headers", std::move(headers)},
-    {"query", std::move(query)},
-    {"path", request.path},
-    {"fragment", request.fragment},
-    {"method", request.method},
-    {"version", request.version},
-    {"body", request.body},
-  };
-}
-
-auto make_request_event(ProxygenRequestData const& request) -> table_slice {
-  auto sb = series_builder{};
-  sb.data(make_request_record(request));
-  return sb.finish_assert_one_slice();
-}
 
 auto try_parse_response_code(data const& value) -> std::optional<uint16_t> {
   if (auto const* x = try_as<uint64_t>(value)) {
@@ -207,7 +69,7 @@ auto try_parse_response_code(data const& value) -> std::optional<uint16_t> {
   return std::nullopt;
 }
 
-struct AcceptHTTPExecutorArgs {
+struct AcceptHttpArgs {
   location op = location::unknown;
   located<secret> url;
   std::optional<located<record>> responses;
@@ -291,33 +153,33 @@ struct AcceptHTTPExecutorArgs {
   }
 };
 
-struct AcceptHTTPServerState {
-  std::shared_ptr<UnboundedQueue<std::optional<ProxygenRequestData>>> queue;
+struct AcceptHttpServerState {
+  std::shared_ptr<UnboundedQueue<std::optional<http::RequestData>>> queue;
   std::optional<record> responses;
   size_t max_request_size = default_max_request_size;
 };
 
-class AcceptHTTPHandler final : public phttp::coro::HTTPHandler {
+class AcceptHttpHandler final : public proxygen::coro::HTTPHandler {
 public:
-  explicit AcceptHTTPHandler(std::shared_ptr<AcceptHTTPServerState> state)
+  explicit AcceptHttpHandler(std::shared_ptr<AcceptHttpServerState> state)
     : state_{std::move(state)} {
   }
 
-  auto handleRequest(folly::EventBase*, phttp::coro::HTTPSessionContextPtr,
-                     phttp::coro::HTTPSourceHolder request_source)
-    -> folly::coro::Task<phttp::coro::HTTPSourceHolder> override {
-    auto request = ProxygenRequestData{};
+  auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
+                     proxygen::coro::HTTPSourceHolder request_source)
+    -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
+    auto request = http::RequestData{};
     auto body_too_large = false;
-    auto reader = phttp::coro::HTTPSourceReader{std::move(request_source)};
+    auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
     reader.onHeaders(
-      [&](std::unique_ptr<phttp::HTTPMessage> msg, bool is_final,
+      [&](std::unique_ptr<proxygen::HTTPMessage> msg, bool is_final,
           bool /*eom*/) -> bool {
         if (not is_final) {
-          return phttp::coro::HTTPSourceReader::Continue;
+          return proxygen::coro::HTTPSourceReader::Continue;
         }
         request.method = msg->getMethodString();
         request.path = msg->getPath();
-        request.query = decode_query_string(msg->getQueryString());
+        request.query = http::decode_query_string(msg->getQueryString());
         auto [major, minor] = msg->getHTTPVersion();
         request.version = fmt::format("{}.{}", major, minor);
         auto parsed = boost::urls::parse_uri_reference(msg->getURL());
@@ -328,13 +190,13 @@ public:
                                       std::string const& value) {
           request.headers.emplace_back(name, value);
         });
-        return phttp::coro::HTTPSourceReader::Continue;
+        return proxygen::coro::HTTPSourceReader::Continue;
       });
-    reader.onBody([&](phttp::coro::BufQueue body, bool /*eom*/) -> bool {
+    reader.onBody([&](proxygen::coro::BufQueue body, bool /*eom*/) -> bool {
       auto bytes = body.chainLength();
       if (request.body.size() + bytes > state_->max_request_size) {
         body_too_large = true;
-        return phttp::coro::HTTPSourceReader::Cancel;
+        return proxygen::coro::HTTPSourceReader::Cancel;
       }
       auto iobuf = body.move();
       if (iobuf) {
@@ -343,14 +205,14 @@ public:
           request.body.insert(request.body.end(), begin, begin + range.size());
         }
       }
-      return phttp::coro::HTTPSourceReader::Continue;
+      return proxygen::coro::HTTPSourceReader::Continue;
     });
     co_await reader.read();
     if (body_too_large) {
-      co_return phttp::coro::HTTPSourceHolder{
-        phttp::coro::HTTPFixedSource::makeFixedResponse(413, std::string{})};
+      co_return proxygen::coro::HTTPSourceHolder{
+        proxygen::coro::HTTPFixedSource::makeFixedResponse(413, std::string{})};
     }
-    state_->queue->enqueue(std::optional<ProxygenRequestData>{request});
+    state_->queue->enqueue(std::optional<http::RequestData>{request});
     auto response_code = uint16_t{200};
     auto content_type = std::string{};
     auto body = std::string{};
@@ -366,37 +228,37 @@ public:
       }
     }
     auto response_source
-      = phttp::coro::HTTPFixedSource::makeFixedResponse(response_code,
+      = proxygen::coro::HTTPFixedSource::makeFixedResponse(response_code,
                                                         std::move(body));
     if (not content_type.empty()) {
       response_source->msg_->getHeaders().set("Content-Type", content_type);
     }
-    co_return phttp::coro::HTTPSourceHolder{response_source};
+    co_return proxygen::coro::HTTPSourceHolder{response_source};
   }
 
 private:
-  std::shared_ptr<AcceptHTTPServerState> state_;
+  std::shared_ptr<AcceptHttpServerState> state_;
 };
 
-struct AcceptHTTPTaskEvent {
-  std::optional<ProxygenRequestData> request;
+struct AcceptHttpTaskEvent {
+  std::optional<http::RequestData> request;
 };
 
-class AcceptHTTPExecutorOperator final : public Operator<void, table_slice> {
+class AcceptHttp final : public Operator<void, table_slice> {
 public:
-  explicit AcceptHTTPExecutorOperator(AcceptHTTPExecutorArgs args)
+  explicit AcceptHttp(AcceptHttpArgs args)
     : args_{std::move(args)}, request_let_id_{args_.request_let} {
   }
 
-  AcceptHTTPExecutorOperator(AcceptHTTPExecutorOperator const&) = delete;
-  auto operator=(AcceptHTTPExecutorOperator const&)
-    -> AcceptHTTPExecutorOperator& = delete;
-  AcceptHTTPExecutorOperator(AcceptHTTPExecutorOperator&&) noexcept
+  AcceptHttp(AcceptHttp const&) = delete;
+  auto operator=(AcceptHttp const&)
+    -> AcceptHttp& = delete;
+  AcceptHttp(AcceptHttp&&) noexcept
     = default;
-  auto operator=(AcceptHTTPExecutorOperator&&) noexcept
-    -> AcceptHTTPExecutorOperator& = default;
+  auto operator=(AcceptHttp&&) noexcept
+    -> AcceptHttp& = default;
 
-  ~AcceptHTTPExecutorOperator() override {
+  ~AcceptHttp() override {
     stop_server();
   }
 
@@ -442,7 +304,7 @@ public:
       co_return;
     }
     tls_context_ = std::move(*ssl_result);
-    server_state_ = std::make_shared<AcceptHTTPServerState>();
+    server_state_ = std::make_shared<AcceptHttpServerState>();
     server_state_->queue = queue_;
     server_state_->responses = args_.responses.transform([](auto const& x) {
       return x.inner;
@@ -459,7 +321,7 @@ public:
     auto addr = folly::SocketAddress{host, port, true};
     server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket), addr,
                                              backlog};
-    handler_ = std::make_shared<AcceptHTTPHandler>(server_state_);
+    handler_ = std::make_shared<AcceptHttpHandler>(server_state_);
     ctx.spawn_task(folly::coro::co_withExecutor(event_base, accept_loop()));
   }
 
@@ -469,31 +331,33 @@ public:
       TENZIR_UNREACHABLE();
     }
     auto request = co_await queue_->dequeue();
-    co_return AcceptHTTPTaskEvent{std::move(request)};
+    co_return AcceptHttpTaskEvent{std::move(request)};
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto event = std::move(result).as<AcceptHTTPTaskEvent>();
+    auto event = std::move(result).as<AcceptHttpTaskEvent>();
     if (not event.request) {
       done_ = true;
       co_return;
     }
     auto request = std::move(*event.request);
     if (not args_.parse) {
-      auto slice = make_request_event(request);
+      auto slice = http::make_request_event(request);
       co_await push(std::move(slice));
       co_return;
     }
     if (request.body.empty()) {
       co_return;
     }
-    auto request_record = make_request_record(request);
+    auto request_record = http::make_request_record(request);
     auto body = std::move(request.body);
-    auto encoding = find_header_value(request.headers, "content-encoding");
+    auto encoding
+      = http::find_header_value(request.headers, "content-encoding");
     auto payload = chunk_ptr{};
     auto body_span = std::span<std::byte const>{body.data(), body.size()};
-    if (auto decompressed = try_decompress_body(encoding, body_span, ctx.dh())) {
+    if (auto decompressed
+        = http::try_decompress_body(encoding, body_span, ctx.dh())) {
       payload = chunk::make(std::move(*decompressed));
     } else {
       payload = chunk::make(std::move(body));
@@ -569,12 +433,12 @@ private:
           continue;
         }
       }
-      auto codec = phttp::HTTPCodecFactory::getCodec(
-        phttp::CodecProtocol::HTTP_1_1,
-        phttp::TransportDirection::DOWNSTREAM);
+      auto codec = proxygen::HTTPCodecFactory::getCodec(
+        proxygen::CodecProtocol::HTTP_1_1,
+        proxygen::TransportDirection::DOWNSTREAM);
       TENZIR_ASSERT(codec);
       auto tinfo = wangle::TransportInfo{};
-      auto session = phttp::coro::HTTPCoroSession::makeDownstreamCoroSession(
+      auto session = proxygen::coro::HTTPCoroSession::makeDownstreamCoroSession(
         std::move(transport), handler_, std::move(codec), std::move(tinfo));
       TENZIR_ASSERT(session);
       session->run().start();
@@ -588,14 +452,14 @@ private:
     }
   }
 
-  AcceptHTTPExecutorArgs args_;
+  AcceptHttpArgs args_;
   std::string resolved_url_;
-  std::shared_ptr<AcceptHTTPServerState> server_state_;
-  std::shared_ptr<UnboundedQueue<std::optional<ProxygenRequestData>>> queue_
-    = std::make_shared<UnboundedQueue<std::optional<ProxygenRequestData>>>();
+  std::shared_ptr<AcceptHttpServerState> server_state_;
+  std::shared_ptr<UnboundedQueue<std::optional<http::RequestData>>> queue_
+    = std::make_shared<UnboundedQueue<std::optional<http::RequestData>>>();
   std::unordered_set<data> active_sub_keys_;
   std::optional<Box<folly::coro::ServerSocket>> server_;
-  std::shared_ptr<AcceptHTTPHandler> handler_;
+  std::shared_ptr<AcceptHttpHandler> handler_;
   std::shared_ptr<folly::SSLContext> tls_context_;
   let_id request_let_id_;
   uint64_t next_sub_key_ = 0;
@@ -606,26 +470,26 @@ private:
 
 } // namespace
 
-struct AcceptHTTP final : public virtual OperatorPlugin {
+struct AcceptHttpPlugin final : public virtual OperatorPlugin {
   auto name() const -> std::string override {
     return "tql2.accept_http";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptHTTPExecutorArgs, AcceptHTTPExecutorOperator>{};
-    d.operator_location(&AcceptHTTPExecutorArgs::op);
-    auto url = d.positional("url", &AcceptHTTPExecutorArgs::url);
-    auto responses = d.named("responses", &AcceptHTTPExecutorArgs::responses);
+    auto d = Describer<AcceptHttpArgs, AcceptHttp>{};
+    d.operator_location(&AcceptHttpArgs::op);
+    auto url = d.positional("url", &AcceptHttpArgs::url);
+    auto responses = d.named("responses", &AcceptHttpArgs::responses);
     auto max_request_size
-      = d.named("max_request_size", &AcceptHTTPExecutorArgs::max_request_size);
+      = d.named("max_request_size", &AcceptHttpArgs::max_request_size);
     auto max_connections
-      = d.named("max_connections", &AcceptHTTPExecutorArgs::max_connections);
-    auto tls = d.named("tls", &AcceptHTTPExecutorArgs::tls);
+      = d.named("max_connections", &AcceptHttpArgs::max_connections);
+    auto tls = d.named("tls", &AcceptHttpArgs::tls);
     auto parse
-      = d.pipeline(&AcceptHTTPExecutorArgs::parse,
-                   {{"request", &AcceptHTTPExecutorArgs::request_let}});
+      = d.pipeline(&AcceptHttpArgs::parse,
+                   {{"request", &AcceptHttpArgs::request_let}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      auto args = AcceptHTTPExecutorArgs{};
+      auto args = AcceptHttpArgs{};
       args.op = ctx.get_location(url).value_or(location::unknown);
       if (auto x = ctx.get(url)) {
         args.url = *x;
@@ -652,6 +516,6 @@ struct AcceptHTTP final : public virtual OperatorPlugin {
   }
 };
 
-} // namespace tenzir::plugins::http
+} // namespace tenzir::plugins
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::AcceptHTTP)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::AcceptHttpPlugin)

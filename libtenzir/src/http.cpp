@@ -8,16 +8,422 @@
 
 #include "tenzir/http.hpp"
 
+#include "tenzir/async/notify.hpp"
 #include "tenzir/curl.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/series_builder.hpp"
+
+#include <arrow/util/compression.h>
+#include <boost/url/parse.hpp>
+#include <boost/url/parse_query.hpp>
+#include <boost/url/url.hpp>
+#include <folly/coro/Sleep.h>
+#include <folly/executors/GlobalExecutor.h>
+#define nsel_CONFIG_SELECT_EXPECTED 1
+#include <proxygen/lib/http/HTTPConnector.h>
+#include <proxygen/lib/http/HTTPMessage.h>
+#include <proxygen/lib/http/HTTPMethod.h>
+#include <proxygen/lib/http/session/HTTPUpstreamSession.h>
+#include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
+#include <deque>
+#include <ranges>
 #include <string_view>
 
 namespace tenzir::http {
 
-namespace {} // namespace
+namespace {
+
+constexpr auto http_version_major = uint8_t{1};
+constexpr auto http_version_minor = uint8_t{1};
+
+auto split_link_header(std::string_view value)
+  -> std::vector<std::string_view> {
+  auto result = std::vector<std::string_view>{};
+  auto start = size_t{0};
+  auto in_angle = false;
+  auto in_quotes = false;
+  auto escaped = false;
+  for (auto i = size_t{}; i < value.size(); ++i) {
+    auto const c = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\' and in_quotes) {
+      escaped = true;
+      continue;
+    }
+    if (c == '"' and not in_angle) {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == '<' and not in_quotes) {
+      in_angle = true;
+      continue;
+    }
+    if (c == '>' and not in_quotes) {
+      in_angle = false;
+      continue;
+    }
+    if (c == ',' and not in_quotes and not in_angle) {
+      auto item = detail::trim(value.substr(start, i - start));
+      if (not item.empty()) {
+        result.push_back(item);
+      }
+      start = i + 1;
+    }
+  }
+  auto item = detail::trim(value.substr(start));
+  if (not item.empty()) {
+    result.push_back(item);
+  }
+  return result;
+}
+
+auto split_link_params(std::string_view value)
+  -> std::pair<std::vector<std::string_view>, bool> {
+  auto result = std::vector<std::string_view>{};
+  auto start = size_t{0};
+  auto in_quotes = false;
+  auto escaped = false;
+  for (auto i = size_t{}; i < value.size(); ++i) {
+    auto const c = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\' and in_quotes) {
+      escaped = true;
+      continue;
+    }
+    if (c == '"') {
+      in_quotes = not in_quotes;
+      continue;
+    }
+    if (c == ';' and not in_quotes) {
+      auto item = detail::trim(value.substr(start, i - start));
+      if (not item.empty()) {
+        result.push_back(item);
+      }
+      start = i + 1;
+    }
+  }
+  auto item = detail::trim(value.substr(start));
+  if (not item.empty()) {
+    result.push_back(item);
+  }
+  return {std::move(result), not in_quotes};
+}
+
+auto rel_contains_next(std::string_view value) -> bool {
+  value = detail::trim(value);
+  if (value.size() >= 2 and value.front() == '"' and value.back() == '"') {
+    value.remove_prefix(1);
+    value.remove_suffix(1);
+  }
+  auto index = size_t{};
+  while (index < value.size()) {
+    while (index < value.size()
+           and std::isspace(static_cast<unsigned char>(value[index])) != 0) {
+      ++index;
+    }
+    auto const token_begin = index;
+    while (index < value.size()
+           and std::isspace(static_cast<unsigned char>(value[index])) == 0) {
+      ++index;
+    }
+    auto const token = value.substr(token_begin, index - token_begin);
+    if (not token.empty() and detail::ascii_icase_equal(token, "next")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+struct NextLinkTargetResult {
+  std::optional<std::string_view> target;
+  bool malformed = false;
+};
+
+auto next_link_target(std::string_view header) -> NextLinkTargetResult {
+  auto item = detail::trim(header);
+  if (item.empty()) {
+    return {};
+  }
+  if (item.front() != '<') {
+    return {.malformed = true};
+  }
+  auto const uri_end = item.find('>');
+  if (uri_end == std::string_view::npos) {
+    return {.malformed = true};
+  }
+  auto target = item.substr(1, uri_end - 1);
+  auto params = item.substr(uri_end + 1);
+  auto [param_parts, ok] = split_link_params(params);
+  if (not ok) {
+    return {.malformed = true};
+  }
+  auto has_next = false;
+  for (auto const part : param_parts) {
+    auto const eq = part.find('=');
+    auto name = detail::trim(part.substr(0, eq));
+    if (name.empty()) {
+      continue;
+    }
+    if (not detail::ascii_icase_equal(name, "rel")) {
+      continue;
+    }
+    if (eq == std::string_view::npos) {
+      continue;
+    }
+    auto const value = detail::trim(part.substr(eq + 1));
+    if (rel_contains_next(value)) {
+      has_next = true;
+      break;
+    }
+  }
+  if (has_next) {
+    return {.target = target};
+  }
+  return {};
+}
+
+enum class HttpMethod : uint8_t {
+  get,
+  head,
+  post,
+  put,
+  del,
+  connect,
+  options,
+  trace,
+};
+
+auto parse_http_method(std::string_view method) -> std::optional<HttpMethod> {
+  if (detail::ascii_icase_equal(method, "get")) {
+    return HttpMethod::get;
+  }
+  if (detail::ascii_icase_equal(method, "head")) {
+    return HttpMethod::head;
+  }
+  if (detail::ascii_icase_equal(method, "post")) {
+    return HttpMethod::post;
+  }
+  if (detail::ascii_icase_equal(method, "put")) {
+    return HttpMethod::put;
+  }
+  if (detail::ascii_icase_equal(method, "delete")
+      or detail::ascii_icase_equal(method, "del")) {
+    return HttpMethod::del;
+  }
+  if (detail::ascii_icase_equal(method, "connect")) {
+    return HttpMethod::connect;
+  }
+  if (detail::ascii_icase_equal(method, "options")) {
+    return HttpMethod::options;
+  }
+  if (detail::ascii_icase_equal(method, "trace")) {
+    return HttpMethod::trace;
+  }
+  return std::nullopt;
+}
+
+auto to_rfc_http_method(HttpMethod method) -> std::string_view {
+  switch (method) {
+    case HttpMethod::get:
+      return "GET";
+    case HttpMethod::head:
+      return "HEAD";
+    case HttpMethod::post:
+      return "POST";
+    case HttpMethod::put:
+      return "PUT";
+    case HttpMethod::del:
+      return "DELETE";
+    case HttpMethod::connect:
+      return "CONNECT";
+    case HttpMethod::options:
+      return "OPTIONS";
+    case HttpMethod::trace:
+      return "TRACE";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto to_proxygen_method(HttpMethod method) -> proxygen::HTTPMethod {
+  switch (method) {
+    case HttpMethod::get:
+      return proxygen::HTTPMethod::GET;
+    case HttpMethod::head:
+      return proxygen::HTTPMethod::HEAD;
+    case HttpMethod::post:
+      return proxygen::HTTPMethod::POST;
+    case HttpMethod::put:
+      return proxygen::HTTPMethod::PUT;
+    case HttpMethod::del:
+      return proxygen::HTTPMethod::DELETE;
+    case HttpMethod::connect:
+      return proxygen::HTTPMethod::CONNECT;
+    case HttpMethod::options:
+      return proxygen::HTTPMethod::OPTIONS;
+    case HttpMethod::trace:
+      return proxygen::HTTPMethod::TRACE;
+  }
+  TENZIR_UNREACHABLE();
+}
+
+class ProxygenClientRequest final : public proxygen::HTTPConnector::Callback,
+                                    public proxygen::HTTPTransactionHandler {
+public:
+  ProxygenClientRequest(ClientRequestConfig config, folly::EventBase* evb)
+    : config_{std::move(config)}, evb_{evb} {
+  }
+
+  auto run() -> Task<HttpResult<ResponseData>> {
+    auto url = proxygen::URL{config_.url};
+    if (not url.isValid() or not url.hasHost()) {
+      co_return Err{fmt::format("failed to parse uri `{}`", config_.url)};
+    }
+    auto method = parse_http_method(config_.method);
+    if (not method) {
+      co_return Err{fmt::format("unsupported http method: `{}`",
+                                config_.method)};
+    }
+    method_ = to_proxygen_method(*method);
+    url_ = std::move(url);
+    auto timeout = proxygen::WheelTimerInstance{config_.connect_timeout, evb_};
+    connector_ = Box<proxygen::HTTPConnector>{
+      std::in_place, static_cast<proxygen::HTTPConnector::Callback*>(this), timeout};
+    auto addr = folly::SocketAddress{url_.getHost(), url_.getPort(), true};
+    if (url_.isSecure()) {
+      if (not config_.ssl_context) {
+        co_return Err{
+          std::string{"TLS is enabled for URL but no TLS context is available"}};
+      }
+      (*connector_)->connectSSL(evb_, addr, config_.ssl_context, nullptr,
+                                config_.connect_timeout,
+                                folly::emptySocketOptionMap,
+                                folly::AsyncSocket::anyAddress(), url_.getHost());
+    } else {
+      (*connector_)->connect(evb_, addr, config_.connect_timeout);
+    }
+    co_await done_.wait();
+    TENZIR_ASSERT(result_);
+    co_return std::move(*result_);
+  }
+
+  void connectSuccess(proxygen::HTTPUpstreamSession* session) override {
+    session_ = session;
+    auto* txn = session_->newTransaction(
+      static_cast<proxygen::HTTPTransaction::Handler*>(this));
+    if (not txn) {
+      finish(Err{std::string{"failed to create http transaction"}});
+      return;
+    }
+    auto request = proxygen::HTTPMessage{};
+    request.setMethod(method_);
+    request.setHTTPVersion(http_version_major, http_version_minor);
+    request.setURL(url_.makeRelativeURL());
+    request.setSecure(url_.isSecure());
+    request.getHeaders().add("Host", url_.getHostAndPort());
+    for (auto const& [k, v] : config_.headers) {
+      request.getHeaders().add(k, v);
+    }
+    txn->sendHeaders(request);
+    if (not config_.body.empty()) {
+      txn->sendBody(folly::IOBuf::copyBuffer(config_.body));
+    }
+    txn->sendEOM();
+    session_->closeWhenIdle();
+  }
+
+  void connectError(folly::AsyncSocketException const& ex) override {
+    finish(Err{fmt::format("cannot_connect_to_node: {}", ex.what())});
+  }
+
+  void setTransaction(proxygen::HTTPTransaction* txn) noexcept override {
+    txn_ = txn;
+  }
+
+  void detachTransaction() noexcept override {
+    txn_ = nullptr;
+  }
+
+  void onHeadersComplete(std::unique_ptr<proxygen::HTTPMessage> msg) noexcept override {
+    response_.status_code = msg->getStatusCode();
+    msg->getHeaders().forEach([&](std::string const& name,
+                                  std::string const& value) {
+      response_.headers.emplace_back(name, value);
+    });
+  }
+
+  void onBody(std::unique_ptr<folly::IOBuf> chain) noexcept override {
+    if (not chain) {
+      return;
+    }
+    auto bytes = chain->computeChainDataLength();
+    if (response_.body.size() + bytes > config_.response_limit) {
+      finish(Err{fmt::format("response size exceeds configured limit of {} bytes",
+                             config_.response_limit)});
+      if (txn_) {
+        txn_->sendAbort();
+      }
+      return;
+    }
+    for (auto const& range : *chain) {
+      auto const* begin = reinterpret_cast<std::byte const*>(range.data());
+      response_.body.insert(response_.body.end(), begin, begin + range.size());
+    }
+  }
+
+  void onEOM() noexcept override {
+    finish(HttpResult<ResponseData>{std::move(response_)});
+  }
+
+  void onError(proxygen::HTTPException const& error) noexcept override {
+    finish(Err{fmt::format("request failed: {}", error.what())});
+  }
+
+  void onTrailers(std::unique_ptr<proxygen::HTTPHeaders>) noexcept override {
+  }
+
+  void onUpgrade(proxygen::UpgradeProtocol) noexcept override {
+  }
+
+  void onEgressPaused() noexcept override {
+  }
+
+  void onEgressResumed() noexcept override {
+  }
+
+private:
+  auto finish(HttpResult<ResponseData> result) -> void {
+    if (result_) {
+      return;
+    }
+    result_ = std::move(result);
+    done_.notify_one();
+  }
+
+  ClientRequestConfig config_;
+  folly::EventBase* evb_ = nullptr;
+  proxygen::HTTPMethod method_ = proxygen::HTTPMethod::GET;
+  proxygen::URL url_;
+  std::optional<Box<proxygen::HTTPConnector>> connector_;
+  proxygen::HTTPUpstreamSession* session_ = nullptr;
+  proxygen::HTTPTransaction* txn_ = nullptr;
+  ResponseData response_;
+  std::optional<HttpResult<ResponseData>> result_;
+  Notify done_;
+};
+
+} // namespace
 
 auto message::header(const std::string& name) -> struct header* {
   auto pred = [&](auto& x) -> bool {
@@ -162,6 +568,274 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     req.headers.emplace_back("Accept", std::move(value));
   }
   return {};
+}
+
+auto normalize_http_method(std::string_view method)
+  -> std::optional<std::string> {
+  auto parsed = parse_http_method(method);
+  if (not parsed) {
+    return std::nullopt;
+  }
+  return std::string{to_rfc_http_method(*parsed)};
+}
+
+auto decode_query_string(std::string_view query) -> HeaderPairs {
+  auto result = HeaderPairs{};
+  if (query.empty()) {
+    return result;
+  }
+  auto parsed = boost::urls::parse_query(query);
+  if (not parsed) {
+    return result;
+  }
+  for (auto const& param : *parsed) {
+    result.emplace_back(std::string{param.key}, std::string{param.value});
+  }
+  return result;
+}
+
+auto try_decompress_body(std::string_view encoding,
+                         std::span<std::byte const> body,
+                         diagnostic_handler& dh) -> std::optional<blob> {
+  if (encoding.empty()) {
+    return std::nullopt;
+  }
+  auto const compression_type
+    = arrow::util::Codec::GetCompressionType(std::string{encoding});
+  if (not compression_type.ok()) {
+    diagnostic::warning("invalid compression type: {}", encoding)
+      .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
+      .note("skipping decompression")
+      .emit(dh);
+    return std::nullopt;
+  }
+  auto out = blob{};
+  out.resize(body.size_bytes() * 2);
+  auto const codec = arrow::util::Codec::Create(
+    compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
+  TENZIR_ASSERT(codec.ok());
+  if (not codec.ValueUnsafe()) {
+    return std::nullopt;
+  }
+  auto const decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
+  auto written = size_t{};
+  auto read = size_t{};
+  while (read != body.size_bytes()) {
+    auto const result = decompressor->Decompress(
+      detail::narrow<int64_t>(body.size_bytes() - read),
+      reinterpret_cast<uint8_t const*>(body.data() + read),
+      detail::narrow<int64_t>(out.size() - written),
+      reinterpret_cast<uint8_t*>(out.data() + written));
+    if (not result.ok()) {
+      diagnostic::warning("failed to decompress: {}",
+                          result.status().ToString())
+        .note("emitting compressed body")
+        .emit(dh);
+      return std::nullopt;
+    }
+    TENZIR_ASSERT(std::cmp_less_equal(result->bytes_written, out.size()));
+    written += result->bytes_written;
+    read += result->bytes_read;
+    if (result->need_more_output) {
+      if (out.size() == out.max_size()) [[unlikely]] {
+        diagnostic::error("failed to resize buffer").emit(dh);
+        return std::nullopt;
+      }
+      if (out.size() < out.max_size() / 2) {
+        out.resize(out.size() * 2);
+      } else [[unlikely]] {
+        out.resize(out.max_size());
+      }
+    }
+    if (decompressor->IsFinished()) {
+      auto const reset = decompressor->Reset();
+      if (not reset.ok()) {
+        diagnostic::warning("failed to reset decompressor: {}",
+                            reset.ToString())
+          .note("emitting compressed body")
+          .emit(dh);
+        return std::nullopt;
+      }
+    }
+  }
+  TENZIR_ASSERT(written != 0);
+  out.resize(written);
+  return out;
+}
+
+auto find_header_value(HeaderPairs const& headers, std::string_view name)
+  -> std::string_view {
+  auto const it = std::ranges::find_if(headers, [&](auto const& kv) {
+    return detail::ascii_icase_equal(kv.first, name);
+  });
+  if (it == headers.end()) {
+    return {};
+  }
+  return it->second;
+}
+
+auto make_response_record(ResponseData const& response) -> record {
+  auto headers = record{};
+  for (auto const& [k, v] : response.headers) {
+    headers.emplace(k, v);
+  }
+  return record{
+    {"code", static_cast<uint64_t>(response.status_code)},
+    {"headers", std::move(headers)},
+  };
+}
+
+auto make_request_record(RequestData const& request) -> record {
+  auto headers = record{};
+  for (auto const& [k, v] : request.headers) {
+    headers.emplace(k, v);
+  }
+  auto query = record{};
+  for (auto const& [k, v] : request.query) {
+    query.emplace(k, v);
+  }
+  return record{
+    {"headers", std::move(headers)},
+    {"query", std::move(query)},
+    {"path", request.path},
+    {"fragment", request.fragment},
+    {"method", request.method},
+    {"version", request.version},
+    {"body", request.body},
+  };
+}
+
+auto make_request_event(RequestData const& request) -> table_slice {
+  auto sb = series_builder{};
+  sb.data(make_request_record(request));
+  return sb.finish_assert_one_slice();
+}
+
+auto normalize_http_url(std::string& url, bool tls_enabled) -> void {
+  if (not url.starts_with("http://") and not url.starts_with("https://")) {
+    url.insert(0, tls_enabled ? "https://" : "http://");
+  } else if (tls_enabled and url.starts_with("http://")) {
+    url.insert(4, "s");
+  }
+}
+
+auto infer_tls_default(std::string_view url) -> bool {
+  return url.starts_with("https://");
+}
+
+auto next_url_from_link_headers(ResponseData const& response,
+                                std::string_view request_uri,
+                                std::optional<location> paginate_source,
+                                diagnostic_handler& dh)
+  -> std::optional<std::string> {
+  auto const base_uri = boost::urls::parse_uri_reference(request_uri);
+  if (not base_uri) {
+    if (paginate_source) {
+      diagnostic::warning("failed to parse request URI for link pagination: {}",
+                          base_uri.error().message())
+        .primary(*paginate_source, "")
+        .note("stopping pagination")
+        .emit(dh);
+    } else {
+      diagnostic::warning("failed to parse request URI for link pagination: {}",
+                          base_uri.error().message())
+        .note("stopping pagination")
+        .emit(dh);
+    }
+    return std::nullopt;
+  }
+  auto malformed = false;
+  for (auto const& [name, value] : response.headers) {
+    if (not detail::ascii_icase_equal(name, "link")) {
+      continue;
+    }
+    for (auto header : split_link_header(value)) {
+      auto const parsed = next_link_target(header);
+      if (parsed.target) {
+        auto ref = boost::urls::parse_uri_reference(*parsed.target);
+        if (not ref) {
+          if (paginate_source) {
+            diagnostic::warning("invalid `rel=next` URL in Link header: {}",
+                                ref.error().message())
+              .primary(*paginate_source, "")
+              .note("stopping pagination")
+              .emit(dh);
+          } else {
+            diagnostic::warning("invalid `rel=next` URL in Link header: {}",
+                                ref.error().message())
+              .note("stopping pagination")
+              .emit(dh);
+          }
+          return std::nullopt;
+        }
+        auto resolved = boost::urls::url{};
+        if (auto result = boost::urls::resolve(*base_uri, *ref, resolved);
+            not result) {
+          if (paginate_source) {
+            diagnostic::warning("failed to resolve `rel=next` URL: {}",
+                                result.error().message())
+              .primary(*paginate_source, "")
+              .note("stopping pagination")
+              .emit(dh);
+          } else {
+            diagnostic::warning("failed to resolve `rel=next` URL: {}",
+                                result.error().message())
+              .note("stopping pagination")
+              .emit(dh);
+          }
+          return std::nullopt;
+        }
+        return std::string{resolved.buffer()};
+      }
+      if (parsed.malformed) {
+        malformed = true;
+      }
+    }
+  }
+  if (malformed) {
+    if (paginate_source) {
+      diagnostic::warning("failed to parse Link header for pagination")
+        .primary(*paginate_source, "")
+        .note("stopping pagination")
+        .emit(dh);
+    } else {
+      diagnostic::warning("failed to parse Link header for pagination")
+        .note("stopping pagination")
+        .emit(dh);
+    }
+  }
+  return std::nullopt;
+}
+
+auto send_request(ClientRequestConfig config) -> Task<HttpResult<ResponseData>> {
+  auto* evb = folly::getGlobalIOExecutor()->getEventBase();
+  TENZIR_ASSERT(evb);
+  auto request_task = Box<ProxygenClientRequest>{std::in_place, std::move(config),
+                                                 evb};
+  co_return co_await folly::coro::co_withExecutor(evb, request_task->run());
+}
+
+auto send_request_with_retries(ClientRequestConfig config,
+                               uint64_t max_retry_count,
+                               std::chrono::milliseconds retry_delay)
+  -> Task<HttpResult<ResponseData>> {
+  auto attempts = uint64_t{};
+  auto max_attempts = max_retry_count + 1;
+  while (attempts < max_attempts) {
+    auto result = co_await send_request(config);
+    if (not result.is_err()) {
+      co_return result;
+    }
+    ++attempts;
+    if (attempts >= max_attempts) {
+      co_return result;
+    }
+    if (retry_delay > std::chrono::milliseconds::zero()) {
+      co_await folly::coro::sleep(
+        std::chrono::duration_cast<folly::HighResDuration>(retry_delay));
+    }
+  }
+  co_return Err{std::string{"request failed"}};
 }
 
 } // namespace tenzir::http

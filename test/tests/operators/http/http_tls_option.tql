@@ -1,0 +1,19 @@
+---
+fixtures:
+  - http:
+      tls: true
+timeout: 60
+---
+
+from {
+  u: env("HTTP_FIXTURE_BODY_URL"),
+  b: {
+    tls: "ok",
+  },
+}
+http u,
+     method="post",
+     body=b,
+     tls={skip_peer_verification: true} {
+  read_json
+}
