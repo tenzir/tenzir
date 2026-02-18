@@ -45,6 +45,7 @@
 #include <fmt/format.h>
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
 
@@ -337,7 +338,8 @@ auto split_for_parallelization(generator<chunk_ptr> input, std::byte splitter)
 ///
 /// The current implementation always assumes that it can reorder the output.
 auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
-                        operator_control_plane& ctrl) -> generator<table_slice> {
+                        operator_control_plane& ctrl)
+  -> generator<table_slice> {
   // TODO: We assume here that we can reorder outputs. However, even if we
   // maintain the order if we are not allowed to reorder, the output can
   // slightly change because we use separate builders.
@@ -718,8 +720,8 @@ public:
     bool array_open_written_ = false;
   };
 
-  auto
-  instantiate_impl() const -> caf::expected<std::unique_ptr<printer_instance>> {
+  auto instantiate_impl() const
+    -> caf::expected<std::unique_ptr<printer_instance>> {
     auto style = default_style();
     if (args_.monochrome_output) {
       style = no_style();
@@ -981,8 +983,8 @@ public:
     return n_jobs_ == 0 ? duration::zero() : duration::max();
   }
 
-  auto
-  parallel_operator(generator<table_slice> input) const -> generator<chunk_ptr> {
+  auto parallel_operator(generator<table_slice> input) const
+    -> generator<chunk_ptr> {
     auto inputs_mut = std::mutex{};
     auto inputs = std::deque<input_t>{};
     auto inputs_cv = std::condition_variable{};
@@ -1136,8 +1138,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     auto replacement = std::make_unique<write_json>(*this);
     replacement->ordered_ = order == event_order::ordered;
@@ -1184,8 +1186,8 @@ public:
     co_return PeriodicTick{};
   }
 
-  auto process_task(Any result, Push<table_slice>& push,
-                    OpCtx& ctx) -> Task<void> override {
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
@@ -1197,8 +1199,8 @@ public:
     }
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push,
-               OpCtx& ctx) -> Task<void> override {
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
@@ -1244,8 +1246,7 @@ public:
       ended_on_carriage_return_{other.ended_on_carriage_return_},
       worker_dh_{std::move(other.worker_dh_)},
       read_input_queue_{std::move(other.read_input_queue_)},
-      read_output_queue_{std::move(other.read_output_queue_)},
-      read_live_workers_{other.read_live_workers_.load()} {
+      read_output_queue_{std::move(other.read_output_queue_)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -1255,7 +1256,6 @@ public:
       auto capacity = static_cast<uint32_t>(args_.jobs * 2);
       read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
       read_output_queue_ = std::make_shared<ReadOutputQueue>(capacity);
-      read_live_workers_.store(args_.jobs);
       // Workers use unordered output since they parse independently.
       auto msb_options = args_.msb_options;
       msb_options.settings.ordered = false;
@@ -1278,16 +1278,16 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     if (args_.jobs > 0) {
-      auto next = co_await read_output_queue_->dequeue();
-      co_return next;
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
     }
     co_await folly::coro::sleep(
       std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
     co_return PeriodicTick{};
   }
 
-  auto process_task(Any result, Push<table_slice>& push,
-                    OpCtx& ctx) -> Task<void> override {
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (result.try_as<PeriodicTick>()) {
       // Non-parallel mode: periodic flush.
@@ -1301,23 +1301,22 @@ public:
       co_return;
     }
     // Parallel mode: output from workers.
-    auto opt_slice = std::move(result).as<std::optional<table_slice>>();
-    if (opt_slice) {
-      co_await push(std::move(*opt_slice));
-    }
+    auto slice = std::move(result).as<table_slice>();
+    co_await push(std::move(slice));
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push,
-               OpCtx& ctx) -> Task<void> override {
+  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_UNUSED(push, ctx);
     if (not input or input->size() == 0) {
       co_return;
     }
     if (args_.jobs > 0) {
       co_await process_parallel(std::move(input));
-      co_return;
+    } else {
+      process_sequential(std::move(input));
     }
-    process_sequential(std::move(input));
+    co_return;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
@@ -1328,23 +1327,13 @@ public:
         buffer_.clear();
         co_await read_input_queue_->enqueue(std::move(batch));
       }
-      // Close the input queue and drain remaining output.
-      auto input_queue = read_input_queue_;
-      ctx.spawn_task([input_queue]() -> Task<void> {
-        co_await input_queue->enqueue(std::nullopt);
-      });
-      while (true) {
-        auto next = co_await read_output_queue_->dequeue();
-        if (not next) {
-          break;
-        }
-        co_await push(std::move(*next));
-      }
+      // Close the input queue and drain until all workers signaled completion.
+      co_await read_input_queue_->enqueue(std::nullopt);
+      co_await drain_parallel_output(push, args_.jobs);
       co_return;
     }
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
-    // Flush remaining buffer as a final line.
     if (not buffer_.empty()) {
       buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
       parser_->parse(simdjson::padded_string_view{buffer_});
@@ -1514,17 +1503,33 @@ private:
       }
     } catch (folly::OperationCancelled const&) {
     }
+    if (not line_buffer.empty()) {
+      line_buffer.reserve(line_buffer.size() + simdjson::SIMDJSON_PADDING);
+      parser.parse(simdjson::padded_string_view{line_buffer});
+      line_buffer.clear();
+    }
     // Finalize: flush remaining data.
     for (auto& slice : parser.builder.finalize_as_table_slice()) {
       co_await read_output_queue_->enqueue(std::move(slice));
     }
-    if (read_live_workers_.fetch_sub(1) == 1) {
-      co_await read_output_queue_->enqueue(std::nullopt);
+    co_await read_output_queue_->enqueue(table_slice{});
+  }
+
+  auto drain_parallel_output(Push<table_slice>& push, uint64_t stop_tokens)
+    -> Task<void> {
+    auto seen_stop_tokens = uint64_t{0};
+    while (seen_stop_tokens < stop_tokens) {
+      auto next = co_await read_output_queue_->dequeue();
+      if (next.rows() == 0) {
+        ++seen_stop_tokens;
+        continue;
+      }
+      co_await push(std::move(next));
     }
   }
 
   using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
-  using ReadOutputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
+  using ReadOutputQueue = folly::coro::BoundedQueue<table_slice>;
 
   ReadJsonArgs args_;
   duration next_tick_;
@@ -1537,7 +1542,6 @@ private:
   std::shared_ptr<thread_safe_diagnostic_handler> worker_dh_;
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
-  mutable std::atomic<uint64_t> read_live_workers_{0};
 };
 
 class read_json_plugin final
@@ -1551,8 +1555,8 @@ public:
     return d.without_optimize();
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -1603,8 +1607,8 @@ public:
     return d.without_optimize();
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = parser_args{"ndjson"};
     args.split_mode = split_at::newline;
     auto parser = argument_parser2::operator_(name());
@@ -1658,8 +1662,8 @@ public:
     return d.without_optimize();
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = parser_args{"gelf"};
     args.split_mode = split_at::null;
     auto parser = argument_parser2::operator_(name());
@@ -1720,8 +1724,8 @@ public:
     return d.without_optimize();
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = parser_args{std::string{Name.str()}};
     args.split_mode = split_at::newline;
     auto parser = argument_parser2::operator_(name());
@@ -1760,8 +1764,8 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());
@@ -1862,8 +1866,7 @@ public:
       opts_{other.opts_},
       array_open_written_{other.array_open_written_},
       write_input_queue_{std::move(other.write_input_queue_)},
-      write_output_queue_{std::move(other.write_output_queue_)},
-      write_live_workers_{other.write_live_workers_.load()} {
+      write_output_queue_{std::move(other.write_output_queue_)} {
     opts_.tql = args_.tql;
     if (args_.color and args_.tql) {
       opts_.style = tql_style();
@@ -1936,15 +1939,14 @@ public:
     auto capacity = static_cast<uint32_t>(args_.jobs * 2);
     write_input_queue_ = std::make_shared<WriteInputQueue>(capacity);
     write_output_queue_ = std::make_shared<WriteOutputQueue>(capacity);
-    write_live_workers_.store(args_.jobs);
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
       ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
                                                   write_worker_loop()));
     }
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push,
-               OpCtx& ctx) -> Task<void> override {
+  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (args_.jobs == 0) {
       co_await push(print_slice(input));
@@ -1959,36 +1961,25 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    auto next = co_await write_output_queue_->dequeue();
-    co_return next;
+    co_await wait_forever();
+    TENZIR_UNREACHABLE();
   }
 
-  auto process_task(Any result, Push<chunk_ptr>& push,
-                    OpCtx& ctx) -> Task<void> override {
+  auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    auto next = std::move(result).as<std::optional<chunk_ptr>>();
+    auto next = std::move(result).as<chunk_ptr>();
     if (not next) {
       co_return;
     }
-    co_await push(std::move(*next));
+    co_await push(std::move(next));
   }
 
   auto finalize(Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
     if (args_.jobs > 0) {
-      // Spawn a task to close the input queue to avoid deadlock: workers
-      // might be blocked on output enqueue while we need to drain output.
-      auto input_queue = write_input_queue_;
-      ctx.spawn_task([input_queue]() -> Task<void> {
-        co_await input_queue->enqueue(std::nullopt);
-      });
-      // Drain all remaining output from workers.
-      while (true) {
-        auto next = co_await write_output_queue_->dequeue();
-        if (not next) {
-          break;
-        }
-        co_await push(std::move(*next));
-      }
+      // Close the input queue and drain until all workers signaled completion.
+      co_await write_input_queue_->enqueue(std::nullopt);
+      co_await drain_parallel_output(push, args_.jobs);
       co_return;
     }
     TENZIR_UNUSED(ctx);
@@ -2018,20 +2009,30 @@ private:
       }
     } catch (folly::OperationCancelled const&) {
     }
-    if (write_live_workers_.fetch_sub(1) == 1) {
-      co_await write_output_queue_->enqueue(std::nullopt);
+    co_await write_output_queue_->enqueue(chunk_ptr{});
+  }
+
+  auto drain_parallel_output(Push<chunk_ptr>& push, uint64_t stop_tokens)
+    -> Task<void> {
+    auto seen_stop_tokens = uint64_t{0};
+    while (seen_stop_tokens < stop_tokens or not write_output_queue_->empty()) {
+      auto next = co_await write_output_queue_->dequeue();
+      if (not next) {
+        ++seen_stop_tokens;
+        continue;
+      }
+      co_await push(std::move(next));
     }
   }
 
   using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
-  using WriteOutputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+  using WriteOutputQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
   WriteJsonArgs args_;
   json_printer_options opts_ = {};
   mutable bool array_open_written_ = false;
   std::shared_ptr<WriteInputQueue> write_input_queue_;
   std::shared_ptr<WriteOutputQueue> write_output_queue_;
-  mutable std::atomic<uint64_t> write_live_workers_{0};
 };
 
 class write_json_plugin final : public virtual operator_plugin2<write_json>,
@@ -2077,8 +2078,8 @@ public:
     return d.without_optimize();
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
     auto n_jobs = std::optional<located<uint64_t>>{};
@@ -2148,8 +2149,8 @@ public:
     return d.without_optimize();
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
     auto n_jobs = std::optional<located<uint64_t>>{};
@@ -2191,8 +2192,8 @@ public:
   print_json_plugin(bool compact) : compact_{compact} {
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto args = printer_args{};
     auto parser = argument_parser2::function(name());
