@@ -366,7 +366,32 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) and -> AnyOperator override {
+  auto optimize(ir::optimize_filter filter,
+                event_order) && -> ir::optimize_result override {
+    auto cons_opt
+      = std::move(args_.consequence).optimize(filter, event_order::unordered);
+    args_.consequence = std::move(cons_opt.replacement);
+    args_.consequence.operators.insert_range(
+      args_.consequence.operators.begin(),
+      cons_opt.filter | std::views::transform(make_where_ir));
+    if (args_.alternative) {
+      auto alt_opt = std::move(args_.alternative->pipeline)
+                       .optimize(std::move(filter), event_order::unordered);
+      args_.alternative->pipeline = std::move(alt_opt.replacement);
+      args_.alternative->pipeline.operators.insert_range(
+        args_.alternative->pipeline.operators.begin(),
+        alt_opt.filter | std::views::transform(make_where_ir));
+    }
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    return {
+      {},
+      event_order::unordered,
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
+  auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);

@@ -1,0 +1,189 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     If {
+       if_keyword: 7..9,
+       condition: constant bool true @ 10..14,
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `write_lines` @ 19..30
+               ],
+               ref: std::write_lines/op
+             },
+             desc: "write_lines",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+             order: "ordered",
+             named_args: [
+               
+             ]
+           },
+           GenericIr {
+             op: {
+               path: [
+                 `read_ndjson` @ 33..44
+               ],
+               ref: std::read_ndjson/op
+             },
+             desc: "read_ndjson",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ]
+           }
+         ]
+       },
+       alternative: {
+         keyword: 47..51,
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             If {
+               if_keyword: 52..54,
+               condition: constant bool false @ 55..60,
+               consequence: {
+                 lets: [
+                   
+                 ],
+                 operators: [
+                   GenericIr {
+                     op: {
+                       path: [
+                         `write_lines` @ 65..76
+                       ],
+                       ref: std::write_lines/op
+                     },
+                     desc: "write_lines",
+                     args: [
+                       
+                     ],
+                     filter: [
+                       
+                     ],
+                     order: "ordered",
+                     named_args: [
+                       
+                     ]
+                   },
+                   GenericIr {
+                     op: {
+                       path: [
+                         `read_ndjson` @ 79..90
+                       ],
+                       ref: std::read_ndjson/op
+                     },
+                     desc: "read_ndjson",
+                     args: [
+                       
+                     ],
+                     filter: [
+                       
+                     ],
+-                    order: "ordered",
++                    order: "unordered",
+                     named_args: [
+                       
+                     ]
+                   }
+                 ]
+               },
+               alternative: {
+                 keyword: 93..97,
+                 pipeline: {
+                   lets: [
+                     
+                   ],
+                   operators: [
+                     GenericIr {
+                       op: {
+                         path: [
+                           `write_lines` @ 102..113
+                         ],
+                         ref: std::write_lines/op
+                       },
+                       desc: "write_lines",
+                       args: [
+                         
+                       ],
+                       filter: [
+                         
+                       ],
+                       order: "ordered",
+                       named_args: [
+                         
+                       ]
+                     },
+                     GenericIr {
+                       op: {
+                         path: [
+                           `read_ndjson` @ 116..127
+                         ],
+                         ref: std::read_ndjson/op
+                       },
+                       desc: "read_ndjson",
+                       args: [
+                         
+                       ],
+                       filter: [
+                         
+                       ],
+-                      order: "ordered",
++                      order: "unordered",
+                       named_args: [
+                         
+                       ]
+                     }
+                   ]
+                 }
+               }
+             }
+           ]
+         }
+       }
+     },
+     discard_ir {
+       
+     }
+   ]
+ }
