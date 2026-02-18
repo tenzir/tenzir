@@ -43,8 +43,12 @@
 #include <arrow/record_batch.h>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
+#include <folly/OperationCancelled.h>
+#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Sleep.h>
+#include <folly/executors/GlobalExecutor.h>
 
+#include <atomic>
 #include <deque>
 #include <simdjson.h>
 #include <string_view>
@@ -58,6 +62,23 @@ TENZIR_ENUM(split_at, none, newline, null);
 namespace {
 
 using namespace tenzir::json;
+
+/// A thread-safe wrapper around a diagnostic_handler for use in parallel
+/// worker coroutines.
+class thread_safe_diagnostic_handler final : public diagnostic_handler {
+public:
+  explicit thread_safe_diagnostic_handler(diagnostic_handler& inner)
+    : inner_{inner} {
+  }
+  void emit(diagnostic d) override {
+    auto lock = std::scoped_lock{mutex_};
+    inner_.emit(std::move(d));
+  }
+
+private:
+  diagnostic_handler& inner_;
+  std::mutex mutex_;
+};
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
@@ -1215,9 +1236,37 @@ public:
   explicit ReadNdjson(ReadJsonArgs args)
     : args_{std::move(args)}, next_tick_{args_.msb_options.settings.timeout} {
   }
+  ReadNdjson(ReadNdjson&& other) noexcept
+    : args_{std::move(other.args_)},
+      next_tick_{other.next_tick_},
+      parser_{std::move(other.parser_)},
+      buffer_{std::move(other.buffer_)},
+      ended_on_carriage_return_{other.ended_on_carriage_return_},
+      worker_dh_{std::move(other.worker_dh_)},
+      read_input_queue_{std::move(other.read_input_queue_)},
+      read_output_queue_{std::move(other.read_output_queue_)},
+      read_live_workers_{other.read_live_workers_.load()} {
+  }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    if (args_.jobs > 0) {
+      // Parallel mode: workers have their own parsers.
+      auto capacity = static_cast<uint32_t>(args_.jobs * 2);
+      read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
+      read_output_queue_ = std::make_shared<ReadOutputQueue>(capacity);
+      read_live_workers_.store(args_.jobs);
+      // Workers use unordered output since they parse independently.
+      auto msb_options = args_.msb_options;
+      msb_options.settings.ordered = false;
+      worker_dh_ = std::make_shared<thread_safe_diagnostic_handler>(ctx.dh());
+      for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+        ctx.spawn_task(folly::coro::co_withExecutor(
+          folly::getGlobalCPUExecutor(),
+          read_worker_loop(args_.parser_name, msb_options)));
+      }
+      co_return;
+    }
     auto msb_options = args_.msb_options;
     if (args_.unordered) {
       msb_options.settings.ordered = false;
@@ -1228,6 +1277,10 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
+    if (args_.jobs > 0) {
+      auto next = co_await read_output_queue_->dequeue();
+      co_return next;
+    }
     co_await folly::coro::sleep(
       std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
     co_return PeriodicTick{};
@@ -1235,24 +1288,93 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push,
                     OpCtx& ctx) -> Task<void> override {
-    TENZIR_ASSERT(result.try_as<PeriodicTick>());
     TENZIR_UNUSED(ctx);
-    TENZIR_ASSERT(parser_);
-    auto ready = parser_->builder.yield_ready_as_table_slice();
-    TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
-    next_tick_ = ready.wait_for;
-    for (auto& slice : ready) {
-      co_await push(std::move(slice));
+    if (result.try_as<PeriodicTick>()) {
+      // Non-parallel mode: periodic flush.
+      TENZIR_ASSERT(parser_);
+      auto ready = parser_->builder.yield_ready_as_table_slice();
+      TENZIR_ASSERT_GEQ(next_tick_, duration::zero());
+      next_tick_ = ready.wait_for;
+      for (auto& slice : ready) {
+        co_await push(std::move(slice));
+      }
+      co_return;
+    }
+    // Parallel mode: output from workers.
+    auto opt_slice = std::move(result).as<std::optional<table_slice>>();
+    if (opt_slice) {
+      co_await push(std::move(*opt_slice));
     }
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push,
                OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(push);
+    TENZIR_UNUSED(push, ctx);
     if (not input or input->size() == 0) {
       co_return;
     }
+    if (args_.jobs > 0) {
+      co_await process_parallel(std::move(input));
+      co_return;
+    }
+    process_sequential(std::move(input));
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    if (args_.jobs > 0) {
+      // Send any remaining buffered data to a worker.
+      if (not buffer_.empty()) {
+        auto batch = make_padded_chunk(buffer_);
+        buffer_.clear();
+        co_await read_input_queue_->enqueue(std::move(batch));
+      }
+      // Close the input queue and drain remaining output.
+      auto input_queue = read_input_queue_;
+      ctx.spawn_task([input_queue]() -> Task<void> {
+        co_await input_queue->enqueue(std::nullopt);
+      });
+      while (true) {
+        auto next = co_await read_output_queue_->dequeue();
+        if (not next) {
+          break;
+        }
+        co_await push(std::move(*next));
+      }
+      co_return;
+    }
     TENZIR_UNUSED(ctx);
+    TENZIR_ASSERT(parser_);
+    // Flush remaining buffer as a final line.
+    if (not buffer_.empty()) {
+      buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
+      parser_->parse(simdjson::padded_string_view{buffer_});
+      buffer_.clear();
+    }
+    parser_->validate_completion();
+    if (parser_->abort_requested) {
+      co_return;
+    }
+    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+      co_await push(std::move(slice));
+    }
+  }
+
+private:
+  struct PeriodicTick {};
+
+  /// Create a chunk with simdjson padding from a string.
+  static auto make_padded_chunk(std::string_view data) -> chunk_ptr {
+    auto buffer
+      = std::vector<std::byte>(data.size() + simdjson::SIMDJSON_PADDING);
+    std::memcpy(buffer.data(), data.data(), data.size());
+    std::memset(buffer.data() + data.size(), 0, simdjson::SIMDJSON_PADDING);
+    return chunk::make(std::move(buffer),
+                       chunk_metadata{.content_type = "application/x-ndjson"})
+      ->slice(0, data.size());
+  }
+
+  /// Sequential (non-parallel) processing of a chunk.
+  auto process_sequential(chunk_ptr input) -> void {
     TENZIR_ASSERT(parser_);
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();
@@ -1284,7 +1406,7 @@ public:
         buffer_.clear();
       }
       if (parser_->abort_requested) {
-        co_return;
+        return;
       }
       // Handle \r\n for newline mode.
       if (args_.split_mode == split_at::newline and *current == '\r') {
@@ -1301,32 +1423,121 @@ public:
     buffer_.append(begin, end);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    TENZIR_ASSERT(parser_);
-    // Flush remaining buffer as a final line.
-    if (not buffer_.empty()) {
-      buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
-      parser_->parse(simdjson::padded_string_view{buffer_});
-      buffer_.clear();
+  /// Parallel processing: split at delimiter boundaries and dispatch to workers.
+  auto process_parallel(chunk_ptr input) -> Task<void> {
+    auto data = std::string_view{reinterpret_cast<char const*>(input->data()),
+                                 input->size()};
+    // Handle case where previous chunk ended on carriage return.
+    if (args_.split_mode == split_at::newline and ended_on_carriage_return_
+        and not data.empty() and data.front() == '\n') {
+      data.remove_prefix(1);
     }
-    parser_->validate_completion();
-    if (parser_->abort_requested) {
+    ended_on_carriage_return_ = false;
+    buffer_.append(data);
+    // Find the last delimiter.
+    auto delim = args_.split_mode == split_at::newline ? '\n' : '\0';
+    auto last_delim = buffer_.rfind(delim);
+    // Also check for \r in newline mode.
+    if (args_.split_mode == split_at::newline
+        and last_delim == std::string::npos) {
+      last_delim = buffer_.rfind('\r');
+    }
+    if (last_delim == std::string::npos) {
+      // No complete line yet; keep buffering.
       co_return;
     }
-    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
-      co_await push(std::move(slice));
+    // Extract complete lines and send to a worker.
+    auto batch_str = std::string_view{buffer_}.substr(0, last_delim + 1);
+    auto batch = make_padded_chunk(batch_str);
+    // Check for trailing \r\n split.
+    if (args_.split_mode == split_at::newline
+        and last_delim + 1 < buffer_.size() and buffer_[last_delim] == '\r'
+        and buffer_[last_delim + 1] == '\n') {
+      buffer_.erase(0, last_delim + 2);
+    } else {
+      buffer_.erase(0, last_delim + 1);
+    }
+    co_await read_input_queue_->enqueue(std::move(batch));
+  }
+
+  /// Worker coroutine that parses ndjson chunks on the CPU executor.
+  auto read_worker_loop(std::string parser_name,
+                        multi_series_builder::options msb_options) const
+    -> Task<void> {
+    auto parser = ndjson_parser{parser_name, *worker_dh_, msb_options};
+    auto line_buffer = std::string{};
+    try {
+      while (true) {
+        auto next = co_await read_input_queue_->dequeue();
+        if (not next) {
+          // Pass the stop sentinel to the next worker.
+          co_await read_input_queue_->enqueue(std::nullopt);
+          break;
+        }
+        auto const* begin = reinterpret_cast<char const*>((*next)->data());
+        auto const* const end = begin + (*next)->size();
+        for (auto const* current = begin; current != end; ++current) {
+          if (args_.split_mode == split_at::newline) {
+            if (*current != '\n' and *current != '\r') {
+              continue;
+            }
+          } else {
+            if (*current != '\0') {
+              continue;
+            }
+          }
+          auto const size = static_cast<size_t>(current - begin);
+          auto const capacity = static_cast<size_t>(end - begin);
+          if (line_buffer.empty()
+              and capacity >= size + simdjson::SIMDJSON_PADDING) {
+            parser.parse(simdjson::padded_string_view{begin, size, capacity});
+          } else {
+            line_buffer.append(begin, current);
+            line_buffer.reserve(line_buffer.size()
+                                + simdjson::SIMDJSON_PADDING);
+            parser.parse(simdjson::padded_string_view{line_buffer});
+            line_buffer.clear();
+          }
+          // Handle \r\n for newline mode.
+          if (args_.split_mode == split_at::newline and *current == '\r') {
+            auto const* after = current + 1;
+            if (after != end and *after == '\n') {
+              ++current;
+            }
+          }
+          begin = current + 1;
+        }
+        // Yield ready results to the output queue.
+        for (auto& slice : parser.builder.yield_ready_as_table_slice()) {
+          co_await read_output_queue_->enqueue(std::move(slice));
+        }
+      }
+    } catch (folly::OperationCancelled const&) {
+    }
+    // Finalize: flush remaining data.
+    for (auto& slice : parser.builder.finalize_as_table_slice()) {
+      co_await read_output_queue_->enqueue(std::move(slice));
+    }
+    if (read_live_workers_.fetch_sub(1) == 1) {
+      co_await read_output_queue_->enqueue(std::nullopt);
     }
   }
 
-private:
-  struct PeriodicTick {};
+  using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+  using ReadOutputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
 
   ReadJsonArgs args_;
   duration next_tick_;
+  // Non-parallel mode state:
   std::unique_ptr<ndjson_parser> parser_;
+  // Shared state:
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
+  // Parallel mode state:
+  std::shared_ptr<thread_safe_diagnostic_handler> worker_dh_;
+  std::shared_ptr<ReadInputQueue> read_input_queue_;
+  std::shared_ptr<ReadOutputQueue> read_output_queue_;
+  mutable std::atomic<uint64_t> read_live_workers_{0};
 };
 
 class read_json_plugin final
@@ -1382,8 +1593,8 @@ public:
     d.named("_unordered", &ReadJsonArgs::unordered);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       msb(ctx);
-      if (ctx.get(jobs)) {
-        diagnostic::error("`_jobs` is not supported for `read_ndjson` in neo")
+      if (auto j = ctx.get(jobs); j and *j == 0) {
+        diagnostic::error("`_jobs` must be greater than zero")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
@@ -1645,6 +1856,14 @@ struct WriteJsonArgs {
 class WriteJson final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteJson(WriteJsonArgs args) : args_{args} {
+  }
+  WriteJson(WriteJson&& other) noexcept
+    : args_{std::move(other.args_)},
+      opts_{other.opts_},
+      array_open_written_{other.array_open_written_},
+      write_input_queue_{std::move(other.write_input_queue_)},
+      write_output_queue_{std::move(other.write_output_queue_)},
+      write_live_workers_{other.write_live_workers_.load()} {
     opts_.tql = args_.tql;
     if (args_.color and args_.tql) {
       opts_.style = tql_style();
@@ -1660,7 +1879,7 @@ public:
     opts_.omit_empty_lists = args_.strip_empty_lists or args_.strip;
   }
 
-  auto print_slice(table_slice const& input) -> chunk_ptr {
+  auto print_slice(table_slice const& input) const -> chunk_ptr {
     auto printer = tenzir::json_printer{opts_};
     // TODO: Since this printer is per-schema we can write an optimized
     // version of it that gets the schema ahead of time and only expects
@@ -1709,13 +1928,69 @@ public:
     return chunk::make(std::move(buffer), meta);
   }
 
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await OperatorBase::start(ctx);
+    if (args_.jobs == 0) {
+      co_return;
+    }
+    auto capacity = static_cast<uint32_t>(args_.jobs * 2);
+    write_input_queue_ = std::make_shared<WriteInputQueue>(capacity);
+    write_output_queue_ = std::make_shared<WriteOutputQueue>(capacity);
+    write_live_workers_.store(args_.jobs);
+    for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
+                                                  write_worker_loop()));
+    }
+  }
+
   auto process(table_slice input, Push<chunk_ptr>& push,
                OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    co_await push(print_slice(input));
+    if (args_.jobs == 0) {
+      co_await push(print_slice(input));
+      co_return;
+    }
+    co_await write_input_queue_->enqueue(std::move(input));
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (args_.jobs == 0) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    auto next = co_await write_output_queue_->dequeue();
+    co_return next;
+  }
+
+  auto process_task(Any result, Push<chunk_ptr>& push,
+                    OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto next = std::move(result).as<std::optional<chunk_ptr>>();
+    if (not next) {
+      co_return;
+    }
+    co_await push(std::move(*next));
   }
 
   auto finalize(Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
+    if (args_.jobs > 0) {
+      // Spawn a task to close the input queue to avoid deadlock: workers
+      // might be blocked on output enqueue while we need to drain output.
+      auto input_queue = write_input_queue_;
+      ctx.spawn_task([input_queue]() -> Task<void> {
+        co_await input_queue->enqueue(std::nullopt);
+      });
+      // Drain all remaining output from workers.
+      while (true) {
+        auto next = co_await write_output_queue_->dequeue();
+        if (not next) {
+          break;
+        }
+        co_await push(std::move(*next));
+      }
+      co_return;
+    }
     TENZIR_UNUSED(ctx);
     if (not args_.arrays_of_objects) {
       co_return;
@@ -1729,9 +2004,34 @@ public:
   }
 
 private:
+  /// Worker coroutine that prints table slices on the CPU executor.
+  auto write_worker_loop() const -> Task<void> {
+    try {
+      while (true) {
+        auto next = co_await write_input_queue_->dequeue();
+        if (not next) {
+          // Pass the stop sentinel to the next worker.
+          co_await write_input_queue_->enqueue(std::nullopt);
+          break;
+        }
+        co_await write_output_queue_->enqueue(print_slice(*next));
+      }
+    } catch (folly::OperationCancelled const&) {
+    }
+    if (write_live_workers_.fetch_sub(1) == 1) {
+      co_await write_output_queue_->enqueue(std::nullopt);
+    }
+  }
+
+  using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
+  using WriteOutputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+
   WriteJsonArgs args_;
   json_printer_options opts_ = {};
-  bool array_open_written_ = false;
+  mutable bool array_open_written_ = false;
+  std::shared_ptr<WriteInputQueue> write_input_queue_;
+  std::shared_ptr<WriteOutputQueue> write_output_queue_;
+  mutable std::atomic<uint64_t> write_live_workers_{0};
 };
 
 class write_json_plugin final : public virtual operator_plugin2<write_json>,
@@ -1828,12 +2128,18 @@ public:
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
-    d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
+    auto arrays_arg
+      = d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
     d.named("color", &WriteJsonArgs::color);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     d.validate([=](ValidateCtx& ctx) -> Empty {
-      if (ctx.get(jobs_arg)) {
-        diagnostic::error("`_jobs` is not supported for `write_ndjson` in neo")
+      if (auto jobs = ctx.get(jobs_arg); jobs and *jobs == 0) {
+        diagnostic::error("`_jobs` must be greater than zero")
+          .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
+          .emit(ctx);
+      }
+      if (ctx.get(jobs_arg) and ctx.get(arrays_arg)) {
+        diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
           .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
           .emit(ctx);
       }
