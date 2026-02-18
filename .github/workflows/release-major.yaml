@@ -12,6 +12,11 @@ on:
           user. Use full sentences and avoid abbreviations.
         required: true
         type: string
+      title:
+        description: |
+          User-facing release title (auto-generated if omitted)
+        required: false
+        type: string
 
 jobs:
   release:
@@ -19,4 +24,5 @@ jobs:
     with:
       bump: major
       intro: ${{ inputs.intro }}
+      title: ${{ inputs.title }}
     secrets: inherit
