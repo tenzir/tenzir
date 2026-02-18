@@ -159,10 +159,6 @@ public:
   ToKafkaOperator(const ToKafkaOperator&) = delete;
   auto operator=(const ToKafkaOperator&) -> ToKafkaOperator& = delete;
 
-  ~ToKafkaOperator() override {
-    flush_and_close();
-  }
-
   auto start(OpCtx& ctx) -> Task<void> override {
     auto auth = co_await resolve_aws_iam_auth(
       args_.aws_iam, args_.aws_region, ctx,
