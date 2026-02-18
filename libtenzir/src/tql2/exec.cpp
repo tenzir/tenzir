@@ -701,6 +701,9 @@ struct ChannelProfile {
 
 class TestChannelFactory : public ChannelFactory {
 public:
+  explicit TestChannelFactory(bool profiling = false) : profiling_{profiling} {
+  }
+
   auto get_profiles() -> std::vector<ChannelProfile> {
     auto lock = std::scoped_lock{mutex_};
     return profiles_;
@@ -731,14 +734,18 @@ private:
   template <class T>
   auto make_profiled_channel(ChannelId id, size_t max_bytes)
     -> PushPull<OperatorMsg<T>> {
-    auto stats = std::make_shared<ChannelStats>();
-    auto lock = std::scoped_lock{mutex_};
-    profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+    auto stats = std::shared_ptr<ChannelStats>{};
+    if (profiling_) {
+      stats = std::make_shared<ChannelStats>();
+      auto lock = std::scoped_lock{mutex_};
+      profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+    }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
     return {OpPush<T>{shared}, OpPull<T>{shared}};
   }
 
+  bool profiling_;
   std::mutex mutex_;
   std::vector<ChannelProfile> profiles_;
 #if TENZIR_DEBUG_ASYNC
@@ -959,7 +966,7 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  auto channel_factory = TestChannelFactory{};
+  auto channel_factory = TestChannelFactory{profile_path.has_value()};
   // Profiling: sample channel stats periodically if requested.
   auto samples = std::vector<ProfileSample>{};
   auto stop_flag = std::atomic<bool>{false};
