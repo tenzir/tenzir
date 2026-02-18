@@ -10,6 +10,8 @@
 
 #include <tenzir/fwd.hpp>
 
+#include <optional>
+
 namespace tenzir {
 
 constexpr inline auto make_default_implicit_events_sink(bool color)
@@ -37,6 +39,7 @@ struct exec_config {
   bool legacy = false;
   bool strict = false;
   bool neo = false;
+  std::optional<std::string> profile;
 };
 
 auto exec_pipeline(std::string content, diagnostic_handler& dh,
