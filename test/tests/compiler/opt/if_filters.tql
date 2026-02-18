@@ -1,0 +1,10 @@
+export
+if true {
+  where a
+} else if false {
+  where b
+} else {
+  where c
+}
+where foo == 42
+discard
