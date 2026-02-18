@@ -32,6 +32,7 @@ struct from_kafka_args {
   std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
   location operator_location;
+  uint64_t jobs = 1;
 
   friend auto inspect(auto& f, from_kafka_args& x) -> bool {
     return f.object(x).fields(
@@ -39,7 +40,8 @@ struct from_kafka_args {
       f.field("exit", x.exit), f.field("offset", x.offset),
       f.field("commit_batch_size", x.commit_batch_size),
       f.field("options", x.options), f.field("aws_region", x.aws_region),
-      f.field("aws", x.aws), f.field("operator_location", x.operator_location));
+      f.field("aws", x.aws), f.field("operator_location", x.operator_location),
+      f.field("jobs", x.jobs));
   }
 };
 
