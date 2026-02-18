@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/async.hpp"
 #include "tenzir/blob.hpp"
 #include "tenzir/data.hpp"
@@ -34,6 +36,10 @@
 namespace folly {
 class SSLContext;
 } // namespace folly
+
+namespace proxygen::coro {
+class HTTPSourceHolder;
+} // namespace proxygen::coro
 
 namespace tenzir::http {
 
@@ -131,10 +137,36 @@ struct ClientRequestConfig {
   std::shared_ptr<folly::SSLContext> ssl_context;
 };
 
+struct Endpoint {
+  std::string host;
+  uint16_t port = 0;
+};
+
+struct ResponseRoute {
+  uint16_t code = 0;
+  std::string content_type;
+  std::string body;
+};
+
 auto normalize_http_method(std::string_view method)
   -> std::optional<std::string>;
 
+auto parse_host_port_endpoint(std::string_view endpoint)
+  -> Result<Endpoint, std::string>;
+
 auto decode_query_string(std::string_view query) -> HeaderPairs;
+
+auto parse_response_code(data const& value) -> std::optional<uint16_t>;
+
+auto validate_response_map(record const& responses, diagnostic_handler& dh,
+                           location source) -> failure_or<void>;
+
+auto lookup_response(record const& responses, std::string_view path)
+  -> std::optional<ResponseRoute>;
+
+auto make_fixed_response_source(uint16_t code, std::string body,
+                                std::string_view content_type = {})
+  -> proxygen::coro::HTTPSourceHolder;
 
 auto try_decompress_body(std::string_view encoding,
                          std::span<std::byte const> body,

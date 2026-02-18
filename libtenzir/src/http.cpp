@@ -25,10 +25,13 @@
 #include <proxygen/lib/http/HTTPConnector.h>
 #include <proxygen/lib/http/HTTPMessage.h>
 #include <proxygen/lib/http/HTTPMethod.h>
+#include <proxygen/lib/http/coro/HTTPFixedSource.h>
+#include <proxygen/lib/http/coro/HTTPSourceHolder.h>
 #include <proxygen/lib/http/session/HTTPUpstreamSession.h>
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <deque>
@@ -579,6 +582,25 @@ auto normalize_http_method(std::string_view method)
   return std::string{to_rfc_http_method(*parsed)};
 }
 
+auto parse_host_port_endpoint(std::string_view endpoint)
+  -> Result<Endpoint, std::string> {
+  auto const colon = endpoint.rfind(':');
+  if (colon == 0 or colon == std::string_view::npos) {
+    return Err{std::string{"`url` must have the form `<host>:<port>`"}};
+  }
+  auto port = uint16_t{};
+  auto const* begin = endpoint.data() + colon + 1;
+  auto const* end = endpoint.data() + endpoint.size();
+  auto [ptr, ec] = std::from_chars(begin, end, port);
+  if (ec != std::errc{} or ptr != end) {
+    return Err{std::string{"`url` must have the form `<host>:<port>`"}};
+  }
+  return Endpoint{
+    .host = std::string{endpoint.substr(0, colon)},
+    .port = port,
+  };
+}
+
 auto decode_query_string(std::string_view query) -> HeaderPairs {
   auto result = HeaderPairs{};
   if (query.empty()) {
@@ -592,6 +614,117 @@ auto decode_query_string(std::string_view query) -> HeaderPairs {
     result.emplace_back(std::string{param.key}, std::string{param.value});
   }
   return result;
+}
+
+auto parse_response_code(data const& value) -> std::optional<uint16_t> {
+  if (auto x = try_as<uint64_t>(value)) {
+    if (*x <= std::numeric_limits<uint16_t>::max()) {
+      return detail::narrow<uint16_t>(*x);
+    }
+    return std::nullopt;
+  }
+  if (auto x = try_as<int64_t>(value)) {
+    if (*x >= 0 and *x <= std::numeric_limits<uint16_t>::max()) {
+      return detail::narrow<uint16_t>(*x);
+    }
+    return std::nullopt;
+  }
+  return std::nullopt;
+}
+
+auto validate_response_map(record const& responses, diagnostic_handler& dh,
+                           location source) -> failure_or<void> {
+  if (responses.empty()) {
+    diagnostic::error("`responses` must not be empty").primary(source).emit(dh);
+    return failure::promise();
+  }
+  for (auto const& [_, value] : responses) {
+    auto rec = try_as<record>(value);
+    if (not rec) {
+      diagnostic::error("field must be `record`").primary(source).emit(dh);
+      return failure::promise();
+    }
+    if (rec->find("code") == rec->end() or rec->find("content_type") == rec->end()
+        or rec->find("body") == rec->end()) {
+      diagnostic::error(
+        "`responses` record must contain `code`, `content_type`, `body`")
+        .primary(source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not parse_response_code(rec->at("code"))) {
+      diagnostic::error(
+        "`responses` field `code` must be an integer between 0 and 65535")
+        .primary(source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not is<std::string>(rec->at("content_type"))) {
+      diagnostic::error("`responses` field `content_type` must be a string")
+        .primary(source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not is<std::string>(rec->at("body"))) {
+      diagnostic::error("`responses` field `body` must be a string")
+        .primary(source)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  return {};
+}
+
+auto lookup_response(record const& responses, std::string_view path)
+  -> std::optional<ResponseRoute> {
+  auto it = responses.find(std::string{path});
+  if (it == responses.end()) {
+    return std::nullopt;
+  }
+  auto rec = try_as<record>(it->second);
+  if (not rec) {
+    return std::nullopt;
+  }
+  auto code_it = rec->find("code");
+  if (code_it == rec->end()) {
+    return std::nullopt;
+  }
+  auto code = parse_response_code(code_it->second);
+  if (not code) {
+    return std::nullopt;
+  }
+  auto content_type_it = rec->find("content_type");
+  if (content_type_it == rec->end()) {
+    return std::nullopt;
+  }
+  auto content_type = try_as<std::string>(content_type_it->second);
+  if (not content_type) {
+    return std::nullopt;
+  }
+  auto body_it = rec->find("body");
+  if (body_it == rec->end()) {
+    return std::nullopt;
+  }
+  auto body = try_as<std::string>(body_it->second);
+  if (not body) {
+    return std::nullopt;
+  }
+  return ResponseRoute{
+    .code = *code,
+    .content_type = *content_type,
+    .body = *body,
+  };
+}
+
+auto make_fixed_response_source(uint16_t code, std::string body,
+                                std::string_view content_type)
+  -> proxygen::coro::HTTPSourceHolder {
+  auto source = proxygen::coro::HTTPFixedSource::makeFixedResponse(
+    code, std::move(body));
+  if (not content_type.empty()) {
+    source->msg_->getHeaders().set("Content-Type", std::string{content_type});
+  }
+  return proxygen::coro::HTTPSourceHolder{source};
 }
 
 auto try_decompress_body(std::string_view encoding,

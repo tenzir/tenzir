@@ -1,4 +1,5 @@
 ---
+error: true
 fixtures: [http]
 timeout: 60
 ---

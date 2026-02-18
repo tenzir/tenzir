@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http:
+      mode: client
+      method: POST
+      path: /events
+      body: ""
+      content_type: ""
+      expected_response_body: |
+        {"event":"post"}
+timeout: 60
+---
+
+from {event: "post"}
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"), path="/events", method="post"

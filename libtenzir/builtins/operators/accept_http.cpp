@@ -30,11 +30,9 @@
 #include <folly/io/coro/ServerSocket.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
 #include <proxygen/lib/http/codec/HTTPCodecFactory.h>
-#include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 
-#include <charconv>
 #include <unordered_set>
 #include <utility>
 
@@ -52,22 +50,6 @@ constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
     return x.inner;
   });
 };
-
-auto try_parse_response_code(data const& value) -> std::optional<uint16_t> {
-  if (auto const* x = try_as<uint64_t>(value)) {
-    if (*x <= std::numeric_limits<uint16_t>::max()) {
-      return detail::narrow<uint16_t>(*x);
-    }
-    return std::nullopt;
-  }
-  if (auto const* x = try_as<int64_t>(value)) {
-    if (*x >= 0 and *x <= std::numeric_limits<uint16_t>::max()) {
-      return detail::narrow<uint16_t>(*x);
-    }
-    return std::nullopt;
-  }
-  return std::nullopt;
-}
 
 struct AcceptHttpArgs {
   location op = location::unknown;
@@ -93,46 +75,7 @@ struct AcceptHttpArgs {
       return failure::promise();
     }
     if (responses) {
-      if (responses->inner.empty()) {
-        diagnostic::error("`responses` must not be empty")
-          .primary(*responses)
-          .emit(dh);
-        return failure::promise();
-      }
-      for (auto const& [_, value] : responses->inner) {
-        auto const* rec = try_as<record>(value);
-        if (not rec) {
-          diagnostic::error("field must be `record`")
-            .primary(*responses)
-            .emit(dh);
-          return failure::promise();
-        }
-        if (rec->find("code") == rec->end() or rec->find("content_type") == rec->end()
-            or rec->find("body") == rec->end()) {
-          diagnostic::error("`responses` record must contain `code`, `content_type`, `body`")
-            .primary(*responses)
-            .emit(dh);
-          return failure::promise();
-        }
-        if (not try_parse_response_code(rec->at("code"))) {
-          diagnostic::error("`responses` field `code` must be an integer between 0 and 65535")
-            .primary(*responses)
-            .emit(dh);
-          return failure::promise();
-        }
-        if (not is<std::string>(rec->at("content_type"))) {
-          diagnostic::error("`responses` field `content_type` must be a string")
-            .primary(*responses)
-            .emit(dh);
-          return failure::promise();
-        }
-        if (not is<std::string>(rec->at("body"))) {
-          diagnostic::error("`responses` field `body` must be a string")
-            .primary(*responses)
-            .emit(dh);
-          return failure::promise();
-        }
-      }
+      TRY(http::validate_response_map(responses->inner, dh, responses->source));
     }
     if (parse) {
       auto output = parse->inner.infer_type(tag_v<chunk_ptr>, dh);
@@ -209,31 +152,21 @@ public:
     });
     co_await reader.read();
     if (body_too_large) {
-      co_return proxygen::coro::HTTPSourceHolder{
-        proxygen::coro::HTTPFixedSource::makeFixedResponse(413, std::string{})};
+      co_return http::make_fixed_response_source(413, std::string{});
     }
     state_->queue->enqueue(std::optional<http::RequestData>{request});
     auto response_code = uint16_t{200};
     auto content_type = std::string{};
     auto body = std::string{};
     if (state_->responses) {
-      auto const it = state_->responses->find(request.path);
-      if (it != state_->responses->end()) {
-        auto rec = as<record>(it->second);
-        auto code = try_parse_response_code(rec["code"]);
-        TENZIR_ASSERT(code);
-        response_code = *code;
-        content_type = as<std::string>(rec["content_type"]);
-        body = as<std::string>(rec["body"]);
+      if (auto response = http::lookup_response(*state_->responses, request.path)) {
+        response_code = response->code;
+        content_type = response->content_type;
+        body = response->body;
       }
     }
-    auto response_source
-      = proxygen::coro::HTTPFixedSource::makeFixedResponse(response_code,
-                                                        std::move(body));
-    if (not content_type.empty()) {
-      response_source->msg_->getHeaders().set("Content-Type", content_type);
-    }
-    co_return proxygen::coro::HTTPSourceHolder{response_source};
+    co_return http::make_fixed_response_source(response_code, std::move(body),
+                                               content_type);
   }
 
 private:
@@ -275,25 +208,15 @@ public:
       done_ = true;
       co_return;
     }
-    auto colon = resolved_url_.rfind(':');
-    if (colon == 0 or colon == std::string::npos) {
+    auto endpoint = http::parse_host_port_endpoint(resolved_url_);
+    if (endpoint.is_err()) {
       diagnostic::error("`url` must have the form `<host>:<port>`")
         .primary(args_.url)
         .emit(dh);
       done_ = true;
       co_return;
     }
-    auto host = resolved_url_.substr(0, colon);
-    auto port = uint16_t{};
-    auto* end = resolved_url_.data() + resolved_url_.size();
-    auto [ptr, ec] = std::from_chars(resolved_url_.data() + colon + 1, end, port);
-    if (ec != std::errc{} or ptr != end) {
-      diagnostic::error("`url` must have the form `<host>:<port>`")
-        .primary(args_.url)
-        .emit(dh);
-      done_ = true;
-      co_return;
-    }
+    auto [host, port] = std::move(endpoint).unwrap();
     tls_options_ = args_.tls
                      ? tls_options{*args_.tls,
                                    {.tls_default = false, .is_server = true}}

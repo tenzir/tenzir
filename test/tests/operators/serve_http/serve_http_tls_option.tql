@@ -1,0 +1,20 @@
+---
+fixtures:
+  - http:
+      mode: client
+      tls: true
+      method: GET
+      path: /tls
+      expected_response_body: |
+        {"tls":true}
+timeout: 60
+---
+
+from {tls: true}
+serve_http env("HTTP_FIXTURE_ACCEPT_ENDPOINT"),
+          path="/tls",
+          tls={
+            certfile: env("HTTP_FIXTURE_TLS_CERTFILE"),
+            keyfile: env("HTTP_FIXTURE_TLS_KEYFILE"),
+            skip_peer_verification: true,
+          }
