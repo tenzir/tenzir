@@ -522,30 +522,32 @@ auto multi_series_builder::make_events_available_on_timeout(
   auto const timeout = settings_.timeout;
   auto const target_size
     = detail::narrow<int64_t>(settings_.desired_batch_size);
+  complete_last_event(now);
   if (uses_merging_builder()) {
-    complete_last_event();
     auto const length = merging_builder_.length();
-    if (length >= target_size
-        or (length > 0
-            and std::chrono::duration_cast<duration>(now - merging_flushed_)
-                  >= timeout)) {
-      flush_merging_builder();
-      merging_flushed_ = now;
-      return settings_.timeout;
+    if (length > 0) {
+      if (length >= target_size
+          or (length > 0
+              and std::chrono::duration_cast<duration>(
+                    now - oldest_event_in_merging_)
+                    >= timeout)) {
+        flush_merging_builder();
+        return timeout;
+      }
+      return now - oldest_event_in_merging_ + timeout;
     }
-    return now - merging_flushed_;
+    return timeout;
   }
-  complete_last_event();
   auto res = duration::max();
   for (auto& entry : entries_) {
     if (detail::narrow<std::size_t>(entry.builder.length())
         > settings_.desired_batch_size) {
-      append_ready_events(entry.flush());
+      append_ready_events(entry.flush(now));
       continue;
     }
-    auto const waiting = now - entry.flushed;
-    if (waiting > settings_.timeout) {
-      append_ready_events(entry.flush());
+    auto const waiting = now - entry.oldest_event;
+    if (waiting > timeout) {
+      append_ready_events(entry.flush(now));
       continue;
     }
     res = std::min(res, waiting);
@@ -554,9 +556,10 @@ auto multi_series_builder::make_events_available_on_timeout(
     if (e.builder.length() != 0) {
       return false;
     }
-    return std::chrono::duration_cast<duration>(now - e.flushed)
+    return std::chrono::duration_cast<duration>(now - e.last_flush)
            >= 10 * timeout;
   });
+  res = std::max(res, duration{});
   return res;
 }
 
@@ -640,9 +643,10 @@ auto multi_series_builder::finalize() -> std::vector<series> {
   if (uses_merging_builder()) {
     flush_merging_builder();
   } else {
-    complete_last_event();
+    auto const now = clock::now();
+    complete_last_event(now);
     for (auto& entry : entries_) {
-      append_ready_events(entry.flush());
+      append_ready_events(entry.flush(now));
     }
   }
   return std::exchange(ready_events_, {});
@@ -654,23 +658,26 @@ auto multi_series_builder::finalize_as_table_slice()
     finalize(), settings_.default_schema_name);
 }
 
-void multi_series_builder::complete_last_event() {
+void multi_series_builder::complete_last_event(time_point now) {
   // Ensure that the slices emitted by us do not exceed `table_slice_size`. We
   // can't use `make_events_available_where` here as that would call
   // `complete_last_event` again.
   if (uses_merging_builder()) {
-    // Merging mode just writes directly into a series builder, so we don't have
-    // anything else to do here.
+    // Since `complete_last_event` is called also when somebody is adding a new
+    // event, we need to potentially setup the timeout.
+    if (oldest_event_in_merging_ == time_point{}) {
+      oldest_event_in_merging_ = now;
+    }
     if (merging_builder_.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
-      flush_merging_builder();
+      append_ready_events(merging_builder_.finish());
     }
     return;
   }
   for (auto& entry : entries_) {
     if (entry.builder.length()
         >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
-      append_ready_events(entry.flush());
+      append_ready_events(entry.flush(now));
     }
   }
   if (not builder_raw_.has_elements()) {
@@ -782,10 +789,13 @@ void multi_series_builder::complete_last_event() {
     // Because it's the ordered mode, we know that that only this single
     // series builder can be active and hold elements. Since the active
     // builder changed, we flush the previous one.
-    append_ready_events(entries_[active_index_].flush());
+    append_ready_events(entries_[active_index_].flush(now));
   }
   active_index_ = new_index;
   auto& entry = entries_[new_index];
+  if (entry.oldest_event == time_point{}) {
+    entry.oldest_event = now;
+  }
   builder_raw_.commit_to(entry.builder, true, parsing_signature_schema_);
 }
 
@@ -843,7 +853,7 @@ void multi_series_builder::garbage_collect_where(
 }
 
 void multi_series_builder::flush_merging_builder() {
-  merging_flushed_ = std::chrono::steady_clock::now();
+  oldest_event_in_merging_ = {};
   auto result = merging_builder_.finish();
   if (ready_events_.empty()) {
     ready_events_ = std::move(result);
