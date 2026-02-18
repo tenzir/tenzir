@@ -546,12 +546,15 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           .emit(ctx);
         return series::null(null_type{}, field.length());
       }
-      auto list_values
-        = series{field_list->type.value_type(), field_list->array->values()};
-      if (list_values.length() == 0) {
-        return make_list_series(
-          series::null(null_type{}, field_list->array->values()->length()),
-          *field_list->array);
+      // The list array may be a slice of a larger backing array, so we must
+      // use the offsets to determine the actual values range.
+      auto values_start = field_list->array->value_offset(0);
+      auto values_end
+        = field_list->array->value_offset(field_list->array->length());
+      auto values_length = values_end - values_start;
+      if (values_length == 0) {
+        return make_list_series(series::null(null_type{}, field_list->length()),
+                                *field_list->array);
       }
       auto ms = eval(args.lambda, *field_list);
       TENZIR_ASSERT(not ms.parts().empty());

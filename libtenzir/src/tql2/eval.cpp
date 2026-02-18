@@ -191,6 +191,13 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
     visitor.visit(lambda.right);
     const auto captures = std::move(visitor).result();
     const auto ty = input.type.value_type();
+    // The input list array may be a slice of a larger backing array (e.g.,
+    // from cached constant broadcasting). We must use only the values
+    // referenced by this slice, not the full backing values array.
+    auto values_start = input.array->value_offset(0);
+    auto values_end = input.array->value_offset(input.array->length());
+    auto values
+      = input.array->values()->Slice(values_start, values_end - values_start);
     auto capture_offsets = std::vector<offset>{};
     for (const auto& capture : captures) {
       if (capture.path().front().id.name == lambda.left.name) {
@@ -202,12 +209,12 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
       }
     }
     if (capture_offsets.empty()) {
-      return eval(lambda, series{ty, input.array->values()}, dh);
+      return eval(lambda, series{ty, values}, dh);
     }
     const auto to
       = check(ast::field_path::try_from(ast::root_field{lambda.left, false}));
     auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
-    check(b.Reserve(input.array->values()->length()));
+    check(b.Reserve(values->length()));
     for (auto i = int64_t{}; i < input.array->length(); ++i) {
       for (auto j = int64_t{}; j < input.array->value_length(i); ++j) {
         b.UnsafeAppend(i);
@@ -219,7 +226,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
       slice.schema(),
     };
     repeated.import_time(slice.import_time());
-    const auto slice = assign(to, {ty, input.array->values()}, repeated, dh);
+    const auto slice = assign(to, {ty, values}, repeated, dh);
     return eval(lambda.right, slice, dh);
   });
 }
