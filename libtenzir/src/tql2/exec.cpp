@@ -558,6 +558,49 @@ struct ChannelStats {
   data out;
 };
 
+/// Monotonic counters for profiling per-operator CPU usage.
+struct ExecutorStats {
+  std::atomic<int64_t> wall_ns{0};
+  std::atomic<int64_t> cpu_ns{0};
+  std::atomic<size_t> task_count{0};
+};
+
+/// Executor wrapper that forwards tasks to an inner executor while measuring
+/// wall-clock time, thread CPU time, and task count.
+class ProfilingExecutor : public folly::Executor {
+public:
+  ProfilingExecutor(folly::Executor::KeepAlive<> inner,
+                    std::shared_ptr<ExecutorStats> stats)
+    : inner_{std::move(inner)}, stats_{std::move(stats)} {
+  }
+
+  void add(folly::Func f) override {
+    inner_->add([stats = stats_, f = std::move(f)]() mutable {
+      auto wall_start = std::chrono::steady_clock::now();
+      struct timespec cpu_start = {};
+      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start);
+      f();
+      auto wall_end = std::chrono::steady_clock::now();
+      struct timespec cpu_end = {};
+      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
+      stats->wall_ns.fetch_add(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
+                                                             - wall_start)
+          .count(),
+        std::memory_order::relaxed);
+      stats->cpu_ns.fetch_add((cpu_end.tv_sec - cpu_start.tv_sec)
+                                  * 1'000'000'000LL
+                                + (cpu_end.tv_nsec - cpu_start.tv_nsec),
+                              std::memory_order::relaxed);
+      stats->task_count.fetch_add(1, std::memory_order::relaxed);
+    });
+  }
+
+private:
+  folly::Executor::KeepAlive<> inner_;
+  std::shared_ptr<ExecutorStats> stats_;
+};
+
 /// Data channel between two operators.
 template <class T>
 struct OpChannel {
@@ -702,14 +745,39 @@ struct ChannelProfile {
   size_t max_bytes;
 };
 
-class TestChannelFactory : public ChannelFactory {
+/// Collected profile for a single operator's executor.
+struct ExecutorProfile {
+  OpId id;
+  std::shared_ptr<ExecutorStats> stats;
+};
+
+class TestExecCtx : public ExecCtx {
 public:
-  explicit TestChannelFactory(bool profiling = false) : profiling_{profiling} {
+  explicit TestExecCtx(bool profiling = false) : profiling_{profiling} {
   }
 
-  auto get_profiles() -> std::vector<ChannelProfile> {
+  auto get_channel_profiles() -> std::vector<ChannelProfile> {
     auto lock = std::scoped_lock{mutex_};
-    return profiles_;
+    return channel_profiles_;
+  }
+
+  auto get_executor_profiles() -> std::vector<ExecutorProfile> {
+    auto lock = std::scoped_lock{mutex_};
+    return executor_profiles_;
+  }
+
+  auto make_executor(OpId id) -> folly::Executor::KeepAlive<> override {
+    if (not profiling_) {
+      return {};
+    }
+    auto stats = std::make_shared<ExecutorStats>();
+    auto exec = std::make_unique<ProfilingExecutor>(
+      folly::getGlobalCPUExecutor(), stats);
+    auto keep_alive = folly::Executor::getKeepAliveToken(exec.get());
+    auto lock = std::scoped_lock{mutex_};
+    executor_profiles_.push_back(ExecutorProfile{id, std::move(stats)});
+    executors_.push_back(std::move(exec));
+    return keep_alive;
   }
 
 protected:
@@ -741,7 +809,7 @@ private:
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
       auto lock = std::scoped_lock{mutex_};
-      profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes});
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -750,7 +818,10 @@ private:
 
   bool profiling_;
   std::mutex mutex_;
-  std::vector<ChannelProfile> profiles_;
+  std::vector<ChannelProfile> channel_profiles_;
+  std::vector<ExecutorProfile> executor_profiles_;
+  // Owns the ProfilingExecutor instances to keep them alive.
+  std::vector<std::unique_ptr<ProfilingExecutor>> executors_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -778,6 +849,13 @@ struct ProfileSample {
     size_t max_bytes;
   };
   std::vector<Channel> channels;
+  struct Executor {
+    std::string name;
+    int64_t wall_ns;
+    int64_t cpu_ns;
+    size_t task_count;
+  };
+  std::vector<Executor> executors;
 };
 
 void write_profile(std::string const& path,
@@ -788,19 +866,82 @@ void write_profile(std::string const& path,
     TENZIR_WARN("failed to open profile output file: {}", path);
     return;
   }
-  // Collect all unique channel names in order of first appearance.
-  auto channel_names = std::vector<std::string>{};
-  auto channel_index = std::unordered_map<std::string, size_t>{};
+  // Parse channel names ("A -> B") and collect unique operator names from
+  // both channels and executors. Boundary markers ("_") are skipped.
+  auto op_names = std::vector<std::string>{};
+  auto op_index = std::unordered_map<std::string, size_t>{};
+  auto add_op = [&](std::string const& name) {
+    if (name == "_") {
+      return;
+    }
+    if (op_index.emplace(name, op_names.size()).second) {
+      op_names.push_back(name);
+    }
+  };
+  struct ChannelEndpoints {
+    std::string sender;
+    std::string receiver;
+  };
+  // An operator B is a child of operator A if B's name starts with "A-",
+  // meaning A spawned a sub-pipeline containing B.
+  auto is_child_of
+    = [](std::string const& child, std::string const& parent) -> bool {
+    return child.size() > parent.size() and child.starts_with(parent)
+           and child[parent.size()] == '-';
+  };
+  auto channel_endpoints = std::unordered_map<std::string, ChannelEndpoints>{};
   for (auto const& sample : samples) {
     for (auto const& ch : sample.channels) {
-      if (channel_index.emplace(ch.name, channel_names.size()).second) {
-        channel_names.push_back(ch.name);
+      if (channel_endpoints.contains(ch.name)) {
+        continue;
+      }
+      auto sep = ch.name.find(" -> ");
+      TENZIR_ASSERT(sep != std::string::npos);
+      auto sender = ch.name.substr(0, sep);
+      auto receiver = ch.name.substr(sep + 4);
+      add_op(sender);
+      add_op(receiver);
+      channel_endpoints[ch.name] = {std::move(sender), std::move(receiver)};
+    }
+    for (auto const& ex : sample.executors) {
+      add_op(ex.name);
+    }
+  }
+  // Create separate "(subs)" entries for operators that have cross-boundary
+  // channels to/from their sub-pipelines.
+  auto sub_op_name = [](std::string const& parent) -> std::string {
+    return fmt::format("{} (subs)", parent);
+  };
+  for (auto const& [name, ep] : channel_endpoints) {
+    if (ep.sender != "_" and ep.receiver != "_") {
+      if (is_child_of(ep.receiver, ep.sender)) {
+        add_op(sub_op_name(ep.sender));
+      } else if (is_child_of(ep.sender, ep.receiver)) {
+        add_op(sub_op_name(ep.receiver));
       }
     }
   }
-  // pid 1 = Totals, pid 2+ = one per channel.
+  // Sort operator names: main operators first, then (subs) entries, then
+  // sub-pipeline operators. Within each group, sort lexicographically.
+  auto op_sort_key
+    = [](std::string const& name) -> std::pair<size_t, std::string const&> {
+    auto is_subs = name.ends_with(" (subs)");
+    auto base = is_subs ? std::string_view{name}.substr(0, name.size() - 7)
+                        : std::string_view{name};
+    auto depth = std::count(base.begin(), base.end(), '-');
+    return {static_cast<size_t>(depth) * 2 + (is_subs ? 1 : 0), name};
+  };
+  std::sort(op_names.begin(), op_names.end(),
+            [&](std::string const& a, std::string const& b) {
+              return op_sort_key(a) < op_sort_key(b);
+            });
+  op_index.clear();
+  for (size_t i = 0; i < op_names.size(); ++i) {
+    op_index[op_names[i]] = i;
+  }
+  // pid 1 = Totals, pid 2..N+1 = per operator.
   static constexpr auto pid_totals = 1;
-  auto channel_pid = [](size_t idx) -> int {
+  auto op_pid = [](size_t idx) -> int {
     return static_cast<int>(idx) + 2;
   };
   // Write the JSON.
@@ -824,108 +965,78 @@ void write_profile(std::string const& path,
       pid, sort_index));
   };
   emit_process(pid_totals, "Totals", 0);
-  for (size_t ci = 0; ci < channel_names.size(); ++ci) {
-    emit_process(channel_pid(ci), channel_names[ci], static_cast<int>(ci) + 1);
+  for (size_t i = 0; i < op_names.size(); ++i) {
+    emit_process(op_pid(i), op_names[i], static_cast<int>(i) + 1);
   }
-  // Track definitions: name and value extractor for each channel.
-  struct TrackDef {
-    char const* name;
-    std::function<double(ProfileSample::Channel const&)> value;
+  auto emit_counter = [&](char const* name, int pid, int64_t us, double val) {
+    emit(fmt::format(
+      R"pp({{"ph": "C", "name": "{}", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
+      name, pid, us, val));
   };
-  auto instant_tracks = std::vector<TrackDef>{
-    {"Memory (bytes)",
-     [](auto const& c) {
-       return static_cast<double>(c.current_bytes);
-     }},
-    {"Batches",
-     [](auto const& c) {
-       return static_cast<double>(c.elements_in - c.elements_out);
-     }},
-    {"Bytes In (cumulative)",
-     [](auto const& c) {
-       return static_cast<double>(c.bytes_in);
-     }},
-    {"Bytes Out (cumulative)",
-     [](auto const& c) {
-       return static_cast<double>(c.bytes_out);
-     }},
-    {"Batches In (cumulative)",
-     [](auto const& c) {
-       return static_cast<double>(c.elements_in);
-     }},
-    {"Batches Out (cumulative)",
-     [](auto const& c) {
-       return static_cast<double>(c.elements_out);
-     }},
-    {"Signals In (cumulative)",
-     [](auto const& c) {
-       return static_cast<double>(c.signals_in);
-     }},
-    {"Signals Out (cumulative)",
-     [](auto const& c) {
-       return static_cast<double>(c.signals_out);
-     }},
+  // Per-operator aggregated channel metrics for a single sample.
+  struct OpChannelAgg {
+    double bytes_in = 0;
+    double bytes_out = 0;
+    double elements_in = 0;
+    double elements_out = 0;
+    double signals_in = 0;
+    double signals_out = 0;
+    double buffer_bytes = 0;
+    double buffer_batches = 0;
   };
-  // Rate track definitions.
-  struct RateTrackDef {
-    char const* name;
-    std::function<double(ProfileSample::Channel const&)> cumulative;
-  };
-  auto rate_tracks = std::vector<RateTrackDef>{
-    {"Bytes In (rate)",
-     [](auto const& c) {
-       return static_cast<double>(c.bytes_in);
-     }},
-    {"Bytes Out (rate)",
-     [](auto const& c) {
-       return static_cast<double>(c.bytes_out);
-     }},
-    {"Batches In (rate)",
-     [](auto const& c) {
-       return static_cast<double>(c.elements_in);
-     }},
-    {"Batches Out (rate)",
-     [](auto const& c) {
-       return static_cast<double>(c.elements_out);
-     }},
-    {"Signals In (rate)",
-     [](auto const& c) {
-       return static_cast<double>(c.signals_in);
-     }},
-    {"Signals Out (rate)",
-     [](auto const& c) {
-       return static_cast<double>(c.signals_out);
-     }},
-  };
-  // Emit per-channel and total tracks per sample.
-  for (auto const& sample : samples) {
-    auto us
-      = std::chrono::duration_cast<std::chrono::microseconds>(sample.time - t0)
-          .count();
-    // Per-channel instant tracks.
+  // Build per-operator channel aggregates: "In" metrics go to the sender,
+  // "Out" metrics go to the receiver. For cross-boundary channels (between a
+  // parent operator and its sub-pipeline), the parent's side is routed to the
+  // separate "(subs)" pid instead.
+  auto aggregate_channels
+    = [&](ProfileSample const& sample) -> std::vector<OpChannelAgg> {
+    auto aggs = std::vector<OpChannelAgg>(op_names.size());
     for (auto const& ch : sample.channels) {
-      auto pid = channel_pid(channel_index.at(ch.name));
-      for (auto const& track : instant_tracks) {
-        emit(fmt::format(
-          R"pp({{"ph": "C", "name": "{}", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
-          track.name, pid, us, track.value(ch)));
+      auto it = channel_endpoints.find(ch.name);
+      TENZIR_ASSERT(it != channel_endpoints.end());
+      auto const& [sender, receiver] = it->second;
+      // Determine where to route the sender's "In" metrics.
+      auto sender_target = std::string{};
+      if (sender != "_" and receiver != "_" and is_child_of(receiver, sender)) {
+        sender_target = sub_op_name(sender);
+      } else {
+        sender_target = sender;
+      }
+      // Determine where to route the receiver's "Out" metrics.
+      auto receiver_target = std::string{};
+      if (sender != "_" and receiver != "_" and is_child_of(sender, receiver)) {
+        receiver_target = sub_op_name(receiver);
+      } else {
+        receiver_target = receiver;
+      }
+      if (auto si = op_index.find(sender_target); si != op_index.end()) {
+        auto& agg = aggs[si->second];
+        agg.bytes_in += static_cast<double>(ch.bytes_in);
+        agg.elements_in += static_cast<double>(ch.elements_in);
+        agg.signals_in += static_cast<double>(ch.signals_in);
+        agg.buffer_bytes += static_cast<double>(ch.current_bytes);
+        agg.buffer_batches
+          += static_cast<double>(ch.elements_in - ch.elements_out);
+      }
+      if (auto ri = op_index.find(receiver_target); ri != op_index.end()) {
+        auto& agg = aggs[ri->second];
+        agg.bytes_out += static_cast<double>(ch.bytes_out);
+        agg.elements_out += static_cast<double>(ch.elements_out);
+        agg.signals_out += static_cast<double>(ch.signals_out);
       }
     }
-    // Totals across all channels (memory first).
-    auto total_bytes = size_t{0};
-    auto total_batches = size_t{0};
-    for (auto const& ch : sample.channels) {
-      total_bytes += ch.current_bytes;
-      total_batches += ch.elements_in - ch.elements_out;
-    }
-    emit(fmt::format(
-      R"pp({{"ph": "C", "name": "Memory (bytes)", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
-      pid_totals, us, total_bytes));
-    emit(fmt::format(
-      R"pp({{"ph": "C", "name": "Batches", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
-      pid_totals, us, total_batches));
-  }
-  // Rate tracks: computed by diffing consecutive samples.
+    return aggs;
+  };
+  // Emit all tracks in a single pass over samples, keeping previous-sample
+  // state for rate computation.
+  static constexpr auto ns_to_s = 1.0 / 1'000'000'000.0;
+  auto prev_aggs = std::vector<OpChannelAgg>{};
+  struct PrevExec {
+    int64_t wall_ns = 0;
+    int64_t cpu_ns = 0;
+    size_t task_count = 0;
+  };
+  auto prev_execs = std::vector<PrevExec>{};
   for (size_t i = 0; i < samples.size(); ++i) {
     auto const& sample = samples[i];
     auto us
@@ -943,21 +1054,96 @@ void write_profile(std::string const& path,
     if (interval_s <= 0.0) {
       interval_s = 0.001;
     }
-    for (auto const& ch : sample.channels) {
-      auto pid = channel_pid(channel_index.at(ch.name));
-      auto j = static_cast<size_t>(&ch - sample.channels.data());
-      for (auto const& track : rate_tracks) {
-        auto cur = track.cumulative(ch);
-        auto prev = 0.0;
-        if (i > 0 and j < samples[i - 1].channels.size()) {
-          prev = track.cumulative(samples[i - 1].channels[j]);
-        }
-        auto rate = (cur - prev) / interval_s;
-        emit(fmt::format(
-          R"pp({{"ph": "C", "name": "{}", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
-          track.name, pid, us, rate));
+    auto aggs = aggregate_channels(sample);
+    // Build per-operator executor lookup for this sample.
+    auto cur_execs = std::vector<PrevExec>(op_names.size());
+    for (auto const& ex : sample.executors) {
+      if (auto it = op_index.find(ex.name); it != op_index.end()) {
+        cur_execs[it->second] = PrevExec{ex.wall_ns, ex.cpu_ns, ex.task_count};
       }
     }
+    // Totals accumulators.
+    auto total_buffer_bytes = 0.0;
+    auto total_buffer_batches = 0.0;
+    auto total_wall_s = 0.0;
+    auto total_cpu_s = 0.0;
+    auto total_tasks = size_t{0};
+    auto total_wall_pct = 0.0;
+    auto total_cpu_pct = 0.0;
+    auto total_tasks_per_s = 0.0;
+    for (size_t oi = 0; oi < op_names.size(); ++oi) {
+      auto pid = op_pid(oi);
+      auto const& agg = aggs[oi];
+      // CPU / executor metrics first.
+      auto const& cur = cur_execs[oi];
+      if (cur.wall_ns != 0 or cur.cpu_ns != 0 or cur.task_count != 0) {
+        auto wall_s = static_cast<double>(cur.wall_ns) * ns_to_s;
+        auto cpu_s = static_cast<double>(cur.cpu_ns) * ns_to_s;
+        total_wall_s += wall_s;
+        total_cpu_s += cpu_s;
+        total_tasks += cur.task_count;
+        auto const& prev = oi < prev_execs.size() ? prev_execs[oi] : PrevExec{};
+        auto wall_pct = static_cast<double>(cur.wall_ns - prev.wall_ns)
+                        * ns_to_s / interval_s;
+        auto cpu_pct = static_cast<double>(cur.cpu_ns - prev.cpu_ns) * ns_to_s
+                       / interval_s;
+        auto tasks_per_s
+          = static_cast<double>(cur.task_count - prev.task_count) / interval_s;
+        total_wall_pct += wall_pct;
+        total_cpu_pct += cpu_pct;
+        total_tasks_per_s += tasks_per_s;
+        emit_counter("A: CPU Active", pid, us, cpu_pct);
+        emit_counter("B: CPU Active (cumulative)", pid, us, cpu_s);
+        emit_counter("C: CPU Wall", pid, us, wall_pct);
+        emit_counter("D: CPU Wall (cumulative)", pid, us, wall_s);
+        emit_counter("E: Tasks/s", pid, us, tasks_per_s);
+        emit_counter("F: Tasks (cumulative)", pid, us,
+                     static_cast<double>(cur.task_count));
+      }
+      // Memory / channel metrics.
+      total_buffer_bytes += agg.buffer_bytes;
+      total_buffer_batches += agg.buffer_batches;
+      auto prev_bi = oi < prev_aggs.size() ? prev_aggs[oi].bytes_in : 0.0;
+      auto prev_bo = oi < prev_aggs.size() ? prev_aggs[oi].bytes_out : 0.0;
+      auto prev_ei = oi < prev_aggs.size() ? prev_aggs[oi].elements_in : 0.0;
+      auto prev_eo = oi < prev_aggs.size() ? prev_aggs[oi].elements_out : 0.0;
+      auto prev_si = oi < prev_aggs.size() ? prev_aggs[oi].signals_in : 0.0;
+      auto prev_so = oi < prev_aggs.size() ? prev_aggs[oi].signals_out : 0.0;
+      auto bi_rate = (agg.bytes_in - prev_bi) / interval_s;
+      auto bo_rate = (agg.bytes_out - prev_bo) / interval_s;
+      emit_counter("G: Buffer (bytes)", pid, us, agg.buffer_bytes);
+      emit_counter("H: Buffer (batches)", pid, us, agg.buffer_batches);
+      emit_counter("I: Bytes In/s", pid, us, bo_rate);
+      emit_counter("J: Bytes In (cumulative)", pid, us, agg.bytes_out);
+      emit_counter("K: Bytes Out/s", pid, us, bi_rate);
+      emit_counter("L: Bytes Out (cumulative)", pid, us, agg.bytes_in);
+      emit_counter("M: Batches In/s", pid, us,
+                   (agg.elements_out - prev_eo) / interval_s);
+      emit_counter("N: Batches In (cumulative)", pid, us, agg.elements_out);
+      emit_counter("O: Batches Out/s", pid, us,
+                   (agg.elements_in - prev_ei) / interval_s);
+      emit_counter("P: Batches Out (cumulative)", pid, us, agg.elements_in);
+      emit_counter("Q: Signals In/s", pid, us,
+                   (agg.signals_out - prev_so) / interval_s);
+      emit_counter("R: Signals In (cumulative)", pid, us, agg.signals_out);
+      emit_counter("S: Signals Out/s", pid, us,
+                   (agg.signals_in - prev_si) / interval_s);
+      emit_counter("T: Signals Out (cumulative)", pid, us, agg.signals_in);
+    }
+    // Totals across all operators.
+    if (total_tasks > 0) {
+      emit_counter("A: CPU Active", pid_totals, us, total_cpu_pct);
+      emit_counter("B: CPU Active (cumulative)", pid_totals, us, total_cpu_s);
+      emit_counter("C: CPU Wall", pid_totals, us, total_wall_pct);
+      emit_counter("D: CPU Wall (cumulative)", pid_totals, us, total_wall_s);
+      emit_counter("E: Tasks/s", pid_totals, us, total_tasks_per_s);
+      emit_counter("F: Tasks (cumulative)", pid_totals, us,
+                   static_cast<double>(total_tasks));
+    }
+    emit_counter("G: Buffer (bytes)", pid_totals, us, total_buffer_bytes);
+    emit_counter("H: Buffer (batches)", pid_totals, us, total_buffer_batches);
+    prev_aggs = std::move(aggs);
+    prev_execs = std::move(cur_execs);
   }
   f << "\n  ]\n}\n";
 }
@@ -969,8 +1155,8 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  auto channel_factory = TestChannelFactory{profile_path.has_value()};
-  // Profiling: sample channel stats periodically if requested.
+  auto exec_ctx = TestExecCtx{profile_path.has_value()};
+  // Profiling: sample channel and executor stats periodically if requested.
   auto samples = std::vector<ProfileSample>{};
   auto stop_flag = std::atomic<bool>{false};
   auto sampler = std::optional<std::thread>{};
@@ -979,12 +1165,13 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
     sampler.emplace([&] {
       while (not stop_flag.load(std::memory_order::relaxed)) {
         std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        auto profiles = channel_factory.get_profiles();
-        if (profiles.empty()) {
+        auto channel_profiles = exec_ctx.get_channel_profiles();
+        auto executor_profiles = exec_ctx.get_executor_profiles();
+        if (channel_profiles.empty() and executor_profiles.empty()) {
           continue;
         }
-        auto sample = ProfileSample{std::chrono::steady_clock::now(), {}};
-        for (auto& p : profiles) {
+        auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
+        for (auto& p : channel_profiles) {
           auto bi = p.stats->in.bytes.load(std::memory_order::relaxed);
           auto bo = p.stats->out.bytes.load(std::memory_order::relaxed);
           sample.channels.push_back({
@@ -999,12 +1186,20 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
             p.max_bytes,
           });
         }
+        for (auto& p : executor_profiles) {
+          sample.executors.push_back({
+            p.id.value,
+            p.stats->wall_ns.load(std::memory_order::relaxed),
+            p.stats->cpu_ns.load(std::memory_order::relaxed),
+            p.stats->task_count.load(std::memory_order::relaxed),
+          });
+        }
         samples.push_back(std::move(sample));
       }
     });
   }
   LOGW("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain), channel_factory, sys, dh);
+  co_await run_pipeline(std::move(*chain), exec_ctx, sys, dh);
   LOGW("blocking on pipeline done");
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
