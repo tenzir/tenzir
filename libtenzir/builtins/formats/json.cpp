@@ -316,8 +316,7 @@ auto split_for_parallelization(generator<chunk_ptr> input, std::byte splitter)
 ///
 /// The current implementation always assumes that it can reorder the output.
 auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
-                        operator_control_plane& ctrl)
-  -> generator<table_slice> {
+                        operator_control_plane& ctrl) -> generator<table_slice> {
   // TODO: We assume here that we can reorder outputs. However, even if we
   // maintain the order if we are not allowed to reorder, the output can
   // slightly change because we use separate builders.
@@ -698,8 +697,8 @@ public:
     bool array_open_written_ = false;
   };
 
-  auto instantiate_impl() const
-    -> caf::expected<std::unique_ptr<printer_instance>> {
+  auto
+  instantiate_impl() const -> caf::expected<std::unique_ptr<printer_instance>> {
     auto style = default_style();
     if (args_.monochrome_output) {
       style = no_style();
@@ -961,8 +960,8 @@ public:
     return n_jobs_ == 0 ? duration::zero() : duration::max();
   }
 
-  auto parallel_operator(generator<table_slice> input) const
-    -> generator<chunk_ptr> {
+  auto
+  parallel_operator(generator<table_slice> input) const -> generator<chunk_ptr> {
     auto inputs_mut = std::mutex{};
     auto inputs = std::deque<input_t>{};
     auto inputs_cv = std::condition_variable{};
@@ -1116,8 +1115,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     auto replacement = std::make_unique<write_json>(*this);
     replacement->ordered_ = order == event_order::ordered;
@@ -1141,6 +1140,7 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
+  bool unordered = false;
   multi_series_builder::options msb_options;
 };
 
@@ -1163,8 +1163,8 @@ public:
     co_return PeriodicTick{};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process_task(Any result, Push<table_slice>& push,
+                    OpCtx& ctx) -> Task<void> override {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
@@ -1176,8 +1176,8 @@ public:
     }
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(chunk_ptr input, Push<table_slice>& push,
+               OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
@@ -1218,8 +1218,12 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    auto msb_options = args_.msb_options;
+    if (args_.unordered) {
+      msb_options.settings.ordered = false;
+    }
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
-                                              args_.msb_options);
+                                              msb_options);
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -1229,8 +1233,8 @@ public:
     co_return PeriodicTick{};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process_task(Any result, Push<table_slice>& push,
+                    OpCtx& ctx) -> Task<void> override {
     TENZIR_ASSERT(result.try_as<PeriodicTick>());
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
@@ -1242,8 +1246,8 @@ public:
     }
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(chunk_ptr input, Push<table_slice>& push,
+               OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(push);
     if (not input or input->size() == 0) {
       co_return;
@@ -1336,8 +1340,8 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -1375,6 +1379,7 @@ public:
                    .msb_options = {}}};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
+    d.named("_unordered", &ReadJsonArgs::unordered);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       msb(ctx);
       if (ctx.get(jobs)) {
@@ -1387,16 +1392,21 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{"ndjson"};
     args.split_mode = split_at::newline;
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     parser.named_optional("_jobs", args.jobs);
+    std::optional<location> unordered;
+    parser.named("_unordered", unordered);
     TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
+    if (unordered) {
+      args.builder_options.settings.ordered = false;
+    }
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
@@ -1437,8 +1447,8 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{"gelf"};
     args.split_mode = split_at::null;
     auto parser = argument_parser2::operator_(name());
@@ -1499,8 +1509,8 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{std::string{Name.str()}};
     args.split_mode = split_at::newline;
     auto parser = argument_parser2::operator_(name());
@@ -1539,8 +1549,8 @@ public:
     return true;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());
@@ -1699,8 +1709,8 @@ public:
     return chunk::make(std::move(buffer), meta);
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(table_slice input, Push<chunk_ptr>& push,
+               OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     co_await push(print_slice(input));
   }
@@ -1767,8 +1777,8 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
     auto n_jobs = std::optional<located<uint64_t>>{};
@@ -1832,8 +1842,8 @@ public:
     return d.without_optimize();
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
     auto n_jobs = std::optional<located<uint64_t>>{};
@@ -1875,8 +1885,8 @@ public:
   print_json_plugin(bool compact) : compact_{compact} {
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto args = printer_args{};
     auto parser = argument_parser2::function(name());
