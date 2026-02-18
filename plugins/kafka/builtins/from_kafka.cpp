@@ -451,12 +451,11 @@ public:
     initialize_runtime_state();
     for (auto source_index = size_t{0};
          source_index < runtime_.partition_sources.size(); ++source_index) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalIOExecutor(),
+      ctx.spawn_task(folly::coro::co_withExecutor(ctx.io_executor(),
                                                   fetch_loop(source_index)));
     }
     for (size_t i = 0; i < worker_count_; ++i) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                                  build_loop()));
+      ctx.spawn_task(build_loop());
     }
   }
 

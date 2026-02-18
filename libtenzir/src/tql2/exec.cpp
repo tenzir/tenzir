@@ -768,7 +768,7 @@ public:
 
   auto make_executor(OpId id) -> folly::Executor::KeepAlive<> override {
     if (not profiling_) {
-      return {};
+      return folly::getGlobalCPUExecutor();
     }
     auto stats = std::make_shared<ExecutorStats>();
     auto exec = std::make_unique<ProfilingExecutor>(
@@ -778,6 +778,21 @@ public:
     executor_profiles_.push_back(ExecutorProfile{id, std::move(stats)});
     executors_.push_back(std::move(exec));
     return keep_alive;
+  }
+
+  auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> override {
+    if (not profiling_) {
+      return folly::getGlobalIOExecutor();
+    }
+    auto stats = std::make_shared<ExecutorStats>();
+    auto exec = std::make_unique<ProfilingExecutor>(
+      folly::getGlobalIOExecutor(), stats);
+    auto ka = folly::Executor::getKeepAliveToken(exec.get());
+    auto lock = std::scoped_lock{mutex_};
+    auto io_id = OpId{fmt::format("{} (io)", id.value)};
+    executor_profiles_.push_back(ExecutorProfile{io_id, std::move(stats)});
+    executors_.push_back(std::move(exec));
+    return ka;
   }
 
 protected:

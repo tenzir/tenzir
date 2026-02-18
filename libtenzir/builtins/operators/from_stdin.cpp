@@ -101,7 +101,7 @@ public:
     }
     co_await ctx.spawn_sub(caf::none, std::move(pipe), tag_v<chunk_ptr>);
     ctx.spawn_task(folly::coro::co_withExecutor(
-      folly::getGlobalIOExecutor(), read_stdin(chunk_queue_, ctx.dh())));
+      ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
