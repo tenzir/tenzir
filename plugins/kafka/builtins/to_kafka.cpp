@@ -10,6 +10,7 @@
 #include "kafka/operator.hpp"
 #include "kafka/to_kafka_legacy.hpp"
 #include "tenzir/aws_iam.hpp"
+#include "tenzir/concept/printable/tenzir/json2.hpp"
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -18,6 +19,7 @@
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/view3.hpp>
 
 #include <librdkafka/rdkafkacpp.h>
 
@@ -32,6 +34,81 @@ namespace {
 
 /// Number of successfully enqueued records between non-blocking producer polls.
 constexpr auto producer_poll_interval = size_t{4096};
+
+/// Returns a `json_printer2` if `expr` is a plain `print_json` or
+/// `print_ndjson` call with constant boolean options, enabling the optimized
+/// serialization path that bypasses expression evaluation entirely.
+auto try_make_json_printer(ast::expression const& expr)
+  -> std::optional<json_printer2> {
+  auto const* const call = try_as<ast::function_call>(expr);
+  if (not call) {
+    return std::nullopt;
+  }
+  if (not call->fn.ref.resolved()) {
+    return std::nullopt;
+  }
+  auto const& segments = call->fn.ref.segments();
+  if (segments.size() != 1) {
+    return std::nullopt;
+  }
+  auto compact = false;
+  if (segments.front() == "print_ndjson") {
+    compact = true;
+  } else if (segments.front() != "print_json") {
+    return std::nullopt;
+  }
+  // The first argument must be `this` (the positional argument).
+  if (call->args.empty() or not is<ast::this_>(call->args.front())) {
+    return std::nullopt;
+  }
+  // Parse any named options from the remaining arguments.
+  auto strip = false;
+  auto strip_null_fields = false;
+  auto strip_nulls_in_lists = false;
+  auto strip_empty_records = false;
+  auto strip_empty_lists = false;
+  for (auto const& arg : std::span{call->args}.subspan(1)) {
+    auto const* const assignment = try_as<ast::assignment>(arg);
+    if (not assignment) {
+      return std::nullopt;
+    }
+    auto const* const fp = try_as<ast::field_path>(assignment->left);
+    if (not fp or fp->path().size() != 1) {
+      return std::nullopt;
+    }
+    // The value must be the boolean constant `true`.
+    auto const* const val = try_as<ast::constant>(assignment->right);
+    if (not val) {
+      return std::nullopt;
+    }
+    auto const* const flag = try_as<bool>(val->value);
+    if (not flag or not *flag) {
+      return std::nullopt;
+    }
+    auto const name = fp->path().front().id.name;
+    if (name == "strip") {
+      strip = true;
+    } else if (name == "strip_null_fields") {
+      strip_null_fields = true;
+    } else if (name == "strip_nulls_in_lists") {
+      strip_nulls_in_lists = true;
+    } else if (name == "strip_empty_records") {
+      strip_empty_records = true;
+    } else if (name == "strip_empty_lists") {
+      strip_empty_lists = true;
+    } else {
+      return std::nullopt;
+    }
+  }
+  return json_printer2{json_printer_options{
+    .style = no_style(),
+    .oneline = compact,
+    .omit_null_fields = strip_null_fields or strip,
+    .omit_nulls_in_lists = strip_nulls_in_lists or strip,
+    .omit_empty_records = strip_empty_records or strip,
+    .omit_empty_lists = strip_empty_lists or strip,
+  }};
+}
 
 /// Short poll interval used while draining producer state after queue saturation.
 constexpr auto queue_full_short_poll_ms = 10;
@@ -123,13 +200,13 @@ public:
     }
     producer_.emplace(Box<RdKafka::Producer>::from_unique_ptr(
       std::unique_ptr<RdKafka::Producer>{raw_producer}));
+    printer_ = try_make_json_printer(args_.message);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     if (done_ or not producer_ or input.rows() == 0) {
       co_return;
     }
-    auto failed = false;
     const auto key = args_.key ? args_.key->inner : "";
     auto timestamp_ms = int64_t{0};
     if (args_.timestamp and args_.timestamp->inner != time{}) {
@@ -137,35 +214,50 @@ public:
                        args_.timestamp->inner.time_since_epoch())
                        .count();
     }
-    const auto& messages = eval(args_.message, input, ctx.dh());
-    for (const auto& series : messages) {
-      match(
-        *series.array,
-        [&](const concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto&
-              array) {
-          for (auto row = int64_t{0}; row < array.length(); ++row) {
-            if (array.IsNull(row)) {
-              diagnostic::warning("expected `string` or `blob`, got `null`")
-                .primary(args_.message)
-                .emit(ctx);
-              continue;
+    if (printer_) {
+      // Optimized path: bypass expression evaluation for plain print_json /
+      // print_ndjson calls and serialize each row directly via json_printer2.
+      for (auto row : values3(input)) {
+        printer_->load_new(row);
+        if (not produce(printer_->bytes(), key, timestamp_ms, ctx)) {
+          done_ = true;
+          co_return;
+        }
+      }
+    } else {
+      // Expression evaluation path: evaluate the message= expression and
+      // iterate the resulting string/blob series.
+      auto failed = false;
+      const auto& messages = eval(args_.message, input, ctx.dh());
+      for (const auto& series : messages) {
+        match(
+          *series.array,
+          [&](const concepts::one_of<arrow::BinaryArray,
+                                     arrow::StringArray> auto& array) {
+            for (auto row = int64_t{0}; row < array.length(); ++row) {
+              if (array.IsNull(row)) {
+                diagnostic::warning("expected `string` or `blob`, got `null`")
+                  .primary(args_.message)
+                  .emit(ctx);
+                continue;
+              }
+              if (not produce(as_bytes(array.Value(row)), key, timestamp_ms,
+                              ctx)) {
+                done_ = true;
+                failed = true;
+                return;
+              }
             }
-            if (not produce(as_bytes(array.Value(row)), key, timestamp_ms,
-                            ctx)) {
-              done_ = true;
-              failed = true;
-              return;
-            }
-          }
-        },
-        [&](const auto&) {
-          diagnostic::warning("expected `string` or `blob`, got `{}`",
-                              series.type.kind())
-            .primary(args_.message)
-            .emit(ctx);
-        });
-      if (failed) {
-        co_return;
+          },
+          [&](const auto&) {
+            diagnostic::warning("expected `string` or `blob`, got `{}`",
+                                series.type.kind())
+              .primary(args_.message)
+              .emit(ctx);
+          });
+        if (failed) {
+          co_return;
+        }
       }
     }
     if (produced_since_poll_ > 0) {
@@ -256,6 +348,7 @@ private:
   ToKafkaArgs args_;
   std::optional<configuration> cfg_;
   std::optional<Box<RdKafka::Producer>> producer_;
+  std::optional<json_printer2> printer_;
   size_t produced_since_poll_ = 0;
   bool done_ = false;
 };
