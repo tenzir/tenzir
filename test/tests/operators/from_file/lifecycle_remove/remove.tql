@@ -1,0 +1,4 @@
+from_file env("FILE_ROOT") + "/lifecycle/remove-target.json",
+         remove=true {
+  read_json
+}

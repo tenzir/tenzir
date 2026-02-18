@@ -1,0 +1,4 @@
+from_s3 env("S3_BUCKET") + "/single/data.json?endpoint_override=" + env("S3_ENDPOINT") + "&scheme=http",
+        aws_iam={access_key_id: env("S3_ACCESS_KEY"), secret_access_key: env("S3_SECRET_KEY"), assume_role: "arn:aws:iam::000000000000:role/test-role"} {
+  read_json
+}

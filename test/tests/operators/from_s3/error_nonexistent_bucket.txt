@@ -1,0 +1,6 @@
+error: `nonexistent-bucket/data.json` does not exist
+ --> tests/operators/from_s3/error_nonexistent_bucket.tql:4:9
+  |
+4 | from_s3 string("nonexistent-bucket/data.json?endpoint_override=" + env("S3_ENDPOINT") + "&scheme=http"),
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

@@ -1,0 +1,5 @@
+suite: from-gcs
+fixtures: [gcs]
+timeout: 30
+skip:
+  on: fixture-unavailable

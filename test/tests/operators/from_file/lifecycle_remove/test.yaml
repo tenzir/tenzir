@@ -1,0 +1,5 @@
+suite: from-file-lifecycle-remove
+fixtures:
+  - local_files:
+      verify_remove: true
+timeout: 30

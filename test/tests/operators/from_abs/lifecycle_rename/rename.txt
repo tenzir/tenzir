@@ -1,0 +1,3 @@
+{
+  filename: "lifecycle/rename-target.json",
+}

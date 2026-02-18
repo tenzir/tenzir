@@ -1,0 +1,4 @@
+from_s3 env("S3_PUBLIC_BUCKET") + "/data.json?endpoint_override=" + env("S3_ENDPOINT") + "&scheme=http",
+        anonymous=true {
+  read_json
+}

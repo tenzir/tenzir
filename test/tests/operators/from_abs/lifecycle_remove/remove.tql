@@ -1,0 +1,5 @@
+from_azure_blob_storage "abfs://" + env("ABS_ACCOUNT_NAME") + "@" + env("ABS_ENDPOINT") + "/" + env("ABS_CONTAINER") + "/lifecycle/remove-target.json?enable_tls=false",
+         account_key=env("ABS_ACCOUNT_KEY"),
+         remove=true {
+  read_json
+}

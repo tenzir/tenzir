@@ -1,0 +1,5 @@
+from_gcs env("GCS_BUCKET") + "/lifecycle/rename-target.json?endpoint_override=" + env("GCS_ENDPOINT") + "&scheme=http",
+         anonymous=true,
+         rename=path => path + ".done" {
+  read_json
+}

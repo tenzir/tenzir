@@ -1,0 +1,4 @@
+from_file env("FILE_ROOT") + "/lifecycle/rename-target.json",
+         rename=path => path + ".done" {
+  read_json
+}

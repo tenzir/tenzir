@@ -1,0 +1,5 @@
+suite: s3-fixture
+fixtures: [s3]
+timeout: 120
+skip:
+  on: fixture-unavailable

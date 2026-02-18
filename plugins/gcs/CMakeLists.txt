@@ -14,9 +14,12 @@ endif()
 include(CTest)
 
 find_package(Tenzir REQUIRED)
+find_package(google_cloud_cpp_storage REQUIRED CONFIG)
 
 TenzirRegisterPlugin(
   TARGET gcs
   ENTRYPOINT src/plugin.cpp
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
+
+target_link_libraries(gcs PUBLIC google-cloud-cpp::storage)
