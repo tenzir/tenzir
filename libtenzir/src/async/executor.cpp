@@ -8,16 +8,13 @@
 
 #include "tenzir/async/executor.hpp"
 
+#include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/mail.hpp"
-#include "tenzir/async/mutex.hpp"
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
-#include "tenzir/connect_to_node.hpp"
-#include "tenzir/connector.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/tql2/eval.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
@@ -35,6 +32,9 @@
 
 namespace tenzir {
 
+// Forward declaration to avoid including registry.hpp.
+auto global_registry() -> std::shared_ptr<const registry>;
+
 class Pass final : public Operator<table_slice, table_slice> {
 public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -42,47 +42,6 @@ public:
     co_await push(std::move(input));
   }
 };
-
-auto filter2(const table_slice& slice, const ast::expression& expr,
-             diagnostic_handler& dh, bool warn) -> std::vector<table_slice> {
-  auto results = std::vector<table_slice>{};
-  auto offset = int64_t{0};
-  for (auto& filter : eval(expr, slice, dh)) {
-    auto array = try_as<arrow::BooleanArray>(&*filter.array);
-    if (not array) {
-      diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-        .primary(expr)
-        .emit(dh);
-      offset += filter.array->length();
-      continue;
-    }
-    if (array->true_count() == array->length()) {
-      results.push_back(subslice(slice, offset, offset + array->length()));
-      offset += array->length();
-      continue;
-    }
-    if (warn) {
-      diagnostic::warning("assertion failure").primary(expr).emit(dh);
-    }
-    auto length = array->length();
-    auto current_value = array->Value(0);
-    auto current_begin = int64_t{0};
-    // We add an artificial `false` at index `length` to flush.
-    for (auto i = int64_t{1}; i < length + 1; ++i) {
-      const auto next = i != length && array->IsValid(i) && array->Value(i);
-      if (current_value == next) {
-        continue;
-      }
-      if (current_value) {
-        results.push_back(subslice(slice, offset + current_begin, offset + i));
-      }
-      current_value = next;
-      current_begin = i;
-    }
-    offset += length;
-  }
-  return results;
-}
 
 enum class TryRecvError {
   empty,
@@ -452,47 +411,6 @@ private:
     co_return;
   }
 
-  auto fetch_node() -> Task<failure_or<node_actor>> override {
-    // Fast path: check local registry for existing node.
-    if (auto node = sys_.registry().template get<node_actor>("tenzir.node")) {
-      co_return node;
-    }
-    static auto mut = RawMutex{};
-    const auto lock = co_await mut.lock();
-    if (auto node = sys_.registry().template get<node_actor>("tenzir.node")) {
-      co_return node;
-    }
-    // Get configuration.
-    const auto& opts = content(sys_.config());
-    const auto node_endpoint = detail::get_node_endpoint(opts);
-    if (not node_endpoint) {
-      diagnostic::error("failed to get node endpoint: {}",
-                        node_endpoint.error())
-        .emit(dh_);
-      co_return failure::promise();
-    }
-    const auto timeout = detail::node_connection_timeout(opts);
-    const auto retry_delay = detail::get_retry_delay(opts);
-    const auto deadline = detail::get_deadline(timeout);
-    // Spawn connector and request connection.
-    auto connector_actor = sys_.spawn(connector, retry_delay, deadline, false);
-    auto request = connect_request{
-      .port = node_endpoint->port->number(),
-      .host = node_endpoint->host,
-    };
-    auto result = co_await async_mail(atom::connect_v, std::move(request))
-                    .request(connector_actor);
-    caf::anon_send_exit(connector_actor, caf::exit_reason::user_shutdown);
-    if (not result) {
-      diagnostic::error("failed to connect to node: {}", result.error())
-        .emit(dh_);
-      co_return failure::promise();
-    }
-    // Put the actor into the local registry for process-wide fast pathing.
-    sys_.registry().put("tenzir.node", *result);
-    co_return std::move(*result);
-  }
-
   auto dh() -> diagnostic_handler& override {
     return dh_;
   }
@@ -542,7 +460,7 @@ private:
       }
       co_return {};
     }
-    auto node = co_await fetch_node();
+    auto node = co_await fetch_node(sys_, dh_);
     if (not node or not *node) {
       co_return failure::promise();
     }

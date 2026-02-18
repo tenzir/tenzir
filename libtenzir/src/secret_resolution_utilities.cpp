@@ -8,6 +8,8 @@
 
 #include "tenzir/secret_resolution_utilities.hpp"
 
+#include "tenzir/data.hpp"
+
 namespace tenzir {
 
 auto make_secret_request(record r, location loc,

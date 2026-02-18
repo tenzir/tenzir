@@ -8,6 +8,9 @@
 
 #include "tenzir/metric_handler.hpp"
 
+#include "tenzir/data.hpp"
+#include "tenzir/type.hpp"
+
 #include <caf/anon_mail.hpp>
 #include <caf/send.hpp>
 

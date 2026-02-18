@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/application.hpp"
+#include "tenzir/as_bytes.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/concept/parseable/numeric/bool.hpp"
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"

@@ -11,12 +11,14 @@
 #include "tenzir/async.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/element_type.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <vector>
 
 namespace tenzir {
+
+// Forward declaration to avoid including pipeline.hpp.
+enum class event_order;
 
 namespace ir {
 
@@ -150,25 +152,5 @@ struct optimize_result {
 
 template <>
 inline constexpr auto enable_default_formatter<ir::pipeline> = true;
-
-/// Plugin for transforming the AST of an operator invocation to its IR.
-class operator_compiler_plugin : public virtual plugin {
-public:
-  /// Return the IR operator for the given AST invocation.
-  ///
-  /// Note that any `let` bindings in the arguments are not bound yet. This
-  /// means that the implementation must call `expr.bind(ctx)` itself. The
-  /// reason for that is that pipeline expressions can not be bound because the
-  /// operator itself can introduce new bindings. Thus, we cannot bind inside
-  /// pipeline expressions. For consistency, we decided to not bind anything.
-  virtual auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>>
-    = 0;
-
-  /// Return the name of the operator, including `::` for modules.
-  ///
-  /// By default, this returns the name of the plugin.
-  virtual auto operator_name() const -> std::string;
-};
 
 } // namespace tenzir

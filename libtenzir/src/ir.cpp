@@ -244,7 +244,7 @@ public:
   explicit If(IfArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> {
+  auto start(OpCtx& ctx) -> Task<void> override {
     // Spawn subpipelines if they are not already spawned (due to restore).
     if (not ctx.get_sub(true).has_value()) {
       co_await ctx.spawn_sub(true, args_.consequence, tag_v<table_slice>);
@@ -256,7 +256,7 @@ public:
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> {
+    -> Task<void> override {
     // FIXME: If the inner subpipelines terminate and get erased, this can fail.
     auto true_sub = check(ctx.get_sub(true));
     auto consequence = as<OpenPipeline<table_slice>>(std::move(true_sub));
