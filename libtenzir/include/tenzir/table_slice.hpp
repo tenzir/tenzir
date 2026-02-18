@@ -164,6 +164,12 @@ public:
   /// Return an approximation of the memory covered by this slice.
   auto approx_bytes() const -> uint64_t;
 
+  /// Return the total size of all buffers backing this slice, including the
+  /// Arrow record batch buffers and the FlatBuffers chunk. Unlike
+  /// `approx_bytes`, this does not account for slicing and always returns the
+  /// full underlying allocation sizes.
+  auto total_buffer_size() const -> uint64_t;
+
   struct memory_stats {
     int64_t serialized_bytes = 0;
     int64_t non_serialized_bytes = 0;
@@ -252,7 +258,7 @@ public:
         .on_load(callback)
         .fields(f.field("chunk", chunk), f.field("offset", offset));
     } else {
-      if (!x.is_serialized()) {
+      if (! x.is_serialized()) {
         auto serialized_x
           = table_slice{to_record_batch(x), x.schema(), serialize::yes};
         serialized_x.import_time(x.import_time());
@@ -415,7 +421,7 @@ filter(const table_slice& slice, const ids& hints);
 template <std::derived_from<arrow::Array> ArrayT>
 auto resolve_enumerations(tenzir::type type,
                           const std::shared_ptr<ArrayT>& array) -> void
-                                                                   = delete;
+  = delete;
 
 /// Resolves all enumeration columns in a struct Array to string columns. Note
 /// that this does not go into records inside lists or maps.
@@ -440,8 +446,8 @@ resolve_enumerations(enumeration_type type,
                std::shared_ptr<type_to_arrow_array_t<list_type>>>;
 
 /// Resolve a meta extractor for a given table slice.
-auto resolve_meta_extractor(const table_slice& slice,
-                            const meta_extractor& ex) -> data;
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> data;
 
 /// Resolve an operand into an Array for a given table slice. Note that this
 /// already uses prefix matching instead of suffix matching.
@@ -453,14 +459,14 @@ auto resolve_operand(const table_slice& slice, const operand& op)
 /// Example: Splitting `{a.b: 42}` with `.` yields `{a: {b: 42}}`.
 auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice;
 
-auto unflatten(const arrow::ListArray& array,
-               std::string_view sep) -> std::shared_ptr<arrow::ListArray>;
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray>;
 
-auto unflatten(std::shared_ptr<arrow::Array> array,
-               std::string_view sep) -> std::shared_ptr<arrow::Array>;
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array>;
 
-auto unflatten(const arrow::StructArray& array,
-               std::string_view sep) -> std::shared_ptr<arrow::StructArray>;
+auto unflatten(const arrow::StructArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::StructArray>;
 
 /// @related flatten
 struct flatten_result {
@@ -512,8 +518,8 @@ struct column_view {
 auto columns_of(const table_slice& slice) -> generator<column_view>;
 
 /// Iterates all top level columns of a `StructArray`
-auto columns_of(const record_type& schema,
-                const arrow::StructArray& array) -> generator<column_view>;
+auto columns_of(const record_type& schema, const arrow::StructArray& array)
+  -> generator<column_view>;
 } // namespace tenzir
 
 #include "tenzir/concept/printable/tenzir/table_slice.hpp"

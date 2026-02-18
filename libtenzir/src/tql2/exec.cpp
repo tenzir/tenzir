@@ -19,6 +19,7 @@
 #include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/si_literals.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -47,8 +48,10 @@
 #include <unordered_set>
 
 namespace tenzir {
-namespace {
 
+using namespace tenzir::si_literals;
+
+namespace {
 auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
   -> failure_or<void> {
   auto package_dirs = std::vector<std::filesystem::path>{};
@@ -169,7 +172,8 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
     auto normalized = package_module_name(pkg.id);
     auto [norm_it, inserted] = normalized_to_id.try_emplace(normalized, pkg.id);
     if (not inserted && norm_it->second != pkg.id) {
-      diagnostic::error("package '{}' conflicts with '{}' after normalization "
+      diagnostic::error("package '{}' conflicts with '{}' after "
+                        "normalization "
                         "to '{}'",
                         pkg.id, norm_it->second, normalized)
         .emit(dh);
@@ -261,8 +265,8 @@ public:
       // Variable exists but there was an error during evaluation.
       return;
     }
-    // let bound variables cannot be on the lhs for now, because a let can only
-    // bind a name to a value, but field_paths are not values yet.
+    // let bound variables cannot be on the lhs for now, because a let can
+    // only bind a name to a value, but field_paths are not values yet.
     diagnostic::error("cannot assign to `{}` constant value",
                       dollar_var->id.name)
       .primary(*dollar_var)
@@ -335,8 +339,8 @@ public:
         diagnostic::error("expected a pipeline expression").primary(args[1]));
       return;
     }
-    // We now expand the pipeline once for each entry in the list, replacing the
-    // original variable with the list items.
+    // We now expand the pipeline once for each entry in the list, replacing
+    // the original variable with the list items.
     auto original = std::move(*it->second);
     auto entries = std::get_if<list>(&original);
     if (not entries) {
@@ -521,57 +525,47 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 namespace {
 
 template <class T>
-auto cost(const OperatorMsg<T>& item, size_t limit) -> size_t {
-  return std::min(match(
-                    item,
-                    [](const table_slice& slice) -> size_t {
-                      return slice.rows();
-                    },
-                    [](const chunk_ptr& chunk) -> size_t {
-                      return chunk ? chunk->size() : 0;
-                    },
-                    [](const Signal&) {
-                      return size_t{1};
-                    }),
-                  limit);
-};
+auto count_bytes(const OperatorMsg<T>& item) -> size_t {
+  auto internal = sizeof(OperatorMsg<T>);
+  auto external = match(
+    item,
+    [](const table_slice& slice) -> size_t {
+      return slice.total_buffer_size();
+    },
+    [](const chunk_ptr& chunk) -> size_t {
+      return chunk ? chunk->size() : 0;
+    },
+    [](const Signal&) -> size_t {
+      return 0;
+    });
+  return internal + external;
+}
 
 /// Data channel between two operators.
 template <class T>
 struct OpChannel {
 public:
-  explicit OpChannel(ChannelId id, size_t limit)
-    : id_{std::move(id)}, limit_{limit}, mutex_{Locked{limit}} {
-    // If we want to allow `limit == 0`, then the logic needs to be adapted to
-    // perform a direct transfer if `send` and `receive` are both active.
-    TENZIR_ASSERT(limit_ > 0);
+  explicit OpChannel(ChannelId id, size_t max_bytes)
+    : id_{std::move(id)}, max_bytes_{max_bytes}, mutex_{Locked{}} {
   }
 
   auto send(OperatorMsg<T> x) -> Task<void> {
-    auto guard = detail::scope_guard{[] noexcept {
-      LOGE("CANCELLED");
-    }};
     auto lock = co_await mutex_.lock();
-    while (true) {
-      if (cost(x, limit_) <= lock->remaining) {
-        break;
-      }
-      LOGV("SPINNING BECAUSE {} > {}", cost(x, limit_), lock->remaining);
+    auto bytes = count_bytes(x);
+    // To also send big messages eventually, we allow to bypass the limit if the
+    // queue is otherwise entirely free.
+    auto free = lock->current_bytes + bytes;
+    while (not free and lock->current_bytes + bytes > max_bytes_) {
       lock.unlock();
       co_await notify_send_.wait();
       lock = co_await mutex_.lock();
     }
-    lock->remaining -= cost(x, limit_);
-    LOGV("SENDING {:?} OVER {}", x, id_);
+    lock->current_bytes += bytes;
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
-    guard.disable();
   }
 
   auto receive() -> Task<Option<OperatorMsg<T>>> {
-    auto guard = detail::scope_guard{[] noexcept {
-      LOGD("CANCELLED");
-    }};
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
       if (sender_closed_.load(std::memory_order::acquire)) {
@@ -583,10 +577,8 @@ public:
     }
     auto result = std::move(lock->queue.front());
     lock->queue.pop_front();
-    lock->remaining += cost(result, limit_);
+    lock->current_bytes -= count_bytes(result);
     notify_send_.notify_one();
-    guard.disable();
-    LOGV("RECEIVED {:?} OVER {}", result, id_);
     co_return result;
   }
 
@@ -601,15 +593,12 @@ public:
 
 private:
   struct Locked {
-    explicit Locked(size_t limit) : remaining{limit} {
-    }
-
-    size_t remaining;
+    size_t current_bytes = 0;
     std::deque<OperatorMsg<T>> queue;
   };
 
   ChannelId id_;
-  size_t limit_;
+  size_t max_bytes_;
   // TODO: This can surely be written better?
   Mutex<Locked> mutex_;
   Notify notify_send_;
@@ -665,9 +654,16 @@ private:
   std::shared_ptr<OpChannel<T>> shared_;
 };
 
+/// Create an operator channel with the specified memory limit.
+///
+/// Note that this limit can be exceeded due to (a) pending writes to the queue
+/// which are still in memory but not yet pushed to the queue, and (b) very big
+/// individual items that exceed the total capacity by themselves, as we
+/// eventually let them through since we need to transmit them.
 template <class T>
-auto make_op_channel(ChannelId id, size_t limit) -> PushPull<OperatorMsg<T>> {
-  auto shared = std::make_shared<OpChannel<T>>(std::move(id), limit);
+auto make_op_channel(ChannelId id, size_t max_bytes)
+  -> PushPull<OperatorMsg<T>> {
+  auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes);
   return {OpPush<T>{shared}, OpPull<T>{shared}};
 }
 
@@ -688,13 +684,15 @@ protected:
 
 private:
 #if TENZIR_DEBUG_ASYNC
-  static constexpr auto void_limit = 1;
-  static constexpr auto events_limit = 1;
-  static constexpr auto bytes_limit = 1;
+  // These numbers block the channel immediately for testing purposes.
+  static constexpr auto void_limit = 0;
+  static constexpr auto events_limit = 0;
+  static constexpr auto bytes_limit = 0;
 #else
-  static constexpr auto void_limit = 1'000;
-  static constexpr auto events_limit = 100'000;
-  static constexpr auto bytes_limit = 16 * 1024 * 1024;
+  // Memory limit per channel type.
+  static constexpr auto void_limit = 1_Ki;
+  static constexpr auto events_limit = 100_Mi;
+  static constexpr auto bytes_limit = 100_Mi;
 #endif
 };
 
