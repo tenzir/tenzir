@@ -242,6 +242,10 @@ public:
   using record_generator = detail::multi_series_builder::record_generator;
   using list_generator = detail::multi_series_builder::list_generator;
 
+  using clock = std::chrono::steady_clock;
+  using time_point = clock::time_point;
+  using duration = clock::duration;
+
   /// @returns a vector of all currently ready (based on timeout or size) series
   [[nodiscard("The result of a flush must be handled")]]
   auto yield_ready() -> std::vector<series>;
@@ -446,7 +450,7 @@ private:
   /// or requests ready events.
   /// This function is responsible for computing the signature and
   /// committing the event to the correct `series_builder` based on that.
-  void complete_last_event();
+  void complete_last_event(time_point now = clock::now());
 
   /// @brief clears the currently build raw event.
   void clear_raw_event();
@@ -458,26 +462,28 @@ private:
   auto type_for_schema(std::string_view name) -> const type*;
 
   struct entry_data {
-    entry_data(const tenzir::type* schema = nullptr)
-      : builder{schema}, flushed{std::chrono::steady_clock::now()} {
+    entry_data(const tenzir::type* schema = nullptr) : builder{schema} {
     }
 
-    auto flush() -> std::vector<series> {
-      flushed = std::chrono::steady_clock::now();
+    auto flush(time_point now) -> std::vector<series> {
+      oldest_event = {};
+      last_flush = now;
       return builder.finish();
     }
 
     series_builder builder;
-    std::chrono::steady_clock::time_point flushed;
+    // The time when the oldest event present in `builder` was added.
+    time_point oldest_event;
+    // The time when this entry was last flushed. This is used for garbage
+    // collection.
+    time_point last_flush;
     bool unused = false;
   };
 
   /// @brief Makes all currently ready (based on timeout or size)  events
   /// available in `ready_events_` and returns a duration after which the
   /// builder expects to have more events ready.
-  auto
-  make_events_available_on_timeout(std::chrono::steady_clock::time_point now)
-    -> duration;
+  auto make_events_available_on_timeout(time_point now) -> duration;
 
   /// @brief appends `new_events` to `ready_events_`
   void append_ready_events(std::vector<series>&& new_events);
@@ -527,9 +533,8 @@ private:
   // events that have been made ready (timeout,  batch size, ordered mode
   // builder switch)
   std::vector<series> ready_events_;
-  // Last flush time for merge mode.
-  std::chrono::steady_clock::time_point merging_flushed_
-    = std::chrono::steady_clock::now();
+  // The point at which the oldest event was put into the merging builder.
+  time_point oldest_event_in_merging_;
   // currently active builder index. used in ordered mode to check whether we
   // need to yield on builder switch
   size_t active_index_ = 0;
