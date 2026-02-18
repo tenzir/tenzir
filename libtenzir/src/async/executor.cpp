@@ -354,26 +354,34 @@ private:
   std::mutex mut_;
 };
 
+class CensoringDiagHandler : public DiagHandler {
+public:
+  explicit CensoringDiagHandler(DiagHandler& dh) : dh_{dh} {
+  }
+
+  auto emit(diagnostic diag) -> void override {
+    dh_->emit(censor_.censor(diag));
+  }
+
+  auto failure() -> failure_or<void> override {
+    return dh_->failure();
+  }
+
+  auto censor() -> secret_censor& {
+    return censor_;
+  }
+
+private:
+  Ref<DiagHandler> dh_;
+  secret_censor censor_;
+};
+
 class Runner final : public OpCtx {
-  class DiagnosticHandler : public diagnostic_handler {
-  public:
-    DiagnosticHandler(diagnostic_handler& dh) : dh_{dh} {
-    }
-    auto emit(diagnostic diag) -> void override {
-      dh_.emit(censor_.censor(diag));
-    }
-
-  private:
-    friend class Runner;
-    diagnostic_handler& dh_;
-    secret_censor censor_;
-  };
-
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
          OpId id, ChannelFactory& channel_factory, caf::actor_system& sys,
-         diagnostic_handler& dh)
+         DiagHandler& dh)
     : op_{std::move(op)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
@@ -527,7 +535,7 @@ private:
       auto success = true;
       for (const auto& f : finishers) {
         success
-          &= static_cast<bool>(f.finish(requested_secrets, dh_.censor_, dh_));
+          &= static_cast<bool>(f.finish(requested_secrets, dh_.censor(), dh_));
       }
       if (not success) {
         co_return failure::promise();
@@ -592,7 +600,7 @@ private:
     /// Finish all secrets via the respective finisher.
     for (const auto& f : finishers) {
       success
-        &= static_cast<bool>(f.finish(requested_secrets, dh_.censor_, dh_));
+        &= static_cast<bool>(f.finish(requested_secrets, dh_.censor(), dh_));
     }
     if (not success) {
       co_return failure::promise();
@@ -1192,7 +1200,7 @@ private:
   Sender<ToControl> to_control_;
   OpId id_;
   ChannelFactory& channel_factory_;
-  DiagnosticHandler dh_;
+  CensoringDiagHandler dh_;
   caf::actor_system& sys_;
   bool input_is_void_;
   bool output_is_void_;
@@ -1228,7 +1236,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, OpId id,
                   ChannelFactory& channel_factory, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void> {
+                  DiagHandler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await Runner{
     AnyOperator{std::move(op)},
@@ -1252,7 +1260,7 @@ public:
               AnyOpPush push_downstream, Receiver<FromControl> from_control,
               Sender<ToControl> to_control, PipeId id,
               ChannelFactory& channel_factory, caf::actor_system& sys,
-              MutexDiagnosticHandler& dh)
+              DiagHandler& dh)
     : operators_{std::move(operators)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
@@ -1444,7 +1452,7 @@ private:
   PipeId id_;
   ChannelFactory& channel_factory_;
   caf::actor_system& sys_;
-  MutexDiagnosticHandler& dh_;
+  DiagHandler& dh_;
 
   std::vector<Sender<FromControl>> operator_ctrl_;
 
@@ -1470,8 +1478,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ChannelFactory& channel_factory,
-               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void> {
-  auto mdh = MutexDiagnosticHandler{dh};
+               caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain).unwrap(),
@@ -1482,7 +1489,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
     std::move(id),
     channel_factory,
     sys,
-    mdh,
+    dh,
   }
     .run_to_completion();
 }
@@ -1491,7 +1498,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
 template <class Output>
   requires(not std::same_as<Output, void>)
 auto run_open_pipeline(OperatorChain<void, Output> pipeline,
-                       caf::actor_system& sys, diagnostic_handler& dh)
+                       caf::actor_system& sys, DiagHandler& dh)
   -> AsyncGenerator<Output> {
   TENZIR_UNUSED(pipeline, sys, dh);
   TENZIR_TODO();
@@ -1509,7 +1516,7 @@ auto new_pipe_id() -> PipeId {
 
 auto run_pipeline(OperatorChain<void, void> pipeline,
                   ChannelFactory& channel_factory, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void> {
+                  DiagHandler& dh) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
     = channel_factory.make<void>(ChannelId::first(id.op(0)));

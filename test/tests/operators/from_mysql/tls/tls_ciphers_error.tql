@@ -1,3 +1,6 @@
+---
+error: true
+---
 // Invalid cipher list must be a hard pipeline error.
 from_mysql sql="SELECT id, name FROM users ORDER BY id",
            host=env("MYSQL_HOST"),

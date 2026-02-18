@@ -635,7 +635,6 @@ public:
   OpPush& operator=(const OpPush&) = delete;
 
   auto operator()(OperatorMsg<T> x) -> Task<void> override {
-    // TENZIR_TODO();
     TENZIR_ASSERT(shared_);
     return shared_->send(std::move(x));
   }
@@ -700,7 +699,7 @@ private:
 };
 
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
-              diagnostic_handler& dh) -> Task<failure_or<void>> {
+              DiagHandler& dh) -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
@@ -712,40 +711,52 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   co_return {};
 }
 
-class DeduplicatingDiagnosticHandler final : public diagnostic_handler {
-public:
-  explicit DeduplicatingDiagnosticHandler(diagnostic_handler& inner)
-    : inner_{inner} {
-  }
-
-  void emit(diagnostic d) override {
-    if (dedup_.insert(d)) {
-      inner_.get().emit(std::move(d));
-    }
-  }
-
-private:
-  std::reference_wrapper<diagnostic_handler> inner_;
-  diagnostic_deduplicator dedup_;
-};
-
 auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
-                       diagnostic_handler& dh) -> failure_or<void> {
+                       DiagHandler& dh) -> failure_or<void> {
   // TODO: Decide where the deduplication should happen and move this.
-  auto dedup = DeduplicatingDiagnosticHandler{dh};
-  LOGI("begin blocking");
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
-  auto result = folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup));
+  TRY(auto result, folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup)));
 #else
   TENZIR_INFO("running pipeline on {} threads",
               folly::getGlobalCPUExecutorCounters().numThreads);
-  auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
-    folly::getGlobalCPUExecutor(), run_plan(std::move(ops), sys, dedup)));
+  TRY(auto result,
+      folly::coro::blockingWait(folly::coro::co_withExecutor(
+        folly::getGlobalCPUExecutor(), run_plan(std::move(ops), sys, dh))));
 #endif
   LOGI("end blocking");
+  TRY(dh.failure());
   return result;
 }
+
+/// Wraps a legacy `diagnostic_handler` into a `DiagHandler`.
+class DiagHandlerWrapper final : public DiagHandler {
+public:
+  explicit DiagHandlerWrapper(diagnostic_handler& dh) : dh_{dh} {
+  }
+
+  auto emit(diagnostic d) -> void override {
+    // We make it thread-safe and deduplicating.
+    auto lock = std::scoped_lock{mutex_};
+    if (dedup_.insert(d)) {
+      if (d.severity == severity::error) {
+        failure_ = failure::promise();
+      }
+      dh_->emit(std::move(d));
+    }
+  }
+
+  auto failure() -> failure_or<void> override {
+    auto lock = std::scoped_lock{mutex_};
+    return failure_;
+  }
+
+private:
+  std::mutex mutex_;
+  Ref<diagnostic_handler> dh_;
+  diagnostic_deduplicator dedup_;
+  failure_or<void> failure_;
+};
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
@@ -826,7 +837,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(spawned), sys, ctx));
+  auto dh = DiagHandlerWrapper{ctx};
+  TRY(run_plan_blocking(std::move(spawned), sys, dh));
   return true;
 }
 

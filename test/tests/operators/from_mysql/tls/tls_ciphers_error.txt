@@ -1,0 +1,6 @@
+error: invalid TLS cipher list
+  --> tests/operators/from_mysql/tls/tls_ciphers_error.tql:11:16
+   |
+11 |            tls={skip_peer_verification: true,
+   |                ^ `tls.ciphers`
+   |

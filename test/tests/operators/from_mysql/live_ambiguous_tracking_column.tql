@@ -1,3 +1,6 @@
+---
+error: true
+---
 from_mysql table="numbers",
            live=true,
            host=env("MYSQL_HOST"),

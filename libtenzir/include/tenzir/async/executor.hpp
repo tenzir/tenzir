@@ -204,23 +204,29 @@ protected:
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
 };
 
+/// A diagnostic handler that is guaranteed to be thread-safe.
+class DiagHandler : public diagnostic_handler {
+public:
+  virtual auto failure() -> failure_or<void> = 0;
+};
+
 /// Run a closed pipeline without external control.
 auto run_pipeline(OperatorChain<void, void> pipeline,
                   ChannelFactory& channel_factory, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> Task<void>;
+                  DiagHandler& dh) -> Task<void>;
 
 /// Run a right-open pipeline without external control.
 template <class Output>
   requires(not std::same_as<Output, void>)
 auto run_pipeline(OperatorChain<void, Output> pipeline, caf::actor_system& sys,
-                  diagnostic_handler& dh) -> AsyncGenerator<Output>;
+                  DiagHandler& dh) -> AsyncGenerator<Output>;
 
 /// Run an open pipeline without external control.
 template <class Input, class Output>
   requires(not std::same_as<Output, void> and not std::same_as<Input, void>)
 auto run_pipeline_with_input(AsyncGenerator<Input> input,
                              OperatorChain<Input, Output> pipeline,
-                             caf::actor_system& sys, diagnostic_handler& dh)
+                             caf::actor_system& sys, DiagHandler& dh)
   -> AsyncGenerator<Output>;
 
 /// Run a pipeline with external control.
@@ -230,6 +236,6 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ChannelFactory& channel_factory,
-               caf::actor_system& sys, diagnostic_handler& dh) -> Task<void>;
+               caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
 
 } // namespace tenzir
