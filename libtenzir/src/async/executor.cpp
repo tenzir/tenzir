@@ -669,6 +669,13 @@ private:
       });
   }
 
+  auto io_executor() -> folly::Executor::KeepAlive<> override {
+    if (not io_executor_) {
+      io_executor_ = exec_ctx_.make_io_executor(id_);
+    }
+    return io_executor_;
+  }
+
   auto spawn_task(Task<void> task) -> AsyncHandle<void> override {
     TENZIR_ASSERT(operator_scope_);
     return operator_scope_->spawn(std::move(task));
@@ -1122,6 +1129,7 @@ private:
   bool input_is_void_;
   bool output_is_void_;
   std::shared_ptr<const registry> reg_ = global_registry();
+  folly::Executor::KeepAlive<> io_executor_;
 
   size_t next_subpipeline_id_ = 0;
 
@@ -1233,23 +1241,14 @@ private:
                                  exec_ctx_, sys_, dh_);
         auto executor = exec_ctx_.make_executor(id_.op(index));
         LOGI("spawning operator task");
-        if (executor) {
-          queue_.spawn([task = std::move(task), index,
-                        executor = std::move(executor)] mutable
-                         -> Task<std::pair<size_t, Terminated>> {
-            co_await folly::coro::co_withExecutor(std::move(executor),
-                                                  std::move(task));
-            LOGI("got termination from operator {}", index);
-            co_return {index, Terminated{}};
-          });
-        } else {
-          queue_.spawn([task = std::move(task),
-                        index] mutable -> Task<std::pair<size_t, Terminated>> {
-            co_await std::move(task);
-            LOGI("got termination from operator {}", index);
-            co_return {index, Terminated{}};
-          });
-        }
+        queue_.spawn([task = std::move(task), index,
+                      executor = std::move(executor)] mutable
+                       -> Task<std::pair<size_t, Terminated>> {
+          co_await folly::coro::co_withExecutor(std::move(executor),
+                                                std::move(task));
+          LOGI("got termination from operator {}", index);
+          co_return {index, Terminated{}};
+        });
         LOGI("inserting control receiver task");
         queue_.spawn(
           [to_control_receiver = std::move(to_control_receiver), index] mutable
