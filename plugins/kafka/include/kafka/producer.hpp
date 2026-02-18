@@ -30,11 +30,15 @@ class message;
 /// Wraps a producer in a friendly interface.
 class producer {
 public:
+  /// Flushes pending messages on destruction.
+  ~producer();
+  producer(producer&&) = default;
+
   /// Constructs a producer from a configuration.
   static auto make(configuration config) -> caf::expected<producer>;
 
   /// Produces a message in the form of opaque bytes.
-  auto produce(std::string topic, std::span<const std::byte> bytes,
+  auto produce(std::string const& topic, std::span<const std::byte> bytes,
                std::string_view key = {}, time timestamp = {}) -> caf::error;
 
   /// Polls the producer for events and invokes callbacks.
@@ -54,7 +58,7 @@ private:
   producer() = default;
 
   configuration config_{};
-  std::shared_ptr<RdKafka::Producer> producer_{};
+  std::unique_ptr<RdKafka::Producer> producer_{};
 };
 
 } // namespace tenzir::plugins::kafka

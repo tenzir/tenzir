@@ -34,13 +34,16 @@ struct to_kafka_args {
   located<record> options;
   std::optional<located<std::string>> aws_region;
   std::optional<tenzir::aws_iam_options> aws;
+  uint64_t jobs = 0;
 
   friend auto inspect(auto& f, to_kafka_args& x) -> bool {
-    return f.object(x).fields(
-      f.field("op", x.op), f.field("topic", x.topic),
-      f.field("message", x.message), f.field("key", x.key),
-      f.field("timestamp", x.timestamp), f.field("options", x.options),
-      f.field("aws_region", x.aws_region), f.field("aws", x.aws));
+    return f.object(x).fields(f.field("op", x.op), f.field("topic", x.topic),
+                              f.field("message", x.message),
+                              f.field("key", x.key),
+                              f.field("timestamp", x.timestamp),
+                              f.field("options", x.options),
+                              f.field("aws_region", x.aws_region),
+                              f.field("aws", x.aws), f.field("jobs", x.jobs));
   }
 };
 
