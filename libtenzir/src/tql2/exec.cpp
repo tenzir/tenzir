@@ -541,12 +541,26 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
   return internal + external;
 }
 
+/// Monotonic counters for profiling channel throughput.
+struct ChannelStats {
+  std::atomic<size_t> bytes_in{0};
+  std::atomic<size_t> bytes_out{0};
+  std::atomic<size_t> elements_in{0};
+  std::atomic<size_t> elements_out{0};
+  std::atomic<size_t> signals_in{0};
+  std::atomic<size_t> signals_out{0};
+};
+
 /// Data channel between two operators.
 template <class T>
 struct OpChannel {
 public:
-  explicit OpChannel(ChannelId id, size_t max_bytes)
-    : id_{std::move(id)}, max_bytes_{max_bytes}, mutex_{Locked{}} {
+  explicit OpChannel(ChannelId id, size_t max_bytes,
+                     std::shared_ptr<ChannelStats> stats)
+    : id_{std::move(id)},
+      max_bytes_{max_bytes},
+      stats_{std::move(stats)},
+      mutex_{Locked{}} {
   }
 
   auto send(OperatorMsg<T> x) -> Task<void> {
@@ -561,6 +575,15 @@ public:
       lock = co_await mutex_.lock();
     }
     lock->current_bytes += bytes;
+    // Update profiling counters.
+    if (stats_) {
+      stats_->bytes_in.fetch_add(bytes, std::memory_order::relaxed);
+      if (is<Signal>(x)) {
+        stats_->signals_in.fetch_add(1, std::memory_order::relaxed);
+      } else {
+        stats_->elements_in.fetch_add(1, std::memory_order::relaxed);
+      }
+    }
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
   }
@@ -577,7 +600,17 @@ public:
     }
     auto result = std::move(lock->queue.front());
     lock->queue.pop_front();
-    lock->current_bytes -= count_bytes(result);
+    auto bytes = count_bytes(result);
+    lock->current_bytes -= bytes;
+    // Update profiling counters.
+    if (stats_) {
+      stats_->bytes_out.fetch_add(bytes, std::memory_order::relaxed);
+      if (is<Signal>(result)) {
+        stats_->signals_out.fetch_add(1, std::memory_order::relaxed);
+      } else {
+        stats_->elements_out.fetch_add(1, std::memory_order::relaxed);
+      }
+    }
     notify_send_.notify_one();
     co_return result;
   }
@@ -599,6 +632,7 @@ private:
 
   ChannelId id_;
   size_t max_bytes_;
+  std::shared_ptr<ChannelStats> stats_;
   // TODO: This can surely be written better?
   Mutex<Locked> mutex_;
   Notify notify_send_;
@@ -654,35 +688,49 @@ private:
   std::shared_ptr<OpChannel<T>> shared_;
 };
 
-/// Create an operator channel with the specified memory limit.
-///
-/// Note that this limit can be exceeded due to (a) pending writes to the queue
-/// which are still in memory but not yet pushed to the queue, and (b) very big
-/// individual items that exceed the total capacity by themselves, as we
-/// eventually let them through since we need to transmit them.
-template <class T>
-auto make_op_channel(ChannelId id, size_t max_bytes)
-  -> PushPull<OperatorMsg<T>> {
-  auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes);
-  return {OpPush<T>{shared}, OpPull<T>{shared}};
-}
+/// Collected profile for a single channel.
+struct ChannelProfile {
+  ChannelId id;
+  std::shared_ptr<ChannelStats> stats;
+  size_t max_bytes;
+};
 
 class TestChannelFactory : public ChannelFactory {
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_op_channel<void>(std::move(id), void_limit);
+    return make_profiled_channel<void>(std::move(id), void_limit);
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_op_channel<table_slice>(std::move(id), events_limit);
+    return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_op_channel<chunk_ptr>(std::move(id), bytes_limit);
+    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
 
 private:
+  /// Create an operator channel with the specified memory limit and collect
+  /// its profile.
+  ///
+  /// Note that the limit can be exceeded due to (a) pending writes to the
+  /// queue which are still in memory but not yet pushed to the queue, and (b)
+  /// very big individual items that exceed the total capacity by themselves,
+  /// as we eventually let them through since we need to transmit them.
+  template <class T>
+  auto make_profiled_channel(ChannelId id, size_t max_bytes)
+    -> PushPull<OperatorMsg<T>> {
+    auto stats = std::make_shared<ChannelStats>();
+    auto lock = std::scoped_lock{mutex_};
+    profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+    auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
+                                                 std::move(stats));
+    return {OpPush<T>{shared}, OpPull<T>{shared}};
+  }
+
+  std::mutex mutex_;
+  std::vector<ChannelProfile> profiles_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
