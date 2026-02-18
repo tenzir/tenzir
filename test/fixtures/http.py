@@ -33,7 +33,7 @@ import ssl
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from email.message import Message
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -63,9 +63,22 @@ _LINK_NONE_PAGE_1 = "/link-pagination/no-link/1"
 
 @dataclass(frozen=True)
 class HttpOptions:
+    @dataclass(frozen=True)
+    class ExpectedRequest:
+        count: int = 0
+        method: str = ""
+        path: str = ""
+        body: str = ""
+        body_alt: str = ""
+        header_name: str = ""
+        header_value: str = ""
+
     # "server" exposes HTTP_FIXTURE_URL, "client" drives accept_http.
     mode: str = "server"
     tls: bool = False
+    expected_request: ExpectedRequest | dict[str, object] = field(
+        default_factory=ExpectedRequest
+    )
     method: str = "POST"
     path: str = "/"
     body: str = "{}"
@@ -74,8 +87,78 @@ class HttpOptions:
     expected_response_body: str = ""
 
 
-def _make_handler(capture_path: Path):
+def _normalize_expected_request(
+    value: HttpOptions.ExpectedRequest | dict[str, object],
+) -> HttpOptions.ExpectedRequest:
+    if isinstance(value, HttpOptions.ExpectedRequest):
+        return value
+    if not isinstance(value, dict):
+        return HttpOptions.ExpectedRequest()
+    count = value.get("count", 0)
+    if not isinstance(count, int):
+        try:
+            count = int(count)
+        except (TypeError, ValueError):
+            count = 0
+    return HttpOptions.ExpectedRequest(
+        count=count,
+        method=str(value.get("method", "")),
+        path=str(value.get("path", "")),
+        body=str(value.get("body", "")),
+        body_alt=str(value.get("body_alt", "")),
+        header_name=str(value.get("header_name", "")),
+        header_value=str(value.get("header_value", "")),
+    )
+
+
+def _make_handler(
+    capture_path: Path,
+    opts: HttpOptions,
+    errors: list[str],
+    request_count: list[int],
+):
     class RecordingEchoHandler(BaseHTTPRequestHandler):
+        def _validate_request(self, path: str, body: bytes) -> None:
+            request_count[0] += 1
+            expected_request = opts.expected_request
+            if expected_request.method:
+                expected_method = expected_request.method.upper()
+                if self.command != expected_method:
+                    errors.append(
+                        "expected request method "
+                        f"{expected_method}, got {self.command}"
+                    )
+            if (
+                expected_request.path
+                and path != expected_request.path
+            ):
+                errors.append(
+                    f"expected request path {expected_request.path}, got {path}"
+                )
+            if expected_request.body:
+                body_text = body.decode("utf-8", errors="replace")
+                body_matches = body_text == expected_request.body
+                if expected_request.body_alt:
+                    body_matches = body_matches or (
+                        body_text == expected_request.body_alt
+                    )
+                if not body_matches:
+                    errors.append(
+                        "expected request body "
+                        f"{expected_request.body!r} or "
+                        f"{expected_request.body_alt!r}, "
+                        f"got {body_text!r}"
+                    )
+            if expected_request.header_name:
+                header = self.headers.get(expected_request.header_name, "")
+                if header != expected_request.header_value:
+                    errors.append(
+                        "expected request header "
+                        f"{expected_request.header_name}: "
+                        f"{expected_request.header_value!r}, "
+                        f"got {header!r}"
+                    )
+
         def _read_body(self) -> bytes:
             transfer_encoding = self.headers.get("Transfer-Encoding", "")
             if transfer_encoding.lower() == "chunked":
@@ -157,6 +240,7 @@ def _make_handler(capture_path: Path):
         def _handle_request(self, body: bytes) -> None:
             self._record_request(body)
             path = urlsplit(self.path).path
+            self._validate_request(path, body)
             if path == "/options/method":
                 self._reply(f'{{"method":"{self.command}"}}\n'.encode())
                 return
@@ -290,7 +374,9 @@ def _run_server(
     opts: HttpOptions,
     tls_env: dict[str, str],
 ) -> Iterator[dict[str, str]]:
-    handler = _make_handler(capture_path)
+    errors: list[str] = []
+    request_count = [0]
+    handler = _make_handler(capture_path, opts, errors, request_count)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     if opts.tls:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -332,6 +418,17 @@ def _run_server(
     finally:
         server.shutdown()
         worker.join()
+        expected_request = opts.expected_request
+        if (
+            expected_request.count
+            and request_count[0] != expected_request.count
+        ):
+            errors.append(
+                "expected request count "
+                f"{expected_request.count}, got {request_count[0]}"
+            )
+        if errors:
+            raise RuntimeError(errors[0])
 
 
 def _run_client(
@@ -437,6 +534,10 @@ def run() -> Iterator[dict[str, str]]:
     os.close(capture_fd)
     capture_path = Path(capture_path_str)
     opts = current_options("http")
+    opts = replace(
+        opts,
+        expected_request=_normalize_expected_request(opts.expected_request),
+    )
     temp_dir: Path | None = None
     tls_env: dict[str, str] = {}
     if opts.tls:

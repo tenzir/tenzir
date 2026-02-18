@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http:
+      expected_request:
+        count: 1
+        method: POST
+        path: /options/body
+        body: hello-world
+timeout: 60
+---
+
+from {
+  foo: "bar",
+}
+to_http env("HTTP_FIXTURE_BODY_URL"), method="post", body="hello-world"

@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {
+  foo: "bar",
+}
+to_http "http://127.0.0.1:31337" {
+  discard
+}

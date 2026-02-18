@@ -1,0 +1,21 @@
+---
+fixtures:
+  - http:
+      expected_request:
+        count: 1
+        method: POST
+        path: /options/body
+        header_name: Content-Type
+        header_value: application/x-www-form-urlencoded
+        body: hello=world&alpha=beta
+        body_alt: alpha=beta&hello=world
+timeout: 60
+---
+
+from {
+  foo: "bar",
+}
+to_http env("HTTP_FIXTURE_BODY_URL"),
+        method="post",
+        body={hello: "world", alpha: "beta"},
+        encode="form"
