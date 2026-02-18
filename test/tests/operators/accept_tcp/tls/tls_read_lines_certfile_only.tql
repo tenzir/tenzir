@@ -1,0 +1,6 @@
+accept_tcp env("TCP_ENDPOINT"),
+         tls={certfile: env("TCP_CERTKEYFILE"),
+              skip_peer_verification: true} {
+  read_lines
+}
+| head 1

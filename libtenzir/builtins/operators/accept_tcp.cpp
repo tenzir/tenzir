@@ -29,28 +29,28 @@
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-namespace tenzir::plugins::from_tcp {
+namespace tenzir::plugins::accept_tcp {
 
 namespace {
 
-constexpr auto kReadTimeout = std::chrono::seconds{1};
-constexpr auto kBufferSize = size_t{65536};
-constexpr auto kListenBacklog = uint32_t{128};
+constexpr auto read_timeout = std::chrono::seconds{1};
+constexpr auto buffer_size = size_t{65536};
+constexpr auto listen_backlog = uint32_t{128};
 
-struct FromTcpArgs {
+struct AcceptTcpArgs {
   located<std::string> endpoint;
   std::optional<located<data>> tls;
   located<ir::pipeline> user_pipeline;
   let_id peer_info;
 };
 
-class FromTcpListener final : public Operator<void, table_slice> {
+class AcceptTcpListener final : public Operator<void, table_slice> {
 public:
   struct Connection {
     std::shared_ptr<folly::coro::Transport> transport;
   };
 
-  FromTcpListener(FromTcpArgs args)
+  AcceptTcpListener(AcceptTcpArgs args)
     : user_pipeline_{std::move(args.user_pipeline)},
       peer_let_id_{args.peer_info} {
     // Parse endpoint string to SocketAddress (validation already done in
@@ -68,11 +68,11 @@ public:
     }
   }
 
-  FromTcpListener(const FromTcpListener&) = delete;
-  FromTcpListener& operator=(const FromTcpListener&) = delete;
-  FromTcpListener(FromTcpListener&&) noexcept = default;
-  FromTcpListener& operator=(FromTcpListener&&) noexcept = default;
-  ~FromTcpListener() override = default;
+  AcceptTcpListener(const AcceptTcpListener&) = delete;
+  AcceptTcpListener& operator=(const AcceptTcpListener&) = delete;
+  AcceptTcpListener(AcceptTcpListener&&) noexcept = default;
+  AcceptTcpListener& operator=(AcceptTcpListener&&) noexcept = default;
+  ~AcceptTcpListener() override = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (tls_ and tls_->get_tls(nullptr).inner) {
@@ -83,13 +83,13 @@ public:
       }
       tls_context_ = std::move(*context);
     }
-    TENZIR_VERBOSE("from_tcp: starting listener on {}", address_.describe());
+    TENZIR_VERBOSE("accept_tcp: starting listener on {}", address_.describe());
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     // Let ServerSocket handle bind/listen setup
     server_ = std::make_unique<folly::coro::ServerSocket>(
-      std::move(socket), address_, kListenBacklog);
+      std::move(socket), address_, listen_backlog);
     co_return;
   }
 
@@ -99,10 +99,10 @@ public:
     }
     TENZIR_ASSERT(evb_);
     TENZIR_ASSERT(server_);
-    TENZIR_VERBOSE("from_tcp: waiting for connection");
+    TENZIR_VERBOSE("accept_tcp: waiting for connection");
     auto transport
       = co_await folly::coro::co_withExecutor(evb_, server_->accept());
-    TENZIR_INFO("from_tcp: accepted connection from {}",
+    TENZIR_INFO("accept_tcp: accepted connection from {}",
                 transport->getPeerAddress().describe());
     co_return Box<folly::coro::Transport>::from_non_null(std::move(transport));
   }
@@ -141,7 +141,7 @@ public:
       MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                 peer_addr.getAddressStr())},
       MetricsDirection::read, MetricsVisibility::external_);
-    TENZIR_DEBUG("from_tcp: using peer_let_id_ = {}", peer_let_id_.id);
+    TENZIR_DEBUG("accept_tcp: using peer_let_id_ = {}", peer_let_id_.id);
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg};
     auto sub_result
@@ -172,8 +172,8 @@ private:
       size_t bytes = 0;
       try {
         bytes = co_await transport->read(
-          buf, 1, kBufferSize,
-          std::chrono::duration_cast<std::chrono::milliseconds>(kReadTimeout));
+          buf, 1, buffer_size,
+          std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout));
       } catch (const folly::AsyncSocketException& e) {
         if (e.getType() != folly::AsyncSocketException::TIMED_OUT) {
           // Timeout is expected - continue to check cancellation
@@ -213,18 +213,18 @@ private:
   mutable uint64_t next_conn_id_{0};
 };
 
-class from_tcp_plugin final : public virtual OperatorPlugin {
+class AcceptTcpPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.from_tcp";
+    return "tql2.accept_tcp";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromTcpArgs, FromTcpListener>{};
-    auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
-    auto tls_arg = d.named("tls", &FromTcpArgs::tls);
-    d.pipeline(&FromTcpArgs::user_pipeline,
-               {{"peer", &FromTcpArgs::peer_info}});
+    auto d = Describer<AcceptTcpArgs, AcceptTcpListener>{};
+    auto endpoint_arg = d.positional("endpoint", &AcceptTcpArgs::endpoint);
+    auto tls_arg = d.named("tls", &AcceptTcpArgs::tls);
+    d.pipeline(&AcceptTcpArgs::user_pipeline,
+               {{"peer", &AcceptTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<struct endpoint>(ep_str.inner);
@@ -249,6 +249,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::from_tcp
+} // namespace tenzir::plugins::accept_tcp
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_tcp::from_tcp_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::accept_tcp::AcceptTcpPlugin)

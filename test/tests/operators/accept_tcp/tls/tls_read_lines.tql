@@ -1,5 +1,7 @@
-from_tcp env("TCP_ENDPOINT"),
+accept_tcp env("TCP_ENDPOINT"),
          tls={certfile: env("TCP_CERTFILE"),
               keyfile: env("TCP_KEYFILE"),
-              skip_peer_verification: true} { read_lines }
+              skip_peer_verification: true} {
+  read_lines
+}
 | head 1

@@ -1,4 +1,4 @@
-suite: from-tcp-tls
+suite: accept-tcp-tls
 fixtures:
   - tcp:
       tls: true
