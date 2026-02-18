@@ -1,0 +1,172 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     If {
+       if_keyword: 7..9,
+       condition: binary_expr {
+         left: root_field {
+           id: `x` @ 10..11,
+           has_question_mark: false
+         },
+         op: "eq" @ 12..14,
+         right: constant int64 1 @ 15..16
+       },
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           where_ir {
+-            self: 21..26,
++            self: 0..0,
+             predicate: binary_expr {
+               left: root_field {
+                 id: `a` @ 27..28,
+                 has_question_mark: false
+               },
+               op: "eq" @ 29..31,
+               right: constant int64 1 @ 32..33
+             }
+           }
+         ]
+       },
+       alternative: {
+         keyword: 36..40,
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             If {
+               if_keyword: 41..43,
+               condition: binary_expr {
+                 left: root_field {
+                   id: `y` @ 44..45,
+                   has_question_mark: false
+                 },
+                 op: "eq" @ 46..48,
+                 right: constant int64 2 @ 49..50
+               },
+               consequence: {
+                 lets: [
+                   
+                 ],
+                 operators: [
+                   GenericIr {
+                     op: {
+                       path: [
+                         `write_lines` @ 55..66
+                       ],
+                       ref: std::write_lines/op
+                     },
+                     desc: "write_lines",
+                     args: [
+                       
+                     ],
+                     filter: [
+                       
+                     ],
+                     order: "ordered",
+                     named_args: [
+                       
+                     ]
+                   },
+                   GenericIr {
+                     op: {
+                       path: [
+                         `read_ndjson` @ 69..80
+                       ],
+                       ref: std::read_ndjson/op
+                     },
+                     desc: "read_ndjson",
+                     args: [
+                       
+                     ],
+                     filter: [
+                       
+                     ],
+-                    order: "ordered",
++                    order: "unordered",
+                     named_args: [
+                       
+                     ]
+                   }
+                 ]
+               },
+               alternative: {
+                 keyword: 83..87,
+                 pipeline: {
+                   lets: [
+                     
+                   ],
+                   operators: [
+                     GenericIr {
+                       op: {
+                         path: [
+                           `head` @ 92..96
+                         ],
+                         ref: std::head/op
+                       },
+                       desc: "head",
+                       args: [
+                         
+                       ],
+                       filter: [
+                         
+                       ],
+-                      order: "ordered",
++                      order: "unordered",
+                       named_args: [
+                         
+                       ]
+                     }
+                   ]
+                 }
+               }
+             }
+           ]
+         }
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 99..106
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "unordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

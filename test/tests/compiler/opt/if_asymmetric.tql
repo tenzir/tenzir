@@ -1,0 +1,8 @@
+export
+if true {
+  where x == 1
+} else {
+  write_lines
+  read_ndjson
+}
+discard

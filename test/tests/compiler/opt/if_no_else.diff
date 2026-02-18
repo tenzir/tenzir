@@ -1,0 +1,95 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     If {
+       if_keyword: 7..9,
+       condition: constant bool true @ 10..14,
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `write_lines` @ 19..30
+               ],
+               ref: std::write_lines/op
+             },
+             desc: "write_lines",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+             order: "ordered",
+             named_args: [
+               
+             ]
+           },
+           GenericIr {
+             op: {
+               path: [
+                 `read_ndjson` @ 33..44
+               ],
+               ref: std::read_ndjson/op
+             },
+             desc: "read_ndjson",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ]
+           }
+         ]
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 47..54
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "unordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

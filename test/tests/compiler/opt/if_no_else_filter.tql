@@ -1,0 +1,6 @@
+export
+if x == 1 {
+  drop a
+}
+where b == 2
+discard

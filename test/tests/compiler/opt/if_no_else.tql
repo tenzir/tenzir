@@ -1,0 +1,6 @@
+export
+if true {
+  write_lines
+  read_ndjson
+}
+discard

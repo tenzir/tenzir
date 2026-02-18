@@ -1,0 +1,8 @@
+export
+if true {
+  discard
+} else {
+  drop a
+}
+where b == 2
+discard

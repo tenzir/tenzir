@@ -1,0 +1,123 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 0..6
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     If {
+       if_keyword: 7..9,
+       condition: constant bool true @ 10..14,
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `head` @ 19..23
+               ],
+               ref: std::head/op
+             },
+             desc: "head",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+             order: "ordered",
+             named_args: [
+               
+             ]
+           }
+         ]
+       },
+       alternative: {
+         keyword: 26..30,
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               op: {
+                 path: [
+                   `head` @ 35..39
+                 ],
+                 ref: std::head/op
+               },
+               desc: "head",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         }
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `write_tql` @ 42..51
+         ],
+         ref: std::write_tql/op
+       },
+       desc: "write_tql",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `save_stdout` @ 52..63
+         ],
+         ref: std::save_stdout/op
+       },
+       desc: "save_stdout",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }
