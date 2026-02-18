@@ -40,10 +40,14 @@
 #include <folly/coro/BlockingWait.h>
 #include <tsl/robin_set.h>
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -541,12 +545,29 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
   return internal + external;
 }
 
+/// Monotonic counters for profiling channel throughput.
+struct ChannelStats {
+  /// We group/align by in and out here, because that is the grouping in which
+  /// these are written.
+  struct alignas(std::hardware_destructive_interference_size) data {
+    std::atomic<size_t> bytes{0};
+    std::atomic<size_t> signals{0};
+    std::atomic<size_t> elements{0};
+  };
+  data in;
+  data out;
+};
+
 /// Data channel between two operators.
 template <class T>
 struct OpChannel {
 public:
-  explicit OpChannel(ChannelId id, size_t max_bytes)
-    : id_{std::move(id)}, max_bytes_{max_bytes}, mutex_{Locked{}} {
+  explicit OpChannel(ChannelId id, size_t max_bytes,
+                     std::shared_ptr<ChannelStats> stats)
+    : id_{std::move(id)},
+      max_bytes_{max_bytes},
+      stats_{std::move(stats)},
+      mutex_{Locked{}} {
   }
 
   auto send(OperatorMsg<T> x) -> Task<void> {
@@ -561,6 +582,15 @@ public:
       lock = co_await mutex_.lock();
     }
     lock->current_bytes += bytes;
+    // Update profiling counters.
+    if (stats_) {
+      stats_->in.bytes.fetch_add(bytes, std::memory_order::relaxed);
+      if (is<Signal>(x)) {
+        stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
+      } else {
+        stats_->in.elements.fetch_add(1, std::memory_order::relaxed);
+      }
+    }
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
   }
@@ -577,7 +607,17 @@ public:
     }
     auto result = std::move(lock->queue.front());
     lock->queue.pop_front();
-    lock->current_bytes -= count_bytes(result);
+    auto bytes = count_bytes(result);
+    lock->current_bytes -= bytes;
+    // Update profiling counters.
+    if (stats_) {
+      stats_->out.bytes.fetch_add(bytes, std::memory_order::relaxed);
+      if (is<Signal>(result)) {
+        stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
+      } else {
+        stats_->out.elements.fetch_add(1, std::memory_order::relaxed);
+      }
+    }
     notify_send_.notify_one();
     co_return result;
   }
@@ -599,6 +639,7 @@ private:
 
   ChannelId id_;
   size_t max_bytes_;
+  std::shared_ptr<ChannelStats> stats_;
   // TODO: This can surely be written better?
   Mutex<Locked> mutex_;
   Notify notify_send_;
@@ -654,35 +695,62 @@ private:
   std::shared_ptr<OpChannel<T>> shared_;
 };
 
-/// Create an operator channel with the specified memory limit.
-///
-/// Note that this limit can be exceeded due to (a) pending writes to the queue
-/// which are still in memory but not yet pushed to the queue, and (b) very big
-/// individual items that exceed the total capacity by themselves, as we
-/// eventually let them through since we need to transmit them.
-template <class T>
-auto make_op_channel(ChannelId id, size_t max_bytes)
-  -> PushPull<OperatorMsg<T>> {
-  auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes);
-  return {OpPush<T>{shared}, OpPull<T>{shared}};
-}
+/// Collected profile for a single channel.
+struct ChannelProfile {
+  ChannelId id;
+  std::shared_ptr<ChannelStats> stats;
+  size_t max_bytes;
+};
 
 class TestChannelFactory : public ChannelFactory {
+public:
+  explicit TestChannelFactory(bool profiling = false) : profiling_{profiling} {
+  }
+
+  auto get_profiles() -> std::vector<ChannelProfile> {
+    auto lock = std::scoped_lock{mutex_};
+    return profiles_;
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_op_channel<void>(std::move(id), void_limit);
+    return make_profiled_channel<void>(std::move(id), void_limit);
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_op_channel<table_slice>(std::move(id), events_limit);
+    return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_op_channel<chunk_ptr>(std::move(id), bytes_limit);
+    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
 
 private:
+  /// Create an operator channel with the specified memory limit and collect
+  /// its profile.
+  ///
+  /// Note that the limit can be exceeded due to (a) pending writes to the
+  /// queue which are still in memory but not yet pushed to the queue, and (b)
+  /// very big individual items that exceed the total capacity by themselves,
+  /// as we eventually let them through since we need to transmit them.
+  template <class T>
+  auto make_profiled_channel(ChannelId id, size_t max_bytes)
+    -> PushPull<OperatorMsg<T>> {
+    auto stats = std::shared_ptr<ChannelStats>{};
+    if (profiling_) {
+      stats = std::make_shared<ChannelStats>();
+      auto lock = std::scoped_lock{mutex_};
+      profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+    }
+    auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
+                                                 std::move(stats));
+    return {OpPush<T>{shared}, OpPull<T>{shared}};
+  }
+
+  bool profiling_;
+  std::mutex mutex_;
+  std::vector<ChannelProfile> profiles_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -696,16 +764,253 @@ private:
 #endif
 };
 
+struct ProfileSample {
+  std::chrono::steady_clock::time_point time;
+  struct Channel {
+    std::string name;
+    size_t current_bytes;
+    size_t bytes_in;
+    size_t bytes_out;
+    size_t elements_in;
+    size_t elements_out;
+    size_t signals_in;
+    size_t signals_out;
+    size_t max_bytes;
+  };
+  std::vector<Channel> channels;
+};
+
+void write_profile(std::string const& path,
+                   std::vector<ProfileSample> const& samples,
+                   std::chrono::steady_clock::time_point t0) {
+  auto f = std::ofstream{path};
+  if (not f) {
+    TENZIR_WARN("failed to open profile output file: {}", path);
+    return;
+  }
+  // Collect all unique channel names in order of first appearance.
+  auto channel_names = std::vector<std::string>{};
+  auto channel_index = std::unordered_map<std::string, size_t>{};
+  for (auto const& sample : samples) {
+    for (auto const& ch : sample.channels) {
+      if (channel_index.emplace(ch.name, channel_names.size()).second) {
+        channel_names.push_back(ch.name);
+      }
+    }
+  }
+  // pid 1 = Totals, pid 2+ = one per channel.
+  static constexpr auto pid_totals = 1;
+  auto channel_pid = [](size_t idx) -> int {
+    return static_cast<int>(idx) + 2;
+  };
+  // Write the JSON.
+  f << "{\n  \"traceEvents\": [\n";
+  auto first_event = true;
+  auto emit = [&](std::string const& json) {
+    if (not first_event) {
+      f << ",\n";
+    }
+    first_event = false;
+    f << "    " << json;
+  };
+  // Metadata events for process group names and sort order.
+  // Append " |" so Perfetto's auto-appended pid is visually separated.
+  auto emit_process = [&](int pid, std::string const& name, int sort_index) {
+    emit(fmt::format(
+      R"pp({{"ph": "M", "pid": {}, "name": "process_name", "args": {{"name": "{} |"}}}})pp",
+      pid, name));
+    emit(fmt::format(
+      R"pp({{"ph": "M", "pid": {}, "name": "process_sort_index", "args": {{"sort_index": {}}}}})pp",
+      pid, sort_index));
+  };
+  emit_process(pid_totals, "Totals", 0);
+  for (size_t ci = 0; ci < channel_names.size(); ++ci) {
+    emit_process(channel_pid(ci), channel_names[ci], static_cast<int>(ci) + 1);
+  }
+  // Track definitions: name and value extractor for each channel.
+  struct TrackDef {
+    char const* name;
+    std::function<double(ProfileSample::Channel const&)> value;
+  };
+  auto instant_tracks = std::vector<TrackDef>{
+    {"Memory (bytes)",
+     [](auto const& c) {
+       return static_cast<double>(c.current_bytes);
+     }},
+    {"Batches",
+     [](auto const& c) {
+       return static_cast<double>(c.elements_in - c.elements_out);
+     }},
+    {"Bytes In (cumulative)",
+     [](auto const& c) {
+       return static_cast<double>(c.bytes_in);
+     }},
+    {"Bytes Out (cumulative)",
+     [](auto const& c) {
+       return static_cast<double>(c.bytes_out);
+     }},
+    {"Batches In (cumulative)",
+     [](auto const& c) {
+       return static_cast<double>(c.elements_in);
+     }},
+    {"Batches Out (cumulative)",
+     [](auto const& c) {
+       return static_cast<double>(c.elements_out);
+     }},
+    {"Signals In (cumulative)",
+     [](auto const& c) {
+       return static_cast<double>(c.signals_in);
+     }},
+    {"Signals Out (cumulative)",
+     [](auto const& c) {
+       return static_cast<double>(c.signals_out);
+     }},
+  };
+  // Rate track definitions.
+  struct RateTrackDef {
+    char const* name;
+    std::function<double(ProfileSample::Channel const&)> cumulative;
+  };
+  auto rate_tracks = std::vector<RateTrackDef>{
+    {"Bytes In (rate)",
+     [](auto const& c) {
+       return static_cast<double>(c.bytes_in);
+     }},
+    {"Bytes Out (rate)",
+     [](auto const& c) {
+       return static_cast<double>(c.bytes_out);
+     }},
+    {"Batches In (rate)",
+     [](auto const& c) {
+       return static_cast<double>(c.elements_in);
+     }},
+    {"Batches Out (rate)",
+     [](auto const& c) {
+       return static_cast<double>(c.elements_out);
+     }},
+    {"Signals In (rate)",
+     [](auto const& c) {
+       return static_cast<double>(c.signals_in);
+     }},
+    {"Signals Out (rate)",
+     [](auto const& c) {
+       return static_cast<double>(c.signals_out);
+     }},
+  };
+  // Emit per-channel and total tracks per sample.
+  for (auto const& sample : samples) {
+    auto us
+      = std::chrono::duration_cast<std::chrono::microseconds>(sample.time - t0)
+          .count();
+    // Per-channel instant tracks.
+    for (auto const& ch : sample.channels) {
+      auto pid = channel_pid(channel_index.at(ch.name));
+      for (auto const& track : instant_tracks) {
+        emit(fmt::format(
+          R"pp({{"ph": "C", "name": "{}", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
+          track.name, pid, us, track.value(ch)));
+      }
+    }
+    // Totals across all channels (memory first).
+    auto total_bytes = size_t{0};
+    auto total_batches = size_t{0};
+    for (auto const& ch : sample.channels) {
+      total_bytes += ch.current_bytes;
+      total_batches += ch.elements_in - ch.elements_out;
+    }
+    emit(fmt::format(
+      R"pp({{"ph": "C", "name": "Memory (bytes)", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
+      pid_totals, us, total_bytes));
+    emit(fmt::format(
+      R"pp({{"ph": "C", "name": "Batches", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
+      pid_totals, us, total_batches));
+  }
+  // Rate tracks: computed by diffing consecutive samples.
+  for (size_t i = 0; i < samples.size(); ++i) {
+    auto const& sample = samples[i];
+    auto us
+      = std::chrono::duration_cast<std::chrono::microseconds>(sample.time - t0)
+          .count();
+    auto interval_s = double{};
+    if (i == 0) {
+      interval_s = static_cast<double>(us) / 1'000'000.0;
+    } else {
+      auto prev_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                       samples[i - 1].time - t0)
+                       .count();
+      interval_s = static_cast<double>(us - prev_us) / 1'000'000.0;
+    }
+    if (interval_s <= 0.0) {
+      interval_s = 0.001;
+    }
+    for (auto const& ch : sample.channels) {
+      auto pid = channel_pid(channel_index.at(ch.name));
+      auto j = static_cast<size_t>(&ch - sample.channels.data());
+      for (auto const& track : rate_tracks) {
+        auto cur = track.cumulative(ch);
+        auto prev = 0.0;
+        if (i > 0 and j < samples[i - 1].channels.size()) {
+          prev = track.cumulative(samples[i - 1].channels[j]);
+        }
+        auto rate = (cur - prev) / interval_s;
+        emit(fmt::format(
+          R"pp({{"ph": "C", "name": "{}", "pid": {}, "ts": {}, "args": {{" ": {}}}}})pp",
+          track.name, pid, us, rate));
+      }
+    }
+  }
+  f << "\n  ]\n}\n";
+}
+
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
-              DiagHandler& dh) -> Task<failure_or<void>> {
+              DiagHandler& dh, std::optional<std::string> const& profile_path)
+  -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  auto channel_factory = TestChannelFactory{};
+  auto channel_factory = TestChannelFactory{profile_path.has_value()};
+  // Profiling: sample channel stats periodically if requested.
+  auto samples = std::vector<ProfileSample>{};
+  auto stop_flag = std::atomic<bool>{false};
+  auto sampler = std::optional<std::thread>{};
+  auto t0 = std::chrono::steady_clock::now();
+  if (profile_path) {
+    sampler.emplace([&] {
+      while (not stop_flag.load(std::memory_order::relaxed)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        auto profiles = channel_factory.get_profiles();
+        if (profiles.empty()) {
+          continue;
+        }
+        auto sample = ProfileSample{std::chrono::steady_clock::now(), {}};
+        for (auto& p : profiles) {
+          auto bi = p.stats->in.bytes.load(std::memory_order::relaxed);
+          auto bo = p.stats->out.bytes.load(std::memory_order::relaxed);
+          sample.channels.push_back({
+            p.id.value,
+            bi >= bo ? bi - bo : 0,
+            bi,
+            bo,
+            p.stats->in.elements.load(std::memory_order::relaxed),
+            p.stats->out.elements.load(std::memory_order::relaxed),
+            p.stats->in.signals.load(std::memory_order::relaxed),
+            p.stats->out.signals.load(std::memory_order::relaxed),
+            p.max_bytes,
+          });
+        }
+        samples.push_back(std::move(sample));
+      }
+    });
+  }
   LOGW("blocking on pipeline");
   co_await run_pipeline(std::move(*chain), channel_factory, sys, dh);
   LOGW("blocking on pipeline done");
+  if (sampler) {
+    stop_flag.store(true, std::memory_order::relaxed);
+    sampler->join();
+    write_profile(*profile_path, samples, t0);
+  }
   co_return {};
 }
 
@@ -742,14 +1047,18 @@ private:
 };
 
 auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
-                       diagnostic_handler& dh) -> failure_or<void> {
+                       diagnostic_handler& dh,
+                       std::optional<std::string> const& profile_path)
+  -> failure_or<void> {
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-    co_return co_await folly::coro::co_awaitTry(
-      folly::coro::co_withCancellation(
-        cancel_source.getToken(), run_plan(std::move(ops), sys, diag_handler)));
-  });
+  auto task
+    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+        co_return co_await folly::coro::co_awaitTry(
+          folly::coro::co_withCancellation(
+            cancel_source.getToken(),
+            run_plan(std::move(ops), sys, diag_handler, profile_path)));
+      });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -846,7 +1155,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(spawned), sys, ctx));
+  TRY(run_plan_blocking(std::move(spawned), sys, ctx, cfg.profile));
   return true;
 }
 
@@ -872,6 +1181,10 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
     if (cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir) {
       // This new code path will eventually supersede the current one.
       return exec_with_ir(std::move(parsed), cfg, ctx, sys);
+    }
+    if (cfg.profile) {
+      diagnostic::warning("`--profile` is only supported with `--neo`")
+        .emit(ctx);
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
     if (cfg.dump_pipeline) {

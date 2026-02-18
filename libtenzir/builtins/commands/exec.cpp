@@ -93,6 +93,11 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   cfg.neo = caf::get_or(inv.options, "tenzir.neo", cfg.neo);
+  auto profile_str
+    = caf::get_or(inv.options, "tenzir.exec.profile", std::string{});
+  if (not profile_str.empty()) {
+    cfg.profile = std::move(profile_str);
+  }
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
@@ -178,7 +183,10 @@ public:
         .add<bool>("multi", "split pipelines at void-to-void boundaries, "
                             "running them sequentially")
         .add<bool>("strict",
-                   "return a non-zero exit code if any warnings occured"));
+                   "return a non-zero exit code if any warnings occured")
+        .add<std::string>("profile",
+                          "write a channel profile to a file (Chrome Trace "
+                          "Format, viewable in ui.perfetto.dev)"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
