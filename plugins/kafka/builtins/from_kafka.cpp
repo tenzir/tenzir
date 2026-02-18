@@ -336,6 +336,7 @@ public:
     runtime_.message_queue = std::move(other.runtime_.message_queue);
     runtime_.table_slice_queue = std::move(other.runtime_.table_slice_queue);
     runtime_.ordered_slices = std::move(other.runtime_.ordered_slices);
+    runtime_.builders_finished = other.runtime_.builders_finished;
     runtime_.message_queue_closed.store(
       other.runtime_.message_queue_closed.load());
     runtime_.live_fetchers.store(other.runtime_.live_fetchers.load());
@@ -582,6 +583,7 @@ private:
     std::shared_ptr<MessageQueue> message_queue;
     std::shared_ptr<TableSliceQueue> table_slice_queue;
     std::map<uint64_t, TableSliceFrame> ordered_slices;
+    bool builders_finished = false;
     std::atomic<bool> message_queue_closed = false;
     std::atomic<size_t> live_fetchers = 0;
     std::atomic<size_t> live_builders = 0;
@@ -806,6 +808,7 @@ private:
     runtime_.table_slice_queue
       = std::make_shared<TableSliceQueue>(fetch_capacity);
     runtime_.ordered_slices.clear();
+    runtime_.builders_finished = false;
     runtime_.next_emit_seq = 0;
     runtime_.next_fetch_seq.store(0);
     runtime_.scheduled_messages.store(emitted_messages_);
@@ -1351,6 +1354,17 @@ private:
     TENZIR_ASSERT(runtime_.table_slice_queue);
     while (true) {
       auto ready = runtime_.ordered_slices.find(runtime_.next_emit_seq);
+      // When builders are finished, some sequence numbers may have been
+      // dropped (e.g., a fetched batch was discarded during shutdown before
+      // reaching the build stage). Skip gaps and drain in map order.
+      if (ready == runtime_.ordered_slices.end()
+          and runtime_.builders_finished) {
+        if (runtime_.ordered_slices.empty()) {
+          co_return TableSliceResult{.end_of_stream = true};
+        }
+        ready = runtime_.ordered_slices.begin();
+        runtime_.next_emit_seq = ready->first;
+      }
       if (ready != runtime_.ordered_slices.end()) {
         auto batch = std::move(ready->second);
         runtime_.ordered_slices.erase(ready);
@@ -1370,11 +1384,7 @@ private:
           as_ns(std::chrono::steady_clock::now() - dequeue_started));
       }
       if (not next) {
-        if (runtime_.ordered_slices.empty()) {
-          co_return TableSliceResult{.end_of_stream = true};
-        }
-        auto contiguous = runtime_.ordered_slices.find(runtime_.next_emit_seq);
-        TENZIR_ASSERT(contiguous != runtime_.ordered_slices.end());
+        runtime_.builders_finished = true;
         continue;
       }
       if (next->seq == runtime_.next_emit_seq) {
