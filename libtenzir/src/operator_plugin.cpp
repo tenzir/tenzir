@@ -395,7 +395,9 @@ public:
       if (remaining) {
         return {};
       }
-      auto is_constant = not is<Setter<ast::expression>>(setter);
+      auto is_constant = not is<Setter<ast::expression>>(setter)
+                         and not is<Setter<ast::lambda_expr>>(setter)
+                         and not is<Setter<ast::field_path>>(setter);
       if (is_constant) {
         if (instantiate or expr.is_deterministic(ctx)) {
           // Handle boolean flags for named arguments.
@@ -462,8 +464,36 @@ public:
           TRY(arg, result);
         }
       } else {
-        // TENZIR_TODO();
-        arg = std::move(expr);
+        TRY(match(
+          setter,
+          [&](const Setter<ast::lambda_expr>&) -> failure_or<void> {
+            auto* lambda = try_as<ast::lambda_expr>(*expr.kind);
+            if (not lambda) {
+              diagnostic::error("expected a lambda expression")
+                .primary(expr)
+                .emit(ctx);
+              return failure::promise();
+            }
+            arg = std::move(*lambda);
+            return {};
+          },
+          [&](const Setter<ast::field_path>&) -> failure_or<void> {
+            auto loc = expr.get_location();
+            auto fp = ast::field_path::try_from(std::move(expr));
+            if (not fp) {
+              diagnostic::error("expected a field path").primary(loc).emit(ctx);
+              return failure::promise();
+            }
+            arg = std::move(*fp);
+            return {};
+          },
+          [&](const Setter<ast::expression>&) -> failure_or<void> {
+            arg = std::move(expr);
+            return {};
+          },
+          [&]<class T>(const Setter<T>&) -> failure_or<void> {
+            TENZIR_UNREACHABLE();
+          }));
       }
       return {};
     };

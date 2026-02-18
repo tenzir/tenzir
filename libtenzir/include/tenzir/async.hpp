@@ -274,7 +274,8 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  virtual auto post_commit() -> Task<void> {
+  virtual auto post_commit(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
     co_return;
   }
 
