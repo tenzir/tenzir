@@ -1,0 +1,2 @@
+suite: from-tcp-tls
+timeout: 60
