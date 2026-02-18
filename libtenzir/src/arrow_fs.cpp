@@ -121,9 +121,13 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
       TENZIR_ASSERT(open.slot < max_jobs);
       TENZIR_ASSERT(processing_[open.slot]);
       if (not open.file.ok()) {
-        diagnostic::warning("failed to open `{}`", processing_[open.slot]->path)
+        diagnostic::error("failed to open `{}`", processing_[open.slot]->path)
           .primary(base_args_.url)
           .note(open.file.status().ToStringWithoutContextLines())
+          .compose([&](auto x) {
+            return is_globbing() ? std::move(x).severity(severity::warning)
+                                 : std::move(x);
+          })
           .emit(ctx);
         processing_[open.slot].reset();
         start_job_in_slot(open.slot, ctx);
@@ -153,10 +157,14 @@ auto ArrowFsOperator::process_task(Any result, Push<table_slice>&, OpCtx& ctx)
       TENZIR_ASSERT(sub);
       auto& pipe = as<OpenPipeline<chunk_ptr>>(*sub);
       if (not read.result.ok()) {
-        diagnostic::warning("failed to read from `{}`",
-                            processing_[read.slot]->path)
+        diagnostic::error("failed to read from `{}`",
+                          processing_[read.slot]->path)
           .primary(base_args_.url)
           .note(read.result.status().ToStringWithoutContextLines())
+          .compose([&](auto x) {
+            return is_globbing() ? std::move(x).severity(severity::warning)
+                                 : std::move(x);
+          })
           .emit(ctx);
         co_await pipe.close();
         co_return;
@@ -375,7 +383,7 @@ auto ArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
       auto root_result
         = co_await arrow_future_to_task(fs_->GetFileInfoAsync({root_path_}));
       if (not root_result.ok()) {
-        diagnostic::warning("failed to scan `{}`", root_path_)
+        diagnostic::error("failed to scan `{}`", root_path_)
           .primary(base_args_.url)
           .note(root_result.status().ToStringWithoutContextLines())
           .emit(dh);
@@ -384,17 +392,29 @@ auto ArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
         auto root_info = std::move((*root_result)[0]);
         switch (root_info.type()) {
           case arrow::fs::FileType::NotFound:
-            diagnostic::warning("path `{}` not found", root_path_)
-              .primary(base_args_.url)
-              .emit(dh);
+            if (not base_args_.watch) {
+              diagnostic::error("`{}` does not exist", root_path_)
+                .primary(base_args_.url)
+                .emit(dh);
+              co_return;
+            }
             break;
           case arrow::fs::FileType::Unknown:
-            diagnostic::warning("path `{}` has unknown type", root_path_)
+            diagnostic::error("`{}` is unknown", root_path_)
               .primary(base_args_.url)
               .emit(dh);
-            break;
+            co_return;
           case arrow::fs::FileType::File:
-            files.push_back(std::move(root_info));
+            if (matches(root_info.path(), glob_)) {
+              files.push_back(std::move(root_info));
+              break;
+            }
+            if (not base_args_.watch) {
+              diagnostic::error("`{}` is a file, not a directory", root_path_)
+                .primary(base_args_.url)
+                .emit(dh);
+              co_return;
+            }
             break;
           case arrow::fs::FileType::Directory: {
             auto sel = arrow::fs::FileSelector{};
@@ -404,11 +424,11 @@ auto ArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
             while (true) {
               auto batch = co_await arrow_future_to_task(gen());
               if (not batch.ok()) {
-                diagnostic::warning("failed to scan `{}`", root_path_)
+                diagnostic::error("failed to scan `{}`", root_path_)
                   .primary(base_args_.url)
                   .note(batch.status().ToStringWithoutContextLines())
                   .emit(dh);
-                break;
+                co_return;
               }
               if (batch->empty()) {
                 break;
