@@ -87,9 +87,8 @@ auto record_generator::field(const ast::field_path& path) -> object_generator {
   return result;
 }
 
-auto record_generator::unflattened_field(std::string_view key,
-                                         std::string_view unflatten)
-  -> object_generator {
+auto record_generator::unflattened_field(
+  std::string_view key, std::string_view unflatten) -> object_generator {
   if (not msb_) {
     return object_generator{};
   }
@@ -434,8 +433,8 @@ auto list_generator::writable() -> bool {
   return msb_;
 }
 
-auto series_to_table_slice(series array, std::string_view fallback_name)
-  -> table_slice {
+auto series_to_table_slice(series array,
+                           std::string_view fallback_name) -> table_slice {
   TENZIR_ASSERT(is<record_type>(array.type));
   TENZIR_ASSERT(array.length() > 0);
   if (array.type.name().empty()) {
@@ -533,7 +532,8 @@ auto multi_series_builder::make_events_available_on_timeout(
       merging_flushed_ = now;
       return settings_.timeout;
     }
-    return now - merging_flushed_;
+    return settings_.timeout
+           - std::chrono::duration_cast<duration>(now - merging_flushed_);
   }
   complete_last_event();
   auto res = duration::max();
@@ -548,7 +548,7 @@ auto multi_series_builder::make_events_available_on_timeout(
       append_ready_events(entry.flush());
       continue;
     }
-    res = std::min(res, waiting);
+    res = std::min(res, settings_.timeout - waiting);
   }
   garbage_collect_where([now, timeout](entry_data const& e) {
     if (e.builder.length() != 0) {
