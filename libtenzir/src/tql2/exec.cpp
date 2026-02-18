@@ -547,12 +547,15 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
 
 /// Monotonic counters for profiling channel throughput.
 struct ChannelStats {
-  std::atomic<size_t> bytes_in{0};
-  std::atomic<size_t> bytes_out{0};
-  std::atomic<size_t> elements_in{0};
-  std::atomic<size_t> elements_out{0};
-  std::atomic<size_t> signals_in{0};
-  std::atomic<size_t> signals_out{0};
+  /// We group/align by in and out here, because that is the grouping in which
+  /// these are written.
+  struct alignas(std::hardware_destructive_interference_size) data {
+    std::atomic<size_t> bytes{0};
+    std::atomic<size_t> signals{0};
+    std::atomic<size_t> elements{0};
+  };
+  data in;
+  data out;
 };
 
 /// Data channel between two operators.
@@ -581,11 +584,11 @@ public:
     lock->current_bytes += bytes;
     // Update profiling counters.
     if (stats_) {
-      stats_->bytes_in.fetch_add(bytes, std::memory_order::relaxed);
+      stats_->in.bytes.fetch_add(bytes, std::memory_order::relaxed);
       if (is<Signal>(x)) {
-        stats_->signals_in.fetch_add(1, std::memory_order::relaxed);
+        stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
       } else {
-        stats_->elements_in.fetch_add(1, std::memory_order::relaxed);
+        stats_->in.elements.fetch_add(1, std::memory_order::relaxed);
       }
     }
     lock->queue.push_back(std::move(x));
@@ -608,11 +611,11 @@ public:
     lock->current_bytes -= bytes;
     // Update profiling counters.
     if (stats_) {
-      stats_->bytes_out.fetch_add(bytes, std::memory_order::relaxed);
+      stats_->out.bytes.fetch_add(bytes, std::memory_order::relaxed);
       if (is<Signal>(result)) {
-        stats_->signals_out.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
       } else {
-        stats_->elements_out.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.elements.fetch_add(1, std::memory_order::relaxed);
       }
     }
     notify_send_.notify_one();
@@ -982,17 +985,17 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
         }
         auto sample = ProfileSample{std::chrono::steady_clock::now(), {}};
         for (auto& p : profiles) {
-          auto bi = p.stats->bytes_in.load(std::memory_order::relaxed);
-          auto bo = p.stats->bytes_out.load(std::memory_order::relaxed);
+          auto bi = p.stats->in.bytes.load(std::memory_order::relaxed);
+          auto bo = p.stats->out.bytes.load(std::memory_order::relaxed);
           sample.channels.push_back({
             p.id.value,
             bi >= bo ? bi - bo : 0,
             bi,
             bo,
-            p.stats->elements_in.load(std::memory_order::relaxed),
-            p.stats->elements_out.load(std::memory_order::relaxed),
-            p.stats->signals_in.load(std::memory_order::relaxed),
-            p.stats->signals_out.load(std::memory_order::relaxed),
+            p.stats->in.elements.load(std::memory_order::relaxed),
+            p.stats->out.elements.load(std::memory_order::relaxed),
+            p.stats->in.signals.load(std::memory_order::relaxed),
+            p.stats->out.signals.load(std::memory_order::relaxed),
             p.max_bytes,
           });
         }
