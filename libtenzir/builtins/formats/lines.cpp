@@ -83,23 +83,22 @@ public:
       TENZIR_UNUSED(ctrl);
       auto builder = series_builder{};
       auto last_finish = std::chrono::steady_clock::now();
-      auto cutter
-        = [&]()
-            ->std::function<auto(generator<chunk_ptr>)
-                              -> generator<std::optional<std::string_view>>> {
-              if (nulls) {
-                return split_nulls;
-              }
-              if (split_at_regex) {
-                return tenzir::split_at_regex(split_at_regex->inner,
-                                              include_separator);
-              }
-              if (split_at_string) {
-                return tenzir::split_at_string(split_at_string->inner,
-                                               include_separator);
-              }
-              return to_lines;
-            }();
+      auto cutter = [&]()
+        -> std::function<auto(generator<chunk_ptr>)
+                           -> generator<std::optional<std::string_view>>> {
+        if (nulls) {
+          return split_nulls;
+        }
+        if (split_at_regex) {
+          return tenzir::split_at_regex(split_at_regex->inner,
+                                        include_separator);
+        }
+        if (split_at_string) {
+          return tenzir::split_at_string(split_at_string->inner,
+                                         include_separator);
+        }
+        return to_lines;
+      }();
       for (auto line : cutter(std::move(input))) {
         if (not line) {
           co_yield {};
@@ -318,8 +317,8 @@ public:
   explicit ReadLinesOperator(ReadLinesArgs args) : args_{args} {
   }
 
-  auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(chunk_ptr input, Push<table_slice>& push,
+               OpCtx& ctx) -> Task<void> override {
     if (not input or input->size() == 0) {
       co_return;
     }
@@ -416,8 +415,8 @@ public:
     return "read_lines";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     argument_parser2::operator_(name())
       .named("binary", args.binary)
@@ -467,8 +466,8 @@ public:
   explicit WriteLinesOperator(WriteLinesArgs args) : args_{args} {
   }
 
-  auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
-    -> Task<void> override {
+  auto process(table_slice input, Push<chunk_ptr>& push,
+               OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (input.rows() == 0) {
       co_return;
@@ -506,8 +505,8 @@ class write_lines final
   : public virtual operator_plugin2<writer_adapter<lines_printer>>,
     public virtual OperatorPlugin {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
     return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
   }
@@ -524,8 +523,8 @@ public:
     return "read_delimited_regex";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
     auto regex = ast::expression{};
@@ -583,8 +582,8 @@ public:
     return "read_delimited";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
     auto separator = ast::expression{};
@@ -633,8 +632,8 @@ public:
     return "read_all";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto binary_flag = std::optional<located<bool>>{};
     TRY(argument_parser2::operator_(name())
           .named("binary", binary_flag)
