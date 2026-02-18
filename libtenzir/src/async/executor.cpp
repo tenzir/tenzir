@@ -339,15 +339,14 @@ class Runner final : public OpCtx {
 public:
   Runner(AnyOperator op, AnyOpPull pull_upstream, AnyOpPush push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-         OpId id, ChannelFactory& channel_factory, caf::actor_system& sys,
-         DiagHandler& dh)
+         OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
     : op_{std::move(op)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
       id_{std::move(id)},
-      channel_factory_{channel_factory},
+      exec_ctx_{exec_ctx},
       dh_{dh},
       sys_{sys},
       input_is_void_{
@@ -543,7 +542,7 @@ private:
         return std::move(*result);
       });
     auto [push_downstream, pull_downstream]
-      = channel_factory_.make<table_slice>(id_.to(sub_id.op(0)));
+      = exec_ctx_.make<table_slice>(id_.to(sub_id.op(0)));
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver]
@@ -555,13 +554,13 @@ private:
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
         auto [push_upstream, pull_upstream]
-          = channel_factory_.make<In>(sub_id.op(chain.size()).to(id_));
+          = exec_ctx_.make<In>(sub_id.op(chain.size() - 1).to(id_));
         return {
           run_chain(std::move(chain), std::move(pull_upstream),
                     std::move(push_downstream),
                     std::move(from_control_receiver),
-                    std::move(to_control_sender), std::move(sub_id),
-                    channel_factory_, sys_, dh_),
+                    std::move(to_control_sender), std::move(sub_id), exec_ctx_,
+                    sys_, dh_),
           std::move(push_upstream),
         };
       });
@@ -1117,7 +1116,7 @@ private:
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   OpId id_;
-  ChannelFactory& channel_factory_;
+  ExecCtx& exec_ctx_;
   CensoringDiagHandler dh_;
   caf::actor_system& sys_;
   bool input_is_void_;
@@ -1152,9 +1151,8 @@ auto run_operator(Box<Operator<Input, Output>> op,
                   Box<Pull<OperatorMsg<Input>>> pull_upstream,
                   Box<Push<OperatorMsg<Output>>> push_downstream,
                   Receiver<FromControl> from_control,
-                  Sender<ToControl> to_control, OpId id,
-                  ChannelFactory& channel_factory, caf::actor_system& sys,
-                  DiagHandler& dh) -> Task<void> {
+                  Sender<ToControl> to_control, OpId id, ExecCtx& exec_ctx,
+                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await Runner{
     AnyOperator{std::move(op)},
@@ -1163,7 +1161,7 @@ auto run_operator(Box<Operator<Input, Output>> op,
     std::move(from_control),
     std::move(to_control),
     std::move(id),
-    channel_factory,
+    exec_ctx,
     sys,
     dh,
   }
@@ -1176,16 +1174,15 @@ class ChainRunner {
 public:
   ChainRunner(std::vector<AnyOperator> operators, AnyOpPull pull_upstream,
               AnyOpPush push_downstream, Receiver<FromControl> from_control,
-              Sender<ToControl> to_control, PipeId id,
-              ChannelFactory& channel_factory, caf::actor_system& sys,
-              DiagHandler& dh)
+              Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+              caf::actor_system& sys, DiagHandler& dh)
     : operators_{std::move(operators)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
       to_control_{std::move(to_control)},
       id_{std::move(id)},
-      channel_factory_{channel_factory},
+      exec_ctx_{exec_ctx},
       sys_{sys},
       dh_{dh} {
   }
@@ -1214,32 +1211,45 @@ private:
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         LOGI("got {}", typeid(*op).name());
         auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(next_input));
-        auto [output_sender, output_receiver]
-          = channel_factory_.make<Out>(id_.op(index).to(id_.op(index + 1)));
-        // TODO: This is a horrible hack.
         auto last = index == operators_.size() - 1;
-        if (last) {
-          output_sender
-            = std::move(as<Box<Push<OperatorMsg<Out>>>>(push_downstream_));
-        }
+        auto output_sender = [&]() -> Box<Push<OperatorMsg<Out>>> {
+          if (last) {
+            return std::move(as<Box<Push<OperatorMsg<Out>>>>(push_downstream_));
+          }
+          auto [sender, receiver]
+            = exec_ctx_.make<Out>(id_.op(index).to(id_.op(index + 1)));
+          next_input = std::move(receiver);
+          return std::move(sender);
+        }();
         auto [from_control_sender, from_control_receiver]
           = bounded_channel<FromControl>(16);
         auto [to_control_sender, to_control_receiver]
           = bounded_channel<ToControl>(16);
         operator_ctrl_.push_back(std::move(from_control_sender));
-        next_input = std::move(output_receiver);
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),
                                  std::move(to_control_sender), id_.op(index),
-                                 channel_factory_, sys_, dh_);
+                                 exec_ctx_, sys_, dh_);
+        auto executor = exec_ctx_.make_executor(id_.op(index));
         LOGI("spawning operator task");
-        queue_.spawn([task = std::move(task),
-                      index] mutable -> Task<std::pair<size_t, Terminated>> {
-          co_await std::move(task);
-          LOGI("got termination from operator {}", index);
-          co_return {index, Terminated{}};
-        });
+        if (executor) {
+          queue_.spawn([task = std::move(task), index,
+                        executor = std::move(executor)] mutable
+                         -> Task<std::pair<size_t, Terminated>> {
+            co_await folly::coro::co_withExecutor(std::move(executor),
+                                                  std::move(task));
+            LOGI("got termination from operator {}", index);
+            co_return {index, Terminated{}};
+          });
+        } else {
+          queue_.spawn([task = std::move(task),
+                        index] mutable -> Task<std::pair<size_t, Terminated>> {
+            co_await std::move(task);
+            LOGI("got termination from operator {}", index);
+            co_return {index, Terminated{}};
+          });
+        }
         LOGI("inserting control receiver task");
         queue_.spawn(
           [to_control_receiver = std::move(to_control_receiver), index] mutable
@@ -1368,7 +1378,7 @@ private:
   Receiver<FromControl> from_control_;
   Sender<ToControl> to_control_;
   PipeId id_;
-  ChannelFactory& channel_factory_;
+  ExecCtx& exec_ctx_;
   caf::actor_system& sys_;
   DiagHandler& dh_;
 
@@ -1395,8 +1405,8 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               PipeId id, ChannelFactory& channel_factory,
-               caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+               PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+               DiagHandler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   co_await ChainRunner{
     std::move(chain).unwrap(),
@@ -1405,7 +1415,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
     std::move(from_control),
     std::move(to_control),
     std::move(id),
-    channel_factory,
+    exec_ctx,
     sys,
     dh,
   }
@@ -1432,14 +1442,13 @@ auto new_pipe_id() -> PipeId {
 
 } // namespace
 
-auto run_pipeline(OperatorChain<void, void> pipeline,
-                  ChannelFactory& channel_factory, caf::actor_system& sys,
-                  DiagHandler& dh) -> Task<void> {
+auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
+                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
-    = channel_factory.make<void>(ChannelId::first(id.op(0)));
+    = exec_ctx.make<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
-    = channel_factory.make<void>(ChannelId::last(id.op(pipeline.size() + 1)));
+    = exec_ctx.make<void>(ChannelId::last(id.op(pipeline.size() - 1)));
   try {
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);
@@ -1453,8 +1462,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline,
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
                            std::move(from_control_receiver),
-                           std::move(to_control_sender), id, channel_factory,
-                           sys, dh);
+                           std::move(to_control_sender), id, exec_ctx, sys, dh);
         co_return std::monostate{};
       });
       // TODO: We just have this right now to simulate checkpointing.

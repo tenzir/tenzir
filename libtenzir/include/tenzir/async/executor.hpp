@@ -15,6 +15,7 @@
 #include "tenzir/async/generator.hpp"
 #include "tenzir/async/signal.hpp"
 
+#include <folly/Executor.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Mutex.h>
 #include <folly/coro/Synchronized.h>
@@ -175,12 +176,13 @@ inline auto OpId::to(OpId other) const -> ChannelId {
   return ChannelId{fmt::format("{} -> {}", value, other.value)};
 }
 
-/// Factory for the channels between operators.
+/// Factory for the channels between operators and optional per-operator
+/// executor creation for profiling.
 ///
 /// Implementations need to be thread-safe.
-class ChannelFactory {
+class ExecCtx {
 public:
-  virtual ~ChannelFactory() = default;
+  virtual ~ExecCtx() = default;
 
   template <class T>
   auto make(ChannelId id) -> PushPull<OperatorMsg<T>> {
@@ -193,6 +195,13 @@ public:
     } else {
       static_assert(false, "unknown type");
     }
+  }
+
+  /// Returns a per-operator executor if profiling is enabled, or an empty
+  /// KeepAlive to use the ambient executor.
+  virtual auto make_executor(OpId id) -> folly::Executor::KeepAlive<> {
+    TENZIR_UNUSED(id);
+    return {};
   }
 
 protected:
@@ -211,9 +220,8 @@ public:
 };
 
 /// Run a closed pipeline without external control.
-auto run_pipeline(OperatorChain<void, void> pipeline,
-                  ChannelFactory& channel_factory, caf::actor_system& sys,
-                  DiagHandler& dh) -> Task<void>;
+auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
+                  caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
 
 /// Run a right-open pipeline without external control.
 template <class Output>
@@ -235,7 +243,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Pull<OperatorMsg<Input>>> pull_upstream,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               PipeId id, ChannelFactory& channel_factory,
-               caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
+               PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+               DiagHandler& dh) -> Task<void>;
 
 } // namespace tenzir
