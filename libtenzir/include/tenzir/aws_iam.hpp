@@ -110,7 +110,6 @@ enum class AwsIamRegionRequirement {
 struct ResolvedAwsIamAuth {
   std::optional<aws_iam_options> options;
   std::optional<resolved_aws_credentials> credentials;
-  std::vector<secret_request> secret_requests;
 };
 
 /// Resolves already-parsed AWS IAM options into runtime auth state.
