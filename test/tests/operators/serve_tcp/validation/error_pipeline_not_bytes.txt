@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/serve_tcp/validation/error_pipeline_not_bytes.tql:5:20
+  |
+5 | serve_tcp ":31337" {
+  |                    ^ 
+  |

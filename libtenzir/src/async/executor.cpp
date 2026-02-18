@@ -678,19 +678,26 @@ private:
     }
     auto spawned = std::move(pipe).spawn(input);
     using AnySubChain = variant<
-      OperatorChain<void, table_slice>, OperatorChain<void, void>,
-      OperatorChain<table_slice, table_slice>, OperatorChain<table_slice, void>,
-      OperatorChain<chunk_ptr, table_slice>, OperatorChain<chunk_ptr, void>>;
+      OperatorChain<void, table_slice>, OperatorChain<void, chunk_ptr>,
+      OperatorChain<void, void>, OperatorChain<table_slice, table_slice>,
+      OperatorChain<table_slice, chunk_ptr>, OperatorChain<table_slice, void>,
+      OperatorChain<chunk_ptr, table_slice>,
+      OperatorChain<chunk_ptr, chunk_ptr>, OperatorChain<chunk_ptr, void>>;
     auto chain = match(input, [&]<class In>(tag<In>) -> AnySubChain {
       auto chain1
         = OperatorChain<In, table_slice>::try_from(std::move(spawned));
       if (chain1) {
         return std::move(chain1).unwrap();
       }
-      auto chain2
-        = OperatorChain<In, void>::try_from(std::move(chain1).unwrap_err());
+      auto chain2 = OperatorChain<In, chunk_ptr>::try_from(
+        std::move(chain1).unwrap_err());
       if (chain2) {
         return std::move(chain2).unwrap();
+      }
+      auto chain3
+        = OperatorChain<In, void>::try_from(std::move(chain2).unwrap_err());
+      if (chain3) {
+        return std::move(chain3).unwrap();
       }
       TENZIR_UNREACHABLE();
     });
@@ -730,6 +737,9 @@ private:
             co_await co_match(
               std::move(*output),
               [&](table_slice output) -> Task<void> {
+                co_await call_process_sub(make_view(key), std::move(output));
+              },
+              [&](chunk_ptr output) -> Task<void> {
                 co_await call_process_sub(make_view(key), std::move(output));
               },
               [&](Signal signal) -> Task<void> {
@@ -942,6 +952,19 @@ private:
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
           co_await op->process_sub(key, std::move(slice), wrapper, *this);
+        }
+      });
+  }
+
+  auto call_process_sub(SubKeyView key, chunk_ptr chunk) -> Task<void> {
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->process_sub(key, std::move(chunk), *this);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->process_sub(key, std::move(chunk), wrapper, *this);
         }
       });
   }
@@ -1683,6 +1706,29 @@ run_chain(OperatorChain<chunk_ptr, void> chain,
           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
   -> Task<void>;
 
+template auto
+run_chain(OperatorChain<void, chunk_ptr> chain,
+          Box<Pull<OperatorMsg<void>>> pull_upstream,
+          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<chunk_ptr, chunk_ptr> chain,
+          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<table_slice, chunk_ptr> chain,
+          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
 /// Run a potentially-open pipeline without external control.
 template <class Output>
   requires(not std::same_as<Output, void>)
