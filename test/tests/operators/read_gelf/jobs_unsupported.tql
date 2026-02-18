@@ -1,5 +1,0 @@
----
-error: true
----
-
-read_gelf _jobs=1
