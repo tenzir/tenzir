@@ -17,8 +17,6 @@
 #include "tenzir/http.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/series_builder.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -28,7 +26,6 @@
 
 #include <deque>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 namespace tenzir::plugins {
@@ -80,10 +77,6 @@ auto queue_executor_request(
   return true;
 }
 
-struct ToHttpTaskCompletion {
-  std::vector<table_slice> hook_slices;
-};
-
 struct ToHttpArgs {
   location op = location::unknown;
   ast::expression url;
@@ -98,7 +91,6 @@ struct ToHttpArgs {
   located<duration> connection_timeout{5s, location::unknown};
   located<uint64_t> max_retry_count{0, location::unknown};
   located<duration> retry_delay{1s, location::unknown};
-  std::optional<located<ir::pipeline>> hook;
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
     if (encode) {
@@ -138,18 +130,6 @@ struct ToHttpArgs {
         .hint("`paginate` must be `\"link\"`")
         .emit(dh);
       return failure::promise();
-    }
-    if (hook) {
-      auto output = hook->inner.infer_type(tag_v<table_slice>, dh);
-      if (not output) {
-        return failure::promise();
-      }
-      if (*output and (*output)->is_not<table_slice>()) {
-        diagnostic::error("pipeline must return events")
-          .primary(*hook)
-          .emit(dh);
-        return failure::promise();
-      }
     }
     auto tls_opts = tls ? tls_options{*tls, {.tls_default = false}}
                         : tls_options{{.tls_default = false}};
@@ -305,7 +285,6 @@ public:
         continue;
       }
       prepared_requests.push_back(PreparedRequest{
-        .request_data = std::move(request_data),
         .url = std::move(url),
         .method = std::move(*method),
         .body = std::move(body),
@@ -314,60 +293,30 @@ public:
         .tls_enabled = tls_enabled,
       });
     }
-    auto in_flight = std::deque<AsyncHandle<ToHttpTaskCompletion>>{};
+    auto in_flight = std::deque<AsyncHandle<void>>{};
     co_await async_scope([&](AsyncScope& scope) -> Task<void> {
       for (auto& request : prepared_requests) {
         while (in_flight.size() >= args_.parallel.inner) {
-          auto completion = co_await in_flight.front().join();
+          co_await in_flight.front().join();
           in_flight.pop_front();
-          co_await process_completion(std::move(completion), ctx);
         }
         in_flight.push_back(
           scope.spawn(
             [this, request = std::move(request)]() mutable
-              -> Task<ToHttpTaskCompletion> {
-              co_return co_await run_request_chain(std::move(request));
+              -> Task<void> {
+              co_await run_request_chain(std::move(request));
             }));
       }
       while (not in_flight.empty()) {
-        auto completion = co_await in_flight.front().join();
+        co_await in_flight.front().join();
         in_flight.pop_front();
-        co_await process_completion(std::move(completion), ctx);
       }
     });
     co_return;
   }
 
-  auto finalize(OpCtx&) -> Task<void> override {
-    upstream_done_ = true;
-    co_return;
-  }
-
-  auto process_sub(SubKeyView key, table_slice slice, OpCtx&) -> Task<void> override {
-    auto sub_key = materialize(key);
-    if (active_sub_keys_.find(sub_key) == active_sub_keys_.end()) {
-      co_return;
-    }
-    TENZIR_UNUSED(slice);
-    co_return;
-  }
-
-  auto finish_sub(SubKeyView key, OpCtx&) -> Task<void> override {
-    auto sub_key = materialize(key);
-    active_sub_keys_.erase(sub_key);
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    if ((aborted_ or upstream_done_) and active_sub_keys_.empty()) {
-      return OperatorState::done;
-    }
-    return OperatorState::unspecified;
-  }
-
 private:
   struct PreparedRequest {
-    data request_data;
     std::string url;
     std::string method;
     std::string body;
@@ -382,19 +331,7 @@ private:
     bool has_accept_header = false;
   };
 
-  auto process_completion(ToHttpTaskCompletion completion, OpCtx& ctx)
-    -> Task<void> {
-    if (not args_.hook) {
-      co_return;
-    }
-    for (auto& slice : completion.hook_slices) {
-      co_await spawn_hook_subpipeline(std::move(slice), ctx);
-    }
-    co_return;
-  }
-
-  auto run_request_chain(PreparedRequest request) const -> Task<ToHttpTaskCompletion> {
-    auto completion = ToHttpTaskCompletion{};
+  auto run_request_chain(PreparedRequest request) const -> Task<void> {
     auto pending = std::deque<ExecutorHttpRequest>{
       ExecutorHttpRequest{
         .url = request.url,
@@ -415,22 +352,12 @@ private:
       auto response_result = co_await perform_request(
         current_request, request.method, request.body, request.ssl_context);
       if (response_result.is_err()) {
-        auto err = std::move(response_result).unwrap_err();
-        if (args_.hook) {
-          completion.hook_slices.push_back(
-            make_hook_slice(request.request_data, current_request.url,
-                            std::nullopt, std::optional{std::move(err)}, false));
-        }
+        std::ignore = std::move(response_result).unwrap_err();
         break;
       }
       auto response = std::move(response_result).unwrap();
       auto const code = response.status_code;
       auto const ok = code >= 200 and code <= 399;
-      if (args_.hook) {
-        completion.hook_slices.push_back(
-          make_hook_slice(request.request_data, current_request.url, response,
-                          std::nullopt, ok));
-      }
       if (ok and args_.paginate and args_.paginate->inner == "link") {
         auto paginate_source = std::optional<location>{args_.paginate->source};
         if (auto next_url = http::next_url_from_link_headers(
@@ -445,7 +372,7 @@ private:
         break;
       }
     }
-    co_return completion;
+    co_return;
   }
 
   auto perform_request(ExecutorHttpRequest const& request,
@@ -464,48 +391,6 @@ private:
     co_return co_await http::send_request_with_retries(
       std::move(config), args_.max_retry_count.inner,
       to_chrono(args_.retry_delay.inner));
-  }
-
-  auto make_hook_slice(data const& request_data, std::string_view url,
-                       std::optional<http::ResponseData> response,
-                       std::optional<std::string> error, bool ok) const
-    -> table_slice {
-    auto sb = series_builder{};
-    auto rb = sb.record();
-    rb.field("request", request_data);
-    rb.field("url", url);
-    rb.field("ok", ok);
-    if (response) {
-      auto response_record = http::make_response_record(*response);
-      response_record.emplace("body", response->body);
-      rb.field("response", std::move(response_record));
-    }
-    if (error) {
-      rb.field("error", std::move(*error));
-    }
-    return sb.finish_assert_one_slice();
-  }
-
-  auto spawn_hook_subpipeline(table_slice slice, OpCtx& ctx) -> Task<void> {
-    TENZIR_ASSERT(args_.hook);
-    auto pipeline = args_.hook->inner;
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
-    auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, nullptr}, true);
-    if (not sub_result) {
-      co_return;
-    }
-    auto sub_key = data{next_sub_key_++};
-    active_sub_keys_.insert(sub_key);
-    auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
-                                      tag_v<table_slice>);
-    auto open_pipeline = as<OpenPipeline<table_slice>>(sub);
-    auto push_result = co_await open_pipeline.push(std::move(slice));
-    if (push_result.is_err()) {
-      active_sub_keys_.erase(sub_key);
-      co_return;
-    }
-    co_await open_pipeline.close();
   }
 
   auto evaluate_headers(table_slice const& input,
@@ -676,9 +561,6 @@ private:
   }
 
   ToHttpArgs args_;
-  std::unordered_set<data> active_sub_keys_;
-  uint64_t next_sub_key_ = 0;
-  bool upstream_done_ = false;
   bool aborted_ = false;
 };
 
@@ -701,7 +583,6 @@ auto make_to_http_description() -> Description {
     = d.named_optional("max_retry_count", &ToHttpArgs::max_retry_count);
   auto retry_delay
     = d.named_optional("retry_delay", &ToHttpArgs::retry_delay);
-  auto hook = d.pipeline(&ToHttpArgs::hook);
   d.validate([=](ValidateCtx& ctx) -> Empty {
     auto args = ToHttpArgs{};
     args.op = ctx.get_location(url).value_or(location::unknown);
@@ -740,9 +621,6 @@ auto make_to_http_description() -> Description {
     }
     if (auto x = ctx.get(retry_delay)) {
       args.retry_delay = *x;
-    }
-    if (auto x = ctx.get(hook)) {
-      args.hook = *x;
     }
     std::ignore = args.validate(ctx);
     return {};

@@ -1,6 +1,0 @@
-error: pipeline must return events
- --> tests/operators/to_http/to_http_hook_requires_sink.tql:8:34
-  |
-8 | to_http "http://127.0.0.1:31337" {
-  |                                  ^^^^^^^^^^^^^ 
-  |
