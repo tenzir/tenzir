@@ -711,28 +711,11 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   co_return {};
 }
 
-auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
-                       DiagHandler& dh) -> failure_or<void> {
-  // TODO: Decide where the deduplication should happen and move this.
-#if 0
-  TENZIR_INFO("running pipeline on a single thread");
-  TRY(auto result, folly::coro::blockingWait(run_plan(std::move(ops), sys, dedup)));
-#else
-  TENZIR_INFO("running pipeline on {} threads",
-              folly::getGlobalCPUExecutorCounters().numThreads);
-  TRY(auto result,
-      folly::coro::blockingWait(folly::coro::co_withExecutor(
-        folly::getGlobalCPUExecutor(), run_plan(std::move(ops), sys, dh))));
-#endif
-  LOGI("end blocking");
-  TRY(dh.failure());
-  return result;
-}
-
 /// Wraps a legacy `diagnostic_handler` into a `DiagHandler`.
-class DiagHandlerWrapper final : public DiagHandler {
+class ExecDiagHandler final : public DiagHandler {
 public:
-  explicit DiagHandlerWrapper(diagnostic_handler& dh) : dh_{dh} {
+  ExecDiagHandler(diagnostic_handler& dh, folly::CancellationSource& source)
+    : dh_{dh}, cancel_source_{source} {
   }
 
   auto emit(diagnostic d) -> void override {
@@ -741,6 +724,7 @@ public:
     if (dedup_.insert(d)) {
       if (d.severity == severity::error) {
         failure_ = failure::promise();
+        cancel_source_->requestCancellation();
       }
       dh_->emit(std::move(d));
     }
@@ -754,9 +738,36 @@ public:
 private:
   std::mutex mutex_;
   Ref<diagnostic_handler> dh_;
+  Ref<folly::CancellationSource> cancel_source_;
   diagnostic_deduplicator dedup_;
   failure_or<void> failure_;
 };
+
+auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
+                       diagnostic_handler& dh) -> failure_or<void> {
+  auto cancel_source = folly::CancellationSource{};
+  auto diag_handler = ExecDiagHandler{dh, cancel_source};
+  auto task = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
+    co_return co_await folly::coro::co_awaitTry(
+      folly::coro::co_withCancellation(
+        cancel_source.getToken(), run_plan(std::move(ops), sys, diag_handler)));
+  });
+#if 0
+  TENZIR_INFO("running pipeline on a single thread");
+  auto result = folly::coro::blockingWait(std::move(task));
+#else
+  TENZIR_INFO("running pipeline on {} threads",
+              folly::getGlobalCPUExecutorCounters().numThreads);
+  auto result = folly::coro::blockingWait(folly::coro::co_withExecutor(
+    folly::getGlobalCPUExecutor(), std::move(task)));
+#endif
+  LOGI("end blocking");
+  if (result.is_cancelled()) {
+    TRY(diag_handler.failure());
+    panic("pipeline got cancelled without error");
+  }
+  return std::move(result).unwrap();
+}
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
@@ -837,8 +848,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
-  auto dh = DiagHandlerWrapper{ctx};
-  TRY(run_plan_blocking(std::move(spawned), sys, dh));
+  TRY(run_plan_blocking(std::move(spawned), sys, ctx));
   return true;
 }
 
