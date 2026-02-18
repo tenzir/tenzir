@@ -65,7 +65,8 @@ jobs:
       - name: Check
         run: |
           set -eo pipefail
-          pip install --upgrade clang-format
+          CLANG_FORMAT_VERSION=$(cat .clang-format-version)
+          pip install --upgrade clang-format=="${CLANG_FORMAT_VERSION}"
           which clang-format
           clang-format --version
           git add --intent-to-add --all
