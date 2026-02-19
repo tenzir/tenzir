@@ -37,6 +37,7 @@
 #include <caf/scheduler.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
+#include <folly/Demangle.h>
 #include <folly/coro/BlockingWait.h>
 #include <tsl/robin_set.h>
 
@@ -795,6 +796,23 @@ public:
     return ka;
   }
 
+  auto register_op_name(OpId id, std::type_info const& type) -> void override {
+    auto demangled = folly::demangle(type);
+    auto name = std::string{demangled};
+    // Strip namespace prefix, keeping only the class name.
+    auto pos = name.rfind("::");
+    if (pos != std::string::npos) {
+      name = name.substr(pos + 2);
+    }
+    auto lock = std::scoped_lock{mutex_};
+    op_type_names_[id.value] = std::move(name);
+  }
+
+  auto op_type_names() -> std::unordered_map<std::string, std::string> {
+    auto lock = std::scoped_lock{mutex_};
+    return op_type_names_;
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
     return make_profiled_channel<void>(std::move(id), void_limit);
@@ -837,6 +855,7 @@ private:
   std::vector<ExecutorProfile> executor_profiles_;
   // Owns the ProfilingExecutor instances to keep them alive.
   std::vector<std::unique_ptr<ProfilingExecutor>> executors_;
+  std::unordered_map<std::string, std::string> op_type_names_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -873,9 +892,10 @@ struct ProfileSample {
   std::vector<Executor> executors;
 };
 
-void write_profile(std::string const& path,
-                   std::vector<ProfileSample> const& samples,
-                   std::chrono::steady_clock::time_point t0) {
+void write_profile(
+  std::string const& path, std::vector<ProfileSample> const& samples,
+  std::chrono::steady_clock::time_point t0,
+  std::unordered_map<std::string, std::string> const& op_type_names) {
   auto f = std::ofstream{path};
   if (not f) {
     TENZIR_WARN("failed to open profile output file: {}", path);
@@ -979,9 +999,23 @@ void write_profile(std::string const& path,
       R"pp({{"ph": "M", "pid": {}, "name": "process_sort_index", "args": {{"sort_index": {}}}}})pp",
       pid, sort_index));
   };
+  // Look up the operator type name for a given op name. The op name may have
+  // a suffix like " (io)" or " (subs)", so we strip it to find the base ID.
+  auto display_name = [&](std::string const& name) -> std::string {
+    auto base = name;
+    auto space = base.find(' ');
+    if (space != std::string::npos) {
+      base = base.substr(0, space);
+    }
+    auto it = op_type_names.find(base);
+    if (it != op_type_names.end()) {
+      return fmt::format("{}: {}", name, it->second);
+    }
+    return name;
+  };
   emit_process(pid_totals, "Totals", 0);
   for (size_t i = 0; i < op_names.size(); ++i) {
-    emit_process(op_pid(i), op_names[i], static_cast<int>(i) + 1);
+    emit_process(op_pid(i), display_name(op_names[i]), static_cast<int>(i) + 1);
   }
   auto emit_counter = [&](char const* name, int pid, int64_t us, double val) {
     emit(fmt::format(
@@ -1221,7 +1255,7 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
     sampler->join();
-    write_profile(*profile_path, samples, t0);
+    write_profile(*profile_path, samples, t0, exec_ctx.op_type_names());
   }
   co_return {};
 }

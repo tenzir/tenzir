@@ -1254,6 +1254,7 @@ private:
       auto index = detail::narrow<size_t>(&op - operators_.data());
       co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
         LOGI("got {}", typeid(*op).name());
+        exec_ctx_.register_op_name(id_.op(index), typeid(*op));
         auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(next_input));
         auto last = index == operators_.size() - 1;
         auto output_sender = [&]() -> Box<Push<OperatorMsg<Out>>> {
