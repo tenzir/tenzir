@@ -29,6 +29,7 @@ let
       fluent-bit,
       protobuf,
       google-cloud-cpp-tenzir,
+      crc32c, # should be propagated by google-cloud-cpp.
       grpc,
       spdlog,
       simdjson,
@@ -274,6 +275,7 @@ let
               libsodium
               snappy
               google-cloud-cpp-tenzir
+              crc32c
               grpc
               libmaxminddb
               jemalloc-tenzir
