@@ -11,14 +11,11 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/collect.hpp>
-#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/ir.hpp>
 #include <tenzir/null_bitmap.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -59,10 +56,20 @@ auto make_keys_expression(std::vector<ast::expression> exprs)
 }
 
 struct configuration;
+struct DeduplicateArgs;
 struct State;
 
 auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
   -> failure_or<configuration>;
+
+auto make_configuration(std::vector<ast::expression> keys,
+                        std::optional<located<int64_t>> limit,
+                        std::optional<located<int64_t>> distance,
+                        std::optional<located<duration>> create_timeout,
+                        std::optional<located<duration>> write_timeout,
+                        std::optional<located<duration>> read_timeout,
+                        std::optional<ast::field_path> count_field,
+                        diagnostic_handler& dh) -> failure_or<configuration>;
 
 auto get_cleanup_duration(const configuration& cfg) -> duration;
 
@@ -82,6 +89,26 @@ struct configuration {
   std::optional<ast::field_path> count_field;
 
   friend auto inspect(auto& f, configuration& x) -> bool {
+    return f.object(x).fields(f.field("keys", x.keys),
+                              f.field("limit", x.limit),
+                              f.field("distance", x.distance),
+                              f.field("create_timeout", x.create_timeout),
+                              f.field("write_timeout", x.write_timeout),
+                              f.field("read_timeout", x.read_timeout),
+                              f.field("count_field", x.count_field));
+  }
+};
+
+struct DeduplicateArgs {
+  std::vector<ast::expression> keys;
+  std::optional<located<int64_t>> limit;
+  std::optional<located<int64_t>> distance;
+  std::optional<located<duration>> create_timeout;
+  std::optional<located<duration>> write_timeout;
+  std::optional<located<duration>> read_timeout;
+  std::optional<ast::field_path> count_field;
+
+  friend auto inspect(auto& f, DeduplicateArgs& x) -> bool {
     return f.object(x).fields(f.field("keys", x.keys),
                               f.field("limit", x.limit),
                               f.field("distance", x.distance),
@@ -163,6 +190,120 @@ struct deduplicate_state {
   }
 };
 
+auto make_configuration(std::vector<ast::expression> keys,
+                        std::optional<located<int64_t>> limit,
+                        std::optional<located<int64_t>> distance,
+                        std::optional<located<duration>> create_timeout,
+                        std::optional<located<duration>> write_timeout,
+                        std::optional<located<duration>> read_timeout,
+                        std::optional<ast::field_path> count_field,
+                        diagnostic_handler& dh) -> failure_or<configuration> {
+  auto seen_general_expression = false;
+  auto normalized_keys = std::vector<ast::expression>{};
+  normalized_keys.reserve(keys.size());
+  auto failed = false;
+  for (auto& key : keys) {
+    if (auto selector = ast::field_path::try_from(ast::expression{key})) {
+      if (selector->has_this() or selector->path().empty()) {
+        diagnostic::error("cannot deduplicate `this` explicitly")
+          .primary(*selector)
+          .emit(dh);
+        failed = true;
+        continue;
+      }
+      if (seen_general_expression) {
+        diagnostic::error("cannot mix field selectors with general expressions")
+          .primary(key)
+          .emit(dh);
+        failed = true;
+        continue;
+      }
+      normalized_keys.push_back(std::move(*selector).unwrap());
+      continue;
+    }
+    if (seen_general_expression) {
+      diagnostic::error("expected selector").primary(key).emit(dh);
+      failed = true;
+      continue;
+    }
+    if (not normalized_keys.empty()) {
+      diagnostic::error("cannot mix field selectors with general expressions")
+        .primary(key)
+        .emit(dh);
+      failed = true;
+      continue;
+    }
+    seen_general_expression = true;
+    normalized_keys.push_back(std::move(key));
+  }
+  auto cfg = configuration{};
+  cfg.keys = normalized_keys.empty()
+               ? ast::expression{ast::this_{location::unknown}}
+               : make_keys_expression(std::move(normalized_keys));
+  cfg.limit = limit.value_or(located{1, location::unknown});
+  cfg.distance = distance;
+  cfg.create_timeout = create_timeout;
+  cfg.write_timeout = write_timeout;
+  cfg.read_timeout = read_timeout;
+  cfg.count_field = std::move(count_field);
+  if (cfg.limit.inner < 1) {
+    diagnostic::error("limit must be at least 1").primary(cfg.limit).emit(dh);
+    failed = true;
+  }
+  if (cfg.distance and cfg.distance->inner < 1) {
+    diagnostic::error("distance must be at least 1")
+      .primary(*cfg.distance)
+      .emit(dh);
+    failed = true;
+  }
+  if (cfg.read_timeout and cfg.read_timeout->inner < duration::zero()) {
+    diagnostic::error("read timeout must be positive")
+      .primary(*cfg.read_timeout)
+      .emit(dh);
+    failed = true;
+  }
+  if (cfg.write_timeout and cfg.write_timeout->inner < duration::zero()) {
+    diagnostic::error("write timeout must be positive")
+      .primary(*cfg.write_timeout)
+      .emit(dh);
+    failed = true;
+  }
+  if (cfg.create_timeout and cfg.create_timeout->inner < duration::zero()) {
+    diagnostic::error("create timeout must be positive")
+      .primary(*cfg.create_timeout)
+      .emit(dh);
+    failed = true;
+  }
+  if (cfg.read_timeout and cfg.write_timeout
+      and cfg.read_timeout->inner >= cfg.write_timeout->inner) {
+    diagnostic::error("read timeout must be less than write timeout")
+      .primary(*cfg.read_timeout)
+      .secondary(*cfg.write_timeout)
+      .emit(dh);
+    failed = true;
+  }
+  if (cfg.read_timeout and cfg.create_timeout
+      and cfg.read_timeout->inner >= cfg.create_timeout->inner) {
+    diagnostic::error("read timeout must be less than create timeout")
+      .primary(*cfg.read_timeout)
+      .secondary(*cfg.create_timeout)
+      .emit(dh);
+    failed = true;
+  }
+  if (cfg.write_timeout and cfg.create_timeout
+      and cfg.write_timeout->inner >= cfg.create_timeout->inner) {
+    diagnostic::error("write timeout must be less than create timeout")
+      .primary(*cfg.write_timeout)
+      .secondary(*cfg.create_timeout)
+      .emit(dh);
+    failed = true;
+  }
+  if (failed) {
+    return failure::promise();
+  }
+  return cfg;
+}
+
 auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
   -> failure_or<configuration> {
   auto expressions = std::vector<ast::expression>{};
@@ -214,7 +355,7 @@ auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
     expressions.push_back(std::move(arg));
   }
   auto limit = std::optional<located<int64_t>>{};
-  auto cfg = configuration{};
+  auto cfg = DeduplicateArgs{};
   auto parser = argument_parser2::operator_("deduplicate");
   [[maybe_unused]] auto unused_key = std::optional<ast::expression>{};
   parser.positional("key", unused_key, "any");
@@ -227,69 +368,9 @@ auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
   auto parser_inv
     = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
   TRY(parser.parse(parser_inv, ctx));
-  if (expressions.empty()) {
-    cfg.keys = ast::this_{location::unknown};
-  } else {
-    cfg.keys = make_keys_expression(std::move(expressions));
-  }
-  cfg.limit = limit.value_or(located{1, location::unknown});
-  auto failed = false;
-  if (cfg.limit.inner < 1) {
-    diagnostic::error("limit must be at least 1").primary(cfg.limit).emit(ctx);
-    failed = true;
-  }
-  if (cfg.distance and cfg.distance->inner < 1) {
-    diagnostic::error("distance must be at least 1")
-      .primary(*cfg.distance)
-      .emit(ctx);
-    failed = true;
-  }
-  if (cfg.read_timeout and cfg.read_timeout->inner < duration::zero()) {
-    diagnostic::error("read timeout must be positive")
-      .primary(*cfg.read_timeout)
-      .emit(ctx);
-    failed = true;
-  }
-  if (cfg.write_timeout and cfg.write_timeout->inner < duration::zero()) {
-    diagnostic::error("write timeout must be positive")
-      .primary(*cfg.write_timeout)
-      .emit(ctx);
-    failed = true;
-  }
-  if (cfg.create_timeout and cfg.create_timeout->inner < duration::zero()) {
-    diagnostic::error("create timeout must be positive")
-      .primary(*cfg.create_timeout)
-      .emit(ctx);
-    failed = true;
-  }
-  if (cfg.read_timeout and cfg.write_timeout
-      and cfg.read_timeout->inner >= cfg.write_timeout->inner) {
-    diagnostic::error("read timeout must be less than write timeout")
-      .primary(*cfg.read_timeout)
-      .secondary(*cfg.write_timeout)
-      .emit(ctx);
-    failed = true;
-  }
-  if (cfg.read_timeout and cfg.create_timeout
-      and cfg.read_timeout->inner >= cfg.create_timeout->inner) {
-    diagnostic::error("read timeout must be less than create timeout")
-      .primary(*cfg.read_timeout)
-      .secondary(*cfg.create_timeout)
-      .emit(ctx);
-    failed = true;
-  }
-  if (cfg.write_timeout and cfg.create_timeout
-      and cfg.write_timeout->inner >= cfg.create_timeout->inner) {
-    diagnostic::error("write timeout must be less than create timeout")
-      .primary(*cfg.write_timeout)
-      .secondary(*cfg.create_timeout)
-      .emit(ctx);
-    failed = true;
-  }
-  if (failed) {
-    return failure::promise();
-  }
-  return cfg;
+  return make_configuration(std::move(expressions), limit, cfg.distance,
+                            cfg.create_timeout, cfg.write_timeout,
+                            cfg.read_timeout, cfg.count_field, ctx);
 }
 
 auto get_cleanup_duration(const configuration& cfg) -> duration {
@@ -523,18 +604,20 @@ private:
   configuration cfg_{};
 };
 
-class Deduplicate final : public Operator<table_slice, table_slice>,
-                          public ir::Operator {
+auto make_configuration_checked(DeduplicateArgs args) -> configuration {
+  auto dh = null_diagnostic_handler{};
+  auto cfg = make_configuration(
+    std::move(args.keys), std::move(args.limit), std::move(args.distance),
+    std::move(args.create_timeout), std::move(args.write_timeout),
+    std::move(args.read_timeout), std::move(args.count_field), dh);
+  TENZIR_ASSERT(cfg);
+  return std::move(*cfg);
+}
+
+class Deduplicate final : public Operator<table_slice, table_slice> {
 public:
-  Deduplicate() = default;
-
-  explicit Deduplicate(configuration cfg)
-    : Deduplicate{location::unknown, std::move(cfg)} {
-  }
-
-  Deduplicate(location loc, configuration cfg)
-    : loc_{loc},
-      cfg_{std::move(cfg)},
+  explicit Deduplicate(DeduplicateArgs args)
+    : cfg_{make_configuration_checked(std::move(args))},
       cleanup_duration_{get_cleanup_duration(cfg_)} {
   }
 
@@ -552,57 +635,7 @@ public:
     serde("row", row_);
   }
 
-  auto name() const -> std::string override {
-    return "deduplicate_ir";
-  }
-
-  auto main_location() const -> location override {
-    return loc_;
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    TENZIR_UNUSED(instantiate);
-    TRY(cfg_.keys.substitute(ctx));
-    return {};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    if (input.is_not<table_slice>()) {
-      diagnostic::error("`deduplicate` expects events")
-        .primary(main_location())
-        .emit(dh);
-      return failure::promise();
-    }
-    return tag_v<table_slice>;
-  }
-
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
-    if (cfg_.distance) {
-      return std::move(*this).ir::Operator::optimize(std::move(filter), order);
-    }
-    auto replacement = ir::pipeline{};
-    replacement.operators.push_back(std::move(*this).move());
-    return ir::optimize_result{
-      std::move(filter),
-      event_order::ordered,
-      std::move(replacement),
-    };
-  }
-
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return Deduplicate{std::move(cfg_)};
-  }
-
-  friend auto inspect(auto& f, Deduplicate& x) -> bool {
-    return f.object(x).fields(f.field("loc", x.loc_), f.field("cfg", x.cfg_));
-  }
-
 private:
-  location loc_ = location::unknown;
   configuration cfg_;
   duration cleanup_duration_;
   tsl::robin_map<data, State> states_;
@@ -612,31 +645,50 @@ private:
 };
 
 class plugin final : public operator_plugin2<deduplicate_operator>,
-                     public virtual operator_compiler_plugin {
+                     public virtual OperatorPlugin {
 public:
+  auto describe() const -> Description override {
+    auto d = Describer<DeduplicateArgs, Deduplicate>{};
+    auto keys = d.optional_variadic("key", &DeduplicateArgs::keys, "any");
+    auto limit = d.named("limit", &DeduplicateArgs::limit);
+    auto distance = d.named("distance", &DeduplicateArgs::distance);
+    auto create_timeout
+      = d.named("create_timeout", &DeduplicateArgs::create_timeout);
+    auto write_timeout
+      = d.named("write_timeout", &DeduplicateArgs::write_timeout);
+    auto read_timeout = d.named("read_timeout", &DeduplicateArgs::read_timeout);
+    auto count_field = d.named("count_field", &DeduplicateArgs::count_field);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      auto key_values = ctx.get_all(keys);
+      auto key_exprs = std::vector<ast::expression>{};
+      key_exprs.reserve(key_values.size());
+      for (auto& value : key_values) {
+        if (not value) {
+          return {};
+        }
+        key_exprs.push_back(std::move(*value));
+      }
+      auto result
+        = make_configuration(std::move(key_exprs), ctx.get(limit),
+                             ctx.get(distance), ctx.get(create_timeout),
+                             ctx.get(write_timeout), ctx.get(read_timeout),
+                             ctx.get(count_field), ctx);
+      if (not result) {
+        return {};
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto cfg, parse_configuration(std::move(inv), ctx));
     return std::make_unique<deduplicate_operator>(std::move(cfg));
   }
-
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
-    auto provider = session_provider::make(ctx);
-    auto loc = inv.op.get_location();
-    auto legacy_inv = operator_factory_plugin::invocation{std::move(inv.op),
-                                                          std::move(inv.args)};
-    TRY(auto cfg,
-        parse_configuration(std::move(legacy_inv), provider.as_session()));
-    TRY(cfg.keys.bind(ctx));
-    return Deduplicate{loc, std::move(cfg)};
-  }
 };
-
-using deduplicate_ir_plugin = inspection_plugin<ir::Operator, Deduplicate>;
 
 } // namespace
 } // namespace tenzir::plugins::deduplicate
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::deduplicate_ir_plugin)
