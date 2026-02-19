@@ -1305,8 +1305,8 @@ void write_profile(
     prev_execs = std::move(cur_execs);
   }
   // Emit backpressure duration bars from channel profiles.
-  // Each channel's events are routed to the sender operator's pid (same
-  // routing as "In" metrics). Uses tid=1 for a dedicated track row.
+  // Backpressure is routed to the *receiver* operator (the bottleneck whose
+  // input buffer filled up), using the same routing as "Out" metrics.
   auto bp_pids_emitted = std::unordered_set<int>{};
   auto has_any_bp = false;
   for (auto const& prof : channel_profiles) {
@@ -1320,32 +1320,32 @@ void write_profile(
     }
     auto sender = prof.id.value.substr(0, sep);
     auto receiver = prof.id.value.substr(sep + 4);
-    if (sender == "_") {
+    if (receiver == "_") {
       continue;
     }
-    // Apply the same routing as "In" metrics.
-    auto sender_target = std::string{};
-    if (receiver != "_" and is_child_of(receiver, sender)) {
-      sender_target = sub_op_name(sender);
+    // Apply the same routing as "Out" metrics.
+    auto receiver_target = std::string{};
+    if (sender != "_" and is_child_of(sender, receiver)) {
+      receiver_target = sub_op_name(receiver);
     } else {
-      sender_target = sender;
+      receiver_target = receiver;
     }
-    auto it = op_index.find(sender_target);
+    auto it = op_index.find(receiver_target);
     if (it == op_index.end()) {
       continue;
     }
     auto pid = op_pid(it->second);
-    auto op_name = display_name(sender_target);
+    auto op_name = display_name(receiver_target);
     // Emit thread name metadata once per pid.
     if (bp_pids_emitted.insert(pid).second) {
       emit(fmt::format(
-        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Backpressure"}}}})pp",
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocked Upstream"}}}})pp",
         pid));
     }
     if (not has_any_bp) {
       has_any_bp = true;
       emit(fmt::format(
-        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Backpressure"}}}})pp",
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocked Upstream"}}}})pp",
         pid_totals));
     }
     for (auto const& ev : prof.stats->backpressure_events) {
@@ -1357,9 +1357,9 @@ void write_profile(
                       .count();
       // Per-operator bar.
       emit(fmt::format(
-        R"pp({{"ph": "X", "name": "Backpressure", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
+        R"pp({{"ph": "X", "name": "", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
         pid, start_us, dur_us));
-      // Totals bar, named after the operator.
+      // Global bar, named after the operator.
       emit(fmt::format(
         R"pp({{"ph": "X", "name": "{}", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
         op_name, pid_totals, start_us, dur_us));
