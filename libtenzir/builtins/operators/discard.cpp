@@ -51,7 +51,7 @@ public:
 };
 
 template <class Input>
-class DiscardImpl final : public Operator<Input, void> {
+class Discard final : public Operator<Input, void> {
 public:
   auto start(OpCtx&) -> Task<void> override {
     co_return;
@@ -81,7 +81,7 @@ public:
       if constexpr (std::is_void_v<T>) {
         TENZIR_UNREACHABLE();
       } else {
-        return DiscardImpl<T>{};
+        return Discard<T>{};
       }
     });
   }
