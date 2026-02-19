@@ -999,19 +999,61 @@ void write_profile(
       }
     }
   }
-  // Sort operator names: main operators first, then (subs) entries, then
-  // sub-pipeline operators. Within each group, sort lexicographically.
-  auto op_sort_key
-    = [](std::string const& name) -> std::pair<size_t, std::string const&> {
+  // Sort operator names with natural ordering: numeric segments are compared
+  // as numbers so "0/2" comes before "0/10". Main operators come first, then
+  // (subs) entries, then sub-pipeline operators.
+  auto natural_less = [](std::string_view a, std::string_view b) -> bool {
+    auto ai = size_t{0};
+    auto bi = size_t{0};
+    while (ai < a.size() and bi < b.size()) {
+      auto a_digit = std::isdigit(static_cast<unsigned char>(a[ai]));
+      auto b_digit = std::isdigit(static_cast<unsigned char>(b[bi]));
+      if (a_digit and b_digit) {
+        // Compare numeric segments by value.
+        auto a_start = ai;
+        auto b_start = bi;
+        while (ai < a.size()
+               and std::isdigit(static_cast<unsigned char>(a[ai]))) {
+          ++ai;
+        }
+        while (bi < b.size()
+               and std::isdigit(static_cast<unsigned char>(b[bi]))) {
+          ++bi;
+        }
+        auto a_len = ai - a_start;
+        auto b_len = bi - b_start;
+        if (a_len != b_len) {
+          return a_len < b_len;
+        }
+        auto cmp = a.substr(a_start, a_len).compare(b.substr(b_start, b_len));
+        if (cmp != 0) {
+          return cmp < 0;
+        }
+      } else {
+        if (a[ai] != b[bi]) {
+          return a[ai] < b[bi];
+        }
+        ++ai;
+        ++bi;
+      }
+    }
+    return a.size() < b.size();
+  };
+  auto op_sort_key = [](std::string const& name) -> std::pair<size_t, size_t> {
     auto is_subs = name.ends_with(" (subs)");
     auto base = is_subs ? std::string_view{name}.substr(0, name.size() - 7)
                         : std::string_view{name};
     auto depth = std::count(base.begin(), base.end(), '-');
-    return {static_cast<size_t>(depth) * 2 + (is_subs ? 1 : 0), name};
+    return {static_cast<size_t>(depth) * 2 + (is_subs ? 1 : 0), 0};
   };
   std::sort(op_names.begin(), op_names.end(),
             [&](std::string const& a, std::string const& b) {
-              return op_sort_key(a) < op_sort_key(b);
+              auto ka = op_sort_key(a);
+              auto kb = op_sort_key(b);
+              if (ka.first != kb.first) {
+                return ka.first < kb.first;
+              }
+              return natural_less(a, b);
             });
   op_index.clear();
   for (size_t i = 0; i < op_names.size(); ++i) {
