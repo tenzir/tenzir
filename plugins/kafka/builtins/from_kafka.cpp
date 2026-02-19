@@ -424,6 +424,13 @@ public:
     if (done_) {
       co_return;
     }
+    read_bytes_counter_
+      = ctx.make_counter(metrics_label{
+                           .key = "operator",
+                           .value = "from_kafka",
+                         },
+                         metrics_direction::read,
+                         metrics_visibility::external_);
     initialize_perf_tracking();
     auto auth = co_await resolve_aws_iam_auth(
       args_.aws_iam, args_.aws_region, ctx,
@@ -1233,6 +1240,7 @@ private:
                        static_cast<uint64_t>(fetched.messages.size()));
       add_perf_counter(perf_.fetched_payload_bytes, fetched.payload_bytes);
     }
+    read_bytes_counter_.add(static_cast<uint64_t>(fetched.payload_bytes));
     auto reserved_bytes = fetched.payload_bytes;
     if (reserved_bytes > 0) {
       auto budget_started = std::chrono::steady_clock::time_point{};
@@ -1521,6 +1529,7 @@ private:
   std::unordered_set<int32_t> eof_partitions_;
   // Optional counters for benchmarking; enabled via env flag.
   mutable FromKafkaPerfCounters perf_;
+  mutable metrics_counter read_bytes_counter_ = {};
   mutable std::atomic<bool> perf_reported_ = false;
   bool perf_enabled_ = false;
   bool perf_started_ = false;
