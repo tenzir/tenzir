@@ -199,27 +199,22 @@ private:
 };
 
 struct DropArgs {
-  std::vector<ast::expression> fields;
+  std::vector<ast::field_path> fields;
 };
 
 class Drop final : public Operator<table_slice, table_slice> {
 public:
-  explicit Drop(DropArgs args) {
-    for (auto& field : args.fields) {
-      auto fp = ast::field_path::try_from(field);
-      TENZIR_ASSERT(fp);
-      fields_.push_back(*fp);
-    }
+  explicit Drop(DropArgs args) : args_{std::move(args)} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto result = tenzir::drop(input, fields_, ctx.dh(), true);
+    auto result = tenzir::drop(input, args_.fields, ctx.dh(), true);
     co_await push(std::move(result));
   }
 
 private:
-  std::vector<ast::field_path> fields_;
+  DropArgs args_;
 };
 
 class plugin2 final : public virtual operator_plugin2<drop_operator2>,
@@ -230,23 +225,13 @@ public:
     auto fields = d.variadic("fields", &DropArgs::fields, "field");
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);
-      auto locations = ctx.get_locations(fields);
-      TENZIR_ASSERT(values.size() == locations.size());
-      for (auto i = size_t{0}; i < values.size(); ++i) {
-        if (not values[i]) {
-          diagnostic::error("value must be a valid field path")
-            .primary(locations[i])
-            .emit(ctx);
+      for (auto& value : values) {
+        if (not value) {
           continue;
         }
-        auto fp = ast::field_path::try_from(*values[i]);
-        if (fp) {
-          continue;
+        if (value->path().empty()) {
+          diagnostic::error("cannot drop `this`").primary(*value).emit(ctx);
         }
-        diagnostic::error("value must be a valid field path")
-          .primary(locations[i])
-          .note("value was {:?}", *values[i])
-          .emit(ctx);
       }
       return {};
     });
