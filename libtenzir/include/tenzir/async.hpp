@@ -95,6 +95,8 @@ public:
   explicit(false) operator base_ctx();
 
   virtual auto actor_system() -> caf::actor_system& = 0;
+  /// Returns the diagnostic handler. The returned handler is guaranteed to be
+  /// thread-safe.
   virtual auto dh() -> diagnostic_handler& = 0;
   virtual auto reg() -> const registry& = 0;
   virtual auto resolve_secrets(std::vector<secret_request> requests)

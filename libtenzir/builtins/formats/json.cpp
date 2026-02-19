@@ -35,7 +35,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
-#include <tenzir/thread_safe_diagnostic_handler.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -1222,17 +1221,6 @@ public:
   explicit ReadNdjson(ReadJsonArgs args)
     : args_{std::move(args)}, next_tick_{args_.msb_options.settings.timeout} {
   }
-  ReadNdjson(ReadNdjson&& other) noexcept
-    : args_{std::move(other.args_)},
-      next_tick_{other.next_tick_},
-      parser_{std::move(other.parser_)},
-      buffer_{std::move(other.buffer_)},
-      ended_on_carriage_return_{other.ended_on_carriage_return_},
-      worker_dh_{std::move(other.worker_dh_)},
-      read_input_queue_{std::move(other.read_input_queue_)},
-      read_output_queue_{std::move(other.read_output_queue_)} {
-  }
-
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
     if (args_.jobs > 0) {
@@ -1243,18 +1231,14 @@ public:
       // Workers use unordered output since they parse independently.
       auto msb_options = args_.msb_options;
       msb_options.settings.ordered = false;
-      worker_dh_ = std::make_shared<ThreadSafeDiagnosticHandler>(ctx.dh());
       for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-        ctx.spawn_task(folly::coro::co_withExecutor(
-          folly::getGlobalCPUExecutor(),
-          read_worker_loop(args_.parser_name, msb_options)));
+        ctx.spawn_task(
+          read_worker_loop(args_.parser_name, msb_options, ctx.dh()));
       }
       co_return;
     }
     auto msb_options = args_.msb_options;
-    if (args_.unordered) {
-      msb_options.settings.ordered = false;
-    }
+    msb_options.settings.ordered = not args_.unordered;
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
                                               msb_options);
   }
@@ -1262,8 +1246,7 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
     if (args_.jobs > 0) {
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
+      co_return co_await read_output_queue_->dequeue();
     }
     co_await folly::coro::sleep(
       std::chrono::duration_cast<folly::HighResDuration>(next_tick_));
@@ -1313,7 +1296,7 @@ public:
       }
       // Close the input queue and drain until all workers signaled completion.
       co_await read_input_queue_->enqueue(std::nullopt);
-      co_await drain_parallel_output(push, args_.jobs);
+      co_await drain_parallel_output(push);
       co_return;
     }
     TENZIR_UNUSED(ctx);
@@ -1434,10 +1417,11 @@ private:
   }
 
   /// Worker coroutine that parses ndjson chunks on the CPU executor.
+  /// @param dh The diagnostic handler, required to be thread-safe.
   auto read_worker_loop(std::string parser_name,
-                        multi_series_builder::options msb_options) const
-    -> Task<void> {
-    auto parser = ndjson_parser{parser_name, *worker_dh_, msb_options};
+                        multi_series_builder::options msb_options,
+                        diagnostic_handler& dh) const -> Task<void> {
+    auto parser = ndjson_parser{parser_name, dh, msb_options};
     auto line_buffer = std::string{};
     try {
       while (true) {
@@ -1499,10 +1483,9 @@ private:
     co_await read_output_queue_->enqueue(table_slice{});
   }
 
-  auto drain_parallel_output(Push<table_slice>& push, uint64_t stop_tokens)
-    -> Task<void> {
+  auto drain_parallel_output(Push<table_slice>& push) -> Task<void> {
     auto seen_stop_tokens = uint64_t{0};
-    while (seen_stop_tokens < stop_tokens) {
+    while (seen_stop_tokens < args_.jobs) {
       auto next = co_await read_output_queue_->dequeue();
       if (next.rows() == 0) {
         ++seen_stop_tokens;
@@ -1523,7 +1506,6 @@ private:
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
   // Parallel mode state:
-  std::shared_ptr<ThreadSafeDiagnosticHandler> worker_dh_;
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
 };
@@ -1578,11 +1560,17 @@ public:
                    .msb_options = {}}};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    d.named("_unordered", &ReadJsonArgs::unordered);
+    // TODO: Integrate with the `unordered` operator instead.
+    auto unordered = d.named("_unordered", &ReadJsonArgs::unordered);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       msb(ctx);
       if (auto j = ctx.get(jobs); j and *j == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
+          .primary(ctx.get_location(jobs).value_or(location::unknown))
+          .emit(ctx);
+      }
+      if (auto j = ctx.get(jobs); j and *j > 0 and not ctx.get(unordered)) {
+        diagnostic::error("`_jobs` requires `_unordered`")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
@@ -1598,14 +1586,8 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    parser.named_optional("_jobs", args.jobs);
-    std::optional<location> unordered;
-    parser.named("_unordered", unordered);
     TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
-    if (unordered) {
-      args.builder_options.settings.ordered = false;
-    }
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
@@ -1924,8 +1906,7 @@ public:
     write_input_queue_ = std::make_shared<WriteInputQueue>(capacity);
     write_output_queue_ = std::make_shared<WriteOutputQueue>(capacity);
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                                  write_worker_loop()));
+      ctx.spawn_task(write_worker_loop());
     }
   }
 
@@ -1945,8 +1926,7 @@ public:
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    co_await wait_forever();
-    TENZIR_UNREACHABLE();
+    co_return co_await write_output_queue_->dequeue();
   }
 
   auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
@@ -1996,10 +1976,9 @@ private:
     co_await write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  auto drain_parallel_output(Push<chunk_ptr>& push, uint64_t stop_tokens)
-    -> Task<void> {
+  auto drain_parallel_output(Push<chunk_ptr>& push) -> Task<void> {
     auto seen_stop_tokens = uint64_t{0};
-    while (seen_stop_tokens < stop_tokens or not write_output_queue_->empty()) {
+    while (seen_stop_tokens < args_.jobs or not write_output_queue_->empty()) {
       auto next = co_await write_output_queue_->dequeue();
       if (not next) {
         ++seen_stop_tokens;
