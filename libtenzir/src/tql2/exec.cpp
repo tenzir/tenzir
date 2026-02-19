@@ -1017,10 +1017,10 @@ void write_profile(
   for (size_t i = 0; i < op_names.size(); ++i) {
     op_index[op_names[i]] = i;
   }
-  // pid 1 = Totals, pid 2..N+1 = per operator.
-  static constexpr auto pid_totals = 1;
+  // Use high pids to avoid Perfetto heuristics for low pid values.
+  static constexpr auto pid_totals = 1000;
   auto op_pid = [](size_t idx) -> int {
-    return static_cast<int>(idx) + 2;
+    return static_cast<int>(idx) + 1001;
   };
   // Write the JSON.
   f << "{\n  \"traceEvents\": [\n";
@@ -1056,7 +1056,7 @@ void write_profile(
     }
     return name;
   };
-  emit_process(pid_totals, "Totals", 0);
+  emit_process(pid_totals, "Global", 0);
   for (size_t i = 0; i < op_names.size(); ++i) {
     emit_process(op_pid(i), display_name(op_names[i]), static_cast<int>(i) + 1);
   }
@@ -1264,8 +1264,9 @@ void write_profile(
   }
   // Emit backpressure duration bars from channel profiles.
   // Each channel's events are routed to the sender operator's pid (same
-  // routing as "In" metrics). We use tid=1 for a dedicated track row.
+  // routing as "In" metrics). Uses tid=1 for a dedicated track row.
   auto bp_pids_emitted = std::unordered_set<int>{};
+  auto has_any_bp = false;
   for (auto const& prof : channel_profiles) {
     if (not prof.stats or prof.stats->backpressure_events.empty()) {
       continue;
@@ -1292,11 +1293,18 @@ void write_profile(
       continue;
     }
     auto pid = op_pid(it->second);
+    auto op_name = display_name(sender_target);
     // Emit thread name metadata once per pid.
     if (bp_pids_emitted.insert(pid).second) {
       emit(fmt::format(
         R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Backpressure"}}}})pp",
         pid));
+    }
+    if (not has_any_bp) {
+      has_any_bp = true;
+      emit(fmt::format(
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Backpressure"}}}})pp",
+        pid_totals));
     }
     for (auto const& ev : prof.stats->backpressure_events) {
       auto start_us
@@ -1305,9 +1313,14 @@ void write_profile(
       auto dur_us = std::chrono::duration_cast<std::chrono::microseconds>(
                       ev.end - ev.start)
                       .count();
+      // Per-operator bar.
       emit(fmt::format(
         R"pp({{"ph": "X", "name": "Backpressure", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
         pid, start_us, dur_us));
+      // Totals bar, named after the operator.
+      emit(fmt::format(
+        R"pp({{"ph": "X", "name": "{}", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
+        op_name, pid_totals, start_us, dur_us));
     }
   }
   f << "\n  ]\n}\n";
