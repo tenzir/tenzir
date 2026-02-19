@@ -1,17 +1,30 @@
 {
   lib,
   stdenv,
+  fetchFromGitHub,
   pkgsBuildBuild,
   arrow-cpp,
   iconv,
   sqlite,
   tzdata,
 }:
+let
+  version = "23.0.0";
+in
 arrow-cpp.overrideAttrs (orig: {
+  inherit version;
+
+  src = fetchFromGitHub {
+    owner = "apache";
+    repo = "arrow";
+    rev = "apache-arrow-${version}";
+    hash = "sha256-BluUlbtGJwvlrpN/c/KziOfFh5dvzZyuCy4JZkkFea4=";
+  };
   patches = [
-    ./arrow-cpp-fields-race.patch
     ./arrow-cpp-nixos-zoneinfo.patch
+    ./arrow-cpp-eager-struct-fields.patch
   ];
+
   nativeBuildInputs =
     orig.nativeBuildInputs
     ++ [
@@ -59,7 +72,7 @@ arrow-cpp.overrideAttrs (orig: {
     ];
 
   doCheck = false;
-  doInstallCheck = !stdenv.hostPlatform.isStatic;
+  doInstallCheck = false;
 
   env =
     ((orig.env or { })

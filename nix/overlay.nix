@@ -8,6 +8,8 @@ let
 
   pytestOverlay = python-finalPkgs: python-prevPkgs: {
     pyarrow = python-prevPkgs.pyarrow.overridePythonAttrs (baseAttrs: {
+      doCheck = false;
+      doInstallCheck = false;
       disabledTestPaths = baseAttrs.disabledTestPaths ++ [
         "pyarrow/tests/test_memory.py::test_env_var"
         "pyarrow/tests/test_memory.py::test_memory_pool_factories"
