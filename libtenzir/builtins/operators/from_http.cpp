@@ -493,6 +493,10 @@ public:
     auto b_ctx = base_ctx{ctx, *reg};
     auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
     if (not sub_result) {
+      if (pending_.empty() and not active_sub_) {
+        done_ = true;
+      }
+      notify_->notify_one();
       co_return;
     }
     auto sub_key = next_sub_key_++;
