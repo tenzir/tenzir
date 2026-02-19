@@ -8,10 +8,13 @@
 
 #pragma once
 
+#include "tenzir/async/executor.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <optional>
+#include <vector>
 #include <string_view>
 
 namespace tenzir {
@@ -23,5 +26,9 @@ auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline>;
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline>;
+
+auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
+              DiagHandler& dh, std::optional<std::string> const& profile_path,
+              metrics_callback emit_fn) -> Task<failure_or<void>>;
 
 } // namespace tenzir

@@ -1148,22 +1148,15 @@ void write_profile(std::string const& path,
   f << "\n  ]\n}\n";
 }
 
-auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
-              DiagHandler& dh, std::optional<std::string> const& profile_path)
-  -> Task<failure_or<void>> {
+auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
+                   DiagHandler& dh,
+                   std::optional<std::string> const& profile_path,
+                   metrics_callback emit_fn) -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
   auto exec_ctx = TestExecCtx{profile_path.has_value()};
-  auto emit_fn = [](std::span<const metrics_snapshot_entry> entries) {
-    for (auto const& e : entries) {
-      TENZIR_INFO("metrics: key={} value={} direction={} bytes={}", e.label.key,
-                  e.label.value,
-                  e.direction == metrics_direction::read ? "read" : "write",
-                  e.value);
-    }
-  };
   // Profiling: sample channel and executor stats periodically if requested.
   auto samples = std::vector<ProfileSample>{};
   auto stop_flag = std::atomic<bool>{false};
@@ -1261,7 +1254,7 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
         co_return co_await folly::coro::co_awaitTry(
           folly::coro::co_withCancellation(
             cancel_source.getToken(),
-            run_plan(std::move(ops), sys, diag_handler, profile_path)));
+            run_plan_impl(std::move(ops), sys, diag_handler, profile_path, {})));
       });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
@@ -1364,6 +1357,13 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 }
 
 } // namespace
+
+auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
+              DiagHandler& dh, std::optional<std::string> const& profile_path,
+              metrics_callback emit_fn) -> Task<failure_or<void>> {
+  co_return co_await run_plan_impl(std::move(ops), sys, dh, profile_path,
+                                   std::move(emit_fn));
+}
 
 auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
