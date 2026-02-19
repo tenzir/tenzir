@@ -861,6 +861,7 @@ private:
     LOGI("tick {} in {} ({})", ticks_, id_, op_name());
     switch (base_op().state()) {
       case OperatorState::done:
+        TENZIR_WARN("state done after tick: {}", op_name());
         co_await handle_done();
         break;
       case OperatorState::unspecified:
@@ -877,14 +878,15 @@ private:
     // The task provided by the inner implementation completed.
     LOGV("got future result in {}", op_name());
     co_await call_process_task(std::move(message.value));
+    LOGV("handled future result in {}", op_name());
     if (base_op().state() == OperatorState::done) {
+      TENZIR_WARN("state done after process_task: {}", op_name());
       co_await handle_done();
     } else {
       queue_.spawn([this] -> Task<ExplicitAny> {
         co_return ExplicitAny{co_await base_op().await_task(*this)};
       });
     }
-    LOGV("handled future result in {}", op_name());
   }
 
   auto process(Option<AnyOperatorMsg> message) -> Task<void> {
@@ -914,6 +916,7 @@ private:
           [&](EndOfData) -> Task<void> {
             LOGV("got end of data in {}", op_name());
             TENZIR_ASSERT(not input_is_void_);
+            TENZIR_WARN("end of data: {}", op_name());
             co_await handle_done();
           },
           [&](Checkpoint checkpoint) -> Task<void> {
@@ -1022,6 +1025,7 @@ private:
         co_return;
       },
       [&](Stop) -> Task<void> {
+        TENZIR_WARN("stop");
         co_await handle_done();
       });
     queue_.spawn(from_control_.recv());
@@ -1074,7 +1078,6 @@ private:
       co_return;
     }
     LOGV("running done in {}", op_name());
-    is_done_ = true;
     // Immediately inform control that we want no more data.
     if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
@@ -1082,10 +1085,12 @@ private:
     // auto behavior = co_await call_finalize_behavior();
     // Then finalize the operator, which can still produce output.
     auto b = co_await call_finalize();
-    if (b == FinalizeBehavior::continue_) {
-      is_done_ = false;
+    if (b == FinalizeBehavior::continue_
+        and base_op().state() != OperatorState::done) {
       co_return;
     }
+    is_done_ = true;
+    LOGW("continuing with done handler: {}", op_name());
     // Tell all subpipelines to shut down. Note that the previous step could
     // have still pushed data into them. The main loop continues running to
     // drain remaining subpipeline output and collect SubPipelineFinished

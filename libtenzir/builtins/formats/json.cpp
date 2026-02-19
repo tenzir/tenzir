@@ -1303,6 +1303,7 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     draining_ = true;
+    TENZIR_WARN("finalize");
     if (args_.jobs > 0) {
       // Send any remaining buffered data to a worker.
       if (not buffer_.empty()) {
@@ -1312,6 +1313,7 @@ public:
       }
       // Close the input queue and drain until all workers signaled completion.
       co_await read_input_queue_->enqueue(std::nullopt);
+      TENZIR_WARN("continue");
       co_return FinalizeBehavior::continue_;
     } else {
       // Non-parallel code path.
