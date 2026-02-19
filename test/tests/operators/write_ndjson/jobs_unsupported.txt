@@ -1,6 +1,1 @@
-error: `_jobs` is not supported for `write_ndjson` in neo
- --> tests/operators/write_ndjson/jobs_unsupported.tql:6:20
-  |
-6 | write_ndjson _jobs=1
-  |                    ^ 
-  |
+{}

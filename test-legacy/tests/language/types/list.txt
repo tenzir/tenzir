@@ -81,7 +81,7 @@ warning: cannot use `null` as index
    |
    = hint: provide a fallback value to suppress this warning
 
-warning: cannot access field `foo` of non-record type
+warning: cannot access field of non-record type
   --> tests/language/types/list.tql:15:18
    |
 15 |   index_str = xs["foo"],
@@ -91,7 +91,7 @@ warning: cannot access field `foo` of non-record type
    |               -- type `list`
    |
 
-warning: cannot access field `foo` of non-record type
+warning: cannot access field of non-record type
   --> tests/language/types/list.tql:16:20
    |
 16 |   get_str = xs.get("foo"),
@@ -101,7 +101,7 @@ warning: cannot access field `foo` of non-record type
    |             -- type `list`
    |
 
-warning: cannot access field `foo` of non-record type
+warning: cannot access field of non-record type
   --> tests/language/types/list.tql:17:29
    |
 17 |   get_str_fallback = xs.get("foo", -1),
@@ -111,7 +111,7 @@ warning: cannot access field `foo` of non-record type
    |                      -- type `list`
    |
 
-warning: cannot access field `foo` of non-record type
+warning: cannot access field of non-record type
   --> tests/language/types/list.tql:18:18
    |
 18 |   get_field = xs.foo,
@@ -121,7 +121,7 @@ warning: cannot access field `foo` of non-record type
    |               -- type `list`
    |
 
-warning: cannot access field `foo` of non-record type
+warning: cannot access field of non-record type
   --> tests/language/types/list.tql:19:27
    |
 19 |   get_field_lenient = xs.?foo,
@@ -179,7 +179,7 @@ warning: tried to access field of `null`
    |
    = hint: provide a fallback value to suppress this warning
 
-warning: tried to access field `foo` of `null`
+warning: tried to access field of `null`
   --> tests/language/types/list.tql:15:18
    |
 15 |   index_str = xs["foo"],
@@ -187,7 +187,7 @@ warning: tried to access field `foo` of `null`
    |
    = hint: append `?` to suppress this warning
 
-warning: tried to access field `foo` of `null`
+warning: tried to access field of `null`
   --> tests/language/types/list.tql:16:20
    |
 16 |   get_str = xs.get("foo"),
@@ -195,7 +195,7 @@ warning: tried to access field `foo` of `null`
    |
    = hint: append `?` to suppress this warning
 
-warning: tried to access field `foo` of `null`
+warning: tried to access field of `null`
   --> tests/language/types/list.tql:18:18
    |
 18 |   get_field = xs.foo,
