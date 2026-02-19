@@ -982,7 +982,10 @@ void write_profile(
       channel_endpoints[ch.name] = {std::move(sender), std::move(receiver)};
     }
     for (auto const& ex : sample.executors) {
-      add_op(ex.name);
+      // IO executor metrics are merged into the parent operator below.
+      if (not ex.name.ends_with(" (io)")) {
+        add_op(ex.name);
+      }
     }
   }
   // Create separate "(subs)" entries for operators that have cross-boundary
@@ -1206,11 +1209,19 @@ void write_profile(
       interval_s = 0.001;
     }
     auto aggs = aggregate_channels(sample);
-    // Build per-operator executor lookup for this sample.
+    // Build per-operator executor lookup for this sample. IO executor
+    // stats are merged into the parent operator's entry.
     auto cur_execs = std::vector<PrevExec>(op_names.size());
     for (auto const& ex : sample.executors) {
-      if (auto it = op_index.find(ex.name); it != op_index.end()) {
-        cur_execs[it->second] = PrevExec{ex.wall_ns, ex.cpu_ns, ex.task_count};
+      auto name = ex.name;
+      if (name.ends_with(" (io)")) {
+        name = name.substr(0, name.size() - 5);
+      }
+      if (auto it = op_index.find(name); it != op_index.end()) {
+        auto& entry = cur_execs[it->second];
+        entry.wall_ns += ex.wall_ns;
+        entry.cpu_ns += ex.cpu_ns;
+        entry.task_count += ex.task_count;
       }
     }
     // Totals accumulators.
