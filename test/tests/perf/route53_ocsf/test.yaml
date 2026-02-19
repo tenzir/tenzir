@@ -1,0 +1,8 @@
+suite: route53-ocsf-perf
+fixtures:
+  - kafka:
+      topic: route53_ocsf_perf_1m
+      partitions: 4
+      messages: 1000000
+      payload_file: test/tests/perf/route53_ocsf/route53_sample.ndjson
+timeout: 1800

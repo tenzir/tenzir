@@ -1,0 +1,202 @@
+from_kafka env("KAFKA_TOPIC"),
+    offset="beginning",
+    exit=true,
+    count=1M,
+    options={
+        "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+        "group.id": "tenzir-perf-route53-ocsf",
+        "auto.offset.reset": "earliest",
+    }
+
+    write_lines
+    read_ndjson raw=true,
+        _unordered=true,
+        _jobs=8,
+        _batch_timeout=10s
+
+    // --- Constants --------------------------------
+    let $rcode_id = {
+    NOERROR: 0,
+    FORMERR: 1,
+    SERVFAIL: 2,
+    NXDOMAIN: 3,
+    NOTIMP: 4,
+    REFUSED: 5,
+    YXDOMAIN: 6,
+    YXRRSET: 7,
+    NXRRSET: 8,
+    NOTAUTH: 9,
+    NOTZONE: 10,
+    DSOTYPENI: 11,
+    BADSIG_VERS: 16,
+    BADKEY: 17,
+    BADTIME: 18,
+    BADMODE: 19,
+    BADNAME: 20,
+    BADALG: 21,
+    BADTRUNC: 22,
+    BADCOOKIE: 23,
+    }
+
+    let $proto_nums = {
+    UDP: 17,
+    TCP: 6,
+    }
+
+    let $firewall_actions = {
+    BLOCK: {
+        action_id: 2,
+        action: "Denied",
+        disposition_id: 2,
+        disposition: "Blocked",
+    },
+    ALLOW: {
+        action_id: 1,
+        action: "Allowed",
+        disposition_id: 1,
+        disposition: "Allowed",
+    },
+    ALERT: {
+        action_id: 1,
+        action: "Allowed",
+        disposition_id: 19,
+        disposition: "Alert",
+        is_alert: true,
+    },
+    }
+
+    // --- Preamble ---------------------------------
+
+    this = {aws: this}
+
+    // --- OCSF: classification attributes ----------
+
+    ocsf = {
+    category_uid: 4,
+    class_uid: 4003,
+    severity_id: 1,
+    severity: "Informational",
+    activity_id: 6,
+    type_uid: 400306,
+    metadata: {
+        product: {
+        name: "Amazon Route 53",
+        vendor_name: "AWS",
+        feature: {
+            name: "Resolver Query Logs",
+        },
+        },
+        version: "1.7.0",
+        profiles: ["cloud"],
+    },
+    }
+    ocsf.cloud = {
+    account: {
+        uid: move aws.account_id?,
+    },
+    region: move aws.region?,
+    provider: "AWS",
+    }
+    ocsf.metadata.product.version = (move aws.version?).string()
+
+    // --- OCSF: occurrence attributes --------------
+
+    ocsf.time = move aws.query_timestamp?
+    ocsf.query_time = ocsf.time
+
+    // --- OCSF: primary attributes -----------------
+
+    ocsf.query = {
+    hostname: move aws.query_name?,
+    type: move aws.query_type?,
+    class: move aws.query_class?,
+    }
+
+    if aws.has("answers") {
+    ocsf.answers = (move aws.answers).map(a => {
+        rdata: a.Rdata,
+        type: a.Type,
+        class: a.Class,
+    })
+    ocsf.response_time = ocsf.time
+    } else {
+    drop aws.answers?
+    }
+
+    // Map DNS response codes to OCSF rcode_id values.
+    if aws.has("rcode") {
+    ocsf.rcode_id = $rcode_id[aws.rcode] else 99
+    ocsf.status_id = 1 if ocsf.rcode_id == 0 else 2
+    ocsf.status = "Success" if ocsf.rcode_id == 0 else "Failure"
+    drop aws.rcode
+    } else {
+    ocsf.status_id = 0
+    ocsf.status = "Unknown"
+    }
+
+    // --- OCSF: network attributes -----------------
+
+    if aws.has("srcaddr") {
+    ocsf.src_endpoint.ip = ip(move aws.srcaddr)
+    ocsf.connection_info.protocol_ver_id = 6 if ocsf.src_endpoint.ip.is_v6() else 4
+    }
+    if aws.has("srcport") {
+    ocsf.src_endpoint.port = int(move aws.srcport)
+    }
+    if aws.has("vpc_id") {
+        ocsf.src_endpoint.vpc_uid = move aws.vpc_id
+    }
+    if aws.srcids?.instance? != null {
+        ocsf.src_endpoint.instance_uid = move aws.srcids.instance
+    }
+
+    // Resolver endpoint info goes to dst_endpoint since it's the DNS server.
+    if aws.srcids?.resolver_endpoint? != null {
+        ocsf.dst_endpoint.uid = move aws.srcids.resolver_endpoint
+    }
+    if aws.srcids?.resolver_network_interface? != null {
+        ocsf.dst_endpoint.interface_uid = move aws.srcids.resolver_network_interface
+    }
+    drop aws.srcids?
+
+    if aws.has("transport") {
+        ocsf.connection_info.protocol_name = aws.transport.to_lower()
+        ocsf.connection_info.protocol_num = $proto_nums[aws.transport] else -1
+        drop aws.transport
+    }
+
+    // --- DNS Firewall (security_control profile) --
+
+    if aws.has("firewall_rule_action") {
+        ocsf.metadata.profiles = ["cloud", "security_control"]
+        ocsf.action_id = $firewall_actions[aws.firewall_rule_action].action_id
+        ocsf.action = $firewall_actions[aws.firewall_rule_action].action
+        ocsf.disposition_id = $firewall_actions[aws.firewall_rule_action].disposition_id
+        ocsf.disposition = $firewall_actions[aws.firewall_rule_action].disposition
+        if $firewall_actions[aws.firewall_rule_action].is_alert? != null {
+            ocsf.is_alert = $firewall_actions[aws.firewall_rule_action].is_alert
+        }
+        drop aws.firewall_rule_action
+        ocsf.firewall_rule = {
+            uid: move aws.firewall_rule_group_id?,
+            match_details: move aws.firewall_domain_list_id?,
+        }
+    }
+
+    // --- Finalize ---------------------------------
+
+    this = {...ocsf, unmapped: aws}
+    @name = "ocsf.dns_activity"
+    ocsf::derive
+
+    // ----
+
+    write_ndjson strip=true, _jobs=8
+    read_lines
+
+    to_kafka "route53-ocsf-output",
+        message=line,
+        options={
+            "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+            "compression.type": "zstd"
+        }
