@@ -222,6 +222,27 @@ endif ()
 dependency_summary("proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/proxygen"
                    "Dependencies")
 
+# CMAKE_SKIP_INSTALL_RULES suppresses generation of per-directory
+# cmake_install.cmake files. The parent facebook install script still
+# includes these paths, so create no-op stubs to keep install steps working.
+foreach (_tenzir_fb_install_subdir folly fizz/fizz wangle/wangle mvfst proxygen)
+  set(
+    _tenzir_fb_install_stub
+    "${CMAKE_CURRENT_BINARY_DIR}/${_tenzir_fb_install_subdir}/cmake_install.cmake"
+  )
+  get_filename_component(_tenzir_fb_install_stub_dir
+                         "${_tenzir_fb_install_stub}" DIRECTORY)
+  file(MAKE_DIRECTORY "${_tenzir_fb_install_stub_dir}")
+  if (NOT EXISTS "${_tenzir_fb_install_stub}")
+    file(
+      WRITE "${_tenzir_fb_install_stub}"
+      "# Bundled via Tenzir; install rules intentionally skipped.\n")
+  endif ()
+endforeach ()
+unset(_tenzir_fb_install_subdir)
+unset(_tenzir_fb_install_stub)
+unset(_tenzir_fb_install_stub_dir)
+
 # All Facebook libs are static archives linked into libtenzir.so. No
 # export/install of individual targets needed.
 set(CMAKE_SKIP_INSTALL_RULES "${_tenzir_prev_skip_install_rules}")
