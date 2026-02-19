@@ -165,7 +165,7 @@ struct FromHttpArgs {
       if (not output) {
         return failure::promise();
       }
-      if (*output and not (*output)->is_any<void, table_slice>()) {
+      if (*output and not(*output)->is_any<void, table_slice>()) {
         diagnostic::error("pipeline must return events or be a sink")
           .primary(*parse)
           .emit(dh);
@@ -245,7 +245,9 @@ auto queue_executor_request(
   if (not parsed) {
     if (diag_severity == severity::warning) {
       if (note.empty()) {
-        diagnostic::warning("failed to parse uri: {}", next_url).primary(op).emit(dh);
+        diagnostic::warning("failed to parse uri: {}", next_url)
+          .primary(op)
+          .emit(dh);
       } else {
         diagnostic::warning("failed to parse uri: {}", next_url)
           .primary(op)
@@ -254,7 +256,9 @@ auto queue_executor_request(
       }
     } else {
       if (note.empty()) {
-        diagnostic::error("failed to parse uri: {}", next_url).primary(op).emit(dh);
+        diagnostic::error("failed to parse uri: {}", next_url)
+          .primary(op)
+          .emit(dh);
       } else {
         diagnostic::error("failed to parse uri: {}", next_url)
           .primary(op)
@@ -293,7 +297,8 @@ public:
     }
     auto requests = std::vector<secret_request>{};
     auto [headers, secrets] = args_.make_headers();
-    requests.emplace_back(make_secret_request("url", args_.url, resolved_url_, dh));
+    requests.emplace_back(
+      make_secret_request("url", args_.url, resolved_url_, dh));
     if (not secrets.empty()) {
       auto const& loc = args_.headers->source;
       for (auto& [name, secret] : secrets) {
@@ -322,8 +327,9 @@ public:
       co_return;
     }
     auto const tls_default = http::infer_tls_default(resolved_url_);
-    tls_options_ = args_.tls ? tls_options{*args_.tls, {.tls_default = tls_default}}
-                             : tls_options{{.tls_default = tls_default}};
+    tls_options_ = args_.tls
+                     ? tls_options{*args_.tls, {.tls_default = tls_default}}
+                     : tls_options{{.tls_default = tls_default}};
     auto validate_tls
       = tls_options_.validate(resolved_url_, args_.url.source, dh);
     if (not validate_tls) {
@@ -343,7 +349,8 @@ public:
       match(
         args_.body->inner,
         [&](blob const& x) {
-          request_body_.append(reinterpret_cast<char const*>(x.data()), x.size());
+          request_body_.append(reinterpret_cast<char const*>(x.data()),
+                               x.size());
         },
         [&](std::string const& x) {
           request_body_ = x;
@@ -371,7 +378,8 @@ public:
     if (not active_sub_ and not pending_.empty()) {
       auto request = std::move(pending_.front());
       pending_.pop_front();
-      if (request.is_pagination and args_.paginate_delay.inner > duration::zero()) {
+      if (request.is_pagination
+          and args_.paginate_delay.inner > duration::zero()) {
         co_await folly::coro::sleep(
           std::chrono::duration_cast<folly::HighResDuration>(
             to_chrono(args_.paginate_delay.inner)));
@@ -379,8 +387,7 @@ public:
       auto result = co_await perform_request(request);
       co_return FromHttpTaskEvent{
         std::optional<ExecutorHttpRequest>{std::move(request)},
-        std::optional<http::HttpResult<http::ResponseData>>{
-          std::move(result)},
+        std::optional<http::HttpResult<http::ResponseData>>{std::move(result)},
       };
     }
     co_await notify_->wait();
@@ -426,8 +433,9 @@ public:
         if (args_.metadata_field) {
           auto metadata = series_builder{};
           metadata.data(response_metadata);
-          slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
-                         std::move(slice), ctx.dh());
+          slice
+            = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                     std::move(slice), ctx.dh());
         }
         co_await push(std::move(slice));
       }
@@ -442,9 +450,10 @@ public:
                                : std::nullopt;
       if (auto url = http::next_url_from_link_headers(
             response, request.url, paginate_source, ctx.dh())) {
-        std::ignore = queue_executor_request(pending_, request.headers, std::move(*url),
-                                             tls_enabled_, args_.op, ctx.dh(),
-                                             severity::error);
+        std::ignore
+          = queue_executor_request(pending_, request.headers, std::move(*url),
+                                   tls_enabled_, args_.op, ctx.dh(),
+                                   severity::error);
       }
     }
     if (response.body.empty()) {
@@ -456,7 +465,8 @@ public:
       co_return;
     }
     if (not args_.parse) {
-      diagnostic::error("`from_http` in the new executor requires an explicit parsing pipeline")
+      diagnostic::error(
+        "`from_http` in the new executor requires an explicit parsing pipeline")
         .primary(args_.op)
         .emit(ctx);
       if (pending_.empty() and not active_sub_) {
@@ -465,8 +475,8 @@ public:
       co_return;
     }
     auto response_body = std::move(response.body);
-    auto chunk_data = std::span<std::byte const>{response_body.data(),
-                                                 response_body.size()};
+    auto chunk_data
+      = std::span<std::byte const>{response_body.data(), response_body.size()};
     auto encoding
       = http::find_header_value(response.headers, "content-encoding");
     auto payload = chunk_ptr{};
@@ -503,8 +513,7 @@ public:
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
-                   OpCtx& ctx)
-    -> Task<void> override {
+                   OpCtx& ctx) -> Task<void> override {
     if (not active_sub_) {
       co_return;
     }
@@ -525,7 +534,8 @@ public:
     co_await push(std::move(slice));
   }
 
-  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
+    -> Task<void> override {
     if (not active_sub_) {
       co_return;
     }
@@ -649,7 +659,7 @@ struct HttpExecutorArgs {
     if (not output) {
       return failure::promise();
     }
-    if (*output and not (*output)->is_any<void, table_slice>()) {
+    if (*output and not(*output)->is_any<void, table_slice>()) {
       diagnostic::error("pipeline must return events or be a sink")
         .primary(parse)
         .emit(dh);
@@ -723,10 +733,9 @@ public:
       if (part.type.kind().is<secret_type>()) {
         for (auto const& value : part.values<secret_type>()) {
           if (value) {
-            requests.emplace_back(
-              make_secret_request("url", materialize(*value),
-                                  args_.url.get_location(), urls.emplace_back(),
-                                  dh));
+            requests.emplace_back(make_secret_request(
+              "url", materialize(*value), args_.url.get_location(),
+              urls.emplace_back(), dh));
           } else {
             url_warned = true;
             urls.emplace_back();
@@ -780,9 +789,8 @@ public:
       }
       auto method = args_.make_method(method_name);
       if (not method) {
-        auto const method_location = args_.method
-                                       ? args_.method->get_location()
-                                       : args_.url.get_location();
+        auto const method_location = args_.method ? args_.method->get_location()
+                                                  : args_.url.get_location();
         diagnostic::warning("invalid http method: `{}`", method_name)
           .primary(method_location)
           .note("skipping request")
@@ -799,8 +807,9 @@ public:
         row_headers.values.emplace("Accept", "application/json, */*;q=0.5");
       }
       auto tls_default = http::infer_tls_default(url);
-      auto tls_opts = args_.tls ? tls_options{*args_.tls, {.tls_default = tls_default}}
-                                : tls_options{{.tls_default = tls_default}};
+      auto tls_opts = args_.tls
+                        ? tls_options{*args_.tls, {.tls_default = tls_default}}
+                        : tls_options{{.tls_default = tls_default}};
       auto tls_enabled = tls_opts.get_tls(nullptr).inner;
       http::normalize_http_url(url, tls_enabled);
       if (auto valid = tls_opts.validate(url, args_.url.get_location(), dh);
@@ -828,8 +837,8 @@ public:
             std::chrono::duration_cast<folly::HighResDuration>(
               to_chrono(args_.paginate_delay.inner)));
         }
-        auto response_result = co_await perform_request(
-          request, *method, body, ssl_context);
+        auto response_result
+          = co_await perform_request(request, *method, body, ssl_context);
         if (response_result.is_err()) {
           diagnostic::warning("{}", std::move(response_result).unwrap_err())
             .primary(args_.op)
@@ -840,7 +849,8 @@ public:
         auto response_metadata = http::make_response_record(response);
         if (auto const code = response.status_code; code < 200 or code > 399) {
           if (not args_.error_field) {
-            diagnostic::warning("received erroneous http status code: `{}`", code)
+            diagnostic::warning("received erroneous http status code: `{}`",
+                                code)
               .primary(args_.op)
               .note("skipping response handling")
               .hint("specify `error_field` to keep the event")
@@ -851,13 +861,15 @@ public:
           base.data(request_record);
           auto error = series_builder{};
           error.data(response.body);
-          auto slice = assign(*args_.error_field, error.finish_assert_one_array(),
-                              base.finish_assert_one_slice(), dh);
+          auto slice
+            = assign(*args_.error_field, error.finish_assert_one_array(),
+                     base.finish_assert_one_slice(), dh);
           if (args_.metadata_field) {
             auto metadata = series_builder{};
             metadata.data(response_metadata);
-            slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
-                           std::move(slice), dh);
+            slice = assign(*args_.metadata_field,
+                           metadata.finish_assert_one_array(), std::move(slice),
+                           dh);
           }
           co_await push(std::move(slice));
           break;
@@ -878,11 +890,11 @@ public:
         auto response_body = std::move(response.body);
         auto response_span = std::span<std::byte const>{response_body.data(),
                                                         response_body.size()};
-        auto encoding = http::find_header_value(response.headers,
-                                                        "content-encoding");
+        auto encoding
+          = http::find_header_value(response.headers, "content-encoding");
         auto payload = chunk_ptr{};
-        if (auto decompressed = http::try_decompress_body(
-              encoding, response_span, dh)) {
+        if (auto decompressed
+            = http::try_decompress_body(encoding, response_span, dh)) {
           payload = chunk::make(std::move(*decompressed));
         } else {
           payload = chunk::make(std::move(response_body));
@@ -893,15 +905,16 @@ public:
         env[response_let_id_] = response_metadata;
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
-        auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
+        auto sub_result
+          = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
           continue;
         }
         auto sub_key = data{next_sub_key_++};
         active_sub_keys_.insert(sub_key);
         if (args_.metadata_field) {
-          response_metadata_by_sub_key_.emplace(
-            sub_key, std::move(response_metadata));
+          response_metadata_by_sub_key_.emplace(sub_key,
+                                                std::move(response_metadata));
         }
         auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
                                           tag_v<chunk_ptr>);
@@ -939,7 +952,8 @@ public:
     co_await push(std::move(slice));
   }
 
-  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
+    -> Task<void> override {
     auto sub_key = materialize(key);
     active_sub_keys_.erase(sub_key);
     response_metadata_by_sub_key_.erase(sub_key);
@@ -965,10 +979,10 @@ private:
     bool has_accept_header = false;
   };
 
-  auto perform_request(ExecutorHttpRequest const& request,
-                       std::string_view method,
-                       std::string const& body,
-                       std::shared_ptr<folly::SSLContext> const& ssl_context) const
+  auto
+  perform_request(ExecutorHttpRequest const& request, std::string_view method,
+                  std::string const& body,
+                  std::shared_ptr<folly::SSLContext> const& ssl_context) const
     -> Task<http::HttpResult<http::ResponseData>> {
     auto config = http::ClientRequestConfig{
       .url = request.url,
@@ -1028,9 +1042,8 @@ private:
             },
             [&](secret_view const x) {
               auto key = std::string{name};
-              requests.emplace_back(
-                make_secret_request(key, materialize(x), location,
-                                    row_headers.values[key], dh));
+              requests.emplace_back(make_secret_request(
+                key, materialize(x), location, row_headers.values[key], dh));
             },
             [&](auto const&) {
               if (not header_warned) {
@@ -1117,9 +1130,9 @@ private:
     }
   }
 
-  static auto eval_optional_string(std::optional<ast::expression> const& expr,
-                                   table_slice const& slice,
-                                   diagnostic_handler& dh)
+  static auto
+  eval_optional_string(std::optional<ast::expression> const& expr,
+                       table_slice const& slice, diagnostic_handler& dh)
     -> generator<std::string_view> {
     if (not expr) {
       for (auto i = size_t{}; i < slice.rows(); ++i) {
@@ -1170,14 +1183,13 @@ auto make_http_executor_description() -> Description {
   auto encode = d.named("encode", &HttpExecutorArgs::encode);
   auto metadata_field
     = d.named("metadata_field", &HttpExecutorArgs::metadata_field);
-  auto error_field
-    = d.named("error_field", &HttpExecutorArgs::error_field);
+  auto error_field = d.named("error_field", &HttpExecutorArgs::error_field);
   auto paginate = d.named("paginate", &HttpExecutorArgs::paginate);
   auto paginate_delay
     = d.named_optional("paginate_delay", &HttpExecutorArgs::paginate_delay);
   auto tls = d.named("tls", &HttpExecutorArgs::tls);
-  auto connection_timeout
-    = d.named_optional("connection_timeout", &HttpExecutorArgs::connection_timeout);
+  auto connection_timeout = d.named_optional(
+    "connection_timeout", &HttpExecutorArgs::connection_timeout);
   auto max_retry_count
     = d.named_optional("max_retry_count", &HttpExecutorArgs::max_retry_count);
   auto retry_delay
@@ -1258,8 +1270,7 @@ struct FromHttpPlugin final : public virtual OperatorPlugin {
     auto headers = d.named("headers", &FromHttpArgs::headers);
     auto metadata_field
       = d.named("metadata_field", &FromHttpArgs::metadata_field);
-    auto error_field
-      = d.named("error_field", &FromHttpArgs::error_field);
+    auto error_field = d.named("error_field", &FromHttpArgs::error_field);
     auto paginate = d.named("paginate", &FromHttpArgs::paginate);
     auto paginate_delay
       = d.named_optional("paginate_delay", &FromHttpArgs::paginate_delay);
@@ -1270,9 +1281,8 @@ struct FromHttpPlugin final : public virtual OperatorPlugin {
     auto retry_delay
       = d.named_optional("retry_delay", &FromHttpArgs::retry_delay);
     auto tls = d.named("tls", &FromHttpArgs::tls);
-    auto parse
-      = d.pipeline(&FromHttpArgs::parse,
-                   {{"response", &FromHttpArgs::response_let}});
+    auto parse = d.pipeline(&FromHttpArgs::parse,
+                            {{"response", &FromHttpArgs::response_let}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto args = FromHttpArgs{};
       args.op = ctx.get_location(url).value_or(location::unknown);

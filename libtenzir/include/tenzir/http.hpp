@@ -191,8 +191,7 @@ auto next_url_from_link_headers(ResponseData const& response,
                                 diagnostic_handler& dh)
   -> std::optional<std::string>;
 
-auto send_request(ClientRequestConfig config)
-  -> Task<HttpResult<ResponseData>>;
+auto send_request(ClientRequestConfig config) -> Task<HttpResult<ResponseData>>;
 
 auto send_request_with_retries(ClientRequestConfig config,
                                uint64_t max_retry_count,

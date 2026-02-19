@@ -30,8 +30,8 @@
 #include <folly/io/coro/ServerSocket.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
 #include <proxygen/lib/http/codec/HTTPCodecFactory.h>
-#include <proxygen/lib/http/coro/HTTPSourceReader.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
+#include <proxygen/lib/http/coro/HTTPSourceReader.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -84,15 +84,16 @@ struct AcceptHttpArgs {
       if (not output) {
         return failure::promise();
       }
-      if (*output and not (*output)->is_any<void, table_slice>()) {
+      if (*output and not(*output)->is_any<void, table_slice>()) {
         diagnostic::error("pipeline must return events or be a sink")
           .primary(*parse)
           .emit(dh);
         return failure::promise();
       }
     }
-    auto tls_opts = tls ? tls_options{*tls, {.tls_default = false, .is_server = true}}
-                        : tls_options{{.tls_default = false, .is_server = true}};
+    auto tls_opts
+      = tls ? tls_options{*tls, {.tls_default = false, .is_server = true}}
+            : tls_options{{.tls_default = false, .is_server = true}};
     TRY(tls_opts.validate(dh));
     return {};
   }
@@ -116,27 +117,26 @@ public:
     auto request = http::RequestData{};
     auto body_too_large = false;
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
-    reader.onHeaders(
-      [&](std::unique_ptr<proxygen::HTTPMessage> msg, bool is_final,
-          bool /*eom*/) -> bool {
-        if (not is_final) {
-          return proxygen::coro::HTTPSourceReader::Continue;
-        }
-        request.method = msg->getMethodString();
-        request.path = msg->getPath();
-        request.query = http::decode_query_string(msg->getQueryString());
-        auto [major, minor] = msg->getHTTPVersion();
-        request.version = fmt::format("{}.{}", major, minor);
-        auto parsed = boost::urls::parse_uri_reference(msg->getURL());
-        if (parsed) {
-          request.fragment = std::string{parsed->fragment()};
-        }
-        msg->getHeaders().forEach([&](std::string const& name,
-                                      std::string const& value) {
+    reader.onHeaders([&](std::unique_ptr<proxygen::HTTPMessage> msg,
+                         bool is_final, bool /*eom*/) -> bool {
+      if (not is_final) {
+        return proxygen::coro::HTTPSourceReader::Continue;
+      }
+      request.method = msg->getMethodString();
+      request.path = msg->getPath();
+      request.query = http::decode_query_string(msg->getQueryString());
+      auto [major, minor] = msg->getHTTPVersion();
+      request.version = fmt::format("{}.{}", major, minor);
+      auto parsed = boost::urls::parse_uri_reference(msg->getURL());
+      if (parsed) {
+        request.fragment = std::string{parsed->fragment()};
+      }
+      msg->getHeaders().forEach(
+        [&](std::string const& name, std::string const& value) {
           request.headers.emplace_back(name, value);
         });
-        return proxygen::coro::HTTPSourceReader::Continue;
-      });
+      return proxygen::coro::HTTPSourceReader::Continue;
+    });
     reader.onBody([&](proxygen::coro::BufQueue body, bool /*eom*/) -> bool {
       auto bytes = body.chainLength();
       if (request.body.size() + bytes > state_->max_request_size) {
@@ -161,7 +161,8 @@ public:
     auto content_type = std::string{};
     auto body = std::string{};
     if (state_->responses) {
-      if (auto response = http::lookup_response(*state_->responses, request.path)) {
+      if (auto response
+          = http::lookup_response(*state_->responses, request.path)) {
         response_code = response->code;
         content_type = response->content_type;
         body = response->body;
@@ -186,12 +187,9 @@ public:
   }
 
   AcceptHttp(AcceptHttp const&) = delete;
-  auto operator=(AcceptHttp const&)
-    -> AcceptHttp& = delete;
-  AcceptHttp(AcceptHttp&&) noexcept
-    = default;
-  auto operator=(AcceptHttp&&) noexcept
-    -> AcceptHttp& = default;
+  auto operator=(AcceptHttp const&) -> AcceptHttp& = delete;
+  AcceptHttp(AcceptHttp&&) noexcept = default;
+  auto operator=(AcceptHttp&&) noexcept -> AcceptHttp& = default;
 
   ~AcceptHttp() override {
     stop_server();
@@ -219,10 +217,10 @@ public:
       co_return;
     }
     auto [host, port] = std::move(endpoint).unwrap();
-    tls_options_ = args_.tls
-                     ? tls_options{*args_.tls,
-                                   {.tls_default = false, .is_server = true}}
-                     : tls_options{{.tls_default = false, .is_server = true}};
+    tls_options_
+      = args_.tls
+          ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
+          : tls_options{{.tls_default = false, .is_server = true}};
     auto ssl_result = tls_options_.make_folly_ssl_context(dh);
     if (not ssl_result) {
       done_ = true;
@@ -244,8 +242,8 @@ public:
     TENZIR_ASSERT(event_base);
     auto socket = folly::AsyncServerSocket::newSocket(event_base);
     auto addr = folly::SocketAddress{host, port, true};
-    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket), addr,
-                                             backlog};
+    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket),
+                                             addr, backlog};
     handler_ = std::make_shared<AcceptHttpHandler>(server_state_);
     ctx.spawn_task(folly::coro::co_withExecutor(event_base, accept_loop()));
   }
@@ -275,8 +273,9 @@ public:
         for (auto i = size_t{}; i < slice.rows(); ++i) {
           metadata.data(request_record);
         }
-        slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
-                       std::move(slice), ctx.dh());
+        slice
+          = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                   std::move(slice), ctx.dh());
       }
       co_await push(std::move(slice));
       co_return;
@@ -309,8 +308,8 @@ public:
     if (args_.metadata_field) {
       request_metadata_by_sub_key_.emplace(sub_key, request_record);
     }
-    auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
-                                      tag_v<chunk_ptr>);
+    auto sub
+      = co_await ctx.spawn_sub(sub_key, std::move(pipeline), tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     auto push_result = co_await open_pipeline.push(std::move(payload));
     if (push_result.is_err()) {
@@ -323,8 +322,7 @@ public:
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
-                   OpCtx& ctx)
-    -> Task<void> override {
+                   OpCtx& ctx) -> Task<void> override {
     auto sub_key = materialize(key);
     if (active_sub_keys_.find(sub_key) == active_sub_keys_.end()) {
       co_return;
@@ -345,7 +343,8 @@ public:
     co_await push(std::move(slice));
   }
 
-  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
+  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
+    -> Task<void> override {
     auto sub_key = materialize(key);
     active_sub_keys_.erase(sub_key);
     request_metadata_by_sub_key_.erase(sub_key);
@@ -437,9 +436,8 @@ struct AcceptHttpPlugin final : public virtual OperatorPlugin {
     auto max_connections
       = d.named("max_connections", &AcceptHttpArgs::max_connections);
     auto tls = d.named("tls", &AcceptHttpArgs::tls);
-    auto parse
-      = d.pipeline(&AcceptHttpArgs::parse,
-                   {{"request", &AcceptHttpArgs::request_let}});
+    auto parse = d.pipeline(&AcceptHttpArgs::parse,
+                            {{"request", &AcceptHttpArgs::request_let}});
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto args = AcceptHttpArgs{};
       args.op = ctx.get_location(url).value_or(location::unknown);

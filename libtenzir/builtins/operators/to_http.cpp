@@ -54,7 +54,9 @@ auto queue_executor_request(
   if (not parsed) {
     if (diag_severity == severity::warning) {
       if (note.empty()) {
-        diagnostic::warning("failed to parse uri: {}", next_url).primary(op).emit(dh);
+        diagnostic::warning("failed to parse uri: {}", next_url)
+          .primary(op)
+          .emit(dh);
       } else {
         diagnostic::warning("failed to parse uri: {}", next_url)
           .primary(op)
@@ -63,7 +65,9 @@ auto queue_executor_request(
       }
     } else {
       if (note.empty()) {
-        diagnostic::error("failed to parse uri: {}", next_url).primary(op).emit(dh);
+        diagnostic::error("failed to parse uri: {}", next_url)
+          .primary(op)
+          .emit(dh);
       } else {
         diagnostic::error("failed to parse uri: {}", next_url)
           .primary(op)
@@ -121,7 +125,9 @@ struct ToHttpArgs {
       return failure::promise();
     }
     if (parallel.inner == 0) {
-      diagnostic::error("`parallel` must be not be zero").primary(parallel).emit(dh);
+      diagnostic::error("`parallel` must be not be zero")
+        .primary(parallel)
+        .emit(dh);
       return failure::promise();
     }
     if (paginate and paginate->inner != "link") {
@@ -154,8 +160,7 @@ struct ToHttpArgs {
 
 class ToHttp final : public Operator<table_slice, void> {
 public:
-  explicit ToHttp(ToHttpArgs args)
-    : args_{std::move(args)} {
+  explicit ToHttp(ToHttpArgs args) : args_{std::move(args)} {
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -186,10 +191,9 @@ public:
       if (part.type.kind().is<secret_type>()) {
         for (auto const& value : part.values<secret_type>()) {
           if (value) {
-            requests.emplace_back(
-              make_secret_request("url", materialize(*value),
-                                  args_.url.get_location(), urls.emplace_back(),
-                                  dh));
+            requests.emplace_back(make_secret_request(
+              "url", materialize(*value), args_.url.get_location(),
+              urls.emplace_back(), dh));
           } else {
             url_warned = true;
             urls.emplace_back();
@@ -253,9 +257,8 @@ public:
       }
       auto method = args_.make_method(method_name);
       if (not method) {
-        auto const method_location = args_.method
-                                       ? args_.method->get_location()
-                                       : args_.url.get_location();
+        auto const method_location = args_.method ? args_.method->get_location()
+                                                  : args_.url.get_location();
         diagnostic::warning("invalid http method: `{}`", method_name)
           .primary(method_location)
           .note("skipping request")
@@ -272,8 +275,9 @@ public:
         row_headers.values.emplace("Accept", "application/json, */*;q=0.5");
       }
       auto tls_default = http::infer_tls_default(url);
-      auto tls_opts = args_.tls ? tls_options{*args_.tls, {.tls_default = tls_default}}
-                                : tls_options{{.tls_default = tls_default}};
+      auto tls_opts = args_.tls
+                        ? tls_options{*args_.tls, {.tls_default = tls_default}}
+                        : tls_options{{.tls_default = tls_default}};
       auto tls_enabled = tls_opts.get_tls(nullptr).inner;
       http::normalize_http_url(url, tls_enabled);
       if (auto valid = tls_opts.validate(url, args_.url.get_location(), dh);
@@ -300,12 +304,10 @@ public:
           co_await in_flight.front().join();
           in_flight.pop_front();
         }
-        in_flight.push_back(
-          scope.spawn(
-            [this, request = std::move(request)]() mutable
-              -> Task<void> {
-              co_await run_request_chain(std::move(request));
-            }));
+        in_flight.push_back(scope.spawn(
+          [this, request = std::move(request)]() mutable -> Task<void> {
+            co_await run_request_chain(std::move(request));
+          }));
       }
       while (not in_flight.empty()) {
         co_await in_flight.front().join();
@@ -362,10 +364,11 @@ private:
         auto paginate_source = std::optional<location>{args_.paginate->source};
         if (auto next_url = http::next_url_from_link_headers(
               response, current_request.url, paginate_source, dh)) {
-          std::ignore = queue_executor_request(
-            pending, current_request.headers, std::move(*next_url),
-            request.tls_enabled, args_.op, dh, severity::warning,
-            "skipping request");
+          std::ignore
+            = queue_executor_request(pending, current_request.headers,
+                                     std::move(*next_url), request.tls_enabled,
+                                     args_.op, dh, severity::warning,
+                                     "skipping request");
         }
       }
       if (not ok) {
@@ -375,10 +378,10 @@ private:
     co_return;
   }
 
-  auto perform_request(ExecutorHttpRequest const& request,
-                       std::string_view method,
-                       std::string const& body,
-                       std::shared_ptr<folly::SSLContext> const& ssl_context) const
+  auto
+  perform_request(ExecutorHttpRequest const& request, std::string_view method,
+                  std::string const& body,
+                  std::shared_ptr<folly::SSLContext> const& ssl_context) const
     -> Task<http::HttpResult<http::ResponseData>> {
     auto config = http::ClientRequestConfig{
       .url = request.url,
@@ -438,9 +441,8 @@ private:
             },
             [&](secret_view x) {
               auto key = std::string{name};
-              requests.emplace_back(
-                make_secret_request(key, materialize(x), location,
-                                    row_headers.values[key], dh));
+              requests.emplace_back(make_secret_request(
+                key, materialize(x), location, row_headers.values[key], dh));
             },
             [&](auto const&) {
               if (not header_warned) {
@@ -527,9 +529,9 @@ private:
     }
   }
 
-  static auto eval_optional_string(std::optional<ast::expression> const& expr,
-                                   table_slice const& slice,
-                                   diagnostic_handler& dh)
+  static auto
+  eval_optional_string(std::optional<ast::expression> const& expr,
+                       table_slice const& slice, diagnostic_handler& dh)
     -> generator<std::string_view> {
     if (not expr) {
       for (auto i = size_t{}; i < slice.rows(); ++i) {
@@ -581,8 +583,7 @@ auto make_to_http_description() -> Description {
     = d.named_optional("connection_timeout", &ToHttpArgs::connection_timeout);
   auto max_retry_count
     = d.named_optional("max_retry_count", &ToHttpArgs::max_retry_count);
-  auto retry_delay
-    = d.named_optional("retry_delay", &ToHttpArgs::retry_delay);
+  auto retry_delay = d.named_optional("retry_delay", &ToHttpArgs::retry_delay);
   d.validate([=](ValidateCtx& ctx) -> Empty {
     auto args = ToHttpArgs{};
     args.op = ctx.get_location(url).value_or(location::unknown);

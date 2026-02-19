@@ -29,8 +29,8 @@
 #include <folly/io/coro/ServerSocket.h>
 #define nsel_CONFIG_SELECT_EXPECTED 1
 #include <proxygen/lib/http/codec/HTTPCodecFactory.h>
-#include <proxygen/lib/http/coro/HTTPSourceReader.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
+#include <proxygen/lib/http/coro/HTTPSourceReader.h>
 
 #include <atomic>
 #include <limits>
@@ -45,7 +45,8 @@ namespace {
 constexpr auto default_listen_backlog = uint32_t{128};
 constexpr auto default_stream_path = std::string_view{"/"};
 constexpr auto default_stream_method = std::string_view{"GET"};
-constexpr auto default_stream_content_type = std::string_view{"application/x-ndjson"};
+constexpr auto default_stream_content_type
+  = std::string_view{"application/x-ndjson"};
 
 template <typename T>
 constexpr auto inner(std::optional<located<T>> const& x) -> std::optional<T> {
@@ -107,7 +108,8 @@ public:
     clients_changed_.notify_one();
   }
 
-  auto snapshot_clients() const -> std::vector<std::shared_ptr<ServeHttpClient>> {
+  auto snapshot_clients() const
+    -> std::vector<std::shared_ptr<ServeHttpClient>> {
     auto guard = std::lock_guard{mutex_};
     auto result = std::vector<std::shared_ptr<ServeHttpClient>>{};
     result.reserve(clients_.size());
@@ -178,7 +180,8 @@ public:
     setHeapAllocated();
   }
 
-  auto readHeaderEvent() -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
+  auto readHeaderEvent()
+    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
     auto msg = std::make_unique<proxygen::HTTPMessage>();
     msg->setStatusCode(200);
     msg->setStatusMessage(proxygen::HTTPMessage::getDefaultReason(200));
@@ -219,8 +222,8 @@ public:
     co_return event;
   }
 
-  void stopReading(
-    folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
+  void
+  stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
     client_->close();
     if (heapAllocated_) {
       delete this;
@@ -252,23 +255,23 @@ public:
     auto request_path = std::string{};
     auto request_method = std::string{};
     auto reader = proxygen::coro::HTTPSourceReader{std::move(request_source)};
-    reader.onHeaders(
-      [&](std::unique_ptr<proxygen::HTTPMessage> msg, bool is_final,
-          bool /*eom*/) -> bool {
-        if (not is_final) {
-          return proxygen::coro::HTTPSourceReader::Continue;
-        }
-        request_method = msg->getMethodString();
-        request_path = msg->getPath();
+    reader.onHeaders([&](std::unique_ptr<proxygen::HTTPMessage> msg,
+                         bool is_final, bool /*eom*/) -> bool {
+      if (not is_final) {
         return proxygen::coro::HTTPSourceReader::Continue;
-      });
+      }
+      request_method = msg->getMethodString();
+      request_path = msg->getPath();
+      return proxygen::coro::HTTPSourceReader::Continue;
+    });
     reader.onBody([&](proxygen::coro::BufQueue body, bool /*eom*/) -> bool {
       std::ignore = body.move();
       return proxygen::coro::HTTPSourceReader::Continue;
     });
     co_await reader.read();
     if (state_->responses) {
-      if (auto response = http::lookup_response(*state_->responses, request_path)) {
+      if (auto response
+          = http::lookup_response(*state_->responses, request_path)) {
         co_return http::make_fixed_response_source(
           response->code, std::move(response->body), response->content_type);
       }
@@ -329,8 +332,9 @@ struct ServeHttpArgs {
         .emit(dh);
       return failure::promise();
     }
-    auto tls_opts = tls ? tls_options{*tls, {.tls_default = false, .is_server = true}}
-                        : tls_options{{.tls_default = false, .is_server = true}};
+    auto tls_opts
+      = tls ? tls_options{*tls, {.tls_default = false, .is_server = true}}
+            : tls_options{{.tls_default = false, .is_server = true}};
     TRY(tls_opts.validate(dh));
     return {};
   }
@@ -338,8 +342,7 @@ struct ServeHttpArgs {
 
 class ServeHttp final : public Operator<table_slice, void> {
 public:
-  explicit ServeHttp(ServeHttpArgs args)
-    : args_{std::move(args)} {
+  explicit ServeHttp(ServeHttpArgs args) : args_{std::move(args)} {
   }
 
   ServeHttp(ServeHttp const&) = delete;
@@ -376,10 +379,10 @@ public:
       co_return;
     }
     auto [host, port] = std::move(endpoint).unwrap();
-    tls_options_ = args_.tls
-                     ? tls_options{*args_.tls,
-                                   {.tls_default = false, .is_server = true}}
-                     : tls_options{{.tls_default = false, .is_server = true}};
+    tls_options_
+      = args_.tls
+          ? tls_options{*args_.tls, {.tls_default = false, .is_server = true}}
+          : tls_options{{.tls_default = false, .is_server = true}};
     auto ssl_result = tls_options_.make_folly_ssl_context(dh);
     if (not ssl_result) {
       done_ = true;
@@ -390,8 +393,8 @@ public:
     server_state_->responses = args_.responses.transform([](auto const& x) {
       return x.inner;
     });
-    server_state_->stream_path = args_.path ? args_.path->inner
-                                            : std::string{default_stream_path};
+    server_state_->stream_path
+      = args_.path ? args_.path->inner : std::string{default_stream_path};
     server_state_->stream_method = std::string{default_stream_method};
     if (args_.method) {
       auto method = http::normalize_http_method(args_.method->inner);
@@ -407,8 +410,8 @@ public:
     TENZIR_ASSERT(event_base);
     auto socket = folly::AsyncServerSocket::newSocket(event_base);
     auto addr = folly::SocketAddress{host, port, true};
-    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket), addr,
-                                             backlog};
+    server_ = Box<folly::coro::ServerSocket>{std::in_place, std::move(socket),
+                                             addr, backlog};
     handler_ = std::make_shared<ServeHttpHandler>(server_state_);
     ctx.spawn_task(folly::coro::co_withExecutor(event_base, accept_loop()));
   }

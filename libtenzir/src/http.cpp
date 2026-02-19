@@ -31,8 +31,8 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <deque>
 #include <ranges>
@@ -295,24 +295,25 @@ public:
     }
     auto method = parse_http_method(config_.method);
     if (not method) {
-      co_return Err{fmt::format("unsupported http method: `{}`",
-                                config_.method)};
+      co_return Err{
+        fmt::format("unsupported http method: `{}`", config_.method)};
     }
     method_ = to_proxygen_method(*method);
     url_ = std::move(url);
     auto timeout = proxygen::WheelTimerInstance{config_.connect_timeout, evb_};
     connector_ = Box<proxygen::HTTPConnector>{
-      std::in_place, static_cast<proxygen::HTTPConnector::Callback*>(this), timeout};
+      std::in_place, static_cast<proxygen::HTTPConnector::Callback*>(this),
+      timeout};
     auto addr = folly::SocketAddress{url_.getHost(), url_.getPort(), true};
     if (url_.isSecure()) {
       if (not config_.ssl_context) {
-        co_return Err{
-          std::string{"TLS is enabled for URL but no TLS context is available"}};
+        co_return Err{std::string{"TLS is enabled for URL but no TLS context "
+                                  "is available"}};
       }
-      (*connector_)->connectSSL(evb_, addr, config_.ssl_context, nullptr,
-                                config_.connect_timeout,
-                                folly::emptySocketOptionMap,
-                                folly::AsyncSocket::anyAddress(), url_.getHost());
+      (*connector_)
+        ->connectSSL(evb_, addr, config_.ssl_context, nullptr,
+                     config_.connect_timeout, folly::emptySocketOptionMap,
+                     folly::AsyncSocket::anyAddress(), url_.getHost());
     } else {
       (*connector_)->connect(evb_, addr, config_.connect_timeout);
     }
@@ -358,12 +359,13 @@ public:
     txn_ = nullptr;
   }
 
-  void onHeadersComplete(std::unique_ptr<proxygen::HTTPMessage> msg) noexcept override {
+  void onHeadersComplete(
+    std::unique_ptr<proxygen::HTTPMessage> msg) noexcept override {
     response_.status_code = msg->getStatusCode();
-    msg->getHeaders().forEach([&](std::string const& name,
-                                  std::string const& value) {
-      response_.headers.emplace_back(name, value);
-    });
+    msg->getHeaders().forEach(
+      [&](std::string const& name, std::string const& value) {
+        response_.headers.emplace_back(name, value);
+      });
   }
 
   void onBody(std::unique_ptr<folly::IOBuf> chain) noexcept override {
@@ -372,8 +374,9 @@ public:
     }
     auto bytes = chain->computeChainDataLength();
     if (response_.body.size() + bytes > config_.response_limit) {
-      finish(Err{fmt::format("response size exceeds configured limit of {} bytes",
-                             config_.response_limit)});
+      finish(
+        Err{fmt::format("response size exceeds configured limit of {} bytes",
+                        config_.response_limit)});
       if (txn_) {
         txn_->sendAbort();
       }
@@ -430,11 +433,14 @@ private:
 
 auto message::header(const std::string& name) -> struct header* {
   auto pred = [&](auto& x) -> bool {
-    if (x.name.size() != name.size())
+    if (x.name.size() != name.size()) {
       return false;
-    for (auto i = 0u; i < name.size(); ++i)
-      if (::toupper(x.name[i]) != ::toupper(name[i]))
+    }
+    for (auto i = 0u; i < name.size(); ++i) {
+      if (::toupper(x.name[i]) != ::toupper(name[i])) {
         return false;
+      }
+    }
     return true;
   };
   auto i = std::find_if(headers.begin(), headers.end(), pred);
@@ -458,26 +464,33 @@ auto request_item::parse(std::string_view str) -> std::optional<request_item> {
     return true;
   };
   auto xs = detail::split_escaped(str, ":=@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_data_json, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, ":=", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = data_json, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, ":", "\\", 1);
-  if (xs.size() == 2 and is_valid_header_name(xs[0]))
+  if (xs.size() == 2 and is_valid_header_name(xs[0])) {
     return request_item{.type = header, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "==", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = url_param, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "=@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_data, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "@", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = file_form, .key = xs[0], .value = xs[1]};
+  }
   xs = detail::split_escaped(str, "=", "\\", 1);
-  if (xs.size() == 2)
+  if (xs.size() == 2) {
     return request_item{.type = data, .key = xs[0], .value = xs[1]};
+  }
   return {};
 }
 
@@ -490,17 +503,20 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
         break;
       }
       case request_item::data: {
-        if (req.method.empty())
+        if (req.method.empty()) {
           req.method = "POST";
+        }
         body.emplace(std::move(item.key), std::move(item.value));
         break;
       }
       case request_item::data_json: {
-        if (req.method.empty())
+        if (req.method.empty()) {
           req.method = "POST";
+        }
         auto data = from_json(item.value);
-        if (not data)
+        if (not data) {
           return data.error();
+        }
         body.emplace(std::move(item.key), std::move(*data));
         break;
       }
@@ -548,8 +564,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     } else if (content_type.starts_with("application/json")) {
       if (not body.empty()) {
         req.body = json_encode(body);
-        if (accept)
+        if (accept) {
           accept->insert(accept->begin(), "application/json");
+        }
         TENZIR_DEBUG("JSON-encoded request body: {}", req.body);
       }
     } else {
@@ -562,8 +579,9 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
     // Without a Content-Type, we assume JSON.
     req.body = json_encode(body);
     req.headers.emplace_back("Content-Type", "application/json");
-    if (accept)
+    if (accept) {
       accept->insert(accept->begin(), "application/json");
+    }
   }
   // Add an Accept header unless we have one already.
   if (accept) {
@@ -644,7 +662,8 @@ auto validate_response_map(record const& responses, diagnostic_handler& dh,
       diagnostic::error("field must be `record`").primary(source).emit(dh);
       return failure::promise();
     }
-    if (rec->find("code") == rec->end() or rec->find("content_type") == rec->end()
+    if (rec->find("code") == rec->end()
+        or rec->find("content_type") == rec->end()
         or rec->find("body") == rec->end()) {
       diagnostic::error(
         "`responses` record must contain `code`, `content_type`, `body`")
@@ -719,8 +738,8 @@ auto lookup_response(record const& responses, std::string_view path)
 auto make_fixed_response_source(uint16_t code, std::string body,
                                 std::string_view content_type)
   -> proxygen::coro::HTTPSourceHolder {
-  auto source = proxygen::coro::HTTPFixedSource::makeFixedResponse(
-    code, std::move(body));
+  auto source
+    = proxygen::coro::HTTPFixedSource::makeFixedResponse(code, std::move(body));
   if (not content_type.empty()) {
     source->msg_->getHeaders().set("Content-Type", std::string{content_type});
   }
@@ -828,12 +847,9 @@ auto make_request_record(RequestData const& request) -> record {
     query.emplace(k, v);
   }
   return record{
-    {"headers", std::move(headers)},
-    {"query", std::move(query)},
-    {"path", request.path},
-    {"fragment", request.fragment},
-    {"method", request.method},
-    {"version", request.version},
+    {"headers", std::move(headers)}, {"query", std::move(query)},
+    {"path", request.path},          {"fragment", request.fragment},
+    {"method", request.method},      {"version", request.version},
     {"body", request.body},
   };
 }
@@ -940,11 +956,12 @@ auto next_url_from_link_headers(ResponseData const& response,
   return std::nullopt;
 }
 
-auto send_request(ClientRequestConfig config) -> Task<HttpResult<ResponseData>> {
+auto send_request(ClientRequestConfig config)
+  -> Task<HttpResult<ResponseData>> {
   auto* evb = folly::getGlobalIOExecutor()->getEventBase();
   TENZIR_ASSERT(evb);
-  auto request_task = Box<ProxygenClientRequest>{std::in_place, std::move(config),
-                                                 evb};
+  auto request_task
+    = Box<ProxygenClientRequest>{std::in_place, std::move(config), evb};
   co_return co_await folly::coro::co_withExecutor(evb, request_task->run());
 }
 

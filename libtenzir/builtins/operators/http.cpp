@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/http.hpp"
+
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
@@ -18,7 +20,6 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/http.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
@@ -352,8 +353,9 @@ auto find_plugin_for_mime(std::string_view mime, location op,
 }
 
 auto make_pipeline(const std::optional<located<pipeline>>& pipe,
-                   const caf::uri& uri, const caf_http::response& r, location oploc,
-                   diagnostic_handler& dh) -> failure_or<located<pipeline>> {
+                   const caf::uri& uri, const caf_http::response& r,
+                   location oploc, diagnostic_handler& dh)
+  -> failure_or<located<pipeline>> {
   if (pipe) {
     return *pipe;
   }
@@ -593,8 +595,8 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
 auto make_metadata(const caf_http::response& r, const uint64_t len)
   -> series_builder {
   auto response_data = tenzir::http::ResponseData{};
-  response_data.status_code = detail::narrow<uint16_t>(
-    std::to_underlying(r.code()));
+  response_data.status_code
+    = detail::narrow<uint16_t>(std::to_underlying(r.code()));
   response_data.headers.reserve(r.header_fields().size());
   for (const auto& [name, value] : r.header_fields()) {
     response_data.headers.emplace_back(name, value);
@@ -987,7 +989,8 @@ public:
         return std::move(diag).modify().severity(severity::warning).done();
       },
     };
-    auto pull = std::optional<caf::async::consumer_resource<caf_http::request>>{};
+    auto pull
+      = std::optional<caf::async::consumer_resource<caf_http::request>>{};
     auto url = std::string{};
     auto port = uint16_t{};
     auto req = make_secret_request("url", args_.url, url, dh);
@@ -1423,17 +1426,18 @@ public:
               .transform([](auto&& x) {
                 return x.first;
               })
-              .transform([&](const caf::async::future<caf_http::response>& fut) {
-                fut.bind_to(ctrl.self())
-                  .then(handle_response(std::move(uri)),
-                        [&](const caf::error& e) {
-                          --awaiting;
-                          ctrl.set_waiting(false);
-                          diagnostic::error("request failed: `{}`", e)
-                            .primary(args_.op)
-                            .emit(dh);
-                        });
-              });
+              .transform(
+                [&](const caf::async::future<caf_http::response>& fut) {
+                  fut.bind_to(ctrl.self())
+                    .then(handle_response(std::move(uri)),
+                          [&](const caf::error& e) {
+                            --awaiting;
+                            ctrl.set_waiting(false);
+                            diagnostic::error("request failed: `{}`", e)
+                              .primary(args_.op)
+                              .emit(dh);
+                          });
+                });
           });
       }
       paginate_queue.clear();
@@ -1741,132 +1745,132 @@ public:
     auto slices = std::vector<table_slice>{};
     auto pagination_queue = std::vector<pagination_request>{};
     auto hdr_warned = false;
-    const auto handle_response
-      = [&](view<record> og, caf::uri uri,
-            std::unordered_map<std::string, std::string> hdrs) {
-          return [&, hdrs = std::move(hdrs), uri = std::move(uri),
-                  og = materialize(std::move(og))](const caf_http::response& r) {
-            TENZIR_TRACE("[http] handling response with size: {}B",
-                         r.body().size_bytes());
-            ctrl.set_waiting(false);
-            const auto& headers = r.header_fields();
-            const auto it = std::ranges::find_if(headers, [](const auto& x) {
-              return detail::ascii_icase_equal(x.first, "content-encoding");
-            });
-            const auto encoding
-              = it != std::ranges::end(headers) ? it->first : "";
-            const auto make_chunk = [&] -> chunk_ptr {
-              if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
-                return chunk::make(std::move(*body));
-              }
-              return chunk::copy(r.body());
-            };
-            const auto make_blob = [&] -> blob {
-              if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
-                return std::move(*body);
-              }
-              return blob{r.body()};
-            };
-            const auto queue_paginate = [&](std::string next_url) {
-              std::ignore = queue_pagination_request(
-                pagination_queue, hdrs, std::move(next_url), tls_enabled,
-                args_.op, dh, severity::warning, "skipping request");
-            };
-            if (const auto code = std::to_underlying(r.code());
-                code < 200 or 399 < code) {
-              --awaiting;
-              if (not args_.error_field) {
-                diagnostic::warning("received erroneous http status code: `{}`",
-                                    code)
-                  .primary(args_.op)
-                  .note("skipping response handling")
-                  .hint("specify `error_field` to keep the event")
-                  .emit(dh);
-                return;
-              }
-              auto sb = series_builder{};
-              sb.data(og);
-              auto error = series_builder{};
-              error.data(make_blob());
-              auto slice
-                = assign(*args_.error_field, error.finish_assert_one_array(),
-                         sb.finish_assert_one_slice(), dh);
-              if (args_.metadata_field) {
-                auto sb = make_metadata(r, slice.rows());
-                slice
-                  = assign(*args_.metadata_field, sb.finish_assert_one_array(),
-                           slice, ctrl.diagnostics());
-              }
-              slices.push_back(std::move(slice));
-              return;
+    const auto handle_response =
+      [&](view<record> og, caf::uri uri,
+          std::unordered_map<std::string, std::string> hdrs) {
+        return [&, hdrs = std::move(hdrs), uri = std::move(uri),
+                og = materialize(std::move(og))](const caf_http::response& r) {
+          TENZIR_TRACE("[http] handling response with size: {}B",
+                       r.body().size_bytes());
+          ctrl.set_waiting(false);
+          const auto& headers = r.header_fields();
+          const auto it = std::ranges::find_if(headers, [](const auto& x) {
+            return detail::ascii_icase_equal(x.first, "content-encoding");
+          });
+          const auto encoding
+            = it != std::ranges::end(headers) ? it->first : "";
+          const auto make_chunk = [&] -> chunk_ptr {
+            if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
+              return chunk::make(std::move(*body));
             }
-            if (is_link_pagination(args_.paginate)) {
-              if (auto url
-                  = next_url_from_link_headers(args_.paginate, r, uri, tdh)) {
-                queue_paginate(std::move(*url));
-              }
-            }
-            if (r.body().empty()) {
-              --awaiting;
-              return;
-            }
-            auto p = make_pipeline(args_.parse, uri, r, args_.op, tdh);
-            if (not p) {
-              --awaiting;
-              return;
-            }
-            const auto actor
-              = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
-            std::invoke([&, &args_ = args_, r, og, hdrs,
-                         actor](this const auto& pull) -> void {
-              TENZIR_TRACE("[http] requesting slice");
-              ctrl.self()
-                .mail(atom::pull_v)
-                .request(actor, caf::infinite)
-                .then(
-                  [&, r, hdrs, pull, og, actor](table_slice slice) {
-                    TENZIR_TRACE("[http] pulled slice");
-                    ctrl.set_waiting(false);
-                    if (slice.rows() == 0) {
-                      TENZIR_TRACE("[http] finishing subpipeline");
-                      --awaiting;
-                      return;
-                    }
-                    pull();
-                    if (args_.response_field) {
-                      auto sb = series_builder{};
-                      for (auto i = size_t{}; i < slice.rows(); ++i) {
-                        sb.data(og);
-                      }
-                      slice = assign(*args_.response_field, series{slice},
-                                     sb.finish_assert_one_slice(), tdh);
-                    }
-                    if (args_.metadata_field) {
-                      auto sb = make_metadata(r, slice.rows());
-                      slice = assign(*args_.metadata_field,
-                                     sb.finish_assert_one_array(), slice,
-                                     ctrl.diagnostics());
-                    }
-                    if (auto url
-                        = next_url_from_lambda(args_.paginate, slice, tdh)) {
-                      queue_paginate(std::move(*url));
-                    } else {
-                      TENZIR_TRACE("[http] done paginating");
-                    }
-                    slices.push_back(std::move(slice));
-                  },
-                  [&](const caf::error& err) {
-                    --awaiting;
-                    ctrl.set_waiting(false);
-                    diagnostic::warning(err)
-                      .note("failed to parse response")
-                      .primary(args_.op)
-                      .emit(ctrl.diagnostics());
-                  });
-            });
-            TENZIR_TRACE("[http] handled response");
+            return chunk::copy(r.body());
           };
+          const auto make_blob = [&] -> blob {
+            if (auto body = try_decompress_body(encoding, r.body(), tdh)) {
+              return std::move(*body);
+            }
+            return blob{r.body()};
+          };
+          const auto queue_paginate = [&](std::string next_url) {
+            std::ignore = queue_pagination_request(
+              pagination_queue, hdrs, std::move(next_url), tls_enabled,
+              args_.op, dh, severity::warning, "skipping request");
+          };
+          if (const auto code = std::to_underlying(r.code());
+              code < 200 or 399 < code) {
+            --awaiting;
+            if (not args_.error_field) {
+              diagnostic::warning("received erroneous http status code: `{}`",
+                                  code)
+                .primary(args_.op)
+                .note("skipping response handling")
+                .hint("specify `error_field` to keep the event")
+                .emit(dh);
+              return;
+            }
+            auto sb = series_builder{};
+            sb.data(og);
+            auto error = series_builder{};
+            error.data(make_blob());
+            auto slice
+              = assign(*args_.error_field, error.finish_assert_one_array(),
+                       sb.finish_assert_one_slice(), dh);
+            if (args_.metadata_field) {
+              auto sb = make_metadata(r, slice.rows());
+              slice
+                = assign(*args_.metadata_field, sb.finish_assert_one_array(),
+                         slice, ctrl.diagnostics());
+            }
+            slices.push_back(std::move(slice));
+            return;
+          }
+          if (is_link_pagination(args_.paginate)) {
+            if (auto url
+                = next_url_from_link_headers(args_.paginate, r, uri, tdh)) {
+              queue_paginate(std::move(*url));
+            }
+          }
+          if (r.body().empty()) {
+            --awaiting;
+            return;
+          }
+          auto p = make_pipeline(args_.parse, uri, r, args_.op, tdh);
+          if (not p) {
+            --awaiting;
+            return;
+          }
+          const auto actor
+            = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
+          std::invoke([&, &args_ = args_, r, og, hdrs,
+                       actor](this const auto& pull) -> void {
+            TENZIR_TRACE("[http] requesting slice");
+            ctrl.self()
+              .mail(atom::pull_v)
+              .request(actor, caf::infinite)
+              .then(
+                [&, r, hdrs, pull, og, actor](table_slice slice) {
+                  TENZIR_TRACE("[http] pulled slice");
+                  ctrl.set_waiting(false);
+                  if (slice.rows() == 0) {
+                    TENZIR_TRACE("[http] finishing subpipeline");
+                    --awaiting;
+                    return;
+                  }
+                  pull();
+                  if (args_.response_field) {
+                    auto sb = series_builder{};
+                    for (auto i = size_t{}; i < slice.rows(); ++i) {
+                      sb.data(og);
+                    }
+                    slice = assign(*args_.response_field, series{slice},
+                                   sb.finish_assert_one_slice(), tdh);
+                  }
+                  if (args_.metadata_field) {
+                    auto sb = make_metadata(r, slice.rows());
+                    slice = assign(*args_.metadata_field,
+                                   sb.finish_assert_one_array(), slice,
+                                   ctrl.diagnostics());
+                  }
+                  if (auto url
+                      = next_url_from_lambda(args_.paginate, slice, tdh)) {
+                    queue_paginate(std::move(*url));
+                  } else {
+                    TENZIR_TRACE("[http] done paginating");
+                  }
+                  slices.push_back(std::move(slice));
+                },
+                [&](const caf::error& err) {
+                  --awaiting;
+                  ctrl.set_waiting(false);
+                  diagnostic::warning(err)
+                    .note("failed to parse response")
+                    .primary(args_.op)
+                    .emit(ctrl.diagnostics());
+                });
+          });
+          TENZIR_TRACE("[http] handled response");
         };
+      };
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -2085,17 +2089,19 @@ public:
                 .transform([](auto&& x) {
                   return x.first;
                 })
-                .transform([&](const caf::async::future<caf_http::response>& fut) {
-                  fut.bind_to(ctrl.self())
-                    .then(handle_response(row, std::move(uri), std::move(hdrs)),
-                          [&](const caf::error& e) {
-                            --awaiting;
-                            ctrl.set_waiting(false);
-                            diagnostic::warning("request failed: `{}`", e)
-                              .primary(args_.op)
-                              .emit(dh);
-                          });
-                });
+                .transform(
+                  [&](const caf::async::future<caf_http::response>& fut) {
+                    fut.bind_to(ctrl.self())
+                      .then(handle_response(row, std::move(uri),
+                                            std::move(hdrs)),
+                            [&](const caf::error& e) {
+                              --awaiting;
+                              ctrl.set_waiting(false);
+                              diagnostic::warning("request failed: `{}`", e)
+                                .primary(args_.op)
+                                .emit(dh);
+                            });
+                  });
             });
           while (awaiting >= args_.parallel.inner) {
             // NOTE: Must be an index-based loop. The thread can go back to the
