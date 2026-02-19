@@ -15,7 +15,9 @@
 #include <caf/actor_registry.hpp>
 #include <caf/mailbox_element.hpp>
 #include <caf/response_type.hpp>
+#include <caf/unit.hpp>
 #include <folly/futures/Future.h>
+#include <type_traits>
 
 namespace tenzir {
 
@@ -37,12 +39,18 @@ void mail_with_callback(Handle receiver, caf::message msg, F f) {
     if (ptr->payload.match_elements<caf::error>()) {
       std::invoke(std::move(*f),
                   caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+    } else if constexpr (std::is_void_v<Result>) {
+      if (ptr->payload.empty() || ptr->payload.match_element<caf::unit_t>(0)) {
+        std::invoke(std::move(*f), caf::expected<void>{});
+      } else {
+        TENZIR_ERROR("unexpected non-empty payload for void response");
+      }
     } else if (ptr->payload.match_element<Result>(0)) {
       std::invoke(std::move(*f),
                   caf::expected<Result>{ptr->payload.get_as<Result>(0)});
     } else {
       // TODO: Apparently we cannot throw here?
-      TENZIR_ERROR("OH NO");
+      TENZIR_ERROR("unexpected response payload type");
     }
     // Serializing the companion for network transmission registers it.
     // Erase it to release that reference and allow cleanup.
