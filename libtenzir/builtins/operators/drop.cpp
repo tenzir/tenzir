@@ -13,6 +13,7 @@
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -197,8 +198,46 @@ private:
   std::vector<ast::field_path> selectors_;
 };
 
-class plugin2 final : public virtual operator_plugin2<drop_operator2> {
+struct DropArgs {
+  std::vector<ast::field_path> fields;
+};
+
+class Drop final : public Operator<table_slice, table_slice> {
 public:
+  explicit Drop(DropArgs args) : args_{std::move(args)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto result = tenzir::drop(input, args_.fields, ctx.dh(), true);
+    co_await push(std::move(result));
+  }
+
+private:
+  DropArgs args_;
+};
+
+class plugin2 final : public virtual operator_plugin2<drop_operator2>,
+                      public virtual OperatorPlugin {
+public:
+  auto describe() const -> Description override {
+    auto d = Describer<DropArgs, Drop>{};
+    auto fields = d.variadic("fields", &DropArgs::fields, "field");
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      auto values = ctx.get_all(fields);
+      for (auto& value : values) {
+        if (not value) {
+          continue;
+        }
+        if (value->path().empty()) {
+          diagnostic::error("cannot drop `this`").primary(*value).emit(ctx);
+        }
+      }
+      return {};
+    });
+    return d.order_invariant();
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("drop");

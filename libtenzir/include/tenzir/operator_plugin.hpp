@@ -128,6 +128,7 @@ public:
   std::vector<Positional> positional;
   std::optional<Pipeline> pipeline;
   std::optional<size_t> first_optional;
+  std::optional<size_t> variadic_index;
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
@@ -217,6 +218,20 @@ auto make_setter(T Args::* ptr) -> auto {
   }
 }
 
+template <class Args, class T>
+auto make_variadic_setter(std::vector<T> Args::* ptr) -> auto {
+  using Value = T;
+  if constexpr (argument_parser_bare_type<Value>) {
+    return Setter<located<Value>>{[ptr](Any& args, located<Value> value) {
+      ((&args.as<Args>())->*ptr).push_back(std::move(value.inner));
+    }};
+  } else {
+    return Setter<Value>{[ptr](Any& args, Value value) {
+      ((&args.as<Args>())->*ptr).push_back(std::move(value));
+    }};
+  }
+}
+
 /// Represents an argument that is not yet fully evaluated.
 struct Incomplete {
   Incomplete() = default;
@@ -268,10 +283,11 @@ class ValidateCtx {
 public:
   ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               std::optional<const PipelineArg> pipeline,
-              const Description& /*desc*/, diagnostic_handler& dh)
+              const Description& desc, diagnostic_handler& dh)
     : args_{args},
       named_args_{named_args},
       pipeline_{std::move(pipeline)},
+      desc_{&desc},
       dh_{&dh} {
   }
 
@@ -328,9 +344,27 @@ public:
           return std::nullopt;
         }
       },
-      [](const auto&) -> std::optional<T> {
-        return std::nullopt;
+      []<class U>(const U& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
       });
+  }
+
+  template <class Args, class T>
+  auto get_all(Argument<Args, T> arg) -> std::vector<std::optional<T>> {
+    auto result = std::vector<std::optional<T>>{};
+    if (arg.type() != ArgumentType::positional or not desc_->variadic_index
+        or arg.index() != *desc_->variadic_index) {
+      result.push_back(get(arg));
+      return result;
+    }
+    for (auto i = arg.index(); i < args_.size(); ++i) {
+      result.push_back(get_impl<T>(args_[i]));
+    }
+    return result;
   }
 
   template <class Args, class T>
@@ -376,14 +410,75 @@ public:
       });
   }
 
+  template <class Args, class T>
+  auto get_locations(Argument<Args, T> arg) -> std::vector<location> {
+    auto result = std::vector<location>{};
+    if (arg.type() != ArgumentType::positional or not desc_->variadic_index
+        or arg.index() != *desc_->variadic_index) {
+      if (auto loc = get_location(arg)) {
+        result.push_back(*loc);
+      }
+      return result;
+    }
+    for (auto i = arg.index(); i < args_.size(); ++i) {
+      if (auto loc = get_location_impl(args_[i])) {
+        result.push_back(*loc);
+      }
+    }
+    return result;
+  }
+
   explicit(false) operator diagnostic_handler&() {
     return *dh_;
   }
 
 private:
+  template <class T>
+  static auto get_impl(const Arg& value) -> std::optional<T> {
+    if (is<Incomplete>(value)) {
+      return std::nullopt;
+    }
+    return match(
+      value,
+      [](const Incomplete&) -> std::optional<T> {
+        TENZIR_UNREACHABLE();
+      },
+      []<class U>(const located<U>& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v.inner;
+        } else if constexpr (std::same_as<T, located<U>>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
+      },
+      []<class U>(const U& v) -> std::optional<T> {
+        if constexpr (std::same_as<T, U>) {
+          return v;
+        } else {
+          return std::nullopt;
+        }
+      });
+  }
+
+  static auto get_location_impl(const Arg& value) -> std::optional<location> {
+    return match(
+      value,
+      [](const Incomplete& v) -> std::optional<location> {
+        return v.expr.get_location();
+      },
+      []<class U>(const located<U>& v) -> std::optional<location> {
+        return v.source;
+      },
+      [](const auto& v) -> std::optional<location> {
+        return v.get_location();
+      });
+  }
+
   std::span<const Arg> args_;
   std::span<const NamedArg> named_args_;
   std::optional<const PipelineArg> pipeline_;
+  const Description* desc_;
   diagnostic_handler* dh_;
 };
 
@@ -438,6 +533,9 @@ public:
   auto positional(std::string name, T Args::* ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
     // TODO: Check exact type?
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
     if (desc_.first_optional) {
       panic("cannot have required positional after optional positional");
     }
@@ -453,6 +551,9 @@ public:
   template <ArgType T>
   auto positional(std::string name, std::optional<T> Args::* ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
@@ -469,6 +570,9 @@ public:
   auto optional_positional(std::string name, T Args::* ptr,
                            std::string type = type_default<T>)
     -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
@@ -545,13 +649,47 @@ public:
     return Argument<Args, located<ir::pipeline>>{ArgumentType::pipeline, 0};
   }
 
-  // TODO
-  // template<typename T>
-  // auto variadic(std::string,
-  //               vector<T> Args::* ptr,
-  //               std::string type = type_default<T>) {
-  //
-  // }
+  /// Adds a variadic positional argument (requires at least one value).
+  template <ArgType T>
+  auto variadic(std::string name, std::vector<T> Args::* ptr,
+                std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot have multiple variadic positional arguments");
+    }
+    auto index = desc_.positional.size();
+    desc_.variadic_index = index;
+    // Append "..." to the type string to indicate variadic
+    auto variadic_type = type.empty() ? "..." : type + "...";
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(variadic_type),
+      make_variadic_setter(ptr),
+    });
+    return Argument<Args, T>{ArgumentType::positional, index};
+  }
+
+  /// Adds an optional variadic positional argument (accepts zero or more values).
+  template <ArgType T>
+  auto optional_variadic(std::string name, std::vector<T> Args::* ptr,
+                         std::string type = type_default<T>)
+    -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot have multiple variadic positional arguments");
+    }
+    if (not desc_.first_optional) {
+      desc_.first_optional = desc_.positional.size();
+    }
+    auto index = desc_.positional.size();
+    desc_.variadic_index = index;
+    // Append "..." to the type string to indicate variadic
+    auto variadic_type = type.empty() ? "..." : type + "...";
+    desc_.positional.push_back(Positional{
+      std::move(name),
+      std::move(variadic_type),
+      make_variadic_setter(ptr),
+    });
+    return Argument<Args, T>{ArgumentType::positional, index};
+  }
 
   /// Adds a required named argument.
   template <ArgType T>
