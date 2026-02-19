@@ -1422,6 +1422,30 @@ auto run_chain(OperatorChain<Input, Output> chain,
     .run_to_completion();
 }
 
+template auto
+run_chain(OperatorChain<void, table_slice> chain,
+          Box<Pull<OperatorMsg<void>>> pull_upstream,
+          Box<Push<OperatorMsg<table_slice>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<chunk_ptr, table_slice> chain,
+          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+          Box<Push<OperatorMsg<table_slice>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<table_slice, table_slice> chain,
+          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+          Box<Push<OperatorMsg<table_slice>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
 /// Run a potentially-open pipeline without external control.
 template <class Output>
   requires(not std::same_as<Output, void>)
