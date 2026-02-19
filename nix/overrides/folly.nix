@@ -19,10 +19,11 @@ folly.overrideAttrs (orig: {
       hash
       ;
   };
-  propagatedBuildInputs = (orig.propagatedBuildInputs or []) ++ [
+  propagatedBuildInputs = (orig.propagatedBuildInputs or [ ]) ++ [
     glog
   ];
-  patches = (builtins.filter (x: (builtins.match ".*-folly-fix-glog-0\.7\.patch$" "${x}") == []) orig.patches)
+  patches =
+    (builtins.filter (x: (builtins.match ".*-folly-fix-glog-0\.7\.patch$" "${x}") == [ ]) orig.patches)
     ++ lib.optional stdenv.hostPlatform.isMusl ./folly-musl-compat.patch
     ++ lib.optional stdenv.hostPlatform.isStatic ./folly-static-compat.patch;
 
@@ -31,7 +32,8 @@ folly.overrideAttrs (orig: {
   '';
 
   env = {
-    NIX_CFLAGS_COMPILE = orig.env.NIX_CFLAGS_COMPILE
+    NIX_CFLAGS_COMPILE =
+      orig.env.NIX_CFLAGS_COMPILE
       + lib.optionalString stdenv.hostPlatform.isMusl " -Doff64_t=off_t"
       + lib.optionalString stdenv.hostPlatform.isStatic " -DFOLLY_HAS_EXCEPTION_TRACER=0";
     NIX_LDFLAGS = lib.optionalString stdenv.hostPlatform.isStatic " -L${xz.out}/lib -llzma";

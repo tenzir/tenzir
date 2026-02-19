@@ -77,7 +77,8 @@ stdenv.mkDerivation (finalAttrs: {
       proxygen/lib/http/gen_HTTPCommonHeaders.sh \
       proxygen/lib/stats/gen_StatsWrapper.sh
 
-
+  ''
+  + lib.optionalString stdenv.hostPlatform.isx86_64 ''
     cmakeFlagsArray+=("-DCMAKE_CXX_FLAGS=-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2")
   '';
 

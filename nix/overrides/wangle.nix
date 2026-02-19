@@ -24,7 +24,9 @@ wangle.overrideAttrs (orig: {
     in
     origEnv
     // {
-      NIX_LDFLAGS = (origEnv.NIX_LDFLAGS or "") + lib.optionalString stdenv.hostPlatform.isStatic " -L${xz.out}/lib -llzma";
+      NIX_LDFLAGS =
+        (origEnv.NIX_LDFLAGS or "")
+        + lib.optionalString stdenv.hostPlatform.isStatic " -L${xz.out}/lib -llzma";
     };
   preConfigure =
     (orig.preConfigure or "")
