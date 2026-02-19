@@ -206,6 +206,7 @@ RUN apt-get update && \
       gnupg2 \
       libasan8 \
       libboost-context1.83.0 \
+      libboost-date-time1.83.0 \
       libboost-filesystem1.83.0 \
       libboost-iostreams1.83.0 \
       libboost-program-options1.83.0 \
