@@ -523,10 +523,19 @@ private:
   configuration cfg_{};
 };
 
-class Deduplicate final : public Operator<table_slice, table_slice> {
+class Deduplicate final : public Operator<table_slice, table_slice>,
+                          public ir::Operator {
 public:
+  Deduplicate() = default;
+
   explicit Deduplicate(configuration cfg)
-    : cfg_{std::move(cfg)}, cleanup_duration_{get_cleanup_duration(cfg_)} {
+    : Deduplicate{location::unknown, std::move(cfg)} {
+  }
+
+  Deduplicate(location loc, configuration cfg)
+    : loc_{loc},
+      cfg_{std::move(cfg)},
+      cleanup_duration_{get_cleanup_duration(cfg_)} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -541,23 +550,6 @@ public:
   auto snapshot(Serde& serde) -> void override {
     serde("states", states_);
     serde("row", row_);
-  }
-
-private:
-  configuration cfg_;
-  duration cleanup_duration_;
-  tsl::robin_map<data, State> states_;
-  int64_t row_ = 0;
-  std::chrono::steady_clock::time_point last_cleanup_time_
-    = std::chrono::steady_clock::now();
-};
-
-class DeduplicateIr final : public ir::Operator {
-public:
-  DeduplicateIr() = default;
-
-  DeduplicateIr(location loc, configuration cfg)
-    : loc_{loc}, cfg_{std::move(cfg)} {
   }
 
   auto name() const -> std::string override {
@@ -605,13 +597,18 @@ public:
     return Deduplicate{std::move(cfg_)};
   }
 
-  friend auto inspect(auto& f, DeduplicateIr& x) -> bool {
+  friend auto inspect(auto& f, Deduplicate& x) -> bool {
     return f.object(x).fields(f.field("loc", x.loc_), f.field("cfg", x.cfg_));
   }
 
 private:
   location loc_ = location::unknown;
-  configuration cfg_{};
+  configuration cfg_;
+  duration cleanup_duration_;
+  tsl::robin_map<data, State> states_;
+  int64_t row_ = 0;
+  std::chrono::steady_clock::time_point last_cleanup_time_
+    = std::chrono::steady_clock::now();
 };
 
 class plugin final : public operator_plugin2<deduplicate_operator>,
@@ -632,11 +629,11 @@ public:
     TRY(auto cfg,
         parse_configuration(std::move(legacy_inv), provider.as_session()));
     TRY(cfg.keys.bind(ctx));
-    return DeduplicateIr{loc, std::move(cfg)};
+    return Deduplicate{loc, std::move(cfg)};
   }
 };
 
-using deduplicate_ir_plugin = inspection_plugin<ir::Operator, DeduplicateIr>;
+using deduplicate_ir_plugin = inspection_plugin<ir::Operator, Deduplicate>;
 
 } // namespace
 } // namespace tenzir::plugins::deduplicate
