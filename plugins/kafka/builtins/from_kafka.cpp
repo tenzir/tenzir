@@ -442,6 +442,11 @@ public:
       co_return;
     }
     initialize_runtime_state();
+    TENZIR_DEBUG("[from_kafka] starts consuming topic `{}` with {} "
+                 "partition(s),"
+                 " {} worker(s), optimization={}",
+                 args_.topic, runtime_.partition_sources.size(), worker_count_,
+                 args_._optimization);
     for (auto source_index = size_t{0};
          source_index < runtime_.partition_sources.size(); ++source_index) {
       ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalIOExecutor(),
@@ -488,6 +493,8 @@ public:
         .frame = std::move(*next),
       };
     } catch (folly::OperationCancelled const&) {
+      TENZIR_DEBUG("[from_kafka] await_task cancelled for topic `{}`",
+                   args_.topic);
       request_pipeline_stop();
       emit_perf_summary("cancelled");
       co_return TableSliceResult{.end_of_stream = true};
@@ -498,6 +505,7 @@ public:
     -> Task<void> override {
     auto task_result = std::move(result).as<TableSliceResult>();
     if (task_result.end_of_stream) {
+      TENZIR_DEBUG("[from_kafka] end of stream for topic `{}`", args_.topic);
       done_ = true;
       emit_perf_summary("end_of_stream");
       request_pipeline_stop();
@@ -534,6 +542,8 @@ public:
       mark_partition_eof(partition);
     }
     if (frame.fatal_error) {
+      TENZIR_DEBUG("[from_kafka] fatal error for topic `{}`: {}", args_.topic,
+                   *frame.fatal_error);
       diagnostic::error("{}", *frame.fatal_error).emit(ctx);
       done_ = true;
       add_perf_counter(perf_.fatal_errors);
@@ -541,6 +551,8 @@ public:
       request_pipeline_stop();
     }
     if (args_.count and emitted_messages_ >= args_.count->inner) {
+      TENZIR_DEBUG("[from_kafka] reached count limit {} for topic `{}`",
+                   args_.count->inner, args_.topic);
       // Don't set done_ here; let the pipeline drain so the build_loop
       // can finalize and flush any buffered data from the builder.
       request_pipeline_stop();
@@ -615,6 +627,7 @@ public:
 
   /// Stops background tasks as soon as the runner asks this source to stop.
   auto stop(OpCtx&) -> Task<void> override {
+    TENZIR_DEBUG("[from_kafka] stopping operator for topic `{}`", args_.topic);
     request_pipeline_stop();
     emit_perf_summary("stop");
     co_return;
@@ -694,6 +707,10 @@ private:
         .emit(ctx);
       return std::nullopt;
     }
+    if (args_.offset) {
+      TENZIR_DEBUG("[from_kafka] adjusting offset to {} ({})",
+                   args_.offset->inner, offset);
+    }
     return offset;
   }
 
@@ -709,6 +726,13 @@ private:
       co_return std::nullopt;
     }
     auto source_cfg = std::move(*cfg);
+    if (auto bootstrap = config.find("bootstrap.servers");
+        bootstrap != config.end()) {
+      TENZIR_DEBUG("[from_kafka] connecting to broker: {}",
+                   try_as<std::string>(&bootstrap->second)
+                     ? *try_as<std::string>(&bootstrap->second)
+                     : "???");
+    }
     auto user_options = args_.options;
     if (auth.options) {
       user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
@@ -783,6 +807,8 @@ private:
       return std::nullopt;
     }
     std::ranges::sort(partitions);
+    TENZIR_DEBUG("[from_kafka] discovered {} partition(s) for topic `{}`",
+                 partitions.size(), args_.topic);
     return partitions;
   }
 
@@ -853,6 +879,8 @@ private:
       runtime_.partition_source_by_id.emplace(
         partition, runtime_.partition_sources.size());
       runtime_.partition_sources.emplace_back(std::move(source));
+      TENZIR_DEBUG("[from_kafka] assigned partition {} for topic `{}`",
+                   partition, args_.topic);
     }
     if (runtime_.partition_sources.empty()) {
       diagnostic::error("topic `{}` has no assignable partitions", args_.topic)
@@ -1029,6 +1057,8 @@ private:
     if (runtime_.pipeline_stop_requested.exchange(true)) {
       return;
     }
+    TENZIR_DEBUG("[from_kafka] requesting pipeline stop for topic `{}`",
+                 args_.topic);
     for (auto& source : runtime_.partition_sources) {
       if (source.queue) {
         (*source.queue)->request_stop();
@@ -1093,6 +1123,7 @@ private:
                                                                   true)) {
       co_return;
     }
+    TENZIR_DEBUG("[from_kafka] all fetchers done, closing message queue");
     for (size_t i = 0; i < worker_count_; ++i) {
       co_await runtime_.message_queue->enqueue(std::nullopt);
     }
@@ -1123,6 +1154,9 @@ private:
           break;
         }
         default: {
+          TENZIR_DEBUG("[from_kafka] unexpected kafka error in partition {}: "
+                       "`{}`",
+                       message.partition(), message.errstr());
           batch.fatal_error
             = fmt::format("unexpected kafka error: `{}`", message.errstr());
           request_pipeline_stop();
@@ -1297,6 +1331,8 @@ private:
       co_await finish_fetcher();
       co_return;
     }
+    TENZIR_DEBUG("[from_kafka] fetch loop started for partition {}",
+                 source.partition);
     try {
       while (not is_pipeline_stopping()) {
         auto max_messages = fetch_batch_size_limit();
@@ -1321,8 +1357,12 @@ private:
         }
       }
     } catch (folly::OperationCancelled const&) {
+      TENZIR_DEBUG("[from_kafka] fetch loop cancelled for partition {}",
+                   source.partition);
       request_pipeline_stop();
     }
+    TENZIR_DEBUG("[from_kafka] fetch loop stopped for partition {}",
+                 source.partition);
     co_await finish_fetcher();
   }
 
@@ -1420,6 +1460,8 @@ private:
       // Flush remaining data from the builder.
       auto final_slices = builder_ptr->finalize_as_table_slice();
       if (not final_slices.empty()) {
+        TENZIR_DEBUG("[from_kafka] flushing {} remaining slice(s) from builder",
+                     final_slices.size());
         auto frame = TableSliceFrame{};
         frame.seq
           = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
@@ -1427,10 +1469,12 @@ private:
         co_await runtime_.table_slice_queue->enqueue(std::move(frame));
       }
     } catch (folly::OperationCancelled const&) {
+      TENZIR_DEBUG("[from_kafka] build loop cancelled");
       request_pipeline_stop();
     }
     if (runtime_.live_builders.fetch_sub(1) == 1
         and runtime_.table_slice_queue) {
+      TENZIR_DEBUG("[from_kafka] all builders done, closing table slice queue");
       co_await runtime_.table_slice_queue->enqueue(std::nullopt);
     }
   }
@@ -1499,7 +1543,12 @@ private:
       return;
     }
     eof_partitions_.insert(partition);
+    TENZIR_DEBUG("[from_kafka] partition {} reached EOF ({}/{} partitions EOF)",
+                 partition, eof_partitions_.size(),
+                 assigned_partitions_.size());
     if (eof_partitions_.size() == assigned_partitions_.size()) {
+      TENZIR_DEBUG("[from_kafka] all partitions reached EOF for topic `{}`",
+                   args_.topic);
       // Don't set done_ here; let the pipeline drain so the build_loop
       // can finalize and flush any buffered data from the builder.
       request_pipeline_stop();

@@ -49,6 +49,7 @@ public:
   /// Produces one signed token and installs it on the librdkafka handle.
   auto oauthbearer_token_refresh_cb(RdKafka::Handle* handle, std::string const&)
     -> void override {
+    TENZIR_DEBUG("[from_kafka] refreshing OAUTHBEARER token via AWS IAM");
     constexpr auto valid_for = std::chrono::seconds{900};
     Aws::InitAPI({});
     auto aws_guard = detail::scope_guard{[] noexcept {
@@ -68,19 +69,23 @@ public:
       = [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
       auto base_provider = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
       if (creds_ and not creds_->access_key_id.empty()) {
+        TENZIR_DEBUG("[from_kafka] using explicit AWS credentials");
         base_provider
           = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
             creds_->access_key_id, creds_->secret_access_key,
             creds_->session_token);
       } else if (creds_ and not creds_->profile.empty()) {
+        TENZIR_DEBUG("[from_kafka] using AWS profile `{}`", creds_->profile);
         base_provider
           = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
             creds_->profile.c_str());
       } else {
+        TENZIR_DEBUG("[from_kafka] using default AWS credentials chain");
         base_provider
           = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
       }
       if (creds_ and not creds_->role.empty()) {
+        TENZIR_DEBUG("[from_kafka] assuming IAM role `{}`", creds_->role);
         auto sts_config = Aws::Client::ClientConfiguration{};
         sts_config.region = region;
         auto sts_client = std::make_shared<Aws::STS::STSClient>(
@@ -103,6 +108,8 @@ public:
       diagnostic::warning("got expired AWS credentials")
         .primary(options_.loc)
         .emit(dh_);
+    } else {
+      TENZIR_DEBUG("[from_kafka] AWS credentials resolved successfully");
     }
 
     request.AddQueryStringParameter("Action", "kafka-cluster:Connect");
@@ -128,6 +135,10 @@ public:
                                   errstr);
     if (not errstr.empty()) {
       diagnostic::error("failed to set oauth token: {}", errstr).emit(dh_);
+    } else {
+      TENZIR_DEBUG("[from_kafka] OAUTHBEARER token set successfully, expires "
+                   "in {} seconds",
+                   valid_for.count());
     }
   }
 
