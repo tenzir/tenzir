@@ -105,8 +105,11 @@ if (BUILD_SHARED_LIBS)
 endif ()
 set(BUILD_SHARED_LIBS OFF)
 
-# Skip install rules for all bundled Facebook libs — they are static archives
-# linked into libtenzir.so and never installed individually.
+# Skip install rules while adding bundled Facebook libs — they are static
+# archives linked into libtenzir.so and never installed individually.
+# Restore the previous value afterwards so this directory still gets a
+# cmake_install.cmake for parent include() calls.
+set(_tenzir_prev_skip_install_rules "${CMAKE_SKIP_INSTALL_RULES}")
 set(CMAKE_SKIP_INSTALL_RULES ON)
 
 # ---- 1. FOLLY ----
@@ -221,6 +224,8 @@ dependency_summary("proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/proxygen"
 
 # All Facebook libs are static archives linked into libtenzir.so. No
 # export/install of individual targets needed.
+set(CMAKE_SKIP_INSTALL_RULES "${_tenzir_prev_skip_install_rules}")
+unset(_tenzir_prev_skip_install_rules)
 set(_tenzir_bundled_facebook
     ""
     PARENT_SCOPE)
