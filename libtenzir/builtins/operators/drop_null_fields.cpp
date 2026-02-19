@@ -148,8 +148,7 @@ auto fields_to_drop_for_pattern(const null_pattern& pattern,
 
 auto drop_null_fields_impl(table_slice slice,
                            const std::vector<ast::field_path>& selectors,
-                           diagnostic_handler& dh)
-  -> std::vector<table_slice> {
+                           diagnostic_handler& dh) -> std::vector<table_slice> {
   if (slice.rows() == 0) {
     return {table_slice{}};
   }
@@ -238,8 +237,8 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      auto output
-        = drop_null_fields_impl(std::move(slice), selectors_, ctrl.diagnostics());
+      auto output = drop_null_fields_impl(std::move(slice), selectors_,
+                                          ctrl.diagnostics());
       for (auto& part : output) {
         co_yield std::move(part);
       }
@@ -262,9 +261,8 @@ private:
 
 } // namespace
 
-class plugin final
-  : public virtual operator_plugin2<drop_null_fields_operator>,
-    public virtual OperatorPlugin {
+class plugin final : public virtual operator_plugin2<drop_null_fields_operator>,
+                     public virtual OperatorPlugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<DropNullFieldsArgs, DropNullFields>{};
@@ -295,7 +293,9 @@ public:
           continue;
         }
         if (selector->has_this()) {
-          diagnostic::error("cannot drop `this`").primary(locations[i]).emit(ctx);
+          diagnostic::error("cannot drop `this`")
+            .primary(locations[i])
+            .emit(ctx);
         }
       }
       return {};
