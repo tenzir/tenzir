@@ -1253,6 +1253,14 @@ public:
     co_return PeriodicTick{};
   }
 
+  auto state() -> OperatorState {
+    if (! draining_) {
+      return OperatorState::unspecified;
+    }
+    return finished_workers_ == args_.jobs ? OperatorState::done
+                                           : OperatorState::almost_done;
+  }
+
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
@@ -1269,6 +1277,10 @@ public:
     }
     // Parallel mode: output from workers.
     auto slice = std::move(result).as<table_slice>();
+    if (slice.rows() == 0) {
+      ++finished_workers_;
+      co_return;
+    }
     co_await push(std::move(slice));
   }
 
@@ -1287,6 +1299,7 @@ public:
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    draining_ = true;
     if (args_.jobs > 0) {
       // Send any remaining buffered data to a worker.
       if (not buffer_.empty()) {
@@ -1296,23 +1309,26 @@ public:
       }
       // Close the input queue and drain until all workers signaled completion.
       co_await read_input_queue_->enqueue(std::nullopt);
-      co_await drain_parallel_output(push);
+      // co_await drain_parallel_output(push);
       co_return;
+    } else {
+      // Non-parallel code path.
+      TENZIR_UNUSED(ctx);
+      TENZIR_ASSERT(parser_);
+      if (not buffer_.empty()) {
+        buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
+        parser_->parse(simdjson::padded_string_view{buffer_});
+        buffer_.clear();
+      }
+      parser_->validate_completion();
+      if (parser_->abort_requested) {
+        co_return;
+      }
+      for (auto& slice : parser_->builder.finalize_as_table_slice()) {
+        co_await push(std::move(slice));
+      }
     }
-    TENZIR_UNUSED(ctx);
-    TENZIR_ASSERT(parser_);
-    if (not buffer_.empty()) {
-      buffer_.reserve(buffer_.size() + simdjson::SIMDJSON_PADDING);
-      parser_->parse(simdjson::padded_string_view{buffer_});
-      buffer_.clear();
-    }
-    parser_->validate_completion();
-    if (parser_->abort_requested) {
-      co_return;
-    }
-    for (auto& slice : parser_->builder.finalize_as_table_slice()) {
-      co_await push(std::move(slice));
-    }
+    co_return;
   }
 
 private:
@@ -1500,6 +1516,8 @@ private:
 
   ReadJsonArgs args_;
   duration next_tick_;
+  bool draining_ = false;
+  size_t finished_workers_ = 0;
   // Non-parallel mode state:
   std::unique_ptr<ndjson_parser> parser_;
   // Shared state:
@@ -1586,6 +1604,7 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
+    parser.named_optional("_jobs", args.jobs);
     TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
@@ -1929,21 +1948,30 @@ public:
     co_return co_await write_output_queue_->dequeue();
   }
 
+  auto state() -> OperatorState {
+    if (! draining_) {
+      return OperatorState::unspecified;
+    }
+    return finished_workers_ == args_.jobs ? OperatorState::done
+                                           : OperatorState::almost_done;
+  }
+
   auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     auto next = std::move(result).as<chunk_ptr>();
     if (not next) {
+      ++finished_workers_;
       co_return;
     }
     co_await push(std::move(next));
   }
 
   auto finalize(Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
+    draining_ = true;
     if (args_.jobs > 0) {
       // Close the input queue and drain until all workers signaled completion.
       co_await write_input_queue_->enqueue(std::nullopt);
-      co_await drain_parallel_output(push);
       co_return;
     }
     TENZIR_UNUSED(ctx);
@@ -1976,18 +2004,6 @@ private:
     co_await write_output_queue_->enqueue(chunk_ptr{});
   }
 
-  auto drain_parallel_output(Push<chunk_ptr>& push) -> Task<void> {
-    auto seen_stop_tokens = uint64_t{0};
-    while (seen_stop_tokens < args_.jobs or not write_output_queue_->empty()) {
-      auto next = co_await write_output_queue_->dequeue();
-      if (not next) {
-        ++seen_stop_tokens;
-        continue;
-      }
-      co_await push(std::move(next));
-    }
-  }
-
   using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
   using WriteOutputQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
@@ -1996,6 +2012,8 @@ private:
   mutable bool array_open_written_ = false;
   std::shared_ptr<WriteInputQueue> write_input_queue_;
   std::shared_ptr<WriteOutputQueue> write_output_queue_;
+  bool draining_ = false;
+  uint64_t finished_workers_ = 0;
 };
 
 class write_json_plugin final : public virtual operator_plugin2<write_json>,
