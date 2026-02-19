@@ -4,10 +4,10 @@
 .github/
 /libtenzir/aux/*
 !/libtenzir/aux/caf/
+!/libtenzir/aux/facebook/
 !/libtenzir/aux/fast_float/
-!/libtenzir/aux/folly/
 !/libtenzir/aux/pfs/
-!/libtenzir/aux/proxygen/
+!/libtenzir/aux/robin-map/
 !/libtenzir/aux/simdjson/
 CMakeUserPresets.json
 build/

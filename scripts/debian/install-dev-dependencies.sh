@@ -18,6 +18,7 @@ apt-get -y --no-install-recommends install \
   libboost-context-dev \
   libboost-dev \
   libboost-filesystem-dev \
+  libboost-iostreams-dev \
   libboost-program-options-dev \
   libboost-regex-dev \
   libboost-stacktrace-dev \

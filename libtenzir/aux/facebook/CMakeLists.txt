@@ -26,6 +26,16 @@ endforeach ()
 # Common setup
 find_package(glog REQUIRED)
 
+# Prefer bundled Facebook headers over any globally installed copies (e.g.
+# Homebrew) so all five libs compile against a consistent API surface.
+include_directories(
+  BEFORE
+  "${CMAKE_CURRENT_SOURCE_DIR}/folly"
+  "${CMAKE_CURRENT_SOURCE_DIR}/fizz"
+  "${CMAKE_CURRENT_SOURCE_DIR}/wangle"
+  "${CMAKE_CURRENT_SOURCE_DIR}/mvfst"
+  "${CMAKE_CURRENT_SOURCE_DIR}/proxygen")
+
 # Configure folly build options
 set(BUILD_TESTS
     OFF

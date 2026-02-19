@@ -143,7 +143,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
       -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
-      -D TENZIR_ENABLE_BUNDLED_FOLLY:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
@@ -207,6 +207,7 @@ RUN apt-get update && \
       libasan8 \
       libboost-context1.83.0 \
       libboost-filesystem1.83.0 \
+      libboost-iostreams1.83.0 \
       libboost-program-options1.83.0 \
       libboost-regex1.83.0 \
       libboost-stacktrace1.83.0 \
