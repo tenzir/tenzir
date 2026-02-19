@@ -9,6 +9,8 @@
 #include "kafka/librdkafka_utils.hpp"
 
 #include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/env.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/data.hpp>
@@ -23,6 +25,7 @@
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sts/STSClient.h>
+#include <aws/sts/model/AssumeRoleRequest.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
@@ -57,6 +60,31 @@ public:
 
     TENZIR_ASSERT(creds_ and not creds_->region.empty());
     auto const& region = creds_->region;
+    // Keep AWS_PROFILE aligned with aws_iam.profile while this callback runs so
+    // the default provider chain behaves like `AWS_PROFILE=<profile> ...`.
+    auto previous_aws_profile = std::optional<std::string>{};
+    auto aws_profile_overridden = false;
+    if (creds_ and not creds_->profile.empty()) {
+      previous_aws_profile = detail::getenv("AWS_PROFILE");
+      if (auto err = detail::setenv("AWS_PROFILE", creds_->profile, 1);
+          err.valid()) {
+        diagnostic::warning("failed to set AWS_PROFILE: {}", err)
+          .primary(options_.loc)
+          .emit(dh_);
+      } else {
+        aws_profile_overridden = true;
+      }
+    }
+    auto aws_profile_guard = detail::scope_guard{[&]() noexcept {
+      if (not aws_profile_overridden) {
+        return;
+      }
+      if (previous_aws_profile) {
+        (void)detail::setenv("AWS_PROFILE", *previous_aws_profile, 1);
+        return;
+      }
+      (void)detail::unsetenv("AWS_PROFILE");
+    }};
     auto url
       = Aws::Http::URI{fmt::format("https://kafka.{}.amazonaws.com/", region)};
     auto request = Aws::Http::Standard::StandardHttpRequest{
@@ -64,22 +92,18 @@ public:
       Aws::Http::HttpMethod::HTTP_GET,
     };
 
+    auto make_base_provider
+      = [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
+      if (creds_ and not creds_->access_key_id.empty()) {
+        return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+          creds_->access_key_id, creds_->secret_access_key,
+          creds_->session_token);
+      }
+      return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+    };
     auto provider
       = [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-      auto base_provider = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
-      if (creds_ and not creds_->access_key_id.empty()) {
-        base_provider
-          = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-            creds_->access_key_id, creds_->secret_access_key,
-            creds_->session_token);
-      } else if (creds_ and not creds_->profile.empty()) {
-        base_provider
-          = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
-            creds_->profile.c_str());
-      } else {
-        base_provider
-          = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
-      }
+      auto base_provider = make_base_provider();
       if (creds_ and not creds_->role.empty()) {
         auto sts_config = Aws::Client::ClientConfiguration{};
         sts_config.region = region;
@@ -96,9 +120,41 @@ public:
     }();
 
     if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
-      diagnostic::warning("got empty AWS credentials")
-        .primary(options_.loc)
-        .emit(dh_);
+      if (creds_ and not creds_->role.empty()) {
+        auto sts_config = Aws::Client::ClientConfiguration{};
+        sts_config.region = region;
+        auto sts_client = Aws::STS::STSClient{
+          make_base_provider(),
+          nullptr,
+          sts_config,
+        };
+        auto request = Aws::STS::Model::AssumeRoleRequest{};
+        request.SetRoleArn(creds_->role);
+        request.SetRoleSessionName(creds_->session_name.empty()
+                                     ? "tenzir-session"
+                                     : creds_->session_name);
+        if (not creds_->external_id.empty()) {
+          request.SetExternalId(creds_->external_id);
+        }
+        auto outcome = sts_client.AssumeRole(request);
+        if (outcome.IsSuccess()) {
+          diagnostic::warning("got empty AWS credentials")
+            .primary(options_.loc)
+            .note("role assumption probe succeeded for {}", creds_->role)
+            .note("provider still returned empty credentials")
+            .emit(dh_);
+        } else {
+          diagnostic::warning("got empty AWS credentials")
+            .primary(options_.loc)
+            .note("STS AssumeRole probe failed for {}", creds_->role)
+            .note("{}", outcome.GetError().GetMessage())
+            .emit(dh_);
+        }
+      } else {
+        diagnostic::warning("got empty AWS credentials")
+          .primary(options_.loc)
+          .emit(dh_);
+      }
     } else if (creds.IsExpired()) {
       diagnostic::warning("got expired AWS credentials")
         .primary(options_.loc)

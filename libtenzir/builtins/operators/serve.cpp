@@ -1242,7 +1242,7 @@ public:
     }
   }
 
-  auto finalize(OpCtx& ctx) -> Task<void> override {
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto result
       = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
     if (not result) {
@@ -1250,6 +1250,7 @@ public:
         .note("failed to deregister at serve-manager")
         .emit(ctx);
     }
+    co_return FinalizeBehavior::done;
   }
 
 private:

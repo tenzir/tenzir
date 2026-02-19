@@ -939,7 +939,7 @@ public:
     }
   }
 
-  auto finalize(OpCtx& ctx) -> Task<void> override {
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     if (not announced_) {
       auto announce_result
         = co_await async_mail(atom::announce_v, false).request(cache_);
@@ -947,7 +947,7 @@ public:
         diagnostic::error(announce_result.error())
           .note("failed to announce write-cache operator to cache")
           .emit(ctx);
-        co_return;
+        co_return FinalizeBehavior::done;
       }
       announced_ = true;
     }
@@ -960,6 +960,7 @@ public:
         .note("failed to finalize cache write")
         .emit(ctx);
     }
+    co_return FinalizeBehavior::done;
   }
 
   auto state() -> OperatorState override {
@@ -1126,7 +1127,8 @@ public:
     ++read_offset_;
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     finalized_ = true;
     if (not announced_) {
       auto announce_result
@@ -1136,7 +1138,7 @@ public:
           .note("failed to announce cache operator")
           .emit(ctx);
         done_ = true;
-        co_return;
+        co_return FinalizeBehavior::done;
       }
       announced_ = true;
     }
@@ -1146,7 +1148,7 @@ public:
       diagnostic::error(write_result.error())
         .note("failed to finalize cache write")
         .emit(ctx);
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     // Drain remaining data from the cache.
     while (true) {
@@ -1165,6 +1167,7 @@ public:
       ++read_offset_;
     }
     done_ = true;
+    co_return FinalizeBehavior::done;
   }
 
   auto state() -> OperatorState override {
