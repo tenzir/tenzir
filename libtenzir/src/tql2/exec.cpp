@@ -1373,13 +1373,13 @@ void write_profile(
     // Emit thread name metadata once per pid.
     if (bp_pids_emitted.insert(pid).second) {
       emit(fmt::format(
-        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocked Upstream"}}}})pp",
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocks Upstream"}}}})pp",
         pid));
     }
     if (not has_any_bp) {
       has_any_bp = true;
       emit(fmt::format(
-        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocked Upstream"}}}})pp",
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocks Upstream"}}}})pp",
         pid_totals));
     }
     for (auto const& ev : prof.stats->backpressure_events) {
