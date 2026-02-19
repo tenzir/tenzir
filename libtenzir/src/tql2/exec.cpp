@@ -1120,8 +1120,10 @@ void write_profile(
     size_t buffer_bytes = 0;
     size_t buffer_batches = 0;
     size_t buffer_events = 0;
-    bool has_events = false;
-    bool has_bytes = false;
+    bool has_events_in = false;
+    bool has_events_out = false;
+    bool has_bytes_in = false;
+    bool has_bytes_out = false;
   };
   // Build per-operator channel aggregates: "In" metrics go to the sender,
   // "Out" metrics go to the receiver. For cross-boundary channels (between a
@@ -1161,8 +1163,8 @@ void write_profile(
         if (is_events) {
           agg.buffer_events += ch.events_in - ch.events_out;
         }
-        agg.has_events |= is_events;
-        agg.has_bytes |= is_bytes;
+        agg.has_events_out |= is_events;
+        agg.has_bytes_out |= is_bytes;
       }
       if (auto ri = op_index.find(receiver_target); ri != op_index.end()) {
         auto& agg = aggs[ri->second];
@@ -1170,8 +1172,8 @@ void write_profile(
         agg.batches_out += ch.batches_out;
         agg.events_out += ch.events_out;
         agg.signals_out += ch.signals_out;
-        agg.has_events |= is_events;
-        agg.has_bytes |= is_bytes;
+        agg.has_events_in |= is_events;
+        agg.has_bytes_in |= is_bytes;
       }
     }
     return aggs;
@@ -1251,7 +1253,9 @@ void write_profile(
                      static_cast<double>(cur.task_count));
       }
       // Channel metrics — skip entirely for void-only operators.
-      if (agg.has_events or agg.has_bytes) {
+      auto has_any_channel = agg.has_events_in or agg.has_events_out
+                             or agg.has_bytes_in or agg.has_bytes_out;
+      if (has_any_channel) {
         total_buffer_bytes += agg.buffer_bytes;
         total_buffer_batches += agg.buffer_batches;
         total_buffer_events += agg.buffer_events;
@@ -1271,7 +1275,7 @@ void write_profile(
         };
         emit_counter("G: Buffer (MB)", pid, us, mb(agg.buffer_bytes));
         emit_counter("H: Buffer (batches)", pid, us, d(agg.buffer_batches));
-        if (agg.has_events) {
+        if (agg.has_events_out) {
           emit_counter("I: Buffer (events)", pid, us, d(agg.buffer_events));
         }
         emit_counter("J: MB In/s", pid, us,
@@ -1286,10 +1290,12 @@ void write_profile(
         emit_counter("P: Batches Out/s", pid, us,
                      rate(agg.batches_in, prev.batches_in));
         emit_counter("Q: Batches Out (cumulative)", pid, us, d(agg.batches_in));
-        if (agg.has_events) {
+        if (agg.has_events_in) {
           emit_counter("R: Events In/s", pid, us,
                        rate(agg.events_out, prev.events_out));
           emit_counter("S: Events In (cumulative)", pid, us, d(agg.events_out));
+        }
+        if (agg.has_events_out) {
           emit_counter("T: Events Out/s", pid, us,
                        rate(agg.events_in, prev.events_in));
           emit_counter("U: Events Out (cumulative)", pid, us, d(agg.events_in));
