@@ -85,9 +85,8 @@ public:
       auto connect_error = std::optional<std::string>{};
       try {
         auto transport = co_await folly::coro::co_withExecutor(
-          evb_,
-          folly::coro::Transport::newConnectedSocket(evb_, address_,
-                                                     connect_timeout));
+          evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
+                                                           connect_timeout));
         reconnect_backoff_ = connect_initial_backoff;
         co_return Box<folly::coro::Transport>{std::move(transport)};
       } catch (const std::exception& ex) {
@@ -117,7 +116,8 @@ public:
     TENZIR_ASSERT(transport_evb);
     if (tls_context_) {
       try {
-        co_await upgrade_transport_to_tls_client(transport, tls_context_, host_);
+        co_await upgrade_transport_to_tls_client(transport, tls_context_,
+                                                 host_);
       } catch (const std::exception& ex) {
         diagnostic::warning("TLS handshake failed with {}: {}",
                             address_.describe(), ex.what())

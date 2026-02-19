@@ -81,9 +81,8 @@ public:
       done_ = true;
       co_return;
     }
-    auto sub
-      = co_await ctx.spawn_sub(sub_key_, std::move(pipeline_copy),
-                               tag_v<table_slice>);
+    auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline_copy),
+                                      tag_v<table_slice>);
     TENZIR_UNUSED(sub);
     co_return;
   }
@@ -112,7 +111,8 @@ public:
     co_return;
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx) -> Task<void> override {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> override {
     if (done_ or not chunk or chunk->size() == 0) {
       co_return;
     }
@@ -132,8 +132,8 @@ public:
           folly::coro::co_withExecutor(evb_, client->write(data)),
           write_timeout);
       } catch (std::exception const& ex) {
-        diagnostic::warning("serve_tcp: dropping client after write failure: {}",
-                            ex.what())
+        diagnostic::warning(
+          "serve_tcp: dropping client after write failure: {}", ex.what())
           .emit(ctx);
         failed.push_back(client);
       }

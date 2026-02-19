@@ -74,9 +74,8 @@ public:
       done_ = true;
       co_return;
     }
-    auto sub
-      = co_await ctx.spawn_sub(sub_key_, std::move(pipeline_copy),
-                               tag_v<table_slice>);
+    auto sub = co_await ctx.spawn_sub(sub_key_, std::move(pipeline_copy),
+                                      tag_v<table_slice>);
     TENZIR_UNUSED(sub);
     co_return;
   }
@@ -105,7 +104,8 @@ public:
     co_return;
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx) -> Task<void> override {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> override {
     if (done_ or not chunk or chunk->size() == 0) {
       co_return;
     }
@@ -164,9 +164,8 @@ private:
       auto connect_error = std::optional<std::string>{};
       try {
         auto transport = co_await folly::coro::co_withExecutor(
-          evb_,
-          folly::coro::Transport::newConnectedSocket(evb_, address_,
-                                                     connect_timeout));
+          evb_, folly::coro::Transport::newConnectedSocket(evb_, address_,
+                                                           connect_timeout));
         auto boxed = Box<folly::coro::Transport>{std::move(transport)};
         if (tls_context_) {
           co_await upgrade_transport_to_tls_client(boxed, tls_context_, host_);
@@ -183,7 +182,8 @@ private:
           .emit(dh);
       }
       auto backoff = reconnect_backoff_;
-      reconnect_backoff_ = std::min(reconnect_backoff_ * 2, connect_max_backoff);
+      reconnect_backoff_
+        = std::min(reconnect_backoff_ * 2, connect_max_backoff);
       co_await folly::coro::sleep(backoff);
     }
   }
