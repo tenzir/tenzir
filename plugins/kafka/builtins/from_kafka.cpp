@@ -751,6 +751,19 @@ private:
       diagnostic::error("failed to create kafka consumer: {}", error).emit(ctx);
       co_return std::nullopt;
     }
+    // Forward the SASL callback queue to librdkafka's background thread so
+    // OAUTHBEARER token refresh fires without polling.
+    if (source_cfg.oauth_callback) {
+      auto sasl_err = std::unique_ptr<RdKafka::Error>{
+        raw_consumer->sasl_background_callbacks_enable()};
+      if (sasl_err) {
+        diagnostic::error("failed to enable SASL background callbacks: {}",
+                          sasl_err->str())
+          .emit(ctx);
+        delete raw_consumer;
+        co_return std::nullopt;
+      }
+    }
     auto source_consumer = SourceConsumer{
       .consumer_cfg = std::move(source_cfg),
       .consumer = Box<RdKafka::KafkaConsumer>::from_unique_ptr(

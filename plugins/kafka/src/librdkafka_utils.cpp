@@ -355,6 +355,17 @@ auto make_consumer_configuration(record const& options,
         err) {
       return err;
     }
+    // Enable a dedicated SASL queue so that
+    // sasl_background_callbacks_enable() can forward it to the background
+    // thread. Without this, the token refresh op sits on the main reply
+    // queue and is never processed because the new operator does not call
+    // poll()/consume().
+    auto errstr = std::string{};
+    if (cfg.conf->enable_sasl_queue(true, errstr) != RdKafka::Conf::CONF_OK) {
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to enable SASL queue: {}",
+                                         errstr));
+    }
   }
 
   return cfg;
