@@ -1119,6 +1119,7 @@ void write_profile(
     size_t signals_out = 0;
     size_t buffer_bytes = 0;
     size_t buffer_batches = 0;
+    size_t buffer_events = 0;
     bool has_events = false;
     bool has_bytes = false;
   };
@@ -1157,6 +1158,9 @@ void write_profile(
         agg.signals_in += ch.signals_in;
         agg.buffer_bytes += ch.current_bytes;
         agg.buffer_batches += ch.batches_in - ch.batches_out;
+        if (is_events) {
+          agg.buffer_events += ch.events_in - ch.events_out;
+        }
         agg.has_events |= is_events;
         agg.has_bytes |= is_bytes;
       }
@@ -1210,6 +1214,7 @@ void write_profile(
     // Totals accumulators.
     auto total_buffer_bytes = size_t{0};
     auto total_buffer_batches = size_t{0};
+    auto total_buffer_events = size_t{0};
     auto total_wall_s = 0.0;
     auto total_cpu_s = 0.0;
     auto total_tasks = size_t{0};
@@ -1249,6 +1254,7 @@ void write_profile(
       if (agg.has_events or agg.has_bytes) {
         total_buffer_bytes += agg.buffer_bytes;
         total_buffer_batches += agg.buffer_batches;
+        total_buffer_events += agg.buffer_events;
         auto d = [](size_t v) {
           return static_cast<double>(v);
         };
@@ -1265,32 +1271,33 @@ void write_profile(
         };
         emit_counter("G: Buffer (MB)", pid, us, mb(agg.buffer_bytes));
         emit_counter("H: Buffer (batches)", pid, us, d(agg.buffer_batches));
-        emit_counter("I: MB In/s", pid, us,
-                     mb_rate(agg.bytes_out, prev.bytes_out));
-        emit_counter("J: MB In (cumulative)", pid, us, mb(agg.bytes_out));
-        emit_counter("K: MB Out/s", pid, us,
-                     mb_rate(agg.bytes_in, prev.bytes_in));
-        emit_counter("L: MB Out (cumulative)", pid, us, mb(agg.bytes_in));
-        emit_counter("M: Batches In/s", pid, us,
-                     rate(agg.batches_out, prev.batches_out));
-        emit_counter("N: Batches In (cumulative)", pid, us, d(agg.batches_out));
-        emit_counter("O: Batches Out/s", pid, us,
-                     rate(agg.batches_in, prev.batches_in));
-        emit_counter("P: Batches Out (cumulative)", pid, us, d(agg.batches_in));
         if (agg.has_events) {
-          emit_counter("Q: Events In/s", pid, us,
-                       rate(agg.events_out, prev.events_out));
-          emit_counter("R: Events In (cumulative)", pid, us, d(agg.events_out));
-          emit_counter("S: Events Out/s", pid, us,
-                       rate(agg.events_in, prev.events_in));
-          emit_counter("T: Events Out (cumulative)", pid, us, d(agg.events_in));
+          emit_counter("I: Buffer (events)", pid, us, d(agg.buffer_events));
         }
-        emit_counter("U: Signals In/s", pid, us,
+        emit_counter("J: MB In/s", pid, us,
+                     mb_rate(agg.bytes_out, prev.bytes_out));
+        emit_counter("K: MB In (cumulative)", pid, us, mb(agg.bytes_out));
+        emit_counter("L: MB Out/s", pid, us,
+                     mb_rate(agg.bytes_in, prev.bytes_in));
+        emit_counter("M: MB Out (cumulative)", pid, us, mb(agg.bytes_in));
+        emit_counter("N: Batches In/s", pid, us,
+                     rate(agg.batches_out, prev.batches_out));
+        emit_counter("O: Batches In (cumulative)", pid, us, d(agg.batches_out));
+        emit_counter("P: Batches Out/s", pid, us,
+                     rate(agg.batches_in, prev.batches_in));
+        emit_counter("Q: Batches Out (cumulative)", pid, us, d(agg.batches_in));
+        if (agg.has_events) {
+          emit_counter("R: Events In/s", pid, us,
+                       rate(agg.events_out, prev.events_out));
+          emit_counter("S: Events In (cumulative)", pid, us, d(agg.events_out));
+          emit_counter("T: Events Out/s", pid, us,
+                       rate(agg.events_in, prev.events_in));
+          emit_counter("U: Events Out (cumulative)", pid, us, d(agg.events_in));
+        }
+        emit_counter("V: Signals In/s", pid, us,
                      rate(agg.signals_out, prev.signals_out));
-        emit_counter("V: Signals In (cumulative)", pid, us, d(agg.signals_out));
         emit_counter("W: Signals Out/s", pid, us,
                      rate(agg.signals_in, prev.signals_in));
-        emit_counter("X: Signals Out (cumulative)", pid, us, d(agg.signals_in));
       }
     }
     // Totals across all operators.
@@ -1309,6 +1316,8 @@ void write_profile(
                  static_cast<double>(total_buffer_bytes) / 1'000'000.0);
     emit_counter("H: Buffer (batches)", pid_totals, us,
                  static_cast<double>(total_buffer_batches));
+    emit_counter("I: Buffer (events)", pid_totals, us,
+                 static_cast<double>(total_buffer_events));
     prev_aggs = std::move(aggs);
     prev_execs = std::move(cur_execs);
   }
