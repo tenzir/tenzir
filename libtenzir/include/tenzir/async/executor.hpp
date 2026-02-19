@@ -212,6 +212,13 @@ public:
     return folly::getGlobalIOExecutor();
   }
 
+  /// Registers the C++ type name for an operator. The default is a no-op.
+  /// Override this to collect operator type names for profiling output.
+  virtual auto register_op_name(OpId id, std::type_info const& type) -> void {
+    TENZIR_UNUSED(id);
+    TENZIR_UNUSED(type);
+  }
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
