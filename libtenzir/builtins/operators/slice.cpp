@@ -369,10 +369,11 @@ public:
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (not needs_buffering_) {
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     // Resolve negative indices using total row count (offset_)
     auto begin = begin_.value_or(0);
@@ -387,7 +388,7 @@ public:
     begin = std::max(begin, int64_t{0});
     end = std::clamp(end, int64_t{0}, offset_);
     if (end <= begin) {
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     // Apply slice to buffer
     auto stride = stride_.value_or(1);
@@ -396,6 +397,7 @@ public:
     } else {
       co_await finalize_negative_stride(push, begin, end, stride);
     }
+    co_return FinalizeBehavior::done;
   }
 
   auto state() -> OperatorState override {
