@@ -209,8 +209,9 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
   return map_series(eval(x.left), [&](series l) -> series {
     if (auto null = l.as<null_type>()) {
       if (not x.suppress_warnings()) {
-        diagnostic::warning("tried to access field `{}` of `null`", x.name.name)
+        diagnostic::warning("tried to access field of `null`")
           .primary(x.name)
+          .note("field name is `{}`", x.name.name)
           .hint("append `?` to suppress this warning")
           .emit(ctx_);
       }
@@ -218,10 +219,10 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     }
     auto* rec_ty = try_as<record_type>(l.type);
     if (not rec_ty) {
-      diagnostic::warning("cannot access field `{}` of non-record type",
-                          x.name.name)
+      diagnostic::warning("cannot access field of non-record type")
         .primary(x.name)
         .secondary(x.left, "type `{}`", l.type.kind())
+        .note("field name is `{}`", x.name.name)
         .emit(ctx_);
       return series::null(null_type{}, l.length());
     }
@@ -229,8 +230,9 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     if (auto idx = rec_ty->resolve_field(x.name.name)) {
       const auto has_null = s.null_count() != 0;
       if (has_null and not x.suppress_warnings()) {
-        diagnostic::warning("tried to access field `{}` of `null`", x.name.name)
+        diagnostic::warning("tried to access field of `null`")
           .primary(x.name)
+          .note("field name is `{}`", x.name.name)
           .hint("append `?` to suppress this warning")
           .emit(ctx_);
         return series{
@@ -245,8 +247,9 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       };
     }
     if (not x.suppress_warnings()) {
-      diagnostic::warning("record does not have field `{}`", x.name.name)
+      diagnostic::warning("record does not have this field")
         .primary(x.name)
+        .note("field name is `{}`", x.name.name)
         .compose([&](auto&& d) {
           auto suggestion = suggest_field_name(x.name.name, rec_ty);
           return suggestion
