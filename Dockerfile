@@ -277,7 +277,8 @@ FROM plugins-source AS compaction-plugin
 COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-compaction --parallel 1 && \
     DESTDIR=/plugin/compaction cmake --install build-compaction --component Runtime && \
     rm -rf build-compaction
@@ -287,7 +288,8 @@ FROM plugins-source AS context-plugin
 COPY contrib/tenzir-plugins/context ./contrib/tenzir-plugins/context
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-context --parallel && \
     DESTDIR=/plugin/context cmake --install build-context --component Runtime && \
     rm -rf build-context
@@ -297,7 +299,8 @@ FROM plugins-source AS pipeline-manager-plugin
 COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-manager
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-pipeline-manager --parallel && \
     DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --component Runtime && \
     rm -rf build-pipeline-manager
@@ -309,7 +312,8 @@ FROM plugins-source AS packages-plugin
 COPY contrib/tenzir-plugins/packages ./contrib/tenzir-plugins/packages
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-packages --parallel && \
     DESTDIR=/plugin/packages cmake --install build-packages --component Runtime && \
     rm -rf build-packages
@@ -319,7 +323,8 @@ FROM plugins-source AS platform-plugin
 COPY contrib/tenzir-plugins/platform ./contrib/tenzir-plugins/platform
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-platform --parallel && \
     DESTDIR=/plugin/platform cmake --install build-platform --component Runtime && \
     rm -rf build-platform
@@ -329,7 +334,8 @@ FROM plugins-source AS snowflake-plugin
 COPY contrib/tenzir-plugins/snowflake ./contrib/tenzir-plugins/snowflake
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-snowflake --parallel && \
     DESTDIR=/plugin/snowflake cmake --install build-snowflake --component Runtime && \
     rm -rf build-snowflake
@@ -339,7 +345,8 @@ FROM plugins-source AS to_amazon_security_lake-plugin
 COPY contrib/tenzir-plugins/to_amazon_security_lake ./contrib/tenzir-plugins/to_amazon_security_lake
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_amazon_security_lake -B build-to_amazon_security_lake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-to_amazon_security_lake --parallel && \
     DESTDIR=/plugin/to_amazon_security_lake cmake --install build-to_amazon_security_lake --component Runtime && \
     rm -rf build-to_amazon_security_lake
@@ -349,7 +356,8 @@ FROM plugins-source AS to_azure_log_analytics-plugin
 COPY contrib/tenzir-plugins/to_azure_log_analytics ./contrib/tenzir-plugins/to_azure_log_analytics
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_azure_log_analytics -B build-to_azure_log_analytics -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-to_azure_log_analytics --parallel && \
     DESTDIR=/plugin/to_azure_log_analytics cmake --install build-to_azure_log_analytics --component Runtime && \
     rm -rf build-to_azure_log_analytics
@@ -359,7 +367,8 @@ FROM plugins-source AS to_splunk-plugin
 COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-to_splunk --parallel && \
     DESTDIR=/plugin/to_splunk cmake --install build-to_splunk --component Runtime && \
     rm -rf build-to_splunk
@@ -369,7 +378,8 @@ FROM plugins-source AS to_google_secops-plugin
 COPY contrib/tenzir-plugins/to_google_secops ./contrib/tenzir-plugins/to_google_secops
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-to_google_secops --parallel && \
     DESTDIR=/plugin/to_google_secops cmake --install build-to_google_secops --component Runtime && \
     rm -rf build-to_google_secops
@@ -380,6 +390,7 @@ COPY contrib/tenzir-plugins/to_google_cloud_logging ./contrib/tenzir-plugins/to_
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_google_cloud_logging -B build-to_google_cloud_logging -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF \
       -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
     cmake --build build-to_google_cloud_logging --parallel && \
     DESTDIR=/plugin/to_google_cloud_logging cmake --install build-to_google_cloud_logging --component Runtime && \
@@ -390,7 +401,8 @@ FROM plugins-source AS to_sentinelone_data_lake-plugin
 COPY contrib/tenzir-plugins/to_sentinelone_data_lake ./contrib/tenzir-plugins/to_sentinelone_data_lake
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-to_sentinelone_data_lake --parallel && \
     DESTDIR=/plugin/to_sentinelone_data_lake cmake --install build-to_sentinelone_data_lake --component Runtime && \
     rm -rf build-to_sentinelone_data_lake
@@ -400,7 +412,8 @@ FROM plugins-source AS vast-plugin
 COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL=OFF && \
     cmake --build build-vast --parallel && \
     DESTDIR=/plugin/vast cmake --install build-vast --component Runtime && \
     rm -rf build-vast
