@@ -14,6 +14,7 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/element_type.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
@@ -546,6 +547,21 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
   return internal + external;
 }
 
+template <class T>
+auto count_events(const OperatorMsg<T>& item) -> size_t {
+  return match(
+    item,
+    [](const table_slice& slice) -> size_t {
+      return slice.rows();
+    },
+    [](const chunk_ptr&) -> size_t {
+      return 0;
+    },
+    [](const Signal&) -> size_t {
+      return 0;
+    });
+}
+
 /// Monotonic counters for profiling channel throughput.
 struct ChannelStats {
   /// We group/align by in and out here, because that is the grouping in which
@@ -553,7 +569,8 @@ struct ChannelStats {
   struct alignas(std::hardware_destructive_interference_size) data {
     std::atomic<size_t> bytes{0};
     std::atomic<size_t> signals{0};
-    std::atomic<size_t> elements{0};
+    std::atomic<size_t> batches{0};
+    std::atomic<size_t> events{0};
   };
   data in;
   data out;
@@ -632,7 +649,9 @@ public:
       if (is<Signal>(x)) {
         stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
       } else {
-        stats_->in.elements.fetch_add(1, std::memory_order::relaxed);
+        stats_->in.batches.fetch_add(1, std::memory_order::relaxed);
+        stats_->in.events.fetch_add(count_events(x),
+                                    std::memory_order::relaxed);
       }
     }
     lock->queue.push_back(std::move(x));
@@ -659,7 +678,9 @@ public:
       if (is<Signal>(result)) {
         stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
       } else {
-        stats_->out.elements.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.batches.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.events.fetch_add(count_events(result),
+                                     std::memory_order::relaxed);
       }
     }
     notify_send_.notify_one();
@@ -744,6 +765,7 @@ struct ChannelProfile {
   ChannelId id;
   std::shared_ptr<ChannelStats> stats;
   size_t max_bytes;
+  element_type_tag type;
 };
 
 /// Collected profile for a single operator's executor.
@@ -815,16 +837,19 @@ public:
 
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_profiled_channel<void>(std::move(id), void_limit);
+    return make_profiled_channel<void>(std::move(id), void_limit,
+                                       element_type_tag{tag_v<void>});
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(std::move(id), events_limit);
+    return make_profiled_channel<table_slice>(
+      std::move(id), events_limit, element_type_tag{tag_v<table_slice>});
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
+    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit,
+                                            element_type_tag{tag_v<chunk_ptr>});
   }
 
 private:
@@ -836,13 +861,14 @@ private:
   /// very big individual items that exceed the total capacity by themselves,
   /// as we eventually let them through since we need to transmit them.
   template <class T>
-  auto make_profiled_channel(ChannelId id, size_t max_bytes)
+  auto
+  make_profiled_channel(ChannelId id, size_t max_bytes, element_type_tag type)
     -> PushPull<OperatorMsg<T>> {
     auto stats = std::shared_ptr<ChannelStats>{};
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
       auto lock = std::scoped_lock{mutex_};
-      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes, type});
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -873,11 +899,14 @@ struct ProfileSample {
   std::chrono::steady_clock::time_point time;
   struct Channel {
     std::string name;
+    element_type_tag type;
     size_t current_bytes;
     size_t bytes_in;
     size_t bytes_out;
-    size_t elements_in;
-    size_t elements_out;
+    size_t batches_in;
+    size_t batches_out;
+    size_t events_in;
+    size_t events_out;
     size_t signals_in;
     size_t signals_out;
     size_t max_bytes;
@@ -1024,14 +1053,18 @@ void write_profile(
   };
   // Per-operator aggregated channel metrics for a single sample.
   struct OpChannelAgg {
-    double bytes_in = 0;
-    double bytes_out = 0;
-    double elements_in = 0;
-    double elements_out = 0;
-    double signals_in = 0;
-    double signals_out = 0;
-    double buffer_bytes = 0;
-    double buffer_batches = 0;
+    size_t bytes_in = 0;
+    size_t bytes_out = 0;
+    size_t batches_in = 0;
+    size_t batches_out = 0;
+    size_t events_in = 0;
+    size_t events_out = 0;
+    size_t signals_in = 0;
+    size_t signals_out = 0;
+    size_t buffer_bytes = 0;
+    size_t buffer_batches = 0;
+    bool has_events = false;
+    bool has_bytes = false;
   };
   // Build per-operator channel aggregates: "In" metrics go to the sender,
   // "Out" metrics go to the receiver. For cross-boundary channels (between a
@@ -1058,20 +1091,27 @@ void write_profile(
       } else {
         receiver_target = receiver;
       }
+      auto is_events = ch.type.is<table_slice>();
+      auto is_bytes = ch.type.is<chunk_ptr>();
       if (auto si = op_index.find(sender_target); si != op_index.end()) {
         auto& agg = aggs[si->second];
-        agg.bytes_in += static_cast<double>(ch.bytes_in);
-        agg.elements_in += static_cast<double>(ch.elements_in);
-        agg.signals_in += static_cast<double>(ch.signals_in);
-        agg.buffer_bytes += static_cast<double>(ch.current_bytes);
-        agg.buffer_batches
-          += static_cast<double>(ch.elements_in - ch.elements_out);
+        agg.bytes_in += ch.bytes_in;
+        agg.batches_in += ch.batches_in;
+        agg.events_in += ch.events_in;
+        agg.signals_in += ch.signals_in;
+        agg.buffer_bytes += ch.current_bytes;
+        agg.buffer_batches += ch.batches_in - ch.batches_out;
+        agg.has_events |= is_events;
+        agg.has_bytes |= is_bytes;
       }
       if (auto ri = op_index.find(receiver_target); ri != op_index.end()) {
         auto& agg = aggs[ri->second];
-        agg.bytes_out += static_cast<double>(ch.bytes_out);
-        agg.elements_out += static_cast<double>(ch.elements_out);
-        agg.signals_out += static_cast<double>(ch.signals_out);
+        agg.bytes_out += ch.bytes_out;
+        agg.batches_out += ch.batches_out;
+        agg.events_out += ch.events_out;
+        agg.signals_out += ch.signals_out;
+        agg.has_events |= is_events;
+        agg.has_bytes |= is_bytes;
       }
     }
     return aggs;
@@ -1112,8 +1152,8 @@ void write_profile(
       }
     }
     // Totals accumulators.
-    auto total_buffer_bytes = 0.0;
-    auto total_buffer_batches = 0.0;
+    auto total_buffer_bytes = size_t{0};
+    auto total_buffer_batches = size_t{0};
     auto total_wall_s = 0.0;
     auto total_cpu_s = 0.0;
     auto total_tasks = size_t{0};
@@ -1149,35 +1189,47 @@ void write_profile(
         emit_counter("F: Tasks (cumulative)", pid, us,
                      static_cast<double>(cur.task_count));
       }
-      // Memory / channel metrics.
-      total_buffer_bytes += agg.buffer_bytes;
-      total_buffer_batches += agg.buffer_batches;
-      auto prev_bi = oi < prev_aggs.size() ? prev_aggs[oi].bytes_in : 0.0;
-      auto prev_bo = oi < prev_aggs.size() ? prev_aggs[oi].bytes_out : 0.0;
-      auto prev_ei = oi < prev_aggs.size() ? prev_aggs[oi].elements_in : 0.0;
-      auto prev_eo = oi < prev_aggs.size() ? prev_aggs[oi].elements_out : 0.0;
-      auto prev_si = oi < prev_aggs.size() ? prev_aggs[oi].signals_in : 0.0;
-      auto prev_so = oi < prev_aggs.size() ? prev_aggs[oi].signals_out : 0.0;
-      auto bi_rate = (agg.bytes_in - prev_bi) / interval_s;
-      auto bo_rate = (agg.bytes_out - prev_bo) / interval_s;
-      emit_counter("G: Buffer (bytes)", pid, us, agg.buffer_bytes);
-      emit_counter("H: Buffer (batches)", pid, us, agg.buffer_batches);
-      emit_counter("I: Bytes In/s", pid, us, bo_rate);
-      emit_counter("J: Bytes In (cumulative)", pid, us, agg.bytes_out);
-      emit_counter("K: Bytes Out/s", pid, us, bi_rate);
-      emit_counter("L: Bytes Out (cumulative)", pid, us, agg.bytes_in);
-      emit_counter("M: Batches In/s", pid, us,
-                   (agg.elements_out - prev_eo) / interval_s);
-      emit_counter("N: Batches In (cumulative)", pid, us, agg.elements_out);
-      emit_counter("O: Batches Out/s", pid, us,
-                   (agg.elements_in - prev_ei) / interval_s);
-      emit_counter("P: Batches Out (cumulative)", pid, us, agg.elements_in);
-      emit_counter("Q: Signals In/s", pid, us,
-                   (agg.signals_out - prev_so) / interval_s);
-      emit_counter("R: Signals In (cumulative)", pid, us, agg.signals_out);
-      emit_counter("S: Signals Out/s", pid, us,
-                   (agg.signals_in - prev_si) / interval_s);
-      emit_counter("T: Signals Out (cumulative)", pid, us, agg.signals_in);
+      // Channel metrics — skip entirely for void-only operators.
+      if (agg.has_events or agg.has_bytes) {
+        total_buffer_bytes += agg.buffer_bytes;
+        total_buffer_batches += agg.buffer_batches;
+        auto d = [](size_t v) {
+          return static_cast<double>(v);
+        };
+        auto rate = [&](size_t cur, size_t prev) {
+          return d(cur - prev) / interval_s;
+        };
+        auto const& prev
+          = oi < prev_aggs.size() ? prev_aggs[oi] : OpChannelAgg{};
+        emit_counter("G: Buffer (bytes)", pid, us, d(agg.buffer_bytes));
+        emit_counter("H: Buffer (batches)", pid, us, d(agg.buffer_batches));
+        emit_counter("I: Bytes In/s", pid, us,
+                     rate(agg.bytes_out, prev.bytes_out));
+        emit_counter("J: Bytes In (cumulative)", pid, us, d(agg.bytes_out));
+        emit_counter("K: Bytes Out/s", pid, us,
+                     rate(agg.bytes_in, prev.bytes_in));
+        emit_counter("L: Bytes Out (cumulative)", pid, us, d(agg.bytes_in));
+        emit_counter("M: Batches In/s", pid, us,
+                     rate(agg.batches_out, prev.batches_out));
+        emit_counter("N: Batches In (cumulative)", pid, us, d(agg.batches_out));
+        emit_counter("O: Batches Out/s", pid, us,
+                     rate(agg.batches_in, prev.batches_in));
+        emit_counter("P: Batches Out (cumulative)", pid, us, d(agg.batches_in));
+        if (agg.has_events) {
+          emit_counter("Q: Events In/s", pid, us,
+                       rate(agg.events_out, prev.events_out));
+          emit_counter("R: Events In (cumulative)", pid, us, d(agg.events_out));
+          emit_counter("S: Events Out/s", pid, us,
+                       rate(agg.events_in, prev.events_in));
+          emit_counter("T: Events Out (cumulative)", pid, us, d(agg.events_in));
+        }
+        emit_counter("U: Signals In/s", pid, us,
+                     rate(agg.signals_out, prev.signals_out));
+        emit_counter("V: Signals In (cumulative)", pid, us, d(agg.signals_out));
+        emit_counter("W: Signals Out/s", pid, us,
+                     rate(agg.signals_in, prev.signals_in));
+        emit_counter("X: Signals Out (cumulative)", pid, us, d(agg.signals_in));
+      }
     }
     // Totals across all operators.
     if (total_tasks > 0) {
@@ -1189,8 +1241,10 @@ void write_profile(
       emit_counter("F: Tasks (cumulative)", pid_totals, us,
                    static_cast<double>(total_tasks));
     }
-    emit_counter("G: Buffer (bytes)", pid_totals, us, total_buffer_bytes);
-    emit_counter("H: Buffer (batches)", pid_totals, us, total_buffer_batches);
+    emit_counter("G: Buffer (bytes)", pid_totals, us,
+                 static_cast<double>(total_buffer_bytes));
+    emit_counter("H: Buffer (batches)", pid_totals, us,
+                 static_cast<double>(total_buffer_batches));
     prev_aggs = std::move(aggs);
     prev_execs = std::move(cur_execs);
   }
@@ -1226,11 +1280,14 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
           auto bo = p.stats->out.bytes.load(std::memory_order::relaxed);
           sample.channels.push_back({
             p.id.value,
+            p.type,
             bi >= bo ? bi - bo : 0,
             bi,
             bo,
-            p.stats->in.elements.load(std::memory_order::relaxed),
-            p.stats->out.elements.load(std::memory_order::relaxed),
+            p.stats->in.batches.load(std::memory_order::relaxed),
+            p.stats->out.batches.load(std::memory_order::relaxed),
+            p.stats->in.events.load(std::memory_order::relaxed),
+            p.stats->out.events.load(std::memory_order::relaxed),
             p.stats->in.signals.load(std::memory_order::relaxed),
             p.stats->out.signals.load(std::memory_order::relaxed),
             p.max_bytes,
