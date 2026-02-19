@@ -410,7 +410,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         }
         if (warn_null_record and not x.has_question_mark) {
           diagnostic::warning("tried to access field of `null`")
-            .primary(x.expr, "is null")
+            .primary(x.expr, "null")
             .compose(add_suppress_hint)
             .emit(ctx_);
         }

@@ -817,7 +817,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
       if (not typed_right) {
         diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
           .primary(x.right)
-          .hint("the result of this expression is `null`")
+          .hint("this will be treated as `false`")
           .emit(self.ctx());
         return self.slice(right_begin, right_end).eval(fallback);
       }
