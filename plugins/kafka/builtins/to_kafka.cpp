@@ -164,6 +164,13 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    write_bytes_counter_
+      = ctx.make_counter(metrics_label{
+                           .key = "operator",
+                           .value = "to_kafka",
+                         },
+                         metrics_direction::write,
+                         metrics_visibility::external_);
     auto auth = co_await resolve_aws_iam_auth(
       args_.aws_iam, args_.aws_region, ctx,
       AwsIamRegionRequirement::required_with_iam);
@@ -298,6 +305,7 @@ private:
               timestamp_ms, nullptr);
       switch (result) {
         case RdKafka::ERR_NO_ERROR: {
+          write_bytes_counter_.add(static_cast<uint64_t>(bytes.size()));
           ++produced_since_poll_;
           if (produced_since_poll_ >= producer_poll_interval) {
             (*producer_)->poll(0);
@@ -349,6 +357,7 @@ private:
   std::optional<configuration> cfg_;
   std::optional<Box<RdKafka::Producer>> producer_;
   std::optional<json_printer2> printer_;
+  metrics_counter write_bytes_counter_ = {};
   size_t produced_since_poll_ = 0;
   bool done_ = false;
 };
