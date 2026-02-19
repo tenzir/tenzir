@@ -5,7 +5,7 @@
 # investigate switching to a different map, e.g., from folly or abseil.
 
 option(TENZIR_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map"
-       OFF)
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map QUIET)
   if (tsl-robin-map_FOUND)
@@ -405,7 +405,8 @@ target_link_libraries(libtenzir PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson
-option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
+option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 
 unset(_tenzir_bundled_simdjson)
 if (NOT TENZIR_ENABLE_BUNDLED_SIMDJSON)
@@ -561,7 +562,8 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
 dependency_summary("reproc++" reproc+++ "Dependencies")
 
 # Link against fast_float
-option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
+option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
   find_package(FastFloat CONFIG)
 endif ()
@@ -584,7 +586,8 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
+  option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule"
+         "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()

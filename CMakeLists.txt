@@ -666,6 +666,11 @@ endif ()
 # Disable module scanning.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
+# -- bundled dependencies ------------------------------------------------------
+
+option(TENZIR_ENABLE_BUNDLED_DEPENDENCIES
+       "Default for all TENZIR_ENABLE_BUNDLED_* dependency options" ON)
+
 # -- schemas -------------------------------------------------------------------
 
 option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
@@ -706,15 +711,8 @@ set(TENZIR_CAF_LOG_LEVEL
     "WARNING"
     CACHE STRING "")
 
-if (TENZIR_ENABLE_DEVELOPER_MODE
-    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt"
-    AND NOT CAF_ROOT_DIR)
-  set(_tenzir_enable_bundled_caf_default ON)
-else ()
-  set(_tenzir_enable_bundled_caf_default OFF)
-endif ()
 option(TENZIR_ENABLE_BUNDLED_CAF "Use the CAF submodule"
-       "${_tenzir_enable_bundled_caf_default}")
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
@@ -825,7 +823,8 @@ endif ()
 # -- facebook libs (folly, fizz, wangle, mvfst, proxygen) ---------------------
 
 option(TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS
-       "Build folly, fizz, wangle, mvfst, and proxygen from submodules" ON)
+       "Build folly, fizz, wangle, mvfst, and proxygen from submodules"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 unset(_tenzir_bundled_facebook)
 set(TENZIR_FOLLY_MINIMUM_VERSION "2026.01.19.00")
 
