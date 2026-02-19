@@ -17,6 +17,7 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/json_parser.hpp"
 #include "tenzir/si_literals.hpp"
 
 #include <tenzir/operator_plugin.hpp>
@@ -53,6 +54,27 @@ namespace {
 using namespace std::chrono_literals;
 using namespace tenzir::si_literals;
 using tenzir::detail::ascii_icase_equal;
+
+/// Diagnostic handler that buffers diagnostics for later retrieval.
+/// Unlike `collecting_diagnostic_handler`, this supports draining without
+/// consuming the handler, so it can be reused across multiple batches.
+class BufferingDiagnosticHandler final : public diagnostic_handler {
+public:
+  void emit(diagnostic diag) override {
+    collected_.push_back(std::move(diag));
+  }
+  auto drain() -> std::vector<diagnostic> {
+    auto result = std::move(collected_);
+    collected_.clear();
+    return result;
+  }
+  auto empty() const -> bool {
+    return collected_.empty();
+  }
+
+private:
+  std::vector<diagnostic> collected_;
+};
 
 /// Concurrent stage layout (executor domains on the right):
 ///
@@ -176,6 +198,11 @@ struct FromKafkaArgs {
   duration _batch_timeout = default_batch_timeout;
   /// Initial broker poll wait before adaptive timeout backoff.
   duration _fetch_wait_timeout = default_fetch_wait_timeout;
+  /// Whether the operator should treat the input as json and produce events
+  /// directly
+  bool _json = false;
+  /// Whether to enable _raw mode for _json.
+  bool _raw = false;
 };
 
 /// Enumerates batching behavior for emitting processed Kafka records.
@@ -298,11 +325,12 @@ struct MessageBatch {
 /// Represents one built table-slice frame plus commit metadata.
 struct TableSliceFrame {
   uint64_t seq = 0;
-  std::optional<table_slice> slice;
+  std::vector<table_slice> slices;
   std::unordered_map<int32_t, int64_t> max_offsets;
   size_t message_count = 0;
   std::vector<int32_t> eof_partitions;
   std::optional<std::string> fatal_error;
+  std::vector<diagnostic> diagnostics;
 };
 
 /// Result wrapper returned by `await_task()` to `process_task()`.
@@ -310,6 +338,45 @@ struct TableSliceResult {
   std::optional<TableSliceFrame> frame;
   bool end_of_stream = false;
 };
+
+/// Converts one message batch into a `TableSliceFrame`.
+///
+/// The `process_payload` callback receives each message's raw payload as a
+/// `std::span<const std::byte>` and feeds it into the appropriate builder.
+///
+/// When `flush` is true, all buffered data is finalized into slices (used in
+/// ordered mode to preserve per-batch ordering). Otherwise, only data that
+/// exceeds the builder's internal thresholds is yielded (used in unordered
+/// mode for higher throughput).
+template <typename F>
+auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
+                       bool flush, F&& process_payload) -> TableSliceFrame {
+  auto frame = TableSliceFrame{};
+  frame.seq = batch.seq;
+  frame.eof_partitions = std::move(batch.eof_partitions);
+  frame.fatal_error = std::move(batch.fatal_error);
+  for (auto& message : batch.messages) {
+    auto payload_bytes = message.payload();
+    if (payload_bytes.is_err()) {
+      frame.fatal_error = fmt::format("invalid kafka payload in partition {} "
+                                      "at offset {}: {}",
+                                      message.partition(), message.offset(),
+                                      std::move(payload_bytes).unwrap_err());
+      break;
+    }
+    auto payload = std::move(payload_bytes).unwrap();
+    process_payload(payload);
+    frame.max_offsets[message.partition()] = message.offset();
+    ++frame.message_count;
+  }
+  if (flush) {
+    frame.slices = builder.finalize_as_table_slice();
+  } else {
+    auto ready = builder.yield_ready_as_table_slice();
+    frame.slices = std::move(ready.slices);
+  }
+  return frame;
+}
 
 /// Streaming source operator that consumes Kafka records asynchronously.
 class FromKafkaOperator final : public Operator<void, table_slice> {
@@ -336,6 +403,7 @@ public:
     runtime_.message_queue = std::move(other.runtime_.message_queue);
     runtime_.table_slice_queue = std::move(other.runtime_.table_slice_queue);
     runtime_.ordered_slices = std::move(other.runtime_.ordered_slices);
+    runtime_.builders_finished = other.runtime_.builders_finished;
     runtime_.message_queue_closed.store(
       other.runtime_.message_queue_closed.load());
     runtime_.live_fetchers.store(other.runtime_.live_fetchers.load());
@@ -436,19 +504,24 @@ public:
       co_return;
     }
     TENZIR_ASSERT(task_result.frame);
-    auto frame = std::move(*task_result.frame);
-    if (frame.slice) {
+    auto& frame = *task_result.frame;
+    for (auto& d : frame.diagnostics) {
+      std::move(d).modify().emit(ctx);
+    }
+    for (auto& slice : frame.slices) {
       auto push_started = std::chrono::steady_clock::time_point{};
       if (perf_enabled_) {
         push_started = std::chrono::steady_clock::now();
       }
-      co_await push(std::move(*frame.slice));
+      co_await push(std::move(slice));
       if (perf_enabled_) {
         add_perf_counter(
           perf_.push_wait_ns,
           as_ns(std::chrono::steady_clock::now() - push_started));
         add_perf_counter(perf_.emitted_slices);
       }
+    }
+    if (frame.message_count > 0) {
       advance_checkpoint(frame.max_offsets);
       co_await commit_pending_offsets(&ctx.dh());
       emitted_messages_ += frame.message_count;
@@ -457,9 +530,6 @@ public:
                        static_cast<uint64_t>(frame.message_count));
     }
     for (auto partition : frame.eof_partitions) {
-      if (done_) {
-        break;
-      }
       add_perf_counter(perf_.eof_events);
       mark_partition_eof(partition);
     }
@@ -467,12 +537,12 @@ public:
       diagnostic::error("{}", *frame.fatal_error).emit(ctx);
       done_ = true;
       add_perf_counter(perf_.fatal_errors);
+      emit_perf_summary("done");
+      request_pipeline_stop();
     }
     if (args_.count and emitted_messages_ >= args_.count->inner) {
-      done_ = true;
-    }
-    if (done_) {
-      emit_perf_summary("done");
+      // Don't set done_ here; let the pipeline drain so the build_loop
+      // can finalize and flush any buffered data from the builder.
       request_pipeline_stop();
     }
   }
@@ -582,6 +652,7 @@ private:
     std::shared_ptr<MessageQueue> message_queue;
     std::shared_ptr<TableSliceQueue> table_slice_queue;
     std::map<uint64_t, TableSliceFrame> ordered_slices;
+    bool builders_finished = false;
     std::atomic<bool> message_queue_closed = false;
     std::atomic<size_t> live_fetchers = 0;
     std::atomic<size_t> live_builders = 0;
@@ -806,6 +877,7 @@ private:
     runtime_.table_slice_queue
       = std::make_shared<TableSliceQueue>(fetch_capacity);
     runtime_.ordered_slices.clear();
+    runtime_.builders_finished = false;
     runtime_.next_emit_seq = 0;
     runtime_.next_fetch_seq.store(0);
     runtime_.scheduled_messages.store(emitted_messages_);
@@ -1254,39 +1326,27 @@ private:
     co_await finish_fetcher();
   }
 
-  /// Converts one message batch into a `TableSliceFrame`.
-  auto build_table_slice(MessageBatch fetched) const -> TableSliceFrame {
-    auto frame = TableSliceFrame{};
-    frame.seq = fetched.seq;
-    frame.eof_partitions = std::move(fetched.eof_partitions);
-    frame.fatal_error = std::move(fetched.fatal_error);
-    if (fetched.messages.empty()) {
-      return frame;
-    }
-    auto builder = KafkaMessageBuilder{};
-    for (auto& message : fetched.messages) {
-      auto payload_bytes = message.payload();
-      if (payload_bytes.is_err()) {
-        frame.fatal_error = fmt::format("invalid kafka payload in partition {} "
-                                        "at offset {}: {}",
-                                        message.partition(), message.offset(),
-                                        std::move(payload_bytes).unwrap_err());
-        break;
-      }
-      builder.append(std::move(payload_bytes).unwrap());
-      frame.max_offsets[message.partition()] = message.offset();
-      ++frame.message_count;
-    }
-    if (not builder.empty()) {
-      frame.slice = builder.finish();
-    }
-    return frame;
-  }
-
   /// Runs one CPU-stage worker that builds slices from source batches.
   auto build_loop() const -> Task<void> {
     if (not runtime_.message_queue or not runtime_.table_slice_queue) {
       co_return;
+    }
+    auto diag_handler = BufferingDiagnosticHandler{};
+    auto builder_ptr = static_cast<multi_series_builder*>(nullptr);
+    auto standalone_builder = std::optional<multi_series_builder>{};
+    auto builder_opts = multi_series_builder::options{};
+    builder_opts.settings.ordered
+      = optimization_mode_ == OptimizationMode::ordered;
+    builder_opts.settings.raw = args_._raw;
+    auto parser = std::optional<json::ndjson_parser>{};
+    if (args_._json) {
+      parser.emplace("json", diag_handler, builder_opts);
+      builder_ptr = &parser->builder;
+    } else {
+      auto opts = builder_opts;
+      opts.settings.default_schema_name = "tenzir.kafka";
+      standalone_builder.emplace(std::move(opts), diag_handler);
+      builder_ptr = &*standalone_builder;
     }
     try {
       while (true) {
@@ -1313,7 +1373,26 @@ private:
         if (perf_enabled_) {
           build_started = std::chrono::steady_clock::now();
         }
-        auto frame = build_table_slice(std::move(fetched));
+        auto flush = optimization_mode_ == OptimizationMode::ordered;
+        auto frame = args_._json
+                       ? build_table_slice(
+                           fetched, parser->builder, flush,
+                           [&](std::span<const std::byte> payload) {
+                             auto const* chars
+                               = reinterpret_cast<char const*>(payload.data());
+                             auto padded
+                               = simdjson::padded_string{chars, payload.size()};
+                             parser->parse(padded);
+                           })
+                       : build_table_slice(
+                           fetched, *standalone_builder, flush,
+                           [&](std::span<const std::byte> payload) {
+                             auto const* chars
+                               = reinterpret_cast<char const*>(payload.data());
+                             auto sv = std::string_view{chars, payload.size()};
+                             standalone_builder->record().field("message").data(
+                               std::string{sv});
+                           });
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_compute_ns,
@@ -1322,20 +1401,30 @@ private:
           add_perf_counter(perf_.built_messages,
                            static_cast<uint64_t>(frame.message_count));
         }
+        // Attach buffered diagnostics to the frame.
+        if (not diag_handler.empty()) {
+          frame.diagnostics = diag_handler.drain();
+        }
         release_budget.trigger();
         auto enqueue_started = std::chrono::steady_clock::time_point{};
         if (perf_enabled_) {
           enqueue_started = std::chrono::steady_clock::now();
         }
-        co_await runtime_.table_slice_queue->enqueue(
-          std::optional<TableSliceFrame>{
-            std::move(frame),
-          });
+        co_await runtime_.table_slice_queue->enqueue(std::move(frame));
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_enqueue_wait_ns,
             as_ns(std::chrono::steady_clock::now() - enqueue_started));
         }
+      }
+      // Flush remaining data from the builder.
+      auto final_slices = builder_ptr->finalize_as_table_slice();
+      if (not final_slices.empty()) {
+        auto frame = TableSliceFrame{};
+        frame.seq
+          = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
+        frame.slices = std::move(final_slices);
+        co_await runtime_.table_slice_queue->enqueue(std::move(frame));
       }
     } catch (folly::OperationCancelled const&) {
       request_pipeline_stop();
@@ -1351,6 +1440,17 @@ private:
     TENZIR_ASSERT(runtime_.table_slice_queue);
     while (true) {
       auto ready = runtime_.ordered_slices.find(runtime_.next_emit_seq);
+      // When builders are finished, some sequence numbers may have been
+      // dropped (e.g., a fetched batch was discarded during shutdown before
+      // reaching the build stage). Skip gaps and drain in map order.
+      if (ready == runtime_.ordered_slices.end()
+          and runtime_.builders_finished) {
+        if (runtime_.ordered_slices.empty()) {
+          co_return TableSliceResult{.end_of_stream = true};
+        }
+        ready = runtime_.ordered_slices.begin();
+        runtime_.next_emit_seq = ready->first;
+      }
       if (ready != runtime_.ordered_slices.end()) {
         auto batch = std::move(ready->second);
         runtime_.ordered_slices.erase(ready);
@@ -1370,11 +1470,7 @@ private:
           as_ns(std::chrono::steady_clock::now() - dequeue_started));
       }
       if (not next) {
-        if (runtime_.ordered_slices.empty()) {
-          co_return TableSliceResult{.end_of_stream = true};
-        }
-        auto contiguous = runtime_.ordered_slices.find(runtime_.next_emit_seq);
-        TENZIR_ASSERT(contiguous != runtime_.ordered_slices.end());
+        runtime_.builders_finished = true;
         continue;
       }
       if (next->seq == runtime_.next_emit_seq) {
@@ -1404,7 +1500,9 @@ private:
     }
     eof_partitions_.insert(partition);
     if (eof_partitions_.size() == assigned_partitions_.size()) {
-      done_ = true;
+      // Don't set done_ here; let the pipeline drain so the build_loop
+      // can finalize and flush any buffered data from the builder.
+      request_pipeline_stop();
     }
   }
 
@@ -1509,6 +1607,8 @@ public:
       = d.named_optional("_batch_timeout", &FromKafkaArgs::_batch_timeout);
     auto fetch_wait_timeout_arg = d.named_optional(
       "_fetch_wait_timeout", &FromKafkaArgs::_fetch_wait_timeout);
+    d.named_optional("_json", &FromKafkaArgs::_json);
+    d.named_optional("_raw", &FromKafkaArgs::_raw);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       auto mode = OptimizationMode::ordered;
       if (auto optimization = ctx.get(optimization_arg); optimization) {

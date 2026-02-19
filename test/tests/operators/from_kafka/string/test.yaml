@@ -1,0 +1,6 @@
+suite: from-kafka-string
+fixtures:
+  - kafka:
+      topic: from_kafka_string_test
+      partitions: 1
+      messages: 3
