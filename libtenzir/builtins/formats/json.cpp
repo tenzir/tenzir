@@ -35,6 +35,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/thread_safe_diagnostic_handler.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -63,23 +64,6 @@ TENZIR_ENUM(split_at, none, newline, null);
 namespace {
 
 using namespace tenzir::json;
-
-/// A thread-safe wrapper around a diagnostic_handler for use in parallel
-/// worker coroutines.
-class thread_safe_diagnostic_handler final : public diagnostic_handler {
-public:
-  explicit thread_safe_diagnostic_handler(diagnostic_handler& inner)
-    : inner_{inner} {
-  }
-  void emit(diagnostic d) override {
-    auto lock = std::scoped_lock{mutex_};
-    inner_.emit(std::move(d));
-  }
-
-private:
-  diagnostic_handler& inner_;
-  std::mutex mutex_;
-};
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
@@ -1259,7 +1243,7 @@ public:
       // Workers use unordered output since they parse independently.
       auto msb_options = args_.msb_options;
       msb_options.settings.ordered = false;
-      worker_dh_ = std::make_shared<thread_safe_diagnostic_handler>(ctx.dh());
+      worker_dh_ = std::make_shared<ThreadSafeDiagnosticHandler>(ctx.dh());
       for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
         ctx.spawn_task(folly::coro::co_withExecutor(
           folly::getGlobalCPUExecutor(),
@@ -1539,7 +1523,7 @@ private:
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
   // Parallel mode state:
-  std::shared_ptr<thread_safe_diagnostic_handler> worker_dh_;
+  std::shared_ptr<ThreadSafeDiagnosticHandler> worker_dh_;
   std::shared_ptr<ReadInputQueue> read_input_queue_;
   std::shared_ptr<ReadOutputQueue> read_output_queue_;
 };
