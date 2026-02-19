@@ -29,6 +29,7 @@
 #include <limits>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace tenzir::plugins::mysql {
 
@@ -252,10 +253,13 @@ struct handshake_info {
 namespace packet {
 inline constexpr auto ok = std::byte{0x00};
 inline constexpr auto auth_more_data = std::byte{0x01};
+inline constexpr auto com_query = std::byte{0x03};
+inline constexpr auto com_stmt_prepare = std::byte{0x16};
+inline constexpr auto com_stmt_execute = std::byte{0x17};
+inline constexpr auto com_stmt_close = std::byte{0x19};
 inline constexpr auto auth_switch = std::byte{0xfe};
 inline constexpr auto eof = std::byte{0xfe};
 inline constexpr auto error = std::byte{0xff};
-inline constexpr auto com_query = std::byte{0x03};
 } // namespace packet
 
 /// caching_sha2_password status bytes.
@@ -321,6 +325,14 @@ void write_lenenc_int(std::vector<std::byte>& buffer, uint64_t value) {
     buffer.push_back(lenenc::eight_byte);
     write_int_le<uint64_t>(buffer, value);
   }
+}
+
+/// Writes a length-encoded string to a byte buffer.
+void write_lenenc_string(std::vector<std::byte>& buffer,
+                         std::string_view value) {
+  write_lenenc_int(buffer, value.size());
+  auto bytes = as_bytes(value);
+  buffer.insert(buffer.end(), bytes.begin(), bytes.end());
 }
 
 /// Lightweight reader over a span of bytes, eliminating manual offset tracking.
@@ -510,20 +522,6 @@ auto quote_identifier(std::string_view name) -> std::string {
   return result;
 }
 
-/// Wraps a SQL string literal with single quotes and escapes embedded quotes.
-auto quote_string_literal(std::string_view value) -> std::string {
-  auto result = std::string{"'"};
-  for (auto c : value) {
-    if (c == '\'') {
-      result += "''";
-    } else {
-      result += c;
-    }
-  }
-  result += '\'';
-  return result;
-}
-
 /// Parses an error packet into a mysql_error.
 auto parse_error_from_packet(std::span<std::byte const> data) -> mysql_error {
   TENZIR_ASSERT(not data.empty() and data[0] == packet::error);
@@ -597,9 +595,33 @@ auto make_query_packet(std::string_view sql) -> std::vector<std::byte> {
   return pkt;
 }
 
+/// Build a COM_STMT_PREPARE packet.
+auto make_stmt_prepare_packet(std::string_view sql) -> std::vector<std::byte> {
+  auto pkt = std::vector<std::byte>{};
+  pkt.reserve(1 + sql.size());
+  pkt.push_back(packet::com_stmt_prepare);
+  auto bytes = as_bytes(sql);
+  pkt.insert(pkt.end(), bytes.begin(), bytes.end());
+  return pkt;
+}
+
+/// Build a COM_STMT_CLOSE packet.
+auto make_stmt_close_packet(uint32_t statement_id) -> std::vector<std::byte> {
+  auto pkt = std::vector<std::byte>{};
+  pkt.reserve(1 + sizeof(statement_id));
+  pkt.push_back(packet::com_stmt_close);
+  write_int_le<uint32_t>(pkt, statement_id);
+  return pkt;
+}
+
 /// Check if packet indicates end-of-result-set.
 auto is_eof(std::span<std::byte const> pkt) -> bool {
   return not pkt.empty() and pkt[0] == packet::eof and pkt.size() < 9;
+}
+
+/// Check if packet indicates end-of-result-set for either EOF or OK mode.
+auto is_result_set_terminator(std::span<std::byte const> pkt) -> bool {
+  return is_eof(pkt) or (not pkt.empty() and pkt[0] == packet::ok);
 }
 
 /// Check if packet is an error packet. Returns the error if so.
@@ -681,6 +703,21 @@ public:
     co_await co_withExecutor(
       evb_, transport_->write(folly::ByteRange{pkt.data(), pkt.size()}));
     sequence_id_ = seq;
+    co_return {};
+  }
+
+  /// Closes the underlying transport on the EventBase thread.
+  auto close() -> Task<MysqlResult<void>> {
+    if (evb_ == nullptr) {
+      co_return {};
+    }
+    auto* evb = evb_;
+    co_await co_withExecutor(evb, [this]() -> Task<void> {
+      transport_ = {};
+      co_return;
+    }());
+    evb_ = nullptr;
+    sequence_id_ = 0;
     co_return {};
   }
 
@@ -987,7 +1024,7 @@ auto read_result_set_meta(async_connection& conn)
     co_return Err{std::move(*err)};
   }
   if (response.empty()) {
-    co_return Err{mysql_error::protocol("empty COM_QUERY response")};
+    co_return Err{mysql_error::protocol("empty result set response")};
   }
   if (response[0] == packet::ok) {
     co_return result_set_meta{};
@@ -1001,8 +1038,13 @@ auto read_result_set_meta(async_connection& conn)
     CO_TRY(auto col, parse_column_definition(col_packet));
     meta.columns.push_back(std::move(col));
   }
-  // Skip EOF packet after column definitions.
-  (void)co_await conn.read_packet();
+  CO_TRY(auto terminator, co_await conn.read_packet());
+  if (auto err = as_error(terminator)) {
+    co_return Err{std::move(*err)};
+  }
+  if (not is_result_set_terminator(terminator)) {
+    co_return Err{mysql_error::protocol("expected result set terminator")};
+  }
   co_return meta;
 }
 
@@ -1026,6 +1068,105 @@ struct query_config {
 };
 
 using result_row = std::vector<std::optional<std::string>>;
+using prepared_param
+  = std::variant<std::monostate, std::string, int64_t, uint64_t>;
+
+struct prepared_statement_meta {
+  uint32_t statement_id = 0;
+  uint16_t num_columns = 0;
+  uint16_t num_params = 0;
+};
+
+auto prepared_param_type_code(prepared_param const& param) -> uint16_t {
+  if (std::holds_alternative<std::monostate>(param)) {
+    return std::to_underlying(mysql_type::null);
+  }
+  if (std::holds_alternative<std::string>(param)) {
+    return std::to_underlying(mysql_type::var_string);
+  }
+  if (std::holds_alternative<int64_t>(param)) {
+    return std::to_underlying(mysql_type::longlong);
+  }
+  if (std::holds_alternative<uint64_t>(param)) {
+    return std::to_underlying(mysql_type::longlong) | (uint16_t{0x80} << 8);
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto make_stmt_execute_packet(uint32_t statement_id,
+                              std::span<prepared_param const> params)
+  -> MysqlResult<std::vector<std::byte>> {
+  auto pkt = std::vector<std::byte>{};
+  pkt.reserve(1 + sizeof(statement_id) + 1 + sizeof(uint32_t));
+  pkt.push_back(packet::com_stmt_execute);
+  write_int_le<uint32_t>(pkt, statement_id);
+  pkt.push_back(std::byte{0x00}); // CURSOR_TYPE_NO_CURSOR
+  write_int_le<uint32_t>(pkt, 1); // iteration count
+  if (params.empty()) {
+    return pkt;
+  }
+  auto null_bitmap_size = (params.size() + 7) / 8;
+  auto null_bitmap_offset = pkt.size();
+  pkt.resize(pkt.size() + null_bitmap_size, std::byte{0x00});
+  for (auto i = size_t{0}; i < params.size(); ++i) {
+    if (std::holds_alternative<std::monostate>(params[i])) {
+      auto bit = std::byte{static_cast<uint8_t>(1u << (i % 8))};
+      pkt[null_bitmap_offset + i / 8] |= bit;
+    }
+  }
+  pkt.push_back(std::byte{0x01}); // new-params-bound-flag
+  for (auto const& param : params) {
+    write_int_le<uint16_t>(pkt, prepared_param_type_code(param));
+  }
+  for (auto const& param : params) {
+    if (std::holds_alternative<std::monostate>(param)) {
+      continue;
+    }
+    if (auto value = std::get_if<std::string>(&param)) {
+      write_lenenc_string(pkt, *value);
+      continue;
+    }
+    if (auto value = std::get_if<int64_t>(&param)) {
+      write_int_le<int64_t>(pkt, *value);
+      continue;
+    }
+    if (auto value = std::get_if<uint64_t>(&param)) {
+      write_int_le<uint64_t>(pkt, *value);
+      continue;
+    }
+    return Err{mysql_error::protocol("unsupported prepared parameter type")};
+  }
+  return pkt;
+}
+
+auto parse_stmt_prepare_ok_packet(std::span<std::byte const> data)
+  -> MysqlResult<prepared_statement_meta> {
+  if (data.empty()) {
+    return Err{mysql_error::protocol("empty COM_STMT_PREPARE response")};
+  }
+  if (data[0] == packet::error) {
+    return Err{parse_error_from_packet(data)};
+  }
+  if (data[0] != packet::ok) {
+    return Err{mysql_error::protocol(
+      fmt::format("unexpected COM_STMT_PREPARE response: 0x{:02x}",
+                  std::to_integer<uint8_t>(data[0])))};
+  }
+  if (data.size() < 12) {
+    return Err{mysql_error::protocol("truncated COM_STMT_PREPARE response")};
+  }
+  auto reader = packet_reader{data};
+  reader.skip(1); // status
+  auto meta = prepared_statement_meta{};
+  meta.statement_id = reader.read_int<uint32_t>();
+  meta.num_columns = reader.read_int<uint16_t>();
+  meta.num_params = reader.read_int<uint16_t>();
+  reader.skip(1); // filler
+  // warning count
+  reader.skip(2);
+  return meta;
+}
+
 struct tracking_candidate {
   std::string name;
   bool is_unsigned = false;
@@ -1048,6 +1189,113 @@ auto parse_row_as_strings(std::span<std::byte const> data, size_t column_count)
       continue;
     }
     TRY(auto value, reader.read_lenenc_string());
+    row.emplace_back(std::move(value));
+  }
+  return row;
+}
+
+template <class SignedType, class UnsignedType>
+auto parse_binary_integral_as_string(packet_reader& reader,
+                                     column_info const& column)
+  -> MysqlResult<std::string> {
+  if (reader.remaining() < sizeof(SignedType)) {
+    return Err{mysql_error::protocol("truncated prepared binary row")};
+  }
+  auto bytes = reader.read_bytes(sizeof(SignedType));
+  if (is_unsigned(column)) {
+    auto value = read_int_le<UnsignedType>(bytes);
+    return std::to_string(value);
+  }
+  auto value = read_int_le<SignedType>(bytes);
+  return std::to_string(value);
+}
+
+auto parse_binary_value_as_string(packet_reader& reader, column_info const& col)
+  -> MysqlResult<std::string> {
+  switch (col.type) {
+    case mysql_type::tiny:
+      return parse_binary_integral_as_string<int8_t, uint8_t>(reader, col);
+    case mysql_type::short_:
+    case mysql_type::year:
+      return parse_binary_integral_as_string<int16_t, uint16_t>(reader, col);
+    case mysql_type::long_:
+    case mysql_type::int24:
+      return parse_binary_integral_as_string<int32_t, uint32_t>(reader, col);
+    case mysql_type::longlong:
+      return parse_binary_integral_as_string<int64_t, uint64_t>(reader, col);
+    case mysql_type::float_: {
+      if (reader.remaining() < sizeof(uint32_t)) {
+        return Err{mysql_error::protocol("truncated prepared binary row")};
+      }
+      auto raw = read_int_le<uint32_t>(reader.read_bytes(sizeof(uint32_t)));
+      auto value = float{};
+      std::memcpy(&value, &raw, sizeof(value));
+      return fmt::format("{}", value);
+    }
+    case mysql_type::double_: {
+      if (reader.remaining() < sizeof(uint64_t)) {
+        return Err{mysql_error::protocol("truncated prepared binary row")};
+      }
+      auto raw = read_int_le<uint64_t>(reader.read_bytes(sizeof(uint64_t)));
+      auto value = double{};
+      std::memcpy(&value, &raw, sizeof(value));
+      return fmt::format("{}", value);
+    }
+    case mysql_type::decimal:
+    case mysql_type::newdecimal:
+    case mysql_type::varchar:
+    case mysql_type::var_string:
+    case mysql_type::string:
+    case mysql_type::bit:
+    case mysql_type::enum_:
+    case mysql_type::set:
+    case mysql_type::tiny_blob:
+    case mysql_type::medium_blob:
+    case mysql_type::long_blob:
+    case mysql_type::blob:
+    case mysql_type::json:
+    case mysql_type::geometry:
+      return reader.read_lenenc_string();
+    case mysql_type::null:
+      return std::string{};
+    default:
+      return Err{mysql_error::protocol(
+        fmt::format("unsupported prepared result type {} for column `{}`",
+                    std::to_underlying(col.type), col.name))};
+  }
+}
+
+/// Parse a prepared-statement binary row into nullable string cells.
+auto parse_binary_row_as_strings(std::span<std::byte const> data,
+                                 std::vector<column_info> const& columns)
+  -> MysqlResult<result_row> {
+  if (data.empty()) {
+    return Err{mysql_error::protocol("empty prepared binary row packet")};
+  }
+  if (data[0] != packet::ok) {
+    return Err{mysql_error::protocol(
+      fmt::format("unexpected prepared row marker: 0x{:02x}",
+                  std::to_integer<uint8_t>(data[0])))};
+  }
+  auto reader = packet_reader{data};
+  reader.skip(1); // row marker
+  auto null_bitmap_size = (columns.size() + 7 + 2) / 8;
+  if (reader.remaining() < null_bitmap_size) {
+    return Err{mysql_error::protocol("truncated prepared row null bitmap")};
+  }
+  auto null_bitmap = reader.read_bytes(null_bitmap_size);
+  auto row = result_row{};
+  row.reserve(columns.size());
+  for (auto i = size_t{0}; i < columns.size(); ++i) {
+    auto bit_index = i + 2;
+    auto bit = static_cast<uint8_t>(1u << (bit_index % 8));
+    auto is_null
+      = (std::to_integer<uint8_t>(null_bitmap[bit_index / 8]) & bit) != 0;
+    if (is_null or columns[i].type == mysql_type::null) {
+      row.emplace_back(std::nullopt);
+      continue;
+    }
+    TRY(auto value, parse_binary_value_as_string(reader, columns[i]));
     row.emplace_back(std::move(value));
   }
   return row;
@@ -1088,50 +1336,65 @@ auto extract_tracking_candidates(std::vector<result_row> rows)
   return result;
 }
 
-/// Parse the first row and first column as optional unsigned 64-bit integer.
-auto parse_first_optional_uint64(std::vector<result_row> const& rows)
-  -> MysqlResult<std::optional<uint64_t>> {
+/// Parse the first row and first column as optional string.
+auto parse_first_optional_string(std::vector<result_row> const& rows)
+  -> MysqlResult<std::optional<std::string>> {
   if (rows.empty()) {
-    return std::optional<uint64_t>{};
+    return std::optional<std::string>{};
   }
   if (rows[0].empty()) {
     return Err{mysql_error::protocol("expected at least one column")};
   }
   if (not rows[0][0]) {
+    return std::optional<std::string>{};
+  }
+  return std::optional<std::string>{*rows[0][0]};
+}
+
+/// Parse an optional string as optional unsigned 64-bit integer.
+auto parse_optional_uint64(std::optional<std::string> const& cell)
+  -> MysqlResult<std::optional<uint64_t>> {
+  if (not cell) {
     return std::optional<uint64_t>{};
   }
   auto value = uint64_t{};
-  auto& cell = *rows[0][0];
   auto [ptr, ec]
-    = std::from_chars(cell.data(), cell.data() + cell.size(), value);
-  if (ec != std::errc{} or ptr != cell.data() + cell.size()) {
+    = std::from_chars(cell->data(), cell->data() + cell->size(), value);
+  if (ec != std::errc{} or ptr != cell->data() + cell->size()) {
     return Err{
-      mysql_error::protocol(fmt::format("invalid uint64 value `{}`", cell))};
+      mysql_error::protocol(fmt::format("invalid uint64 value `{}`", *cell))};
   }
   return std::optional<uint64_t>{value};
+}
+
+/// Parse an optional string as optional signed 64-bit integer.
+auto parse_optional_int64(std::optional<std::string> const& cell)
+  -> MysqlResult<std::optional<int64_t>> {
+  if (not cell) {
+    return std::optional<int64_t>{};
+  }
+  auto value = int64_t{};
+  auto [ptr, ec]
+    = std::from_chars(cell->data(), cell->data() + cell->size(), value);
+  if (ec != std::errc{} or ptr != cell->data() + cell->size()) {
+    return Err{
+      mysql_error::protocol(fmt::format("invalid int64 value `{}`", *cell))};
+  }
+  return std::optional<int64_t>{value};
+}
+
+/// Parse the first row and first column as optional unsigned 64-bit integer.
+auto parse_first_optional_uint64(std::vector<result_row> const& rows)
+  -> MysqlResult<std::optional<uint64_t>> {
+  TRY(auto cell, parse_first_optional_string(rows));
+  return parse_optional_uint64(cell);
 }
 
 /// Parse the first row and first column as optional signed 64-bit integer.
 auto parse_first_optional_int64(std::vector<result_row> const& rows)
   -> MysqlResult<std::optional<int64_t>> {
-  if (rows.empty()) {
-    return std::optional<int64_t>{};
-  }
-  if (rows[0].empty()) {
-    return Err{mysql_error::protocol("expected at least one column")};
-  }
-  if (not rows[0][0]) {
-    return std::optional<int64_t>{};
-  }
-  auto value = int64_t{};
-  auto& cell = *rows[0][0];
-  auto [ptr, ec]
-    = std::from_chars(cell.data(), cell.data() + cell.size(), value);
-  if (ec != std::errc{} or ptr != cell.data() + cell.size()) {
-    return Err{
-      mysql_error::protocol(fmt::format("invalid int64 value `{}`", cell))};
-  }
-  return std::optional<int64_t>{value};
+  TRY(auto cell, parse_first_optional_string(rows));
+  return parse_optional_int64(cell);
 }
 
 /// Parse a row packet into a series_builder.
@@ -1305,6 +1568,27 @@ public:
     co_return rows;
   }
 
+  /// Execute a prepared statement and return all rows as nullable strings.
+  auto
+  query_rows_prepared(std::string_view sql, std::vector<prepared_param> params)
+    -> Task<MysqlResult<std::vector<result_row>>> {
+    CO_TRY(auto stmt, co_await prepare_statement(sql));
+    auto rows_result = co_await execute_prepared_query_rows(stmt, params);
+    auto close_result = co_await close_statement(stmt.statement_id);
+    if (rows_result.is_err()) {
+      co_return Err{std::move(rows_result).unwrap_err()};
+    }
+    if (close_result.is_err()) {
+      co_return Err{std::move(close_result).unwrap_err()};
+    }
+    co_return std::move(rows_result).unwrap();
+  }
+
+  auto close() -> Task<MysqlResult<void>> {
+    CO_TRY(co_await conn_.close());
+    co_return {};
+  }
+
   explicit async_client(async_connection conn) : conn_{std::move(conn)} {
   }
 
@@ -1315,6 +1599,82 @@ private:
     CO_TRY(co_await conn_.write_packet(pkt, 0));
     CO_TRY(auto meta, co_await read_result_set_meta(conn_));
     co_return std::move(meta).columns;
+  }
+
+  auto prepare_statement(std::string_view sql)
+    -> Task<MysqlResult<prepared_statement_meta>> {
+    auto pkt = make_stmt_prepare_packet(sql);
+    CO_TRY(co_await conn_.write_packet(pkt, 0));
+    CO_TRY(auto response, co_await conn_.read_packet());
+    CO_TRY(auto stmt, parse_stmt_prepare_ok_packet(response));
+    if (stmt.num_params > 0) {
+      CO_TRY(auto param_definitions,
+             co_await read_statement_column_definitions(stmt.num_params));
+      TENZIR_UNUSED(param_definitions);
+    }
+    if (stmt.num_columns > 0) {
+      CO_TRY(auto column_definitions,
+             co_await read_statement_column_definitions(stmt.num_columns));
+      TENZIR_UNUSED(column_definitions);
+    }
+    co_return stmt;
+  }
+
+  auto read_statement_column_definitions(uint16_t count)
+    -> Task<MysqlResult<std::vector<column_info>>> {
+    auto columns = std::vector<column_info>{};
+    columns.reserve(count);
+    for (auto i = uint16_t{0}; i < count; ++i) {
+      CO_TRY(auto col_packet, co_await conn_.read_packet());
+      if (auto err = as_error(col_packet)) {
+        co_return Err{std::move(*err)};
+      }
+      CO_TRY(auto col, parse_column_definition(col_packet));
+      columns.push_back(std::move(col));
+    }
+    CO_TRY(auto terminator, co_await conn_.read_packet());
+    if (auto err = as_error(terminator)) {
+      co_return Err{std::move(*err)};
+    }
+    if (not is_result_set_terminator(terminator)) {
+      co_return Err{
+        mysql_error::protocol("expected statement metadata terminator packet")};
+    }
+    co_return columns;
+  }
+
+  auto execute_prepared_query_rows(prepared_statement_meta const& stmt,
+                                   std::span<prepared_param const> params)
+    -> Task<MysqlResult<std::vector<result_row>>> {
+    if (params.size() != stmt.num_params) {
+      co_return Err{mysql_error::protocol(
+        fmt::format("prepared statement expected {} parameters, got {}",
+                    stmt.num_params, params.size()))};
+    }
+    CO_TRY(auto execute_packet,
+           make_stmt_execute_packet(stmt.statement_id, params));
+    CO_TRY(co_await conn_.write_packet(execute_packet, 0));
+    CO_TRY(auto meta, co_await read_result_set_meta(conn_));
+    if (meta.columns.empty()) {
+      co_return std::vector<result_row>{};
+    }
+    auto rows = std::vector<result_row>{};
+    while (true) {
+      CO_TRY(auto maybe_row_packet, co_await read_next_row_packet());
+      if (not maybe_row_packet) {
+        break;
+      }
+      CO_TRY(auto row,
+             parse_binary_row_as_strings(*maybe_row_packet, meta.columns));
+      rows.push_back(std::move(row));
+    }
+    co_return rows;
+  }
+
+  auto close_statement(uint32_t statement_id) -> Task<MysqlResult<void>> {
+    auto pkt = make_stmt_close_packet(statement_id);
+    CO_TRY(co_await conn_.write_packet(pkt, 0));
+    co_return {};
   }
 
   auto read_next_row_packet()
@@ -1367,15 +1727,26 @@ private:
     return fmt::format("{}", fmt::join(names, ", "));
   }
 
+  auto close_client(OpCtx& ctx) -> Task<void> {
+    if (not has_client_) {
+      co_return;
+    }
+    auto result = co_await client_->close();
+    if (result.is_err()) {
+      emit_mysql_error(std::move(result).unwrap_err(), ctx);
+    }
+    client_ = {};
+    has_client_ = false;
+  }
+
   auto
   find_tracking_candidates(std::string const& table, bool auto_increment_only)
     -> Task<MysqlResult<std::vector<tracking_candidate>>> {
-    auto sql = fmt::format("SELECT column_name, "
+    auto sql = std::string{"SELECT column_name, "
                            "LOCATE('unsigned', column_type) > 0 "
                            "FROM information_schema.columns "
                            "WHERE table_schema = DATABASE() "
-                           "AND table_name = {}",
-                           quote_string_literal(table));
+                           "AND table_name = ?"};
     if (auto_increment_only) {
       sql += " AND column_key = 'PRI' AND LOCATE('auto_increment', extra) > 0";
     } else {
@@ -1383,7 +1754,8 @@ private:
              "'bigint')";
     }
     sql += " ORDER BY ordinal_position";
-    auto rows = co_await client_->query_rows(sql);
+    auto rows
+      = co_await client_->query_rows_prepared(sql, {prepared_param{table}});
     if (rows.is_err()) {
       co_return Err{std::move(rows).unwrap_err()};
     }
@@ -1393,18 +1765,18 @@ private:
   auto resolve_tracking_column(OpCtx& ctx) -> Task<bool> {
     TENZIR_ASSERT(args_.table);
     if (args_.tracking_column) {
-      auto sql = fmt::format(
+      auto sql = std::string{
         "SELECT column_name, "
         "LOCATE('unsigned', column_type) > 0 "
         "FROM information_schema.columns "
         "WHERE table_schema = DATABASE() "
-        "AND table_name = {} "
-        "AND column_name = {} "
+        "AND table_name = ? "
+        "AND column_name = ? "
         "AND data_type IN ('tinyint', 'smallint', 'mediumint', 'int', "
-        "'bigint')",
-        quote_string_literal(args_.table->inner),
-        quote_string_literal(args_.tracking_column->inner));
-      auto rows = co_await client_->query_rows(sql);
+        "'bigint')"};
+      auto rows = co_await client_->query_rows_prepared(
+        sql, {prepared_param{args_.table->inner},
+              prepared_param{args_.tracking_column->inner}});
       if (rows.is_err()) {
         emit_mysql_error(std::move(rows).unwrap_err(), ctx);
         co_return false;
@@ -1500,6 +1872,24 @@ private:
     co_return std::move(value).unwrap();
   }
 
+  auto query_max_tracking_value_raw(std::string_view tracking_column)
+    -> Task<MysqlResult<std::optional<std::string>>> {
+    TENZIR_ASSERT(not tracking_column.empty());
+    TENZIR_ASSERT(not table_name_.empty());
+    auto sql
+      = fmt::format("SELECT MAX({}) FROM {}", quote_identifier(tracking_column),
+                    quote_identifier(table_name_));
+    auto rows = co_await client_->query_rows(sql);
+    if (rows.is_err()) {
+      co_return Err{std::move(rows).unwrap_err()};
+    }
+    auto value = parse_first_optional_string(std::move(rows).unwrap());
+    if (value.is_err()) {
+      co_return Err{std::move(value).unwrap_err()};
+    }
+    co_return std::move(value).unwrap();
+  }
+
   auto query_max_tracking_value_signed()
     -> Task<MysqlResult<std::optional<int64_t>>> {
     TENZIR_ASSERT(not tracking_column_.empty());
@@ -1519,34 +1909,75 @@ private:
   }
 
   auto initialize_live(OpCtx& ctx) -> Task<bool> {
+    auto initial_watermark_raw = std::optional<std::string>{};
+    // For explicit tracking columns, capture the initial watermark first.
+    // This avoids dropping early rows if schema validation takes longer than
+    // expected.
+    if (args_.tracking_column and not tracking_column_resolved_) {
+      auto watermark
+        = co_await query_max_tracking_value_raw(args_.tracking_column->inner);
+      if (watermark.is_err()) {
+        emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+        co_return false;
+      }
+      initial_watermark_raw = std::move(watermark).unwrap();
+    }
     if (not tracking_column_resolved_) {
       if (not(co_await resolve_tracking_column(ctx))) {
         co_return false;
       }
     }
-    if (tracking_column_is_unsigned_) {
-      auto watermark = co_await query_max_tracking_value_unsigned();
-      if (watermark.is_err()) {
-        emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
-        co_return false;
-      }
-      if (auto value = std::move(watermark).unwrap()) {
-        live_watermark_unsigned_ = *value;
-        live_has_watermark_ = true;
+    if (initial_watermark_raw) {
+      if (tracking_column_is_unsigned_) {
+        auto watermark = parse_optional_uint64(initial_watermark_raw);
+        if (watermark.is_err()) {
+          emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+          co_return false;
+        }
+        if (auto value = std::move(watermark).unwrap()) {
+          live_watermark_unsigned_ = *value;
+          live_has_watermark_ = true;
+        } else {
+          live_has_watermark_ = false;
+        }
       } else {
-        live_has_watermark_ = false;
+        auto watermark = parse_optional_int64(initial_watermark_raw);
+        if (watermark.is_err()) {
+          emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+          co_return false;
+        }
+        if (auto value = std::move(watermark).unwrap()) {
+          live_watermark_signed_ = *value;
+          live_has_watermark_ = true;
+        } else {
+          live_has_watermark_ = false;
+        }
       }
     } else {
-      auto watermark = co_await query_max_tracking_value_signed();
-      if (watermark.is_err()) {
-        emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
-        co_return false;
-      }
-      if (auto value = std::move(watermark).unwrap()) {
-        live_watermark_signed_ = *value;
-        live_has_watermark_ = true;
+      if (tracking_column_is_unsigned_) {
+        auto watermark = co_await query_max_tracking_value_unsigned();
+        if (watermark.is_err()) {
+          emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+          co_return false;
+        }
+        if (auto value = std::move(watermark).unwrap()) {
+          live_watermark_unsigned_ = *value;
+          live_has_watermark_ = true;
+        } else {
+          live_has_watermark_ = false;
+        }
       } else {
-        live_has_watermark_ = false;
+        auto watermark = co_await query_max_tracking_value_signed();
+        if (watermark.is_err()) {
+          emit_mysql_error(std::move(watermark).unwrap_err(), ctx);
+          co_return false;
+        }
+        if (auto value = std::move(watermark).unwrap()) {
+          live_watermark_signed_ = *value;
+          live_has_watermark_ = true;
+        } else {
+          live_has_watermark_ = false;
+        }
       }
     }
     live_initialized_ = true;
@@ -1705,6 +2136,7 @@ public:
       co_return;
     }
     client_ = std::move(result).unwrap();
+    has_client_ = true;
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -1730,6 +2162,7 @@ public:
       if (not live_initialized_) {
         if (not(co_await initialize_live(ctx))) {
           done_ = true;
+          co_await close_client(ctx);
         }
         co_return;
       }
@@ -1749,6 +2182,7 @@ public:
       }
       if (not live_ok) {
         done_ = true;
+        co_await close_client(ctx);
       }
       co_return;
     }
@@ -1764,6 +2198,18 @@ public:
       co_await push(std::move(*slice_result).unwrap());
     }
     done_ = true;
+    co_await close_client(ctx);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(push);
+    done_ = true;
+    co_await close_client(ctx);
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    co_await OperatorBase::stop(ctx);
+    co_await close_client(ctx);
   }
 
   auto state() -> OperatorState override {
@@ -1784,6 +2230,7 @@ public:
 private:
   FromMySQLArgs args_;
   Box<async_client> client_;
+  bool has_client_ = false;
   std::string query_;
   std::string schema_name_;
   std::string table_name_;
