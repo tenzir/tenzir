@@ -22,6 +22,7 @@ pkgs.mkShell (
         pkgs.gperf
         pkgs.nixfmt-rfc-style
         pkgs.speeve
+        pkgs.libsodium
         pkgs.shfmt
         pkgs.poetry
         pkgs.python3Packages.spdx-tools

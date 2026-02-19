@@ -822,12 +822,15 @@ else ()
                      "Dependencies")
 endif ()
 
-# -- folly ---------------------------------------------------------------------
+# -- facebook libs (folly, fizz, wangle, mvfst, proxygen) ---------------------
 
-option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" ON)
+option(TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS
+       "Build folly, fizz, wangle, mvfst, and proxygen from submodules" ON)
+unset(_tenzir_bundled_facebook)
 set(TENZIR_FOLLY_MINIMUM_VERSION "2026.01.19.00")
-if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
-  # Keep glog headers consuming correctly when pulled in through Folly's async APIs.
+
+if (NOT TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  # --- System Facebook libs via find_package ---
   add_definitions(-DGLOG_USE_GLOG_EXPORT)
 
   # folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
@@ -868,31 +871,53 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
     )
   endif ()
   find_package(glog REQUIRED)
+  find_package(proxygen REQUIRED CONFIG)
   dependency_summary("folly" Folly::folly "Dependencies")
+  dependency_summary("proxygen" proxygen::proxygen "Dependencies")
 else ()
-  if (NOT EXISTS
-      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly/CMakeLists.txt")
-    message(
-      FATAL_ERROR
-        "folly not found, either use -Dfolly_dir=... or initialize the"
-        " libtenzir/aux/folly submodule")
-  endif ()
+  # --- Bundled Facebook libs ---
+  # Validate all submodules exist. Some repos (fizz, wangle) have their
+  # CMakeLists.txt in a subdirectory named after the project.
+  foreach (_fb_lib folly mvfst proxygen)
+    if (NOT
+        EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/${_fb_lib}/CMakeLists.txt"
+    )
+      message(
+        FATAL_ERROR
+          "${_fb_lib} not found. Initialize submodule libtenzir/aux/facebook/${_fb_lib}"
+      )
+    endif ()
+  endforeach ()
+  foreach (_fb_lib fizz wangle)
+    if (NOT
+        EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/${_fb_lib}/${_fb_lib}/CMakeLists.txt"
+    )
+      message(
+        FATAL_ERROR
+          "${_fb_lib} not found. Initialize submodule libtenzir/aux/facebook/${_fb_lib}"
+      )
+    endif ()
+  endforeach ()
+
+  # Common setup
+  add_definitions(-DGLOG_USE_GLOG_EXPORT)
+  find_package(glog REQUIRED)
+
   # Configure folly build options
   set(BUILD_TESTS
       OFF
-      CACHE BOOL "")
+      CACHE BOOL "" FORCE)
   set(BUILD_BENCHMARKS
       OFF
       CACHE BOOL "")
-  set(FOLLY_HAVE_LIBGFLAGS
+  set(BUILD_EXAMPLES
       OFF
-      CACHE BOOL "")
-  # Prevent Folly's FindGflags.cmake from finding gflags, because folly-deps.cmake
-  # would override the FOLLY_HAVE_LIBGFLAGS cache variable with a regular variable
-  # set to ${LIBGFLAGS_FOUND}. This causes duplicate gflags flag registrations at
-  # runtime when libgflags.so is also loaded via libglog.so.
-  set(CMAKE_DISABLE_FIND_PACKAGE_Gflags TRUE)
-  add_definitions(-DGLOG_USE_GLOG_EXPORT)
+      CACHE BOOL "" FORCE)
+  # gflags is available from the Nix environment (transitive dep of glog).
+  # With all Facebook libs as static archives inside libtenzir.so, gflags
+  # registrations go into the single shared libgflags — no duplication.
   # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
   set(FOLLY_HAVE_MALLOC_USABLE_SIZE
       OFF
@@ -909,13 +934,11 @@ else ()
   if (blake3_FOUND)
     list(APPEND FOLLY_LINK_LIBRARIES BLAKE3::blake3)
   endif ()
-  # Pass SSE/AVX flags to folly to ensure F14 containers use the same intrinsics
-  # mode across all compilation units. Without this, folly's F14Table.cpp may be
-  # compiled with different SIMD settings than code using F14 headers, causing
-  # link errors due to F14LinkCheck mismatch.
-  # We temporarily modify CMAKE_CXX_FLAGS because folly's folly_add_library()
-  # function uses cmake_parse_arguments with prefix FOLLY_LIB, which shadows
-  # any variable named FOLLY_LIB_COMPILE_OPTIONS set from the parent scope.
+
+  # Pass SSE/AVX flags to all Facebook libs to ensure consistent SIMD settings
+  # across all compilation units. Without this, F14Table.cpp may be compiled
+  # with different SIMD settings than code using F14 headers, causing link
+  # errors due to F14LinkCheck mismatch.
   set(_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
   if (TENZIR_ENABLE_SSE_INSTRUCTIONS)
     string(APPEND CMAKE_CXX_FLAGS " -msse")
@@ -941,137 +964,150 @@ else ()
   if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
     string(APPEND CMAKE_CXX_FLAGS " -mavx2")
   endif ()
-  message(STATUS "Folly CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-  # Force folly to build as a static library for two reasons:
-  # 1. On macOS, std::current_exception() returns nullptr in coroutine
-  #    unhandled_exception() handlers when folly crosses shared library
-  #    boundaries.
-  # 2. On Linux aarch64, folly's CMake has duplicate aor (Arm Optimized
-  #    Routines) object targets that cause multiple definition errors when
-  #    building as a shared library.
+
+  # Force ALL Facebook libs to build as static libraries. This ensures every
+  # folly singleton lives in exactly one place (libtenzir.so), preventing the
+  # "mismatched unique instance" crash from duplicate folly singletons.
   set(_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
   set(BUILD_SHARED_LIBS OFF)
-  # When the main build uses shared libraries, folly must be compiled with
-  # -fPIC even though it's built as a static library, because it will be
-  # linked into a shared library.
+  # When the main build uses shared libraries, static archives must be compiled
+  # with -fPIC because they will be linked into a shared library.
   if (_saved_build_shared_libs)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   endif ()
-  add_subdirectory(libtenzir/aux/folly SYSTEM)
-  unset(CMAKE_DISABLE_FIND_PACKAGE_Gflags)
-  set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
-  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
+
+  # Skip install rules for all bundled Facebook libs — they are static archives
+  # linked into libtenzir.so and never installed individually.
+  set(_TENZIR_CMAKE_SKIP_INSTALL_RULES "${CMAKE_SKIP_INSTALL_RULES}")
+  set(CMAKE_SKIP_INSTALL_RULES ON)
+
+  # ---- 1. FOLLY ----
+  add_subdirectory(libtenzir/aux/facebook/folly SYSTEM)
   if (NOT TARGET Folly::folly)
     add_library(Folly::folly ALIAS folly)
   endif ()
-  # Set variable to include bundled folly in exports
-  set(_tenzir_bundled_folly folly folly_deps)
-  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly"
-                     "Dependencies")
-endif ()
-
-# -- proxygen ------------------------------------------------------------------
-
-option(TENZIR_ENABLE_BUNDLED_PROXYGEN "Use the Proxygen submodule" ON)
-unset(_tenzir_bundled_proxygen)
-set(_tenzir_proxygen_target "")
-if (TENZIR_ENABLE_BUNDLED_PROXYGEN)
-  if (NOT EXISTS
-      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen/CMakeLists.txt")
-    message(
-      FATAL_ERROR
-        "proxygen not found, either use -DTENZIR_ENABLE_BUNDLED_PROXYGEN=OFF"
-        " or initialize the libtenzir/aux/proxygen submodule")
-  endif ()
-  find_package(glog REQUIRED)
-  set(_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
-  if (TENZIR_ENABLE_SSE_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse")
-  endif ()
-  if (TENZIR_ENABLE_SSE2_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse2")
-  endif ()
-  if (TENZIR_ENABLE_SSE3_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse3")
-  endif ()
-  if (TENZIR_ENABLE_SSSE3_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -mssse3")
-  endif ()
-  if (TENZIR_ENABLE_SSE4_1_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse4.1")
-  endif ()
-  if (TENZIR_ENABLE_SSE4_2_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse4.2")
-  endif ()
-  if (TENZIR_ENABLE_AVX_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -mavx")
-  endif ()
-  if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -mavx2")
-  endif ()
-  message(STATUS "Proxygen CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-  # Keep Proxygen from pulling bundled dependencies so it can stay versioned and
-  # dependency-matched with the separate Folly package.
-  set(PROXYGEN_USE_BUNDLED_FOLLY
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_WANGLE
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_FIZZ
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_MVFST
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_ZLIB
-      OFF
-      CACHE BOOL "")
-  set(PROXYGEN_USE_BUNDLED_ZSTD
-      OFF
-      CACHE BOOL "")
-  set(BUILD_TESTS
-      OFF
-      CACHE BOOL "" FORCE)
-  set(_TENZIR_CMAKE_SKIP_INSTALL_RULES "${CMAKE_SKIP_INSTALL_RULES}")
-  set(CMAKE_SKIP_INSTALL_RULES ON)
-  add_subdirectory(libtenzir/aux/proxygen SYSTEM)
-  set(CMAKE_SKIP_INSTALL_RULES "${_TENZIR_CMAKE_SKIP_INSTALL_RULES}")
-  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
-  TenzirSystemizeTarget(proxygenhttpserver)
-  add_library(proxygen::proxygenhttpserver ALIAS proxygenhttpserver)
-  foreach (_tenzir_proxygen_export_target IN ITEMS proxygen proxygenhttpserver)
-    if (TARGET ${_tenzir_proxygen_export_target})
-      list(APPEND _tenzir_bundled_proxygen ${_tenzir_proxygen_export_target})
-    endif ()
-  endforeach ()
-  #export(
-  #  EXPORT proxygenTargets
-  #  FILE proxygen-config.cmake
-  #  NAMESPACE proxygen::)
+  # Write shim config files so downstream find_package() calls are no-ops
+  # when the target is already defined from add_subdirectory(). The generated
+  # folly-config.cmake has set_and_check() calls that fail because the build
+  # tree doesn't match folly's expected install layout.
+  set(_fb_shim_dir "${CMAKE_BINARY_DIR}/_fb_shims")
+  file(MAKE_DIRECTORY "${_fb_shim_dir}/folly" "${_fb_shim_dir}/fizz"
+       "${_fb_shim_dir}/wangle" "${_fb_shim_dir}/mvfst")
+  file(
+    WRITE "${_fb_shim_dir}/folly/folly-config.cmake"
+    "# Shim: target already defined via add_subdirectory()\n"
+    "if(NOT TARGET Folly::folly)\n"
+    "  message(FATAL_ERROR \"Folly::folly target not found\")\n"
+    "endif()\n"
+    "set(FOLLY_LIBRARIES Folly::folly)\n")
+  set(folly_DIR
+      "${_fb_shim_dir}/folly"
+      CACHE PATH "" FORCE)
   dependency_summary(
-    "proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/proxygen"
+    "folly" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/folly"
     "Dependencies")
-else ()
-  find_package(proxygen REQUIRED CONFIG)
-  dependency_summary("proxygen" proxygen::proxygen "Dependencies")
+
+  # ---- 2. FIZZ ----
+  # fizz's CMakeLists.txt is in fizz/fizz/ (repo root has no CMakeLists.txt)
+  add_subdirectory(libtenzir/aux/facebook/fizz/fizz SYSTEM)
+  # Fix include path: fizz uses CMAKE_SOURCE_DIR which is wrong for subdirectory
+  # builds
+  target_include_directories(
+    fizz BEFORE
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/fizz>
+  )
+  if (NOT TARGET fizz::fizz)
+    add_library(fizz::fizz ALIAS fizz)
+  endif ()
+  file(
+    WRITE "${_fb_shim_dir}/fizz/fizz-config.cmake"
+    "# Shim: target already defined via add_subdirectory()\n"
+    "if(NOT TARGET fizz::fizz)\n"
+    "  message(FATAL_ERROR \"fizz::fizz target not found\")\n"
+    "endif()\n"
+    "set(FIZZ_LIBRARIES fizz::fizz)\n")
+  set(fizz_DIR
+      "${_fb_shim_dir}/fizz"
+      CACHE PATH "" FORCE)
+  set(Fizz_DIR
+      "${_fb_shim_dir}/fizz"
+      CACHE PATH "" FORCE)
+
+  # ---- 3. WANGLE ----
+  # wangle's CMakeLists.txt is in wangle/wangle/
+  add_subdirectory(libtenzir/aux/facebook/wangle/wangle SYSTEM)
+  # Fix include path (same CMAKE_SOURCE_DIR issue)
+  target_include_directories(
+    wangle BEFORE
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/wangle>
+  )
+  if (NOT TARGET wangle::wangle)
+    add_library(wangle::wangle ALIAS wangle)
+  endif ()
+  file(
+    WRITE "${_fb_shim_dir}/wangle/wangle-config.cmake"
+    "# Shim: target already defined via add_subdirectory()\n"
+    "if(NOT TARGET wangle::wangle)\n"
+    "  message(FATAL_ERROR \"wangle::wangle target not found\")\n"
+    "endif()\n"
+    "set(WANGLE_LIBRARIES wangle::wangle)\n")
+  set(wangle_DIR
+      "${_fb_shim_dir}/wangle"
+      CACHE PATH "" FORCE)
+
+  # ---- 4. MVFST ----
+  # mvfst's CMakeLists.txt is at repo root
+  add_subdirectory(libtenzir/aux/facebook/mvfst SYSTEM)
+  # mvfst's install(EXPORT) adds the mvfst:: namespace, but add_subdirectory
+  # only creates bare targets. Create aliases for all targets that proxygen
+  # and other downstream libs reference with the mvfst:: prefix.
+  file(
+    GLOB_RECURSE
+    _mvfst_cmake_files
+    "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/mvfst/quic/*/CMakeLists.txt"
+  )
+  foreach (_mvfst_cmake_file IN LISTS _mvfst_cmake_files)
+    file(READ "${_mvfst_cmake_file}" _mvfst_cmake_content)
+    string(REGEX MATCHALL "TARGETS mvfst_[a-z_]+" _mvfst_matches
+                 "${_mvfst_cmake_content}")
+    foreach (_mvfst_match IN LISTS _mvfst_matches)
+      string(REGEX REPLACE "^TARGETS " "" _mvfst_tgt "${_mvfst_match}")
+      if (TARGET ${_mvfst_tgt} AND NOT TARGET mvfst::${_mvfst_tgt})
+        add_library(mvfst::${_mvfst_tgt} ALIAS ${_mvfst_tgt})
+      endif ()
+    endforeach ()
+  endforeach ()
+  file(WRITE "${_fb_shim_dir}/mvfst/mvfst-config.cmake"
+       "# Shim: target already defined via add_subdirectory()\n")
+  set(mvfst_DIR
+      "${_fb_shim_dir}/mvfst"
+      CACHE PATH "" FORCE)
+
+  # ---- 5. PROXYGEN ----
+  add_subdirectory(libtenzir/aux/facebook/proxygen SYSTEM)
+  # Newer glog (0.7+) no longer transitively includes <gflags/gflags.h> in
+  # <glog/logging.h>. Proxygen source files use raw DEFINE_int32/DEFINE_bool
+  # macros without explicitly including gflags. Force-include the header.
+  target_compile_options(proxygen PRIVATE -include gflags/gflags.h)
+  TenzirSystemizeTarget(proxygenhttpserver)
+  if (NOT TARGET proxygen::proxygenhttpserver)
+    add_library(proxygen::proxygenhttpserver ALIAS proxygenhttpserver)
+  endif ()
+  dependency_summary(
+    "proxygen" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/facebook/proxygen"
+    "Dependencies")
+
+  # Restore install rules, shared libs setting, and CXX flags
+  set(CMAKE_SKIP_INSTALL_RULES "${_TENZIR_CMAKE_SKIP_INSTALL_RULES}")
+  set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
+  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
+
+  # All Facebook libs are static archives linked into libtenzir.so. No
+  # export/install of individual targets needed.
+  set(_tenzir_bundled_facebook "")
 endif ()
-#foreach (
-#  _tenzir_candidate IN
-#  ITEMS "proxygen" "proxygen::proxygen" "Proxygen::proxygen"
-#        "proxygenhttpserver" "proxygen::proxygenhttpserver"
-#        "Proxygen::proxygenhttpserver")
-#  if (TARGET ${_tenzir_candidate})
-#    set(_tenzir_proxygen_target "${_tenzir_candidate}")
-#    break()
-#  endif ()
-#endforeach ()
-#if (NOT _tenzir_proxygen_target)
-#  message(
-#    FATAL_ERROR "Could not determine the Proxygen CMake target name; extend"
-#                " the candidate list in CMakeLists.txt.")
-#endif ()
-#message(STATUS "Using Proxygen target: ${_tenzir_proxygen_target}")
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS
