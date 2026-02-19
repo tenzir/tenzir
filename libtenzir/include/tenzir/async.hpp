@@ -134,6 +134,13 @@ enum class OperatorState {
   unspecified,
   /// The operator wants to finalize.
   done,
+  /// The operator is draining and will manually set the state
+  /// to `done` when finished. The operator can opt-into this
+  /// behavior by setting the state to `almost_done` in `finalize()`,
+  /// the executor will then continue scheduling the pipeline normally,
+  /// and the operator is responsible for switching to `done` within
+  /// a bounded amount of time.
+  almost_done,
 };
 
 template <class Input, class Output>
