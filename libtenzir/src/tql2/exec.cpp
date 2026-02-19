@@ -1391,7 +1391,7 @@ void write_profile(
                       .count();
       // Per-operator bar.
       emit(fmt::format(
-        R"pp({{"ph": "X", "name": "", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
+        R"pp({{"ph": "X", "name": " ", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
         pid, start_us, dur_us));
       // Global bar, named after the operator.
       emit(fmt::format(
