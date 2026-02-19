@@ -6,13 +6,19 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/null_bitmap.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/session.hpp>
+#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -51,6 +57,20 @@ auto make_keys_expression(std::vector<ast::expression> exprs)
   }
   return ast::expression{ast::record{begin_loc, std::move(items), end_loc}};
 }
+
+struct configuration;
+struct State;
+
+auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
+  -> failure_or<configuration>;
+
+auto get_cleanup_duration(const configuration& cfg) -> duration;
+
+auto deduplicate_slice(
+  const table_slice& slice, const configuration& cfg, duration cleanup_duration,
+  tsl::robin_map<data, State>& states, int64_t& row,
+  std::chrono::steady_clock::time_point& last_cleanup_time,
+  diagnostic_handler& dh) -> std::vector<table_slice>;
 
 struct configuration {
   ast::expression keys;
@@ -143,6 +163,248 @@ struct deduplicate_state {
   }
 };
 
+auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
+  -> failure_or<configuration> {
+  auto expressions = std::vector<ast::expression>{};
+  auto named_args = std::vector<ast::expression>{};
+  auto seen_named = false;
+  auto seen_general_expression = false;
+  expressions.reserve(inv.args.size());
+  named_args.reserve(inv.args.size());
+  for (auto& arg : inv.args) {
+    if (is<ast::assignment>(arg)) {
+      seen_named = true;
+      named_args.push_back(std::move(arg));
+      continue;
+    }
+    if (seen_named) {
+      diagnostic::error("positional arguments must precede named arguments")
+        .primary(arg)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto selector = ast::field_path::try_from(arg);
+    if (selector) {
+      if (selector->has_this() || selector->path().empty()) {
+        diagnostic::error("cannot deduplicate `this` explicitly")
+          .primary(*selector)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (seen_general_expression) {
+        diagnostic::error("cannot mix field selectors with general expressions")
+          .primary(arg)
+          .emit(ctx);
+        return failure::promise();
+      }
+      expressions.push_back(std::move(*selector).unwrap());
+      continue;
+    }
+    if (seen_general_expression) {
+      diagnostic::error("expected selector").primary(arg).emit(ctx);
+      return failure::promise();
+    }
+    if (! expressions.empty()) {
+      diagnostic::error("cannot mix field selectors with general expressions")
+        .primary(arg)
+        .emit(ctx);
+      return failure::promise();
+    }
+    seen_general_expression = true;
+    expressions.push_back(std::move(arg));
+  }
+  auto limit = std::optional<located<int64_t>>{};
+  auto cfg = configuration{};
+  auto parser = argument_parser2::operator_("deduplicate");
+  [[maybe_unused]] auto unused_key = std::optional<ast::expression>{};
+  parser.positional("key", unused_key, "any");
+  parser.named("distance", cfg.distance);
+  parser.named("limit", limit);
+  parser.named("create_timeout", cfg.create_timeout);
+  parser.named("write_timeout", cfg.write_timeout);
+  parser.named("read_timeout", cfg.read_timeout);
+  parser.named("count_field", cfg.count_field);
+  auto parser_inv
+    = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
+  TRY(parser.parse(parser_inv, ctx));
+  if (expressions.empty()) {
+    cfg.keys = ast::this_{location::unknown};
+  } else {
+    cfg.keys = make_keys_expression(std::move(expressions));
+  }
+  cfg.limit = limit.value_or(located{1, location::unknown});
+  auto failed = false;
+  if (cfg.limit.inner < 1) {
+    diagnostic::error("limit must be at least 1").primary(cfg.limit).emit(ctx);
+    failed = true;
+  }
+  if (cfg.distance and cfg.distance->inner < 1) {
+    diagnostic::error("distance must be at least 1")
+      .primary(*cfg.distance)
+      .emit(ctx);
+    failed = true;
+  }
+  if (cfg.read_timeout and cfg.read_timeout->inner < duration::zero()) {
+    diagnostic::error("read timeout must be positive")
+      .primary(*cfg.read_timeout)
+      .emit(ctx);
+    failed = true;
+  }
+  if (cfg.write_timeout and cfg.write_timeout->inner < duration::zero()) {
+    diagnostic::error("write timeout must be positive")
+      .primary(*cfg.write_timeout)
+      .emit(ctx);
+    failed = true;
+  }
+  if (cfg.create_timeout and cfg.create_timeout->inner < duration::zero()) {
+    diagnostic::error("create timeout must be positive")
+      .primary(*cfg.create_timeout)
+      .emit(ctx);
+    failed = true;
+  }
+  if (cfg.read_timeout and cfg.write_timeout
+      and cfg.read_timeout->inner >= cfg.write_timeout->inner) {
+    diagnostic::error("read timeout must be less than write timeout")
+      .primary(*cfg.read_timeout)
+      .secondary(*cfg.write_timeout)
+      .emit(ctx);
+    failed = true;
+  }
+  if (cfg.read_timeout and cfg.create_timeout
+      and cfg.read_timeout->inner >= cfg.create_timeout->inner) {
+    diagnostic::error("read timeout must be less than create timeout")
+      .primary(*cfg.read_timeout)
+      .secondary(*cfg.create_timeout)
+      .emit(ctx);
+    failed = true;
+  }
+  if (cfg.write_timeout and cfg.create_timeout
+      and cfg.write_timeout->inner >= cfg.create_timeout->inner) {
+    diagnostic::error("write timeout must be less than create timeout")
+      .primary(*cfg.write_timeout)
+      .secondary(*cfg.create_timeout)
+      .emit(ctx);
+    failed = true;
+  }
+  if (failed) {
+    return failure::promise();
+  }
+  return cfg;
+}
+
+auto get_cleanup_duration(const configuration& cfg) -> duration {
+  constexpr auto get_duration = [](auto opt) -> duration {
+    return opt ? opt->inner : duration::max();
+  };
+  const auto min_cfg = std::min(
+    {
+      get_duration(cfg.create_timeout),
+      get_duration(cfg.write_timeout),
+      get_duration(cfg.read_timeout),
+    },
+    std::less<>{});
+  return std::clamp(min_cfg, min_cleanup_duration, max_cleanup_duration);
+}
+
+auto deduplicate_slice(
+  const table_slice& slice, const configuration& cfg, duration cleanup_duration,
+  tsl::robin_map<data, State>& states, int64_t& row,
+  std::chrono::steady_clock::time_point& last_cleanup_time,
+  diagnostic_handler& dh) -> std::vector<table_slice> {
+  auto output = std::vector<table_slice>{};
+  const auto now = std::chrono::steady_clock::now();
+  if (now > last_cleanup_time + cleanup_duration) {
+    last_cleanup_time = now;
+    for (auto it = states.begin(); it != states.end();) {
+      const auto should_remove
+        = cfg.count_field ? it->second.is_double_expired(cfg, row, now)
+                          : it->second.is_expired(cfg, row, now);
+      if (should_remove) {
+        it = states.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+  if (slice.rows() == 0) {
+    output.push_back({});
+    return output;
+  }
+  auto keys = eval(cfg.keys, slice, dh);
+  auto offset = int64_t{};
+  auto ids = null_bitmap{};
+  auto count_builder = std::shared_ptr<arrow::Int64Builder>{};
+  if (cfg.count_field) {
+    count_builder = std::make_shared<arrow::Int64Builder>(arrow_memory_pool());
+    check(count_builder->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
+  }
+  for (const auto& key : keys.values()) {
+    const auto current_row = row + offset++;
+    // FIXME: This needs to materialize the data_view, otherwise this
+    // segfaults.
+    auto k = materialize(key);
+    auto it = states.find(k);
+    if (it == states.end()) {
+      states.emplace_hint(it, std::move(k), State{}).value().reset(current_row,
+                                                                    now);
+      ids.append_bit(true);
+      if (count_builder) {
+        check(count_builder->Append(0));
+      }
+      continue;
+    }
+    if (it->second.is_expired(cfg, current_row, now)) {
+      if (count_builder) {
+        const auto double_expired
+          = it->second.is_double_expired(cfg, current_row, now);
+        if (double_expired) {
+          check(count_builder->Append(0));
+        } else {
+          const auto dropped = it->second.count - cfg.limit.inner;
+          check(count_builder->Append(dropped));
+        }
+      }
+      it.value().reset(current_row, now);
+      ids.append_bit(true);
+      continue;
+    }
+    it.value().read_at = now;
+    it.value().last_row = current_row;
+    it.value().count += 1;
+    if (it->second.count > cfg.limit.inner) {
+      ids.append_bit(false);
+      continue;
+    }
+    it.value().written_at = now;
+    ids.append_bit(true);
+    if (count_builder) {
+      check(count_builder->Append(0));
+    }
+  }
+  row += keys.length();
+  if (cfg.count_field) {
+    auto count_series = series{int64_type{}, finish(*count_builder)};
+    // Track count offset separately. The count array only has required
+    // entries, so all entries must be used, i.e. count_series.length() !=
+    // slice.rows() necessarily and cannot be sliced alongside.
+    auto count_offset = int64_t{};
+    for (auto [begin, end] : select_runs(ids)) {
+      auto output_slice = subslice(slice, begin, end);
+      const auto delta = end - begin;
+      auto count_slice = count_series.slice(count_offset, count_offset + delta);
+      count_offset += delta;
+      output.push_back(assign(cfg.count_field.value(), count_slice, output_slice,
+                              dh, assign_position::back));
+    }
+    TENZIR_ASSERT(count_offset == count_series.length());
+  } else {
+    for (auto [begin, end] : select_runs(ids)) {
+      output.push_back(subslice(slice, begin, end));
+    }
+  }
+  return output;
+}
+
 #if 0
 class deduplicate3 : public exec::operator_base<deduplicate_state> {
 public:
@@ -223,113 +485,13 @@ public:
     -> generator<table_slice> {
     auto states = tsl::robin_map<data, State>{};
     auto row = int64_t{};
-    constexpr auto get_duration = [](auto opt) -> duration {
-      return opt ? opt->inner : duration::max();
-    };
-    const auto min_cfg = std::min(
-      {
-        get_duration(cfg_.create_timeout),
-        get_duration(cfg_.write_timeout),
-        get_duration(cfg_.read_timeout),
-      },
-      std::less<>{});
-    const auto cleanup_duration
-      = std::clamp(min_cfg, min_cleanup_duration, max_cleanup_duration);
+    const auto cleanup_duration = get_cleanup_duration(cfg_);
     auto last_cleanup_time = std::chrono::steady_clock::now();
     for (const auto& slice : input) {
-      const auto now = std::chrono::steady_clock::now();
-      if (now > last_cleanup_time + cleanup_duration) {
-        last_cleanup_time = now;
-        for (auto it = states.begin(); it != states.end();) {
-          const auto should_remove
-            = cfg_.count_field ? it->second.is_double_expired(cfg_, row, now)
-                               : it->second.is_expired(cfg_, row, now);
-          if (should_remove) {
-            it = states.erase(it);
-          } else {
-            ++it;
-          }
-        }
-      }
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      auto keys = eval(cfg_.keys, slice, ctrl.diagnostics());
-      auto offset = int64_t{};
-      auto ids = null_bitmap{};
-      auto count_builder = std::shared_ptr<arrow::Int64Builder>{};
-      if (cfg_.count_field) {
-        count_builder
-          = std::make_shared<arrow::Int64Builder>(arrow_memory_pool());
-        check(
-          count_builder->Reserve(detail::narrow_cast<int64_t>(slice.rows())));
-      }
-      for (const auto& key : keys.values()) {
-        const auto current_row = row + offset++;
-        // FIXME: This needs to materialize the data_view, otherwise this
-        // segfaults.
-        auto k = materialize(key);
-        auto it = states.find(k);
-        if (it == states.end()) {
-          states.emplace_hint(it, std::move(k), State{})
-            .value()
-            .reset(current_row, now);
-          ids.append_bit(true);
-          if (count_builder) {
-            check(count_builder->Append(0));
-          }
-          continue;
-        }
-        if (it->second.is_expired(cfg_, current_row, now)) {
-          if (count_builder) {
-            const auto double_expired
-              = it->second.is_double_expired(cfg_, current_row, now);
-            if (double_expired) {
-              check(count_builder->Append(0));
-            } else {
-              const auto dropped = it->second.count - cfg_.limit.inner;
-              check(count_builder->Append(dropped));
-            }
-          }
-          it.value().reset(current_row, now);
-          ids.append_bit(true);
-          continue;
-        }
-        it.value().read_at = now;
-        it.value().last_row = current_row;
-        it.value().count += 1;
-        if (it->second.count > cfg_.limit.inner) {
-          ids.append_bit(false);
-          continue;
-        }
-        it.value().written_at = now;
-        ids.append_bit(true);
-        if (count_builder) {
-          check(count_builder->Append(0));
-        }
-      }
-      row += keys.length();
-      if (cfg_.count_field) {
-        auto count_series = series{int64_type{}, finish(*count_builder)};
-        // Track count offset separately. The count array only has required
-        // entries, so all entries must be used, i.e. count_series.length() !=
-        // slice.rows() necessarily and cannot be sliced alongside.
-        auto count_offset = int64_t{};
-        for (auto [begin, end] : select_runs(ids)) {
-          auto output_slice = subslice(slice, begin, end);
-          const auto delta = end - begin;
-          auto count_slice
-            = count_series.slice(count_offset, count_offset + delta);
-          count_offset += delta;
-          co_yield assign(cfg_.count_field.value(), count_slice, output_slice,
-                          ctrl.diagnostics(), assign_position::back);
-        }
-        TENZIR_ASSERT(count_offset == count_series.length());
-      } else {
-        for (auto [begin, end] : select_runs(ids)) {
-          co_yield subslice(slice, begin, end);
-        }
+      auto output = deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
+                                      last_cleanup_time, ctrl.diagnostics());
+      for (auto& x : output) {
+        co_yield std::move(x);
       }
     }
   }
@@ -359,140 +521,125 @@ private:
   configuration cfg_{};
 };
 
-class plugin final : public operator_plugin2<deduplicate_operator> {
+class Deduplicate final : public Operator<table_slice, table_slice> {
+public:
+  explicit Deduplicate(configuration cfg)
+    : cfg_{std::move(cfg)}, cleanup_duration_{get_cleanup_duration(cfg_)} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto output = deduplicate_slice(input, cfg_, cleanup_duration_, states_, row_,
+                                    last_cleanup_time_, ctx);
+    for (auto& slice : output) {
+      co_await push(std::move(slice));
+    }
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("states", states_);
+    serde("row", row_);
+  }
+
+private:
+  configuration cfg_;
+  duration cleanup_duration_;
+  tsl::robin_map<data, State> states_;
+  int64_t row_ = 0;
+  std::chrono::steady_clock::time_point last_cleanup_time_
+    = std::chrono::steady_clock::now();
+};
+
+class DeduplicateIr final : public ir::Operator {
+public:
+  DeduplicateIr() = default;
+
+  DeduplicateIr(location loc, configuration cfg)
+    : loc_{loc}, cfg_{std::move(cfg)} {
+  }
+
+  auto name() const -> std::string override {
+    return "deduplicate_ir";
+  }
+
+  auto main_location() const -> location override {
+    return loc_;
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(instantiate);
+    TRY(cfg_.keys.substitute(ctx));
+    return {};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("`deduplicate` expects events")
+        .primary(main_location())
+        .emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    if (cfg_.distance) {
+      return std::move(*this).ir::Operator::optimize(std::move(filter), order);
+    }
+    auto replacement = ir::pipeline{};
+    replacement.operators.push_back(std::move(*this).move());
+    return ir::optimize_result{
+      std::move(filter),
+      event_order::ordered,
+      std::move(replacement),
+    };
+  }
+
+  auto spawn(element_type_tag input) && -> AnyOperator override {
+    TENZIR_ASSERT(input.is<table_slice>());
+    return Deduplicate{std::move(cfg_)};
+  }
+
+  friend auto inspect(auto& f, DeduplicateIr& x) -> bool {
+    return f.object(x).fields(f.field("loc", x.loc_),
+                              f.field("cfg", x.cfg_));
+  }
+
+private:
+  location loc_ = location::unknown;
+  configuration cfg_{};
+};
+
+class plugin final : public operator_plugin2<deduplicate_operator>,
+                     public virtual operator_compiler_plugin {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto expressions = std::vector<ast::expression>{};
-    auto named_args = std::vector<ast::expression>{};
-    auto seen_named = false;
-    auto seen_general_expression = false;
-    expressions.reserve(inv.args.size());
-    named_args.reserve(inv.args.size());
-    for (auto& arg : inv.args) {
-      if (is<ast::assignment>(arg)) {
-        seen_named = true;
-        named_args.push_back(std::move(arg));
-        continue;
-      }
-      if (seen_named) {
-        diagnostic::error("positional arguments must precede named arguments")
-          .primary(arg)
-          .emit(ctx);
-        return failure::promise();
-      }
-      auto selector = ast::field_path::try_from(arg);
-      if (selector) {
-        if (selector->has_this() || selector->path().empty()) {
-          diagnostic::error("cannot deduplicate `this` explicitly")
-            .primary(*selector)
-            .emit(ctx);
-          return failure::promise();
-        }
-        if (seen_general_expression) {
-          diagnostic::error(
-            "cannot mix field selectors with general expressions")
-            .primary(arg)
-            .emit(ctx);
-          return failure::promise();
-        }
-        expressions.push_back(std::move(*selector).unwrap());
-        continue;
-      }
-      if (seen_general_expression) {
-        diagnostic::error("expected selector").primary(arg).emit(ctx);
-        return failure::promise();
-      }
-      if (! expressions.empty()) {
-        diagnostic::error("cannot mix field selectors with general expressions")
-          .primary(arg)
-          .emit(ctx);
-        return failure::promise();
-      }
-      seen_general_expression = true;
-      expressions.push_back(std::move(arg));
-    }
-    auto limit = std::optional<located<int64_t>>{};
-    auto cfg = configuration{};
-    auto parser = argument_parser2::operator_("deduplicate");
-    [[maybe_unused]] auto unused_key = std::optional<ast::expression>{};
-    parser.positional("key", unused_key, "any");
-    parser.named("distance", cfg.distance);
-    parser.named("limit", limit);
-    parser.named("create_timeout", cfg.create_timeout);
-    parser.named("write_timeout", cfg.write_timeout);
-    parser.named("read_timeout", cfg.read_timeout);
-    parser.named("count_field", cfg.count_field);
-    auto parser_inv
-      = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
-    TRY(parser.parse(parser_inv, ctx));
-    if (expressions.empty()) {
-      cfg.keys = ast::this_{location::unknown};
-    } else {
-      cfg.keys = make_keys_expression(std::move(expressions));
-    }
-    cfg.limit = limit.value_or(located{1, location::unknown});
-    auto failed = false;
-    if (cfg.limit.inner < 1) {
-      diagnostic::error("limit must be at least 1").primary(cfg.limit).emit(ctx);
-      failed = true;
-    }
-    if (cfg.distance and cfg.distance->inner < 1) {
-      diagnostic::error("distance must be at least 1")
-        .primary(*cfg.distance)
-        .emit(ctx);
-      failed = true;
-    }
-    if (cfg.read_timeout and cfg.read_timeout->inner < duration::zero()) {
-      diagnostic::error("read timeout must be positive")
-        .primary(*cfg.read_timeout)
-        .emit(ctx);
-      failed = true;
-    }
-    if (cfg.write_timeout and cfg.write_timeout->inner < duration::zero()) {
-      diagnostic::error("write timeout must be positive")
-        .primary(*cfg.write_timeout)
-        .emit(ctx);
-      failed = true;
-    }
-    if (cfg.create_timeout and cfg.create_timeout->inner < duration::zero()) {
-      diagnostic::error("create timeout must be positive")
-        .primary(*cfg.create_timeout)
-        .emit(ctx);
-      failed = true;
-    }
-    if (cfg.read_timeout and cfg.write_timeout
-        and cfg.read_timeout->inner >= cfg.write_timeout->inner) {
-      diagnostic::error("read timeout must be less than write timeout")
-        .primary(*cfg.read_timeout)
-        .secondary(*cfg.write_timeout)
-        .emit(ctx);
-      failed = true;
-    }
-    if (cfg.read_timeout and cfg.create_timeout
-        and cfg.read_timeout->inner >= cfg.create_timeout->inner) {
-      diagnostic::error("read timeout must be less than create timeout")
-        .primary(*cfg.read_timeout)
-        .secondary(*cfg.create_timeout)
-        .emit(ctx);
-      failed = true;
-    }
-    if (cfg.write_timeout and cfg.create_timeout
-        and cfg.write_timeout->inner >= cfg.create_timeout->inner) {
-      diagnostic::error("write timeout must be less than create timeout")
-        .primary(*cfg.write_timeout)
-        .secondary(*cfg.create_timeout)
-        .emit(ctx);
-      failed = true;
-    }
-    if (failed) {
-      return failure::promise();
-    }
+    TRY(auto cfg, parse_configuration(std::move(inv), ctx));
     return std::make_unique<deduplicate_operator>(std::move(cfg));
   }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<Box<ir::Operator>> override {
+    auto provider = session_provider::make(ctx);
+    auto loc = inv.op.get_location();
+    auto legacy_inv
+      = operator_factory_plugin::invocation{std::move(inv.op),
+                                            std::move(inv.args)};
+    TRY(auto cfg, parse_configuration(std::move(legacy_inv),
+                                      provider.as_session()));
+    TRY(cfg.keys.bind(ctx));
+    return DeduplicateIr{loc, std::move(cfg)};
+  }
 };
+
+using deduplicate_ir_plugin = inspection_plugin<ir::Operator, DeduplicateIr>;
 
 } // namespace
 } // namespace tenzir::plugins::deduplicate
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::deduplicate_ir_plugin)
