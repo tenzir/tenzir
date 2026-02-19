@@ -651,6 +651,354 @@ TEST("real - scientific") {
   }
 }
 
+TEST("real - comma separator") {
+  auto p = double_parser<','>{};
+  {
+    MESSAGE("basic comma decimal");
+    auto str = "1,5"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 1.5);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("negative with comma");
+    auto str = "-1,5"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, -1.5);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("positive with comma and leading plus");
+    auto str = "+1,5"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 1.5);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("scientific notation with comma");
+    auto str = "1,5e2"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 150.0);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("scientific notation with comma and negative exponent");
+    auto str = "1,5e-2"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.015);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("integer without comma (no separator present)");
+    auto str = "123"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 123.0);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("special value inf with comma separator path");
+    auto str = "inf"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK(d > 0);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("special value nan with comma separator path");
+    auto str = "nan"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isnan(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("negative zero with comma separator");
+    auto str = "-0,0"s;
+    double d = 1;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.0);
+    CHECK(std::signbit(d)); // Verify it's negative zero
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("negative zero integer with comma separator path");
+    auto str = "-0"s;
+    double d = 1;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.0);
+    CHECK(std::signbit(d)); // Verify it's negative zero
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("input exceeding buffer size with comma separator");
+    // Create a string longer than 64 characters with comma separator.
+    auto str = "0,"s + std::string(70, '0') + "1"s;
+    double d = 1;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK_EQUAL(p(f, l, d), false); // Should fail due to buffer size limit
+  }
+}
+
+TEST("real - special values") {
+  auto p = make_parser<double>{};
+  {
+    MESSAGE("infinity lowercase");
+    auto str = "inf"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK(d > 0);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("infinity mixed case");
+    auto str = "Inf"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("infinity uppercase");
+    auto str = "INF"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("infinity spelled out");
+    auto str = "infinity"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("negative infinity");
+    auto str = "-inf"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK(d < 0);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("nan lowercase");
+    auto str = "nan"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isnan(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("nan mixed case");
+    auto str = "NaN"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isnan(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("nan uppercase");
+    auto str = "NAN"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isnan(d));
+    CHECK_EQUAL(f, l);
+  }
+}
+
+TEST("real - leading plus sign") {
+  auto p = make_parser<double>{};
+  {
+    MESSAGE("basic positive with plus");
+    auto str = "+123.456"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 123.456);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("fractional only with plus");
+    auto str = "+.456"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.456);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("scientific with plus");
+    auto str = "+1e5"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 1e5);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("scientific with plus and negative exponent");
+    auto str = "+1.5e-3"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.0015);
+    CHECK_EQUAL(f, l);
+  }
+}
+
+TEST("real - extreme exponents") {
+  auto p = make_parser<double>{};
+  {
+    MESSAGE("near DBL_MAX");
+    auto str = "1e308"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(d > 1e307);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("near DBL_MIN");
+    auto str = "1e-308"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(d < 1e-307);
+    CHECK(d > 0);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("overflow to infinity");
+    auto str = "1e309"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("large overflow to infinity");
+    auto str = "1e1000"s;
+    double d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK(std::isinf(d));
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("underflow to zero");
+    auto str = "1e-500"s;
+    double d = 1.0; // Initialize to non-zero
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.0);
+    CHECK_EQUAL(f, l);
+  }
+}
+
+TEST("real - error cases") {
+  auto p = make_parser<double>{};
+  double d = 0;
+  {
+    MESSAGE("empty string");
+    auto str = ""s;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(! p(f, l, d));
+  }
+  {
+    MESSAGE("bare plus sign");
+    auto str = "+"s;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(! p(f, l, d));
+  }
+  {
+    MESSAGE("bare minus sign");
+    auto str = "-"s;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(! p(f, l, d));
+  }
+  {
+    MESSAGE("bare dot");
+    auto str = "."s;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(! p(f, l, d));
+  }
+  {
+    MESSAGE("exponent without mantissa");
+    auto str = "e5"s;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(! p(f, l, d));
+  }
+  {
+    MESSAGE("alphabetic string");
+    auto str = "abc"s;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(! p(f, l, d));
+  }
+}
+
 // This is commented out because it revealed bugs in both libstdc++ and fmt.
 // Both libraries format some values incorrectly.
 // TEST("real - scientific exhaustive") {

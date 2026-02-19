@@ -24,7 +24,6 @@ let
       libbacktrace,
       clickhouse-cpp,
       empty-libgcc_eh,
-      fast-float,
       flatbuffers,
       fluent-bit,
       protobuf,
@@ -235,7 +234,6 @@ let
               azure-sdk-for-cpp.storage-blobs
               libbacktrace
               clickhouse-cpp
-              fast-float
               fluent-bit
               libpcap
               libunwind
