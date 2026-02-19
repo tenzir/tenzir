@@ -644,7 +644,7 @@ private:
     = std::chrono::steady_clock::now();
 };
 
-class plugin final : public operator_plugin2<deduplicate_operator>,
+class Plugin final : public operator_plugin2<deduplicate_operator>,
                      public virtual OperatorPlugin {
 public:
   auto describe() const -> Description override {
@@ -691,4 +691,4 @@ public:
 } // namespace
 } // namespace tenzir::plugins::deduplicate
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::Plugin)
