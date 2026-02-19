@@ -1,0 +1,95 @@
+From af2b39bd7a05e02caa058e5933ca43279ef4d913 Mon Sep 17 00:00:00 2001
+From: Raghav Narang <raxyte@raxyte.dev>
+Date: Mon, 16 Feb 2026 15:47:59 +0530
+Subject: [PATCH] Store boxed child arrays for `StructArray` on construction
+
+---
+ cpp/src/arrow/array/array_nested.cc | 49 +++++++++--------------------
+ 1 file changed, 15 insertions(+), 34 deletions(-)
+
+diff --git a/cpp/src/arrow/array/array_nested.cc b/cpp/src/arrow/array/array_nested.cc
+index c5a26a475c..6caa0beee5 100644
+--- a/src/arrow/array/array_nested.cc
++++ b/src/arrow/array/array_nested.cc
+@@ -1005,7 +1005,7 @@ Result<std::shared_ptr<Array>> FixedSizeListArray::Flatten(
+ // Struct
+ 
+ struct StructArray::Impl {
+-  mutable ArrayVector boxed_fields_;
++  ArrayVector boxed_fields_;
+ };
+ 
+ StructArray::~StructArray() = default;
+@@ -1014,6 +1014,12 @@ StructArray::StructArray(const std::shared_ptr<ArrayData>& data) {
+   SetData(data);
+   impl_ = std::make_unique<Impl>();
+   impl_->boxed_fields_.resize(data_->child_data.size());
++  for (size_t i = 0; i < data_->child_data.size(); ++i) {
++    auto field_data = (data_->offset != 0 || data_->child_data[i]->length != data_->length)
++                          ? data_->child_data[i]->Slice(data_->offset, data_->length)
++                          : data_->child_data[i];
++    impl_->boxed_fields_[i] = MakeArray(field_data);
++  }
+ }
+ 
+ StructArray::StructArray(const std::shared_ptr<DataType>& type, int64_t length,
+@@ -1028,6 +1034,12 @@ StructArray::StructArray(const std::shared_ptr<DataType>& type, int64_t length,
+   }
+   impl_ = std::make_unique<Impl>();
+   impl_->boxed_fields_.resize(data_->child_data.size());
++  for (size_t i = 0; i < data_->child_data.size(); ++i) {
++    auto field_data = (data_->offset != 0 || data_->child_data[i]->length != data_->length)
++                          ? data_->child_data[i]->Slice(data_->offset, data_->length)
++                          : data_->child_data[i];
++    impl_->boxed_fields_[i] = MakeArray(field_data);
++  }
+ }
+ 
+ Result<std::shared_ptr<StructArray>> StructArray::Make(
+@@ -1077,41 +1089,10 @@ const StructType* StructArray::struct_type() const {
+   return checked_cast<const StructType*>(data_->type.get());
+ }
+ 
+-const ArrayVector& StructArray::fields() const {
+-  for (int i = 0; i < num_fields(); ++i) {
+-    (void)field(i);
+-  }
+-  return impl_->boxed_fields_;
+-}
++const ArrayVector& StructArray::fields() const { return impl_->boxed_fields_; }
+ 
+ std::shared_ptr<Array> StructArray::field(int i) const {
+-  // Atomic ops on std::shared_ptr<T> are deprecated in C++20.  They should be
+-  // replaced with std::atomic<std::shared_ptr<T>> but not all C++ standard
+-  // libraries implement it yet. :-/
+-  ARROW_SUPPRESS_DEPRECATION_WARNING
+-  std::shared_ptr<Array> result = std::atomic_load(&impl_->boxed_fields_[i]);
+-  ARROW_UNSUPPRESS_DEPRECATION_WARNING
+-  if (result) {
+-    return result;
+-  }
+-  std::shared_ptr<ArrayData> field_data;
+-  if (data_->offset != 0 || data_->child_data[i]->length != data_->length) {
+-    field_data = data_->child_data[i]->Slice(data_->offset, data_->length);
+-  } else {
+-    field_data = data_->child_data[i];
+-  }
+-  result = MakeArray(field_data);
+-  // Check if some other thread inserted the array in the meantime and return
+-  // that in that case.
+-  std::shared_ptr<Array> expected = nullptr;
+-  ARROW_SUPPRESS_DEPRECATION_WARNING
+-  const bool update_successful =
+-      std::atomic_compare_exchange_strong(&impl_->boxed_fields_[i], &expected, result);
+-  ARROW_UNSUPPRESS_DEPRECATION_WARNING
+-  if (!update_successful) {
+-    result = std::move(expected);
+-  }
+-  return result;
++  return impl_->boxed_fields_[i];
+ }
+ 
+ std::shared_ptr<Array> StructArray::GetFieldByName(const std::string& name) const {
+-- 
+2.53.0
+
