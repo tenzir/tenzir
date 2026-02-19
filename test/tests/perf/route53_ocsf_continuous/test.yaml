@@ -1,0 +1,7 @@
+suite: route53-ocsf-continuous-perf
+fixtures:
+  - kafka:
+      topic: route53_ocsf_continuous
+      partitions: 4
+      messages: 0
+timeout: 3600
