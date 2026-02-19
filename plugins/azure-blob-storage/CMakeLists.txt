@@ -17,6 +17,7 @@ endif ()
 include(CTest)
 
 find_package(Tenzir REQUIRED)
+find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
 
 TenzirRegisterPlugin(
   TARGET azure-blob-storage
@@ -24,8 +25,4 @@ TenzirRegisterPlugin(
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
-if (TENZIR_ENABLE_STATIC_EXECUTABLE)
-  target_link_libraries(
-    azure-blob-storage PUBLIC Azure::azure-identity Azure::azure-storage-blobs
-                              Azure::azure-storage-files-datalake)
-endif ()
+target_link_libraries(azure-blob-storage PUBLIC Azure::azure-storage-blobs)

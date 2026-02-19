@@ -796,8 +796,13 @@ function (TenzirRegisterPlugin)
                                                         tenzir::internal)
     TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                  ${PLUGIN_TARGET}-static)
-    TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                                 tenzir::libtenzir_builtins)
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+      TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
+                                   tenzir::libtenzir_builtins)
+    else ()
+      target_link_libraries(${PLUGIN_TARGET}-test PRIVATE
+                            tenzir::libtenzir_builtins)
+    endif ()
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)

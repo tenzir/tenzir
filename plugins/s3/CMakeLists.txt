@@ -14,7 +14,7 @@ endif()
 include(CTest)
 
 find_package(Tenzir REQUIRED)
-find_package(AWSSDK COMPONENTS sts REQUIRED CONFIG)
+find_package(AWSSDK COMPONENTS s3 sts REQUIRED CONFIG)
 
 TenzirRegisterPlugin(
   TARGET s3

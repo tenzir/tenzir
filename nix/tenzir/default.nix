@@ -29,6 +29,8 @@ let
       fluent-bit,
       protobuf,
       google-cloud-cpp-tenzir,
+      nlohmann_json,
+      crc32c,
       grpc,
       spdlog,
       simdjson,
@@ -274,6 +276,8 @@ let
               libevent
               snappy
               google-cloud-cpp-tenzir
+              nlohmann_json
+              crc32c
               grpc
               libmaxminddb
               jemalloc-tenzir
