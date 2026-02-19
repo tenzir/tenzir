@@ -843,6 +843,7 @@ private:
         co_await handle_done();
         break;
       case OperatorState::unspecified:
+      case OperatorState::almost_done:
         break;
     }
     LOGV("waiting in {} for message", op_name());
@@ -1058,8 +1059,15 @@ private:
     if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
+    // auto behavior = co_await call_finalize_behavior();
     // Then finalize the operator, which can still produce output.
     co_await call_finalize();
+    if state () {
+      == OperatorState::almost_done {
+        // operator will set state to `done` manually
+        co_return;
+      }
+    }
     // Tell all subpipelines to shut down. Note that the previous step could
     // have still pushed data into them. The main loop continues running to
     // drain remaining subpipeline output and collect SubPipelineFinished
