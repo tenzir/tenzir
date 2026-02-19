@@ -150,16 +150,16 @@ struct ToKafkaArgs {
 };
 
 /// Streaming sink operator that serializes events and produces Kafka messages.
-class ToKafkaOperator final : public Operator<table_slice, void> {
+class ToKafka final : public Operator<table_slice, void> {
 public:
-  explicit ToKafkaOperator(ToKafkaArgs args) : args_{std::move(args)} {
+  explicit ToKafka(ToKafkaArgs args) : args_{std::move(args)} {
   }
-  ToKafkaOperator(ToKafkaOperator&&) = default;
-  auto operator=(ToKafkaOperator&&) -> ToKafkaOperator& = default;
-  ToKafkaOperator(const ToKafkaOperator&) = delete;
-  auto operator=(const ToKafkaOperator&) -> ToKafkaOperator& = delete;
+  ToKafka(ToKafka&&) = default;
+  auto operator=(ToKafka&&) -> ToKafka& = default;
+  ToKafka(const ToKafka&) = delete;
+  auto operator=(const ToKafka&) -> ToKafka& = delete;
 
-  ~ToKafkaOperator() override {
+  ~ToKafka() override {
     flush_and_close();
   }
 
@@ -416,7 +416,7 @@ public:
   auto describe() const -> Description override {
     auto initial = ToKafkaArgs{};
     initial.options = located{record{}, location::unknown};
-    auto d = Describer<ToKafkaArgs, ToKafkaOperator>{std::move(initial)};
+    auto d = Describer<ToKafkaArgs, ToKafka>{std::move(initial)};
     d.positional("topic", &ToKafkaArgs::topic);
     d.named_optional("message", &ToKafkaArgs::message, "blob|string");
     d.named("key", &ToKafkaArgs::key);

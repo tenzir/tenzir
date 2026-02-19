@@ -85,9 +85,9 @@ struct ReadCB : folly::AsyncReader::ReadCallback {
   }
 };
 
-class FromStdinOperator final : public Operator<void, table_slice> {
+class FromStdin final : public Operator<void, table_slice> {
 public:
-  explicit FromStdinOperator(FromStdinArgs args) : args_{std::move(args)} {
+  explicit FromStdin(FromStdinArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -315,7 +315,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromStdinArgs, FromStdinOperator>{};
+    auto d = Describer<FromStdinArgs, FromStdin>{};
     auto pipe_arg = d.pipeline(&FromStdinArgs::pipe);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       TRY(auto pipe, ctx.get(pipe_arg));
