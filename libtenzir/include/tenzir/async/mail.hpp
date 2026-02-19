@@ -8,55 +8,91 @@
 
 #pragma once
 
-#include "tenzir/logger.hpp"
-
+#include "tenzir/error.hpp"
 #include <caf/actor_cast.hpp>
 #include <caf/actor_companion.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/mailbox_element.hpp>
+#include <caf/message.hpp>
 #include <caf/response_type.hpp>
+#include <caf/timespan.hpp>
 #include <caf/unit.hpp>
 #include <folly/futures/Future.h>
+#include <atomic>
+#include <memory>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 
 namespace tenzir {
 
-template <class Result, class Handle, class F>
-void mail_with_callback(Handle receiver, caf::message msg, F f) {
+template <class Result, class Handle, class F, class... Ts>
+void mail_with_callback(Handle receiver, F f, Ts&&... xs) {
   auto companion = receiver->home_system().make_companion();
   auto& registry = companion->home_system().registry();
   auto companion_id = companion->id();
-  // We need to wrap non-copyable functions because CAF wants a copy...
-  auto handled = std::make_shared<bool>(false);
-  companion->on_enqueue([f = std::make_shared<F>(std::move(f)), handled,
-                         &registry,
-                         companion_id](caf::mailbox_element_ptr ptr) {
-    // Only process the first message (the response).
-    if (*handled) {
+  auto receiver_id = static_cast<uint64_t>(receiver->id());
+  auto* companion_ptr = companion.get();
+  auto request_id = companion->new_request_id(caf::message_priority::normal);
+  auto response_id = request_id.response_id();
+  auto completed = std::make_shared<std::atomic<bool>>(false);
+  auto fn = std::make_shared<F>(std::move(f));
+  auto finish = [fn, completed, &registry, companion_id](
+                  caf::expected<Result> res) {
+    auto expected = false;
+    if (not completed->compare_exchange_strong(expected, true,
+                                               std::memory_order_relaxed)) {
       return;
     }
-    *handled = true;
+    std::invoke(*fn, std::move(res));
+    registry.erase(companion_id);
+  };
+  companion->on_exit([companion_id, receiver_id, companion_ptr, finish] {
+    finish(caf::expected<Result>{companion_ptr->fail_state()});
+  });
+  auto receiver_monitor = std::make_shared<caf::disposable>(companion->monitor(
+    receiver, [companion_id, receiver_id, finish](caf::error err) mutable {
+      TENZIR_UNUSED(companion_id, receiver_id);
+      finish(caf::expected<Result>{std::move(err)});
+    }));
+  companion->on_enqueue([response_id, companion_id, receiver_id, finish,
+                         receiver_monitor](caf::mailbox_element_ptr ptr) mutable {
+    TENZIR_UNUSED(receiver_monitor);
+    if (not ptr) {
+      return;
+    }
+    if (ptr->mid != response_id) {
+      TENZIR_UNUSED(companion_id, receiver_id);
+      return;
+    }
     if (ptr->payload.match_elements<caf::error>()) {
-      std::invoke(std::move(*f),
-                  caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
-    } else if constexpr (std::is_void_v<Result>) {
+      finish(caf::expected<Result>{ptr->payload.get_as<caf::error>(0)});
+      return;
+    }
+    if constexpr (std::is_void_v<Result>) {
       if (ptr->payload.empty() || ptr->payload.match_element<caf::unit_t>(0)) {
-        std::invoke(std::move(*f), caf::expected<void>{});
+        finish(caf::expected<void>{});
       } else {
-        TENZIR_ERROR("unexpected non-empty payload for void response");
+        finish(caf::expected<void>{caf::make_error(
+          ec::logic_error, "unexpected non-empty payload for void response")});
       }
     } else if (ptr->payload.match_element<Result>(0)) {
-      std::invoke(std::move(*f),
-                  caf::expected<Result>{ptr->payload.get_as<Result>(0)});
+      finish(caf::expected<Result>{ptr->payload.get_as<Result>(0)});
     } else {
-      // TODO: Apparently we cannot throw here?
-      TENZIR_ERROR("unexpected response payload type");
+      finish(caf::expected<Result>{
+        caf::make_error(ec::logic_error, "unexpected response payload type")});
     }
-    // Serializing the companion for network transmission registers it.
-    // Erase it to release that reference and allow cleanup.
-    registry.erase(companion_id);
   });
-  companion->mail(std::move(msg)).send(caf::actor_cast<caf::actor>(receiver));
+  auto* actor = caf::actor_cast<caf::abstract_actor*>(receiver);
+  if (not actor) {
+    finish(caf::expected<Result>{
+      caf::make_error(ec::logic_error, "invalid receiver in async_mail")});
+    return;
+  }
+  actor->enqueue(
+    caf::make_mailbox_element({companion->ctrl(), caf::add_ref}, request_id,
+                              caf::make_message_nowrap(std::forward<Ts>(xs)...)),
+    companion->context());
 }
 
 template <class Handle, class... Args>
@@ -66,28 +102,32 @@ using AsyncMailResult = caf::expected<caf::detail::tl_head_t<
 template <class... Args>
 class AsyncMail {
 public:
-  explicit AsyncMail(caf::message msg) : msg_{std::move(msg)} {
+  explicit AsyncMail(Args... xs) : args_{std::move(xs)...} {
   }
 
   template <class Handle, class Result = AsyncMailResult<Handle, Args...>>
   auto request(Handle receiver) && -> folly::SemiFuture<Result> {
     auto [promise, future] = folly::makePromiseContract<Result>();
-    mail_with_callback<typename Result::value_type>(
-      receiver, std::move(msg_),
-      [promise = std::move(promise)](Result result) mutable {
-        promise.setValue(std::move(result));
-      });
+    std::apply(
+      [&](auto&&... xs) mutable {
+        mail_with_callback<typename Result::value_type>(
+          receiver,
+          [promise = std::move(promise)](Result result) mutable {
+            promise.setValue(std::move(result));
+          },
+          std::move(xs)...);
+      },
+      std::move(args_));
     return std::move(future);
   }
 
 private:
-  caf::message msg_;
+  std::tuple<Args...> args_;
 };
 
 template <class... Ts>
 auto async_mail(Ts&&... xs) -> AsyncMail<std::decay_t<Ts>...> {
-  return AsyncMail<std::decay_t<Ts>...>{
-    caf::make_message(std::forward<Ts>(xs)...)};
+  return AsyncMail<std::decay_t<Ts>...>{std::forward<Ts>(xs)...};
 }
 
 } // namespace tenzir
