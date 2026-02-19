@@ -1,0 +1,16 @@
+---
+fixtures: [http]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_METHOD_URL"),
+          method="put",
+          metadata_field=meta {
+  read_json
+}
+meta.headers.Server = replace_regex(
+  meta.headers.Server,
+  "Python/[0-9.]+",
+  "Python/*.*.*"
+)
+meta.headers.Date = "*"

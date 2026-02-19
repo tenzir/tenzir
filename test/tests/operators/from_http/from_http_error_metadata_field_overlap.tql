@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_http "https://example.org/data.json",
+          error_field=x,
+          metadata_field=x

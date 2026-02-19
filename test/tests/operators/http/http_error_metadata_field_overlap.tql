@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {
+  u: "https://example.org/data.json",
+}
+http u, error_field=x, metadata_field=x {
+  read_json
+}

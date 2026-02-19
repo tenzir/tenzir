@@ -33,6 +33,7 @@
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -55,6 +56,7 @@ struct AcceptHttpArgs {
   location op = location::unknown;
   located<secret> url;
   std::optional<located<record>> responses;
+  std::optional<ast::field_path> metadata_field;
   std::optional<located<uint64_t>> max_request_size;
   std::optional<located<uint64_t>> max_connections;
   std::optional<located<data>> tls;
@@ -265,15 +267,23 @@ public:
       co_return;
     }
     auto request = std::move(*event.request);
+    auto request_record = http::make_request_record(request);
     if (not args_.parse) {
       auto slice = http::make_request_event(request);
+      if (args_.metadata_field) {
+        auto metadata = series_builder{};
+        for (auto i = size_t{}; i < slice.rows(); ++i) {
+          metadata.data(request_record);
+        }
+        slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                       std::move(slice), ctx.dh());
+      }
       co_await push(std::move(slice));
       co_return;
     }
     if (request.body.empty()) {
       co_return;
     }
-    auto request_record = http::make_request_record(request);
     auto body = std::move(request.body);
     auto encoding
       = http::find_header_value(request.headers, "content-encoding");
@@ -287,7 +297,7 @@ public:
     }
     auto pipeline = args_.parse->inner;
     auto env = substitute_ctx::env_t{};
-    env[request_let_id_] = std::move(request_record);
+    env[request_let_id_] = request_record;
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg};
     auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
@@ -296,19 +306,24 @@ public:
     }
     auto sub_key = data{next_sub_key_++};
     active_sub_keys_.insert(sub_key);
+    if (args_.metadata_field) {
+      request_metadata_by_sub_key_.emplace(sub_key, request_record);
+    }
     auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
                                       tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     auto push_result = co_await open_pipeline.push(std::move(payload));
     if (push_result.is_err()) {
       active_sub_keys_.erase(sub_key);
+      request_metadata_by_sub_key_.erase(sub_key);
       done_ = true;
       co_return;
     }
     co_await open_pipeline.close();
   }
 
-  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push, OpCtx&)
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx)
     -> Task<void> override {
     auto sub_key = materialize(key);
     if (active_sub_keys_.find(sub_key) == active_sub_keys_.end()) {
@@ -317,12 +332,23 @@ public:
     if (slice.rows() == 0) {
       co_return;
     }
+    if (args_.metadata_field) {
+      auto metadata_it = request_metadata_by_sub_key_.find(sub_key);
+      TENZIR_ASSERT(metadata_it != request_metadata_by_sub_key_.end());
+      auto metadata = series_builder{};
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        metadata.data(metadata_it->second);
+      }
+      slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                     std::move(slice), ctx.dh());
+    }
     co_await push(std::move(slice));
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
     auto sub_key = materialize(key);
     active_sub_keys_.erase(sub_key);
+    request_metadata_by_sub_key_.erase(sub_key);
     co_return;
   }
 
@@ -381,6 +407,7 @@ private:
   std::shared_ptr<UnboundedQueue<std::optional<http::RequestData>>> queue_
     = std::make_shared<UnboundedQueue<std::optional<http::RequestData>>>();
   std::unordered_set<data> active_sub_keys_;
+  std::unordered_map<data, record> request_metadata_by_sub_key_;
   std::optional<Box<folly::coro::ServerSocket>> server_;
   std::shared_ptr<AcceptHttpHandler> handler_;
   std::shared_ptr<folly::SSLContext> tls_context_;
@@ -403,6 +430,8 @@ struct AcceptHttpPlugin final : public virtual OperatorPlugin {
     d.operator_location(&AcceptHttpArgs::op);
     auto url = d.positional("url", &AcceptHttpArgs::url);
     auto responses = d.named("responses", &AcceptHttpArgs::responses);
+    auto metadata_field
+      = d.named("metadata_field", &AcceptHttpArgs::metadata_field);
     auto max_request_size
       = d.named("max_request_size", &AcceptHttpArgs::max_request_size);
     auto max_connections
@@ -419,6 +448,9 @@ struct AcceptHttpPlugin final : public virtual OperatorPlugin {
       }
       if (auto x = ctx.get(responses)) {
         args.responses = *x;
+      }
+      if (auto x = ctx.get(metadata_field)) {
+        args.metadata_field = *x;
       }
       if (auto x = ctx.get(max_request_size)) {
         args.max_request_size = *x;

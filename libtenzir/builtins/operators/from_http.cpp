@@ -45,6 +45,19 @@ auto to_chrono(duration d) -> std::chrono::milliseconds {
   return std::chrono::duration_cast<std::chrono::milliseconds>(d);
 }
 
+auto field_paths_overlap(ast::field_path const& lhs, ast::field_path const& rhs)
+  -> bool {
+  auto lhs_path = lhs.path();
+  auto rhs_path = rhs.path();
+  auto i = size_t{};
+  for (; i < lhs_path.size() and i < rhs_path.size(); ++i) {
+    if (lhs_path[i].id.name != rhs_path[i].id.name) {
+      return false;
+    }
+  }
+  return i == lhs_path.size() or i == rhs_path.size();
+}
+
 struct FromHttpArgs {
   location op = location::unknown;
   located<secret> url;
@@ -52,6 +65,7 @@ struct FromHttpArgs {
   std::optional<located<data>> body;
   std::optional<located<std::string>> encode;
   std::optional<located<record>> headers;
+  std::optional<ast::field_path> metadata_field;
   std::optional<ast::field_path> error_field;
   std::optional<located<std::string>> paginate;
   located<duration> paginate_delay{0s, location::unknown};
@@ -63,6 +77,15 @@ struct FromHttpArgs {
   let_id response_let;
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
+    if (metadata_field and error_field
+        and field_paths_overlap(*metadata_field, *error_field)) {
+      diagnostic::error("`error_field` and `metadata_field` must not "
+                        "point to same or nested field")
+        .primary(*error_field)
+        .primary(*metadata_field)
+        .emit(dh);
+      return failure::promise();
+    }
     if (headers) {
       for (auto const& [_, v] : headers->inner) {
         if (not is<std::string>(v) and not is<secret>(v)) {
@@ -258,6 +281,16 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto& dh = ctx.dh();
+    if (args_.metadata_field and args_.error_field
+        and field_paths_overlap(*args_.metadata_field, *args_.error_field)) {
+      diagnostic::error("`error_field` and `metadata_field` must not "
+                        "point to same or nested field")
+        .primary(*args_.error_field)
+        .primary(*args_.metadata_field)
+        .emit(dh);
+      done_ = true;
+      co_return;
+    }
     auto requests = std::vector<secret_request>{};
     auto [headers, secrets] = args_.make_headers();
     requests.emplace_back(make_secret_request("url", args_.url, resolved_url_, dh));
@@ -376,6 +409,7 @@ public:
       co_return;
     }
     auto response = std::move(response_result).unwrap();
+    auto response_metadata = http::make_response_record(response);
     if (auto const code = response.status_code; code < 200 or code > 399) {
       if (not args_.error_field) {
         diagnostic::error("received erroneous http status code: `{}`", code)
@@ -389,6 +423,12 @@ public:
         error.data(response.body);
         auto slice = assign(*args_.error_field, error.finish_assert_one_array(),
                             sb.finish_assert_one_slice(), ctx.dh());
+        if (args_.metadata_field) {
+          auto metadata = series_builder{};
+          metadata.data(response_metadata);
+          slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                         std::move(slice), ctx.dh());
+        }
         co_await push(std::move(slice));
       }
       if (pending_.empty() and not active_sub_) {
@@ -436,10 +476,9 @@ public:
     } else {
       payload = chunk::make(std::move(response_body));
     }
-    auto response_record = http::make_response_record(response);
     auto pipeline = args_.parse->inner;
     auto env = substitute_ctx::env_t{};
-    env[response_let_id_] = std::move(response_record);
+    env[response_let_id_] = response_metadata;
     auto reg = global_registry();
     auto b_ctx = base_ctx{ctx, *reg};
     auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
@@ -447,22 +486,24 @@ public:
       co_return;
     }
     auto sub_key = next_sub_key_++;
+    active_sub_ = ActiveSubContext{
+      .key = sub_key,
+      .response_metadata = std::move(response_metadata),
+    };
     auto sub = co_await ctx.spawn_sub(data{sub_key}, std::move(pipeline),
                                       tag_v<chunk_ptr>);
     auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
     auto push_result = co_await open_pipeline.push(std::move(payload));
     if (push_result.is_err()) {
+      active_sub_ = std::nullopt;
       done_ = true;
       co_return;
     }
     co_await open_pipeline.close();
-    active_sub_ = ActiveSubContext{
-      .key = sub_key,
-    };
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
-                   OpCtx&)
+                   OpCtx& ctx)
     -> Task<void> override {
     if (not active_sub_) {
       co_return;
@@ -472,6 +513,14 @@ public:
     }
     if (slice.rows() == 0) {
       co_return;
+    }
+    if (args_.metadata_field) {
+      auto metadata = series_builder{};
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        metadata.data(active_sub_->response_metadata);
+      }
+      slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                     std::move(slice), ctx.dh());
     }
     co_await push(std::move(slice));
   }
@@ -499,6 +548,7 @@ public:
 private:
   struct ActiveSubContext {
     uint64_t key = 0;
+    record response_metadata;
   };
 
   auto perform_request(ExecutorHttpRequest const& request) const
@@ -539,6 +589,8 @@ struct HttpExecutorArgs {
   std::optional<ast::expression> body;
   std::optional<ast::expression> headers;
   std::optional<located<std::string>> encode;
+  std::optional<ast::field_path> metadata_field;
+  std::optional<ast::field_path> error_field;
   std::optional<located<std::string>> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   std::optional<located<data>> tls;
@@ -550,6 +602,15 @@ struct HttpExecutorArgs {
   let_id response_let;
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
+    if (metadata_field and error_field
+        and field_paths_overlap(*metadata_field, *error_field)) {
+      diagnostic::error("`error_field` and `metadata_field` must not "
+                        "point to same or nested field")
+        .primary(*error_field)
+        .primary(*metadata_field)
+        .emit(dh);
+      return failure::promise();
+    }
     if (encode) {
       if (encode->inner != "json" and encode->inner != "form") {
         diagnostic::error("unsupported encoding: `{}`", encode->inner)
@@ -620,7 +681,20 @@ public:
       response_let_id_{args_.response_let} {
   }
 
-  auto process(table_slice input, Push<table_slice>&, OpCtx& ctx)
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (args_.metadata_field and args_.error_field
+        and field_paths_overlap(*args_.metadata_field, *args_.error_field)) {
+      diagnostic::error("`error_field` and `metadata_field` must not "
+                        "point to same or nested field")
+        .primary(*args_.error_field)
+        .primary(*args_.metadata_field)
+        .emit(ctx);
+      aborted_ = true;
+    }
+    co_return;
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (aborted_) {
       co_return;
@@ -763,11 +837,29 @@ public:
           break;
         }
         auto response = std::move(response_result).unwrap();
+        auto response_metadata = http::make_response_record(response);
         if (auto const code = response.status_code; code < 200 or code > 399) {
-          diagnostic::warning("received erroneous http status code: `{}`", code)
-            .primary(args_.op)
-            .note("skipping response handling")
-            .emit(dh);
+          if (not args_.error_field) {
+            diagnostic::warning("received erroneous http status code: `{}`", code)
+              .primary(args_.op)
+              .note("skipping response handling")
+              .hint("specify `error_field` to keep the event")
+              .emit(dh);
+            break;
+          }
+          auto base = series_builder{};
+          base.data(request_record);
+          auto error = series_builder{};
+          error.data(response.body);
+          auto slice = assign(*args_.error_field, error.finish_assert_one_array(),
+                              base.finish_assert_one_slice(), dh);
+          if (args_.metadata_field) {
+            auto metadata = series_builder{};
+            metadata.data(response_metadata);
+            slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                           std::move(slice), dh);
+          }
+          co_await push(std::move(slice));
           break;
         }
         if (args_.paginate and args_.paginate->inner == "link") {
@@ -798,7 +890,7 @@ public:
         auto pipeline = args_.parse.inner;
         auto env = substitute_ctx::env_t{};
         env[request_let_id_] = request_record;
-        env[response_let_id_] = http::make_response_record(response);
+        env[response_let_id_] = response_metadata;
         auto reg = global_registry();
         auto b_ctx = base_ctx{ctx, *reg};
         auto sub_result = pipeline.substitute(substitute_ctx{b_ctx, &env}, true);
@@ -807,12 +899,17 @@ public:
         }
         auto sub_key = data{next_sub_key_++};
         active_sub_keys_.insert(sub_key);
+        if (args_.metadata_field) {
+          response_metadata_by_sub_key_.emplace(
+            sub_key, std::move(response_metadata));
+        }
         auto sub = co_await ctx.spawn_sub(sub_key, std::move(pipeline),
                                           tag_v<chunk_ptr>);
         auto open_pipeline = as<OpenPipeline<chunk_ptr>>(sub);
         auto push_result = co_await open_pipeline.push(std::move(payload));
         if (push_result.is_err()) {
           active_sub_keys_.erase(sub_key);
+          response_metadata_by_sub_key_.erase(sub_key);
           continue;
         }
         co_await open_pipeline.close();
@@ -821,7 +918,7 @@ public:
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
-                   OpCtx&) -> Task<void> override {
+                   OpCtx& ctx) -> Task<void> override {
     auto sub_key = materialize(key);
     if (active_sub_keys_.find(sub_key) == active_sub_keys_.end()) {
       co_return;
@@ -829,12 +926,23 @@ public:
     if (slice.rows() == 0) {
       co_return;
     }
+    if (args_.metadata_field) {
+      auto metadata_it = response_metadata_by_sub_key_.find(sub_key);
+      TENZIR_ASSERT(metadata_it != response_metadata_by_sub_key_.end());
+      auto metadata = series_builder{};
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        metadata.data(metadata_it->second);
+      }
+      slice = assign(*args_.metadata_field, metadata.finish_assert_one_array(),
+                     std::move(slice), ctx.dh());
+    }
     co_await push(std::move(slice));
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&) -> Task<void> override {
     auto sub_key = materialize(key);
     active_sub_keys_.erase(sub_key);
+    response_metadata_by_sub_key_.erase(sub_key);
     co_return;
   }
 
@@ -1046,6 +1154,7 @@ private:
   let_id request_let_id_;
   let_id response_let_id_;
   std::unordered_set<data> active_sub_keys_;
+  std::unordered_map<data, record> response_metadata_by_sub_key_;
   uint64_t next_sub_key_ = 0;
   bool upstream_done_ = false;
   bool aborted_ = false;
@@ -1059,6 +1168,10 @@ auto make_http_executor_description() -> Description {
   auto body = d.named("body", &HttpExecutorArgs::body, "record|string|blob");
   auto headers = d.named("headers", &HttpExecutorArgs::headers, "record");
   auto encode = d.named("encode", &HttpExecutorArgs::encode);
+  auto metadata_field
+    = d.named("metadata_field", &HttpExecutorArgs::metadata_field);
+  auto error_field
+    = d.named("error_field", &HttpExecutorArgs::error_field);
   auto paginate = d.named("paginate", &HttpExecutorArgs::paginate);
   auto paginate_delay
     = d.named_optional("paginate_delay", &HttpExecutorArgs::paginate_delay);
@@ -1094,6 +1207,12 @@ auto make_http_executor_description() -> Description {
     }
     if (auto x = ctx.get(encode)) {
       args.encode = *x;
+    }
+    if (auto x = ctx.get(metadata_field)) {
+      args.metadata_field = *x;
+    }
+    if (auto x = ctx.get(error_field)) {
+      args.error_field = *x;
     }
     if (auto x = ctx.get(paginate)) {
       args.paginate = *x;
@@ -1137,6 +1256,8 @@ struct FromHttpPlugin final : public virtual OperatorPlugin {
     auto body = d.named("body", &FromHttpArgs::body);
     auto encode = d.named("encode", &FromHttpArgs::encode);
     auto headers = d.named("headers", &FromHttpArgs::headers);
+    auto metadata_field
+      = d.named("metadata_field", &FromHttpArgs::metadata_field);
     auto error_field
       = d.named("error_field", &FromHttpArgs::error_field);
     auto paginate = d.named("paginate", &FromHttpArgs::paginate);
@@ -1169,6 +1290,9 @@ struct FromHttpPlugin final : public virtual OperatorPlugin {
       }
       if (auto x = ctx.get(headers)) {
         args.headers = *x;
+      }
+      if (auto x = ctx.get(metadata_field)) {
+        args.metadata_field = *x;
       }
       if (auto x = ctx.get(error_field)) {
         args.error_field = *x;
