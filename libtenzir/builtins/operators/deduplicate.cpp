@@ -6,12 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/compile_ctx.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/collect.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/null_bitmap.hpp>
@@ -66,11 +66,11 @@ auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
 
 auto get_cleanup_duration(const configuration& cfg) -> duration;
 
-auto deduplicate_slice(
-  const table_slice& slice, const configuration& cfg, duration cleanup_duration,
-  tsl::robin_map<data, State>& states, int64_t& row,
-  std::chrono::steady_clock::time_point& last_cleanup_time,
-  diagnostic_handler& dh) -> std::vector<table_slice>;
+auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
+                       duration cleanup_duration,
+                       tsl::robin_map<data, State>& states, int64_t& row,
+                       std::chrono::steady_clock::time_point& last_cleanup_time,
+                       diagnostic_handler& dh) -> std::vector<table_slice>;
 
 struct configuration {
   ast::expression keys;
@@ -306,19 +306,19 @@ auto get_cleanup_duration(const configuration& cfg) -> duration {
   return std::clamp(min_cfg, min_cleanup_duration, max_cleanup_duration);
 }
 
-auto deduplicate_slice(
-  const table_slice& slice, const configuration& cfg, duration cleanup_duration,
-  tsl::robin_map<data, State>& states, int64_t& row,
-  std::chrono::steady_clock::time_point& last_cleanup_time,
-  diagnostic_handler& dh) -> std::vector<table_slice> {
+auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
+                       duration cleanup_duration,
+                       tsl::robin_map<data, State>& states, int64_t& row,
+                       std::chrono::steady_clock::time_point& last_cleanup_time,
+                       diagnostic_handler& dh) -> std::vector<table_slice> {
   auto output = std::vector<table_slice>{};
   const auto now = std::chrono::steady_clock::now();
   if (now > last_cleanup_time + cleanup_duration) {
     last_cleanup_time = now;
     for (auto it = states.begin(); it != states.end();) {
-      const auto should_remove
-        = cfg.count_field ? it->second.is_double_expired(cfg, row, now)
-                          : it->second.is_expired(cfg, row, now);
+      const auto should_remove = cfg.count_field
+                                   ? it->second.is_double_expired(cfg, row, now)
+                                   : it->second.is_expired(cfg, row, now);
       if (should_remove) {
         it = states.erase(it);
       } else {
@@ -345,8 +345,9 @@ auto deduplicate_slice(
     auto k = materialize(key);
     auto it = states.find(k);
     if (it == states.end()) {
-      states.emplace_hint(it, std::move(k), State{}).value().reset(current_row,
-                                                                    now);
+      states.emplace_hint(it, std::move(k), State{})
+        .value()
+        .reset(current_row, now);
       ids.append_bit(true);
       if (count_builder) {
         check(count_builder->Append(0));
@@ -393,8 +394,8 @@ auto deduplicate_slice(
       const auto delta = end - begin;
       auto count_slice = count_series.slice(count_offset, count_offset + delta);
       count_offset += delta;
-      output.push_back(assign(cfg.count_field.value(), count_slice, output_slice,
-                              dh, assign_position::back));
+      output.push_back(assign(cfg.count_field.value(), count_slice,
+                              output_slice, dh, assign_position::back));
     }
     TENZIR_ASSERT(count_offset == count_series.length());
   } else {
@@ -488,8 +489,9 @@ public:
     const auto cleanup_duration = get_cleanup_duration(cfg_);
     auto last_cleanup_time = std::chrono::steady_clock::now();
     for (const auto& slice : input) {
-      auto output = deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
-                                      last_cleanup_time, ctrl.diagnostics());
+      auto output
+        = deduplicate_slice(slice, cfg_, cleanup_duration, states, row,
+                            last_cleanup_time, ctrl.diagnostics());
       for (auto& x : output) {
         co_yield std::move(x);
       }
@@ -529,8 +531,8 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto output = deduplicate_slice(input, cfg_, cleanup_duration_, states_, row_,
-                                    last_cleanup_time_, ctx);
+    auto output = deduplicate_slice(input, cfg_, cleanup_duration_, states_,
+                                    row_, last_cleanup_time_, ctx);
     for (auto& slice : output) {
       co_await push(std::move(slice));
     }
@@ -604,8 +606,7 @@ public:
   }
 
   friend auto inspect(auto& f, DeduplicateIr& x) -> bool {
-    return f.object(x).fields(f.field("loc", x.loc_),
-                              f.field("cfg", x.cfg_));
+    return f.object(x).fields(f.field("loc", x.loc_), f.field("cfg", x.cfg_));
   }
 
 private:
@@ -626,11 +627,10 @@ public:
     -> failure_or<Box<ir::Operator>> override {
     auto provider = session_provider::make(ctx);
     auto loc = inv.op.get_location();
-    auto legacy_inv
-      = operator_factory_plugin::invocation{std::move(inv.op),
-                                            std::move(inv.args)};
-    TRY(auto cfg, parse_configuration(std::move(legacy_inv),
-                                      provider.as_session()));
+    auto legacy_inv = operator_factory_plugin::invocation{std::move(inv.op),
+                                                          std::move(inv.args)};
+    TRY(auto cfg,
+        parse_configuration(std::move(legacy_inv), provider.as_session()));
     TRY(cfg.keys.bind(ctx));
     return DeduplicateIr{loc, std::move(cfg)};
   }
