@@ -241,7 +241,6 @@ protected:
     if (not resolved_) {
       co_return failure::promise();
     }
-    TENZIR_ASSERT(resolved_->secret_requests.empty());
     co_return std::move(uri);
   }
 

@@ -171,8 +171,6 @@ auto resolve_aws_iam_auth(std::optional<aws_iam_options> aws_iam,
   result.options = std::move(aws_iam);
   if (result.options) {
     result.credentials.emplace();
-    result.secret_requests
-      = result.options->make_secret_requests(*result.credentials, dh);
   }
   if (aws_region) {
     if (not result.credentials) {
@@ -205,9 +203,12 @@ auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
   if (not auth) {
     co_return std::nullopt;
   }
-  if (auto ok = co_await ctx.resolve_secrets(std::move(auth->secret_requests));
-      not ok) {
-    co_return std::nullopt;
+  if (auth->options and auth->credentials) {
+    auto requests
+      = auth->options->make_secret_requests(*auth->credentials, ctx.dh());
+    if (not co_await ctx.resolve_secrets(std::move(requests))) {
+      co_return std::nullopt;
+    }
   }
   co_return std::move(*auth);
 }
