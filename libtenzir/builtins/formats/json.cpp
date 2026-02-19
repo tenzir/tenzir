@@ -1943,7 +1943,7 @@ public:
     if (args_.jobs > 0) {
       // Close the input queue and drain until all workers signaled completion.
       co_await write_input_queue_->enqueue(std::nullopt);
-      co_await drain_parallel_output(push, args_.jobs);
+      co_await drain_parallel_output(push);
       co_return;
     }
     TENZIR_UNUSED(ctx);
