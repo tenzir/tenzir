@@ -1237,10 +1237,10 @@ void write_profile(
         total_wall_pct += wall_pct;
         total_cpu_pct += cpu_pct;
         total_tasks_per_s += tasks_per_s;
-        emit_counter("A: CPU Active", pid, us, cpu_pct);
-        emit_counter("B: CPU Active (cumulative)", pid, us, cpu_s);
-        emit_counter("C: CPU Wall", pid, us, wall_pct);
-        emit_counter("D: CPU Wall (cumulative)", pid, us, wall_s);
+        emit_counter("A: CPU Active (%)", pid, us, cpu_pct * 100.0);
+        emit_counter("B: CPU Active (s) (cumulative)", pid, us, cpu_s);
+        emit_counter("C: CPU Wall (%)", pid, us, wall_pct * 100.0);
+        emit_counter("D: CPU Wall (s) (cumulative)", pid, us, wall_s);
         emit_counter("E: Tasks/s", pid, us, tasks_per_s);
         emit_counter("F: Tasks (cumulative)", pid, us,
                      static_cast<double>(cur.task_count));
@@ -1257,14 +1257,20 @@ void write_profile(
         };
         auto const& prev
           = oi < prev_aggs.size() ? prev_aggs[oi] : OpChannelAgg{};
-        emit_counter("G: Buffer (bytes)", pid, us, d(agg.buffer_bytes));
+        auto mb = [](size_t v) {
+          return static_cast<double>(v) / 1'000'000.0;
+        };
+        auto mb_rate = [&](size_t cur, size_t prev) {
+          return mb(cur - prev) / interval_s;
+        };
+        emit_counter("G: Buffer (MB)", pid, us, mb(agg.buffer_bytes));
         emit_counter("H: Buffer (batches)", pid, us, d(agg.buffer_batches));
-        emit_counter("I: Bytes In/s", pid, us,
-                     rate(agg.bytes_out, prev.bytes_out));
-        emit_counter("J: Bytes In (cumulative)", pid, us, d(agg.bytes_out));
-        emit_counter("K: Bytes Out/s", pid, us,
-                     rate(agg.bytes_in, prev.bytes_in));
-        emit_counter("L: Bytes Out (cumulative)", pid, us, d(agg.bytes_in));
+        emit_counter("I: MB In/s", pid, us,
+                     mb_rate(agg.bytes_out, prev.bytes_out));
+        emit_counter("J: MB In (cumulative)", pid, us, mb(agg.bytes_out));
+        emit_counter("K: MB Out/s", pid, us,
+                     mb_rate(agg.bytes_in, prev.bytes_in));
+        emit_counter("L: MB Out (cumulative)", pid, us, mb(agg.bytes_in));
         emit_counter("M: Batches In/s", pid, us,
                      rate(agg.batches_out, prev.batches_out));
         emit_counter("N: Batches In (cumulative)", pid, us, d(agg.batches_out));
@@ -1289,16 +1295,18 @@ void write_profile(
     }
     // Totals across all operators.
     if (total_tasks > 0) {
-      emit_counter("A: CPU Active", pid_totals, us, total_cpu_pct);
-      emit_counter("B: CPU Active (cumulative)", pid_totals, us, total_cpu_s);
-      emit_counter("C: CPU Wall", pid_totals, us, total_wall_pct);
-      emit_counter("D: CPU Wall (cumulative)", pid_totals, us, total_wall_s);
+      emit_counter("A: CPU Active (%)", pid_totals, us, total_cpu_pct * 100.0);
+      emit_counter("B: CPU Active (s) (cumulative)", pid_totals, us,
+                   total_cpu_s);
+      emit_counter("C: CPU Wall (%)", pid_totals, us, total_wall_pct * 100.0);
+      emit_counter("D: CPU Wall (s) (cumulative)", pid_totals, us,
+                   total_wall_s);
       emit_counter("E: Tasks/s", pid_totals, us, total_tasks_per_s);
       emit_counter("F: Tasks (cumulative)", pid_totals, us,
                    static_cast<double>(total_tasks));
     }
-    emit_counter("G: Buffer (bytes)", pid_totals, us,
-                 static_cast<double>(total_buffer_bytes));
+    emit_counter("G: Buffer (MB)", pid_totals, us,
+                 static_cast<double>(total_buffer_bytes) / 1'000'000.0);
     emit_counter("H: Buffer (batches)", pid_totals, us,
                  static_cast<double>(total_buffer_batches));
     prev_aggs = std::move(aggs);
