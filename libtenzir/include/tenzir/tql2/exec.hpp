@@ -14,6 +14,7 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <optional>
 #include <string_view>
 
 namespace tenzir {
