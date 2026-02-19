@@ -1492,9 +1492,9 @@ void warn_deprecated_payload(const operator_factory_plugin::invocation& inv,
   }
 }
 
-struct from_http final : public virtual operator_factory_plugin {
+struct from_http_compat final : public virtual operator_factory_plugin {
   auto name() const -> std::string override {
-    return "tql2.from_http";
+    return "tql2.from_http_compat";
   }
 
   auto make(invocation inv, session ctx) const
@@ -2301,6 +2301,7 @@ using from_http_server = operator_inspection_plugin<from_http_server_operator>;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_client)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_server)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http_compat)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::HttpPlugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::internal_source_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::internal_sink_plugin)

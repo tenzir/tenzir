@@ -111,6 +111,10 @@ set(BUILD_SHARED_LIBS OFF)
 # cmake_install.cmake for parent include() calls.
 set(_tenzir_prev_skip_install_rules "${CMAKE_SKIP_INSTALL_RULES}")
 set(CMAKE_SKIP_INSTALL_RULES ON)
+# CMake's top-level install script still includes this directory's
+# `cmake_install.cmake` when it is added via `add_subdirectory`.
+# Provide an empty file so `cmake --install` does not fail in bundled builds.
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cmake_install.cmake" "")
 
 # ---- 1. FOLLY ----
 add_subdirectory(folly SYSTEM)
