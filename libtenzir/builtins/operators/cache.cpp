@@ -190,6 +190,7 @@ private:
     if (not writer_) {
       const auto sender = self_->current_sender();
       writer_ = sender->address();
+      enforce_writer_identity_ = monitor;
       if (monitor) {
         self_->monitor(sender, [this](const caf::error& err) {
           if (done_) {
@@ -211,13 +212,15 @@ private:
     if (not writer_) {
       return diagnostic::error("cache has no writer").to_error();
     }
-    const auto sender = self_->current_sender();
-    if (not sender) {
-      return diagnostic::error("cache write request has no sender").to_error();
-    }
-    if (sender->address() != writer_) {
-      return diagnostic::error("cache write request from non-writer actor")
-        .to_error();
+    if (enforce_writer_identity_) {
+      const auto sender = self_->current_sender();
+      if (not sender) {
+        return diagnostic::error("cache write request has no sender").to_error();
+      }
+      if (sender->address() != writer_) {
+        return diagnostic::error("cache write request from non-writer actor")
+          .to_error();
+      }
     }
     TENZIR_ASSERT(events.rows() > 0);
     auto exceeded_capacity = false;
@@ -280,13 +283,15 @@ private:
     if (not writer_) {
       return diagnostic::error("cache has no writer").to_error();
     }
-    const auto sender = self_->current_sender();
-    if (not sender) {
-      return diagnostic::error("cache write request has no sender").to_error();
-    }
-    if (sender->address() != writer_) {
-      return diagnostic::error("cache write request from non-writer actor")
-        .to_error();
+    if (enforce_writer_identity_) {
+      const auto sender = self_->current_sender();
+      if (not sender) {
+        return diagnostic::error("cache write request has no sender").to_error();
+      }
+      if (sender->address() != writer_) {
+        return diagnostic::error("cache write request from non-writer actor")
+          .to_error();
+      }
     }
     if (not done_) {
       mark_done(cache_state::closed);
@@ -353,6 +358,7 @@ private:
   caf::flow::multicaster<cache_update> update_multicaster_;
 
   caf::actor_addr writer_;
+  bool enforce_writer_identity_ = true;
   bool done_ = {};
   detail::flat_map<caf::actor_addr, reader> readers_;
   detail::flat_map<uint64_t,
