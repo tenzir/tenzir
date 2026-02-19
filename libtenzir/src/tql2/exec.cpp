@@ -574,6 +574,13 @@ struct ChannelStats {
   };
   data in;
   data out;
+
+  /// Backpressure intervals recorded by the sender.
+  struct BackpressureEvent {
+    std::chrono::steady_clock::time_point start;
+    std::chrono::steady_clock::time_point end;
+  };
+  std::vector<BackpressureEvent> backpressure_events;
 };
 
 /// Monotonic counters for profiling per-operator CPU usage.
@@ -634,14 +641,6 @@ public:
   auto send(OperatorMsg<T> x) -> Task<void> {
     auto lock = co_await mutex_.lock();
     auto bytes = count_bytes(x);
-    // To also send big messages eventually, we allow to bypass the limit if the
-    // queue is otherwise entirely free.
-    auto free = lock->current_bytes + bytes;
-    while (not free and lock->current_bytes + bytes > max_bytes_) {
-      lock.unlock();
-      co_await notify_send_.wait();
-      lock = co_await mutex_.lock();
-    }
     lock->current_bytes += bytes;
     // Update profiling counters.
     if (stats_) {
@@ -656,6 +655,20 @@ public:
     }
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
+    // Block sender if buffer exceeds capacity. Large messages may temporarily
+    // exceed the limit, but the sender waits for drain before continuing.
+    if (lock->current_bytes > max_bytes_) {
+      auto bp_start = std::chrono::steady_clock::now();
+      while (lock->current_bytes > max_bytes_) {
+        lock.unlock();
+        co_await notify_send_.wait();
+        lock = co_await mutex_.lock();
+      }
+      if (stats_) {
+        auto bp_end = std::chrono::steady_clock::now();
+        stats_->backpressure_events.push_back({bp_start, bp_end});
+      }
+    }
   }
 
   auto receive() -> Task<Option<OperatorMsg<T>>> {
@@ -924,7 +937,8 @@ struct ProfileSample {
 void write_profile(
   std::string const& path, std::vector<ProfileSample> const& samples,
   std::chrono::steady_clock::time_point t0,
-  std::unordered_map<std::string, std::string> const& op_type_names) {
+  std::unordered_map<std::string, std::string> const& op_type_names,
+  std::vector<ChannelProfile> const& channel_profiles) {
   auto f = std::ofstream{path};
   if (not f) {
     TENZIR_WARN("failed to open profile output file: {}", path);
@@ -1248,6 +1262,54 @@ void write_profile(
     prev_aggs = std::move(aggs);
     prev_execs = std::move(cur_execs);
   }
+  // Emit backpressure duration bars from channel profiles.
+  // Each channel's events are routed to the sender operator's pid (same
+  // routing as "In" metrics). We use tid=1 for a dedicated track row.
+  auto bp_pids_emitted = std::unordered_set<int>{};
+  for (auto const& prof : channel_profiles) {
+    if (not prof.stats or prof.stats->backpressure_events.empty()) {
+      continue;
+    }
+    // Parse channel name to get sender/receiver.
+    auto sep = prof.id.value.find(" -> ");
+    if (sep == std::string::npos) {
+      continue;
+    }
+    auto sender = prof.id.value.substr(0, sep);
+    auto receiver = prof.id.value.substr(sep + 4);
+    if (sender == "_") {
+      continue;
+    }
+    // Apply the same routing as "In" metrics.
+    auto sender_target = std::string{};
+    if (receiver != "_" and is_child_of(receiver, sender)) {
+      sender_target = sub_op_name(sender);
+    } else {
+      sender_target = sender;
+    }
+    auto it = op_index.find(sender_target);
+    if (it == op_index.end()) {
+      continue;
+    }
+    auto pid = op_pid(it->second);
+    // Emit thread name metadata once per pid.
+    if (bp_pids_emitted.insert(pid).second) {
+      emit(fmt::format(
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Backpressure"}}}})pp",
+        pid));
+    }
+    for (auto const& ev : prof.stats->backpressure_events) {
+      auto start_us
+        = std::chrono::duration_cast<std::chrono::microseconds>(ev.start - t0)
+            .count();
+      auto dur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                      ev.end - ev.start)
+                      .count();
+      emit(fmt::format(
+        R"pp({{"ph": "X", "name": "Backpressure", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
+        pid, start_us, dur_us));
+    }
+  }
   f << "\n  ]\n}\n";
 }
 
@@ -1312,7 +1374,8 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
     sampler->join();
-    write_profile(*profile_path, samples, t0, exec_ctx.op_type_names());
+    write_profile(*profile_path, samples, t0, exec_ctx.op_type_names(),
+                  exec_ctx.get_channel_profiles());
   }
   co_return {};
 }
