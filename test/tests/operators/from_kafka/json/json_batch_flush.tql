@@ -1,0 +1,11 @@
+// Consume all seeded JSON records while forcing intermediate flushes.
+from_kafka env("KAFKA_TOPIC"),
+           _json=true,
+           count=3,
+           offset="beginning",
+           batch_size=2,
+           _batch_timeout=1s,
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-json-batch"
+           }

@@ -1,0 +1,7 @@
+suite: from-kafka-json
+fixtures:
+  - kafka:
+      topic: from_kafka_json_test
+      partitions: 1
+      messages: 3
+      payload_file: test/tests/operators/from_kafka/json/payload.ndjson

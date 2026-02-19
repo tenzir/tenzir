@@ -1,0 +1,9 @@
+// Consume two seeded JSON messages with inline parsing.
+from_kafka env("KAFKA_TOPIC"),
+           _json=true,
+           count=2,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-json-basic"
+           }
