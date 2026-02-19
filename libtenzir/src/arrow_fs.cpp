@@ -213,8 +213,10 @@ auto ArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx& ctx)
   co_await results_->enqueue(SubFinished{slot});
 }
 
-auto ArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx) -> Task<void> {
+auto ArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
+  -> Task<FinalizeBehavior> {
   co_await cleanup_files(ctx.dh());
+  co_return FinalizeBehavior::done;
 }
 
 auto ArrowFsOperator::state() -> OperatorState {

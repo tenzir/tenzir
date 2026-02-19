@@ -134,13 +134,15 @@ enum class OperatorState {
   unspecified,
   /// The operator wants to finalize.
   done,
+};
+
+enum class FinalizeBehavior {
+  /// The operator is done.
+  done,
   /// The operator is draining and will manually set the state
-  /// to `done` when finished. The operator can opt-into this
-  /// behavior by setting the state to `almost_done` in `finalize()`,
-  /// the executor will then continue scheduling the pipeline normally,
-  /// and the operator is responsible for switching to `done` within
-  /// a bounded amount of time.
-  almost_done,
+  /// to `done` when finished. The operator is responsible for
+  /// switching to `done` within a bounded amount of time.
+  continue_,
 };
 
 template <class Input, class Output>
@@ -179,9 +181,10 @@ public:
   }
 
   /// Called once at end-of-stream. See file-level docs.
-  virtual auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<void> {
+  virtual auto finalize(Push<Output>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> {
     TENZIR_UNUSED(push, ctx);
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   /// Process the result of a spawned subpipeline in a *thread-safe* way.
@@ -219,9 +222,9 @@ public:
     co_return;
   }
 
-  virtual auto finalize(OpCtx& ctx) -> Task<void> {
+  virtual auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
     TENZIR_UNUSED(ctx);
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)

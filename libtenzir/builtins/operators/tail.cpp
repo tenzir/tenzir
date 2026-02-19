@@ -38,7 +38,8 @@ public:
     co_return;
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     // Output the last count_ rows from buffer (in correct forward order)
     auto skip = buffered_rows_ > count_ ? buffered_rows_ - count_ : 0;
@@ -55,6 +56,7 @@ public:
         co_await push(std::move(slice));
       }
     }
+    co_return FinalizeBehavior::done;
   }
 
   auto snapshot(Serde& serde) -> void override {

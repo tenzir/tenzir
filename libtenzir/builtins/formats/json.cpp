@@ -1196,16 +1196,18 @@ public:
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(parser_);
     parser_->validate_completion();
     if (parser_->abort_requested) {
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     for (auto& slice : parser_->builder.finalize_as_table_slice()) {
       co_await push(std::move(slice));
     }
+    co_return FinalizeBehavior::done;
   }
 
 private:
@@ -1223,7 +1225,7 @@ public:
   }
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    if (args_.jobs > 0) {
+    if (args_.jobs > 0 and finished_workers_ < args_.jobs) {
       // Parallel mode: workers have their own parsers.
       auto capacity = static_cast<uint32_t>(args_.jobs * 2);
       read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
@@ -1258,7 +1260,7 @@ public:
       return OperatorState::unspecified;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
-                                           : OperatorState::almost_done;
+                                           : OperatorState::unspecified;
   }
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
@@ -1298,7 +1300,8 @@ public:
     co_return;
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     draining_ = true;
     if (args_.jobs > 0) {
       // Send any remaining buffered data to a worker.
@@ -1309,8 +1312,7 @@ public:
       }
       // Close the input queue and drain until all workers signaled completion.
       co_await read_input_queue_->enqueue(std::nullopt);
-      // co_await drain_parallel_output(push);
-      co_return;
+      co_return FinalizeBehavior::continue_;
     } else {
       // Non-parallel code path.
       TENZIR_UNUSED(ctx);
@@ -1322,13 +1324,13 @@ public:
       }
       parser_->validate_completion();
       if (parser_->abort_requested) {
-        co_return;
+        co_return FinalizeBehavior::done;
       }
       for (auto& slice : parser_->builder.finalize_as_table_slice()) {
         co_await push(std::move(slice));
       }
     }
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
 private:
@@ -1953,7 +1955,7 @@ public:
       return OperatorState::unspecified;
     }
     return finished_workers_ == args_.jobs ? OperatorState::done
-                                           : OperatorState::almost_done;
+                                           : OperatorState::unspecified;
   }
 
   auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
@@ -1967,23 +1969,25 @@ public:
     co_await push(std::move(next));
   }
 
-  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     draining_ = true;
-    if (args_.jobs > 0) {
+    if (args_.jobs > 0 and finished_workers_ < args_.jobs) {
       // Close the input queue and drain until all workers signaled completion.
       co_await write_input_queue_->enqueue(std::nullopt);
-      co_return;
+      co_return FinalizeBehavior::continue_;
     }
     TENZIR_UNUSED(ctx);
     if (not args_.arrays_of_objects) {
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     auto meta = chunk_metadata{.content_type = "application/json"};
     if (not array_open_written_) {
       co_await push(chunk::copy(std::string_view{"[]"}, meta));
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     co_await push(chunk::copy(std::string_view{"]"}, meta));
+    co_return FinalizeBehavior::done;
   }
 
 private:
