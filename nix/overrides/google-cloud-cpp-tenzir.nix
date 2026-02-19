@@ -2,6 +2,7 @@
   lib,
   stdenv,
   fetchFromGitHub,
+  nlohmann_json,
   google-cloud-cpp,
 }:
 (
@@ -24,6 +25,12 @@
       tag = "v2.45.0";
       hash = "sha256-TniMcby9PtG+jvtqQwO0cqXASjuPhlboNjb03WkQjNE=";
     };
+    propagatedBuildInputs = (orig.propagatedBuildInputs or [])
+    ++ [
+      # In the public interface of google_cloud_cpp_rest_internal.
+      nlohmann_json
+    ];
+
     installCheckPhase =
       let
         disabledTests = lib.optionalString stdenv.hostPlatform.isDarwin ''
