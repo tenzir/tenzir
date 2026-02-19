@@ -273,22 +273,16 @@ public:
         }
       }
     }
-    // Check for missing required positional arguments.
-    // For variadic arguments, we need to check if we have at least one when
-    // required
-    auto actual_min_positional = min_positional;
+    // Check for missing required variadic arguments ()
     if (desc->variadic_index
         and *desc->variadic_index
               < desc->first_optional.value_or(desc->positional.size())) {
       // Variadic is required, so we need at least one argument at that position
-      // The check is: did we reach the variadic position?
-      if (positional_idx < min_positional
-          and result.args_.size() < min_positional) {
+      if (result.args_.size() < min_positional) {
         auto specifier
           = min_positional == max_positional ? "exactly" : "at least";
-        emit(diagnostic::error("expected {} {} positional argument{}",
-                               specifier, min_positional,
-                               min_positional == 1 ? "" : "s")
+        emit(diagnostic::error("expected {} {} positional arguments", specifier,
+                               min_positional)
                .primary(result.op_));
       }
     } else if (positional_idx < min_positional) {

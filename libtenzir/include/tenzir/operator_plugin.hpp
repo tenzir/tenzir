@@ -533,6 +533,9 @@ public:
   auto positional(std::string name, T Args::* ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
     // TODO: Check exact type?
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
     if (desc_.first_optional) {
       panic("cannot have required positional after optional positional");
     }
@@ -548,6 +551,9 @@ public:
   template <ArgType T>
   auto positional(std::string name, std::optional<T> Args::* ptr,
                   std::string type = type_default<T>) -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
@@ -564,6 +570,9 @@ public:
   auto optional_positional(std::string name, T Args::* ptr,
                            std::string type = type_default<T>)
     -> Argument<Args, T> {
+    if (desc_.variadic_index) {
+      panic("cannot add positional argument after variadic argument");
+    }
     if (not desc_.first_optional) {
       desc_.first_optional = desc_.positional.size();
     }
@@ -646,9 +655,6 @@ public:
                 std::string type = type_default<T>) -> Argument<Args, T> {
     if (desc_.variadic_index) {
       panic("cannot have multiple variadic positional arguments");
-    }
-    if (not desc_.first_optional) {
-      desc_.first_optional = desc_.positional.size();
     }
     auto index = desc_.positional.size();
     desc_.variadic_index = index;
