@@ -5,7 +5,7 @@
 # investigate switching to a different map, e.g., from folly or abseil.
 
 option(TENZIR_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map"
-       OFF)
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map QUIET)
   if (tsl-robin-map_FOUND)
@@ -110,9 +110,17 @@ endif ()
 # -- aws sdk (for direct S3 object deletion) -----------------------------------
 
 if (ARROW_S3)
-  find_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-         "\nfind_package(AWSSDK COMPONENTS s3 REQUIRED CONFIG)")
+  find_package(
+    AWSSDK
+    COMPONENTS s3 sts identity-management
+    REQUIRED CONFIG)
+  if (NOT BUILD_SHARED_LIBS)
+    string(
+      APPEND
+      TENZIR_FIND_DEPENDENCY_LIST
+      "\nfind_package(AWSSDK COMPONENTS s3 sts identity-management REQUIRED CONFIG)"
+    )
+  endif ()
   dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 endif ()
 
@@ -120,15 +128,25 @@ endif ()
 
 if (ARROW_AZURE)
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-         "\nfind_package(azure-storage-blobs-cpp CONFIG REQUIRED)")
+  if (NOT BUILD_SHARED_LIBS)
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(azure-storage-blobs-cpp CONFIG REQUIRED)")
+  endif ()
   dependency_summary("Azure Storage Blobs" Azure::azure-storage-blobs
                      "Dependencies")
 endif ()
 
 # -- boost ---------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)
+find_package(
+  Boost REQUIRED
+  COMPONENTS headers
+             filesystem
+             url
+             context
+             program_options
+             regex
+             thread)
 
 # -- re2 -----------------------------------------------------------------------
 
@@ -153,7 +171,8 @@ provide_find_module(c-ares)
 # Use MODULE mode to avoid broken CMake config in static Nix builds
 
 find_package(EXPAT REQUIRED MODULE)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(EXPAT REQUIRED MODULE)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(EXPAT REQUIRED MODULE)")
 dependency_summary("expat" EXPAT::EXPAT "Dependencies")
 
 # -- jemalloc ------------------------------------------------------------------
@@ -386,7 +405,8 @@ target_link_libraries(libtenzir PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson
-option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
+option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 
 unset(_tenzir_bundled_simdjson)
 if (NOT TENZIR_ENABLE_BUNDLED_SIMDJSON)
@@ -475,12 +495,20 @@ if (ARROW_AZURE)
 endif ()
 
 # Link against Boost.
-target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
-                                       Boost::url Boost::context
-                                       Boost::program_options Boost::regex
-                                       Boost::thread)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)")
+target_link_libraries(
+  libtenzir
+  PUBLIC Boost::headers
+         Boost::filesystem
+         Boost::url
+         Boost::context
+         Boost::program_options
+         Boost::regex
+         Boost::thread)
+string(
+  APPEND
+  TENZIR_FIND_DEPENDENCY_LIST
+  "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url context program_options regex thread)"
+)
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
@@ -489,10 +517,40 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against folly.
-target_link_libraries(libtenzir PUBLIC Folly::folly)
-if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  # All Facebook libs are static archives linked into libtenzir.so.
+  # Use BUILD_LOCAL_INTERFACE to keep them visible in the local build
+  # tree but invisible in export()/install(EXPORT), avoiding a cascade
+  # of internal targets leaking into the TenzirTargets export set.
+  target_link_libraries(libtenzir PUBLIC $<BUILD_LOCAL_INTERFACE:Folly::folly>)
+else ()
+  target_link_libraries(libtenzir PUBLIC Folly::folly)
+  # Ensure Folly's own headers are preferred over system includes to avoid
+  # ABI/constructor mismatches from mixed folly installations.
+  get_target_property(_tenzir_folly_include_dirs Folly::folly
+                      INTERFACE_INCLUDE_DIRECTORIES)
+  if (_tenzir_folly_include_dirs)
+    target_include_directories(libtenzir BEFORE
+                               PRIVATE ${_tenzir_folly_include_dirs})
+  endif ()
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(glog CONFIG REQUIRED)")
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(folly REQUIRED)")
 endif ()
+target_link_libraries(libtenzir PRIVATE proxygen::proxygenhttpserver)
+# For the bundled case libtenzir_builtins is a static library whose private
+# deps would normally propagate into the export set. BUILD_LOCAL_INTERFACE
+# prevents that; the proxygen symbols are resolved through libtenzir.so
+# which consumers also link.
+if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  target_link_libraries(
+    libtenzir_builtins
+    PRIVATE $<BUILD_LOCAL_INTERFACE:proxygen::proxygenhttpserver>)
+else ()
+  target_link_libraries(libtenzir_builtins PRIVATE proxygen::proxygenhttpserver)
+endif ()
+target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1)
+target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_HAS_PROXYGEN=1)
 # gflags is a transitive dependency of glog (used by folly). We must re-export
 # find_package(gflags) so that plugins can resolve the gflags_shared cmake
 # target that appears in the exported transitive link libraries.
@@ -504,7 +562,8 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(reproc++ REQUIRED)")
 dependency_summary("reproc++" reproc+++ "Dependencies")
 
 # Link against fast_float
-option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
+option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
   find_package(FastFloat CONFIG)
 endif ()
@@ -527,7 +586,8 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
 unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
+  option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule"
+         "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()
@@ -663,7 +723,7 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
-          ${_tenzir_bundled_pfs} ${_tenzir_bundled_folly}
+          ${_tenzir_bundled_pfs} ${_tenzir_bundled_facebook}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime

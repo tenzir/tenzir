@@ -21,7 +21,8 @@ TenzirRegisterPlugin(
 find_package(OpenSSL REQUIRED)
 
 option(TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
-       "Always use the bundled and patched restinio" ON)
+       "Always use the bundled and patched restinio"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
   find_package(fmt REQUIRED)
   find_package(restinio REQUIRED)

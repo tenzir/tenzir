@@ -15,7 +15,8 @@ TenzirRegisterPlugin(
   INCLUDE_DIRECTORIES include)
 
 option(TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP
-       "Always use the bundled tsl-robin-map" OFF)
+       "Always use the bundled clickhouse-cpp"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP)
   find_package(clickhouse-cpp QUIET)
 endif ()

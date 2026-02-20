@@ -666,6 +666,11 @@ endif ()
 # Disable module scanning.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
+# -- bundled dependencies ------------------------------------------------------
+
+option(TENZIR_ENABLE_BUNDLED_DEPENDENCIES
+       "Default for all TENZIR_ENABLE_BUNDLED_* dependency options" ON)
+
 # -- schemas -------------------------------------------------------------------
 
 option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
@@ -706,15 +711,8 @@ set(TENZIR_CAF_LOG_LEVEL
     "WARNING"
     CACHE STRING "")
 
-if (TENZIR_ENABLE_DEVELOPER_MODE
-    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt"
-    AND NOT CAF_ROOT_DIR)
-  set(_tenzir_enable_bundled_caf_default ON)
-else ()
-  set(_tenzir_enable_bundled_caf_default OFF)
-endif ()
 option(TENZIR_ENABLE_BUNDLED_CAF "Use the CAF submodule"
-       "${_tenzir_enable_bundled_caf_default}")
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
@@ -822,10 +820,18 @@ else ()
                      "Dependencies")
 endif ()
 
-# -- folly ---------------------------------------------------------------------
+# -- facebook libs (folly, fizz, wangle, mvfst, proxygen) ---------------------
 
-option(TENZIR_ENABLE_BUNDLED_FOLLY "Use the folly submodule" ON)
-if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
+option(TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS
+       "Build folly, fizz, wangle, mvfst, and proxygen from submodules"
+       "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
+unset(_tenzir_bundled_facebook)
+set(TENZIR_FOLLY_MINIMUM_VERSION "2026.01.19.00")
+
+if (NOT TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  # --- System Facebook libs via find_package ---
+  add_definitions(-DGLOG_USE_GLOG_EXPORT)
+
   # folly's CMake config references gflags_shared in INTERFACE_LINK_LIBRARIES.
   # We need to find gflags first and fix its target configuration, because
   # Homebrew gflags only exports IMPORTED_LOCATION_RELEASE.
@@ -841,107 +847,35 @@ if (NOT TENZIR_ENABLE_BUNDLED_FOLLY)
     endif ()
   endif ()
   find_package(folly REQUIRED)
-  find_package(glog REQUIRED)
-  dependency_summary("folly" Folly::folly "Dependencies")
-else ()
-  if (NOT EXISTS
-      "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly/CMakeLists.txt")
+  if (DEFINED folly_VERSION)
+    set(_tenzir_folly_version "${folly_VERSION}")
+  elseif (DEFINED FOLLY_VERSION)
+    set(_tenzir_folly_version "${FOLLY_VERSION}")
+  else ()
+    set(_tenzir_folly_version "")
+  endif ()
+  if (_tenzir_folly_version)
+    string(REGEX REPLACE "-.*$" "" _tenzir_folly_version
+                         "${_tenzir_folly_version}")
+    if (_tenzir_folly_version VERSION_LESS "${TENZIR_FOLLY_MINIMUM_VERSION}")
+      message(
+        FATAL_ERROR
+          "Found Folly ${_tenzir_folly_version} but Tenzir requires Folly >="
+          " ${TENZIR_FOLLY_MINIMUM_VERSION}.")
+    endif ()
+  else ()
     message(
-      FATAL_ERROR
-        "folly not found, either use -Dfolly_dir=... or initialize the"
-        " libtenzir/aux/folly submodule")
+      WARNING
+        "Found Folly without a version string; skipping minimum version verification."
+    )
   endif ()
-  # Configure folly build options
-  set(BUILD_TESTS
-      OFF
-      CACHE BOOL "")
-  set(BUILD_BENCHMARKS
-      OFF
-      CACHE BOOL "")
-  set(FOLLY_HAVE_LIBGFLAGS
-      OFF
-      CACHE BOOL "")
-  # Prevent Folly's FindGflags.cmake from finding gflags, because folly-deps.cmake
-  # would override the FOLLY_HAVE_LIBGFLAGS cache variable with a regular variable
-  # set to ${LIBGFLAGS_FOUND}. This causes duplicate gflags flag registrations at
-  # runtime when libgflags.so is also loaded via libglog.so.
-  set(CMAKE_DISABLE_FIND_PACKAGE_Gflags TRUE)
+  find_package(glog REQUIRED)
+  find_package(proxygen REQUIRED CONFIG)
+  dependency_summary("folly" Folly::folly "Dependencies")
+  dependency_summary("proxygen" proxygen::proxygen "Dependencies")
+else ()
   add_definitions(-DGLOG_USE_GLOG_EXPORT)
-  # Disable malloc_usable_size - conflicts with jemalloc's symbol renaming
-  set(FOLLY_HAVE_MALLOC_USABLE_SIZE
-      OFF
-      CACHE BOOL "")
-  # Point folly to our bundled fast_float.
-  if (TENZIR_ENABLE_BUNDLED_FASTFLOAT)
-    set(FASTFLOAT_INCLUDE_DIR
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/fast_float/include>"
-        CACHE PATH "")
-  endif ()
-  # Find blake3 if available - folly uses __has_include(<blake3.h>) to compile
-  # blake3 support, so we must link against it when the header is found.
-  find_package(blake3 CONFIG QUIET)
-  if (blake3_FOUND)
-    list(APPEND FOLLY_LINK_LIBRARIES BLAKE3::blake3)
-  endif ()
-  # Pass SSE/AVX flags to folly to ensure F14 containers use the same intrinsics
-  # mode across all compilation units. Without this, folly's F14Table.cpp may be
-  # compiled with different SIMD settings than code using F14 headers, causing
-  # link errors due to F14LinkCheck mismatch.
-  # We temporarily modify CMAKE_CXX_FLAGS because folly's folly_add_library()
-  # function uses cmake_parse_arguments with prefix FOLLY_LIB, which shadows
-  # any variable named FOLLY_LIB_COMPILE_OPTIONS set from the parent scope.
-  set(_saved_cxx_flags "${CMAKE_CXX_FLAGS}")
-  if (TENZIR_ENABLE_SSE_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse")
-  endif ()
-  if (TENZIR_ENABLE_SSE2_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse2")
-  endif ()
-  if (TENZIR_ENABLE_SSE3_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse3")
-  endif ()
-  if (TENZIR_ENABLE_SSSE3_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -mssse3")
-  endif ()
-  if (TENZIR_ENABLE_SSE4_1_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse4.1")
-  endif ()
-  if (TENZIR_ENABLE_SSE4_2_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -msse4.2")
-  endif ()
-  if (TENZIR_ENABLE_AVX_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -mavx")
-  endif ()
-  if (TENZIR_ENABLE_AVX2_INSTRUCTIONS)
-    string(APPEND CMAKE_CXX_FLAGS " -mavx2")
-  endif ()
-  message(STATUS "Folly CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-  # Force folly to build as a static library for two reasons:
-  # 1. On macOS, std::current_exception() returns nullptr in coroutine
-  #    unhandled_exception() handlers when folly crosses shared library
-  #    boundaries.
-  # 2. On Linux aarch64, folly's CMake has duplicate aor (Arm Optimized
-  #    Routines) object targets that cause multiple definition errors when
-  #    building as a shared library.
-  set(_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
-  set(BUILD_SHARED_LIBS OFF)
-  # When the main build uses shared libraries, folly must be compiled with
-  # -fPIC even though it's built as a static library, because it will be
-  # linked into a shared library.
-  if (_saved_build_shared_libs)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-  endif ()
-  add_subdirectory(libtenzir/aux/folly SYSTEM)
-  unset(CMAKE_DISABLE_FIND_PACKAGE_Gflags)
-  set(BUILD_SHARED_LIBS "${_saved_build_shared_libs}")
-  set(CMAKE_CXX_FLAGS "${_saved_cxx_flags}")
-  if (NOT TARGET Folly::folly)
-    add_library(Folly::folly ALIAS folly)
-  endif ()
-  # Set variable to include bundled folly in exports
-  set(_tenzir_bundled_folly folly folly_deps)
-  dependency_summary("folly" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/folly"
-                     "Dependencies")
+  add_subdirectory(libtenzir/aux/facebook)
 endif ()
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS

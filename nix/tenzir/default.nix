@@ -29,6 +29,8 @@ let
       fluent-bit,
       protobuf,
       google-cloud-cpp-tenzir,
+      nlohmann_json,
+      crc32c,
       grpc,
       spdlog,
       simdjson,
@@ -57,10 +59,10 @@ let
       pfs,
       c-ares,
       folly,
+      proxygen,
       double-conversion,
       libevent,
       liburing,
-      libsodium,
       snappy,
       expat,
       # Defaults to null because it is omitted for the developer edition build.
@@ -269,11 +271,13 @@ let
               curl
               flatbuffers
               folly
+              proxygen
               double-conversion
               libevent
-              libsodium
               snappy
               google-cloud-cpp-tenzir
+              nlohmann_json
+              crc32c
               grpc
               libmaxminddb
               jemalloc-tenzir
@@ -284,6 +288,8 @@ let
               robin-map
               simdjson
               spdlog
+              c-ares
+              expat
               yaml-cpp
               xxHash
             ]
@@ -310,8 +316,7 @@ let
               "-DTENZIR_ALLOCATOR=jemalloc"
               "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
               "-DTENZIR_ENABLE_MANPAGES=OFF"
-              "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
-              "-DTENZIR_ENABLE_BUNDLED_FOLLY=OFF"
+              "-DTENZIR_ENABLE_BUNDLED_DEPENDENCIES=OFF"
               "-DTENZIR_PYTHON_DEPENDENCY_WHEELS=${tenzirPythonPkgs.tenzir-wheels}"
               "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
               "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
@@ -373,8 +378,8 @@ let
             ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure = (
-            if isReleaseBuild then
+          preConfigure =
+            (if isReleaseBuild then
               ''
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
               ''
@@ -382,8 +387,7 @@ let
               ''
                 version_build_metadata=$(basename $out | cut -d'-' -f 1)
                 cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              ''
-          );
+              '');
 
           hardeningDisable =
             lib.optionals isStatic [

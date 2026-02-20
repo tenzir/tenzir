@@ -143,7 +143,7 @@ RUN --mount=target=/ccache,type=cache,from=cache-context \
       -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
-      -D TENZIR_ENABLE_BUNDLED_FOLLY:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
@@ -206,7 +206,9 @@ RUN apt-get update && \
       gnupg2 \
       libasan8 \
       libboost-context1.83.0 \
+      libboost-date-time1.83.0 \
       libboost-filesystem1.83.0 \
+      libboost-iostreams1.83.0 \
       libboost-program-options1.83.0 \
       libboost-regex1.83.0 \
       libboost-stacktrace1.83.0 \
@@ -276,7 +278,7 @@ COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-compaction --parallel 1 && \
+    cmake --build build-compaction --parallel && \
     DESTDIR=/plugin/compaction cmake --install build-compaction --component Runtime && \
     rm -rf build-compaction
 

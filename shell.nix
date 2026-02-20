@@ -19,8 +19,10 @@ pkgs.mkShell (
         pkgs.ccache
         pkgs.clang-tools
         pkgs.cmake-format
+        pkgs.gperf
         pkgs.nixfmt-rfc-style
         pkgs.speeve
+        pkgs.libsodium
         pkgs.shfmt
         pkgs.poetry
         pkgs.python3Packages.spdx-tools

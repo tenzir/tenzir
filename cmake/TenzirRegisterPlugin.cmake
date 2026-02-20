@@ -228,6 +228,7 @@ function (TenzirCompileFlatBuffers)
   list(APPEND FBS_SCHEMAS ${included_flatbuffers_schemas})
   list(REMOVE_DUPLICATES FBS_SCHEMAS)
 
+  set(_fbs_outputs "")
   foreach (schema IN LISTS FBS_SCHEMAS)
     get_filename_component(basename ${schema} NAME_WE)
     # The hardcoded path that flatc generates.
@@ -280,11 +281,22 @@ function (TenzirCompileFlatBuffers)
                       DEPENDS "${desired_file}")
     add_dependencies(${FBS_TARGET}
                      "compile-flatbuffers-schema-${FBS_TARGET}-${basename}")
+    list(APPEND _fbs_outputs "${desired_file}")
     set_property(
       TARGET ${FBS_TARGET}
       APPEND
       PROPERTY PUBLIC_HEADER "${desired_file}" "${schema}")
   endforeach ()
+
+  # The INTERFACE library above cannot be built directly (e.g., via
+  # `ninja libtenzir-fbs`), so we add a custom target that only depends
+  # on the generated header files without going through the INTERFACE
+  # library and its link dependencies.
+  add_custom_target(compile-${FBS_TARGET} DEPENDS ${_fbs_outputs})
+  if (NOT TARGET compile-flatbuffers)
+    add_custom_target(compile-flatbuffers)
+  endif ()
+  add_dependencies(compile-flatbuffers compile-${FBS_TARGET})
 
   install(
     TARGETS ${FBS_TARGET}
@@ -784,8 +796,13 @@ function (TenzirRegisterPlugin)
                                                         tenzir::internal)
     TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                  ${PLUGIN_TARGET}-static)
-    TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                                 tenzir::libtenzir_builtins)
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+      TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
+                                   tenzir::libtenzir_builtins)
+    else ()
+      target_link_libraries(${PLUGIN_TARGET}-test
+                            PRIVATE tenzir::libtenzir_builtins)
+    endif ()
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)

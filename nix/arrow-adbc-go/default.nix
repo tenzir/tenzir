@@ -13,7 +13,7 @@ buildGoModule (
       owner = "apache";
       repo = "arrow-adbc";
       rev = "apache-arrow-adbc-21";
-      hash = "sha256-yC4Mn0K/bwUwu765cc6waq+xPbPdOoaKL9z9RtOm+9E=";
+      hash = "sha256-pJ5BGpQWnBzdHVcnfBapAWM/+WUKfL9494FNKDMB3Vw=";
     };
 
     sourceRoot = "source/go/adbc";

@@ -31,7 +31,23 @@
 [submodule "plugins/web/aux/llhttp"]
 	path = plugins/web/aux/llhttp
 	url = https://github.com/nodejs/llhttp.git
-[submodule "libtenzir/aux/folly"]
-	path = libtenzir/aux/folly
-	url = https://github.com/facebook/folly
+[submodule "libtenzir/aux/facebook/folly"]
+	path = libtenzir/aux/facebook/folly
+	url = https://github.com/tenzir/folly
+	shallow = true
+[submodule "libtenzir/aux/facebook/fizz"]
+	path = libtenzir/aux/facebook/fizz
+	url = https://github.com/facebookincubator/fizz
+	shallow = true
+[submodule "libtenzir/aux/facebook/wangle"]
+	path = libtenzir/aux/facebook/wangle
+	url = https://github.com/facebook/wangle
+	shallow = true
+[submodule "libtenzir/aux/facebook/mvfst"]
+	path = libtenzir/aux/facebook/mvfst
+	url = https://github.com/facebook/mvfst
+	shallow = true
+[submodule "libtenzir/aux/facebook/proxygen"]
+	path = libtenzir/aux/facebook/proxygen
+	url = https://github.com/facebook/proxygen.git
 	shallow = true
