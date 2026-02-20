@@ -41,14 +41,10 @@ class aws_iam_refresh_callback final
   : public RdKafka::OAuthBearerTokenRefreshCb {
 public:
   /// Constructs a callback with resolved IAM option inputs.
-  aws_iam_refresh_callback(
-    aws_iam_options options, std::optional<resolved_aws_credentials> creds,
-    std::shared_ptr<oauth_refresh_diagnostics> diagnostics,
-    diagnostic_handler& dh)
-    : options_{std::move(options)},
-      creds_{std::move(creds)},
-      diagnostics_{std::move(diagnostics)},
-      dh_{dh} {
+  aws_iam_refresh_callback(aws_iam_options options,
+                           std::optional<resolved_aws_credentials> creds,
+                           diagnostic_handler& dh)
+    : options_{std::move(options)}, creds_{std::move(creds)}, dh_{dh} {
   }
 
   /// Produces one signed token and installs it on the librdkafka handle.
@@ -81,23 +77,6 @@ public:
       }
       return "default_chain";
     }();
-    auto const set_callback_state
-      = [&](std::string result, std::optional<std::string> failure
-                                = std::nullopt) -> void {
-      if (not diagnostics_) {
-        return;
-      }
-      auto guard = std::scoped_lock{diagnostics_->mutex};
-      diagnostics_->last_result = std::move(result);
-      if (failure) {
-        diagnostics_->last_failure = std::move(*failure);
-      } else {
-        diagnostics_->last_failure.clear();
-      }
-    };
-    if (diagnostics_) {
-      diagnostics_->attempts.fetch_add(1, std::memory_order_relaxed);
-    }
     auto url
       = Aws::Http::URI{fmt::format("https://kafka.{}.amazonaws.com/", region)};
     auto request = Aws::Http::Standard::StandardHttpRequest{
@@ -149,21 +128,12 @@ public:
     }();
 
     auto const report_refresh_failure = [&](std::string reason) -> void {
-      if (diagnostics_) {
-        diagnostics_->failures.fetch_add(1, std::memory_order_relaxed);
-      }
       auto const err = handle->oauthbearer_set_token_failure(reason);
       if (err != RdKafka::ERR_NO_ERROR) {
         diagnostic::warning("failed to report oauth token refresh failure")
           .note("librdkafka error: {}", RdKafka::err2str(err))
           .primary(options_.loc)
           .emit(dh_);
-        set_callback_state("refresh_failed",
-                           fmt::format("{}; oauthbearer_set_token_failure "
-                                       "failed: {}",
-                                       reason, RdKafka::err2str(err)));
-      } else {
-        set_callback_state("refresh_failed", std::move(reason));
       }
     };
 
@@ -205,24 +175,14 @@ public:
     handle->oauthbearer_set_token(encoded, expiration.count(), "Tenzir", {},
                                   errstr);
     if (not errstr.empty()) {
-      if (diagnostics_) {
-        diagnostics_->failures.fetch_add(1, std::memory_order_relaxed);
-      }
-      set_callback_state("set_token_failed",
-                         fmt::format("oauthbearer_set_token: {}", errstr));
       diagnostic::error("failed to set oauth token: {}", errstr).emit(dh_);
       return;
     }
-    if (diagnostics_) {
-      diagnostics_->successes.fetch_add(1, std::memory_order_relaxed);
-    }
-    set_callback_state("token_set");
   }
 
 private:
   aws_iam_options options_;
   std::optional<resolved_aws_credentials> creds_;
-  std::shared_ptr<oauth_refresh_diagnostics> diagnostics_;
   diagnostic_handler& dh_;
 };
 
@@ -426,9 +386,8 @@ auto make_consumer_configuration(record const& options,
   }
 
   if (aws) {
-    cfg.oauth_diagnostics = std::make_shared<oauth_refresh_diagnostics>();
     cfg.oauth_callback = std::make_shared<aws_iam_refresh_callback>(
-      std::move(*aws), std::move(creds), cfg.oauth_diagnostics, dh);
+      std::move(*aws), std::move(creds), dh);
     if (auto err = set_conf_callback(*cfg.conf, "oauthbearer_token_refresh_cb",
                                      cfg.oauth_callback.get());
         err) {

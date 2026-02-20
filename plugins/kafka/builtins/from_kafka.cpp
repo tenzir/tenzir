@@ -763,18 +763,14 @@ private:
     auto& consumer = *source.consumer;
     auto serve_oauth_refresh_callbacks = [&](duration budget) -> void {
       if (not source.consumer_cfg.oauth_callback
-          or not source.consumer_cfg.oauth_diagnostics
           or source.consumer_cfg.oauth_background_callbacks_active) {
         return;
       }
       auto const deadline = std::chrono::steady_clock::now() + budget;
       while (std::chrono::steady_clock::now() < deadline) {
-        if (source.consumer_cfg.oauth_diagnostics->attempts.load(
-              std::memory_order_relaxed)
-            > 0) {
+        if (consumer.poll(50) > 0) {
           return;
         }
-        (void)consumer.poll(50);
       }
     };
     auto oauth_callback_servicing = [&]() -> std::string_view {
@@ -837,33 +833,14 @@ private:
       serve_oauth_refresh_callbacks(1s);
     }
     auto err = query_metadata();
-    if (err != RdKafka::ERR_NO_ERROR and source.consumer_cfg.oauth_diagnostics
-        and not source.consumer_cfg.oauth_background_callbacks_active
-        and source.consumer_cfg.oauth_diagnostics->attempts.load(
-              std::memory_order_relaxed)
-              == 0) {
-      // Poll fallback retry: if no refresh attempt happened yet, give one extra
-      // poll window and retry metadata once before surfacing diagnostics.
+    if (err != RdKafka::ERR_NO_ERROR and source.consumer_cfg.oauth_callback
+        and not source.consumer_cfg.oauth_background_callbacks_active) {
+      // Poll fallback retry: give one extra poll window and retry metadata once
+      // before surfacing diagnostics.
       serve_oauth_refresh_callbacks(1500ms);
       err = query_metadata();
     }
     if (err != RdKafka::ERR_NO_ERROR) {
-      auto oauth_attempts = uint64_t{0};
-      auto oauth_successes = uint64_t{0};
-      auto oauth_failures = uint64_t{0};
-      auto oauth_last_result = std::string{};
-      auto oauth_last_failure = std::string{};
-      auto has_oauth_state = false;
-      if (auto const& oauth_diag = source.consumer_cfg.oauth_diagnostics;
-          oauth_diag) {
-        has_oauth_state = true;
-        oauth_attempts = oauth_diag->attempts.load(std::memory_order_relaxed);
-        oauth_successes = oauth_diag->successes.load(std::memory_order_relaxed);
-        oauth_failures = oauth_diag->failures.load(std::memory_order_relaxed);
-        auto guard = std::scoped_lock{oauth_diag->mutex};
-        oauth_last_result = oauth_diag->last_result;
-        oauth_last_failure = oauth_diag->last_failure;
-      }
       auto out
         = diagnostic::error("failed to query topic metadata for `{}`: {}",
                             args_.topic, RdKafka::err2str(err))
@@ -878,20 +855,6 @@ private:
           out = std::move(out).note(
             "oauth.background_setup={}",
             source.consumer_cfg.oauth_background_setup_note);
-        }
-      }
-      if (has_oauth_state) {
-        out = std::move(out).note("oauth.refresh.attempts={}", oauth_attempts);
-        out
-          = std::move(out).note("oauth.refresh.successes={}", oauth_successes);
-        out = std::move(out).note("oauth.refresh.failures={}", oauth_failures);
-        out = std::move(out).note("oauth.last_result={}",
-                                  oauth_last_result.empty()
-                                    ? std::string_view{"<none>"}
-                                    : std::string_view{oauth_last_result});
-        if (not oauth_last_failure.empty()) {
-          out
-            = std::move(out).note("oauth.last_failure={}", oauth_last_failure);
         }
       }
       if (auth.options and auth.credentials) {
