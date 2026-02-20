@@ -800,8 +800,8 @@ function (TenzirRegisterPlugin)
       TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                    tenzir::libtenzir_builtins)
     else ()
-      target_link_libraries(${PLUGIN_TARGET}-test PRIVATE
-                            tenzir::libtenzir_builtins)
+      target_link_libraries(${PLUGIN_TARGET}-test
+                            PRIVATE tenzir::libtenzir_builtins)
     endif ()
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
