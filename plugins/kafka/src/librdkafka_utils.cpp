@@ -77,6 +77,29 @@ public:
       }
       return "default_chain";
     }();
+    auto emit_credentials_unavailable = [&](std::string_view reason) -> void {
+      auto out
+        = diagnostic::warning("failed to refresh AWS credentials for Kafka IAM")
+            .primary(options_.loc.subloc(0, 1))
+            .note("reason={}", reason)
+            .note("aws_iam.mode={}", auth_mode)
+            .note("aws_iam.region={}", region);
+      if (has_profile) {
+        out = std::move(out).note("aws_iam.profile={}", creds_->profile);
+      }
+      if (has_role) {
+        out = std::move(out).note("aws_iam.assume_role={}", creds_->role);
+        out = std::move(out).hint(
+          "verify the role ARN exists, the source credentials can call "
+          "`sts:AssumeRole`, and the role trust policy allows that principal");
+      } else {
+        out = std::move(out).hint(
+          "verify base credentials resolve (for example with "
+          "`aws sts get-caller-identity`) for the configured profile or "
+          "default chain");
+      }
+      std::move(out).emit(dh_);
+    };
     auto url
       = Aws::Http::URI{fmt::format("https://kafka.{}.amazonaws.com/", region)};
     auto request = Aws::Http::Standard::StandardHttpRequest{
@@ -138,16 +161,12 @@ public:
     };
 
     if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
-      diagnostic::warning("got empty AWS credentials")
-        .primary(options_.loc)
-        .emit(dh_);
+      emit_credentials_unavailable("provider returned empty credentials");
       report_refresh_failure(fmt::format(
         "empty AWS credentials (mode={}, region={})", auth_mode, region));
       return;
     } else if (creds.IsExpired()) {
-      diagnostic::warning("got expired AWS credentials")
-        .primary(options_.loc)
-        .emit(dh_);
+      emit_credentials_unavailable("provider returned expired credentials");
       report_refresh_failure(fmt::format(
         "expired AWS credentials (mode={}, region={})", auth_mode, region));
       return;

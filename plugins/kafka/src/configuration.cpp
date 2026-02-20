@@ -40,6 +40,27 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   // Use resolved region from creds_ since options_.region is a secret.
   TENZIR_ASSERT(creds_ and not creds_->region.empty());
   const auto& region = creds_->region;
+  const auto has_explicit_creds = not creds_->access_key_id.empty();
+  const auto has_profile = not creds_->profile.empty();
+  const auto has_role = not creds_->role.empty();
+  const auto auth_mode = [&]() -> const char* {
+    if (has_explicit_creds and has_role) {
+      return "explicit+assume_role";
+    }
+    if (has_profile and has_role) {
+      return "profile+assume_role";
+    }
+    if (has_role) {
+      return "default+assume_role";
+    }
+    if (has_explicit_creds) {
+      return "explicit";
+    }
+    if (has_profile) {
+      return "profile";
+    }
+    return "default_chain";
+  }();
   const auto url = Aws::Http::URI{
     fmt::format("https://kafka.{}.amazonaws.com/", region),
   };
@@ -101,14 +122,48 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
       }
       return base_credentials;
     });
+  const auto emit_credentials_unavailable = [&](std::string_view reason) {
+    auto out
+      = diagnostic::warning("failed to refresh AWS credentials for Kafka IAM")
+          .primary(options_.loc.subloc(0, 1))
+          .note("reason={}", reason)
+          .note("aws_iam.mode={}", auth_mode)
+          .note("aws_iam.region={}", region);
+    if (has_profile) {
+      out = std::move(out).note("aws_iam.profile={}", creds_->profile);
+    }
+    if (has_role) {
+      out = std::move(out).note("aws_iam.assume_role={}", creds_->role);
+      out = std::move(out).hint(
+        "verify the role ARN exists, the source credentials can call "
+        "`sts:AssumeRole`, and the role trust policy allows that principal");
+    } else {
+      out = std::move(out).hint(
+        "verify base credentials resolve (for example with "
+        "`aws sts get-caller-identity`) for the configured profile or "
+        "default chain");
+    }
+    std::move(out).emit(dh_);
+  };
+  const auto report_refresh_failure = [&](std::string_view reason) {
+    auto err = handle->oauthbearer_set_token_failure(std::string{reason});
+    if (err != RdKafka::ERR_NO_ERROR) {
+      diagnostic::warning("failed to report oauth token refresh failure")
+        .note("librdkafka error: {}", RdKafka::err2str(err))
+        .primary(options_.loc.subloc(0, 1))
+        .emit(dh_);
+    }
+  };
   if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
-    diagnostic::warning("got empty AWS credentials")
-      .primary(options_.loc)
-      .emit(dh_);
+    emit_credentials_unavailable("provider returned empty credentials");
+    report_refresh_failure(fmt::format(
+      "empty AWS credentials (mode={}, region={})", auth_mode, region));
+    return;
   } else if (creds.IsExpired()) {
-    diagnostic::warning("got expired AWS credentials")
-      .primary(options_.loc)
-      .emit(dh_);
+    emit_credentials_unavailable("provider returned expired credentials");
+    report_refresh_failure(fmt::format(
+      "expired AWS credentials (mode={}, region={})", auth_mode, region));
+    return;
   }
   request.AddQueryStringParameter("Action", "kafka-cluster:Connect");
   const auto signer = Aws::Client::AWSAuthV4Signer{

@@ -864,13 +864,24 @@ private:
         out
           = std::move(out).note("aws_iam.mode={}", auth_mode(auth.credentials));
         out = std::move(out).note("aws_iam.region={}", region);
+        if (not auth.credentials->profile.empty()) {
+          out = std::move(out).note("aws_iam.profile={}",
+                                    auth.credentials->profile);
+        }
+        if (not auth.credentials->role.empty()) {
+          out = std::move(out).note("aws_iam.assume_role={}",
+                                    auth.credentials->role);
+        }
         std::move(out)
-          .hint("this usually indicates broker reachability, TLS, or SASL auth "
-                "failure before metadata fetch")
+          .hint("verify bootstrap broker reachability, TLS trust/cert setup, "
+                "and IAM/SASL settings (region, mechanism, and assume-role "
+                "inputs)")
           .emit(ctx);
       } else {
         std::move(out)
-          .hint("check broker reachability, TLS, or SASL auth")
+          .hint("verify bootstrap broker reachability and that "
+                "`security.protocol`/`sasl.mechanism` match broker "
+                "requirements")
           .emit(ctx);
       }
       return std::nullopt;
