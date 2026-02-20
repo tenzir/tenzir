@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-: "${AWS_SDK_CPP_TAG=1.11.449}"
+: "${AWS_SDK_CPP_TAG=1.11.754}"
 : "${AWS_SDK_CPP_VERSION=$(printf '%s' "$AWS_SDK_CPP_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
