@@ -95,6 +95,8 @@ public:
   explicit(false) operator base_ctx();
 
   virtual auto actor_system() -> caf::actor_system& = 0;
+  /// Returns the diagnostic handler. The returned handler is guaranteed to be
+  /// thread-safe.
   virtual auto dh() -> diagnostic_handler& = 0;
   virtual auto reg() -> const registry& = 0;
   virtual auto resolve_secrets(std::vector<secret_request> requests)
@@ -134,6 +136,15 @@ enum class OperatorState {
   done,
 };
 
+enum class FinalizeBehavior {
+  /// The operator is done.
+  done,
+  /// The operator is draining and will manually set the state
+  /// to `done` when finished. The operator is responsible for
+  /// switching to `done` within a bounded amount of time.
+  continue_,
+};
+
 template <class Input, class Output>
 class OperatorInputOutputBase {
 public:
@@ -170,9 +181,10 @@ public:
   }
 
   /// Called once at end-of-stream. See file-level docs.
-  virtual auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<void> {
+  virtual auto finalize(Push<Output>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> {
     TENZIR_UNUSED(push, ctx);
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   /// Process the result of a spawned subpipeline in a *thread-safe* way.
@@ -210,9 +222,9 @@ public:
     co_return;
   }
 
-  virtual auto finalize(OpCtx& ctx) -> Task<void> {
+  virtual auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
     TENZIR_UNUSED(ctx);
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)

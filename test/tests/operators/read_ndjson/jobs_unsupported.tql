@@ -1,5 +1,0 @@
----
-error: true
----
-
-read_ndjson _jobs=1

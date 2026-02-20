@@ -267,9 +267,9 @@ public:
     co_return;
   }
 
-  auto finalize(OpCtx&) -> Task<void> override {
+  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
     flush_and_close();
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   auto state() -> OperatorState override {

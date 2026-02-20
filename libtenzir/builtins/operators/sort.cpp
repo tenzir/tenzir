@@ -551,10 +551,11 @@ public:
     co_return;
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     if (indices_.empty()) {
-      co_return;
+      co_return FinalizeBehavior::done;
     }
     // TODO: If all chunks evaluate to the same type, we can choose a faster
     // path where we do not need to evaluate the key's type for each row
@@ -603,6 +604,7 @@ public:
     if (not batch.empty()) {
       co_await push(concatenate(std::move(batch)));
     }
+    co_return FinalizeBehavior::done;
   }
 
 private:

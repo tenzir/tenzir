@@ -724,15 +724,17 @@ private:
       });
   }
 
-  auto call_finalize() -> Task<void> {
-    co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+  auto call_finalize() -> Task<FinalizeBehavior> {
+    co_return co_await co_match(
+      op_,
+      [&]<class In, class Out>(
+        Box<Operator<In, Out>>& op) -> Task<FinalizeBehavior> {
         if constexpr (std::same_as<Out, void>) {
-          co_await op->finalize(*this);
+          co_return co_await op->finalize(*this);
         } else {
           auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
           auto wrapper = OpPushWrapper{push};
-          co_await op->finalize(wrapper, *this);
+          co_return co_await op->finalize(wrapper, *this);
         }
       });
   }
@@ -1058,8 +1060,13 @@ private:
     if (not input_is_void_) {
       co_await to_control_.send(ToControl::no_more_input);
     }
+    // auto behavior = co_await call_finalize_behavior();
     // Then finalize the operator, which can still produce output.
-    co_await call_finalize();
+    auto b = co_await call_finalize();
+    if (b == FinalizeBehavior::continue_) {
+      is_done_ = false;
+      co_return;
+    }
     // Tell all subpipelines to shut down. Note that the previous step could
     // have still pushed data into them. The main loop continues running to
     // drain remaining subpipeline output and collect SubPipelineFinished

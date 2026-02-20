@@ -365,7 +365,8 @@ public:
     }
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     // Emit any remaining buffered data as the final line.
     if (not buffer_.empty()) {
       emit_line(buffer_, ctx);
@@ -375,6 +376,7 @@ public:
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.line"));
     }
+    co_return FinalizeBehavior::done;
   }
 
   auto snapshot(Serde& serde) -> void override {

@@ -249,7 +249,8 @@ public:
     -> Task<void> final;
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> final;
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> final;
   auto state() -> OperatorState final;
   auto snapshot(Serde& serde) -> void final;
   auto post_commit(OpCtx& ctx) -> Task<void> final;
