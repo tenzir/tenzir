@@ -44,7 +44,6 @@ support_for_partition_version(uint64_t partition_version) noexcept {
 namespace build {
 
 const char* type = "@TENZIR_BUILD_TYPE@";
-const char* tree_hash = "@TENZIR_BUILD_TREE_HASH@";
 
 #undef TENZIR_ENABLE_ASSERTIONS
 #cmakedefine01 TENZIR_ENABLE_ASSERTIONS

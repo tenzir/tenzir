@@ -92,6 +92,10 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
                                                "MinSizeRel" "RelWithDebInfo")
 endif ()
 
+# Avoid relinking dependents of shared libraries if only the internal
+# implementation changed.
+set(CMAKE_LINK_DEPENDS_NO_SHARED ON)
+
 # -- includes ------------------------------------------------------------------
 
 include(CMakeDependentOption)

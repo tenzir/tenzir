@@ -27,7 +27,6 @@ record retrieve_versions(const record& cfg) {
   result["Tenzir"] = version::version;
   result["Build Configuration"] = record{
     {"Type", version::build::type},
-    {"Tree Hash", version::build::tree_hash},
     {"Assertions", version::build::has_assertions},
     {"Address Sanitizer", version::build::has_address_sanitizer},
     {"Undefined Behavior Sanitizer",
