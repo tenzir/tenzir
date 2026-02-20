@@ -46,8 +46,7 @@ pkgs.mkShell (
       ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
         # Make clang available as alternative compiler when it isn't the default.
         pkgs.clang
-        # Bintools come with a wrapped lld for faster linking.
-        pkgs.llvmPackages.bintools
+        pkgs.mold
       ]
       ++ lib.optionals pkgs.stdenv.isLinux [
         # Temporarily only on Linux.
