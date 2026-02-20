@@ -55,6 +55,27 @@ public:
     // so this callback relies on that process-level initialization contract.
     TENZIR_ASSERT(creds_ and not creds_->region.empty());
     auto const& region = creds_->region;
+    auto const has_explicit_creds = not creds_->access_key_id.empty();
+    auto const has_profile = not creds_->profile.empty();
+    auto const has_role = not creds_->role.empty();
+    auto const auth_mode = [&]() -> const char* {
+      if (has_explicit_creds and has_role) {
+        return "explicit+assume_role";
+      }
+      if (has_profile and has_role) {
+        return "profile+assume_role";
+      }
+      if (has_role) {
+        return "default+assume_role";
+      }
+      if (has_explicit_creds) {
+        return "explicit";
+      }
+      if (has_profile) {
+        return "profile";
+      }
+      return "default_chain";
+    }();
     auto url
       = Aws::Http::URI{fmt::format("https://kafka.{}.amazonaws.com/", region)};
     auto request = Aws::Http::Standard::StandardHttpRequest{
@@ -93,14 +114,31 @@ public:
       return base_provider;
     }();
 
+    auto const report_refresh_failure = [&](std::string_view reason) -> void {
+      auto const err
+        = handle->oauthbearer_set_token_failure(std::string{reason});
+      if (err != RdKafka::ERR_NO_ERROR) {
+        diagnostic::warning("failed to report oauth token refresh failure")
+          .note("librdkafka error: {}", RdKafka::err2str(err))
+          .primary(options_.loc)
+          .emit(dh_);
+      }
+    };
+
     if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
       diagnostic::warning("got empty AWS credentials")
         .primary(options_.loc)
         .emit(dh_);
+      report_refresh_failure(fmt::format(
+        "empty AWS credentials (mode={}, region={})", auth_mode, region));
+      return;
     } else if (creds.IsExpired()) {
       diagnostic::warning("got expired AWS credentials")
         .primary(options_.loc)
         .emit(dh_);
+      report_refresh_failure(fmt::format(
+        "expired AWS credentials (mode={}, region={})", auth_mode, region));
+      return;
     }
 
     request.AddQueryStringParameter("Action", "kafka-cluster:Connect");
