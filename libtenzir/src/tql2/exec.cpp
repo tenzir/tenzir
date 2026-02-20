@@ -913,7 +913,6 @@ struct ProfileSample {
   struct Channel {
     std::string name;
     element_type_tag type;
-    size_t current_bytes;
     size_t bytes_in;
     size_t bytes_out;
     size_t batches_in;
@@ -1161,10 +1160,13 @@ void write_profile(
         agg.batches_in += ch.batches_in;
         agg.events_in += ch.events_in;
         agg.signals_in += ch.signals_in;
-        agg.buffer_bytes += ch.current_bytes;
-        agg.buffer_batches += ch.batches_in - ch.batches_out;
+        auto clamp_sub = [](size_t a, size_t b) {
+          return a >= b ? a - b : 0;
+        };
+        agg.buffer_bytes += clamp_sub(ch.bytes_in, ch.bytes_out);
+        agg.buffer_batches += clamp_sub(ch.batches_in, ch.batches_out);
         if (is_events) {
-          agg.buffer_events += ch.events_in - ch.events_out;
+          agg.buffer_events += clamp_sub(ch.events_in, ch.events_out);
         }
         agg.has_events_out |= is_events;
         agg.has_bytes_out |= is_bytes;
@@ -1426,14 +1428,11 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
         }
         auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
         for (auto& p : channel_profiles) {
-          auto bi = p.stats->in.bytes.load(std::memory_order::relaxed);
-          auto bo = p.stats->out.bytes.load(std::memory_order::relaxed);
           sample.channels.push_back({
             p.id.value,
             p.type,
-            bi >= bo ? bi - bo : 0,
-            bi,
-            bo,
+            p.stats->in.bytes.load(std::memory_order::relaxed),
+            p.stats->out.bytes.load(std::memory_order::relaxed),
             p.stats->in.batches.load(std::memory_order::relaxed),
             p.stats->out.batches.load(std::memory_order::relaxed),
             p.stats->in.events.load(std::memory_order::relaxed),
