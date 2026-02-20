@@ -225,6 +225,10 @@ public:
   virtual void emit_metrics(std::span<const metrics_snapshot_entry>) {
   }
 
+  auto metrics() const -> std::shared_ptr<pipeline_metrics> const& {
+    return metrics_;
+  }
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
@@ -232,6 +236,10 @@ protected:
     = 0;
 
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
+
+private:
+  std::shared_ptr<pipeline_metrics> metrics_
+    = std::make_shared<pipeline_metrics>();
 };
 
 /// A diagnostic handler that is guaranteed to be thread-safe.
@@ -265,7 +273,6 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Box<Push<OperatorMsg<Output>>> push_downstream,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-               DiagHandler& dh, std::shared_ptr<pipeline_metrics> metrics = {})
-  -> Task<void>;
+               DiagHandler& dh) -> Task<void>;
 
 } // namespace tenzir
