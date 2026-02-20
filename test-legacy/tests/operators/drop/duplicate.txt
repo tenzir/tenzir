@@ -1,7 +1,7 @@
 {
   d: 3,
 }
-warning: fields may only be dropped once
+warning: field `a` may only be dropped once
  --> tests/operators/drop/duplicate.tql:8:6
   |
 8 | drop a, a

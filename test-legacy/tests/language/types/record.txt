@@ -101,6 +101,7 @@ warning: record does not have this field
 15 |   index_str = xs["foo"],
    |                  ~~~~~ 
    |
+   = note: field name is `foo`
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
@@ -109,6 +110,7 @@ warning: record does not have this field
 16 |   get_str = xs.get("foo"),
    |                    ~~~~~ 
    |
+   = note: field name is `foo`
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
@@ -117,6 +119,7 @@ warning: record does not have this field
 18 |   get_field = xs.foo,
    |                  ~~~ 
    |
+   = note: field name is `foo`
    = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
@@ -157,6 +160,7 @@ warning: tried to access field of `null`
 15 |   index_str = xs["foo"],
    |                  ~~~~~ 
    |
+   = note: field name is `foo`
    = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
@@ -165,6 +169,7 @@ warning: tried to access field of `null`
 16 |   get_str = xs.get("foo"),
    |                    ~~~~~ 
    |
+   = note: field name is `foo`
    = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
@@ -173,6 +178,7 @@ warning: tried to access field of `null`
 18 |   get_field = xs.foo,
    |                  ~~~ 
    |
+   = note: field name is `foo`
    = hint: append `?` to suppress this warning
 
 warning: expected `record` or `list`
@@ -208,6 +214,7 @@ warning: cannot access field of non-record type
 15 |   index_str = xs["foo"],
    |               -- type `string`
    |
+   = note: field name is `foo`
 
 warning: cannot access field of non-record type
   --> tests/language/types/record.tql:16:20
@@ -218,6 +225,7 @@ warning: cannot access field of non-record type
 16 |   get_str = xs.get("foo"),
    |             -- type `string`
    |
+   = note: field name is `foo`
 
 warning: cannot access field of non-record type
   --> tests/language/types/record.tql:17:29
@@ -228,6 +236,7 @@ warning: cannot access field of non-record type
 17 |   get_str_fallback = xs.get("foo", -1),
    |                      -- type `string`
    |
+   = note: field name is `foo`
 
 warning: cannot access field of non-record type
   --> tests/language/types/record.tql:18:18
@@ -238,6 +247,7 @@ warning: cannot access field of non-record type
 18 |   get_field = xs.foo,
    |               -- type `string`
    |
+   = note: field name is `foo`
 
 warning: cannot access field of non-record type
   --> tests/language/types/record.tql:19:27
@@ -248,3 +258,4 @@ warning: cannot access field of non-record type
 19 |   get_field_lenient = xs.?foo,
    |                       -- type `string`
    |
+   = note: field name is `foo`

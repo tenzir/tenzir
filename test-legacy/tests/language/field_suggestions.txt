@@ -67,6 +67,7 @@ warning: record does not have this field
 28 |   field_close1 = user.usernam,
    |                       ~~~~~~~ 
    |
+   = note: field name is `usernam`
    = hint: did you mean `username`?
    = hint: append `?` to suppress this warning
 
@@ -76,6 +77,7 @@ warning: record does not have this field
 29 |   field_close2 = user.email_addres,
    |                       ~~~~~~~~~~~~ 
    |
+   = note: field name is `email_addres`
    = hint: did you mean `email_address`?
    = hint: append `?` to suppress this warning
 
@@ -85,6 +87,7 @@ warning: record does not have this field
 32 |   field_distant1 = user.abc,
    |                         ~~~ 
    |
+   = note: field name is `abc`
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
@@ -93,6 +96,7 @@ warning: record does not have this field
 33 |   field_distant2 = user.qwerty,
    |                         ~~~~~~ 
    |
+   = note: field name is `qwerty`
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
@@ -101,6 +105,7 @@ warning: record does not have this field
 36 |   index_close1 = this["src_i"],
    |                       ~~~~~~~ 
    |
+   = note: field name is `src_i`
    = hint: did you mean `src_ip`?
    = hint: append `?` to suppress this warning
 
@@ -110,6 +115,7 @@ warning: record does not have this field
 37 |   index_close2 = this["dest_por"],
    |                       ~~~~~~~~~~ 
    |
+   = note: field name is `dest_por`
    = hint: did you mean `dest_port`?
    = hint: append `?` to suppress this warning
 
@@ -119,6 +125,7 @@ warning: record does not have this field
 38 |   index_close3 = user["usernam"],
    |                       ~~~~~~~~~ 
    |
+   = note: field name is `usernam`
    = hint: did you mean `username`?
    = hint: append `?` to suppress this warning
 
@@ -128,6 +135,7 @@ warning: record does not have this field
 39 |   index_close4 = user["email_addres"],
    |                       ~~~~~~~~~~~~~~ 
    |
+   = note: field name is `email_addres`
    = hint: did you mean `email_address`?
    = hint: append `?` to suppress this warning
 
@@ -137,6 +145,7 @@ warning: record does not have this field
 42 |   index_distant1 = this["xyz"],
    |                         ~~~~~ 
    |
+   = note: field name is `xyz`
    = hint: append `?` to suppress this warning
 
 warning: record does not have this field
@@ -145,4 +154,5 @@ warning: record does not have this field
 43 |   index_distant2 = user["abc123"],
    |                         ~~~~~~~~ 
    |
+   = note: field name is `abc123`
    = hint: append `?` to suppress this warning

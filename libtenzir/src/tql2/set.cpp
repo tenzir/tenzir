@@ -367,7 +367,8 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
           const auto resolved_exhausted = r == resolved.end();
           if (offset_exhausted and resolved_exhausted) {
             if (warn_for_duplicates) {
-              diagnostic::warning("fields may only be dropped once")
+              diagnostic::warning("field `{}` may only be dropped once",
+                                  field.path().back().id.name)
                 .primary(offset)
                 .primary(field)
                 .emit(dh);

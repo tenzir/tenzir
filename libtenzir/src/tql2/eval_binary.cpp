@@ -670,6 +670,7 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
                                 "and `{}`",
                                 x.op.inner, left.type.kind(), right.type.kind())
               .primary(x)
+              .hint("the result of this expression is `null`")
               .emit(self.ctx());
             return series::null(null_type{}, left.length());
           }
@@ -692,6 +693,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
       if (not is<null_type>(left.type)) {
         diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
           .primary(x.left)
+          .hint("the result of this expression is `null`")
           .emit(self.ctx());
       }
     }
@@ -711,6 +713,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
           diagnostic::warning("expected `bool`, but got `{}`",
                               right.type.kind())
             .primary(x.right)
+            .hint("the result of this expression is `null`")
             .emit(self.ctx());
         }
         check(builder.AppendNulls(right.length()));
@@ -758,6 +761,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
           diagnostic::warning("expected `bool`, but got `{}`",
                               right.type.kind())
             .primary(x.right)
+            .hint("the result of this expression is `null`")
             .emit(self.ctx());
         }
         check(builder.AppendNulls(right.length()));
@@ -813,6 +817,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
       if (not typed_right) {
         diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
           .primary(x.right)
+          .hint("this will be treated as `false`")
           .emit(self.ctx());
         return self.slice(right_begin, right_end).eval(fallback);
       }
@@ -822,6 +827,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
       if (typed_right->array->null_count() > 0) {
         diagnostic::warning("expected `bool`, but got `null`")
           .primary(x.right)
+          .hint("use `else` to provide a fallback value")
           .emit(self.ctx());
       }
       if (typed_right->array->true_count() == 0) {

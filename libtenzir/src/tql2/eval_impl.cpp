@@ -211,6 +211,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       if (not x.suppress_warnings()) {
         diagnostic::warning("tried to access field of `null`")
           .primary(x.name)
+          .note("field name is `{}`", x.name.name)
           .hint("append `?` to suppress this warning")
           .emit(ctx_);
       }
@@ -221,6 +222,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       diagnostic::warning("cannot access field of non-record type")
         .primary(x.name)
         .secondary(x.left, "type `{}`", l.type.kind())
+        .note("field name is `{}`", x.name.name)
         .emit(ctx_);
       return series::null(null_type{}, l.length());
     }
@@ -230,6 +232,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       if (has_null and not x.suppress_warnings()) {
         diagnostic::warning("tried to access field of `null`")
           .primary(x.name)
+          .note("field name is `{}`", x.name.name)
           .hint("append `?` to suppress this warning")
           .emit(ctx_);
         return series{
@@ -246,6 +249,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     if (not x.suppress_warnings()) {
       diagnostic::warning("record does not have this field")
         .primary(x.name)
+        .note("field name is `{}`", x.name.name)
         .compose([&](auto&& d) {
           auto suggestion = suggest_field_name(x.name.name, rec_ty);
           return suggestion
@@ -409,7 +413,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         }
         if (warn_null_record and not x.has_question_mark) {
           diagnostic::warning("tried to access field of `null`")
-            .primary(x.expr)
+            .primary(x.expr, "null")
             .compose(add_suppress_hint)
             .emit(ctx_);
         }
