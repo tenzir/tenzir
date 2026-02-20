@@ -7,6 +7,17 @@
   forceClang ? false,
 }:
 rec {
+  ccacheExtraConfig = ''
+    export CCACHE_COMPRESS=1
+    export CCACHE_UMASK=007
+    if [ -w /var/cache/ccache ] || (mkdir -p /var/cache/ccache 2>/dev/null && [ -w /var/cache/ccache ]); then
+      export CCACHE_DIR=/var/cache/ccache
+    else
+      export CCACHE_DIR=''${TMPDIR:-/tmp}/ccache
+      mkdir -p "$CCACHE_DIR"
+    fi
+  '';
+
   excluded-integration-tests = lib.fileset.unions [
     # plugins not available in the Nix build.
     ../test/tests/operators/from_sentinelone_data_lake
@@ -29,11 +40,8 @@ rec {
     ../test/tests/operators/from_zmq/plain_read_json.tql
     ../test/tests/operators/from_zmq/prefix_read_json.tql
   ];
-  integration-test-tree = lib.fileset.difference
-    (lib.fileset.unions [
-      ../test
-    ])
-    excluded-integration-tests;
+  integration-test-tree = lib.fileset.difference ../test excluded-integration-tests;
+
   tenzir-tree = lib.fileset.unions [
     ../changelog
     ../cmake
@@ -109,6 +117,10 @@ rec {
       canUseMold = false; # linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
       linkAdapter = if canUseMold then linkPkgs.stdenvAdapters.useMoldLinker else lib.trivial.id;
       tenzirStdenv = linkAdapter baseStdenv;
+      tenzirCcacheStdenv = linkPkgs.ccacheStdenv.override {
+        stdenv = if forceClang then linkPkgs.clangStdenv else linkPkgs.stdenv;
+        extraConfig = ccacheExtraConfig;
+      };
       tenzir-de = linkPkgs.callPackage ./tenzir {
         inherit
           tenzir-source
@@ -116,7 +128,7 @@ rec {
           toImageFn
           isReleaseBuild
           ;
-        stdenv = tenzirStdenv;
+        stdenv = tenzirCcacheStdenv;
         caf = linkPkgs.caf.override {
           stdenv = tenzirStdenv;
         };
