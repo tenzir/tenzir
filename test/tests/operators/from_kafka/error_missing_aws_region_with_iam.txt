@@ -1,0 +1,6 @@
+error: `aws_region` is required for Kafka MSK authentication
+ --> tests/operators/from_kafka/error_missing_aws_region_with_iam.tql:6:20
+  |
+6 |            aws_iam={
+  |                    ^ 
+  |
