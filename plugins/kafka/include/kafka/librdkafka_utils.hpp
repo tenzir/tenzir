@@ -43,6 +43,16 @@ struct consumer_configuration {
   std::shared_ptr<oauth_refresh_diagnostics> oauth_diagnostics;
   std::shared_ptr<RdKafka::EventCb> event_callback;
   std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
+  // `enable_sasl_queue(true)` is configured on `Conf` before consumer
+  // creation. This is required to later attach OAUTH callback servicing to
+  // librdkafka's background thread.
+  bool oauth_sasl_queue_enabled = false;
+  // Set to true only after `sasl_background_callbacks_enable()` succeeds on
+  // the created consumer handle.
+  bool oauth_background_callbacks_active = false;
+  // Human-readable setup detail used by metadata diagnostics when we fall back
+  // to poll-driven callback servicing.
+  std::string oauth_background_setup_note;
 };
 
 /// Creates a consumer configuration from static options plus callback setup.

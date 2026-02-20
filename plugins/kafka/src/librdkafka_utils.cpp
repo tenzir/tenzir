@@ -434,6 +434,18 @@ auto make_consumer_configuration(record const& options,
         err) {
       return err;
     }
+    auto errstr = std::string{};
+    // Prefer servicing OAUTH refresh callbacks on librdkafka's background
+    // thread. This keeps metadata/bootstrap calls from depending on manual
+    // `poll()` progress. We still keep poll-based servicing as a fallback.
+    auto queue_result = cfg.conf->enable_sasl_queue(true, errstr);
+    if (queue_result == RdKafka::Conf::ConfResult::CONF_OK) {
+      cfg.oauth_sasl_queue_enabled = true;
+    } else {
+      cfg.oauth_background_setup_note
+        = fmt::format("enable_sasl_queue(true) failed: {}",
+                      errstr.empty() ? std::string{"<no detail>"} : errstr);
+    }
   }
 
   return cfg;

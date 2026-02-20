@@ -731,6 +731,27 @@ private:
       .consumer = Box<RdKafka::KafkaConsumer>::from_unique_ptr(
         std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}),
     };
+    if (source_consumer.consumer_cfg.oauth_callback) {
+      if (source_consumer.consumer_cfg.oauth_sasl_queue_enabled) {
+        // Primary path: once the SASL queue was enabled on the configuration,
+        // bind it to librdkafka's background queue so OAUTH refresh callbacks
+        // progress independently from explicit `poll()` calls.
+        auto* err
+          = source_consumer.consumer->sasl_background_callbacks_enable();
+        if (err == nullptr) {
+          source_consumer.consumer_cfg.oauth_background_callbacks_active = true;
+        } else {
+          auto err_guard = std::unique_ptr<RdKafka::Error>{err};
+          source_consumer.consumer_cfg.oauth_background_setup_note
+            = fmt::format("sasl_background_callbacks_enable failed: {}",
+                          err_guard->str());
+        }
+      } else if (source_consumer.consumer_cfg.oauth_background_setup_note
+                   .empty()) {
+        source_consumer.consumer_cfg.oauth_background_setup_note
+          = "sasl queue is disabled";
+      }
+    }
     co_return source_consumer;
   }
 
@@ -742,7 +763,8 @@ private:
     auto& consumer = *source.consumer;
     auto serve_oauth_refresh_callbacks = [&](duration budget) -> void {
       if (not source.consumer_cfg.oauth_callback
-          or not source.consumer_cfg.oauth_diagnostics) {
+          or not source.consumer_cfg.oauth_diagnostics
+          or source.consumer_cfg.oauth_background_callbacks_active) {
         return;
       }
       auto const deadline = std::chrono::steady_clock::now() + budget;
@@ -754,6 +776,15 @@ private:
         }
         (void)consumer.poll(50);
       }
+    };
+    auto oauth_callback_servicing = [&]() -> std::string_view {
+      if (not source.consumer_cfg.oauth_callback) {
+        return "disabled";
+      }
+      if (source.consumer_cfg.oauth_background_callbacks_active) {
+        return "background";
+      }
+      return "poll_fallback";
     };
     auto conf_value = [&](std::string_view key) -> std::string {
       if (not source.consumer_cfg.conf) {
@@ -797,14 +828,22 @@ private:
       metadata = nullptr;
       return consumer.metadata(false, nullptr, &metadata, 5000);
     };
-    serve_oauth_refresh_callbacks(1s);
+    // Primary path: background callbacks are already active and refresh happens
+    // on librdkafka's background thread. Fallback path: when background setup
+    // is unavailable, drive callback progress with short manual polls before
+    // metadata queries so the first token can still be minted in time.
+    if (source.consumer_cfg.oauth_callback
+        and not source.consumer_cfg.oauth_background_callbacks_active) {
+      serve_oauth_refresh_callbacks(1s);
+    }
     auto err = query_metadata();
     if (err != RdKafka::ERR_NO_ERROR and source.consumer_cfg.oauth_diagnostics
+        and not source.consumer_cfg.oauth_background_callbacks_active
         and source.consumer_cfg.oauth_diagnostics->attempts.load(
               std::memory_order_relaxed)
               == 0) {
-      // OAUTHBEARER callbacks are poll-driven. If no callback attempt happened
-      // yet, give librdkafka another short poll window before one retry.
+      // Poll fallback retry: if no refresh attempt happened yet, give one extra
+      // poll window and retry metadata once before surfacing diagnostics.
       serve_oauth_refresh_callbacks(1500ms);
       err = query_metadata();
     }
@@ -825,51 +864,48 @@ private:
         oauth_last_result = oauth_diag->last_result;
         oauth_last_failure = oauth_diag->last_failure;
       }
-      auto diag
+      auto out
         = diagnostic::error("failed to query topic metadata for `{}`: {}",
                             args_.topic, RdKafka::err2str(err))
             .note("bootstrap.servers={}", conf_value("bootstrap.servers"))
             .note("security.protocol={}", conf_value("security.protocol"))
             .note("sasl.mechanism={}", conf_value("sasl.mechanism"))
             .note("client.id={}", conf_value("client.id"));
+      if (source.consumer_cfg.oauth_callback) {
+        out = std::move(out).note("oauth.callback_servicing={}",
+                                  oauth_callback_servicing());
+        if (not source.consumer_cfg.oauth_background_setup_note.empty()) {
+          out = std::move(out).note(
+            "oauth.background_setup={}",
+            source.consumer_cfg.oauth_background_setup_note);
+        }
+      }
+      if (has_oauth_state) {
+        out = std::move(out).note("oauth.refresh.attempts={}", oauth_attempts);
+        out
+          = std::move(out).note("oauth.refresh.successes={}", oauth_successes);
+        out = std::move(out).note("oauth.refresh.failures={}", oauth_failures);
+        out = std::move(out).note("oauth.last_result={}",
+                                  oauth_last_result.empty()
+                                    ? std::string_view{"<none>"}
+                                    : std::string_view{oauth_last_result});
+        if (not oauth_last_failure.empty()) {
+          out
+            = std::move(out).note("oauth.last_failure={}", oauth_last_failure);
+        }
+      }
       if (auth.options and auth.credentials) {
         auto const region = auth.credentials->region.empty()
                               ? "<unset>"
                               : auth.credentials->region;
-        auto out = std::move(diag).note("aws_iam mode={}, region={}",
-                                        auth_mode(auth.credentials), region);
-        if (has_oauth_state) {
-          out = std::move(out).note(
-            "oauth.refresh.attempts={}, successes={}, failures={}",
-            oauth_attempts, oauth_successes, oauth_failures);
-          out = std::move(out).note("oauth.last_result={}",
-                                    oauth_last_result.empty()
-                                      ? std::string_view{"<none>"}
-                                      : std::string_view{oauth_last_result});
-          if (not oauth_last_failure.empty()) {
-            out = std::move(out).note("oauth.last_failure={}",
-                                      oauth_last_failure);
-          }
-        }
+        out
+          = std::move(out).note("aws_iam.mode={}", auth_mode(auth.credentials));
+        out = std::move(out).note("aws_iam.region={}", region);
         std::move(out)
           .hint("this usually indicates broker reachability, TLS, or SASL auth "
                 "failure before metadata fetch")
           .emit(ctx);
       } else {
-        auto out = std::move(diag);
-        if (has_oauth_state) {
-          out = std::move(out).note(
-            "oauth.refresh.attempts={}, successes={}, failures={}",
-            oauth_attempts, oauth_successes, oauth_failures);
-          out = std::move(out).note("oauth.last_result={}",
-                                    oauth_last_result.empty()
-                                      ? std::string_view{"<none>"}
-                                      : std::string_view{oauth_last_result});
-          if (not oauth_last_failure.empty()) {
-            out = std::move(out).note("oauth.last_failure={}",
-                                      oauth_last_failure);
-          }
-        }
         std::move(out)
           .hint("check broker reachability, TLS, or SASL auth")
           .emit(ctx);
