@@ -42,6 +42,13 @@ struct consumer_configuration {
   std::string oauth_background_setup_note;
 };
 
+/// Owns librdkafka producer config and callback objects with shared lifetime.
+struct producer_configuration {
+  std::shared_ptr<RdKafka::Conf> conf;
+  std::shared_ptr<RdKafka::OAuthBearerTokenRefreshCb> oauth_callback;
+  std::shared_ptr<RdKafka::EventCb> event_callback;
+};
+
 /// Creates a consumer configuration from static options plus callback setup.
 auto make_consumer_configuration(record const& options,
                                  std::optional<aws_iam_options> aws,
@@ -49,9 +56,23 @@ auto make_consumer_configuration(record const& options,
                                  int64_t offset, diagnostic_handler& dh)
   -> caf::expected<consumer_configuration>;
 
+/// Creates a producer configuration from static options plus callback setup.
+auto make_producer_configuration(record const& options,
+                                 std::optional<aws_iam_options> aws,
+                                 std::optional<resolved_aws_credentials> creds,
+                                 diagnostic_handler& dh)
+  -> caf::expected<producer_configuration>;
+
 /// Applies plain options and returns secret requests for deferred resolution.
 [[nodiscard]] auto
 configure_consumer_or_request_secrets(consumer_configuration& cfg,
+                                      located<record> const& options,
+                                      diagnostic_handler& dh)
+  -> std::vector<secret_request>;
+
+/// Applies plain options and returns secret requests for deferred resolution.
+[[nodiscard]] auto
+configure_producer_or_request_secrets(producer_configuration& cfg,
                                       located<record> const& options,
                                       diagnostic_handler& dh)
   -> std::vector<secret_request>;

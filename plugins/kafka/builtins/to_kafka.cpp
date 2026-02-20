@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "kafka/configuration.hpp"
-#include "kafka/operator.hpp"
+#include "kafka/librdkafka_utils.hpp"
+#include "kafka/operator_args.hpp"
 #include "kafka/to_kafka_legacy.hpp"
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
@@ -172,8 +172,8 @@ public:
       co_return;
     }
     auto config = sink_global_defaults();
-    auto cfg
-      = configuration::make(config, auth->options, auth->credentials, ctx.dh());
+    auto cfg = make_producer_configuration(config, auth->options,
+                                           auth->credentials, ctx.dh());
     if (not cfg) {
       diagnostic::error("failed to create kafka configuration: {}", cfg.error())
         .emit(ctx);
@@ -186,13 +186,14 @@ public:
       user_options.inner["sasl.mechanism"] = "OAUTHBEARER";
     }
     if (auto ok = co_await ctx.resolve_secrets(
-          configure_or_request(user_options, *cfg_, ctx.dh()));
+          configure_producer_or_request_secrets(*cfg_, user_options, ctx.dh()));
         not ok) {
       done_ = true;
       co_return;
     }
     auto error = std::string{};
-    auto* raw_producer = RdKafka::Producer::create(cfg_->underlying(), error);
+    TENZIR_ASSERT(cfg_->conf);
+    auto* raw_producer = RdKafka::Producer::create(cfg_->conf.get(), error);
     if (raw_producer == nullptr) {
       diagnostic::error("failed to create kafka producer: {}", error).emit(ctx);
       done_ = true;
@@ -346,7 +347,7 @@ private:
   }
 
   ToKafkaArgs args_;
-  std::optional<configuration> cfg_;
+  std::optional<producer_configuration> cfg_;
   std::optional<Box<RdKafka::Producer>> producer_;
   std::optional<json_printer2> printer_;
   size_t produced_since_poll_ = 0;

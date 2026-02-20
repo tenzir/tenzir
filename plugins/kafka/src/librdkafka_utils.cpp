@@ -429,29 +429,62 @@ auto make_consumer_configuration(record const& options,
   return cfg;
 }
 
-[[nodiscard]] auto
-configure_consumer_or_request_secrets(consumer_configuration& cfg,
-                                      located<record> const& options,
-                                      diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  TENZIR_ASSERT(cfg.conf);
+auto make_producer_configuration(record const& options,
+                                 std::optional<aws_iam_options> aws,
+                                 std::optional<resolved_aws_credentials> creds,
+                                 diagnostic_handler& dh)
+  -> caf::expected<producer_configuration> {
+  auto cfg = producer_configuration{};
+  cfg.conf = std::shared_ptr<RdKafka::Conf>{
+    RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL),
+  };
+  TENZIR_ASSERT(cfg.conf, "RdKafka::Conf::create");
+
+  if (auto err = apply_record_options(*cfg.conf, options); err) {
+    return err;
+  }
+
+  cfg.event_callback = std::make_shared<error_event_callback>(dh);
+  if (auto err
+      = set_conf_callback(*cfg.conf, "event_cb", cfg.event_callback.get());
+      err) {
+    return err;
+  }
+
+  if (aws) {
+    cfg.oauth_callback = std::make_shared<aws_iam_refresh_callback>(
+      std::move(*aws), std::move(creds), dh);
+    if (auto err = set_conf_callback(*cfg.conf, "oauthbearer_token_refresh_cb",
+                                     cfg.oauth_callback.get());
+        err) {
+      return err;
+    }
+  }
+
+  return cfg;
+}
+
+auto configure_conf_or_request_secrets(
+  std::shared_ptr<RdKafka::Conf> const& conf, located<record> const& options,
+  diagnostic_handler& dh) -> std::vector<secret_request> {
+  TENZIR_ASSERT(conf);
   auto requests = std::vector<secret_request>{};
   for (auto const& [key, value] : options.inner) {
     match(
       value,
       [&](concepts::arithmetic auto const& v) {
-        set_conf_or_emit(*cfg.conf, key, fmt::to_string(v), options.source, dh);
+        set_conf_or_emit(*conf, key, fmt::to_string(v), options.source, dh);
       },
       [&](std::string const& s) {
-        set_conf_or_emit(*cfg.conf, key, s, options.source, dh);
+        set_conf_or_emit(*conf, key, s, options.source, dh);
       },
       [&](secret const& s) {
         requests.emplace_back(
           s, options.source,
-          [&cfg, &dh, key, loc = options.source](
+          [&conf, &dh, key, loc = options.source](
             resolved_secret_value const& v) -> failure_or<void> {
             TRY(auto str, v.utf8_view("options." + key, loc, dh));
-            set_conf_or_emit(*cfg.conf, key, std::string{str}, loc, dh);
+            set_conf_or_emit(*conf, key, std::string{str}, loc, dh);
             return {};
           });
       },
@@ -460,6 +493,22 @@ configure_consumer_or_request_secrets(consumer_configuration& cfg,
       });
   }
   return requests;
+}
+
+[[nodiscard]] auto
+configure_consumer_or_request_secrets(consumer_configuration& cfg,
+                                      located<record> const& options,
+                                      diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  return configure_conf_or_request_secrets(cfg.conf, options, dh);
+}
+
+[[nodiscard]] auto
+configure_producer_or_request_secrets(producer_configuration& cfg,
+                                      located<record> const& options,
+                                      diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  return configure_conf_or_request_secrets(cfg.conf, options, dh);
 }
 
 } // namespace tenzir::plugins::kafka
