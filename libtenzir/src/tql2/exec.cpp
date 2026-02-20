@@ -847,6 +847,7 @@ public:
   auto op_type_names() -> std::unordered_map<std::string, std::string> {
     auto lock = std::scoped_lock{mutex_};
     return op_type_names_;
+  }
 
   void emit_metrics(std::span<const MetricsSnapshotEntry> entries) override {
     if (emit_fn_) {
