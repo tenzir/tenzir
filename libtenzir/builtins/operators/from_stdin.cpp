@@ -85,9 +85,9 @@ struct ReadCB : folly::AsyncReader::ReadCallback {
   }
 };
 
-class FromStdinOperator final : public Operator<void, table_slice> {
+class FromStdin final : public Operator<void, table_slice> {
 public:
-  explicit FromStdinOperator(FromStdinArgs args) : args_{std::move(args)} {
+  explicit FromStdin(FromStdinArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -101,7 +101,7 @@ public:
     }
     co_await ctx.spawn_sub(caf::none, std::move(pipe), tag_v<chunk_ptr>);
     ctx.spawn_task(folly::coro::co_withExecutor(
-      folly::getGlobalIOExecutor(), read_stdin(chunk_queue_, ctx.dh())));
+      ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -315,7 +315,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromStdinArgs, FromStdinOperator>{};
+    auto d = Describer<FromStdinArgs, FromStdin>{};
     auto pipe_arg = d.pipeline(&FromStdinArgs::pipe);
     d.validate([=](ValidateCtx& ctx) -> Empty {
       TRY(auto pipe, ctx.get(pipe_arg));

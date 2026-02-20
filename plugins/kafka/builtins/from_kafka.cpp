@@ -379,12 +379,12 @@ auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
 }
 
 /// Streaming source operator that consumes Kafka records asynchronously.
-class FromKafkaOperator final : public Operator<void, table_slice> {
+class FromKafka final : public Operator<void, table_slice> {
 public:
-  explicit FromKafkaOperator(FromKafkaArgs args) : args_{std::move(args)} {
+  explicit FromKafka(FromKafkaArgs args) : args_{std::move(args)} {
     perf_enabled_ = from_kafka_perf_stats_enabled();
   }
-  FromKafkaOperator(FromKafkaOperator&& other) noexcept
+  FromKafka(FromKafka&& other) noexcept
     : args_{std::move(other.args_)},
       optimization_mode_{other.optimization_mode_},
       worker_count_{other.worker_count_},
@@ -415,9 +415,9 @@ public:
     runtime_.next_emit_seq = other.runtime_.next_emit_seq;
     runtime_.scheduled_messages.store(other.runtime_.scheduled_messages.load());
   }
-  auto operator=(FromKafkaOperator&&) -> FromKafkaOperator& = delete;
-  FromKafkaOperator(FromKafkaOperator const&) = delete;
-  auto operator=(FromKafkaOperator const&) -> FromKafkaOperator& = delete;
+  auto operator=(FromKafka&&) -> FromKafka& = delete;
+  FromKafka(FromKafka const&) = delete;
+  auto operator=(FromKafka const&) -> FromKafka& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
@@ -444,12 +444,11 @@ public:
     initialize_runtime_state();
     for (auto source_index = size_t{0};
          source_index < runtime_.partition_sources.size(); ++source_index) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalIOExecutor(),
+      ctx.spawn_task(folly::coro::co_withExecutor(ctx.io_executor(),
                                                   fetch_loop(source_index)));
     }
     for (size_t i = 0; i < worker_count_; ++i) {
-      ctx.spawn_task(folly::coro::co_withExecutor(folly::getGlobalCPUExecutor(),
-                                                  build_loop()));
+      ctx.spawn_task(build_loop());
     }
   }
 
@@ -1583,7 +1582,7 @@ public:
   auto describe() const -> Description override {
     auto initial = FromKafkaArgs{};
     initial.options = located{record{}, location::unknown};
-    auto d = Describer<FromKafkaArgs, FromKafkaOperator>{std::move(initial)};
+    auto d = Describer<FromKafkaArgs, FromKafka>{std::move(initial)};
     d.positional("topic", &FromKafkaArgs::topic);
     d.named("count", &FromKafkaArgs::count);
     auto exit_arg = d.named("exit", &FromKafkaArgs::exit);

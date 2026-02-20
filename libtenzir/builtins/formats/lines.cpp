@@ -313,9 +313,9 @@ struct ReadLinesArgs {
 
 /// The read_lines operator using the new async execution API.
 /// Transforms chunk_ptr input into table_slice output by splitting on newlines.
-class ReadLinesOperator final : public Operator<chunk_ptr, table_slice> {
+class ReadLines final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadLinesOperator(ReadLinesArgs args) : args_{args} {
+  explicit ReadLines(ReadLinesArgs args) : args_{args} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
@@ -453,7 +453,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ReadLinesArgs, ReadLinesOperator>{};
+    auto d = Describer<ReadLinesArgs, ReadLines>{};
     d.named("binary", &ReadLinesArgs::binary);
     d.named("skip_empty", &ReadLinesArgs::skip_empty);
     return d.without_optimize();
@@ -464,9 +464,9 @@ struct WriteLinesArgs {
   // write_lines takes no arguments.
 };
 
-class WriteLinesOperator final : public Operator<table_slice, chunk_ptr> {
+class WriteLines final : public Operator<table_slice, chunk_ptr> {
 public:
-  explicit WriteLinesOperator(WriteLinesArgs args) : args_{args} {
+  explicit WriteLines(WriteLinesArgs args) : args_{args} {
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
@@ -515,7 +515,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<WriteLinesArgs, WriteLinesOperator>{};
+    auto d = Describer<WriteLinesArgs, WriteLines>{};
     return d.without_optimize();
   }
 };

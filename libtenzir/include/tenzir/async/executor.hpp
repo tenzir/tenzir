@@ -19,6 +19,7 @@
 #include <folly/coro/Collect.h>
 #include <folly/coro/Mutex.h>
 #include <folly/coro/Synchronized.h>
+#include <folly/executors/GlobalExecutor.h>
 
 namespace tenzir {
 
@@ -197,11 +198,25 @@ public:
     }
   }
 
-  /// Returns a per-operator executor if profiling is enabled, or an empty
-  /// KeepAlive to use the ambient executor.
+  /// Returns a per-operator CPU executor. The default returns the global
+  /// CPU executor. Override this to wrap it for profiling.
   virtual auto make_executor(OpId id) -> folly::Executor::KeepAlive<> {
     TENZIR_UNUSED(id);
-    return {};
+    return folly::getGlobalCPUExecutor();
+  }
+
+  /// Returns a per-operator IO executor. The default returns the global
+  /// IO executor. Override this to wrap it for profiling.
+  virtual auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> {
+    TENZIR_UNUSED(id);
+    return folly::getGlobalIOExecutor();
+  }
+
+  /// Registers the C++ type name for an operator. The default is a no-op.
+  /// Override this to collect operator type names for profiling output.
+  virtual auto register_op_name(OpId id, std::type_info const& type) -> void {
+    TENZIR_UNUSED(id);
+    TENZIR_UNUSED(type);
   }
 
 protected:

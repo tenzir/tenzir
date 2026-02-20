@@ -702,7 +702,7 @@ public:
   }
 };
 
-class SaveStdoutImpl final : public Operator<chunk_ptr, void> {
+class SaveStdout final : public Operator<chunk_ptr, void> {
 public:
   auto process(chunk_ptr input, OpCtx& ctx) -> Task<void> override {
     std::cout << std::string_view{reinterpret_cast<char const*>(input->data()),
@@ -724,7 +724,7 @@ public:
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
     TENZIR_ASSERT(input.is<chunk_ptr>());
-    return SaveStdoutImpl{};
+    return SaveStdout{};
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

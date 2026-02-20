@@ -14,6 +14,7 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/element_type.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/package.hpp"
@@ -37,6 +38,7 @@
 #include <caf/scheduler.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
+#include <folly/Demangle.h>
 #include <folly/coro/BlockingWait.h>
 #include <tsl/robin_set.h>
 
@@ -545,6 +547,21 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
   return internal + external;
 }
 
+template <class T>
+auto count_events(const OperatorMsg<T>& item) -> size_t {
+  return match(
+    item,
+    [](const table_slice& slice) -> size_t {
+      return slice.rows();
+    },
+    [](const chunk_ptr&) -> size_t {
+      return 0;
+    },
+    [](const Signal&) -> size_t {
+      return 0;
+    });
+}
+
 /// Monotonic counters for profiling channel throughput.
 struct ChannelStats {
   /// We group/align by in and out here, because that is the grouping in which
@@ -552,10 +569,18 @@ struct ChannelStats {
   struct alignas(std::hardware_destructive_interference_size) data {
     std::atomic<size_t> bytes{0};
     std::atomic<size_t> signals{0};
-    std::atomic<size_t> elements{0};
+    std::atomic<size_t> batches{0};
+    std::atomic<size_t> events{0};
   };
   data in;
   data out;
+
+  /// Backpressure intervals recorded by the sender.
+  struct BackpressureEvent {
+    std::chrono::steady_clock::time_point start;
+    std::chrono::steady_clock::time_point end;
+  };
+  std::vector<BackpressureEvent> backpressure_events;
 };
 
 /// Monotonic counters for profiling per-operator CPU usage.
@@ -616,14 +641,6 @@ public:
   auto send(OperatorMsg<T> x) -> Task<void> {
     auto lock = co_await mutex_.lock();
     auto bytes = count_bytes(x);
-    // To also send big messages eventually, we allow to bypass the limit if the
-    // queue is otherwise entirely free.
-    auto free = lock->current_bytes + bytes;
-    while (not free and lock->current_bytes + bytes > max_bytes_) {
-      lock.unlock();
-      co_await notify_send_.wait();
-      lock = co_await mutex_.lock();
-    }
     lock->current_bytes += bytes;
     // Update profiling counters.
     if (stats_) {
@@ -631,11 +648,27 @@ public:
       if (is<Signal>(x)) {
         stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
       } else {
-        stats_->in.elements.fetch_add(1, std::memory_order::relaxed);
+        stats_->in.batches.fetch_add(1, std::memory_order::relaxed);
+        stats_->in.events.fetch_add(count_events(x),
+                                    std::memory_order::relaxed);
       }
     }
     lock->queue.push_back(std::move(x));
     notify_receive_.notify_one();
+    // Block sender if buffer exceeds capacity. Large messages may temporarily
+    // exceed the limit, but the sender waits for drain before continuing.
+    if (lock->current_bytes > max_bytes_) {
+      auto bp_start = std::chrono::steady_clock::now();
+      while (lock->current_bytes > max_bytes_) {
+        lock.unlock();
+        co_await notify_send_.wait();
+        lock = co_await mutex_.lock();
+      }
+      if (stats_) {
+        auto bp_end = std::chrono::steady_clock::now();
+        stats_->backpressure_events.push_back({bp_start, bp_end});
+      }
+    }
   }
 
   auto receive() -> Task<Option<OperatorMsg<T>>> {
@@ -658,7 +691,9 @@ public:
       if (is<Signal>(result)) {
         stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
       } else {
-        stats_->out.elements.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.batches.fetch_add(1, std::memory_order::relaxed);
+        stats_->out.events.fetch_add(count_events(result),
+                                     std::memory_order::relaxed);
       }
     }
     notify_send_.notify_one();
@@ -743,6 +778,7 @@ struct ChannelProfile {
   ChannelId id;
   std::shared_ptr<ChannelStats> stats;
   size_t max_bytes;
+  element_type_tag type;
 };
 
 /// Collected profile for a single operator's executor.
@@ -768,7 +804,7 @@ public:
 
   auto make_executor(OpId id) -> folly::Executor::KeepAlive<> override {
     if (not profiling_) {
-      return {};
+      return folly::getGlobalCPUExecutor();
     }
     auto stats = std::make_shared<ExecutorStats>();
     auto exec = std::make_unique<ProfilingExecutor>(
@@ -780,18 +816,53 @@ public:
     return keep_alive;
   }
 
+  auto make_io_executor(OpId id) -> folly::Executor::KeepAlive<> override {
+    if (not profiling_) {
+      return folly::getGlobalIOExecutor();
+    }
+    auto stats = std::make_shared<ExecutorStats>();
+    auto exec = std::make_unique<ProfilingExecutor>(
+      folly::getGlobalIOExecutor(), stats);
+    auto ka = folly::Executor::getKeepAliveToken(exec.get());
+    auto lock = std::scoped_lock{mutex_};
+    auto io_id = OpId{fmt::format("{} (io)", id.value)};
+    executor_profiles_.push_back(ExecutorProfile{io_id, std::move(stats)});
+    executors_.push_back(std::move(exec));
+    return ka;
+  }
+
+  auto register_op_name(OpId id, std::type_info const& type) -> void override {
+    auto demangled = folly::demangle(type);
+    auto name = std::string{demangled};
+    // Strip namespace prefix, keeping only the class name.
+    auto pos = name.rfind("::");
+    if (pos != std::string::npos) {
+      name = name.substr(pos + 2);
+    }
+    auto lock = std::scoped_lock{mutex_};
+    op_type_names_[id.value] = std::move(name);
+  }
+
+  auto op_type_names() -> std::unordered_map<std::string, std::string> {
+    auto lock = std::scoped_lock{mutex_};
+    return op_type_names_;
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
-    return make_profiled_channel<void>(std::move(id), void_limit);
+    return make_profiled_channel<void>(std::move(id), void_limit,
+                                       element_type_tag{tag_v<void>});
   }
 
   auto make_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(std::move(id), events_limit);
+    return make_profiled_channel<table_slice>(
+      std::move(id), events_limit, element_type_tag{tag_v<table_slice>});
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
-    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
+    return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit,
+                                            element_type_tag{tag_v<chunk_ptr>});
   }
 
 private:
@@ -803,13 +874,14 @@ private:
   /// very big individual items that exceed the total capacity by themselves,
   /// as we eventually let them through since we need to transmit them.
   template <class T>
-  auto make_profiled_channel(ChannelId id, size_t max_bytes)
+  auto
+  make_profiled_channel(ChannelId id, size_t max_bytes, element_type_tag type)
     -> PushPull<OperatorMsg<T>> {
     auto stats = std::shared_ptr<ChannelStats>{};
     if (profiling_) {
       stats = std::make_shared<ChannelStats>();
       auto lock = std::scoped_lock{mutex_};
-      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes});
+      channel_profiles_.push_back(ChannelProfile{id, stats, max_bytes, type});
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -822,6 +894,7 @@ private:
   std::vector<ExecutorProfile> executor_profiles_;
   // Owns the ProfilingExecutor instances to keep them alive.
   std::vector<std::unique_ptr<ProfilingExecutor>> executors_;
+  std::unordered_map<std::string, std::string> op_type_names_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
   static constexpr auto void_limit = 0;
@@ -839,11 +912,13 @@ struct ProfileSample {
   std::chrono::steady_clock::time_point time;
   struct Channel {
     std::string name;
-    size_t current_bytes;
+    element_type_tag type;
     size_t bytes_in;
     size_t bytes_out;
-    size_t elements_in;
-    size_t elements_out;
+    size_t batches_in;
+    size_t batches_out;
+    size_t events_in;
+    size_t events_out;
     size_t signals_in;
     size_t signals_out;
     size_t max_bytes;
@@ -858,9 +933,11 @@ struct ProfileSample {
   std::vector<Executor> executors;
 };
 
-void write_profile(std::string const& path,
-                   std::vector<ProfileSample> const& samples,
-                   std::chrono::steady_clock::time_point t0) {
+void write_profile(
+  std::string const& path, std::vector<ProfileSample> const& samples,
+  std::chrono::steady_clock::time_point t0,
+  std::unordered_map<std::string, std::string> const& op_type_names,
+  std::vector<ChannelProfile> const& channel_profiles) {
   auto f = std::ofstream{path};
   if (not f) {
     TENZIR_WARN("failed to open profile output file: {}", path);
@@ -904,7 +981,10 @@ void write_profile(std::string const& path,
       channel_endpoints[ch.name] = {std::move(sender), std::move(receiver)};
     }
     for (auto const& ex : sample.executors) {
-      add_op(ex.name);
+      // IO executor metrics are merged into the parent operator below.
+      if (not ex.name.ends_with(" (io)")) {
+        add_op(ex.name);
+      }
     }
   }
   // Create separate "(subs)" entries for operators that have cross-boundary
@@ -921,28 +1001,70 @@ void write_profile(std::string const& path,
       }
     }
   }
-  // Sort operator names: main operators first, then (subs) entries, then
-  // sub-pipeline operators. Within each group, sort lexicographically.
-  auto op_sort_key
-    = [](std::string const& name) -> std::pair<size_t, std::string const&> {
+  // Sort operator names with natural ordering: numeric segments are compared
+  // as numbers so "0/2" comes before "0/10". Main operators come first, then
+  // (subs) entries, then sub-pipeline operators.
+  auto natural_less = [](std::string_view a, std::string_view b) -> bool {
+    auto ai = size_t{0};
+    auto bi = size_t{0};
+    while (ai < a.size() and bi < b.size()) {
+      auto a_digit = std::isdigit(static_cast<unsigned char>(a[ai]));
+      auto b_digit = std::isdigit(static_cast<unsigned char>(b[bi]));
+      if (a_digit and b_digit) {
+        // Compare numeric segments by value.
+        auto a_start = ai;
+        auto b_start = bi;
+        while (ai < a.size()
+               and std::isdigit(static_cast<unsigned char>(a[ai]))) {
+          ++ai;
+        }
+        while (bi < b.size()
+               and std::isdigit(static_cast<unsigned char>(b[bi]))) {
+          ++bi;
+        }
+        auto a_len = ai - a_start;
+        auto b_len = bi - b_start;
+        if (a_len != b_len) {
+          return a_len < b_len;
+        }
+        auto cmp = a.substr(a_start, a_len).compare(b.substr(b_start, b_len));
+        if (cmp != 0) {
+          return cmp < 0;
+        }
+      } else {
+        if (a[ai] != b[bi]) {
+          return a[ai] < b[bi];
+        }
+        ++ai;
+        ++bi;
+      }
+    }
+    return a.size() < b.size();
+  };
+  auto op_sort_key = [](std::string const& name) -> std::pair<size_t, size_t> {
     auto is_subs = name.ends_with(" (subs)");
     auto base = is_subs ? std::string_view{name}.substr(0, name.size() - 7)
                         : std::string_view{name};
     auto depth = std::count(base.begin(), base.end(), '-');
-    return {static_cast<size_t>(depth) * 2 + (is_subs ? 1 : 0), name};
+    return {static_cast<size_t>(depth) * 2 + (is_subs ? 1 : 0), 0};
   };
   std::sort(op_names.begin(), op_names.end(),
             [&](std::string const& a, std::string const& b) {
-              return op_sort_key(a) < op_sort_key(b);
+              auto ka = op_sort_key(a);
+              auto kb = op_sort_key(b);
+              if (ka.first != kb.first) {
+                return ka.first < kb.first;
+              }
+              return natural_less(a, b);
             });
   op_index.clear();
   for (size_t i = 0; i < op_names.size(); ++i) {
     op_index[op_names[i]] = i;
   }
-  // pid 1 = Totals, pid 2..N+1 = per operator.
-  static constexpr auto pid_totals = 1;
+  // Use high pids to avoid Perfetto heuristics for low pid values.
+  static constexpr auto pid_totals = 1000;
   auto op_pid = [](size_t idx) -> int {
-    return static_cast<int>(idx) + 2;
+    return static_cast<int>(idx) + 1001;
   };
   // Write the JSON.
   f << "{\n  \"traceEvents\": [\n";
@@ -964,9 +1086,23 @@ void write_profile(std::string const& path,
       R"pp({{"ph": "M", "pid": {}, "name": "process_sort_index", "args": {{"sort_index": {}}}}})pp",
       pid, sort_index));
   };
-  emit_process(pid_totals, "Totals", 0);
+  // Look up the operator type name for a given op name. The op name may have
+  // a suffix like " (io)" or " (subs)", so we strip it to find the base ID.
+  auto display_name = [&](std::string const& name) -> std::string {
+    auto base = name;
+    auto space = base.find(' ');
+    if (space != std::string::npos) {
+      base = base.substr(0, space);
+    }
+    auto it = op_type_names.find(base);
+    if (it != op_type_names.end()) {
+      return fmt::format("{}: {}", name, it->second);
+    }
+    return name;
+  };
+  emit_process(pid_totals, "Global", 0);
   for (size_t i = 0; i < op_names.size(); ++i) {
-    emit_process(op_pid(i), op_names[i], static_cast<int>(i) + 1);
+    emit_process(op_pid(i), display_name(op_names[i]), static_cast<int>(i) + 1);
   }
   auto emit_counter = [&](char const* name, int pid, int64_t us, double val) {
     emit(fmt::format(
@@ -975,14 +1111,21 @@ void write_profile(std::string const& path,
   };
   // Per-operator aggregated channel metrics for a single sample.
   struct OpChannelAgg {
-    double bytes_in = 0;
-    double bytes_out = 0;
-    double elements_in = 0;
-    double elements_out = 0;
-    double signals_in = 0;
-    double signals_out = 0;
-    double buffer_bytes = 0;
-    double buffer_batches = 0;
+    size_t bytes_in = 0;
+    size_t bytes_out = 0;
+    size_t batches_in = 0;
+    size_t batches_out = 0;
+    size_t events_in = 0;
+    size_t events_out = 0;
+    size_t signals_in = 0;
+    size_t signals_out = 0;
+    size_t buffer_bytes = 0;
+    size_t buffer_batches = 0;
+    size_t buffer_events = 0;
+    bool has_events_in = false;
+    bool has_events_out = false;
+    bool has_bytes_in = false;
+    bool has_bytes_out = false;
   };
   // Build per-operator channel aggregates: "In" metrics go to the sender,
   // "Out" metrics go to the receiver. For cross-boundary channels (between a
@@ -1009,20 +1152,33 @@ void write_profile(std::string const& path,
       } else {
         receiver_target = receiver;
       }
+      auto is_events = ch.type.is<table_slice>();
+      auto is_bytes = ch.type.is<chunk_ptr>();
       if (auto si = op_index.find(sender_target); si != op_index.end()) {
         auto& agg = aggs[si->second];
-        agg.bytes_in += static_cast<double>(ch.bytes_in);
-        agg.elements_in += static_cast<double>(ch.elements_in);
-        agg.signals_in += static_cast<double>(ch.signals_in);
-        agg.buffer_bytes += static_cast<double>(ch.current_bytes);
-        agg.buffer_batches
-          += static_cast<double>(ch.elements_in - ch.elements_out);
+        agg.bytes_in += ch.bytes_in;
+        agg.batches_in += ch.batches_in;
+        agg.events_in += ch.events_in;
+        agg.signals_in += ch.signals_in;
+        auto clamp_sub = [](size_t a, size_t b) {
+          return a >= b ? a - b : 0;
+        };
+        agg.buffer_bytes += clamp_sub(ch.bytes_in, ch.bytes_out);
+        agg.buffer_batches += clamp_sub(ch.batches_in, ch.batches_out);
+        if (is_events) {
+          agg.buffer_events += clamp_sub(ch.events_in, ch.events_out);
+        }
+        agg.has_events_out |= is_events;
+        agg.has_bytes_out |= is_bytes;
       }
       if (auto ri = op_index.find(receiver_target); ri != op_index.end()) {
         auto& agg = aggs[ri->second];
-        agg.bytes_out += static_cast<double>(ch.bytes_out);
-        agg.elements_out += static_cast<double>(ch.elements_out);
-        agg.signals_out += static_cast<double>(ch.signals_out);
+        agg.bytes_out += ch.bytes_out;
+        agg.batches_out += ch.batches_out;
+        agg.events_out += ch.events_out;
+        agg.signals_out += ch.signals_out;
+        agg.has_events_in |= is_events;
+        agg.has_bytes_in |= is_bytes;
       }
     }
     return aggs;
@@ -1055,16 +1211,25 @@ void write_profile(std::string const& path,
       interval_s = 0.001;
     }
     auto aggs = aggregate_channels(sample);
-    // Build per-operator executor lookup for this sample.
+    // Build per-operator executor lookup for this sample. IO executor
+    // stats are merged into the parent operator's entry.
     auto cur_execs = std::vector<PrevExec>(op_names.size());
     for (auto const& ex : sample.executors) {
-      if (auto it = op_index.find(ex.name); it != op_index.end()) {
-        cur_execs[it->second] = PrevExec{ex.wall_ns, ex.cpu_ns, ex.task_count};
+      auto name = ex.name;
+      if (name.ends_with(" (io)")) {
+        name = name.substr(0, name.size() - 5);
+      }
+      if (auto it = op_index.find(name); it != op_index.end()) {
+        auto& entry = cur_execs[it->second];
+        entry.wall_ns += ex.wall_ns;
+        entry.cpu_ns += ex.cpu_ns;
+        entry.task_count += ex.task_count;
       }
     }
     // Totals accumulators.
-    auto total_buffer_bytes = 0.0;
-    auto total_buffer_batches = 0.0;
+    auto total_buffer_bytes = size_t{0};
+    auto total_buffer_batches = size_t{0};
+    auto total_buffer_events = size_t{0};
     auto total_wall_s = 0.0;
     auto total_cpu_s = 0.0;
     auto total_tasks = size_t{0};
@@ -1092,58 +1257,149 @@ void write_profile(std::string const& path,
         total_wall_pct += wall_pct;
         total_cpu_pct += cpu_pct;
         total_tasks_per_s += tasks_per_s;
-        emit_counter("A: CPU Active", pid, us, cpu_pct);
-        emit_counter("B: CPU Active (cumulative)", pid, us, cpu_s);
-        emit_counter("C: CPU Wall", pid, us, wall_pct);
-        emit_counter("D: CPU Wall (cumulative)", pid, us, wall_s);
+        emit_counter("A: CPU Active (%)", pid, us, cpu_pct * 100.0);
+        emit_counter("B: CPU Active (s) (cumulative)", pid, us, cpu_s);
+        emit_counter("C: CPU Wall (%)", pid, us, wall_pct * 100.0);
+        emit_counter("D: CPU Wall (s) (cumulative)", pid, us, wall_s);
         emit_counter("E: Tasks/s", pid, us, tasks_per_s);
         emit_counter("F: Tasks (cumulative)", pid, us,
                      static_cast<double>(cur.task_count));
       }
-      // Memory / channel metrics.
-      total_buffer_bytes += agg.buffer_bytes;
-      total_buffer_batches += agg.buffer_batches;
-      auto prev_bi = oi < prev_aggs.size() ? prev_aggs[oi].bytes_in : 0.0;
-      auto prev_bo = oi < prev_aggs.size() ? prev_aggs[oi].bytes_out : 0.0;
-      auto prev_ei = oi < prev_aggs.size() ? prev_aggs[oi].elements_in : 0.0;
-      auto prev_eo = oi < prev_aggs.size() ? prev_aggs[oi].elements_out : 0.0;
-      auto prev_si = oi < prev_aggs.size() ? prev_aggs[oi].signals_in : 0.0;
-      auto prev_so = oi < prev_aggs.size() ? prev_aggs[oi].signals_out : 0.0;
-      auto bi_rate = (agg.bytes_in - prev_bi) / interval_s;
-      auto bo_rate = (agg.bytes_out - prev_bo) / interval_s;
-      emit_counter("G: Buffer (bytes)", pid, us, agg.buffer_bytes);
-      emit_counter("H: Buffer (batches)", pid, us, agg.buffer_batches);
-      emit_counter("I: Bytes In/s", pid, us, bo_rate);
-      emit_counter("J: Bytes In (cumulative)", pid, us, agg.bytes_out);
-      emit_counter("K: Bytes Out/s", pid, us, bi_rate);
-      emit_counter("L: Bytes Out (cumulative)", pid, us, agg.bytes_in);
-      emit_counter("M: Batches In/s", pid, us,
-                   (agg.elements_out - prev_eo) / interval_s);
-      emit_counter("N: Batches In (cumulative)", pid, us, agg.elements_out);
-      emit_counter("O: Batches Out/s", pid, us,
-                   (agg.elements_in - prev_ei) / interval_s);
-      emit_counter("P: Batches Out (cumulative)", pid, us, agg.elements_in);
-      emit_counter("Q: Signals In/s", pid, us,
-                   (agg.signals_out - prev_so) / interval_s);
-      emit_counter("R: Signals In (cumulative)", pid, us, agg.signals_out);
-      emit_counter("S: Signals Out/s", pid, us,
-                   (agg.signals_in - prev_si) / interval_s);
-      emit_counter("T: Signals Out (cumulative)", pid, us, agg.signals_in);
+      // Channel metrics — skip entirely for void-only operators.
+      auto has_any_channel = agg.has_events_in or agg.has_events_out
+                             or agg.has_bytes_in or agg.has_bytes_out;
+      if (has_any_channel) {
+        total_buffer_bytes += agg.buffer_bytes;
+        total_buffer_batches += agg.buffer_batches;
+        total_buffer_events += agg.buffer_events;
+        auto d = [](size_t v) {
+          return static_cast<double>(v);
+        };
+        auto rate = [&](size_t cur, size_t prev) {
+          return d(cur - prev) / interval_s;
+        };
+        auto const& prev
+          = oi < prev_aggs.size() ? prev_aggs[oi] : OpChannelAgg{};
+        auto mb = [](size_t v) {
+          return static_cast<double>(v) / 1'000'000.0;
+        };
+        auto mb_rate = [&](size_t cur, size_t prev) {
+          return mb(cur - prev) / interval_s;
+        };
+        emit_counter("G: Buffer (MB)", pid, us, mb(agg.buffer_bytes));
+        emit_counter("H: Buffer (batches)", pid, us, d(agg.buffer_batches));
+        if (agg.has_events_out) {
+          emit_counter("I: Buffer (events)", pid, us, d(agg.buffer_events));
+        }
+        emit_counter("J: MB In/s", pid, us,
+                     mb_rate(agg.bytes_out, prev.bytes_out));
+        emit_counter("K: MB In (cumulative)", pid, us, mb(agg.bytes_out));
+        emit_counter("L: MB Out/s", pid, us,
+                     mb_rate(agg.bytes_in, prev.bytes_in));
+        emit_counter("M: MB Out (cumulative)", pid, us, mb(agg.bytes_in));
+        emit_counter("N: Batches In/s", pid, us,
+                     rate(agg.batches_out, prev.batches_out));
+        emit_counter("O: Batches In (cumulative)", pid, us, d(agg.batches_out));
+        emit_counter("P: Batches Out/s", pid, us,
+                     rate(agg.batches_in, prev.batches_in));
+        emit_counter("Q: Batches Out (cumulative)", pid, us, d(agg.batches_in));
+        if (agg.has_events_in) {
+          emit_counter("R: Events In/s", pid, us,
+                       rate(agg.events_out, prev.events_out));
+          emit_counter("S: Events In (cumulative)", pid, us, d(agg.events_out));
+        }
+        if (agg.has_events_out) {
+          emit_counter("T: Events Out/s", pid, us,
+                       rate(agg.events_in, prev.events_in));
+          emit_counter("U: Events Out (cumulative)", pid, us, d(agg.events_in));
+        }
+        emit_counter("V: Signals In/s", pid, us,
+                     rate(agg.signals_out, prev.signals_out));
+        emit_counter("W: Signals Out/s", pid, us,
+                     rate(agg.signals_in, prev.signals_in));
+      }
     }
     // Totals across all operators.
     if (total_tasks > 0) {
-      emit_counter("A: CPU Active", pid_totals, us, total_cpu_pct);
-      emit_counter("B: CPU Active (cumulative)", pid_totals, us, total_cpu_s);
-      emit_counter("C: CPU Wall", pid_totals, us, total_wall_pct);
-      emit_counter("D: CPU Wall (cumulative)", pid_totals, us, total_wall_s);
+      emit_counter("A: CPU Active (%)", pid_totals, us, total_cpu_pct * 100.0);
+      emit_counter("B: CPU Active (s) (cumulative)", pid_totals, us,
+                   total_cpu_s);
+      emit_counter("C: CPU Wall (%)", pid_totals, us, total_wall_pct * 100.0);
+      emit_counter("D: CPU Wall (s) (cumulative)", pid_totals, us,
+                   total_wall_s);
       emit_counter("E: Tasks/s", pid_totals, us, total_tasks_per_s);
       emit_counter("F: Tasks (cumulative)", pid_totals, us,
                    static_cast<double>(total_tasks));
     }
-    emit_counter("G: Buffer (bytes)", pid_totals, us, total_buffer_bytes);
-    emit_counter("H: Buffer (batches)", pid_totals, us, total_buffer_batches);
+    emit_counter("G: Buffer (MB)", pid_totals, us,
+                 static_cast<double>(total_buffer_bytes) / 1'000'000.0);
+    emit_counter("H: Buffer (batches)", pid_totals, us,
+                 static_cast<double>(total_buffer_batches));
+    emit_counter("I: Buffer (events)", pid_totals, us,
+                 static_cast<double>(total_buffer_events));
     prev_aggs = std::move(aggs);
     prev_execs = std::move(cur_execs);
+  }
+  // Emit backpressure duration bars from channel profiles.
+  // Backpressure is routed to the *receiver* operator (the bottleneck whose
+  // input buffer filled up), using the same routing as "Out" metrics.
+  auto bp_pids_emitted = std::unordered_set<int>{};
+  auto has_any_bp = false;
+  for (auto const& prof : channel_profiles) {
+    if (not prof.stats or prof.stats->backpressure_events.empty()) {
+      continue;
+    }
+    // Parse channel name to get sender/receiver.
+    auto sep = prof.id.value.find(" -> ");
+    if (sep == std::string::npos) {
+      continue;
+    }
+    auto sender = prof.id.value.substr(0, sep);
+    auto receiver = prof.id.value.substr(sep + 4);
+    if (receiver == "_") {
+      continue;
+    }
+    // Apply the same routing as "Out" metrics.
+    auto receiver_target = std::string{};
+    if (sender != "_" and is_child_of(sender, receiver)) {
+      receiver_target = sub_op_name(receiver);
+    } else {
+      receiver_target = receiver;
+    }
+    auto it = op_index.find(receiver_target);
+    if (it == op_index.end()) {
+      continue;
+    }
+    auto pid = op_pid(it->second);
+    auto op_name = display_name(receiver_target);
+    // Emit thread name metadata once per pid.
+    if (bp_pids_emitted.insert(pid).second) {
+      emit(fmt::format(
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocks Upstream"}}}})pp",
+        pid));
+    }
+    if (not has_any_bp) {
+      has_any_bp = true;
+      emit(fmt::format(
+        R"pp({{"ph": "M", "pid": {}, "tid": 1, "name": "thread_name", "args": {{"name": "Blocks Upstream"}}}})pp",
+        pid_totals));
+    }
+    for (auto const& ev : prof.stats->backpressure_events) {
+      auto start_us
+        = std::chrono::duration_cast<std::chrono::microseconds>(ev.start - t0)
+            .count();
+      auto dur_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                      ev.end - ev.start)
+                      .count();
+      // Per-operator bar.
+      emit(fmt::format(
+        R"pp({{"ph": "X", "name": " ", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
+        pid, start_us, dur_us));
+      // Global bar, named after the operator.
+      emit(fmt::format(
+        R"pp({{"ph": "X", "name": "{}", "pid": {}, "tid": 1, "ts": {}, "dur": {}}})pp",
+        op_name, pid_totals, start_us, dur_us));
+    }
   }
   f << "\n  ]\n}\n";
 }
@@ -1172,15 +1428,15 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
         }
         auto sample = ProfileSample{std::chrono::steady_clock::now(), {}, {}};
         for (auto& p : channel_profiles) {
-          auto bi = p.stats->in.bytes.load(std::memory_order::relaxed);
-          auto bo = p.stats->out.bytes.load(std::memory_order::relaxed);
           sample.channels.push_back({
             p.id.value,
-            bi >= bo ? bi - bo : 0,
-            bi,
-            bo,
-            p.stats->in.elements.load(std::memory_order::relaxed),
-            p.stats->out.elements.load(std::memory_order::relaxed),
+            p.type,
+            p.stats->in.bytes.load(std::memory_order::relaxed),
+            p.stats->out.bytes.load(std::memory_order::relaxed),
+            p.stats->in.batches.load(std::memory_order::relaxed),
+            p.stats->out.batches.load(std::memory_order::relaxed),
+            p.stats->in.events.load(std::memory_order::relaxed),
+            p.stats->out.events.load(std::memory_order::relaxed),
             p.stats->in.signals.load(std::memory_order::relaxed),
             p.stats->out.signals.load(std::memory_order::relaxed),
             p.max_bytes,
@@ -1204,7 +1460,8 @@ auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);
     sampler->join();
-    write_profile(*profile_path, samples, t0);
+    write_profile(*profile_path, samples, t0, exec_ctx.op_type_names(),
+                  exec_ctx.get_channel_profiles());
   }
   co_return {};
 }
