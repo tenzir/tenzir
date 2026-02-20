@@ -1726,7 +1726,7 @@ public:
         if (not ctx.get(aws_region_arg) and not aws->region) {
           diagnostic::error(
             "`aws_region` is required for Kafka MSK authentication")
-            .primary(iam->source)
+            .primary(iam->source.subloc(0, 1))
             .emit(ctx);
           return {};
         }
