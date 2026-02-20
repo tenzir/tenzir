@@ -1,5 +1,9 @@
 suite: from-abs
 fixtures: [abs]
+assertions:
+  fixtures:
+    abs:
+      state: unchanged
 timeout: 30
 skip:
   on: fixture-unavailable

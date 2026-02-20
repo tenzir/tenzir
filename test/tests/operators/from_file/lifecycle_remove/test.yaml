@@ -1,5 +1,7 @@
 suite: from-file-lifecycle-remove
-fixtures:
-  - local_files:
-      verify_remove: true
+fixtures: [local_files]
+assertions:
+  fixtures:
+    local_files:
+      state: removed
 timeout: 30

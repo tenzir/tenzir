@@ -1,6 +1,6 @@
 """Shared helpers for cloud storage fixture testing (S3, GCS, ABS).
 
-Provides common test data definitions, options, and post-test verification
+Provides common test data definitions, assertions, and post-test verification
 logic that can be reused across MinIO (S3), fake-gcs-server (GCS), and
 Azurite (ABS) fixtures.
 
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -42,27 +42,42 @@ TEST_FILES: dict[str, dict[str, str]] = {
 
 
 @dataclass(frozen=True)
-class CloudStorageOptions:
-    """Options controlling post-test verification for cloud storage fixtures.
+class CloudStorageAssertions:
+    """Assertions controlling post-test verification for cloud storage fixtures.
 
-    verify_remove:
-        Assert that ``lifecycle/remove-target.json`` was deleted from the
-        bucket after tests complete.
-    verify_rename:
-        Assert that ``lifecycle/rename-target.json`` was moved to
-        ``lifecycle/rename-target.json.done`` after tests complete.
-
-    When neither option is set, the fixture verifies that all originally
-    uploaded test files are still present.
+    Accepted states:
+    - unchanged: Verify all original files are still present.
+    - removed: Verify lifecycle/remove-target.json is gone.
+    - renamed: Verify lifecycle/rename-target.json moved to .done.
     """
 
-    verify_remove: bool = False
-    verify_rename: bool = False
+    state: str = "unchanged"
+
+    def __post_init__(self) -> None:
+        if self.state not in {"unchanged", "removed", "renamed"}:
+            raise TypeError(
+                "cloud storage fixture assertion `state` must be one of: "
+                "unchanged, removed, renamed"
+            )
+
+
+def extract_assertions(
+    raw: CloudStorageAssertions | dict[str, Any],
+) -> CloudStorageAssertions:
+    """Normalize raw fixture assertion payload into a typed dataclass."""
+    if isinstance(raw, CloudStorageAssertions):
+        return raw
+    if isinstance(raw, dict):
+        return CloudStorageAssertions(**raw)
+    raise TypeError(
+        "cloud storage fixture assertions must be a mapping or "
+        "CloudStorageAssertions instance"
+    )
 
 
 def verify_post_test(
     file_exists: Callable[[str], bool],
-    opts: CloudStorageOptions,
+    assertions: CloudStorageAssertions,
     bucket: str = BUCKET,
 ) -> None:
     """Verify bucket state after tests complete.
@@ -71,28 +86,30 @@ def verify_post_test(
         file_exists: Callback that returns True if the given key exists in
             *bucket*.  The key is relative to the bucket (e.g.
             ``"single/data.json"``).
-        opts: The fixture options controlling which checks to run.
+        assertions: The fixture assertions controlling which checks to run.
         bucket: The bucket to check against.
     """
-    if opts.verify_remove:
+    if assertions.state == "removed":
         if file_exists("lifecycle/remove-target.json"):
             raise RuntimeError(
-                "lifecycle/remove-target.json still exists after remove=true"
+                "lifecycle/remove-target.json still exists after state=removed"
             )
         logger.info("Verified: lifecycle/remove-target.json was removed")
         return
 
-    if opts.verify_rename:
+    if assertions.state == "renamed":
         if file_exists("lifecycle/rename-target.json"):
-            raise RuntimeError("lifecycle/rename-target.json still exists after rename")
+            raise RuntimeError(
+                "lifecycle/rename-target.json still exists after state=renamed"
+            )
         if not file_exists("lifecycle/rename-target.json.done"):
             raise RuntimeError(
-                "lifecycle/rename-target.json.done not found after rename"
+                "lifecycle/rename-target.json.done not found after state=renamed"
             )
         logger.info("Verified: lifecycle/rename-target.json was renamed to .done")
         return
 
-    # No lifecycle options — verify all original files are still present.
+    # Default behavior: verify all original files are still present.
     for key in TEST_FILES:
         # Keys in TEST_FILES are "{bucket}/{path}"; extract the path portion.
         parts = key.split("/", 1)

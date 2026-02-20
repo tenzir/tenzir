@@ -1,7 +1,9 @@
 suite: from-gcs-lifecycle-remove
-fixtures:
-  - gcs:
-      verify_remove: true
+fixtures: [gcs]
+assertions:
+  fixtures:
+    gcs:
+      state: removed
 timeout: 30
 skip:
   on: fixture-unavailable

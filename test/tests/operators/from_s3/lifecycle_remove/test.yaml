@@ -1,7 +1,9 @@
 suite: from-s3-lifecycle-remove
-fixtures:
-  - s3:
-      verify_remove: true
+fixtures: [s3]
+assertions:
+  fixtures:
+    s3:
+      state: removed
 timeout: 30
 skip:
   on: fixture-unavailable

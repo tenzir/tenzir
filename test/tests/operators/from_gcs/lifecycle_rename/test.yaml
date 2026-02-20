@@ -1,7 +1,9 @@
 suite: from-gcs-lifecycle-rename
-fixtures:
-  - gcs:
-      verify_rename: true
+fixtures: [gcs]
+assertions:
+  fixtures:
+    gcs:
+      state: renamed
 timeout: 30
 skip:
   on: fixture-unavailable

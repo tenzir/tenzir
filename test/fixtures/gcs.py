@@ -7,14 +7,8 @@ Environment variables yielded:
 - GCS_BUCKET: Main test bucket name (tenzir-test)
 - GCS_PUBLIC_BUCKET: Public bucket name (tenzir-test-public)
 
-Options:
-- verify_remove (bool): After tests, assert that lifecycle/remove-target.json
-  was deleted from the bucket.
-- verify_rename (bool): After tests, assert that lifecycle/rename-target.json
-  was moved to lifecycle/rename-target.json.done.
-
-When neither option is set, the fixture verifies that all originally uploaded
-test files are still present after tests complete.
+Assertions payload accepted under ``assertions.fixtures.gcs``:
+- state: unchanged | removed | renamed
 """
 
 from __future__ import annotations
@@ -25,10 +19,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from typing import Iterator
+from pathlib import Path
+from typing import Any
 
-from tenzir_test import fixture
-from tenzir_test.fixtures import FixtureUnavailable, current_options
+from tenzir_test import FixtureHandle, fixture
+from tenzir_test.fixtures import FixtureUnavailable
 from tenzir_test.fixtures.container_runtime import (
     ContainerReadinessTimeout,
     ManagedContainer,
@@ -42,7 +37,8 @@ from ._cloud_storage import (
     BUCKET,
     PUBLIC_BUCKET,
     TEST_FILES,
-    CloudStorageOptions,
+    CloudStorageAssertions,
+    extract_assertions,
     verify_post_test,
 )
 from ._utils import find_free_port
@@ -170,10 +166,9 @@ def _gcs_file_exists(port: int, key: str) -> bool:
         raise
 
 
-@fixture(options=CloudStorageOptions)
-def gcs() -> Iterator[dict[str, str]]:
-    """Start fake-gcs-server and yield environment variables for GCS access."""
-    opts = current_options("gcs")
+@fixture(assertions=CloudStorageAssertions)
+def gcs() -> FixtureHandle:
+    """Start fake-gcs-server and return fixture handle with assertions."""
     runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
@@ -187,17 +182,33 @@ def gcs() -> Iterator[dict[str, str]]:
         container = _start_fake_gcs(runtime, port)
         _wait_for_gcs(port, STARTUP_TIMEOUT)
         _setup_gcs_data(port)
+    except Exception:
+        if container is not None:
+            _stop_container(container, "fake-gcs-server")
+        raise
+    assert container is not None
 
-        yield {
+    def _assert_test(
+        *,
+        test: Path,
+        assertions: CloudStorageAssertions | dict[str, Any],
+        **_: Any,
+    ) -> None:
+        assertion_config = extract_assertions(assertions)
+        try:
+            verify_post_test(
+                file_exists=lambda key: _gcs_file_exists(port, key),
+                assertions=assertion_config,
+            )
+        except RuntimeError as exc:
+            raise AssertionError(f"{test.name}: {exc}") from exc
+
+    return FixtureHandle(
+        env={
             "GCS_ENDPOINT": f"127.0.0.1:{port}",
             "GCS_BUCKET": BUCKET,
             "GCS_PUBLIC_BUCKET": PUBLIC_BUCKET,
-        }
-
-        verify_post_test(
-            file_exists=lambda key: _gcs_file_exists(port, key),
-            opts=opts,
-        )
-    finally:
-        if container is not None:
-            _stop_container(container, "fake-gcs-server")
+        },
+        teardown=lambda: _stop_container(container, "fake-gcs-server"),
+        hooks={"assert_test": _assert_test},
+    )
