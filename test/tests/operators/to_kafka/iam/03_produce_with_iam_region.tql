@@ -1,0 +1,14 @@
+// Produce a second message using aws_iam.region (without top-level aws_region).
+from {message: "iam-message-0002"}
+to_kafka env("KAFKA_TOPIC"),
+         message=this.message,
+         aws_iam={
+           region: env("KAFKA_AWS_REGION"),
+           access_key_id: env("KAFKA_AWS_ACCESS_KEY_ID"),
+           secret_access_key: env("KAFKA_AWS_SECRET_ACCESS_KEY")
+         },
+         options={
+           "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+           "security.protocol": "SASL_PLAINTEXT",
+           "enable.metrics.push": false
+         }

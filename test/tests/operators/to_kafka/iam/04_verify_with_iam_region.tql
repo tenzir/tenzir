@@ -1,0 +1,15 @@
+// Verify both produced messages are readable via aws_iam.region.
+from_kafka env("KAFKA_TOPIC"),
+           count=2,
+           offset="beginning",
+           aws_iam={
+             region: env("KAFKA_AWS_REGION"),
+             access_key_id: env("KAFKA_AWS_ACCESS_KEY_ID"),
+             secret_access_key: env("KAFKA_AWS_SECRET_ACCESS_KEY")
+           },
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "security.protocol": "SASL_PLAINTEXT",
+             "enable.metrics.push": false,
+             "group.id": "tenzir-test-to-kafka-iam-verify-region"
+           }
