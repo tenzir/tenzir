@@ -46,6 +46,8 @@
 // implicitly a component actor, and as such may run outside of the node or even
 // multiple times. We should revisit this in the future.
 
+#include "tenzir/async.hpp"
+#include "tenzir/async/mail.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 
 #include <tenzir/actors.hpp>
@@ -58,6 +60,7 @@
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
@@ -1201,6 +1204,61 @@ auto serve_handler(
   };
 }
 
+// -- new executor serve operator ---------------------------------------------
+
+struct ServeArgs {
+  std::string id;
+  uint64_t buffer_size = defaults::api::serve::max_events;
+};
+
+class ServeImpl final : public Operator<table_slice, void> {
+public:
+  explicit ServeImpl(ServeArgs args) : args_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await OperatorBase::start(ctx);
+    serve_manager_ = ctx.actor_system().registry().get<serve_manager_actor>(
+      "tenzir.serve-manager");
+    auto result
+      = co_await async_mail(atom::start_v, args_.id, args_.buffer_size)
+          .request(serve_manager_);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to register at serve-manager")
+        .emit(ctx);
+    }
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
+    auto result = co_await async_mail(atom::put_v, args_.id, std::move(input))
+                    .request(serve_manager_);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to buffer events at serve-manager")
+        .emit(ctx);
+    }
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    auto result
+      = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to deregister at serve-manager")
+        .emit(ctx);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  ServeArgs args_;
+  serve_manager_actor serve_manager_;
+};
+
 // -- serve operator ----------------------------------------------------------
 
 class serve_operator final : public crtp_operator<serve_operator> {
@@ -1304,8 +1362,25 @@ private:
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
                      public virtual operator_plugin2<serve_operator>,
+                     public virtual OperatorPlugin,
                      public virtual aspect_plugin {
 public:
+  auto describe() const -> Description override {
+    auto d = Describer<ServeArgs, ServeImpl>{};
+    d.positional("id", &ServeArgs::id);
+    auto bs = d.named_optional("buffer_size", &ServeArgs::buffer_size);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      TRY(auto buffer_size, ctx.get(bs));
+      if (buffer_size == 0) {
+        diagnostic::error("buffer size must not be zero")
+          .primary(ctx.get_location(bs).value())
+          .emit(ctx);
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto component_name() const -> std::string override {
     return "serve-manager";
   }
