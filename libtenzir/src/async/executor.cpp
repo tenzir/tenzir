@@ -1501,8 +1501,7 @@ auto new_pipe_id() -> PipeId {
 } // namespace
 
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  metrics_callback emit_fn) -> Task<void> {
+                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
     = exec_ctx.make<void>(ChannelId::first(id.op(0)));
@@ -1518,18 +1517,16 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
-      // Spawn periodic metrics emission if a callback was provided.
-      if (emit_fn) {
-        queue.scope().spawn([metrics, emit_fn] -> Task<void> {
-          while (true) {
-            co_await folly::coro::sleep(
-              std::chrono::duration_cast<folly::HighResDuration>(
-                defaults::metrics_interval));
-            auto snapshot = metrics->take_snapshot();
-            emit_fn(snapshot);
-          }
-        });
-      }
+      // Spawn periodic metrics emission.
+      queue.scope().spawn([metrics, &exec_ctx] -> Task<void> {
+        while (true) {
+          co_await folly::coro::sleep(
+            std::chrono::duration_cast<folly::HighResDuration>(
+              defaults::metrics_interval));
+          auto snapshot = metrics->take_snapshot();
+          exec_ctx.emit_metrics(snapshot);
+        }
+      });
       queue.spawn([&] -> Task<std::monostate> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),

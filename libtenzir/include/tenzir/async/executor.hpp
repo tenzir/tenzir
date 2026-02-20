@@ -21,6 +21,8 @@
 #include <folly/coro/Synchronized.h>
 #include <folly/executors/GlobalExecutor.h>
 
+#include <span>
+
 namespace tenzir {
 
 template <class SemiAwaitable, class F>
@@ -219,6 +221,10 @@ public:
     TENZIR_UNUSED(type);
   }
 
+  /// Called periodically with metrics snapshots.
+  virtual void emit_metrics(std::span<const metrics_snapshot_entry>) {
+  }
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
@@ -236,8 +242,7 @@ public:
 
 /// Run a closed pipeline without external control.
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  metrics_callback emit_fn = {}) -> Task<void>;
+                  caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
 
 /// Run a right-open pipeline without external control.
 template <class Output>
