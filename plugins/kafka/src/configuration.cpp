@@ -8,6 +8,7 @@
 
 #include "kafka/configuration.hpp"
 
+#include "tenzir/aws_credentials.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -70,34 +71,34 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
     Aws::Http::HttpMethod::HTTP_GET,
   };
   // Determine base credentials provider: explicit, profile, or default chain.
-  auto base_provider = std::invoke(
-    [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-      if (creds_ and not creds_->access_key_id.empty()) {
-        TENZIR_VERBOSE("[kafka iam] using explicit credentials");
-        return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-          creds_->access_key_id, creds_->secret_access_key,
-          creds_->session_token);
-      }
-      if (creds_ and not creds_->profile.empty()) {
-        TENZIR_VERBOSE("[kafka iam] using profile {}", creds_->profile);
-        class profile_provider_chain final
-          : public Aws::Auth::AWSCredentialsProviderChain {
-        public:
-          explicit profile_provider_chain(std::string_view profile) {
-            AddProvider(std::make_shared<
-                        Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
-              profile.data()));
-            AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(
-              Aws::String{profile.data()}));
-          }
-        };
-        // Support both static profiles (~/.aws/credentials) and AWS SSO
-        // profiles (~/.aws/config) when `aws_iam.profile` is specified.
-        return std::make_shared<profile_provider_chain>(creds_->profile);
-      }
-      TENZIR_VERBOSE("[kafka iam] using the default credential chain");
-      return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
-    });
+  auto base_provider
+    = std::invoke([&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
+        if (creds_ and not creds_->access_key_id.empty()) {
+          TENZIR_VERBOSE("[kafka iam] using explicit credentials");
+          return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            creds_->access_key_id, creds_->secret_access_key,
+            creds_->session_token);
+        }
+        if (creds_ and not creds_->profile.empty()) {
+          TENZIR_VERBOSE("[kafka iam] using profile {}", creds_->profile);
+          class profile_provider_chain final
+            : public Aws::Auth::AWSCredentialsProviderChain {
+          public:
+            explicit profile_provider_chain(std::string_view profile) {
+              AddProvider(std::make_shared<
+                          Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
+                profile.data()));
+              AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(
+                Aws::String{profile.data()}));
+            }
+          };
+          // Support both static profiles (~/.aws/credentials) and AWS SSO
+          // profiles (~/.aws/config) when `aws_iam.profile` is specified.
+          return std::make_shared<profile_provider_chain>(creds_->profile);
+        }
+        TENZIR_VERBOSE("[kafka iam] using the default credential chain");
+        return make_default_aws_credentials_provider_chain();
+      });
   const auto emit_credentials_unavailable = [&](std::string_view reason) {
     auto const is_truthy = [](std::string_view value) {
       return value == "1" or value == "true" or value == "TRUE"

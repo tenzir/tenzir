@@ -8,6 +8,7 @@
 
 #include "kafka/librdkafka_utils.hpp"
 
+#include "tenzir/aws_credentials.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/env.hpp"
 
@@ -156,7 +157,7 @@ public:
         // profiles (~/.aws/config) when `aws_iam.profile` is specified.
         return std::make_shared<profile_provider_chain>(creds_->profile);
       }
-      return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+      return make_default_aws_credentials_provider_chain();
     }();
 
     auto const report_refresh_failure = [&](std::string reason) -> void {

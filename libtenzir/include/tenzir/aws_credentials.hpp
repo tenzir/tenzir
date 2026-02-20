@@ -39,6 +39,13 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
 auto load_profile_credentials(const std::string& profile)
   -> caf::expected<sts_credentials>;
 
+/// Creates the default AWS credential provider chain with bounded IMDS latency.
+///
+/// The returned chain keeps IMDS enabled but constrains metadata lookups to a
+/// low-latency profile suitable for interactive/operator paths.
+auto make_default_aws_credentials_provider_chain()
+  -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider>;
+
 /// Creates an AWS credentials provider based on the resolved credentials.
 ///
 /// This function implements the common credential resolution logic:
