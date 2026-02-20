@@ -222,28 +222,40 @@ public:
 
   /// Flushes buffered messages and tears down producer resources.
   auto finalize(diagnostic_handler* dh) -> Task<void> {
-    const auto timeout_ms = detail::narrow_cast<int>(10000);
-    auto result = producer_->flush(timeout_ms);
-    const auto pending = producer_->outq_len();
-    if (dh and (result != RdKafka::ERR_NO_ERROR or pending > 0)) {
-      auto reason = std::string{};
-      if (result == RdKafka::ERR__TIMED_OUT) {
-        reason = "producer flush timed out before all messages were delivered";
-      } else if (result != RdKafka::ERR_NO_ERROR) {
-        reason
-          = fmt::format("producer flush failed: {}", RdKafka::err2str(result));
-      } else {
-        reason = "messages remained queued after flush";
+    constexpr auto max_retries = 1000;
+    for (auto retry = 0; retry < max_retries; ++retry) {
+      auto result = producer_->flush(0);
+      const auto pending = producer_->outq_len();
+      if (result == RdKafka::ERR_NO_ERROR and pending == 0) {
+        co_return;
       }
+      if (result != RdKafka::ERR_NO_ERROR
+          and result != RdKafka::ERR__TIMED_OUT) {
+        if (dh) {
+          auto out
+            = diagnostic::error(
+                "failed to flush produced Kafka messages for `{}`", topic_)
+                .note("reason={}", RdKafka::err2str(result))
+                .note("outbound.messages.pending={}", pending);
+          out = add_connection_and_auth_notes(std::move(out));
+          out = add_connectivity_hint(std::move(out));
+          std::move(out).emit(*dh);
+        }
+        co_return;
+      }
+      co_await folly::coro::sleep(std::chrono::milliseconds{10});
+    }
+    if (dh) {
+      const auto pending = producer_->outq_len();
       auto out = diagnostic::error(
                    "failed to flush produced Kafka messages for `{}`", topic_)
-                   .note("reason={}", reason)
+                   .note("reason=producer flush timed out after {} retries",
+                         max_retries)
                    .note("outbound.messages.pending={}", pending);
       out = add_connection_and_auth_notes(std::move(out));
       out = add_connectivity_hint(std::move(out));
       std::move(out).emit(*dh);
     }
-    co_return;
   }
 
 private:
