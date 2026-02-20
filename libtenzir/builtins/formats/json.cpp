@@ -16,6 +16,7 @@
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/concept/printable/tenzir/json2.hpp>
 #include <tenzir/config_options.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
@@ -1441,10 +1442,12 @@ private:
   auto read_worker_loop(std::string parser_name,
                         multi_series_builder::options msb_options,
                         diagnostic_handler& dh) const -> Task<void> {
+    co_await folly::coro::co_reschedule_on_current_executor;
     auto parser = ndjson_parser{parser_name, dh, msb_options};
     auto line_buffer = std::string{};
     try {
       while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await read_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
@@ -1498,6 +1501,7 @@ private:
     }
     // Finalize: flush remaining data.
     for (auto& slice : parser.builder.finalize_as_table_slice()) {
+      co_await folly::coro::co_reschedule_on_current_executor;
       co_await read_output_queue_->enqueue(std::move(slice));
     }
     co_await read_output_queue_->enqueue(table_slice{});
@@ -1872,45 +1876,46 @@ public:
   }
 
   auto print_slice(table_slice const& input) const -> chunk_ptr {
-    auto printer = tenzir::json_printer{opts_};
-    // TODO: Since this printer is per-schema we can write an optimized
-    // version of it that gets the schema ahead of time and only expects
-    // data corresponding to exactly that schema.
-    auto buffer = std::vector<char>{};
+    auto printer = tenzir::json_printer2{opts_};
+    auto buffer = std::vector<std::byte>{};
     auto resolved_slice = resolve_enumerations(input);
-    auto out_iter = std::back_inserter(buffer);
     auto rows = values3(resolved_slice);
-    auto row = rows.begin();
-    if (args_.arrays_of_objects) {
-      if (array_open_written_) {
-        *out_iter++ = ',';
-        if (not opts_.oneline) {
-          *out_iter++ = '\n';
+    auto append_char = [&](char c) {
+      buffer.push_back(static_cast<std::byte>(c));
+    };
+    auto append_bytes = [&](std::span<std::byte const> b) {
+      buffer.insert(buffer.end(), b.begin(), b.end());
+    };
+    auto first = true;
+    for (auto const& row : rows) {
+      if (first) {
+        first = false;
+        if (args_.arrays_of_objects) {
+          if (array_open_written_) {
+            append_char(',');
+            if (not opts_.oneline) {
+              append_char('\n');
+            }
+          } else {
+            append_char('[');
+            array_open_written_ = true;
+          }
         }
       } else {
-        out_iter = fmt::format_to(out_iter, "[");
-        array_open_written_ = true;
-      }
-    }
-    if (row != rows.end()) {
-      auto const ok = printer.print(out_iter, *row);
-      TENZIR_ASSERT(ok);
-      ++row;
-    }
-    for (; row != rows.end(); ++row) {
-      if (args_.arrays_of_objects) {
-        *out_iter++ = ',';
-        if (not opts_.oneline) {
-          *out_iter++ = '\n';
+        if (args_.arrays_of_objects) {
+          append_char(',');
+          if (not opts_.oneline) {
+            append_char('\n');
+          }
+        } else {
+          append_char('\n');
         }
-      } else {
-        out_iter = fmt::format_to(out_iter, "\n");
       }
-      auto const ok = printer.print(out_iter, *row);
-      TENZIR_ASSERT(ok);
+      printer.load_new(row);
+      append_bytes(printer.bytes());
     }
     if (not args_.arrays_of_objects) {
-      *out_iter++ = '\n';
+      append_char('\n');
     }
     auto meta = chunk_metadata{
       .content_type = opts_.oneline and not args_.arrays_of_objects
@@ -1997,6 +2002,7 @@ private:
   auto write_worker_loop() const -> Task<void> {
     try {
       while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await write_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.

@@ -608,15 +608,25 @@ public:
       auto wall_end = std::chrono::steady_clock::now();
       struct timespec cpu_end = {};
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
+      auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+                          wall_end - wall_start)
+                          .count();
+      auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
+                       + (cpu_end.tv_nsec - cpu_start.tv_nsec);
+      if (wall_delta > 1'000'000) {
+        fmt::print(stderr,
+                   "PROF add(): wall={}us cpu={}ns total_cpu={}ns "
+                   "tasks={}\n",
+                   wall_delta, cpu_delta,
+                   stats->cpu_ns.load(std::memory_order::relaxed) + cpu_delta,
+                   stats->task_count.load(std::memory_order::relaxed) + 1);
+      }
       stats->wall_ns.fetch_add(
         std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
                                                              - wall_start)
           .count(),
         std::memory_order::relaxed);
-      stats->cpu_ns.fetch_add((cpu_end.tv_sec - cpu_start.tv_sec)
-                                  * 1'000'000'000LL
-                                + (cpu_end.tv_nsec - cpu_start.tv_nsec),
-                              std::memory_order::relaxed);
+      stats->cpu_ns.fetch_add(cpu_delta, std::memory_order::relaxed);
       stats->task_count.fetch_add(1, std::memory_order::relaxed);
     });
   }
@@ -1507,13 +1517,13 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
   -> failure_or<void> {
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task
-    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-        co_return co_await folly::coro::co_awaitTry(
-          folly::coro::co_withCancellation(
-            cancel_source.getToken(),
-            run_plan_impl(std::move(ops), sys, diag_handler, profile_path, {})));
-      });
+  auto task = folly::coro::co_invoke(
+    [&] -> Task<AsyncResult<failure_or<void>>> {
+      co_return co_await folly::coro::co_awaitTry(
+        folly::coro::co_withCancellation(
+          cancel_source.getToken(),
+          run_plan_impl(std::move(ops), sys, diag_handler, profile_path, {})));
+    });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
