@@ -8,9 +8,8 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/detail/assert.hpp>
-#include <tenzir/detail/enumerate.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/pipeline.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/table_slice.hpp>
@@ -18,11 +17,6 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
-
-#include <arrow/type.h>
-#include <fmt/format.h>
-
-#include <bitset>
 
 namespace tenzir::plugins::drop_null_fields {
 
@@ -99,6 +93,133 @@ auto get_all_field_paths(const record_type& record,
   return result;
 }
 
+auto fields_to_check(const table_slice& slice,
+                     const std::vector<ast::field_path>& selectors)
+  -> std::vector<ast::field_path> {
+  if (selectors.empty()) {
+    if (auto* record = try_as<record_type>(slice.schema())) {
+      return get_all_field_paths(*record);
+    }
+    return {};
+  }
+  auto result = std::vector<ast::field_path>{};
+  for (const auto& selector : selectors) {
+    // First add the selector itself.
+    result.push_back(selector);
+    // Then check if it's a record and add its nested fields.
+    auto resolved = resolve(selector, slice.schema());
+    auto* field_offset = std::get_if<offset>(&resolved);
+    if (not field_offset or field_offset->empty()) {
+      continue;
+    }
+    auto field_type = slice.schema();
+    for (const auto& idx : *field_offset) {
+      if (auto* rec = try_as<record_type>(field_type)) {
+        if (idx < rec->num_fields()) {
+          field_type = rec->field(idx).type;
+        }
+      }
+    }
+    if (auto* record = try_as<record_type>(field_type)) {
+      auto prefix = std::vector<ast::field_path::segment>{};
+      prefix.reserve(selector.path().size());
+      for (const auto& seg : selector.path()) {
+        prefix.push_back(seg);
+      }
+      auto nested_paths = get_all_field_paths(*record, std::move(prefix));
+      result.insert(result.end(), nested_paths.begin(), nested_paths.end());
+    }
+  }
+  return result;
+}
+
+auto fields_to_drop_for_pattern(const null_pattern& pattern,
+                                const std::vector<ast::field_path>& fields)
+  -> std::vector<ast::field_path> {
+  TENZIR_ASSERT(pattern.size() == fields.size());
+  auto result = std::vector<ast::field_path>{};
+  for (auto i = 0uz; i < fields.size(); ++i) {
+    if (pattern[i]) {
+      result.push_back(fields[i]);
+    }
+  }
+  return result;
+}
+
+auto drop_null_fields_impl(table_slice slice,
+                           const std::vector<ast::field_path>& selectors,
+                           diagnostic_handler& dh) -> std::vector<table_slice> {
+  if (slice.rows() == 0) {
+    return {table_slice{}};
+  }
+  auto fields = fields_to_check(slice, selectors);
+  if (fields.empty()) {
+    return {std::move(slice)};
+  }
+  auto field_offsets = resolve_field_paths(fields, slice.schema());
+  auto result = std::vector<table_slice>{};
+  auto current_start = 0uz;
+  auto current_pattern = compute_null_pattern(slice, 0, field_offsets);
+  for (auto row = 1uz; row < slice.rows(); ++row) {
+    auto pattern = compute_null_pattern(slice, row, field_offsets);
+    if (pattern == current_pattern) {
+      continue;
+    }
+    auto fields_to_drop = fields_to_drop_for_pattern(current_pattern, fields);
+    auto group_slice = subslice(slice, current_start, row);
+    if (fields_to_drop.empty()) {
+      result.push_back(std::move(group_slice));
+    } else {
+      result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+    }
+    current_start = row;
+    current_pattern = std::move(pattern);
+  }
+  auto fields_to_drop = fields_to_drop_for_pattern(current_pattern, fields);
+  auto group_slice = subslice(slice, current_start, slice.rows());
+  if (fields_to_drop.empty()) {
+    result.push_back(std::move(group_slice));
+  } else {
+    result.push_back(tenzir::drop(group_slice, fields_to_drop, dh, false));
+  }
+  return result;
+}
+
+struct DropNullFieldsArgs {
+  std::vector<ast::expression> fields;
+};
+
+class DropNullFields final : public Operator<table_slice, table_slice> {
+public:
+  explicit DropNullFields(DropNullFieldsArgs args) {
+    if (args.fields.size() == 1) {
+      auto selector = ast::field_path::try_from(args.fields.front());
+      TENZIR_ASSERT(selector);
+      if (selector->has_this() and selector->path().empty()) {
+        return;
+      }
+    }
+    selectors_.reserve(args.fields.size());
+    for (auto& arg : args.fields) {
+      auto selector = ast::field_path::try_from(arg);
+      TENZIR_ASSERT(selector);
+      TENZIR_ASSERT(not selector->has_this());
+      selectors_.push_back(std::move(*selector));
+    }
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto output = drop_null_fields_impl(std::move(input), selectors_, ctx.dh());
+    for (auto& slice : output) {
+      co_await push(std::move(slice));
+    }
+  }
+
+private:
+  std::vector<ast::field_path> selectors_;
+};
+
 class drop_null_fields_operator final
   : public crtp_operator<drop_null_fields_operator> {
 public:
@@ -116,95 +237,10 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      // Determine which fields to check
-      auto fields_to_check = std::vector<ast::field_path>{};
-      if (selectors_.empty()) {
-        if (auto* record = try_as<record_type>(slice.schema())) {
-          fields_to_check = get_all_field_paths(*record);
-        }
-      } else {
-        // When selectors are provided, we need to check both the selectors
-        // themselves and all nested fields within them if they are records
-        for (const auto& selector : selectors_) {
-          // First add the selector itself
-          fields_to_check.push_back(selector);
-          // Then check if it's a record and add its nested fields
-          auto resolved = resolve(selector, slice.schema());
-          if (auto* field_offset = std::get_if<offset>(&resolved)) {
-            if (! field_offset->empty()) {
-              // Get the type at this offset
-              auto field_type = slice.schema();
-              for (const auto& idx : *field_offset) {
-                if (auto* rec = try_as<record_type>(field_type)) {
-                  if (idx < rec->num_fields()) {
-                    field_type = rec->field(idx).type;
-                  }
-                }
-              }
-              // If the field is a record, get all its nested paths
-              if (auto* record = try_as<record_type>(field_type)) {
-                // Build the prefix from the selector
-                auto prefix = std::vector<ast::field_path::segment>{};
-                for (const auto& seg : selector.path()) {
-                  prefix.push_back(seg);
-                }
-                auto nested_paths = get_all_field_paths(*record, prefix);
-                fields_to_check.insert(fields_to_check.end(),
-                                       nested_paths.begin(),
-                                       nested_paths.end());
-              }
-            }
-          }
-        }
-      }
-      if (fields_to_check.empty()) {
-        // No fields to check, yield unchanged
-        co_yield std::move(slice);
-        continue;
-      }
-      // Resolve field paths to offsets once per slice
-      auto field_offsets = resolve_field_paths(fields_to_check, slice.schema());
-      // Process consecutive rows by their null pattern
-      auto current_start = 0uz;
-      auto current_pattern = compute_null_pattern(slice, 0, field_offsets);
-      for (auto row = 1uz; row < slice.rows(); ++row) {
-        auto pattern = compute_null_pattern(slice, row, field_offsets);
-        if (pattern != current_pattern) {
-          // Pattern changed, process the current group
-          auto fields_to_drop = std::vector<ast::field_path>{};
-          for (auto i = 0uz; i < fields_to_check.size(); ++i) {
-            if (current_pattern[i]) {
-              fields_to_drop.push_back(fields_to_check[i]);
-            }
-          }
-          auto group_slice = subslice(slice, current_start, row);
-          if (fields_to_drop.empty()) {
-            co_yield std::move(group_slice);
-          } else {
-            co_yield tenzir::drop(group_slice, fields_to_drop,
-                                  ctrl.diagnostics(), false);
-          }
-          current_start = row;
-          current_pattern = std::move(pattern);
-        }
-      }
-      // Process the last group
-      auto fields_to_drop = std::vector<ast::field_path>{};
-      for (auto i = 0uz; i < fields_to_check.size(); ++i) {
-        if (current_pattern[i]) {
-          fields_to_drop.push_back(fields_to_check[i]);
-        }
-      }
-      auto group_slice = subslice(slice, current_start, slice.rows());
-      if (fields_to_drop.empty()) {
-        co_yield std::move(group_slice);
-      } else {
-        co_yield tenzir::drop(group_slice, fields_to_drop, ctrl.diagnostics(),
-                              false);
+      auto output = drop_null_fields_impl(std::move(slice), selectors_,
+                                          ctrl.diagnostics());
+      for (auto& part : output) {
+        co_yield std::move(part);
       }
     }
   }
@@ -225,9 +261,48 @@ private:
 
 } // namespace
 
-class plugin final
-  : public virtual operator_plugin2<drop_null_fields_operator> {
+class plugin final : public virtual operator_plugin2<drop_null_fields_operator>,
+                     public virtual OperatorPlugin {
 public:
+  auto describe() const -> Description override {
+    auto d = Describer<DropNullFieldsArgs, DropNullFields>{};
+    auto fields
+      = d.optional_variadic("fields", &DropNullFieldsArgs::fields, "field");
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      auto values = ctx.get_all(fields);
+      auto locations = ctx.get_locations(fields);
+      TENZIR_ASSERT(values.size() == locations.size());
+      if (values.size() == 1 and values[0]) {
+        auto selector = ast::field_path::try_from(*values[0]);
+        if (selector and selector->has_this() and selector->path().empty()) {
+          return {};
+        }
+      }
+      for (auto i = 0uz; i < values.size(); ++i) {
+        if (not values[i]) {
+          diagnostic::error("expected simple selector")
+            .primary(locations[i])
+            .emit(ctx);
+          continue;
+        }
+        auto selector = ast::field_path::try_from(*values[i]);
+        if (not selector) {
+          diagnostic::error("expected simple selector")
+            .primary(locations[i])
+            .emit(ctx);
+          continue;
+        }
+        if (selector->has_this()) {
+          diagnostic::error("cannot drop `this`")
+            .primary(locations[i])
+            .emit(ctx);
+        }
+      }
+      return {};
+    });
+    return d.without_optimize();
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("drop_null_fields");
