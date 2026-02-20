@@ -8,11 +8,13 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace tenzir {
@@ -21,9 +23,36 @@ enum class metrics_direction { read, write };
 enum class metrics_visibility { external_, internal_ };
 
 /// A (key, value) label attached to a counter.
-struct metrics_label {
-  std::string key;
-  std::string value;
+/// Key and value are bounded to `max_length` characters.
+class metrics_label {
+  static constexpr std::size_t max_length = 16;
+  struct fixed_string {
+    std::array<char, max_length> data_{};
+    template <std::size_t N>
+      requires(N <= max_length)
+    constexpr fixed_string(char const (&str)[N]) {
+      std::copy_n(str, N, data_.begin());
+    }
+    auto view() const noexcept -> std::string_view {
+      return std::string_view{data_.data()};
+    }
+  };
+
+public:
+  template <std::size_t KeyN, std::size_t ValueN>
+  constexpr metrics_label(char const (&key)[KeyN], char const (&value)[ValueN])
+    : key_{key}, value_{value} {
+  }
+  auto key() const noexcept -> std::string_view {
+    return key_.view();
+  }
+  auto value() const noexcept -> std::string_view {
+    return value_.view();
+  }
+
+private:
+  fixed_string key_;
+  fixed_string value_;
 };
 
 /// Thread-safe counter. Wraps a `shared_ptr<atomic<uint64_t>>`.

@@ -849,8 +849,8 @@ public:
 
   void emit_metrics(std::span<const metrics_snapshot_entry> entries) override {
     for (auto const& e : entries) {
-      TENZIR_INFO("metrics: key={} value={} direction={} bytes={}", e.label.key,
-                  e.label.value,
+      TENZIR_INFO("metrics: key={} value={} direction={} bytes={}",
+                  e.label.key(), e.label.value(),
                   e.direction == metrics_direction::read ? "read" : "write",
                   e.value);
     }

@@ -31,7 +31,7 @@ auto pipeline_metrics::make_counter(metrics_label label,
   auto value = std::make_shared<std::atomic<uint64_t>>(0);
   auto lock = std::lock_guard{mutex_};
   entries_.push_back(entry{
-    .label = std::move(label),
+    .label = label,
     .direction = direction,
     .visibility = visibility,
     .value = value,
