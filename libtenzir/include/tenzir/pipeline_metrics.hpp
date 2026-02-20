@@ -27,23 +27,33 @@ enum class MetricsVisibility { external_, internal_ };
 /// A (key, value) label attached to a counter.
 /// Key and value are bounded to `max_length` characters.
 class MetricsLabel {
+public:
   static constexpr std::size_t max_length = 16;
-  struct fixed_string {
+
+  struct FixedString {
     std::array<char, max_length> data_{};
+    FixedString() = default;
     template <std::size_t N>
       requires(N <= max_length)
-    constexpr fixed_string(char const (&str)[N]) {
+    constexpr FixedString(char const (&str)[N]) {
       std::copy_n(str, N, data_.begin());
+    }
+    static auto truncate(std::string_view sv) -> FixedString {
+      auto result = FixedString{};
+      auto n = std::min(sv.size(), max_length - 1);
+      std::copy_n(sv.data(), n, result.data_.begin());
+      return result;
     }
     auto view() const noexcept -> std::string_view {
       return std::string_view{data_.data()};
     }
   };
 
-public:
   template <std::size_t KeyN, std::size_t ValueN>
   constexpr MetricsLabel(char const (&key)[KeyN], char const (&value)[ValueN])
     : key_{key}, value_{value} {
+  }
+  MetricsLabel(FixedString key, FixedString value) : key_{key}, value_{value} {
   }
   auto key() const noexcept -> std::string_view {
     return key_.view();
@@ -53,8 +63,8 @@ public:
   }
 
 private:
-  fixed_string key_;
-  fixed_string value_;
+  FixedString key_;
+  FixedString value_;
 };
 
 /// Thread-safe counter. Wraps a `shared_ptr<atomic<uint64_t>>`.
