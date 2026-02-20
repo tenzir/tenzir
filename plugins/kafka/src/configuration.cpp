@@ -74,13 +74,11 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   auto base_provider
     = std::invoke([&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
         if (creds_ and not creds_->access_key_id.empty()) {
-          TENZIR_VERBOSE("[kafka iam] using explicit credentials");
           return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
             creds_->access_key_id, creds_->secret_access_key,
             creds_->session_token);
         }
         if (creds_ and not creds_->profile.empty()) {
-          TENZIR_VERBOSE("[kafka iam] using profile {}", creds_->profile);
           class profile_provider_chain final
             : public Aws::Auth::AWSCredentialsProviderChain {
           public:
@@ -96,7 +94,6 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
           // profiles (~/.aws/config) when `aws_iam.profile` is specified.
           return std::make_shared<profile_provider_chain>(creds_->profile);
         }
-        TENZIR_VERBOSE("[kafka iam] using the default credential chain");
         return make_default_aws_credentials_provider_chain();
       });
   const auto emit_credentials_unavailable = [&](std::string_view reason) {
@@ -171,8 +168,6 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
                                          auth_mode, region));
       return;
     }
-    TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
-                   region, creds_->role, valid_for);
     auto sts_config = Aws::Client::ClientConfiguration{};
     sts_config.region = region;
     auto sts_client = std::make_shared<Aws::STS::STSClient>(
@@ -223,7 +218,6 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   // TODO: Maybe use the credential expiration time instead?
   const auto expiration = duration_cast<std::chrono::milliseconds>(
     (time::clock::now() + valid_for).time_since_epoch());
-  TENZIR_VERBOSE("[kafka iam] setting token");
   handle->oauthbearer_set_token(encoded, expiration.count(), "Tenzir", {},
                                 errstr);
   if (not errstr.empty()) {
@@ -256,9 +250,6 @@ auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
   };
   const auto error_code = event.err();
   const auto error_msg = event.str();
-  TENZIR_VERBOSE("librdkafka {}: {} ({})", get_severity(),
-                 error_msg.empty() ? RdKafka::err2str(error_code) : error_msg,
-                 std::to_underlying(error_code));
   if (event.type() == RdKafka::Event::EVENT_ERROR
       or event.severity() >= RdKafka::Event::EVENT_SEVERITY_WARNING) {
     diagnostic::warning("librdkafka {}: {} ({})", get_severity(),
@@ -287,7 +278,6 @@ auto configuration::make(const record& options,
       .to_error();
   }
   if (aws) {
-    TENZIR_VERBOSE("setting aws iam callback");
     result.aws_ = std::make_shared<aws_iam_callback>(std::move(aws).value(),
                                                      std::move(creds), dh);
     result.conf_->set("oauthbearer_token_refresh_cb", result.aws_.get(),
