@@ -1440,10 +1440,12 @@ private:
   auto read_worker_loop(std::string parser_name,
                         multi_series_builder::options msb_options,
                         diagnostic_handler& dh) const -> Task<void> {
+    co_await folly::coro::co_reschedule_on_current_executor;
     auto parser = ndjson_parser{parser_name, dh, msb_options};
     auto line_buffer = std::string{};
     try {
       while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await read_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
@@ -1497,7 +1499,6 @@ private:
     }
     // Finalize: flush remaining data.
     for (auto& slice : parser.builder.finalize_as_table_slice()) {
-      co_await folly::coro::co_reschedule_on_current_executor;
       read_output_queue_->enqueue(std::move(slice));
     }
     read_output_queue_->enqueue(table_slice{});
@@ -2007,6 +2008,7 @@ private:
   auto write_worker_loop() const -> Task<void> {
     try {
       while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await write_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
