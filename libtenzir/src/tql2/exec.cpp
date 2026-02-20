@@ -608,15 +608,25 @@ public:
       auto wall_end = std::chrono::steady_clock::now();
       struct timespec cpu_end = {};
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
+      auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+                          wall_end - wall_start)
+                          .count();
+      auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
+                       + (cpu_end.tv_nsec - cpu_start.tv_nsec);
+      if (wall_delta > 1'000'000) {
+        TENZIR_VERBOSE("add(): wall={}us cpu={}ns total_cpu={}ns "
+                       "tasks={}",
+                       wall_delta, cpu_delta,
+                       stats->cpu_ns.load(std::memory_order::relaxed)
+                         + cpu_delta,
+                       stats->task_count.load(std::memory_order::relaxed) + 1);
+      }
       stats->wall_ns.fetch_add(
         std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
                                                              - wall_start)
           .count(),
         std::memory_order::relaxed);
-      stats->cpu_ns.fetch_add((cpu_end.tv_sec - cpu_start.tv_sec)
-                                  * 1'000'000'000LL
-                                + (cpu_end.tv_nsec - cpu_start.tv_nsec),
-                              std::memory_order::relaxed);
+      stats->cpu_ns.fetch_add(cpu_delta, std::memory_order::relaxed);
       stats->task_count.fetch_add(1, std::memory_order::relaxed);
     });
   }

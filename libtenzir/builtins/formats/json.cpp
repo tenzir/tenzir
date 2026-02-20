@@ -1440,11 +1440,31 @@ private:
   auto read_worker_loop(std::string parser_name,
                         multi_series_builder::options msb_options,
                         diagnostic_handler& dh) const -> Task<void> {
+    co_await folly::coro::co_reschedule_on_current_executor;
+    auto ct = co_await folly::coro::co_current_cancellation_token;
     auto parser = ndjson_parser{parser_name, dh, msb_options};
     auto line_buffer = std::string{};
     try {
       while (true) {
-        auto next = co_await read_input_queue_->dequeue();
+        co_await folly::coro::co_reschedule_on_current_executor;
+        // Use a timed dequeue so we periodically flush buffered events even
+        // when input is slow. On timeout, yield_ready_as_table_slice() emits
+        // any slices whose MSB timeout has expired.
+        auto next = std::optional<chunk_ptr>{};
+        try {
+          next = co_await read_input_queue_->co_try_dequeue_for(
+            std::chrono::duration_cast<folly::Duration>(
+              msb_options.settings.timeout));
+        } catch (folly::OperationCancelled const&) {
+          if (ct.isCancellationRequested()) {
+            throw; // real shutdown — let outer catch handle it
+          }
+          // Dequeue timeout: flush whatever is ready and loop.
+          for (auto& slice : parser.builder.yield_ready_as_table_slice()) {
+            read_output_queue_->enqueue(std::move(slice));
+          }
+          continue;
+        }
         if (not next) {
           // Pass the stop sentinel to the next worker.
           co_await read_input_queue_->enqueue(std::nullopt);
@@ -1497,7 +1517,6 @@ private:
     }
     // Finalize: flush remaining data.
     for (auto& slice : parser.builder.finalize_as_table_slice()) {
-      co_await folly::coro::co_reschedule_on_current_executor;
       read_output_queue_->enqueue(std::move(slice));
     }
     read_output_queue_->enqueue(table_slice{});
@@ -2007,6 +2026,7 @@ private:
   auto write_worker_loop() const -> Task<void> {
     try {
       while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
         auto next = co_await write_input_queue_->dequeue();
         if (not next) {
           // Pass the stop sentinel to the next worker.
