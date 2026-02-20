@@ -247,6 +247,46 @@ unset(_tenzir_fb_install_stub_dir)
 # export/install of individual targets needed.
 set(CMAKE_SKIP_INSTALL_RULES "${_tenzir_prev_skip_install_rules}")
 unset(_tenzir_prev_skip_install_rules)
+
+# Bundle public headers from vendored Facebook libraries into the Tenzir
+# development package so downstream consumers can compile against tenzir's
+# public headers without requiring separate system installs.
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/folly/folly"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fizz/fizz"
+            "${CMAKE_CURRENT_SOURCE_DIR}/wangle/wangle"
+            "${CMAKE_CURRENT_SOURCE_DIR}/mvfst/quic"
+            "${CMAKE_CURRENT_SOURCE_DIR}/proxygen/proxygen"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  COMPONENT Development
+  FILES_MATCHING
+  PATTERN "*.h"
+  PATTERN "*.hpp"
+  PATTERN "*.hh"
+  PATTERN "*.inc"
+  PATTERN "*.inl"
+  PATTERN "*.tcc")
+
+# Install generated headers from bundled builds.
+install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/folly/folly/folly-config.h"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/folly"
+  COMPONENT Development
+  OPTIONAL)
+install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/fizz/fizz/generated/fizz/fizz-config.h"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/fizz"
+  COMPONENT Development
+  OPTIONAL)
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/proxygen/generated/proxygen"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  COMPONENT Development
+  OPTIONAL
+  FILES_MATCHING
+  PATTERN "*.h"
+  PATTERN "*.hpp")
+
 set(_tenzir_bundled_facebook
     ""
     PARENT_SCOPE)
