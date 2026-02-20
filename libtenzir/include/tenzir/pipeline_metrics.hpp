@@ -12,8 +12,10 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -81,6 +83,10 @@ struct metrics_snapshot_entry {
   metrics_visibility visibility = {};
   uint64_t value = {};
 };
+
+/// Callback type for periodic emission.
+using metrics_callback
+  = std::function<void(std::span<const metrics_snapshot_entry>)>;
 
 /// Per-pipeline collection of labeled counters.
 ///
