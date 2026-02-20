@@ -152,7 +152,7 @@
           };
         # Legacy aliases for backwards compatibility.
         devShell = import ./shell.nix { inherit pkgs package; };
-        formatter = pkgs.nixfmt-rfc-style;
+        formatter = pkgs.nixfmt;
         hydraJobs =
           {
             packages = self.packages.${system};

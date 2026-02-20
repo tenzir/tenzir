@@ -20,7 +20,7 @@ pkgs.mkShell (
         pkgs.clang-tools
         pkgs.cmake-format
         pkgs.gperf
-        pkgs.nixfmt-rfc-style
+        pkgs.nixfmt
         pkgs.speeve
         pkgs.libsodium
         pkgs.shfmt
