@@ -250,10 +250,9 @@ from_kafka_operator::from_kafka_operator(from_kafka_args args, record config)
 auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
   -> generator<table_slice> {
   auto& dh = ctrl.diagnostics();
-  // Resolve secrets if explicit credentials or role are provided.
+  // Resolve all aws_iam fields; region/profile/session_name may be secrets.
   auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
-  if (args_.aws
-      and (args_.aws->has_explicit_credentials() or args_.aws->role)) {
+  if (args_.aws) {
     resolved_creds.emplace();
     auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
     co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
