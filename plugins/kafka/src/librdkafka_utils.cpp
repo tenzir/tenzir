@@ -50,11 +50,9 @@ public:
   auto oauthbearer_token_refresh_cb(RdKafka::Handle* handle, std::string const&)
     -> void override {
     constexpr auto valid_for = std::chrono::seconds{900};
-    Aws::InitAPI({});
-    auto aws_guard = detail::scope_guard{[] noexcept {
-      Aws::ShutdownAPI({});
-    }};
-
+    // AWS SDK initialization is process-scoped in tenzir/tenzir.cpp.
+    // The AWS C++ SDK does not expose a public runtime "is initialized" probe,
+    // so this callback relies on that process-level initialization contract.
     TENZIR_ASSERT(creds_ and not creds_->region.empty());
     auto const& region = creds_->region;
     auto url

@@ -27,6 +27,9 @@
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
 
+#if TENZIR_HAS_AWS_SDK
+#  include <aws/core/Aws.h>
+#endif
 #include <arrow/compute/api.h>
 #include <arrow/util/compression.h>
 #include <arrow/util/utf8.h>
@@ -79,6 +82,22 @@ auto is_ec2_instance() -> bool {
 #endif
   return false;
 }
+
+#if TENZIR_HAS_AWS_SDK
+class aws_sdk_guard {
+public:
+  aws_sdk_guard() {
+    Aws::InitAPI(options_);
+  }
+
+  ~aws_sdk_guard() {
+    Aws::ShutdownAPI(options_);
+  }
+
+private:
+  Aws::SDKOptions options_;
+};
+#endif
 
 class cleaning_actor_clock : public caf::actor_clock {
 public:
@@ -198,6 +217,9 @@ auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
   // Ensure the signal handler object file is linked (needed for static builds).
   signal_handlers_anchor();
+#if TENZIR_HAS_AWS_SDK
+  auto aws_sdk = aws_sdk_guard{};
+#endif
   arrow::util::InitializeUTF8();
 #if ARROW_VERSION_MAJOR >= 21
   if (auto status = arrow::compute::Initialize(); not status.ok()) {

@@ -35,10 +35,6 @@ namespace tenzir::plugins::kafka {
 auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   RdKafka::Handle* handle, const std::string&) -> void {
   const auto valid_for = std::chrono::seconds{900};
-  Aws::InitAPI({});
-  const auto aws_guard = detail::scope_guard{[] noexcept {
-    Aws::ShutdownAPI({});
-  }};
   // Region is required for Kafka MSK - validated at parse time.
   // Use resolved region from creds_ since options_.region is a secret.
   TENZIR_ASSERT(creds_ and not creds_->region.empty());
