@@ -789,7 +789,8 @@ struct ExecutorProfile {
 
 class TestExecCtx : public ExecCtx {
 public:
-  explicit TestExecCtx(bool profiling = false) : profiling_{profiling} {
+  explicit TestExecCtx(bool profiling = false, MetricsCallback emit_fn = {})
+    : profiling_{profiling}, emit_fn_{std::move(emit_fn)} {
   }
 
   auto get_channel_profiles() -> std::vector<ChannelProfile> {
@@ -848,6 +849,12 @@ public:
     return op_type_names_;
   }
 
+  void emit_metrics(std::span<const MetricsSnapshotEntry> entries) override {
+    if (emit_fn_) {
+      emit_fn_(entries);
+    }
+  }
+
 protected:
   auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> override {
     return make_profiled_channel<void>(std::move(id), void_limit,
@@ -889,6 +896,7 @@ private:
   }
 
   bool profiling_;
+  MetricsCallback emit_fn_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
   std::vector<ExecutorProfile> executor_profiles_;
@@ -1404,14 +1412,15 @@ void write_profile(
   f << "\n  ]\n}\n";
 }
 
-auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
-              DiagHandler& dh, std::optional<std::string> const& profile_path)
-  -> Task<failure_or<void>> {
+auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
+                   DiagHandler& dh,
+                   std::optional<std::string> const& profile_path,
+                   MetricsCallback emit_fn) -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  auto exec_ctx = TestExecCtx{profile_path.has_value()};
+  auto exec_ctx = TestExecCtx{profile_path.has_value(), std::move(emit_fn)};
   // Profiling: sample channel and executor stats periodically if requested.
   auto samples = std::vector<ProfileSample>{};
   auto stop_flag = std::atomic<bool>{false};
@@ -1504,13 +1513,13 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
   -> failure_or<void> {
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
-  auto task
-    = folly::coro::co_invoke([&] -> Task<AsyncResult<failure_or<void>>> {
-        co_return co_await folly::coro::co_awaitTry(
-          folly::coro::co_withCancellation(
-            cancel_source.getToken(),
-            run_plan(std::move(ops), sys, diag_handler, profile_path)));
-      });
+  auto task = folly::coro::co_invoke(
+    [&] -> Task<AsyncResult<failure_or<void>>> {
+      co_return co_await folly::coro::co_awaitTry(
+        folly::coro::co_withCancellation(
+          cancel_source.getToken(),
+          run_plan_impl(std::move(ops), sys, diag_handler, profile_path, {})));
+    });
 #if 0
   TENZIR_INFO("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -1527,6 +1536,17 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
   }
   return std::move(result).unwrap();
 }
+
+} // namespace
+
+auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
+              DiagHandler& dh, std::optional<std::string> const& profile_path,
+              MetricsCallback emit_fn) -> Task<failure_or<void>> {
+  co_return co_await run_plan_impl(std::move(ops), sys, dh, profile_path,
+                                   std::move(emit_fn));
+}
+
+namespace {
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,

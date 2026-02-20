@@ -45,6 +45,7 @@
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/result.hpp"
 #include "tenzir/secret_resolution.hpp"
@@ -129,6 +130,19 @@ public:
       folly::coro::semi_await_result_t<std::invoke_result_t<F>>>
   auto spawn_task(F f) -> AsyncHandle<void> {
     return spawn_task(folly::coro::co_invoke(std::move(f)));
+  }
+
+  /// Create a throughput counter with the given label.
+  /// Returns a null counter if metrics collection is disabled.
+  virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
+                            MetricsVisibility visibility) -> MetricsCounter {
+    TENZIR_UNUSED(label, direction, visibility);
+    return {};
+  }
+
+  virtual auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
+    static auto empty = std::shared_ptr<PipelineMetrics>{};
+    return empty;
   }
 };
 

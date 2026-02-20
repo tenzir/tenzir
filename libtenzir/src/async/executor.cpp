@@ -13,6 +13,9 @@
 #include "tenzir/async/queue_scope.hpp"
 #include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/connect_to_node.hpp"
+#include "tenzir/connector.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 
@@ -21,6 +24,7 @@
 #include <folly/Executor.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Sleep.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
@@ -412,6 +416,15 @@ private:
 
   auto dh() -> diagnostic_handler& override {
     return dh_;
+  }
+
+  auto make_counter(MetricsLabel label, MetricsDirection direction,
+                    MetricsVisibility visibility) -> MetricsCounter override {
+    return exec_ctx_.metrics()->make_counter(label, direction, visibility);
+  }
+
+  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& override {
+    return exec_ctx_.metrics();
   }
 
   auto resolve_secrets(std::vector<secret_request> requests)
@@ -1489,6 +1502,16 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       variant<std::monostate, Option<ToControl>, Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await queue.activate([&] -> Task<void> {
+      // Spawn periodic metrics emission.
+      queue.scope().spawn([&exec_ctx] -> Task<void> {
+        while (true) {
+          co_await folly::coro::sleep(
+            std::chrono::duration_cast<folly::HighResDuration>(
+              defaults::metrics_interval));
+          auto snapshot = exec_ctx.metrics()->take_snapshot();
+          exec_ctx.emit_metrics(snapshot);
+        }
+      });
       queue.spawn([&] -> Task<std::monostate> {
         co_await run_chain(std::move(pipeline), std::move(pull_input),
                            std::move(push_output),
@@ -1558,6 +1581,9 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
           });
       }
       queue.cancel();
+      // Emit final metrics snapshot so the last interval is not lost.
+      auto snapshot = exec_ctx.metrics()->take_snapshot();
+      exec_ctx.emit_metrics(snapshot);
     });
   } catch (folly::OperationCancelled) {
     // TODO: ?
