@@ -39,17 +39,21 @@ auto pipeline_metrics::make_counter(metrics_label label,
   return metrics_counter{std::move(value)};
 }
 
+auto pipeline_metrics::entry::snapshot() const -> metrics_snapshot_entry {
+  return metrics_snapshot_entry{
+    .label = label,
+    .direction = direction,
+    .visibility = visibility,
+    .value = value->load(std::memory_order_relaxed),
+  };
+}
+
 auto pipeline_metrics::take_snapshot() -> std::vector<metrics_snapshot_entry> {
   auto result = std::vector<metrics_snapshot_entry>{};
   auto lock = std::lock_guard{mutex_};
   result.reserve(entries_.size());
   for (auto const& e : entries_) {
-    result.push_back(metrics_snapshot_entry{
-      .label = e.label,
-      .direction = e.direction,
-      .visibility = e.visibility,
-      .value = e.value->load(std::memory_order_relaxed),
-    });
+    result.push_back(e.snapshot());
   }
   return result;
 }

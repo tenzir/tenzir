@@ -72,6 +72,8 @@ private:
     metrics_direction direction;
     metrics_visibility visibility;
     std::shared_ptr<std::atomic<uint64_t>> value;
+
+    auto snapshot() const -> metrics_snapshot_entry;
   };
 
   std::mutex mutex_;
