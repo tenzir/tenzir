@@ -17,16 +17,30 @@
 #include <caf/expected.hpp>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace tenzir::plugins::kafka {
+
+/// Shared, thread-safe snapshot of oauth refresh callback activity.
+struct oauth_refresh_diagnostics {
+  std::atomic<uint64_t> attempts = 0;
+  std::atomic<uint64_t> successes = 0;
+  std::atomic<uint64_t> failures = 0;
+  std::mutex mutex;
+  std::string last_result;
+  std::string last_failure;
+};
 
 /// Owns librdkafka consumer config and callback objects with shared lifetime.
 struct consumer_configuration {
   std::shared_ptr<RdKafka::Conf> conf;
   std::shared_ptr<RdKafka::OAuthBearerTokenRefreshCb> oauth_callback;
+  std::shared_ptr<oauth_refresh_diagnostics> oauth_diagnostics;
   std::shared_ptr<RdKafka::EventCb> event_callback;
   std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
 };
