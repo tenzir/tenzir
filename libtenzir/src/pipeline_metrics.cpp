@@ -10,24 +10,24 @@
 
 namespace tenzir {
 
-metrics_counter::metrics_counter(std::shared_ptr<std::atomic<uint64_t>> value)
+MetricsCounter::MetricsCounter(std::shared_ptr<std::atomic<uint64_t>> value)
   : value_{std::move(value)} {
 }
 
-void metrics_counter::add(uint64_t bytes) {
+void MetricsCounter::add(uint64_t bytes) {
   if (value_) {
     value_->fetch_add(bytes, std::memory_order_relaxed);
   }
 }
 
-metrics_counter::operator bool() const {
+MetricsCounter::operator bool() const {
   return value_ != nullptr;
 }
 
-auto pipeline_metrics::make_counter(metrics_label label,
-                                    metrics_direction direction,
-                                    metrics_visibility visibility)
-  -> metrics_counter {
+auto PipelineMetrics::make_counter(MetricsLabel label,
+                                   MetricsDirection direction,
+                                   MetricsVisibility visibility)
+  -> MetricsCounter {
   auto value = std::make_shared<std::atomic<uint64_t>>(0);
   auto lock = std::lock_guard{mutex_};
   entries_.push_back(entry{
@@ -36,11 +36,11 @@ auto pipeline_metrics::make_counter(metrics_label label,
     .visibility = visibility,
     .value = value,
   });
-  return metrics_counter{std::move(value)};
+  return MetricsCounter{std::move(value)};
 }
 
-auto pipeline_metrics::entry::snapshot() const -> metrics_snapshot_entry {
-  return metrics_snapshot_entry{
+auto PipelineMetrics::entry::snapshot() const -> MetricsSnapshotEntry {
+  return MetricsSnapshotEntry{
     .label = label,
     .direction = direction,
     .visibility = visibility,
@@ -48,8 +48,8 @@ auto pipeline_metrics::entry::snapshot() const -> metrics_snapshot_entry {
   };
 }
 
-auto pipeline_metrics::take_snapshot() -> std::vector<metrics_snapshot_entry> {
-  auto result = std::vector<metrics_snapshot_entry>{};
+auto PipelineMetrics::take_snapshot() -> std::vector<MetricsSnapshotEntry> {
+  auto result = std::vector<MetricsSnapshotEntry>{};
   auto lock = std::lock_guard{mutex_};
   result.reserve(entries_.size());
   for (auto const& e : entries_) {

@@ -29,6 +29,6 @@ auto parse_and_compile(std::string_view source, session ctx)
 /// Run a closed pipeline from a list of operators.
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
               DiagHandler& dh, std::optional<std::string> const& profile_path,
-              metrics_callback emit_fn = {}) -> Task<failure_or<void>>;
+              MetricsCallback emit_fn = {}) -> Task<failure_or<void>>;
 
 } // namespace tenzir

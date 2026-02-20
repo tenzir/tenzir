@@ -418,12 +418,12 @@ private:
     return dh_;
   }
 
-  auto make_counter(metrics_label label, metrics_direction direction,
-                    metrics_visibility visibility) -> metrics_counter override {
+  auto make_counter(MetricsLabel label, MetricsDirection direction,
+                    MetricsVisibility visibility) -> MetricsCounter override {
     return exec_ctx_.metrics()->make_counter(label, direction, visibility);
   }
 
-  auto metrics() const -> std::shared_ptr<pipeline_metrics> const& override {
+  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& override {
     return exec_ctx_.metrics();
   }
 

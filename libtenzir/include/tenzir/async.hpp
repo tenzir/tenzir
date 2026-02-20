@@ -134,14 +134,14 @@ public:
 
   /// Create a throughput counter with the given label.
   /// Returns a null counter if metrics collection is disabled.
-  virtual auto make_counter(metrics_label label, metrics_direction direction,
-                            metrics_visibility visibility) -> metrics_counter {
+  virtual auto make_counter(MetricsLabel label, MetricsDirection direction,
+                            MetricsVisibility visibility) -> MetricsCounter {
     TENZIR_UNUSED(label, direction, visibility);
     return {};
   }
 
-  virtual auto metrics() const -> std::shared_ptr<pipeline_metrics> const& {
-    static auto empty = std::shared_ptr<pipeline_metrics>{};
+  virtual auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
+    static auto empty = std::shared_ptr<PipelineMetrics>{};
     return empty;
   }
 };

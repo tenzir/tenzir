@@ -21,12 +21,12 @@
 
 namespace tenzir {
 
-enum class metrics_direction { read, write };
-enum class metrics_visibility { external_, internal_ };
+enum class MetricsDirection { read, write };
+enum class MetricsVisibility { external_, internal_ };
 
 /// A (key, value) label attached to a counter.
 /// Key and value are bounded to `max_length` characters.
-class metrics_label {
+class MetricsLabel {
   static constexpr std::size_t max_length = 16;
   struct fixed_string {
     std::array<char, max_length> data_{};
@@ -42,7 +42,7 @@ class metrics_label {
 
 public:
   template <std::size_t KeyN, std::size_t ValueN>
-  constexpr metrics_label(char const (&key)[KeyN], char const (&value)[ValueN])
+  constexpr MetricsLabel(char const (&key)[KeyN], char const (&value)[ValueN])
     : key_{key}, value_{value} {
   }
   auto key() const noexcept -> std::string_view {
@@ -59,56 +59,56 @@ private:
 
 /// Thread-safe counter. Wraps a `shared_ptr<atomic<uint64_t>>`.
 /// Cheap to copy, safe to capture in lambdas and pass to background tasks.
-class metrics_counter {
+class MetricsCounter {
 public:
   /// Constructs a null counter where `add()` is a no-op.
-  metrics_counter() = default;
+  MetricsCounter() = default;
 
   void add(uint64_t bytes);
 
   explicit operator bool() const;
 
 private:
-  friend class pipeline_metrics;
+  friend class PipelineMetrics;
 
-  explicit metrics_counter(std::shared_ptr<std::atomic<uint64_t>> value);
+  explicit MetricsCounter(std::shared_ptr<std::atomic<uint64_t>> value);
 
   std::shared_ptr<std::atomic<uint64_t>> value_;
 };
 
 /// Snapshot of a single counter (plain values, no atomics).
-struct metrics_snapshot_entry {
-  metrics_label label;
-  metrics_direction direction = {};
-  metrics_visibility visibility = {};
+struct MetricsSnapshotEntry {
+  MetricsLabel label;
+  MetricsDirection direction = {};
+  MetricsVisibility visibility = {};
   uint64_t value = {};
 };
 
 /// Callback type for periodic emission.
-using metrics_callback
-  = std::function<void(std::span<const metrics_snapshot_entry>)>;
+using MetricsCallback
+  = std::function<void(std::span<const MetricsSnapshotEntry>)>;
 
 /// Per-pipeline collection of labeled counters.
 ///
 /// Thread-safe: `make_counter()` can be called from operator coroutines,
 /// `take_snapshot()` from the timer coroutine.
-class pipeline_metrics {
+class PipelineMetrics {
 public:
   /// Create and register a new counter.
-  auto make_counter(metrics_label label, metrics_direction direction,
-                    metrics_visibility visibility) -> metrics_counter;
+  auto make_counter(MetricsLabel label, MetricsDirection direction,
+                    MetricsVisibility visibility) -> MetricsCounter;
 
   /// Read all counters into plain snapshots.
-  auto take_snapshot() -> std::vector<metrics_snapshot_entry>;
+  auto take_snapshot() -> std::vector<MetricsSnapshotEntry>;
 
 private:
   struct entry {
-    metrics_label label;
-    metrics_direction direction;
-    metrics_visibility visibility;
+    MetricsLabel label;
+    MetricsDirection direction;
+    MetricsVisibility visibility;
     std::shared_ptr<std::atomic<uint64_t>> value;
 
-    auto snapshot() const -> metrics_snapshot_entry;
+    auto snapshot() const -> MetricsSnapshotEntry;
   };
 
   std::mutex mutex_;

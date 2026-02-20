@@ -789,7 +789,7 @@ struct ExecutorProfile {
 
 class TestExecCtx : public ExecCtx {
 public:
-  explicit TestExecCtx(bool profiling = false, metrics_callback emit_fn = {})
+  explicit TestExecCtx(bool profiling = false, MetricsCallback emit_fn = {})
     : profiling_{profiling}, emit_fn_{std::move(emit_fn)} {
   }
 
@@ -848,7 +848,7 @@ public:
     auto lock = std::scoped_lock{mutex_};
     return op_type_names_;
 
-  void emit_metrics(std::span<const metrics_snapshot_entry> entries) override {
+  void emit_metrics(std::span<const MetricsSnapshotEntry> entries) override {
     if (emit_fn_) {
       emit_fn_(entries);
     }
@@ -895,7 +895,7 @@ private:
   }
 
   bool profiling_;
-  metrics_callback emit_fn_;
+  MetricsCallback emit_fn_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
   std::vector<ExecutorProfile> executor_profiles_;
@@ -1414,7 +1414,7 @@ void write_profile(
 auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
                    DiagHandler& dh,
                    std::optional<std::string> const& profile_path,
-                   metrics_callback emit_fn) -> Task<failure_or<void>> {
+                   MetricsCallback emit_fn) -> Task<failure_or<void>> {
   LOGW("spawning plan with {} operators", ops.size());
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
@@ -1540,7 +1540,7 @@ auto run_plan_blocking(std::vector<AnyOperator> ops, caf::actor_system& sys,
 
 auto run_plan(std::vector<AnyOperator> ops, caf::actor_system& sys,
               DiagHandler& dh, std::optional<std::string> const& profile_path,
-              metrics_callback emit_fn) -> Task<failure_or<void>> {
+              MetricsCallback emit_fn) -> Task<failure_or<void>> {
   co_return co_await run_plan_impl(std::move(ops), sys, dh, profile_path,
                                    std::move(emit_fn));
 }

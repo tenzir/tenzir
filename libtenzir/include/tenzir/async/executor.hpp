@@ -222,10 +222,10 @@ public:
   }
 
   /// Called periodically with metrics snapshots.
-  virtual void emit_metrics(std::span<const metrics_snapshot_entry>) {
+  virtual void emit_metrics(std::span<const MetricsSnapshotEntry>) {
   }
 
-  auto metrics() const -> std::shared_ptr<pipeline_metrics> const& {
+  auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
     return metrics_;
   }
 
@@ -238,8 +238,8 @@ protected:
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
 
 private:
-  std::shared_ptr<pipeline_metrics> metrics_
-    = std::make_shared<pipeline_metrics>();
+  std::shared_ptr<PipelineMetrics> metrics_
+    = std::make_shared<PipelineMetrics>();
 };
 
 /// A diagnostic handler that is guaranteed to be thread-safe.
