@@ -9,6 +9,7 @@
 #include "kafka/configuration.hpp"
 
 #include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
 
 #include <tenzir/concept/printable/tenzir/data.hpp>
@@ -68,19 +69,16 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
     url,
     Aws::Http::HttpMethod::HTTP_GET,
   };
-  auto provider = std::invoke(
+  // Determine base credentials provider: explicit, profile, or default chain.
+  auto base_provider = std::invoke(
     [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-      // Determine base credentials provider: explicit, profile, or default
-      // chain.
-      auto base_credentials
-        = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
       if (creds_ and not creds_->access_key_id.empty()) {
         TENZIR_VERBOSE("[kafka iam] using explicit credentials");
-        base_credentials
-          = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-            creds_->access_key_id, creds_->secret_access_key,
-            creds_->session_token);
-      } else if (creds_ and not creds_->profile.empty()) {
+        return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+          creds_->access_key_id, creds_->secret_access_key,
+          creds_->session_token);
+      }
+      if (creds_ and not creds_->profile.empty()) {
         TENZIR_VERBOSE("[kafka iam] using profile {}", creds_->profile);
         class profile_provider_chain final
           : public Aws::Auth::AWSCredentialsProviderChain {
@@ -95,34 +93,16 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
         };
         // Support both static profiles (~/.aws/credentials) and AWS SSO
         // profiles (~/.aws/config) when `aws_iam.profile` is specified.
-        base_credentials
-          = std::make_shared<profile_provider_chain>(creds_->profile);
-      } else {
-        TENZIR_VERBOSE("[kafka iam] using the default credential chain");
-        base_credentials
-          = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+        return std::make_shared<profile_provider_chain>(creds_->profile);
       }
-      // If role assumption is requested, use STS provider.
-      // Use resolved values from creds_ since options_ fields are secrets.
-      if (creds_ and not creds_->role.empty()) {
-        TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
-                       region, creds_->role, valid_for);
-        // Create STS client configuration with the base credentials.
-        auto sts_config = Aws::Client::ClientConfiguration{};
-        sts_config.region = region;
-        auto sts_client = std::make_shared<Aws::STS::STSClient>(
-          base_credentials, nullptr, sts_config);
-        // Get session_name from resolved credentials, default to tenzir-session
-        const auto session_name = creds_->session_name.empty()
-                                    ? std::string{"tenzir-session"}
-                                    : creds_->session_name;
-        return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-          creds_->role, session_name, creds_->external_id,
-          Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
-      }
-      return base_credentials;
+      TENZIR_VERBOSE("[kafka iam] using the default credential chain");
+      return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
     });
   const auto emit_credentials_unavailable = [&](std::string_view reason) {
+    auto const is_truthy = [](std::string_view value) {
+      return value == "1" or value == "true" or value == "TRUE"
+             or value == "True";
+    };
     auto out
       = diagnostic::warning("failed to refresh AWS credentials for Kafka IAM")
           .primary(options_.loc.subloc(0, 1))
@@ -143,6 +123,19 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
         "`aws sts get-caller-identity`) for the configured profile or "
         "default chain");
     }
+    if (not has_explicit_creds and not has_profile) {
+      if (auto disabled = detail::getenv("AWS_EC2_METADATA_DISABLED")) {
+        out = std::move(out).note("AWS_EC2_METADATA_DISABLED={}", *disabled);
+        if (is_truthy(*disabled)) {
+          out = std::move(out).hint(
+            "if you run on EC2, unset `AWS_EC2_METADATA_DISABLED` so IMDS "
+            "credentials are available to the default chain");
+        }
+      }
+      if (auto profile = detail::getenv("AWS_PROFILE")) {
+        out = std::move(out).note("AWS_PROFILE={}", *profile);
+      }
+    }
     std::move(out).emit(dh_);
   };
   const auto report_refresh_failure = [&](std::string_view reason) {
@@ -154,13 +147,55 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
         .emit(dh_);
     }
   };
+  auto provider = base_provider;
+  if (has_role) {
+    // AssumeRole requires source credentials first (explicit, profile, or
+    // default chain). Validate this separately so diagnostics can point at the
+    // exact failing stage instead of reporting one generic "empty credentials"
+    // message.
+    if (auto base_creds = base_provider->GetAWSCredentials();
+        base_creds.IsEmpty()) {
+      emit_credentials_unavailable(
+        "source credentials are unavailable before `sts:AssumeRole`");
+      report_refresh_failure(fmt::format("empty source AWS credentials before "
+                                         "assume-role (mode={}, region={})",
+                                         auth_mode, region));
+      return;
+    } else if (base_creds.IsExpired()) {
+      emit_credentials_unavailable(
+        "source credentials are expired before `sts:AssumeRole`");
+      report_refresh_failure(fmt::format("expired source AWS credentials "
+                                         "before assume-role (mode={}, "
+                                         "region={})",
+                                         auth_mode, region));
+      return;
+    }
+    TENZIR_VERBOSE("[kafka iam] refreshing IAM Credentials for {}, {}, {}",
+                   region, creds_->role, valid_for);
+    auto sts_config = Aws::Client::ClientConfiguration{};
+    sts_config.region = region;
+    auto sts_client = std::make_shared<Aws::STS::STSClient>(
+      base_provider, nullptr, sts_config);
+    const auto session_name = creds_->session_name.empty()
+                                ? std::string{"tenzir-session"}
+                                : creds_->session_name;
+    provider = std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
+      creds_->role, session_name, creds_->external_id,
+      Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+  }
   if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
-    emit_credentials_unavailable("provider returned empty credentials");
+    emit_credentials_unavailable(has_role
+                                   ? "assume-role provider returned empty "
+                                     "credentials"
+                                   : "provider returned empty credentials");
     report_refresh_failure(fmt::format(
       "empty AWS credentials (mode={}, region={})", auth_mode, region));
     return;
   } else if (creds.IsExpired()) {
-    emit_credentials_unavailable("provider returned expired credentials");
+    emit_credentials_unavailable(has_role
+                                   ? "assume-role provider returned expired "
+                                     "credentials"
+                                   : "provider returned expired credentials");
     report_refresh_failure(fmt::format(
       "expired AWS credentials (mode={}, region={})", auth_mode, region));
     return;

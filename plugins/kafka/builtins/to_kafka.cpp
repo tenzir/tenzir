@@ -14,6 +14,7 @@
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/entity_path.hpp>
@@ -21,6 +22,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/view3.hpp>
 
+#include <fmt/format.h>
 #include <librdkafka/rdkafkacpp.h>
 
 #include <memory>
@@ -160,7 +162,7 @@ public:
   auto operator=(const ToKafka&) -> ToKafka& = delete;
 
   ~ToKafka() override {
-    flush_and_close();
+    flush_and_close(nullptr);
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -171,6 +173,7 @@ public:
       done_ = true;
       co_return;
     }
+    auth_ = *auth;
     auto config = sink_global_defaults();
     auto cfg = make_producer_configuration(config, auth->options,
                                            auth->credentials, ctx.dh());
@@ -269,7 +272,7 @@ public:
   }
 
   auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
-    flush_and_close();
+    flush_and_close(&ctx.dh());
     co_return FinalizeBehavior::done;
   }
 
@@ -316,37 +319,83 @@ private:
           continue;
         }
         default:
-          diagnostic::error("failed to produce kafka message: {}",
-                            RdKafka::err2str(result))
-            .emit(ctx);
+          auto out
+            = diagnostic::error("failed to produce kafka message for `{}`: {}",
+                                args_.topic, RdKafka::err2str(result));
+          out = add_connection_and_auth_notes(std::move(out));
+          if (auth_ and auth_->options and auth_->credentials) {
+            out = std::move(out).hint(
+              "verify bootstrap broker reachability, TLS trust/cert setup, "
+              "and IAM/SASL settings (region, mechanism, and assume-role "
+              "inputs)");
+          } else {
+            out = std::move(out).hint(
+              "verify bootstrap broker reachability and that "
+              "`security.protocol`/`sasl.mechanism` match broker "
+              "requirements");
+          }
+          std::move(out).emit(ctx);
           return false;
       }
     }
   }
 
   /// Flushes buffered messages and tears down producer resources.
-  auto flush_and_close() -> void {
+  auto flush_and_close(diagnostic_handler* dh) -> void {
     if (not producer_) {
       cfg_.reset();
       return;
     }
     const auto timeout_ms = detail::narrow_cast<int>(10000);
     auto result = (*producer_)->flush(timeout_ms);
-    if (result == RdKafka::ERR__TIMED_OUT) {
-      TENZIR_WARN("to_kafka: producer flush timed out");
-    } else if (result != RdKafka::ERR_NO_ERROR) {
-      TENZIR_WARN("to_kafka: producer flush failed: {}",
-                  RdKafka::err2str(result));
-    }
     const auto pending = (*producer_)->outq_len();
-    if (pending > 0) {
-      TENZIR_ERROR("to_kafka: {} messages were not delivered", pending);
+    if (dh and (result != RdKafka::ERR_NO_ERROR or pending > 0)) {
+      auto reason = std::string{};
+      if (result == RdKafka::ERR__TIMED_OUT) {
+        reason = "producer flush timed out before all messages were delivered";
+      } else if (result != RdKafka::ERR_NO_ERROR) {
+        reason
+          = fmt::format("producer flush failed: {}", RdKafka::err2str(result));
+      } else {
+        reason = "messages remained queued after flush";
+      }
+      auto out
+        = diagnostic::error("failed to flush produced Kafka messages for `{}`",
+                            args_.topic)
+            .note("reason={}", reason)
+            .note("outbound.messages.pending={}", pending);
+      out = add_connection_and_auth_notes(std::move(out));
+      if (auth_ and auth_->options and auth_->credentials) {
+        out = std::move(out).hint(
+          "verify bootstrap broker reachability, TLS trust/cert setup, and "
+          "IAM/SASL settings (region, mechanism, and assume-role inputs)");
+      } else {
+        out = std::move(out).hint(
+          "verify bootstrap broker reachability and that "
+          "`security.protocol`/`sasl.mechanism` match broker requirements");
+      }
+      std::move(out).emit(*dh);
     }
     producer_.reset();
     cfg_.reset();
   }
 
+  auto add_connection_and_auth_notes(diagnostic_builder out) const
+    -> diagnostic_builder {
+    auto* conf = cfg_ and cfg_->conf ? cfg_->conf.get() : nullptr;
+    out = add_kafka_connection_diagnostic_notes(std::move(out), conf);
+    if (cfg_ and cfg_->oauth_callback) {
+      out = std::move(out).note("oauth.callback_servicing=producer_poll");
+    }
+    if (auth_ and auth_->options and auth_->credentials) {
+      out = add_kafka_aws_iam_diagnostic_notes(std::move(out),
+                                               auth_->credentials);
+    }
+    return out;
+  }
+
   ToKafkaArgs args_;
+  std::optional<ResolvedAwsIamAuth> auth_;
   std::optional<producer_configuration> cfg_;
   std::optional<Box<RdKafka::Producer>> producer_;
   std::optional<json_printer2> printer_;

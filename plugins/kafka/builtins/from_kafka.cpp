@@ -782,43 +782,6 @@ private:
       }
       return "poll_fallback";
     };
-    auto conf_value = [&](std::string_view key) -> std::string {
-      if (not source.consumer_cfg.conf) {
-        return "<unknown>";
-      }
-      auto value = std::string{};
-      if (source.consumer_cfg.conf->get(std::string{key}, value)
-            != RdKafka::Conf::ConfResult::CONF_OK
-          or value.empty()) {
-        return "<unset>";
-      }
-      return value;
-    };
-    auto auth_mode =
-      [&](std::optional<resolved_aws_credentials> const& creds) -> const char* {
-      if (not creds) {
-        return "none";
-      }
-      auto const has_explicit_creds = not creds->access_key_id.empty();
-      auto const has_profile = not creds->profile.empty();
-      auto const has_role = not creds->role.empty();
-      if (has_explicit_creds and has_role) {
-        return "explicit+assume_role";
-      }
-      if (has_profile and has_role) {
-        return "profile+assume_role";
-      }
-      if (has_role) {
-        return "default+assume_role";
-      }
-      if (has_explicit_creds) {
-        return "explicit";
-      }
-      if (has_profile) {
-        return "profile";
-      }
-      return "default_chain";
-    };
     auto* metadata = static_cast<RdKafka::Metadata*>(nullptr);
     auto query_metadata = [&]() {
       metadata = nullptr;
@@ -843,11 +806,9 @@ private:
     if (err != RdKafka::ERR_NO_ERROR) {
       auto out
         = diagnostic::error("failed to query topic metadata for `{}`: {}",
-                            args_.topic, RdKafka::err2str(err))
-            .note("bootstrap.servers={}", conf_value("bootstrap.servers"))
-            .note("security.protocol={}", conf_value("security.protocol"))
-            .note("sasl.mechanism={}", conf_value("sasl.mechanism"))
-            .note("client.id={}", conf_value("client.id"));
+                            args_.topic, RdKafka::err2str(err));
+      out = add_kafka_connection_diagnostic_notes(
+        std::move(out), source.consumer_cfg.conf.get());
       if (source.consumer_cfg.oauth_callback) {
         out = std::move(out).note("oauth.callback_servicing={}",
                                   oauth_callback_servicing());
@@ -858,20 +819,8 @@ private:
         }
       }
       if (auth.options and auth.credentials) {
-        auto const region = auth.credentials->region.empty()
-                              ? "<unset>"
-                              : auth.credentials->region;
-        out
-          = std::move(out).note("aws_iam.mode={}", auth_mode(auth.credentials));
-        out = std::move(out).note("aws_iam.region={}", region);
-        if (not auth.credentials->profile.empty()) {
-          out = std::move(out).note("aws_iam.profile={}",
-                                    auth.credentials->profile);
-        }
-        if (not auth.credentials->role.empty()) {
-          out = std::move(out).note("aws_iam.assume_role={}",
-                                    auth.credentials->role);
-        }
+        out = add_kafka_aws_iam_diagnostic_notes(std::move(out),
+                                                 auth.credentials);
         std::move(out)
           .hint("verify bootstrap broker reachability, TLS trust/cert setup, "
                 "and IAM/SASL settings (region, mechanism, and assume-role "

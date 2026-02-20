@@ -49,6 +49,21 @@ struct producer_configuration {
   std::shared_ptr<RdKafka::EventCb> event_callback;
 };
 
+/// Returns one librdkafka config value or a diagnostic placeholder.
+auto kafka_conf_value(RdKafka::Conf const* conf, std::string_view key)
+  -> std::string;
+
+/// Adds common connection-related Kafka config notes to one diagnostic.
+auto add_kafka_connection_diagnostic_notes(diagnostic_builder out,
+                                           RdKafka::Conf const* conf)
+  -> diagnostic_builder;
+
+/// Adds AWS IAM mode/region/profile/role notes when credentials are available.
+auto add_kafka_aws_iam_diagnostic_notes(
+  diagnostic_builder out,
+  std::optional<resolved_aws_credentials> const& credentials)
+  -> diagnostic_builder;
+
 /// Creates a consumer configuration from static options plus callback setup.
 auto make_consumer_configuration(record const& options,
                                  std::optional<aws_iam_options> aws,
