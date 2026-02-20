@@ -731,19 +731,108 @@ private:
       .consumer = Box<RdKafka::KafkaConsumer>::from_unique_ptr(
         std::unique_ptr<RdKafka::KafkaConsumer>{raw_consumer}),
     };
+    if (source_consumer.consumer_cfg.oauth_callback) {
+      if (source_consumer.consumer_cfg.oauth_sasl_queue_enabled) {
+        // Primary path: once the SASL queue was enabled on the configuration,
+        // bind it to librdkafka's background queue so OAUTH refresh callbacks
+        // progress independently from explicit `poll()` calls.
+        auto* err
+          = source_consumer.consumer->sasl_background_callbacks_enable();
+        if (err == nullptr) {
+          source_consumer.consumer_cfg.oauth_background_callbacks_active = true;
+        } else {
+          auto err_guard = std::unique_ptr<RdKafka::Error>{err};
+          source_consumer.consumer_cfg.oauth_background_setup_note
+            = fmt::format("sasl_background_callbacks_enable failed: {}",
+                          err_guard->str());
+        }
+      } else if (source_consumer.consumer_cfg.oauth_background_setup_note
+                   .empty()) {
+        source_consumer.consumer_cfg.oauth_background_setup_note
+          = "sasl queue is disabled";
+      }
+    }
     co_return source_consumer;
   }
 
   /// Discovers all partition ids for `args_.topic` from broker metadata.
   auto
-  discover_topic_partitions(RdKafka::KafkaConsumer& consumer, OpCtx& ctx) const
+  discover_topic_partitions(SourceConsumer& source,
+                            ResolvedAwsIamAuth const& auth, OpCtx& ctx) const
     -> std::optional<std::vector<int32_t>> {
+    auto& consumer = *source.consumer;
+    auto serve_oauth_refresh_callbacks = [&](duration budget) -> void {
+      if (not source.consumer_cfg.oauth_callback
+          or source.consumer_cfg.oauth_background_callbacks_active) {
+        return;
+      }
+      auto const deadline = std::chrono::steady_clock::now() + budget;
+      while (std::chrono::steady_clock::now() < deadline) {
+        if (consumer.poll(50) > 0) {
+          return;
+        }
+      }
+    };
+    auto oauth_callback_servicing = [&]() -> std::string_view {
+      if (not source.consumer_cfg.oauth_callback) {
+        return "disabled";
+      }
+      if (source.consumer_cfg.oauth_background_callbacks_active) {
+        return "background";
+      }
+      return "poll_fallback";
+    };
     auto* metadata = static_cast<RdKafka::Metadata*>(nullptr);
-    if (auto err = consumer.metadata(false, nullptr, &metadata, 5000);
-        err != RdKafka::ERR_NO_ERROR) {
-      diagnostic::error("failed to query topic metadata: {}",
-                        RdKafka::err2str(err))
-        .emit(ctx);
+    auto query_metadata = [&]() {
+      metadata = nullptr;
+      return consumer.metadata(false, nullptr, &metadata, 5000);
+    };
+    // Primary path: background callbacks are already active and refresh happens
+    // on librdkafka's background thread. Fallback path: when background setup
+    // is unavailable, drive callback progress with short manual polls before
+    // metadata queries so the first token can still be minted in time.
+    if (source.consumer_cfg.oauth_callback
+        and not source.consumer_cfg.oauth_background_callbacks_active) {
+      serve_oauth_refresh_callbacks(1s);
+    }
+    auto err = query_metadata();
+    if (err != RdKafka::ERR_NO_ERROR and source.consumer_cfg.oauth_callback
+        and not source.consumer_cfg.oauth_background_callbacks_active) {
+      // Poll fallback retry: give one extra poll window and retry metadata once
+      // before surfacing diagnostics.
+      serve_oauth_refresh_callbacks(1500ms);
+      err = query_metadata();
+    }
+    if (err != RdKafka::ERR_NO_ERROR) {
+      auto out
+        = diagnostic::error("failed to query topic metadata for `{}`: {}",
+                            args_.topic, RdKafka::err2str(err));
+      out = add_kafka_connection_diagnostic_notes(
+        std::move(out), source.consumer_cfg.conf.get());
+      if (source.consumer_cfg.oauth_callback) {
+        out = std::move(out).note("oauth.callback_servicing={}",
+                                  oauth_callback_servicing());
+        if (not source.consumer_cfg.oauth_background_setup_note.empty()) {
+          out = std::move(out).note(
+            "oauth.background_setup={}",
+            source.consumer_cfg.oauth_background_setup_note);
+        }
+      }
+      if (auth.options and auth.credentials) {
+        out = add_kafka_aws_iam_diagnostic_notes(std::move(out),
+                                                 auth.credentials);
+        std::move(out)
+          .hint("verify bootstrap broker reachability, TLS trust/cert setup, "
+                "and IAM/SASL settings (region, mechanism, and assume-role "
+                "inputs)")
+          .emit(ctx);
+      } else {
+        std::move(out)
+          .hint("verify bootstrap broker reachability and that "
+                "`security.protocol`/`sasl.mechanism` match broker "
+                "requirements")
+          .emit(ctx);
+      }
       return std::nullopt;
     }
     auto metadata_guard = std::unique_ptr<RdKafka::Metadata>{metadata};
@@ -806,8 +895,7 @@ private:
     if (not bootstrap_consumer) {
       co_return false;
     }
-    auto partitions
-      = discover_topic_partitions(*bootstrap_consumer->consumer, ctx);
+    auto partitions = discover_topic_partitions(*bootstrap_consumer, auth, ctx);
     if (not partitions) {
       co_return false;
     }
@@ -1725,7 +1813,7 @@ public:
         if (not ctx.get(aws_region_arg) and not aws->region) {
           diagnostic::error(
             "`aws_region` is required for Kafka MSK authentication")
-            .primary(iam->source)
+            .primary(iam->source.subloc(0, 1))
             .emit(ctx);
           return {};
         }

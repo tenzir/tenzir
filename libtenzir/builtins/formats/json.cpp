@@ -47,6 +47,7 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
+#include <folly/coro/UnboundedQueue.h>
 #include <folly/executors/GlobalExecutor.h>
 
 #include <atomic>
@@ -1229,7 +1230,7 @@ public:
       // Parallel mode: workers have their own parsers.
       auto capacity = static_cast<uint32_t>(args_.jobs * 2);
       read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
-      read_output_queue_ = std::make_shared<ReadOutputQueue>(capacity);
+      read_output_queue_ = std::make_shared<ReadOutputQueue>();
       // Workers use unordered output since they parse independently.
       auto msb_options = args_.msb_options;
       msb_options.settings.ordered = false;
@@ -1484,7 +1485,7 @@ private:
         }
         // Yield ready results to the output queue.
         for (auto& slice : parser.builder.yield_ready_as_table_slice()) {
-          co_await read_output_queue_->enqueue(std::move(slice));
+          read_output_queue_->enqueue(std::move(slice));
         }
       }
     } catch (folly::OperationCancelled const&) {
@@ -1496,9 +1497,10 @@ private:
     }
     // Finalize: flush remaining data.
     for (auto& slice : parser.builder.finalize_as_table_slice()) {
-      co_await read_output_queue_->enqueue(std::move(slice));
+      co_await folly::coro::co_reschedule_on_current_executor;
+      read_output_queue_->enqueue(std::move(slice));
     }
-    co_await read_output_queue_->enqueue(table_slice{});
+    read_output_queue_->enqueue(table_slice{});
   }
 
   auto drain_parallel_output(Push<table_slice>& push) -> Task<void> {
@@ -1514,7 +1516,17 @@ private:
   }
 
   using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
-  using ReadOutputQueue = folly::coro::BoundedQueue<table_slice>;
+  /// The output queue is unbounded. This is intentional to avoid a theoretical
+  /// deadlock, where the "main thread" wants to push to a full input queue and
+  /// hence waits, while all workers want to push to a full output queue and
+  /// hence wait - thus never taking any input.
+  /// Making the output queue unbounded is safe here insofar that its maximum
+  /// volume it could actually hold is bounded by how much we could put into the
+  /// input queue. If we have backpressure from downstream though, we will not
+  /// be able to push events downstream in `process_task`, hence we dont run
+  /// `process` and dont accept events from upstream, not making any new work
+  /// available for the workers.
+  using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
 
   ReadJsonArgs args_;
   duration next_tick_;
@@ -1925,7 +1937,7 @@ public:
     }
     auto capacity = static_cast<uint32_t>(args_.jobs * 2);
     write_input_queue_ = std::make_shared<WriteInputQueue>(capacity);
-    write_output_queue_ = std::make_shared<WriteOutputQueue>(capacity);
+    write_output_queue_ = std::make_shared<WriteOutputQueue>();
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
       ctx.spawn_task(write_worker_loop());
     }
@@ -2001,15 +2013,16 @@ private:
           co_await write_input_queue_->enqueue(std::nullopt);
           break;
         }
-        co_await write_output_queue_->enqueue(print_slice(*next));
+        write_output_queue_->enqueue(print_slice(*next));
       }
     } catch (folly::OperationCancelled const&) {
     }
-    co_await write_output_queue_->enqueue(chunk_ptr{});
+    write_output_queue_->enqueue(chunk_ptr{});
   }
 
   using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
-  using WriteOutputQueue = folly::coro::BoundedQueue<chunk_ptr>;
+  /// @ref ReadOutputQueue
+  using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
 
   WriteJsonArgs args_;
   json_printer_options opts_ = {};

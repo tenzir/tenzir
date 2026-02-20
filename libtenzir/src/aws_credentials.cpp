@@ -19,6 +19,20 @@
 
 namespace tenzir {
 
+auto make_default_aws_credentials_provider_chain()
+  -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
+  auto config
+    = Aws::Client::ClientConfiguration::CredentialProviderConfiguration{};
+  // Bound IMDS latency in interactive paths while keeping EC2 instance-profile
+  // credentials available when present.
+  config.imdsConfig.metadataServiceTimeout = 1;
+  config.imdsConfig.metadataServiceNumAttempts = 1;
+  config.imdsConfig.disableImdsV1 = true;
+  config.imdsConfig.disableImds = false;
+  return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>(
+    config);
+}
+
 auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::string& role_arn,
                                   const std::string& session_name,
@@ -94,7 +108,7 @@ auto make_aws_credentials_provider(
   const std::optional<std::string>& region)
   -> caf::expected<std::shared_ptr<Aws::Auth::AWSCredentialsProvider>> {
   if (not creds) {
-    return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+    return make_default_aws_credentials_provider_chain();
   }
   const auto has_explicit_creds = not creds->access_key_id.empty();
   const auto has_role = not creds->role.empty();
@@ -167,8 +181,7 @@ auto make_aws_credentials_provider(
     if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_STS")) {
       sts_config.endpointOverride = *endpoint_url;
     }
-    auto base_credentials
-      = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+    auto base_credentials = make_default_aws_credentials_provider_chain();
     auto sts_client = std::make_shared<Aws::STS::STSClient>(
       base_credentials, nullptr, sts_config);
     auto session = session_name.empty() ? "tenzir-session" : session_name;
@@ -177,7 +190,7 @@ auto make_aws_credentials_provider(
       Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
   }
   // Default credential chain.
-  return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+  return make_default_aws_credentials_provider_chain();
 }
 
 } // namespace tenzir

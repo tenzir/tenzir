@@ -8,7 +8,9 @@
 
 #include "kafka/librdkafka_utils.hpp"
 
+#include "tenzir/aws_credentials.hpp"
 #include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/env.hpp"
 
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/data.hpp>
@@ -19,6 +21,7 @@
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <aws/core/auth/SSOCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
@@ -35,6 +38,32 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
+auto aws_iam_mode(std::optional<resolved_aws_credentials> const& creds) -> const
+  char* {
+  if (not creds) {
+    return "none";
+  }
+  auto const has_explicit_creds = not creds->access_key_id.empty();
+  auto const has_profile = not creds->profile.empty();
+  auto const has_role = not creds->role.empty();
+  if (has_explicit_creds and has_role) {
+    return "explicit+assume_role";
+  }
+  if (has_profile and has_role) {
+    return "profile+assume_role";
+  }
+  if (has_role) {
+    return "default+assume_role";
+  }
+  if (has_explicit_creds) {
+    return "explicit";
+  }
+  if (has_profile) {
+    return "profile";
+  }
+  return "default_chain";
+}
+
 /// Callback that refreshes Kafka OAUTHBEARER tokens via AWS IAM signing.
 class aws_iam_refresh_callback final
   : public RdKafka::OAuthBearerTokenRefreshCb {
@@ -50,59 +79,145 @@ public:
   auto oauthbearer_token_refresh_cb(RdKafka::Handle* handle, std::string const&)
     -> void override {
     constexpr auto valid_for = std::chrono::seconds{900};
-    Aws::InitAPI({});
-    auto aws_guard = detail::scope_guard{[] noexcept {
-      Aws::ShutdownAPI({});
-    }};
-
+    // AWS SDK initialization is process-scoped in tenzir/tenzir.cpp.
+    // The AWS C++ SDK does not expose a public runtime "is initialized" probe,
+    // so this callback relies on that process-level initialization contract.
     TENZIR_ASSERT(creds_ and not creds_->region.empty());
     auto const& region = creds_->region;
+    auto const has_explicit_creds = not creds_->access_key_id.empty();
+    auto const has_profile = not creds_->profile.empty();
+    auto const has_role = not creds_->role.empty();
+    auto const auth_mode = aws_iam_mode(creds_);
+    auto emit_credentials_unavailable = [&](std::string_view reason) -> void {
+      auto const is_truthy = [](std::string_view value) {
+        return value == "1" or value == "true" or value == "TRUE"
+               or value == "True";
+      };
+      auto out
+        = diagnostic::warning("failed to refresh AWS credentials for Kafka IAM")
+            .primary(options_.loc.subloc(0, 1))
+            .note("reason={}", reason)
+            .note("aws_iam.mode={}", auth_mode)
+            .note("aws_iam.region={}", region);
+      if (has_profile) {
+        out = std::move(out).note("aws_iam.profile={}", creds_->profile);
+      }
+      if (has_role) {
+        out = std::move(out).note("aws_iam.assume_role={}", creds_->role);
+        out = std::move(out).hint(
+          "verify the role ARN exists, the source credentials can call "
+          "`sts:AssumeRole`, and the role trust policy allows that principal");
+      } else {
+        out = std::move(out).hint(
+          "verify base credentials resolve (for example with "
+          "`aws sts get-caller-identity`) for the configured profile or "
+          "default chain");
+      }
+      if (not has_explicit_creds and not has_profile) {
+        if (auto disabled = detail::getenv("AWS_EC2_METADATA_DISABLED")) {
+          out = std::move(out).note("AWS_EC2_METADATA_DISABLED={}", *disabled);
+          if (is_truthy(*disabled)) {
+            out = std::move(out).hint(
+              "if you run on EC2, unset `AWS_EC2_METADATA_DISABLED` so IMDS "
+              "credentials are available to the default chain");
+          }
+        }
+        if (auto profile = detail::getenv("AWS_PROFILE")) {
+          out = std::move(out).note("AWS_PROFILE={}", *profile);
+        }
+      }
+      std::move(out).emit(dh_);
+    };
     auto url
       = Aws::Http::URI{fmt::format("https://kafka.{}.amazonaws.com/", region)};
     auto request = Aws::Http::Standard::StandardHttpRequest{
       url,
       Aws::Http::HttpMethod::HTTP_GET,
     };
-
-    auto provider
+    auto base_provider
       = [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-      auto base_provider = std::shared_ptr<Aws::Auth::AWSCredentialsProvider>{};
       if (creds_ and not creds_->access_key_id.empty()) {
-        base_provider
-          = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-            creds_->access_key_id, creds_->secret_access_key,
-            creds_->session_token);
-      } else if (creds_ and not creds_->profile.empty()) {
-        base_provider
-          = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
-            creds_->profile.c_str());
-      } else {
-        base_provider
-          = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+        return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+          creds_->access_key_id, creds_->secret_access_key,
+          creds_->session_token);
       }
-      if (creds_ and not creds_->role.empty()) {
-        auto sts_config = Aws::Client::ClientConfiguration{};
-        sts_config.region = region;
-        auto sts_client = std::make_shared<Aws::STS::STSClient>(
-          base_provider, nullptr, sts_config);
-        auto session_name = creds_->session_name.empty()
-                              ? std::string{"tenzir-session"}
-                              : creds_->session_name;
-        return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
-          creds_->role, session_name, creds_->external_id,
-          Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+      if (creds_ and not creds_->profile.empty()) {
+        class profile_provider_chain final
+          : public Aws::Auth::AWSCredentialsProviderChain {
+        public:
+          explicit profile_provider_chain(std::string_view profile) {
+            AddProvider(std::make_shared<
+                        Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
+              profile.data()));
+            AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(
+              Aws::String{profile.data()}));
+          }
+        };
+        // Support both static profiles (~/.aws/credentials) and AWS SSO
+        // profiles (~/.aws/config) when `aws_iam.profile` is specified.
+        return std::make_shared<profile_provider_chain>(creds_->profile);
       }
-      return base_provider;
+      return make_default_aws_credentials_provider_chain();
     }();
 
+    auto const report_refresh_failure = [&](std::string reason) -> void {
+      auto const err = handle->oauthbearer_set_token_failure(reason);
+      if (err != RdKafka::ERR_NO_ERROR) {
+        diagnostic::warning("failed to report oauth token refresh failure")
+          .note("librdkafka error: {}", RdKafka::err2str(err))
+          .primary(options_.loc)
+          .emit(dh_);
+      }
+    };
+    auto provider = base_provider;
+    if (has_role) {
+      // AssumeRole needs source credentials first. Check that stage explicitly
+      // so diagnostics can point to the failing step.
+      if (auto base_creds = base_provider->GetAWSCredentials();
+          base_creds.IsEmpty()) {
+        emit_credentials_unavailable(
+          "source credentials are unavailable before `sts:AssumeRole`");
+        report_refresh_failure(fmt::format("empty source AWS credentials "
+                                           "before assume-role (mode={}, "
+                                           "region={})",
+                                           auth_mode, region));
+        return;
+      } else if (base_creds.IsExpired()) {
+        emit_credentials_unavailable(
+          "source credentials are expired before `sts:AssumeRole`");
+        report_refresh_failure(fmt::format("expired source AWS credentials "
+                                           "before assume-role (mode={}, "
+                                           "region={})",
+                                           auth_mode, region));
+        return;
+      }
+      auto sts_config = Aws::Client::ClientConfiguration{};
+      sts_config.region = region;
+      auto sts_client = std::make_shared<Aws::STS::STSClient>(
+        base_provider, nullptr, sts_config);
+      auto session_name = creds_->session_name.empty()
+                            ? std::string{"tenzir-session"}
+                            : creds_->session_name;
+      provider = std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
+        creds_->role, session_name, creds_->external_id,
+        Aws::Auth::DEFAULT_CREDS_LOAD_FREQ_SECONDS, sts_client);
+    }
     if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
-      diagnostic::warning("got empty AWS credentials")
-        .primary(options_.loc)
-        .emit(dh_);
+      emit_credentials_unavailable(has_role
+                                     ? "assume-role provider returned empty "
+                                       "credentials"
+                                     : "provider returned empty credentials");
+      report_refresh_failure(fmt::format(
+        "empty AWS credentials (mode={}, region={})", auth_mode, region));
+      return;
     } else if (creds.IsExpired()) {
-      diagnostic::warning("got expired AWS credentials")
-        .primary(options_.loc)
-        .emit(dh_);
+      emit_credentials_unavailable(has_role
+                                     ? "assume-role provider returned expired "
+                                       "credentials"
+                                     : "provider returned expired credentials");
+      report_refresh_failure(fmt::format(
+        "expired AWS credentials (mode={}, region={})", auth_mode, region));
+      return;
     }
 
     request.AddQueryStringParameter("Action", "kafka-cluster:Connect");
@@ -128,6 +243,7 @@ public:
                                   errstr);
     if (not errstr.empty()) {
       diagnostic::error("failed to set oauth token: {}", errstr).emit(dh_);
+      return;
     }
   }
 
@@ -307,6 +423,54 @@ auto set_conf_or_emit(RdKafka::Conf& conf, std::string const& key,
 
 } // namespace
 
+auto kafka_conf_value(RdKafka::Conf const* conf, std::string_view key)
+  -> std::string {
+  if (conf == nullptr) {
+    return "<unknown>";
+  }
+  auto value = std::string{};
+  if (conf->get(std::string{key}, value) != RdKafka::Conf::ConfResult::CONF_OK
+      or value.empty()) {
+    return "<unset>";
+  }
+  return value;
+}
+
+auto add_kafka_connection_diagnostic_notes(diagnostic_builder out,
+                                           RdKafka::Conf const* conf)
+  -> diagnostic_builder {
+  out = std::move(out).note("bootstrap.servers={}",
+                            kafka_conf_value(conf, "bootstrap.servers"));
+  out = std::move(out).note("security.protocol={}",
+                            kafka_conf_value(conf, "security.protocol"));
+  out = std::move(out).note("sasl.mechanism={}",
+                            kafka_conf_value(conf, "sasl.mechanism"));
+  out
+    = std::move(out).note("client.id={}", kafka_conf_value(conf, "client.id"));
+  return out;
+}
+
+auto add_kafka_aws_iam_diagnostic_notes(
+  diagnostic_builder out,
+  std::optional<resolved_aws_credentials> const& credentials)
+  -> diagnostic_builder {
+  if (not credentials) {
+    return out;
+  }
+  auto const region = credentials->region.empty()
+                        ? std::string_view{"<unset>"}
+                        : std::string_view{credentials->region};
+  out = std::move(out).note("aws_iam.mode={}", aws_iam_mode(credentials));
+  out = std::move(out).note("aws_iam.region={}", region);
+  if (not credentials->profile.empty()) {
+    out = std::move(out).note("aws_iam.profile={}", credentials->profile);
+  }
+  if (not credentials->role.empty()) {
+    out = std::move(out).note("aws_iam.assume_role={}", credentials->role);
+  }
+  return out;
+}
+
 auto make_consumer_configuration(record const& options,
                                  std::optional<aws_iam_options> aws,
                                  std::optional<resolved_aws_credentials> creds,
@@ -344,34 +508,79 @@ auto make_consumer_configuration(record const& options,
         err) {
       return err;
     }
+    auto errstr = std::string{};
+    // Prefer servicing OAUTH refresh callbacks on librdkafka's background
+    // thread. This keeps metadata/bootstrap calls from depending on manual
+    // `poll()` progress. We still keep poll-based servicing as a fallback.
+    auto queue_result = cfg.conf->enable_sasl_queue(true, errstr);
+    if (queue_result == RdKafka::Conf::ConfResult::CONF_OK) {
+      cfg.oauth_sasl_queue_enabled = true;
+    } else {
+      cfg.oauth_background_setup_note
+        = fmt::format("enable_sasl_queue(true) failed: {}",
+                      errstr.empty() ? std::string{"<no detail>"} : errstr);
+    }
   }
 
   return cfg;
 }
 
-[[nodiscard]] auto
-configure_consumer_or_request_secrets(consumer_configuration& cfg,
-                                      located<record> const& options,
-                                      diagnostic_handler& dh)
-  -> std::vector<secret_request> {
-  TENZIR_ASSERT(cfg.conf);
+auto make_producer_configuration(record const& options,
+                                 std::optional<aws_iam_options> aws,
+                                 std::optional<resolved_aws_credentials> creds,
+                                 diagnostic_handler& dh)
+  -> caf::expected<producer_configuration> {
+  auto cfg = producer_configuration{};
+  cfg.conf = std::shared_ptr<RdKafka::Conf>{
+    RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL),
+  };
+  TENZIR_ASSERT(cfg.conf, "RdKafka::Conf::create");
+
+  if (auto err = apply_record_options(*cfg.conf, options); err) {
+    return err;
+  }
+
+  cfg.event_callback = std::make_shared<error_event_callback>(dh);
+  if (auto err
+      = set_conf_callback(*cfg.conf, "event_cb", cfg.event_callback.get());
+      err) {
+    return err;
+  }
+
+  if (aws) {
+    cfg.oauth_callback = std::make_shared<aws_iam_refresh_callback>(
+      std::move(*aws), std::move(creds), dh);
+    if (auto err = set_conf_callback(*cfg.conf, "oauthbearer_token_refresh_cb",
+                                     cfg.oauth_callback.get());
+        err) {
+      return err;
+    }
+  }
+
+  return cfg;
+}
+
+auto configure_conf_or_request_secrets(
+  std::shared_ptr<RdKafka::Conf> const& conf, located<record> const& options,
+  diagnostic_handler& dh) -> std::vector<secret_request> {
+  TENZIR_ASSERT(conf);
   auto requests = std::vector<secret_request>{};
   for (auto const& [key, value] : options.inner) {
     match(
       value,
       [&](concepts::arithmetic auto const& v) {
-        set_conf_or_emit(*cfg.conf, key, fmt::to_string(v), options.source, dh);
+        set_conf_or_emit(*conf, key, fmt::to_string(v), options.source, dh);
       },
       [&](std::string const& s) {
-        set_conf_or_emit(*cfg.conf, key, s, options.source, dh);
+        set_conf_or_emit(*conf, key, s, options.source, dh);
       },
       [&](secret const& s) {
         requests.emplace_back(
           s, options.source,
-          [&cfg, &dh, key, loc = options.source](
+          [&conf, &dh, key, loc = options.source](
             resolved_secret_value const& v) -> failure_or<void> {
             TRY(auto str, v.utf8_view("options." + key, loc, dh));
-            set_conf_or_emit(*cfg.conf, key, std::string{str}, loc, dh);
+            set_conf_or_emit(*conf, key, std::string{str}, loc, dh);
             return {};
           });
       },
@@ -380,6 +589,22 @@ configure_consumer_or_request_secrets(consumer_configuration& cfg,
       });
   }
   return requests;
+}
+
+[[nodiscard]] auto
+configure_consumer_or_request_secrets(consumer_configuration& cfg,
+                                      located<record> const& options,
+                                      diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  return configure_conf_or_request_secrets(cfg.conf, options, dh);
+}
+
+[[nodiscard]] auto
+configure_producer_or_request_secrets(producer_configuration& cfg,
+                                      located<record> const& options,
+                                      diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  return configure_conf_or_request_secrets(cfg.conf, options, dh);
 }
 
 } // namespace tenzir::plugins::kafka
