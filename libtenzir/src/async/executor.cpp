@@ -1581,6 +1581,9 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
           });
       }
       queue.cancel();
+      // Emit final metrics snapshot so the last interval is not lost.
+      auto snapshot = exec_ctx.metrics()->take_snapshot();
+      exec_ctx.emit_metrics(snapshot);
     });
   } catch (folly::OperationCancelled) {
     // TODO: ?
