@@ -1,0 +1,14 @@
+// Produce one message to Kafka via AWS IAM SASL/OAUTHBEARER.
+from {message: "iam-message-0001"}
+to_kafka env("KAFKA_TOPIC"),
+         message=this.message,
+         aws_region=env("KAFKA_AWS_REGION"),
+         aws_iam={
+           access_key_id: env("KAFKA_AWS_ACCESS_KEY_ID"),
+           secret_access_key: env("KAFKA_AWS_SECRET_ACCESS_KEY")
+         },
+         options={
+           "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+           "security.protocol": "SASL_PLAINTEXT",
+           "enable.metrics.push": false
+         }
