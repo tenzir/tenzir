@@ -736,14 +736,72 @@ private:
 
   /// Discovers all partition ids for `args_.topic` from broker metadata.
   auto
-  discover_topic_partitions(RdKafka::KafkaConsumer& consumer, OpCtx& ctx) const
+  discover_topic_partitions(SourceConsumer& source,
+                            ResolvedAwsIamAuth const& auth, OpCtx& ctx) const
     -> std::optional<std::vector<int32_t>> {
+    auto& consumer = *source.consumer;
+    auto conf_value = [&](std::string_view key) -> std::string {
+      if (not source.consumer_cfg.conf) {
+        return "<unknown>";
+      }
+      auto value = std::string{};
+      if (source.consumer_cfg.conf->get(std::string{key}, value)
+            != RdKafka::Conf::ConfResult::CONF_OK
+          or value.empty()) {
+        return "<unset>";
+      }
+      return value;
+    };
+    auto auth_mode =
+      [&](std::optional<resolved_aws_credentials> const& creds) -> const char* {
+      if (not creds) {
+        return "none";
+      }
+      auto const has_explicit_creds = not creds->access_key_id.empty();
+      auto const has_profile = not creds->profile.empty();
+      auto const has_role = not creds->role.empty();
+      if (has_explicit_creds and has_role) {
+        return "explicit+assume_role";
+      }
+      if (has_profile and has_role) {
+        return "profile+assume_role";
+      }
+      if (has_role) {
+        return "default+assume_role";
+      }
+      if (has_explicit_creds) {
+        return "explicit";
+      }
+      if (has_profile) {
+        return "profile";
+      }
+      return "default_chain";
+    };
     auto* metadata = static_cast<RdKafka::Metadata*>(nullptr);
     if (auto err = consumer.metadata(false, nullptr, &metadata, 5000);
         err != RdKafka::ERR_NO_ERROR) {
-      diagnostic::error("failed to query topic metadata: {}",
-                        RdKafka::err2str(err))
-        .emit(ctx);
+      auto diag
+        = diagnostic::error("failed to query topic metadata for `{}`: {}",
+                            args_.topic, RdKafka::err2str(err))
+            .note("bootstrap.servers={}", conf_value("bootstrap.servers"))
+            .note("security.protocol={}", conf_value("security.protocol"))
+            .note("sasl.mechanism={}", conf_value("sasl.mechanism"))
+            .note("client.id={}", conf_value("client.id"));
+      if (auth.options and auth.credentials) {
+        auto const region = auth.credentials->region.empty()
+                              ? "<unset>"
+                              : auth.credentials->region;
+        std::move(diag)
+          .note("aws_iam mode={}, region={}", auth_mode(auth.credentials),
+                region)
+          .hint("this usually indicates broker reachability, TLS, or SASL auth "
+                "failure before metadata fetch")
+          .emit(ctx);
+      } else {
+        std::move(diag)
+          .hint("check broker reachability, TLS, or SASL auth")
+          .emit(ctx);
+      }
       return std::nullopt;
     }
     auto metadata_guard = std::unique_ptr<RdKafka::Metadata>{metadata};
@@ -806,8 +864,7 @@ private:
     if (not bootstrap_consumer) {
       co_return false;
     }
-    auto partitions
-      = discover_topic_partitions(*bootstrap_consumer->consumer, ctx);
+    auto partitions = discover_topic_partitions(*bootstrap_consumer, auth, ctx);
     if (not partitions) {
       co_return false;
     }
