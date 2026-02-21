@@ -6,7 +6,7 @@
     extra-trusted-public-keys = [
       "tenzir.cachix.org-1:+MLwldLx9GLGLsi9mDr5RrVYyI64iVobWpntJaPM50E="
     ];
-    sandbox-paths = [ "/var/cache/ccache?" ];
+    extra-sandbox-paths = [ "/var/cache/ccache?" ];
   };
 
   inputs = {

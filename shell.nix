@@ -135,7 +135,19 @@ pkgs.mkShell (
       if (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") then "-fuse-ld=mold" else null;
     # uv is provided in the tools-prefix above.
     env.TENZIR_ENABLE_BUNDLED_UV = "OFF";
+
+    env.CCACHE_S3_BUCKET = "tenzir-tenzir-ccache";
+    env.CCACHE_S3_PREFIX = "develop";
+    env.CCACHE_S3_REGION = "eu-central-1";
+    env.CCACHE_AWS_ROLE_ARN = "arn:aws:iam::622024652768:role/tenzir-ccache-s3";
+    env.CCACHE_NOREMOTE_ONLY = "true";
+    env.CCACHE_RESHARE = "true";
+    env.CCACHE_NAMESPACE = "tenzir";
+    env.CCACHE_COMPRESS = "true";
+    env.CCACHE_SLOPPINESS = "pch_defines,time_macros,include_file_mtime,include_file_ctime";
+
     shellHook = ''
+      export CCACHE_REMOTE_STORAGE="crsh:''${XDG_RUNTIME_DIR:-/tmp}/tenzir-ccache/s3.sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-workers=8 @upload-drain-timeout=60"
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator
       # without needing to rebuild the wheel.

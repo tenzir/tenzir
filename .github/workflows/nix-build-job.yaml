@@ -76,6 +76,48 @@ jobs:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
           pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+      - name: Prepare ccache directory
+        if: runner.os == 'Linux'
+        run: |
+          sudo mkdir -p /var/cache/ccache
+          sudo chmod 1777 /var/cache/ccache
+          sudo rm -f \
+            /var/cache/ccache/remote-only \
+            /var/cache/ccache/s3.sock \
+            /var/cache/ccache/s3-helper.pid
+      - name: Configure ccache AWS credentials
+        if: runner.os == 'Linux' && vars.CCACHE_S3_BUCKET != '' && vars.CCACHE_AWS_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
+        with:
+          role-to-assume: ${{ vars.CCACHE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+      - name: Start ccache S3 helper
+        if: runner.os == 'Linux'
+        env:
+          CCACHE_S3_BUCKET: ${{ vars.CCACHE_S3_BUCKET }}
+          CCACHE_S3_PREFIX: ${{ vars.CCACHE_S3_PREFIX || 'tenzir' }}
+          CCACHE_S3_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+          AWS_DEFAULT_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+          AWS_REGION: ${{ vars.CCACHE_S3_REGION || 'eu-central-1' }}
+        run: |
+          if [[ -z "${CCACHE_S3_BUCKET}" ]]; then
+            echo "::notice::CCACHE_S3_BUCKET is unset, skipping ccache S3 helper"
+            exit 0
+          fi
+          sudo touch /var/cache/ccache/remote-only
+          sudo chmod 0666 /var/cache/ccache/remote-only
+          nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' --run '
+            python_bin="$(command -v python3)"
+            nohup "$python_bin" scripts/ccache-storage-s3.py \
+              --endpoint /var/cache/ccache/s3.sock \
+              --url "s3://${CCACHE_S3_BUCKET}/${CCACHE_S3_PREFIX}" \
+              --idle-timeout 0 \
+              --socket-mode 0666 \
+              >/tmp/ccache-s3-helper.log 2>&1 &
+            echo $! | sudo tee /var/cache/ccache/s3-helper.pid >/dev/null
+          '
+          sleep 1
+          sudo test -S /var/cache/ccache/s3.sock
       - name: Import Apple signing certificates
         id: import_apple_signing_certificates
         if: runner.os == 'macOS'
@@ -313,3 +355,9 @@ jobs:
           fi
           nix-shell -p 'python3.withPackages (ps: [ ps.boto3 ])' skopeo \
             --run "python3 .github/workflows/nix-build.py push ${args[*]}"
+      - name: Stop ccache storage helpers
+        if: always() && runner.os == 'Linux'
+        run: |
+          if [[ -f /var/cache/ccache/s3-helper.pid ]]; then
+            sudo kill "$(cat /var/cache/ccache/s3-helper.pid)" || true
+          fi
