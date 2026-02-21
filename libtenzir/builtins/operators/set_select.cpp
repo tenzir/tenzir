@@ -6,15 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/ir.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/rebatch.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
-#include <tenzir/tql2/registry.hpp>
 #include <tenzir/tql2/set.hpp>
 
 #include <ranges>
@@ -23,24 +20,52 @@ namespace tenzir::plugins::set_select {
 
 namespace {
 
-/// Create a `where` IR operator with the given expression.
-auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
-  auto const* where = plugins::find<operator_compiler_plugin>("tql2.where");
-  TENZIR_ASSERT(where);
-  auto args = std::vector<ast::expression>{};
-  args.push_back(std::move(filter));
-  // TODO: This should reuse the existing compile context.
-  auto dh = null_diagnostic_handler{};
-  auto reg = global_registry();
-  auto ctx = compile_ctx::make_root(base_ctx{dh, *reg});
-  return where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
-    .unwrap();
+struct SelectArgs {
+  std::vector<ast::expression> fields;
+};
+
+auto make_select_assignments(std::vector<ast::expression> args,
+                             diagnostic_handler* dh)
+  -> std::optional<std::vector<ast::assignment>> {
+  auto assignments = std::vector<ast::assignment>{};
+  assignments.reserve(1 + args.size());
+  assignments.emplace_back(ast::field_path::try_from(ast::this_{}).value(),
+                           location::unknown,
+                           ast::record{location::unknown, {}, location::unknown});
+  for (auto& arg : args) {
+    if (auto* assignment = std::get_if<ast::assignment>(&*arg.kind)) {
+      auto* selector = std::get_if<ast::field_path>(&assignment->left);
+      if (not selector) {
+        if (dh) {
+          diagnostic::error("expected selector")
+            .primary(assignment->left)
+            .emit(*dh);
+        }
+        return std::nullopt;
+      }
+      assignments.push_back(std::move(*assignment));
+      continue;
+    }
+    auto selector = ast::field_path::try_from(std::move(arg));
+    if (not selector) {
+      if (dh) {
+        diagnostic::error("expected selector").primary(arg).emit(*dh);
+      }
+      return std::nullopt;
+    }
+    auto rhs = selector->inner();
+    assignments.emplace_back(std::move(*selector), location::unknown,
+                             std::move(rhs));
+  }
+  return assignments;
 }
 
 class SelectSet final : public Operator<table_slice, table_slice> {
 public:
-  SelectSet(std::vector<ast::assignment> assignments, event_order order)
-    : assignments_{std::move(assignments)}, order_{order} {
+  explicit SelectSet(SelectArgs args) {
+    auto assignments = make_select_assignments(std::move(args.fields), nullptr);
+    TENZIR_ASSERT(assignments);
+    assignments_ = std::move(*assignments);
     for (auto& assignment : assignments_) {
       auto [pruned_assignment, moved_fields]
         = resolve_move_keyword(std::move(assignment));
@@ -89,11 +114,6 @@ public:
       }
       std::ranges::move(state, std::back_inserter(results));
     }
-    // This can reshuffle output schemas when strict ordering is not required.
-    if (order_ != event_order::ordered) {
-      std::ranges::stable_sort(results, std::ranges::less{},
-                               &table_slice::schema);
-    }
     for (auto& result : rebatch(std::move(results))) {
       co_await push(std::move(result));
     }
@@ -101,69 +121,7 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
   std::vector<ast::field_path> moved_fields_;
-};
-
-class select_ir final : public ir::Operator {
-public:
-  select_ir() = default;
-
-  explicit select_ir(std::vector<ast::assignment> assignments)
-    : assignments_{std::move(assignments)} {
-  }
-
-  auto name() const -> std::string override {
-    return "select_ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    (void)instantiate;
-    for (auto& x : assignments_) {
-      TRY(x.right.substitute(ctx));
-    }
-    return {};
-  }
-
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
-    // Remember the order for potential rebatches.
-    order_ = order;
-    auto ops = std::vector<Box<ir::Operator>>{};
-    if (not filter.empty()) {
-      // TODO: Propagate all filters.
-      TENZIR_ASSERT(filter.size() == 1);
-      ops.reserve(2);
-      auto where = make_where_ir(filter[0]);
-      ops.push_back(std::move(where));
-    }
-    ops.emplace_back(select_ir{std::move(*this)});
-    auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
-    return {{}, order_, std::move(replacement)};
-  }
-
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return SelectSet{std::move(assignments_), order_};
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
-    if (input.is_not<table_slice>()) {
-      diagnostic::error("select operator expected events").emit(dh);
-      return failure::promise();
-    }
-    return input;
-  }
-
-  friend auto inspect(auto& f, select_ir& x) -> bool {
-    return f.object(x).fields(f.field("assignments", x.assignments_));
-  }
-
-private:
-  std::vector<ast::assignment> assignments_;
-  event_order order_ = event_order::ordered;
 };
 
 class set final : public operator_plugin2<set_operator> {
@@ -190,8 +148,8 @@ public:
   }
 };
 
-class select final : public virtual operator_factory_plugin,
-                     public virtual operator_compiler_plugin {
+class select final : public virtual operator_plugin2<set_operator>,
+                     public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.select";
@@ -199,71 +157,36 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto assignments = std::vector<ast::assignment>{};
-    assignments.reserve(1 + inv.args.size());
-    assignments.emplace_back(
-      ast::field_path::try_from(ast::this_{}).value(), location::unknown,
-      ast::record{location::unknown, {}, location::unknown});
-    for (auto& arg : inv.args) {
-      if (auto assignment = std::get_if<ast::assignment>(&*arg.kind)) {
-        auto selector = std::get_if<ast::field_path>(&assignment->left);
-        if (not selector) {
-          diagnostic::error("expected selector")
-            .primary(assignment->left)
-            .emit(ctx);
-          continue;
-        }
-        assignments.push_back(std::move(*assignment));
-      } else {
-        auto selector = ast::field_path::try_from(arg);
-        if (not selector) {
-          diagnostic::error("expected selector").primary(arg).emit(ctx);
-          continue;
-        }
-        // TODO: This is a hack.
-        assignments.emplace_back(std::move(*selector), location::unknown,
-                                 std::move(arg));
-      }
+    auto assignments = make_select_assignments(std::move(inv.args), &ctx.dh());
+    if (not assignments) {
+      return failure::promise();
     }
-    return std::make_unique<set_operator>(std::move(assignments));
+    return std::make_unique<set_operator>(std::move(*assignments));
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<Box<ir::Operator>> override {
-    auto assignments = std::vector<ast::assignment>{};
-    assignments.reserve(1 + inv.args.size());
-    // Start with `this = {}` to clear the record.
-    assignments.emplace_back(
-      ast::field_path::try_from(ast::this_{}).value(), location::unknown,
-      ast::record{location::unknown, {}, location::unknown});
-    for (auto& arg : inv.args) {
-      if (auto* assignment = std::get_if<ast::assignment>(&*arg.kind)) {
-        auto* selector = std::get_if<ast::field_path>(&assignment->left);
-        if (not selector) {
-          diagnostic::error("expected selector")
-            .primary(assignment->left)
-            .emit(ctx);
+  auto describe() const -> Description override {
+    auto d = Describer<SelectArgs, SelectSet>{};
+    auto fields
+      = d.optional_variadic("field", &SelectArgs::fields, "selector");
+    d.validate([fields](ValidateCtx& ctx) -> Empty {
+      auto args = ctx.get_all(fields);
+      auto fields = std::vector<ast::expression>{};
+      fields.reserve(args.size());
+      for (auto& arg : args) {
+        if (not arg) {
           continue;
         }
-        TRY(assignment->right.bind(ctx));
-        assignments.push_back(std::move(*assignment));
-      } else {
-        auto selector = ast::field_path::try_from(arg);
-        if (not selector) {
-          diagnostic::error("expected selector").primary(arg).emit(ctx);
-          continue;
-        }
-        TRY(arg.bind(ctx));
-        // TODO: This is a hack.
-        assignments.emplace_back(std::move(*selector), location::unknown,
-                                 std::move(arg));
+        fields.push_back(std::move(*arg));
       }
-    }
-    return select_ir{std::move(assignments)};
+      auto ignored = make_select_assignments(
+        std::move(fields), &static_cast<diagnostic_handler&>(ctx));
+      (void)ignored;
+      return {};
+    });
+    d.assignments_are_positional();
+    return d.order_invariant();
   }
 };
-
-using select_ir_plugin = inspection_plugin<ir::Operator, select_ir>;
 
 } // namespace
 
@@ -271,4 +194,3 @@ using select_ir_plugin = inspection_plugin<ir::Operator, select_ir>;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::set_select::set)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::set_select::select)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::set_select::select_ir_plugin)
