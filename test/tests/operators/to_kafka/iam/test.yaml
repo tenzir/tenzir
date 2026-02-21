@@ -1,6 +1,7 @@
 suite: to-kafka-iam
 fixtures:
-  - kafka_iam_mock:
+  - kafka:
+      mode: aws_iam
       topic: to_kafka_iam_test
       partitions: 1
       messages: 0

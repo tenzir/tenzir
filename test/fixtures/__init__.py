@@ -6,7 +6,6 @@ from __future__ import annotations
 from . import abs  # noqa: F401
 from . import gcs  # noqa: F401
 from . import kafka  # noqa: F401
-from . import kafka_iam_mock  # noqa: F401
 from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
 from . import s3  # noqa: F401
@@ -16,7 +15,6 @@ __all__ = [
     "abs",
     "gcs",
     "kafka",
-    "kafka_iam_mock",
     "local_files",
     "mysql",
     "s3",
