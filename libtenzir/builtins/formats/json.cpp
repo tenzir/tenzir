@@ -1305,6 +1305,11 @@ public:
     -> Task<FinalizeBehavior> override {
     draining_ = true;
     if (args_.jobs > 0) {
+      // The executor may call finalize() again after all workers have finished
+      // and state() returned done. In that case we are truly done.
+      if (finished_workers_ >= args_.jobs) {
+        co_return FinalizeBehavior::done;
+      }
       // Send any remaining buffered data to a worker.
       if (not buffer_.empty()) {
         auto batch = make_padded_chunk(buffer_);
