@@ -144,19 +144,28 @@ struct State {
   }
 
   friend auto inspect(auto& f, State& x) -> bool {
-    auto created_at = x.created_at.time_since_epoch();
-    auto written_at = x.written_at.time_since_epoch();
-    auto read_at = x.read_at.time_since_epoch();
+    const auto now = std::chrono::steady_clock::now();
+    const auto to_age = [now](std::chrono::steady_clock::time_point tp) {
+      return std::chrono::duration_cast<std::chrono::nanoseconds>(now - tp)
+        .count();
+    };
+    auto created_at_age_ns = to_age(x.created_at);
+    auto written_at_age_ns = to_age(x.written_at);
+    auto read_at_age_ns = to_age(x.read_at);
     auto on_load = [&] {
-      x.created_at = std::chrono::steady_clock::time_point{created_at};
-      x.written_at = std::chrono::steady_clock::time_point{written_at};
-      x.read_at = std::chrono::steady_clock::time_point{read_at};
+      const auto restored_now = std::chrono::steady_clock::now();
+      x.created_at
+        = restored_now - std::chrono::nanoseconds{created_at_age_ns};
+      x.written_at
+        = restored_now - std::chrono::nanoseconds{written_at_age_ns};
+      x.read_at = restored_now - std::chrono::nanoseconds{read_at_age_ns};
       return true;
     };
     return f.object(x).on_load(on_load).fields(
       f.field("count", x.count), f.field("last_row", x.last_row),
-      f.field("created_at", created_at), f.field("written_at", written_at),
-      f.field("read_at", read_at));
+      f.field("created_at_age_ns", created_at_age_ns),
+      f.field("written_at_age_ns", written_at_age_ns),
+      f.field("read_at_age_ns", read_at_age_ns));
   }
 
   auto is_double_expired(const configuration& cfg, int64_t current_row,
