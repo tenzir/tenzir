@@ -1,0 +1,37 @@
+diff --git i/src/lto-unix.cc w/src/lto-unix.cc
+index 04099d37..5425cf02 100644
+--- i/src/lto-unix.cc
++++ w/src/lto-unix.cc
+@@ -629,10 +629,18 @@ ObjectFile<E> *read_lto_object(Context<E> &ctx, MappedFile *mf) {
+   // claim_file_hook() calls add_symbols() which initializes `plugin_symbols`
+   int claimed = false;
+   claim_file_hook(&file, &claimed);
+-  if (!claimed)
++  if (!claimed) {
++    // Archive members are loaded eagerly before symbol reachability is known.
++    // If the active plugin can't claim an IR member, skip it here and let
++    // normal archive semantics decide whether the link still succeeds.
++    if (mf->parent) {
++      mf->parent->close_fd();
++      return nullptr;
++    }
+     Fatal(ctx) << mf->name << ": not claimed by the LTO plugin;"
+                << " please make sure you are using the same compiler of the"
+                << " same version for all object files";
++  }
+ 
+   if (mf->parent)
+     mf->parent->close_fd();
+diff --git i/src/main.cc w/src/main.cc
+index 40cfdaf2..fae69b53 100644
+--- i/src/main.cc
++++ w/src/main.cc
+@@ -55,6 +55,8 @@ static ObjectFile<E> *new_lto_obj(Context<E> &ctx, ReaderContext &rctx,
+     return nullptr;
+ 
+   ObjectFile<E> *file = read_lto_object(ctx, mf);
++  if (!file)
++    return nullptr;
+   file->priority = ctx.file_priority++;
+   file->archive_name = archive_name;
+   file->as_needed =
