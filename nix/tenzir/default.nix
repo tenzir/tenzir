@@ -393,9 +393,6 @@ let
             lib.optionals isStatic [
               "fortify"
               "pic"
-            ]
-            ++ lib.optionals (stdenv.cc.isClang && isStatic) [
-              "pie"
             ];
 
           preBuild =

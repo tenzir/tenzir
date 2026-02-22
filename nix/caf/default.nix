@@ -75,9 +75,6 @@ in
       [
         "fortify"
         "pic"
-      ]
-      ++ lib.optionals stdenv.cc.isClang [
-        "pie"
       ];
     dontStrip = true;
     doCheck = false;
