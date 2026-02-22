@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -99,8 +100,8 @@ public:
     return operator_location::local;
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -111,15 +112,59 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<openapi_operator>,
-                     public virtual operator_factory_plugin {
+struct OpenapiArgs {
+  // No arguments.
+};
+
+class Openapi final : public Operator<void, table_slice> {
+public:
+  explicit Openapi(OpenapiArgs /*args*/) {
+  }
+
+  auto start(OpCtx&) -> Task<void> override {
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return {};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    auto builder = series_builder{};
+    builder.data(openapi_record());
+    co_await push(builder.finish_assert_one_slice("tenzir.openapi"));
+    done_ = true;
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::unspecified;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
+  }
+
+private:
+  bool done_ = false;
+};
+
+class Plugin final : public virtual operator_plugin<openapi_operator>,
+                     public virtual operator_factory_plugin,
+                     public virtual OperatorPlugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("openapi").parse(inv, ctx));
     return std::make_unique<openapi_operator>();
   }
@@ -130,10 +175,15 @@ public:
     parser.parse(p);
     return std::make_unique<openapi_operator>();
   }
+
+  auto describe() const -> Description override {
+    auto d = Describer<OpenapiArgs, Openapi>{};
+    return d.without_optimize();
+  }
 };
 
 } // namespace
 
 } // namespace tenzir::plugins::openapi
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::openapi::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::openapi::Plugin)
