@@ -8,7 +8,7 @@ pr: 5819
 created: 2026-02-22T18:04:20.448605Z
 ---
 
-The `slice` function now supports `list` types in addition to `string`. You can slice lists using the same `begin`, `end`, and `stride` parameters. Negative stride values are now supported for both strings and lists, letting you reverse or step backward through the data.
+The `slice` function now supports `list` types in addition to `string`. You can slice lists using the same `begin`, `end`, and `stride` parameters. Negative stride values are now supported for lists, letting you reverse or step backward through list data. String slicing continues to require a positive `stride`.
 
 Example usage with lists:
 
