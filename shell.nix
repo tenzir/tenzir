@@ -46,12 +46,14 @@ pkgs.mkShell (
       ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
         # Make clang available as alternative compiler when it isn't the default.
         pkgs.clang
-        pkgs.mold
+        pkgs.llvmPackages.bintools
       ]
       ++ lib.optionals pkgs.stdenv.isLinux [
         # Temporarily only on Linux.
         pkgs.pandoc
         pkgs.gdb
+      ] ++ lib.optionals (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") [
+        pkgs.mold
       ];
     # To build libcaf_openssl with bundled CAF.
     buildInputs = [
@@ -66,6 +68,8 @@ pkgs.mkShell (
       # uv is provided in the nativeBuildInputs above.
       export TENZIR_ENABLE_BUNDLED_UV=OFF
       export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$PWD/python"
+    '' + lib.optionalString (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") ''
+      export LDFLAGS="-fuse-ld=mold"
     '';
   }
   // lib.optionalAttrs isStatic {

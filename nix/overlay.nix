@@ -1,6 +1,6 @@
 finalPkgs: prevPkgs:
 let
-  inherit (prevPkgs) lib;
+  inherit (prevPkgs) lib config;
   inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
@@ -17,6 +17,7 @@ let
       ];
     });
   };
+
 in
 {
   curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {

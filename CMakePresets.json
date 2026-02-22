@@ -15,9 +15,6 @@
         "TENZIR_ENABLE_BUNDLED_DEPENDENCIES": "OFF",
         "TENZIR_ENABLE_DEVELOPER_MODE": "ON",
         "TENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS": "OFF"
-      },
-      "environment": {
-        "LDFLAGS": "-fuse-ld=mold"
       }
     },
     {
