@@ -29,9 +29,9 @@ auto make_select_assignments(std::vector<ast::expression> args,
   -> std::optional<std::vector<ast::assignment>> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.reserve(1 + args.size());
-  assignments.emplace_back(ast::field_path::try_from(ast::this_{}).value(),
-                           location::unknown,
-                           ast::record{location::unknown, {}, location::unknown});
+  assignments.emplace_back(
+    ast::field_path::try_from(ast::this_{}).value(), location::unknown,
+    ast::record{location::unknown, {}, location::unknown});
   for (auto& arg : args) {
     if (auto* assignment = std::get_if<ast::assignment>(&*arg.kind)) {
       auto* selector = std::get_if<ast::field_path>(&assignment->left);
@@ -46,10 +46,11 @@ auto make_select_assignments(std::vector<ast::expression> args,
       assignments.push_back(std::move(*assignment));
       continue;
     }
+    auto original_arg = arg;
     auto selector = ast::field_path::try_from(std::move(arg));
     if (not selector) {
       if (dh) {
-        diagnostic::error("expected selector").primary(arg).emit(*dh);
+        diagnostic::error("expected selector").primary(original_arg).emit(*dh);
       }
       return std::nullopt;
     }
@@ -166,8 +167,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<SelectArgs, SelectSet>{};
-    auto fields
-      = d.optional_variadic("field", &SelectArgs::fields, "selector");
+    auto fields = d.optional_variadic("field", &SelectArgs::fields, "selector");
     d.validate([fields](ValidateCtx& ctx) -> Empty {
       auto args = ctx.get_all(fields);
       auto fields = std::vector<ast::expression>{};
