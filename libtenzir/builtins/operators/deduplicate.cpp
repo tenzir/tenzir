@@ -122,11 +122,11 @@ struct DeduplicateArgs {
 struct State {
   int64_t count = {};
   int64_t last_row = {};
-  std::chrono::steady_clock::time_point created_at;
-  std::chrono::steady_clock::time_point written_at;
-  std::chrono::steady_clock::time_point read_at;
+  std::chrono::system_clock::time_point created_at;
+  std::chrono::system_clock::time_point written_at;
+  std::chrono::system_clock::time_point read_at;
 
-  void reset(int64_t current_row, std::chrono::steady_clock::time_point now) {
+  void reset(int64_t current_row, std::chrono::system_clock::time_point now) {
     count = 1;
     last_row = current_row;
     created_at = now;
@@ -135,7 +135,7 @@ struct State {
   }
 
   auto is_expired(const configuration& cfg, int64_t current_row,
-                  std::chrono::steady_clock::time_point now) const -> bool {
+                  std::chrono::system_clock::time_point now) const -> bool {
     return (cfg.create_timeout and now > created_at + cfg.create_timeout->inner)
            or (cfg.write_timeout
                and now > written_at + cfg.write_timeout->inner)
@@ -144,32 +144,14 @@ struct State {
   }
 
   friend auto inspect(auto& f, State& x) -> bool {
-    const auto now = std::chrono::steady_clock::now();
-    const auto to_age = [now](std::chrono::steady_clock::time_point tp) {
-      return std::chrono::duration_cast<std::chrono::nanoseconds>(now - tp)
-        .count();
-    };
-    auto created_at_age_ns = to_age(x.created_at);
-    auto written_at_age_ns = to_age(x.written_at);
-    auto read_at_age_ns = to_age(x.read_at);
-    auto on_load = [&] {
-      const auto restored_now = std::chrono::steady_clock::now();
-      x.created_at
-        = restored_now - std::chrono::nanoseconds{created_at_age_ns};
-      x.written_at
-        = restored_now - std::chrono::nanoseconds{written_at_age_ns};
-      x.read_at = restored_now - std::chrono::nanoseconds{read_at_age_ns};
-      return true;
-    };
-    return f.object(x).on_load(on_load).fields(
+    return f.object(x).fields(
       f.field("count", x.count), f.field("last_row", x.last_row),
-      f.field("created_at_age_ns", created_at_age_ns),
-      f.field("written_at_age_ns", written_at_age_ns),
-      f.field("read_at_age_ns", read_at_age_ns));
+      f.field("created_at", x.created_at), f.field("written_at", x.written_at),
+      f.field("read_at", x.read_at));
   }
 
   auto is_double_expired(const configuration& cfg, int64_t current_row,
-                         std::chrono::steady_clock::time_point now) const
+                         std::chrono::system_clock::time_point now) const
     -> bool {
     constexpr auto get_duration = [](auto opt) -> duration {
       return opt ? opt->inner : duration::max();
@@ -408,9 +390,10 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
                        std::chrono::steady_clock::time_point& last_cleanup_time,
                        diagnostic_handler& dh) -> std::vector<table_slice> {
   auto output = std::vector<table_slice>{};
-  const auto now = std::chrono::steady_clock::now();
-  if (now > last_cleanup_time + cleanup_duration) {
-    last_cleanup_time = now;
+  const auto cleanup_now = std::chrono::steady_clock::now();
+  if (cleanup_now > last_cleanup_time + cleanup_duration) {
+    last_cleanup_time = cleanup_now;
+    const auto now = std::chrono::system_clock::now();
     for (auto it = states.begin(); it != states.end();) {
       const auto should_remove = cfg.count_field
                                    ? it->second.is_double_expired(cfg, row, now)
@@ -422,6 +405,7 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
       }
     }
   }
+  const auto now = std::chrono::system_clock::now();
   if (slice.rows() == 0) {
     output.push_back({});
     return output;
