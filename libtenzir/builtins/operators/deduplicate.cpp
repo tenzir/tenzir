@@ -144,13 +144,19 @@ struct State {
   }
 
   friend auto inspect(auto& f, State& x) -> bool {
-    // FIXME: Inspect time points.
-    return f.object(x).fields(f.field("count", x.count),
-                              f.field("last_row", x.last_row)
-                              // ,f.field("created_at", x.created_at),
-                              // f.field("written_at", x.written_at),
-                              // f.field("read_at", x.read_at)
-    );
+    auto created_at = x.created_at.time_since_epoch();
+    auto written_at = x.written_at.time_since_epoch();
+    auto read_at = x.read_at.time_since_epoch();
+    auto on_load = [&] {
+      x.created_at = std::chrono::steady_clock::time_point{created_at};
+      x.written_at = std::chrono::steady_clock::time_point{written_at};
+      x.read_at = std::chrono::steady_clock::time_point{read_at};
+      return true;
+    };
+    return f.object(x).on_load(on_load).fields(
+      f.field("count", x.count), f.field("last_row", x.last_row),
+      f.field("created_at", created_at), f.field("written_at", written_at),
+      f.field("read_at", read_at));
   }
 
   auto is_double_expired(const configuration& cfg, int64_t current_row,
