@@ -11,7 +11,10 @@
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
+
+#include <optional>
 
 namespace tenzir {
 
@@ -132,6 +135,8 @@ public:
                     const basic_series<list_type>& input) const -> multi_series;
 
     auto length() const -> int64_t;
+
+    auto slice(int64_t begin, int64_t end) const -> std::optional<table_slice>;
 
   private:
     void* self_;

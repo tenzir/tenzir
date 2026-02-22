@@ -19,6 +19,7 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/compute/api_vector.h>
@@ -39,28 +40,28 @@ struct comparator_warning_state {
   bool non_boolean_result = false;
 };
 
+auto empty_scope_slice() -> table_slice {
+  auto schema = type{"cmp", record_type{}};
+  return table_slice{
+    arrow::RecordBatch::Make(schema.to_arrow_schema(), int64_t{1},
+                             arrow::ArrayVector{}),
+    std::move(schema),
+  };
+}
+
 auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& left,
-                         const data& right,
+                         const data& right, const table_slice& scope,
                          comparator_warning_state& warning_state, session ctx)
   -> bool {
   TENZIR_ASSERT(cmp.is_binary());
   auto left_series = data_to_series(left, int64_t{1});
   auto right_series = data_to_series(right, int64_t{1});
-  auto schema = type{
-    "cmp",
-    record_type{
-      {cmp.param(0).name, left_series.type},
-      {cmp.param(1).name, right_series.type},
-    },
-  };
-  auto slice = table_slice{
-    arrow::RecordBatch::Make(schema.to_arrow_schema(), int64_t{1},
-                             arrow::ArrayVector{
-                               left_series.array,
-                               right_series.array,
-                             }),
-    schema,
-  };
+  auto lhs_path
+    = check(ast::field_path::try_from(ast::root_field{cmp.param(0), false}));
+  auto rhs_path
+    = check(ast::field_path::try_from(ast::root_field{cmp.param(1), false}));
+  auto slice = assign(lhs_path, std::move(left_series), scope, ctx.dh());
+  slice = assign(rhs_path, std::move(right_series), slice, ctx.dh());
   auto result = eval(cmp.right, slice, ctx.dh());
   if (result.length() != 1) {
     if (not warning_state.invalid_result_length) {
@@ -93,13 +94,19 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& left,
   return false;
 }
 
-auto sort_list(const series& input, bool descending,
-               const std::optional<ast::lambda_expr>& cmp, session ctx)
-  -> series {
+auto sort_list(const series& input, const std::optional<table_slice>& scope,
+               bool descending, const std::optional<ast::lambda_expr>& cmp,
+               session ctx) -> series {
   auto builder = series_builder{input.type};
+  TENZIR_ASSERT(
+    not scope or scope->rows() == detail::narrow_cast<size_t>(input.length()));
   auto warning_state = comparator_warning_state{};
+  auto fallback_scope = empty_scope_slice();
+  auto row = int64_t{0};
   for (const auto& value :
        values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
+    auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
+    ++row;
     if (not value) {
       builder.null();
       continue;
@@ -110,8 +117,8 @@ auto sort_list(const series& input, bool descending,
                        [&](const data& lhs, const data& rhs) {
                          const auto& left = descending ? rhs : lhs;
                          const auto& right = descending ? lhs : rhs;
-                         return eval_sort_predicate(*cmp, left, right,
-                                                    warning_state, ctx);
+                         return eval_sort_predicate(
+                           *cmp, left, right, row_scope, warning_state, ctx);
                        });
     } else if (descending) {
       std::stable_sort(materialized.begin(), materialized.end(),
@@ -770,13 +777,16 @@ public:
     return function_use::make([call = inv.call, expr = std::move(expr),
                                descending,
                                cmp = std::move(cmp)](auto eval, session ctx) {
+      auto offset = int64_t{0};
       return map_series(eval(expr), [&](series arg) {
+        auto scope = eval.slice(offset, offset + arg.length());
+        offset += arg.length();
         auto f = detail::overload{
           [&](const arrow::NullArray&) {
             return arg;
           },
           [&](const arrow::ListArray&) {
-            return sort_list(arg, descending, cmp, ctx);
+            return sort_list(arg, scope, descending, cmp, ctx);
           },
           [&](const arrow::StructArray&) {
             if (descending or cmp) {
