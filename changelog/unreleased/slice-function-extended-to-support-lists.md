@@ -3,7 +3,7 @@ title: Slice function extended to support lists
 type: feature
 authors:
   - mavam
-  - claude
+  - codex
 pr: 5819
 created: 2026-02-22T18:04:20.448605Z
 ---
