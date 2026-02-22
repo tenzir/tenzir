@@ -562,14 +562,11 @@ public:
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner == 0) {
-        diagnostic::error("`stride` must not be 0")
-          .primary(*stride)
-          .emit(ctx);
+        diagnostic::error("`stride` must not be 0").primary(*stride).emit(ctx);
       }
     }
     return function_use::make([this, subject_expr = std::move(subject_expr),
-                               begin = begin, end = end,
-                               stride = stride,
+                               begin = begin, end = end, stride = stride,
                                normalize_bounds](evaluator eval, session ctx) {
       auto result_type = string_type{};
       return map_series(eval(subject_expr), [&](series subject) {
@@ -599,8 +596,8 @@ public:
           [&](const arrow::ListArray& array) -> series {
             auto list_subject = subject.as<list_type>();
             TENZIR_ASSERT(list_subject);
-            auto builder = list_subject->type.make_arrow_builder(
-              arrow_memory_pool());
+            auto builder
+              = list_subject->type.make_arrow_builder(arrow_memory_pool());
             auto slice_stride = stride ? stride->inner : 1;
             auto value_type = list_subject->type.value_type();
             // Arrow's list_slice currently does not implement our required
@@ -622,19 +619,25 @@ public:
               if (slice_stride > 0) {
                 for (auto element = row_begin; element < row_end;
                      element += slice_stride) {
-                  check(append_array_slice(*builder->value_builder(), value_type,
-                                           *array.values(),
+                  check(append_array_slice(*builder->value_builder(),
+                                           value_type, *array.values(),
                                            row_offset + element, 1));
                 }
+                continue;
+              }
+              if (slice_stride == std::numeric_limits<int64_t>::min()) {
+                check(append_array_slice(*builder->value_builder(), value_type,
+                                         *array.values(),
+                                         row_offset + row_end - 1, 1));
                 continue;
               }
               const auto abs_stride = -slice_stride;
               for (auto element = row_end - 1; element >= row_begin;
                    element -= abs_stride) {
                 check(append_array_slice(*builder->value_builder(), value_type,
-                                         *array.values(),
-                                         row_offset + element, 1));
-                if (element < row_begin + abs_stride) {
+                                         *array.values(), row_offset + element,
+                                         1));
+                if (element - row_begin < abs_stride) {
                   break;
                 }
               }
