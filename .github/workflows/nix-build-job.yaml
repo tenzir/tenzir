@@ -19,6 +19,11 @@ on:
         required: false
         default: true
         description: "Run installation tests and tenzir-test after build"
+      notarize_macos:
+        type: boolean
+        required: false
+        default: false
+        description: "Notarize signed macOS installer package"
     outputs:
       images:
         description: "Space-separated list of pushed image URLs"
@@ -117,8 +122,31 @@ jobs:
 
           # Installer identity (for productsign)
           INSTALLER_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | grep -o '"[^"]*"' | head -1 | tr -d '"')
+          echo "APPLE_INSTALLER_IDENTITY=$INSTALLER_IDENTITY" >> "$GITHUB_OUTPUT"
           echo "APPLE_INSTALLER_IDENTITY=$INSTALLER_IDENTITY" >> "$GITHUB_ENV"
           echo "::notice::Installer signing identity: $INSTALLER_IDENTITY"
+      - name: Validate Apple signing identities
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ steps.import_apple_signing_certificates.outputs.APPLE_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_IDENTITY: ${{ steps.import_apple_signing_certificates.outputs.APPLE_INSTALLER_IDENTITY }}
+        run: |
+          if [[ -z "${APPLE_SIGNING_IDENTITY}" ]]; then
+            echo "::error::APPLE_SIGNING_IDENTITY is empty"
+            exit 1
+          fi
+          if [[ -z "${APPLE_INSTALLER_IDENTITY}" ]]; then
+            echo "::error::APPLE_INSTALLER_IDENTITY is empty"
+            exit 1
+          fi
+      - name: Setup Apple notarization credentials
+        if: runner.os == 'macOS' && (github.event_name == 'release' || inputs.notarize_macos)
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "$API_KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=${{ secrets.APPLE_API_KEY_ID }}" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER_ID=${{ secrets.APPLE_API_ISSUER_ID }}" >> "$GITHUB_ENV"
       # =========================================================================
       # Build Phase
       # =========================================================================
@@ -166,9 +194,13 @@ jobs:
         if: runner.os == 'macOS'
         env:
           APPLE_SIGNING_IDENTITY: ${{ steps.import_apple_signing_certificates.outputs.APPLE_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_IDENTITY: ${{ steps.import_apple_signing_certificates.outputs.APPLE_INSTALLER_IDENTITY }}
         run: |
-          python3 .github/workflows/nix-build.py sign \
-            --package-dir ${{ steps.build.outputs.package-dir }}
+          args=(--package-dir ${{ steps.build.outputs.package-dir }})
+          if [[ "${{ github.event_name }}" == "release" || "${{ inputs.notarize_macos }}" == "true" ]]; then
+            args+=(--notarize-macos)
+          fi
+          python3 .github/workflows/nix-build.py sign "${args[@]}"
 
       # =========================================================================
       # Upload Phase
@@ -186,6 +218,13 @@ jobs:
         with:
           name: tenzir-signed-tarball-${{ inputs.arch }}-${{ inputs.os }}
           path: ${{ steps.sign.outputs.package-dir }}/*.tar.gz
+          retention-days: 1
+      - name: Upload Signed Pkg to GitHub Actions
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: tenzir-signed-pkg-${{ inputs.arch }}-${{ inputs.os }}
+          path: ${{ steps.sign.outputs.package-dir }}/*.pkg
           retention-days: 1
       - name: Upload Packages to GCS and GitHub Releases
         env:

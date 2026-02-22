@@ -1,0 +1,34 @@
+name: macOS Notarization Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      attribute:
+        description: Nix attribute to build
+        required: false
+        default: tenzir-static
+        type: string
+      arch:
+        description: macOS architecture
+        required: false
+        default: arm64
+        type: choice
+        options:
+          - arm64
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  notarization-check:
+    name: Notarization (${{ inputs.attribute }}-${{ inputs.arch }}-darwin)
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: macos-15
+      os: darwin
+      arch: ${{ inputs.arch }}
+      attribute: ${{ inputs.attribute }}
+      notarize_macos: true
+    secrets: inherit
