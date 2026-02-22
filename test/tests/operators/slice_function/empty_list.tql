@@ -1,0 +1,2 @@
+from {xs: []}
+xs = xs.slice(begin=1, end=5, stride=-2)

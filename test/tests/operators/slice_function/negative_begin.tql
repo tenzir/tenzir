@@ -1,0 +1,2 @@
+from {xs: [1, 2, 3, 4, 5]}
+xs = xs.slice(begin=-3)
