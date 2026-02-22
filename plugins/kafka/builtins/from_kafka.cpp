@@ -1430,7 +1430,7 @@ private:
       co_return;
     }
     auto diag_handler = BufferingDiagnosticHandler{};
-    auto builder_ptr = static_cast<multi_series_builder*>(nullptr);
+    auto* builder_ptr = static_cast<multi_series_builder*>(nullptr);
     auto standalone_builder = std::optional<multi_series_builder>{};
     auto builder_opts = multi_series_builder::options{};
     builder_opts.settings.ordered
@@ -1446,6 +1446,10 @@ private:
       standalone_builder.emplace(std::move(opts), diag_handler);
       builder_ptr = &*standalone_builder;
     }
+    // Reusable padded buffer for the JSON path: avoids a per-message
+    // malloc/memcpy/free by growing to the high-water mark and reusing
+    // the allocation across messages.
+    auto padded_buf = std::vector<char>{};
     try {
       while (true) {
         auto dequeue_started = std::chrono::steady_clock::time_point{};
@@ -1472,25 +1476,32 @@ private:
           build_started = std::chrono::steady_clock::now();
         }
         auto flush = optimization_mode_ == OptimizationMode::ordered;
-        auto frame = args_._json
-                       ? build_table_slice(
-                           fetched, parser->builder, flush,
-                           [&](std::span<const std::byte> payload) {
-                             auto const* chars
-                               = reinterpret_cast<char const*>(payload.data());
-                             auto padded
-                               = simdjson::padded_string{chars, payload.size()};
-                             parser->parse(padded);
-                           })
-                       : build_table_slice(
-                           fetched, *standalone_builder, flush,
-                           [&](std::span<const std::byte> payload) {
-                             auto const* chars
-                               = reinterpret_cast<char const*>(payload.data());
-                             auto sv = std::string_view{chars, payload.size()};
-                             standalone_builder->record().field("message").data(
-                               std::string{sv});
-                           });
+        auto frame
+          = args_._json
+              ? build_table_slice(
+                  fetched, parser->builder, flush,
+                  [&](std::span<const std::byte> payload) {
+                    auto const needed
+                      = payload.size() + simdjson::SIMDJSON_PADDING;
+                    if (padded_buf.size() < needed) {
+                      padded_buf.resize(needed);
+                    }
+                    std::memcpy(padded_buf.data(),
+                                reinterpret_cast<char const*>(payload.data()),
+                                payload.size());
+                    auto padded_view = simdjson::padded_string_view{
+                      padded_buf.data(), payload.size(), padded_buf.size()};
+                    parser->parse(padded_view);
+                  })
+              : build_table_slice(
+                  fetched, *standalone_builder, flush,
+                  [&](std::span<const std::byte> payload) {
+                    auto const* chars
+                      = reinterpret_cast<char const*>(payload.data());
+                    auto sv = std::string_view{chars, payload.size()};
+                    standalone_builder->record().field("message").data(
+                      std::string{sv});
+                  });
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_compute_ns,
