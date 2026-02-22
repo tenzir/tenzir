@@ -617,11 +617,14 @@ public:
                 continue;
               }
               if (slice_stride > 0) {
-                for (auto element = row_begin; element < row_end;
-                     element += slice_stride) {
+                for (auto element = row_begin; element < row_end;) {
                   check(append_array_slice(*builder->value_builder(),
                                            value_type, *array.values(),
                                            row_offset + element, 1));
+                  if (row_end - element <= slice_stride) {
+                    break;
+                  }
+                  element += slice_stride;
                 }
                 continue;
               }
