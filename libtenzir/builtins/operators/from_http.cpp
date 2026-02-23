@@ -1237,9 +1237,8 @@ auto make_http_executor_description() -> Description {
   auto metadata_field
     = d.named("metadata_field", &HttpExecutorArgs::metadata_field);
   auto error_field = d.named("error_field", &HttpExecutorArgs::error_field);
-  auto paginate
-    = d.named("paginate", &HttpExecutorArgs::paginate_expr,
-              "record->string|string");
+  auto paginate = d.named("paginate", &HttpExecutorArgs::paginate_expr,
+                          "record->string|string");
   auto paginate_delay
     = d.named_optional("paginate_delay", &HttpExecutorArgs::paginate_delay);
   auto tls = d.named("tls", &HttpExecutorArgs::tls);
