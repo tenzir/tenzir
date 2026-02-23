@@ -964,9 +964,12 @@ public:
     co_return;
   }
 
-  auto finalize(Push<table_slice>&, OpCtx&) -> Task<void> override {
+  auto finalize(Push<table_slice>&, OpCtx&) -> Task<FinalizeBehavior> override {
     upstream_done_ = true;
-    co_return;
+    if (active_sub_keys_.empty()) {
+      co_return FinalizeBehavior::done;
+    }
+    co_return FinalizeBehavior::continue_;
   }
 
   auto state() -> OperatorState override {

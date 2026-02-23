@@ -455,11 +455,11 @@ public:
     co_return;
   }
 
-  auto finalize(OpCtx&) -> Task<void> override {
+  auto finalize(OpCtx&) -> Task<FinalizeBehavior> override {
     done_ = true;
     clients_->shutdown();
     stop_server();
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   auto stop(OpCtx&) -> Task<void> override {
