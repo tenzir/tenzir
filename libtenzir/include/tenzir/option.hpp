@@ -114,6 +114,10 @@ public:
   explicit(false) Option(U& ref) : storage_{ref} {
   }
 
+  /// Constructs from `std::nullopt`.
+  explicit(false) Option(std::nullopt_t) {
+  }
+
   /// Constructs from a `std::optional` (non-reference `T` only).
   template <class U = T>
     requires(not std::is_reference_v<T>)

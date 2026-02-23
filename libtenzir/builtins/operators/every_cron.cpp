@@ -68,9 +68,11 @@ public:
     if (next_ > 0) {
       auto last_pipe = ctx.get_sub(next_ - 1);
       if (last_pipe) {
-        auto pipe = as<OpenPipeline<Input>>(*last_pipe);
-        // TODO: Does this get rid of it?
-        pipe.close();
+        if constexpr (not std::same_as<Input, void>) {
+          auto pipe = as<OpenPipeline<Input>>(*last_pipe);
+          // TODO: Does this get rid of it?
+          pipe.close();
+        }
       } else {
         // FIXME
       }

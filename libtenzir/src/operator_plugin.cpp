@@ -319,9 +319,16 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
-    if (desc_->infer_output) {
+    if (desc_->spawner) {
       auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, dh};
-      return (*desc_->infer_output)(input, ctx);
+      TRY(auto spawn, (*desc_->spawner)(input, ctx));
+      if (spawn) {
+        return match(*spawn,
+                     []<class Input, class Output>(
+                       Spawn<Input, Output>&) -> element_type_tag {
+                       return tag_v<Output>;
+                     });
+      }
     }
     for (auto& spawn : desc_->spawns) {
       auto output = match(
@@ -345,16 +352,16 @@ public:
   }
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
-    // When infer_output is set, re-derive the output type so we can select
-    // the correct spawn among multiple Output variants. This must happen
-    // before filling args, because that moves the pipeline out.
-    auto desired_output = std::optional<element_type_tag>{};
-    if (desc_->infer_output) {
+    // The spawner must be retrieved before filling args, because we move them
+    // out and thus the passed `DescribeCtx` would be incomplete.
+    auto spawner = std::optional<AnySpawn>{};
+    if (desc_->spawner) {
       auto noop_dh = null_diagnostic_handler{};
       auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
-      auto result = (*desc_->infer_output)(input, ctx);
+      auto result = (*desc_->spawner)(input, ctx);
       TENZIR_ASSERT(result);
-      desired_output = *result;
+      TENZIR_ASSERT(*result);
+      spawner = std::move(**result);
     }
     auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
@@ -403,13 +410,17 @@ public:
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
     }
+    if (spawner) {
+      return match(*spawner, [&](auto& spawner) -> AnyOperator {
+        return spawner(std::move(args));
+      });
+    }
     for (auto& spawn : desc_->spawns) {
       auto result = match(
         spawn,
         [&]<class Input, class Output>(
           const Spawn<Input, Output>& spawn) -> std::optional<AnyOperator> {
-          if (input.is<Input>()
-              and (not desired_output or desired_output->is<Output>())) {
+          if (input.is<Input>()) {
             return spawn(std::move(args));
           }
           return std::nullopt;
