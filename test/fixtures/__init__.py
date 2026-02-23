@@ -9,6 +9,7 @@ from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import mysql  # noqa: F401
 from . import s3  # noqa: F401
+from . import platform_ws  # noqa: F401
 from . import tcp  # noqa: F401
 
 __all__ = [
@@ -17,6 +18,8 @@ __all__ = [
     "kafka",
     "local_files",
     "mysql",
+    "platform_ws",
     "s3",
     "tcp",
 ]
+
