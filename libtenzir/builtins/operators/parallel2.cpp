@@ -138,6 +138,10 @@ public:
     }
   }
 
+  auto snapshot(Serde& serde) {
+    serde("rows_assigned", rows_assigned_);
+  }
+
   auto finalize(OpCtx& ctx) -> Task<void> {
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto sub = ctx.get_sub(int64_t(i));
@@ -206,6 +210,10 @@ public:
     return impl_.start(ctx);
   }
 
+  auto snapshot(Serde& serde) -> void override {
+    impl_.snapshot(serde);
+  }
+
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
@@ -231,6 +239,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     return impl_.start(ctx);
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    impl_.snapshot(serde);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
