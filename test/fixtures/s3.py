@@ -244,7 +244,13 @@ def s3() -> FixtureHandle:
         if ctx is not None:
             raw_config_assertions = ctx.config.get("assertions", {})
             if isinstance(raw_config_assertions, dict):
-                raw_suite_assertions = raw_config_assertions.get("s3", {})
+                # Handle both normalized fixture assertions mapping (`assertions.s3`)
+                # and raw nested test.yaml shape (`assertions.fixtures.s3`).
+                nested_fixtures = raw_config_assertions.get("fixtures", {})
+                raw_suite_assertions = raw_config_assertions.get(
+                    "s3",
+                    nested_fixtures.get("s3", {}) if isinstance(nested_fixtures, dict) else {},
+                )
     suite_assertions = extract_assertions(raw_suite_assertions)
 
     def _assert_test(
