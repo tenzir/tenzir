@@ -1,0 +1,6 @@
+error: expected selector
+ --> tests/operators/select/error_invalid_selector.tql:6:8
+  |
+6 | select 1
+  |        ^ 
+  |

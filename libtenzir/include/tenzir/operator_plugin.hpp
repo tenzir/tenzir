@@ -134,8 +134,6 @@ public:
   std::optional<Validator> validator;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
-  // If true, assignments are treated as positional arguments, not named args.
-  bool assignments_are_positional = false;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -793,10 +791,6 @@ public:
 
   auto validate(Validator validator) -> void {
     desc_.validator = std::move(validator);
-  }
-
-  auto assignments_are_positional() -> void {
-    desc_.assignments_are_positional = true;
   }
 
   // TODO

@@ -206,8 +206,7 @@ public:
       = desc->first_optional.value_or(desc->positional.size());
     auto max_positional = desc->positional.size();
     for (auto& arg : args) {
-      if (auto* assignment = try_as<ast::assignment>(arg);
-          assignment and not desc->assignments_are_positional) {
+      if (auto* assignment = try_as<ast::assignment>(arg)) {
         // Named argument.
         auto* sel = try_as<ast::field_path>(assignment->left);
         if (not sel or sel->has_this() or sel->path().size() != 1
