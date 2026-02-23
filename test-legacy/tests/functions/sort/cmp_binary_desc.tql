@@ -1,2 +1,2 @@
 from {xs: [{v: 2, id: "b"}, {v: 1, id: "a"}, {v: 2, id: "c"}]}
-select ys = sort(xs, order="desc", cmp=(left, right) => left.v < right.v)
+select ys = sort(xs, desc=true, cmp=(left, right) => left.v < right.v)
