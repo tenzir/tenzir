@@ -1,7 +1,9 @@
 suite: from-abs-lifecycle-rename
-fixtures:
-  - abs:
-      verify_rename: true
+fixtures: [abs]
+assertions:
+  fixtures:
+    abs:
+      state: renamed
 timeout: 30
 skip:
   on: fixture-unavailable

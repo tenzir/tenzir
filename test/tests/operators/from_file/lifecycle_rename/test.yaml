@@ -1,5 +1,7 @@
 suite: from-file-lifecycle-rename
-fixtures:
-  - local_files:
-      verify_rename: true
+fixtures: [local_files]
+assertions:
+  fixtures:
+    local_files:
+      state: renamed
 timeout: 30

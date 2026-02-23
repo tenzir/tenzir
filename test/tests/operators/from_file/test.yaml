@@ -1,3 +1,7 @@
 suite: from-file
 fixtures: [local_files]
+assertions:
+  fixtures:
+    local_files:
+      state: unchanged
 timeout: 30

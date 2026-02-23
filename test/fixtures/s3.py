@@ -10,14 +10,8 @@ Environment variables yielded:
 - S3_BUCKET: Main test bucket name (tenzir-test)
 - S3_PUBLIC_BUCKET: Anonymous access bucket name (tenzir-test-public)
 
-Options:
-- verify_remove (bool): After tests, assert that lifecycle/remove-target.json
-  was deleted from the bucket.
-- verify_rename (bool): After tests, assert that lifecycle/rename-target.json
-  was moved to lifecycle/rename-target.json.done.
-
-When neither option is set, the fixture verifies that all originally uploaded
-test files are still present after tests complete.
+Assertions payload accepted under ``assertions.fixtures.s3``:
+- state: unchanged | removed | renamed
 """
 
 from __future__ import annotations
@@ -27,10 +21,11 @@ import logging
 import urllib.error
 import urllib.request
 import uuid
-from typing import Iterator
+from pathlib import Path
+from typing import Any
 
-from tenzir_test import fixture
-from tenzir_test.fixtures import FixtureUnavailable, current_options
+from tenzir_test import FixtureHandle, fixture
+from tenzir_test.fixtures import FixtureUnavailable, current_assertions, current_context
 from tenzir_test.fixtures.container_runtime import (
     ContainerReadinessTimeout,
     ManagedContainer,
@@ -44,7 +39,8 @@ from ._cloud_storage import (
     BUCKET,
     PUBLIC_BUCKET,
     TEST_FILES,
-    CloudStorageOptions,
+    CloudStorageAssertions,
+    extract_assertions,
     verify_post_test,
 )
 from ._utils import find_free_port
@@ -219,10 +215,9 @@ def _file_exists(container: ManagedContainer, key: str) -> bool:
     return result.returncode == 0
 
 
-@fixture(options=CloudStorageOptions)
-def s3() -> Iterator[dict[str, str]]:
-    """Start LocalStack and yield environment variables for S3 access."""
-    opts = current_options("s3")
+@fixture(assertions=CloudStorageAssertions)
+def s3() -> FixtureHandle:
+    """Start LocalStack and return fixture handle with assertions."""
     runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
@@ -236,20 +231,64 @@ def s3() -> Iterator[dict[str, str]]:
         container = _start_localstack(runtime, port)
         _wait_for_localstack(port, STARTUP_TIMEOUT)
         _setup_localstack_data(container)
+    except Exception:
+        if container is not None:
+            _stop_container(container, "LocalStack")
+        raise
+    assert container is not None
+    did_run_test_assertions = False
 
-        yield {
+    raw_suite_assertions = current_assertions("s3")
+    if not raw_suite_assertions:
+        ctx = current_context()
+        if ctx is not None:
+            raw_config_assertions = ctx.config.get("assertions", {})
+            if isinstance(raw_config_assertions, dict):
+                # Handle both normalized fixture assertions mapping (`assertions.s3`)
+                # and raw nested test.yaml shape (`assertions.fixtures.s3`).
+                nested_fixtures = raw_config_assertions.get("fixtures", {})
+                raw_suite_assertions = raw_config_assertions.get(
+                    "s3",
+                    nested_fixtures.get("s3", {}) if isinstance(nested_fixtures, dict) else {},
+                )
+    suite_assertions = extract_assertions(raw_suite_assertions)
+
+    def _assert_test(
+        *,
+        test: Path,
+        assertions: CloudStorageAssertions | dict[str, Any],
+        **_: Any,
+    ) -> None:
+        nonlocal did_run_test_assertions
+        did_run_test_assertions = True
+        assertion_config = extract_assertions(assertions)
+        try:
+            verify_post_test(
+                file_exists=lambda key: _file_exists(container, key),
+                assertions=assertion_config,
+            )
+        except RuntimeError as exc:
+            raise AssertionError(f"{test.name}: {exc}") from exc
+
+    def _teardown() -> None:
+        try:
+            if not did_run_test_assertions:
+                verify_post_test(
+                    file_exists=lambda key: _file_exists(container, key),
+                    assertions=suite_assertions,
+                )
+        finally:
+            _stop_container(container, "LocalStack")
+
+    return FixtureHandle(
+        env={
             "S3_ENDPOINT": f"127.0.0.1:{port}",
             "S3_ACCESS_KEY": ACCESS_KEY,
             "S3_SECRET_KEY": SECRET_KEY,
             "S3_BUCKET": BUCKET,
             "S3_PUBLIC_BUCKET": PUBLIC_BUCKET,
             "AWS_ENDPOINT_URL_STS": f"http://127.0.0.1:{port}",
-        }
-
-        verify_post_test(
-            file_exists=lambda key: _file_exists(container, key),
-            opts=opts,
-        )
-    finally:
-        if container is not None:
-            _stop_container(container, "LocalStack")
+        },
+        teardown=_teardown,
+        hooks={"assert_test": _assert_test},
+    )

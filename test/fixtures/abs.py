@@ -9,14 +9,8 @@ Environment variables yielded:
 - ABS_CONTAINER: Main test container name (tenzir-test)
 - ABS_PUBLIC_CONTAINER: Public container name (tenzir-test-public)
 
-Options:
-- verify_remove (bool): After tests, assert that lifecycle/remove-target.json
-  was deleted from the container.
-- verify_rename (bool): After tests, assert that lifecycle/rename-target.json
-  was moved to lifecycle/rename-target.json.done.
-
-When neither option is set, the fixture verifies that all originally uploaded
-test files are still present after tests complete.
+Assertions payload accepted under ``assertions.fixtures.abs``:
+- state: unchanged | removed | renamed
 """
 
 from __future__ import annotations
@@ -32,10 +26,11 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime, timezone
-from typing import Iterator
+from pathlib import Path
+from typing import Any
 
-from tenzir_test import fixture
-from tenzir_test.fixtures import FixtureUnavailable, current_options
+from tenzir_test import FixtureHandle, fixture
+from tenzir_test.fixtures import FixtureUnavailable
 from tenzir_test.fixtures.container_runtime import (
     ContainerReadinessTimeout,
     ManagedContainer,
@@ -49,7 +44,8 @@ from ._cloud_storage import (
     BUCKET,
     PUBLIC_BUCKET,
     TEST_FILES,
-    CloudStorageOptions,
+    CloudStorageAssertions,
+    extract_assertions,
     verify_post_test,
 )
 from ._utils import find_free_port
@@ -292,10 +288,9 @@ def _blob_exists(port: int, key: str) -> bool:
     raise RuntimeError(f"unexpected status {status} checking blob {key}")
 
 
-@fixture(options=CloudStorageOptions)
-def abs() -> Iterator[dict[str, str]]:
-    """Start Azurite and yield environment variables for ABS access."""
-    opts = current_options("abs")
+@fixture(assertions=CloudStorageAssertions)
+def abs() -> FixtureHandle:
+    """Start Azurite and return fixture handle with assertions."""
     runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
@@ -309,19 +304,35 @@ def abs() -> Iterator[dict[str, str]]:
         container = _start_azurite(runtime, port)
         _wait_for_azurite(port, STARTUP_TIMEOUT)
         _setup_azurite_data(port)
+    except Exception:
+        if container is not None:
+            _stop_container(container, "Azurite")
+        raise
+    assert container is not None
 
-        yield {
+    def _assert_test(
+        *,
+        test: Path,
+        assertions: CloudStorageAssertions | dict[str, Any],
+        **_: Any,
+    ) -> None:
+        assertion_config = extract_assertions(assertions)
+        try:
+            verify_post_test(
+                file_exists=lambda key: _blob_exists(port, key),
+                assertions=assertion_config,
+            )
+        except RuntimeError as exc:
+            raise AssertionError(f"{test.name}: {exc}") from exc
+
+    return FixtureHandle(
+        env={
             "ABS_ENDPOINT": f"127.0.0.1:{port}",
             "ABS_ACCOUNT_NAME": ACCOUNT_NAME,
             "ABS_ACCOUNT_KEY": ACCOUNT_KEY,
             "ABS_CONTAINER": BUCKET,
             "ABS_PUBLIC_CONTAINER": PUBLIC_BUCKET,
-        }
-
-        verify_post_test(
-            file_exists=lambda key: _blob_exists(port, key),
-            opts=opts,
-        )
-    finally:
-        if container is not None:
-            _stop_container(container, "Azurite")
+        },
+        teardown=lambda: _stop_container(container, "Azurite"),
+        hooks={"assert_test": _assert_test},
+    )

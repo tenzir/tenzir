@@ -1,5 +1,9 @@
 suite: from-s3
 fixtures: [s3]
+assertions:
+  fixtures:
+    s3:
+      state: unchanged
 timeout: 30
 skip:
   on: fixture-unavailable

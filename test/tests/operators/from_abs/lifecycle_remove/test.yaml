@@ -1,7 +1,9 @@
 suite: from-abs-lifecycle-remove
-fixtures:
-  - abs:
-      verify_remove: true
+fixtures: [abs]
+assertions:
+  fixtures:
+    abs:
+      state: removed
 timeout: 30
 skip:
   on: fixture-unavailable
