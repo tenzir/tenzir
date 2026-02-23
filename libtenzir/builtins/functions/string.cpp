@@ -521,76 +521,6 @@ private:
   bool regex_ = {};
 };
 
-class slice : public virtual function_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.slice";
-  }
-
-  auto is_deterministic() const -> bool override {
-    return true;
-  }
-
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto subject_expr = ast::expression{};
-    auto begin = std::optional<located<int64_t>>{};
-    auto end = std::optional<located<int64_t>>{};
-    auto stride = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::function(name())
-          .positional("x", subject_expr, "string")
-          .named("begin", begin)
-          .named("end", end)
-          .named("stride", stride)
-          .parse(inv, ctx));
-    if (stride) {
-      if (stride->inner <= 0) {
-        diagnostic::error("`stride` must be greater 0, but got {}",
-                          stride->inner)
-          .primary(*stride)
-          .emit(ctx);
-      }
-    }
-    return function_use::make([this, subject_expr = std::move(subject_expr),
-                               begin = begin, end = end,
-                               stride = stride](evaluator eval, session ctx) {
-      auto result_type = string_type{};
-      auto result_arrow_type
-        = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
-      return map_series(eval(subject_expr), [&](series subject) {
-        auto f = detail::overload{
-          [&](const arrow::StringArray& array) {
-            auto options = arrow::compute::SliceOptions(
-              begin ? begin->inner : 0,
-              end ? end->inner : std::numeric_limits<int64_t>::max(),
-              stride ? stride->inner : 1);
-            auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
-                                                       {array}, &options);
-            if (not result.ok()) {
-              diagnostic::warning("{}", result.status().ToString())
-                .primary(subject_expr)
-                .emit(ctx);
-              return series::null(result_type, subject.length());
-            }
-            return series{result_type, result.MoveValueUnsafe().make_array()};
-          },
-          [&](const arrow::NullArray& array) {
-            return series::null(result_type, array.length());
-          },
-          [&](const auto&) {
-            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
-                                subject.type.kind())
-              .primary(subject_expr)
-              .emit(ctx);
-            return series::null(result_type, subject.length());
-          },
-        };
-        return match(*subject.array, f);
-      });
-    });
-  }
-};
-
 template <bool Deprecated>
 class string_fn : public virtual function_plugin {
 public:
@@ -847,7 +777,6 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
 
 TENZIR_REGISTER_PLUGIN(replace{true});
 TENZIR_REGISTER_PLUGIN(replace{false});
-TENZIR_REGISTER_PLUGIN(slice);
 TENZIR_REGISTER_PLUGIN(string_fn<false>);
 TENZIR_REGISTER_PLUGIN(string_fn<true>);
 
