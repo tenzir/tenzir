@@ -17,8 +17,8 @@ namespace tenzir::plugins::set_select {
 namespace {
 
 auto make_select_assignments(std::vector<ast::expression> args,
-                             diagnostic_handler* dh)
-  -> std::optional<std::vector<ast::assignment>> {
+                             diagnostic_handler& dh)
+  -> failure_or<std::vector<ast::assignment>> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.reserve(1 + args.size());
   assignments.emplace_back(
@@ -28,12 +28,10 @@ auto make_select_assignments(std::vector<ast::expression> args,
     if (auto* assignment = std::get_if<ast::assignment>(&*arg.kind)) {
       auto* selector = std::get_if<ast::field_path>(&assignment->left);
       if (not selector) {
-        if (dh) {
-          diagnostic::error("expected selector")
-            .primary(assignment->left)
-            .emit(*dh);
-        }
-        return std::nullopt;
+        diagnostic::error("expected selector")
+          .primary(assignment->left)
+          .emit(dh);
+        return failure::promise();
       }
       assignments.push_back(std::move(*assignment));
       continue;
@@ -41,10 +39,8 @@ auto make_select_assignments(std::vector<ast::expression> args,
     auto original_arg = arg;
     auto selector = ast::field_path::try_from(std::move(arg));
     if (not selector) {
-      if (dh) {
-        diagnostic::error("expected selector").primary(original_arg).emit(*dh);
-      }
-      return std::nullopt;
+      diagnostic::error("expected selector").primary(original_arg).emit(dh);
+      return failure::promise();
     }
     auto rhs = selector->inner();
     assignments.emplace_back(std::move(*selector), location::unknown,
@@ -86,11 +82,9 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto assignments = make_select_assignments(std::move(inv.args), &ctx.dh());
-    if (not assignments) {
-      return failure::promise();
-    }
-    return std::make_unique<set_operator>(std::move(*assignments));
+    TRY(auto assignments,
+        make_select_assignments(std::move(inv.args), ctx.dh()));
+    return std::make_unique<set_operator>(std::move(assignments));
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
@@ -99,11 +93,8 @@ public:
       TRY(arg.bind(ctx));
     }
     auto& dh = static_cast<diagnostic_handler&>(ctx);
-    auto assignments = make_select_assignments(std::move(inv.args), &dh);
-    if (not assignments) {
-      return failure::promise();
-    }
-    return make_set_ir(std::move(*assignments));
+    TRY(auto assignments, make_select_assignments(std::move(inv.args), dh));
+    return make_set_ir(std::move(assignments));
   }
 };
 

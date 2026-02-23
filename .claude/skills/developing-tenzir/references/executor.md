@@ -124,8 +124,7 @@ Use `Describer` to register operators:
 
 ```cpp
 class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_compiler_plugin,
-                     public virtual OperatorPlugin {
+                     public virtual operator_compiler_plugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<Args, Impl>{};
