@@ -46,7 +46,7 @@ building modular pipelines that process structured event data.
 
 A build is configured when its directory contains `CMakeCache.txt`.
 
-If no configured build exists, run:
+Only when explicitly asked to configure a build, run:
 
 ```sh
 cmake --list-presets
