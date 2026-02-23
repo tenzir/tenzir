@@ -1450,13 +1450,48 @@ private:
     // malloc/memcpy/free by growing to the high-water mark and reusing
     // the allocation across messages.
     auto padded_buf = std::vector<char>{};
+    auto ct = co_await folly::coro::co_current_cancellation_token;
     try {
       while (true) {
         auto dequeue_started = std::chrono::steady_clock::time_point{};
         if (perf_enabled_) {
           dequeue_started = std::chrono::steady_clock::now();
         }
-        auto next = co_await runtime_.message_queue->dequeue();
+        auto next = Option<MessageBatch>{};
+        auto timed_out = false;
+        try {
+          next = co_await runtime_.message_queue->co_try_dequeue_for(
+            std::chrono::duration_cast<folly::Duration>(
+              builder_opts.settings.timeout));
+        } catch (folly::OperationCancelled const&) {
+          if (ct.isCancellationRequested()) {
+            throw;
+          }
+          // Dequeue timed out — flush ready builder events and keep waiting.
+          // Note: co_await is not permitted inside a catch handler, so we set
+          // a flag and handle the flush after the try/catch block.
+          timed_out = true;
+        }
+        if (timed_out) {
+          if (perf_enabled_) {
+            add_perf_counter(
+              perf_.build_dequeue_wait_ns,
+              as_ns(std::chrono::steady_clock::now() - dequeue_started));
+          }
+          auto ready = builder_ptr->yield_ready_as_table_slice();
+          if (not ready.slices.empty() or not diag_handler.empty()) {
+            auto flush_frame = TableSliceFrame{};
+            flush_frame.seq
+              = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
+            flush_frame.slices = std::move(ready.slices);
+            if (not diag_handler.empty()) {
+              flush_frame.diagnostics = diag_handler.drain();
+            }
+            co_await runtime_.table_slice_queue->enqueue(
+              std::move(flush_frame));
+          }
+          continue;
+        }
         if (perf_enabled_) {
           add_perf_counter(
             perf_.build_dequeue_wait_ns,
