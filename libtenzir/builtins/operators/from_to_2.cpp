@@ -98,11 +98,21 @@ public:
     : events_{std::move(events)} {
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+  auto start(OpCtx& ctx) -> Task<void> override {
+    read_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_events",
+      },
+      MetricsDirection::read, MetricsVisibility::internal_);
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
     co_return {};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_ASSERT(next_ < events_.size());
     auto sp = session_provider::make(ctx);
@@ -117,6 +127,7 @@ public:
                                                       cast->length(),
                                                       cast->array->fields()),
                              schema};
+    read_bytes_counter_.add(slice.approx_bytes());
     co_await push(std::move(slice));
     next_ += 1;
   }
@@ -135,6 +146,7 @@ public:
 private:
   size_t next_ = 0;
   std::vector<ast::expression> events_;
+  MetricsCounter read_bytes_counter_;
 };
 
 class from_ir final : public ir::Operator {

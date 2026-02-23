@@ -53,13 +53,31 @@ public:
 template <class Input>
 class Discard final : public Operator<Input, void> {
 public:
-  auto start(OpCtx&) -> Task<void> override {
+  auto start(OpCtx& ctx) -> Task<void> override {
+    write_bytes_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "discard",
+      },
+      MetricsDirection::write, MetricsVisibility::internal_);
     co_return;
   }
 
-  auto process(Input, OpCtx&) -> Task<void> override {
+  auto process(Input input, OpCtx&) -> Task<void> override {
+    auto bytes = std::size_t{};
+    if constexpr (std::same_as<Input, table_slice>) {
+      bytes = input.approx_bytes();
+    } else {
+      if (input) {
+        bytes = input->size();
+      }
+    }
+    write_bytes_counter_.add(static_cast<uint64_t>(bytes));
     co_return;
   }
+
+private:
+  MetricsCounter write_bytes_counter_;
 };
 
 class discard_ir final : public ir::Operator {
