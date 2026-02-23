@@ -1256,7 +1256,7 @@ public:
     co_return PeriodicTick{};
   }
 
-  auto state() -> OperatorState {
+  auto state() -> OperatorState override {
     if (! draining_) {
       return OperatorState::unspecified;
     }
@@ -1999,7 +1999,7 @@ public:
     co_return co_await write_output_queue_->dequeue();
   }
 
-  auto state() -> OperatorState {
+  auto state() -> OperatorState override {
     if (! draining_) {
       return OperatorState::unspecified;
     }

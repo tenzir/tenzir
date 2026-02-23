@@ -564,7 +564,7 @@ public:
       = d.named("write_timeout", &DeduplicateArgs::write_timeout);
     auto read_timeout = d.named("read_timeout", &DeduplicateArgs::read_timeout);
     auto count_field = d.named("count_field", &DeduplicateArgs::count_field);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto key_values = ctx.get_all(keys);
       auto key_exprs = std::vector<ast::expression>{};
       key_exprs.reserve(key_values.size());

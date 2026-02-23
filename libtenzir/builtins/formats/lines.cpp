@@ -690,7 +690,7 @@ public:
     d.named("binary", &ReadLinesArgs::binary);
     d.named("skip_empty", &ReadLinesArgs::skip_empty);
     auto jobs = d.named_optional("_jobs", &ReadLinesArgs::jobs);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and *j == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
@@ -840,7 +840,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<WriteLinesArgs, WriteLines>{};
     auto jobs = d.named_optional("_jobs", &WriteLinesArgs::jobs);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and *j == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
