@@ -53,6 +53,18 @@ jobs:
           fi
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Validate macOS installer terms page
+        if: runner.os == 'macOS'
+        run: |
+          license_file="scripts/macOS/installer/license.html"
+          if grep -Eq "BSD 3-Clause License|Redistribution and use in source and binary forms" "$license_file"; then
+            echo "::error::${license_file} still contains BSD terms text"
+            exit 1
+          fi
+          if ! grep -q "https://tenzir.com/legal/terms-and-conditions" "$license_file"; then
+            echo "::error::${license_file} must link to the canonical terms URL"
+            exit 1
+          fi
       - name: Tailscale
         if: false
         uses: tailscale/github-action@a392da0a182bba0e9613b6243ebd69529b1878aa  # v4.1.0
