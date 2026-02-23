@@ -73,6 +73,8 @@ GO_BUILD_PREREQUISITE_MARKERS = (
     "requires go >=",
     "requires go1.",
     "unknown revision",
+    "forbidden",
+    "status code 403",
     "dial tcp",
     "proxyconnect tcp",
     "temporary failure in name resolution",
