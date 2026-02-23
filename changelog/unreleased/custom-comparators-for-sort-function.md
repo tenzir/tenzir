@@ -1,5 +1,5 @@
 ---
-title: Enhance `sort` function with `order` and `cmp` parameters
+title: Enhance `sort` function with `desc` and `cmp` parameters
 type: feature
 authors:
   - mavam
@@ -8,14 +8,14 @@ pr: 5767
 created: 2026-02-17T06:37:14.758079Z
 ---
 
-The `sort` function now supports two new parameters: `order` for controlling
+The `sort` function now supports two new parameters: `desc` for controlling
 sort direction and `cmp` for custom comparison logic via binary lambdas.
 
 **Sort in descending order:**
 
 ```tql
 from {xs: [3, 1, 2]}
-select ys = sort(xs, order="desc")
+select ys = sort(xs, desc=true)
 ```
 
 ```tql
