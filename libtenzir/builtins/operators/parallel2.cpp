@@ -29,7 +29,18 @@ struct ParallelArgs {
   located<ir::pipeline> pipe;
 };
 
-/// Water-fills `total` rows across the `k` most-starved workers.
+/// Distributes `total` rows across `k` workers, leveling them up from the
+/// least-loaded first. Workers with fewer rows assigned get more rows, bringing
+/// everyone as close to equal as possible. Any leftover rows after leveling are
+/// split evenly.
+///
+/// The `sorted_indices` must be sorted by ascending `rows_assigned`.
+///
+/// Example: rows_assigned = [100, 300, 500], total = 1000
+///   Level up worker 0 by 200 to match worker 1 (cost: 200)
+///   Level up workers 0,1 by 200 each to match worker 2 (cost: 400)
+///   Remaining 400 split evenly: 134, 133, 133
+///   Result: [534, 333, 133], new totals: [634, 633, 633]
 auto water_fill(uint64_t total, std::span<const size_t> sorted_indices,
                 std::span<const uint64_t> rows_assigned)
   -> std::vector<uint64_t> {
@@ -65,7 +76,23 @@ auto water_fill(uint64_t total, std::span<const size_t> sorted_indices,
   return alloc;
 }
 
-/// Returns (worker_index, row_count) pairs for adaptive round-robin.
+/// Distributes `total_rows` across workers while maintaining fairness.
+///
+/// Tries to use as few workers as possible (for better locality) while keeping
+/// the max/min ratio of total rows assigned across all workers within
+/// `fairness_factor`. Starts by trying to send everything to the most-starved
+/// worker (k=1), then considers spreading across 2, 3, ... workers until the
+/// fairness constraint is satisfied. At k=n (all workers), always accepts.
+///
+/// Updates `rows_assigned` in place and returns (worker_index, row_count) pairs.
+///
+/// Example: 4 workers at [0, 0, 0, 0], distributing 1000 rows
+///   k=1: all to worker 0 → [1000, 0, 0, 0], unfair → rejected
+///   k=4: 250 each → [250, 250, 250, 250] → accepted
+///
+/// Example: 4 workers at [500, 300, 200, 100], distributing 400 rows
+///   k=1: all to worker 3 → [500, 300, 200, 500], max/min = 2.5 → rejected
+///   k=2: water-fill workers 3,2 → [500, 300, 300, 300], max/min = 1.67 → ok
 auto distribute_adaptive(uint64_t total_rows,
                          std::vector<uint64_t>& rows_assigned)
   -> std::vector<std::pair<size_t, uint64_t>> {
