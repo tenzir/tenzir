@@ -37,6 +37,15 @@ Only override `state()` if the operator can terminate early (e.g., `head` stops
 after N rows). Operators that process until end-of-stream do not need to
 override `state()`.
 
+### Avoid Destructors
+
+Avoid defining destructors for operators. Work that needs to be done during a
+regular shutdown should be performed in `finalize()`. Work that needs to always
+be, including in the case of cancellation should be handled via RAII members. If
+you need to define a destructor because no RAII type is easily available, make
+sure to `= delete` the copy operations and `= default` the move operations of the
+operator class.
+
 ## Patterns
 
 ### Streaming (head, filter)
