@@ -272,8 +272,8 @@ auto queue_executor_request(
   return true;
 }
 
-auto validate_executor_paginate(std::optional<ast::expression> expr,
-                                diagnostic_handler& dh)
+auto resolve_executor_paginate(std::optional<ast::expression> expr,
+                               diagnostic_handler& dh)
   -> failure_or<std::optional<located<std::string>>> {
   if (not expr) {
     return std::nullopt;
@@ -750,6 +750,14 @@ public:
         .primary(*args_.metadata_field)
         .emit(ctx);
       aborted_ = true;
+    }
+    if (not aborted_) {
+      if (auto paginate
+          = resolve_executor_paginate(args_.paginate_expr, ctx.dh())) {
+        args_.paginate = std::move(*paginate);
+      } else {
+        aborted_ = true;
+      }
     }
     co_return;
   }
@@ -1282,11 +1290,6 @@ auto make_http_executor_description() -> Description {
     }
     if (auto x = ctx.get(paginate)) {
       args.paginate_expr = *x;
-    }
-    if (auto x = validate_executor_paginate(args.paginate_expr, ctx)) {
-      args.paginate = std::move(*x);
-    } else {
-      return {};
     }
     if (auto x = ctx.get(paginate_delay)) {
       args.paginate_delay = *x;
