@@ -367,7 +367,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ParallelArgs>{};
-    auto jobs = d.named("jobs", &ParallelArgs::jobs);
+    auto jobs = d.positional("jobs", &ParallelArgs::jobs);
     auto route_by = d.named("route_by", &ParallelArgs::route_by, "expression");
     auto pipe = d.pipeline(&ParallelArgs::pipe);
     d.validate([jobs](DescribeCtx& ctx) -> Empty {

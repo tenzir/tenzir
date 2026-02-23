@@ -1,1 +1,1 @@
-parallel jobs=2 { from {x: 1} | discard }
+parallel 2 { from {x: 1} | discard }

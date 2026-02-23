@@ -1,6 +1,6 @@
 error: this operator was not ported yet
- --> tests/operators/parallel/error_source_bytes.tql:5:19
+ --> tests/operators/parallel/error_source_bytes.tql:5:14
   |
-5 | parallel jobs=2 { load_file "/dev/null" }
-  |                   ^^^^^^^^^ 
+5 | parallel 2 { load_file "/dev/null" }
+  |              ^^^^^^^^^ 
   |
