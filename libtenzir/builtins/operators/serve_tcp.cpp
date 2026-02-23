@@ -147,7 +147,7 @@ public:
     });
   }
 
-  auto finalize(OpCtx& ctx) -> Task<void> override {
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto sub = ctx.get_sub(make_view(sub_key_));
     if (sub) {
       auto pipeline = as<OpenPipeline<table_slice>>(*sub);
@@ -159,7 +159,7 @@ public:
       clients_.clear();
     }
     done_ = true;
-    co_return;
+    co_return FinalizeBehavior::done;
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
