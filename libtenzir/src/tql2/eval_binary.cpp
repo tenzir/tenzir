@@ -19,9 +19,10 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 
+#include <arrow/compute/api_scalar.h>
+
 #include <algorithm>
 #include <array>
-#include <arrow/compute/api_scalar.h>
 #include <cctype>
 #include <ranges>
 
@@ -702,45 +703,52 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
 }
 
 template <ast::binary_op Op>
+  requires(Op == ast::binary_op::and_ or Op == ast::binary_op::or_)
 auto eval_and_or_eager(evaluator& self, const ast::binary_expr& x) -> series {
-  static_assert(Op == ast::binary_op::and_ or Op == ast::binary_op::or_);
   auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
   check(builder.Reserve(self.length()));
   for (auto [left, right] :
        split_multi_series(self.eval(x.left), self.eval(x.right))) {
     const auto length = left.length();
-    TENZIR_ASSERT(length == right.length());
+    TENZIR_ASSERT_EQ(length, right.length());
     const auto typed_left = left.as<bool_type>();
     if (not typed_left) {
-      if (not is<null_type>(left.type)) {
-        diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
-          .primary(x.left)
-          .hint("the result of this expression is `null`")
-          .emit(self.ctx());
-      }
+      diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
+        .primary(x.left)
+        .hint("the result of this expression is `null`")
+        .emit(self.ctx());
       const auto typed_right = right.as<bool_type>();
-      if (not typed_right and not is<null_type>(right.type)) {
+      if (not typed_right) {
         diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
           .primary(x.right)
           .hint("the result of this expression is `null`")
           .emit(self.ctx());
       }
       for (auto i = int64_t{0}; i < length; ++i) {
-        if (typed_right and typed_right->array->IsValid(i)
-            and typed_right->array->GetView(i) == (Op == ast::binary_op::or_)) {
-          check(builder.Append(Op == ast::binary_op::or_));
+        if constexpr (Op == ast::binary_op::or_) {
+          if (typed_right and typed_right->array->IsValid(i)
+              and typed_right->array->GetView(i)) {
+            check(builder.Append(true));
+          } else {
+            check(builder.AppendNull());
+          }
         } else {
-          check(builder.AppendNull());
+          if (typed_right and typed_right->array->IsValid(i)
+              and not typed_right->array->GetView(i)) {
+            check(builder.Append(false));
+          } else {
+            check(builder.AppendNull());
+          }
         }
       }
       continue;
     }
-    const auto typed_right = right.as<bool_type>();
+    auto* const right_array = try_as<arrow::BooleanArray>(right.array.get());
     auto warned_right_mismatch = false;
     const auto append_from_right = [&](int64_t i) {
-      if (typed_right) {
-        if (typed_right->array->IsValid(i)) {
-          check(builder.Append(typed_right->array->GetView(i)));
+      if (right_array) {
+        if (right_array->IsValid(i)) {
+          check(builder.Append(right_array->GetView(i)));
         } else {
           check(builder.AppendNull());
         }
@@ -927,8 +935,8 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
       const auto& then_branch = parts[1];
       const auto& else_branch = parts[2];
       const auto length = predicate.length();
-      TENZIR_ASSERT(length == then_branch.length());
-      TENZIR_ASSERT(length == else_branch.length());
+      TENZIR_ASSERT_EQ(length, then_branch.length());
+      TENZIR_ASSERT_EQ(length, else_branch.length());
       const auto typed_predicate = predicate.as<bool_type>();
       if (not typed_predicate) {
         diagnostic::warning("expected `bool`, but got `{}`",
@@ -992,7 +1000,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
         range_current = not range_current;
       }
       append_until(length);
-      TENZIR_ASSERT(result.length() == length);
+      TENZIR_ASSERT_EQ(result.length(), length);
       return result;
     });
   }
@@ -1043,7 +1051,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
         range_current = not range_current;
       }
       append_until(length);
-      TENZIR_ASSERT(result.length() == length);
+      TENZIR_ASSERT_EQ(result.length(), length);
       return result;
     });
 }
@@ -1057,6 +1065,46 @@ auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
     if (binop->op.inner == ast::binary_op::if_) {
       return eval_if(self, *binop, x.right);
     }
+  }
+  if (disable_short_circuiting()) {
+    auto inputs = std::array<multi_series, 2>{
+      self.eval(x.left),
+      self.eval(x.right),
+    };
+    return map_series(inputs, [&](std::span<series> parts) -> multi_series {
+      TENZIR_ASSERT_EQ(parts.size(), 2u);
+      auto& left = parts[0];
+      auto& right = parts[1];
+      const auto length = left.length();
+      TENZIR_ASSERT_EQ(length, right.length());
+      if (left.array->null_count() == 0) {
+        return left;
+      }
+      if (left.array->null_count() == length) {
+        return right;
+      }
+      auto result = multi_series{};
+      auto range_offset = int64_t{0};
+      auto range_current = left.array->IsValid(0);
+      const auto append_until = [&](int64_t end) {
+        if (range_current) {
+          result.append(left.slice(range_offset, end));
+        } else {
+          result.append(right.slice(range_offset, end));
+        }
+      };
+      for (auto i = int64_t{1}; i < length; ++i) {
+        if (range_current == left.array->IsValid(i)) {
+          continue;
+        }
+        append_until(i);
+        range_offset = i;
+        range_current = not range_current;
+      }
+      append_until(length);
+      TENZIR_ASSERT_EQ(result.length(), length);
+      return result;
+    });
   }
   auto left_offset = int64_t{0};
   return map_series(self.eval(x.left), [&](series left) -> multi_series {
@@ -1093,7 +1141,7 @@ auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_current = not range_current;
     }
     append_until(length);
-    TENZIR_ASSERT(result.length() == length);
+    TENZIR_ASSERT_EQ(result.length(), length);
     return result;
   });
 }
