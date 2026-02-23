@@ -398,9 +398,12 @@ public:
           if (not left or left->has_question_mark) {
             diagnostic::error("expected identifier").primary(expr).throw_();
           }
-          auto right = parse_expression();
-          expr = lambda_expr{std::move(left->id), arrow.location,
-                             std::move(right)};
+          auto body = parse_expression();
+          expr = lambda_expr{
+            std::vector<identifier>{std::move(left->id)},
+            arrow.location,
+            std::move(body),
+          };
           continue;
         }
       }
@@ -597,6 +600,29 @@ public:
   auto parse_primary_expression() -> ast::expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
+      auto next_stash = next_;
+      auto last_stash = last_;
+      auto tries_stash = tries_;
+      if (auto first_param = accept(tk::identifier)) {
+        auto params = std::vector<identifier>{};
+        params.push_back(first_param.as_identifier());
+        while (accept(tk::comma)) {
+          params.push_back(expect(tk::identifier).as_identifier());
+        }
+        if (accept(tk::rpar)) {
+          if (auto arrow = accept(tk::fat_arrow)) {
+            auto body = parse_expression();
+            return lambda_expr{
+              std::move(params),
+              arrow.location,
+              std::move(body),
+            };
+          }
+        }
+      }
+      next_ = next_stash;
+      last_ = last_stash;
+      tries_ = std::move(tries_stash);
       auto result = parse_expression();
       expect(tk::rpar);
       return result;
@@ -677,7 +703,6 @@ public:
       static_cast<bool>(question_mark),
     };
   }
-
   auto parse_record_or_pipeline_expr() -> ast::expression {
     auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);

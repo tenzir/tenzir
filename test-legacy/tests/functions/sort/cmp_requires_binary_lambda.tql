@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {xs: [3, 1, 2]}
+select ys = sort(xs, cmp=x => x < x)

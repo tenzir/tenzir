@@ -1,0 +1,2 @@
+from {xs: [3, 1, 2]}
+select ys = sort(xs, desc=true)

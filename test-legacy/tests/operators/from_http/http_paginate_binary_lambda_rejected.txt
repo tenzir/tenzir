@@ -1,0 +1,7 @@
+error: expected unary lambda
+ --> tests/operators/from_http/http_paginate_binary_lambda_rejected.tql:7:22
+  |
+7 | http url, paginate=((left, right) => left) { read_json }
+  |                      ^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = hint: binary lambdas are only supported for `sort(..., cmp=...)`

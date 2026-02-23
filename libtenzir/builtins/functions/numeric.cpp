@@ -132,16 +132,16 @@ public:
   explicit count_instance(std::optional<ast::expression> expr,
                           std::optional<ast::lambda_expr> lambda)
     : expr_{std::move(expr)}, lambda_{std::move(lambda)} {
-    if (lambda_) {
+    if (lambda_ and lambda_->is_unary()) {
       // Aggregation functions do not evaluate their arguments for null values,
-      // so we patch the lambda expression from `left => right` to `left =>
-      // right if left != null else false`
-      lambda_->right = ast::binary_expr{
+      // so we patch the lambda body from `left => body` to
+      // `left => body if left != null else false`.
+      lambda_->body = ast::binary_expr{
         ast::binary_expr{
-          lambda_->right,
+          lambda_->body,
           located{ast::binary_op::if_, location::unknown},
           ast::binary_expr{
-            lambda_->left_as_field_path().inner(),
+            lambda_->unary_param_as_field_path().inner(),
             located{ast::binary_op::neq, location::unknown},
             ast::constant{caf::none, location::unknown},
           },
@@ -165,13 +165,13 @@ public:
       const auto typed_pred = pred.as<bool_type>();
       if (not typed_pred) {
         diagnostic::warning("expected `bool`, got `{}`", pred.type.kind())
-          .primary(lambda_->right)
+          .primary(lambda_->body)
           .emit(ctx);
         continue;
       }
       if (typed_pred->array->null_count() > 0) {
         diagnostic::warning("expected `bool`, got `null`")
-          .primary(lambda_->right)
+          .primary(lambda_->body)
           .emit(ctx);
       }
       count_ += typed_pred->array->true_count();
@@ -248,6 +248,13 @@ public:
           .positional("x", expr, "any")
           .positional("predicate", lambda, "any => bool")
           .parse(inv, ctx));
+    if (not lambda.is_unary()) {
+      diagnostic::error("expected unary lambda for `count_if`")
+        .primary(lambda)
+        .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::make_unique<count_instance>(std::move(expr), std::move(lambda));
   }
 };

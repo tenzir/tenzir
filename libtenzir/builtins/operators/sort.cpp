@@ -10,6 +10,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -19,11 +20,14 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 
+#include <algorithm>
+#include <optional>
 #include <ranges>
 #include <string_view>
 
@@ -31,16 +35,125 @@ namespace tenzir::plugins::sort {
 
 namespace {
 
-auto sort_list(const series& input) -> series {
+struct comparator_warning_state {
+  bool invalid_result_length = false;
+  bool null_result = false;
+  bool non_boolean_result = false;
+  diagnostic_deduplicator eval_diagnostics = {};
+};
+
+auto empty_scope_slice() -> table_slice {
+  auto schema = type{"cmp", record_type{}};
+  return table_slice{
+    arrow::RecordBatch::Make(schema.to_arrow_schema(), int64_t{1},
+                             arrow::ArrayVector{}),
+    std::move(schema),
+  };
+}
+
+class deduplicating_diagnostic_handler final : public diagnostic_handler {
+public:
+  deduplicating_diagnostic_handler(diagnostic_handler& inner,
+                                   diagnostic_deduplicator& deduplicator)
+    : inner_{inner}, deduplicator_{deduplicator} {
+  }
+
+  void emit(diagnostic diag) override {
+    if (deduplicator_.insert(diag)) {
+      inner_.emit(std::move(diag));
+    }
+  }
+
+private:
+  diagnostic_handler& inner_;
+  diagnostic_deduplicator& deduplicator_;
+};
+
+auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
+                         const data& rhs_value, const table_slice& scope,
+                         comparator_warning_state& warning_state, session ctx)
+  -> bool {
+  TENZIR_ASSERT(cmp.is_binary());
+  auto lhs_series = data_to_series(lhs_value, int64_t{1});
+  auto rhs_series = data_to_series(rhs_value, int64_t{1});
+  auto lhs_param_path
+    = check(ast::field_path::try_from(ast::root_field{cmp.param(0), false}));
+  auto rhs_param_path
+    = check(ast::field_path::try_from(ast::root_field{cmp.param(1), false}));
+  auto slice = assign(lhs_param_path, std::move(lhs_series), scope, ctx.dh());
+  slice = assign(rhs_param_path, std::move(rhs_series), slice, ctx.dh());
+  auto cmp_dh = deduplicating_diagnostic_handler{
+    ctx.dh(), warning_state.eval_diagnostics};
+  auto result = eval(cmp.body, slice, cmp_dh);
+  if (result.length() != 1) {
+    if (not warning_state.invalid_result_length) {
+      diagnostic::warning("`cmp` lambda must return exactly one value")
+        .primary(cmp.body)
+        .emit(ctx);
+      warning_state.invalid_result_length = true;
+    }
+    return false;
+  }
+  auto value = materialize(result.value_at(0));
+  if (auto* boolean = try_as<bool>(&value)) {
+    return *boolean;
+  }
+  if (is<caf::none_t>(value)) {
+    if (not warning_state.null_result) {
+      diagnostic::warning("`cmp` lambda must return `bool`, got `null`")
+        .primary(cmp.body)
+        .emit(ctx);
+      warning_state.null_result = true;
+    }
+    return false;
+  }
+  if (not warning_state.non_boolean_result) {
+    diagnostic::warning("`cmp` lambda must return `bool`")
+      .primary(cmp.body)
+      .emit(ctx);
+    warning_state.non_boolean_result = true;
+  }
+  return false;
+}
+
+auto sort_list(const series& input, const std::optional<table_slice>& scope,
+               bool descending, const std::optional<ast::lambda_expr>& cmp,
+               session ctx) -> series {
   auto builder = series_builder{input.type};
+  TENZIR_ASSERT(
+    not scope or scope->rows() == detail::narrow_cast<size_t>(input.length()));
+  auto warning_state = comparator_warning_state{};
+  auto fallback_scope = empty_scope_slice();
+  auto row = int64_t{0};
   for (const auto& value :
        values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
+    auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
+    ++row;
     if (not value) {
       builder.null();
       continue;
     }
     auto materialized = materialize(*value);
-    std::ranges::sort(materialized);
+    if (cmp) {
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [&](const data& lhs, const data& rhs) {
+                         const auto& cmp_lhs = descending ? rhs : lhs;
+                         const auto& cmp_rhs = descending ? lhs : rhs;
+                         return eval_sort_predicate(*cmp, cmp_lhs, cmp_rhs,
+                                                    row_scope, warning_state,
+                                                    ctx);
+                       });
+    } else if (descending) {
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [](const data& lhs, const data& rhs) {
+                         return rhs < lhs;
+                       });
+    } else {
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [](const data& lhs, const data& rhs) {
+                         return lhs < rhs;
+                       });
+    }
     builder.data(materialized);
   }
   return builder.finish_assert_one_array();
@@ -660,20 +773,47 @@ public:
   auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
+    auto descending = false;
+    auto cmp = std::optional<ast::lambda_expr>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "list|record")
+          .named_optional("desc", descending, "bool")
+          .named("cmp", cmp, "(a, b) => bool")
           .parse(inv, ctx));
-    return function_use::make([call = inv.call,
-                               expr = std::move(expr)](auto eval, session ctx) {
-      return map_series(eval(expr), [&](series arg) {
+    if (cmp and not cmp->is_binary()) {
+      diagnostic::error("`cmp` must be a binary lambda")
+        .primary(*cmp)
+        .hint("provide `cmp=(a, b) => ...`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([call = inv.call, expr = std::move(expr),
+                               descending,
+                               cmp = std::move(cmp)](auto eval, session ctx) {
+      auto input = eval.get_input();
+      return map_series(eval(expr), [call, descending, cmp, ctx,
+                                     input = std::move(input),
+                                     offset = int64_t{0}](series arg) mutable {
+        auto scope = std::optional<table_slice>{};
+        if (input) {
+          scope = subslice(*input, offset, offset + arg.length());
+        }
+        offset += arg.length();
         auto f = detail::overload{
           [&](const arrow::NullArray&) {
             return arg;
           },
           [&](const arrow::ListArray&) {
-            return sort_list(arg);
+            return sort_list(arg, scope, descending, cmp, ctx);
           },
           [&](const arrow::StructArray&) {
+            if (descending or cmp) {
+              diagnostic::warning(
+                "`desc` and `cmp` are only applied when sorting lists")
+                .primary(call)
+                .note("record fields are always sorted ascending by key")
+                .emit(ctx);
+            }
             return sort_record(arg);
           },
           [&](const auto&) {

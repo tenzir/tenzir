@@ -19,6 +19,15 @@ auto function_use::evaluator::length() const -> int64_t {
   return static_cast<tenzir::evaluator*>(self_)->length();
 }
 
+auto function_use::evaluator::get_input() const -> std::optional<table_slice> {
+  auto* evaluator = static_cast<tenzir::evaluator*>(self_);
+  const auto* input = evaluator->get_input();
+  if (not input) {
+    return std::nullopt;
+  }
+  return *input;
+}
+
 auto function_use::evaluator::operator()(const ast::expression& expr) const
   -> multi_series {
   return static_cast<tenzir::evaluator*>(self_)->eval(expr);

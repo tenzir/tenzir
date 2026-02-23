@@ -334,6 +334,13 @@ struct arguments {
           .positional("list", args.field, "list")
           .positional(lambda_name, args.lambda, lambda_hint)
           .parse(inv, sp.as_session())) {
+      if (not args.lambda.is_unary()) {
+        diagnostic::error("expected unary lambda for `{}`", name)
+          .primary(args.lambda)
+          .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+          .emit(ctx);
+        return failure::promise();
+      }
       std::move(dh).forward_to(ctx);
       return args;
     }
@@ -342,10 +349,10 @@ struct arguments {
     if (argument_parser2::function(name)
           .positional("list", args.field, "list")
           .positional("x", expr, "any")
-          .positional("expr", args.lambda.right, "any")
+          .positional("expr", args.lambda.body, "any")
           .parse(inv, sp.as_session())) {
       diagnostic::warning("deprecated; please use a lambda expression instead")
-        .primary(expr.get_location().combine(args.lambda.right))
+        .primary(expr.get_location().combine(args.lambda.body))
         .hint("instead of `x, y`, provide `x => y`")
         .emit(ctx);
       std::move(dh).forward_to(ctx);
@@ -354,7 +361,7 @@ struct arguments {
         diagnostic::error("expected identifier").primary(expr).emit(ctx);
         return failure::promise();
       }
-      args.lambda.left = std::move(field->id);
+      args.lambda.params = {std::move(field->id)};
       return args;
     }
     for (auto& diag : diags) {
@@ -401,7 +408,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
                   all_true = false;
                   if (pred.array->null_count() > 0) {
                     diagnostic::warning("expected `bool`, got `null`")
-                      .primary(args.lambda.right)
+                      .primary(args.lambda.body)
                       .emit(ctx);
                   }
                   if (pred.array->true_count() == 0) {
@@ -416,7 +423,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
                 [&](const auto&) {
                   diagnostic::warning("expected `bool`, got `{}`",
                                       result.type.kind())
-                    .primary(args.lambda.right)
+                    .primary(args.lambda.body)
                     .emit(ctx);
                   all_true = false;
                   ids.append_bits(false, result.length());
@@ -763,7 +770,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           }
           diagnostic::warning(
             "lambda must evaluate to compatible types within the same list")
-            .primary(args.lambda.right, primary)
+            .primary(args.lambda.body, primary)
             .note(note)
             .emit(ctx);
         }
