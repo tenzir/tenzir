@@ -34,7 +34,7 @@
                     `x` @ 48..49
                   ],
                   arrow: 50..52,
-                  right: binary_expr {
+                  body: binary_expr {
                     left: root_field {
                       id: `x` @ 53..54,
                       has_question_mark: false
