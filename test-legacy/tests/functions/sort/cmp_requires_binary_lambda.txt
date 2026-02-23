@@ -4,4 +4,4 @@ error: `cmp` must be a binary lambda
 6 | select ys = sort(xs, cmp=x => x < x)
   |                          ^^^^^^^^^^ 
   |
-  = hint: provide `cmp=(left, right) => ...`
+  = hint: provide `cmp=(a, b) => ...`
