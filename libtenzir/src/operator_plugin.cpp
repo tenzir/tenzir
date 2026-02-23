@@ -345,6 +345,17 @@ public:
   }
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
+    // When infer_output is set, re-derive the output type so we can select
+    // the correct spawn among multiple Output variants. This must happen
+    // before filling args, because that moves the pipeline out.
+    auto desired_output = std::optional<element_type_tag>{};
+    if (desc_->infer_output) {
+      auto noop_dh = null_diagnostic_handler{};
+      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
+      auto result = (*desc_->infer_output)(input, ctx);
+      TENZIR_ASSERT(result);
+      desired_output = *result;
+    }
     auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
@@ -391,16 +402,6 @@ public:
     }
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
-    }
-    // When infer_output is set, re-derive the output type so we can select
-    // the correct spawn among multiple Output variants.
-    auto desired_output = std::optional<element_type_tag>{};
-    if (desc_->infer_output) {
-      auto noop_dh = null_diagnostic_handler{};
-      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
-      auto result = (*desc_->infer_output)(input, ctx);
-      TENZIR_ASSERT(result);
-      desired_output = *result;
     }
     for (auto& spawn : desc_->spawns) {
       auto result = match(

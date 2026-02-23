@@ -354,13 +354,8 @@ public:
       dh_{dh},
       sys_{sys},
       input_is_void_{
-        match(op_,
-              []<class In, class Out>(const Box<Operator<In, Out>>&) {
-                return std::same_as<In, void>;
-              })},
-      output_is_void_{
         match(op_, []<class In, class Out>(const Box<Operator<In, Out>>&) {
-          return std::same_as<Out, void>;
+          return std::same_as<In, void>;
         })} {
   }
 
@@ -1125,10 +1120,8 @@ private:
     if (not is_done_ or not all_subpipelines_finished()) {
       co_return;
     }
-    if (not output_is_void_) {
-      LOGW("sending end of data from {}", id_);
-      co_await push_signal(EndOfData{});
-    }
+    LOGW("sending end of data from {}", id_);
+    co_await push_signal(EndOfData{});
   }
 
   auto try_ready_for_shutdown() -> Task<void> {
@@ -1149,7 +1142,6 @@ private:
   CensoringDiagHandler dh_;
   caf::actor_system& sys_;
   bool input_is_void_;
-  bool output_is_void_;
   std::shared_ptr<const registry> reg_ = global_registry();
   folly::Executor::KeepAlive<> io_executor_;
 
