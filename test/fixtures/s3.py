@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from tenzir_test import FixtureHandle, fixture
-from tenzir_test.fixtures import FixtureUnavailable
+from tenzir_test.fixtures import FixtureUnavailable, current_assertions, current_context
 from tenzir_test.fixtures.container_runtime import (
     ContainerReadinessTimeout,
     ManagedContainer,
@@ -236,6 +236,16 @@ def s3() -> FixtureHandle:
             _stop_container(container, "LocalStack")
         raise
     assert container is not None
+    did_run_test_assertions = False
+
+    raw_suite_assertions = current_assertions("s3")
+    if not raw_suite_assertions:
+        ctx = current_context()
+        if ctx is not None:
+            raw_config_assertions = ctx.config.get("assertions", {})
+            if isinstance(raw_config_assertions, dict):
+                raw_suite_assertions = raw_config_assertions.get("s3", {})
+    suite_assertions = extract_assertions(raw_suite_assertions)
 
     def _assert_test(
         *,
@@ -243,6 +253,8 @@ def s3() -> FixtureHandle:
         assertions: CloudStorageAssertions | dict[str, Any],
         **_: Any,
     ) -> None:
+        nonlocal did_run_test_assertions
+        did_run_test_assertions = True
         assertion_config = extract_assertions(assertions)
         try:
             verify_post_test(
@@ -251,6 +263,16 @@ def s3() -> FixtureHandle:
             )
         except RuntimeError as exc:
             raise AssertionError(f"{test.name}: {exc}") from exc
+
+    def _teardown() -> None:
+        try:
+            if not did_run_test_assertions:
+                verify_post_test(
+                    file_exists=lambda key: _file_exists(container, key),
+                    assertions=suite_assertions,
+                )
+        finally:
+            _stop_container(container, "LocalStack")
 
     return FixtureHandle(
         env={
@@ -261,6 +283,6 @@ def s3() -> FixtureHandle:
             "S3_PUBLIC_BUCKET": PUBLIC_BUCKET,
             "AWS_ENDPOINT_URL_STS": f"http://127.0.0.1:{port}",
         },
-        teardown=lambda: _stop_container(container, "LocalStack"),
+        teardown=_teardown,
         hooks={"assert_test": _assert_test},
     )
