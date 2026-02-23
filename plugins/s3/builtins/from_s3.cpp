@@ -429,7 +429,7 @@ class from_s3 final : public operator_plugin2<from_s3_operator>,
     auto d = Describer<FromS3Args, FromS3Operator>{};
     auto anon = d.named("anonymous", &FromS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &FromS3Args::aws_iam);
-    ArrowFsArgs::describe_to(d, [=](ValidateCtx& ctx) {
+    ArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
       auto has_anon = ctx.get_location(anon).has_value();
       auto has_iam = ctx.get_location(aws_iam_arg).has_value();
       if (has_anon and has_iam) {

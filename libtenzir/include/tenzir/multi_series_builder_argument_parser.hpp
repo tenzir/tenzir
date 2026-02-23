@@ -115,7 +115,7 @@ struct msb_describer_options {
 };
 
 /// Returned by add_msb_to_describer. Stores Argument handles internally
-/// and is callable with a ValidateCtx to perform validation.
+/// and is callable with a DescribeCtx to perform validation.
 template <class Args>
 struct msb_validator {
   Argument<Args, std::string> schema;
@@ -128,7 +128,7 @@ struct msb_validator {
   Argument<Args, uint64_t> batch_size;
   bool schema_only_requires_schema_or_selector = true;
 
-  auto operator()(ValidateCtx& ctx) const -> Empty {
+  auto operator()(DescribeCtx& ctx) const -> Empty {
     auto schema_val = ctx.get(schema);
     auto schema_loc = ctx.get_location(schema);
     auto selector_val = ctx.get(selector);

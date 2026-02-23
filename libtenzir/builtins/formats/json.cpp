@@ -1631,7 +1631,7 @@ public:
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
     // TODO: Integrate with the `unordered` operator instead.
     auto unordered = d.named("_unordered", &ReadJsonArgs::unordered);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (auto j = ctx.get(jobs); j and *j == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
@@ -1686,7 +1686,7 @@ public:
     }};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (ctx.get(jobs)) {
         diagnostic::error("`_jobs` is not supported for `read_gelf` in neo")
@@ -1748,7 +1748,7 @@ public:
                                      .schema_only_requires_schema_or_selector
                                      = false});
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (ctx.get(jobs)) {
         diagnostic::error("`_jobs` is not supported for this operator in neo")
@@ -2093,7 +2093,7 @@ public:
     if (not tql_) {
       d.named("compact", &WriteJsonArgs::compact);
       d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
-      d.validate([=](ValidateCtx& ctx) -> Empty {
+      d.validate([=](DescribeCtx& ctx) -> Empty {
         if (ctx.get(jobs_arg)) {
           diagnostic::error("`_jobs` is not supported for `write_json` in neo")
             .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
@@ -2102,7 +2102,7 @@ public:
         return {};
       });
     } else {
-      d.validate([=](ValidateCtx& ctx) -> Empty {
+      d.validate([=](DescribeCtx& ctx) -> Empty {
         if (ctx.get(jobs_arg)) {
           diagnostic::error("`_jobs` is not supported for `write_tql` in neo")
             .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
@@ -2169,7 +2169,7 @@ public:
       = d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
     d.named("color", &WriteJsonArgs::color);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto jobs = ctx.get(jobs_arg); jobs and *jobs == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
           .primary(ctx.get_location(jobs_arg).value_or(location::unknown))

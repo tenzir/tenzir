@@ -268,7 +268,7 @@ public:
     auto d = Describer<DropNullFieldsArgs, DropNullFields>{};
     auto fields
       = d.optional_variadic("fields", &DropNullFieldsArgs::fields, "field");
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);
       auto locations = ctx.get_locations(fields);
       TENZIR_ASSERT(values.size() == locations.size());

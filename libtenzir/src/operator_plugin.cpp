@@ -10,6 +10,7 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -318,6 +319,10 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
+    if (desc_->infer_output) {
+      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, dh};
+      return (*desc_->infer_output)(input, ctx);
+    }
     for (auto& spawn : desc_->spawns) {
       auto output = match(
         spawn,
@@ -387,12 +392,23 @@ public:
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
     }
+    // When infer_output is set, re-derive the output type so we can select
+    // the correct spawn among multiple Output variants.
+    auto desired_output = std::optional<element_type_tag>{};
+    if (desc_->infer_output) {
+      auto noop_dh = null_diagnostic_handler{};
+      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
+      auto result = (*desc_->infer_output)(input, ctx);
+      TENZIR_ASSERT(result);
+      desired_output = *result;
+    }
     for (auto& spawn : desc_->spawns) {
       auto result = match(
         spawn,
         [&]<class Input, class Output>(
           const Spawn<Input, Output>& spawn) -> std::optional<AnyOperator> {
-          if (input.is<Input>()) {
+          if (input.is<Input>()
+              and (not desired_output or desired_output->is<Output>())) {
             return spawn(std::move(args));
           }
           return std::nullopt;
@@ -545,7 +561,7 @@ public:
     if (desc_->validator) {
       auto error_tracker = error_tracking_handler{ctx};
       auto validate_ctx
-        = ValidateCtx{args_, named_args_, pipeline_, *desc_, error_tracker};
+        = DescribeCtx{args_, named_args_, pipeline_, *desc_, error_tracker};
       (*desc_->validator)(validate_ctx);
       if (error_tracker.had_error()) {
         return failure::promise();

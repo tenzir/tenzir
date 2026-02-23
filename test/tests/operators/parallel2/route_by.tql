@@ -1,0 +1,3 @@
+from {x: 1}, {x: 2}, {x: 1}, {x: 2}
+parallel route_by=x { y = x }
+sort x

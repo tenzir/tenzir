@@ -176,7 +176,7 @@ public:
     auto arg = d.named("secret", &AssertSecretArgs::secret);
     d.named("expected", &AssertSecretArgs::expected);
     d.validate(
-      [enabled = enabled_, name = name(), arg](ValidateCtx& ctx) -> Empty {
+      [enabled = enabled_, name = name(), arg](DescribeCtx& ctx) -> Empty {
         if (not enabled) {
           diagnostic::error("the `{}` operator is disabled ", name)
             .primary(*ctx.get_location(arg))

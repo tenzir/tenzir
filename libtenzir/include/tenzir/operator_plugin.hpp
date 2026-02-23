@@ -114,9 +114,12 @@ public:
   }
 };
 
-class ValidateCtx;
+class DescribeCtx;
 
-using Validator = std::function<Empty(ValidateCtx&)>;
+using Validator = std::function<Empty(DescribeCtx&)>;
+
+using InferOutput = std::function<failure_or<std::optional<element_type_tag>>(
+  element_type_tag input, DescribeCtx& ctx)>;
 
 struct Description {
 public:
@@ -132,6 +135,7 @@ public:
   std::vector<Named> named;
   std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
+  std::optional<InferOutput> infer_output;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
 };
@@ -279,9 +283,9 @@ struct PipelineArg {
   }
 };
 
-class ValidateCtx {
+class DescribeCtx {
 public:
-  ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
+  DescribeCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               std::optional<const PipelineArg> pipeline,
               const Description& desc, diagnostic_handler& dh)
     : args_{args},
@@ -793,6 +797,10 @@ public:
     desc_.validator = std::move(validator);
   }
 
+  auto infer_output(InferOutput f) -> void {
+    desc_.infer_output = std::move(f);
+  }
+
   // TODO
   template <class F>
   auto optimize(F&& f) -> Description;
@@ -825,10 +833,10 @@ private:
 } // namespace _::operator_plugin
 
 using _::operator_plugin::Argument;
+using _::operator_plugin::DescribeCtx;
 using _::operator_plugin::Describer;
 using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
-using _::operator_plugin::ValidateCtx;
 
 } // namespace tenzir
