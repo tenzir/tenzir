@@ -272,51 +272,6 @@ auto queue_executor_request(
   return true;
 }
 
-auto resolve_executor_paginate(std::optional<ast::expression> expr,
-                               diagnostic_handler& dh)
-  -> failure_or<std::optional<located<std::string>>> {
-  if (not expr) {
-    return std::nullopt;
-  }
-  if (const auto* lambda = try_as<ast::lambda_expr>(*expr)) {
-    if (not lambda->is_unary()) {
-      diagnostic::error("expected unary lambda")
-        .primary(*lambda)
-        .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
-        .emit(dh);
-      return failure::promise();
-    }
-    diagnostic::error("unsupported pagination mode: lambda")
-      .primary(*lambda)
-      .hint("`paginate` must be `\"link\"`")
-      .emit(dh);
-    return failure::promise();
-  }
-  TRY(auto value, const_eval(*expr, dh));
-  return match(
-    value,
-    [&](const std::string& mode)
-      -> failure_or<std::optional<located<std::string>>> {
-      if (mode != "link") {
-        diagnostic::error("unsupported pagination mode: `{}`", mode)
-          .primary(*expr)
-          .hint("`paginate` must be `\"link\"`")
-          .emit(dh);
-        return failure::promise();
-      }
-      return std::optional<located<std::string>>{
-        located<std::string>{mode, expr->get_location()}};
-    },
-    [&](const auto&) -> failure_or<std::optional<located<std::string>>> {
-      const auto ty = type::infer(value);
-      diagnostic::error("expected `paginate` to be `string`")
-        .primary(*expr, "got `{}`", ty ? ty->kind() : type_kind{})
-        .hint("`paginate` must be `\"link\"`")
-        .emit(dh);
-      return failure::promise();
-    });
-}
-
 struct FromHttpTaskEvent {
   std::optional<ExecutorHttpRequest> request;
   std::optional<http::HttpResult<http::ResponseData>> response;
@@ -650,7 +605,6 @@ struct HttpExecutorArgs {
   std::optional<located<std::string>> encode;
   std::optional<ast::field_path> metadata_field;
   std::optional<ast::field_path> error_field;
-  std::optional<ast::expression> paginate_expr;
   std::optional<located<std::string>> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   std::optional<located<data>> tls;
@@ -750,14 +704,6 @@ public:
         .primary(*args_.metadata_field)
         .emit(ctx);
       aborted_ = true;
-    }
-    if (not aborted_) {
-      if (auto paginate
-          = resolve_executor_paginate(args_.paginate_expr, ctx.dh())) {
-        args_.paginate = std::move(*paginate);
-      } else {
-        aborted_ = true;
-      }
     }
     co_return;
   }
@@ -1245,8 +1191,7 @@ auto make_http_executor_description() -> Description {
   auto metadata_field
     = d.named("metadata_field", &HttpExecutorArgs::metadata_field);
   auto error_field = d.named("error_field", &HttpExecutorArgs::error_field);
-  auto paginate = d.named("paginate", &HttpExecutorArgs::paginate_expr,
-                          "record->string|string");
+  auto paginate = d.named("paginate", &HttpExecutorArgs::paginate);
   auto paginate_delay
     = d.named_optional("paginate_delay", &HttpExecutorArgs::paginate_delay);
   auto tls = d.named("tls", &HttpExecutorArgs::tls);
@@ -1289,7 +1234,7 @@ auto make_http_executor_description() -> Description {
       args.error_field = *x;
     }
     if (auto x = ctx.get(paginate)) {
-      args.paginate_expr = *x;
+      args.paginate = *x;
     }
     if (auto x = ctx.get(paginate_delay)) {
       args.paginate_delay = *x;
