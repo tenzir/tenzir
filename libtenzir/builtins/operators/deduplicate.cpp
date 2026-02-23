@@ -55,30 +55,6 @@ auto make_keys_expression(std::vector<ast::expression> exprs)
   return ast::expression{ast::record{begin_loc, std::move(items), end_loc}};
 }
 
-struct configuration;
-struct DeduplicateArgs;
-struct State;
-
-auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
-  -> failure_or<configuration>;
-
-auto make_configuration(std::vector<ast::expression> keys,
-                        std::optional<located<int64_t>> limit,
-                        std::optional<located<int64_t>> distance,
-                        std::optional<located<duration>> create_timeout,
-                        std::optional<located<duration>> write_timeout,
-                        std::optional<located<duration>> read_timeout,
-                        std::optional<ast::field_path> count_field,
-                        diagnostic_handler& dh) -> failure_or<configuration>;
-
-auto get_cleanup_duration(const configuration& cfg) -> duration;
-
-auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
-                       duration cleanup_duration,
-                       tsl::robin_map<data, State>& states, int64_t& row,
-                       std::chrono::steady_clock::time_point& last_cleanup_time,
-                       diagnostic_handler& dh) -> std::vector<table_slice>;
-
 struct configuration {
   ast::expression keys;
   located<int64_t> limit;
@@ -97,6 +73,20 @@ struct configuration {
                               f.field("read_timeout", x.read_timeout),
                               f.field("count_field", x.count_field));
   }
+
+  static auto
+  make(std::vector<ast::expression> keys, std::optional<located<int64_t>> limit,
+       std::optional<located<int64_t>> distance,
+       std::optional<located<duration>> create_timeout,
+       std::optional<located<duration>> write_timeout,
+       std::optional<located<duration>> read_timeout,
+       std::optional<ast::field_path> count_field, diagnostic_handler& dh)
+    -> failure_or<configuration>;
+
+  static auto parse(operator_factory_plugin::invocation inv, session ctx)
+    -> failure_or<configuration>;
+
+  auto cleanup_duration() const -> duration;
 };
 
 struct DeduplicateArgs {
@@ -144,42 +134,10 @@ struct State {
   }
 
   friend auto inspect(auto& f, State& x) -> bool {
-    auto created_at = std::chrono::system_clock::time_point{};
-    auto written_at = std::chrono::system_clock::time_point{};
-    auto read_at = std::chrono::system_clock::time_point{};
-    const auto snapshot_steady_now = std::chrono::steady_clock::now();
-    const auto snapshot_wall_now = std::chrono::system_clock::now();
-    const auto to_wall = [snapshot_steady_now, snapshot_wall_now](
-                           std::chrono::steady_clock::time_point tp) {
-      return snapshot_wall_now
-             - std::chrono::duration_cast<std::chrono::system_clock::duration>(
-               snapshot_steady_now - tp);
-    };
-    created_at = to_wall(x.created_at);
-    written_at = to_wall(x.written_at);
-    read_at = to_wall(x.read_at);
-    auto on_load = [&] {
-      const auto restored_steady_now = std::chrono::steady_clock::now();
-      const auto restored_wall_now = std::chrono::system_clock::now();
-      const auto to_steady = [restored_steady_now, restored_wall_now](
-                               std::chrono::system_clock::time_point tp) {
-        auto age = restored_wall_now - tp;
-        if (age < decltype(age)::zero()) {
-          age = decltype(age)::zero();
-        }
-        return restored_steady_now
-               - std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                 age);
-      };
-      x.created_at = to_steady(created_at);
-      x.written_at = to_steady(written_at);
-      x.read_at = to_steady(read_at);
-      return true;
-    };
-    return f.object(x).on_load(on_load).fields(
-      f.field("count", x.count), f.field("last_row", x.last_row),
-      f.field("created_at", created_at), f.field("written_at", written_at),
-      f.field("read_at", read_at));
+    // We intentionally avoid serializing timeout timestamps. After a restore,
+    // this favors less deduplication over accidentally over-deduplicating.
+    return f.object(x).fields(f.field("count", x.count),
+                              f.field("last_row", x.last_row));
   }
 
   auto is_double_expired(const configuration& cfg, int64_t current_row,
@@ -207,26 +165,14 @@ struct State {
   }
 };
 
-struct deduplicate_state {
-  tsl::robin_map<data, State> state;
-  int64_t row = 0;
-  std::chrono::steady_clock::time_point last_cleanup_time
-    = std::chrono::steady_clock::now();
-
-  friend auto inspect(auto& f, deduplicate_state& x) -> bool {
-    // FIXME: Make `last_cleanup_time` inspectable.
-    return f.object(x).fields(f.field("state", x.state), f.field("row", x.row));
-  }
-};
-
-auto make_configuration(std::vector<ast::expression> keys,
-                        std::optional<located<int64_t>> limit,
-                        std::optional<located<int64_t>> distance,
-                        std::optional<located<duration>> create_timeout,
-                        std::optional<located<duration>> write_timeout,
-                        std::optional<located<duration>> read_timeout,
-                        std::optional<ast::field_path> count_field,
-                        diagnostic_handler& dh) -> failure_or<configuration> {
+auto configuration::make(std::vector<ast::expression> keys,
+                         std::optional<located<int64_t>> limit,
+                         std::optional<located<int64_t>> distance,
+                         std::optional<located<duration>> create_timeout,
+                         std::optional<located<duration>> write_timeout,
+                         std::optional<located<duration>> read_timeout,
+                         std::optional<ast::field_path> count_field,
+                         diagnostic_handler& dh) -> failure_or<configuration> {
   auto seen_general_expression = false;
   auto normalized_keys = std::vector<ast::expression>{};
   normalized_keys.reserve(keys.size());
@@ -333,7 +279,7 @@ auto make_configuration(std::vector<ast::expression> keys,
   return cfg;
 }
 
-auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
+auto configuration::parse(operator_factory_plugin::invocation inv, session ctx)
   -> failure_or<configuration> {
   auto expressions = std::vector<ast::expression>{};
   auto named_args = std::vector<ast::expression>{};
@@ -397,20 +343,19 @@ auto parse_configuration(operator_factory_plugin::invocation inv, session ctx)
   auto parser_inv
     = operator_factory_plugin::invocation{inv.self, std::move(named_args)};
   TRY(parser.parse(parser_inv, ctx));
-  return make_configuration(std::move(expressions), limit, cfg.distance,
-                            cfg.create_timeout, cfg.write_timeout,
-                            cfg.read_timeout, cfg.count_field, ctx);
+  return make(std::move(expressions), limit, cfg.distance, cfg.create_timeout,
+              cfg.write_timeout, cfg.read_timeout, cfg.count_field, ctx);
 }
 
-auto get_cleanup_duration(const configuration& cfg) -> duration {
+auto configuration::cleanup_duration() const -> duration {
   constexpr auto get_duration = [](auto opt) -> duration {
     return opt ? opt->inner : duration::max();
   };
   const auto min_cfg = std::min(
     {
-      get_duration(cfg.create_timeout),
-      get_duration(cfg.write_timeout),
-      get_duration(cfg.read_timeout),
+      get_duration(create_timeout),
+      get_duration(write_timeout),
+      get_duration(read_timeout),
     },
     std::less<>{});
   return std::clamp(min_cfg, min_cleanup_duration, max_cleanup_duration);
@@ -516,74 +461,6 @@ auto deduplicate_slice(const table_slice& slice, const configuration& cfg,
   return output;
 }
 
-#if 0
-class deduplicate3 : public exec::operator_base<deduplicate_state> {
-public:
-  explicit deduplicate3(initializer init, configuration cfg)
-    : operator_base{std::move(init)}, cfg_{std::move(cfg)} {
-  }
-
-  void next(const table_slice& events) override {
-    const auto now = std::chrono::steady_clock::now();
-    auto& state = this->state();
-    if (events.rows() == 0) {
-      // We clean up every 15 minutes. This is a bit arbitrary, but there's no
-      // good mechanism for detecting whether an operator is idle from within
-      // the operator right now.
-      if (now > state.last_cleanup_time + std::chrono::minutes{15}) {
-        state.last_cleanup_time = now;
-        auto expired_keys = std::vector<data>{};
-        for (const auto& [key, value] : state.state) {
-          if (value.is_expired(cfg_, state.row, now)) {
-            expired_keys.push_back(key);
-          }
-        }
-        for (const auto& key : expired_keys) {
-          state.state.erase(key);
-        }
-      }
-      return;
-    }
-    auto keys = eval(cfg_.key, events, ctx());
-    auto offset = int64_t{};
-    auto ids = null_bitmap{};
-    for (auto&& key : keys.values()) {
-      const auto current_row = state.row + offset++;
-      auto it = state.state.find(key);
-      if (it == state.state.end()) {
-        state.state.emplace_hint(it, materialize(key), deduplicate::state{})
-          .value()
-          .reset(current_row, now);
-        ids.append_bit(true);
-        continue;
-      }
-      if (it->second.is_expired(cfg_, current_row, now)) {
-        it.value().reset(current_row, now);
-        ids.append_bit(true);
-        continue;
-      }
-      it.value().read_at = now;
-      it.value().last_row = current_row;
-      if (it->second.count >= cfg_.limit.inner) {
-        ids.append_bit(false);
-        continue;
-      }
-      it.value().count += 1;
-      it.value().written_at = now;
-      ids.append_bit(true);
-    }
-    state.row += keys.length();
-    for (auto [begin, end] : select_runs(ids)) {
-      push(subslice(events, begin, end));
-    }
-  }
-
-private:
-  configuration cfg_;
-};
-
-#endif
-
 class deduplicate_operator final : public crtp_operator<deduplicate_operator> {
 public:
   deduplicate_operator() = default;
@@ -596,7 +473,7 @@ public:
     -> generator<table_slice> {
     auto states = tsl::robin_map<data, State>{};
     auto row = int64_t{};
-    const auto cleanup_duration = get_cleanup_duration(cfg_);
+    const auto cleanup_duration = cfg_.cleanup_duration();
     auto last_cleanup_time = std::chrono::steady_clock::now();
     for (const auto& slice : input) {
       auto output
@@ -635,7 +512,7 @@ private:
 
 auto make_configuration_checked(DeduplicateArgs args) -> configuration {
   auto dh = null_diagnostic_handler{};
-  auto cfg = make_configuration(
+  auto cfg = configuration::make(
     std::move(args.keys), std::move(args.limit), std::move(args.distance),
     std::move(args.create_timeout), std::move(args.write_timeout),
     std::move(args.read_timeout), std::move(args.count_field), dh);
@@ -647,7 +524,7 @@ class Deduplicate final : public Operator<table_slice, table_slice> {
 public:
   explicit Deduplicate(DeduplicateArgs args)
     : cfg_{make_configuration_checked(std::move(args))},
-      cleanup_duration_{get_cleanup_duration(cfg_)} {
+      cleanup_duration_{cfg_.cleanup_duration()} {
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -698,10 +575,10 @@ public:
         key_exprs.push_back(std::move(*value));
       }
       auto result
-        = make_configuration(std::move(key_exprs), ctx.get(limit),
-                             ctx.get(distance), ctx.get(create_timeout),
-                             ctx.get(write_timeout), ctx.get(read_timeout),
-                             ctx.get(count_field), ctx);
+        = configuration::make(std::move(key_exprs), ctx.get(limit),
+                              ctx.get(distance), ctx.get(create_timeout),
+                              ctx.get(write_timeout), ctx.get(read_timeout),
+                              ctx.get(count_field), ctx);
       if (not result) {
         return {};
       }
@@ -712,7 +589,7 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    TRY(auto cfg, parse_configuration(std::move(inv), ctx));
+    TRY(auto cfg, configuration::parse(std::move(inv), ctx));
     return std::make_unique<deduplicate_operator>(std::move(cfg));
   }
 };
