@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+parallel jobs=2 { load_file "/dev/null" }

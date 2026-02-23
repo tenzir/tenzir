@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+parallel route_by=x { from {x: 1} }

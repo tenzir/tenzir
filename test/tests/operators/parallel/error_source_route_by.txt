@@ -1,0 +1,6 @@
+error: `route_by` cannot be used when `parallel` is used as a source
+ --> tests/operators/parallel/error_source_route_by.tql:5:19
+  |
+5 | parallel route_by=x { from {x: 1} }
+  |                   ^ 
+  |

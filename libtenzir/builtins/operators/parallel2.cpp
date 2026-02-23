@@ -227,6 +227,33 @@ private:
   std::vector<uint64_t> rows_assigned_;
 };
 
+/// Shared implementation for void-input variants (source operators).
+class ParallelSourceImpl {
+public:
+  explicit ParallelSourceImpl(ParallelArgs args)
+    : jobs_{args.jobs
+              ? args.jobs->inner
+              : std::max(uint64_t{1}, static_cast<uint64_t>(
+                                        std::thread::hardware_concurrency()))},
+      pipe_{std::move(args.pipe.inner)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> {
+    for (auto i = uint64_t{0}; i < jobs_; ++i) {
+      auto copy = pipe_;
+      auto sub_ctx = substitute_ctx{base_ctx{ctx.dh(), ctx.reg()}, nullptr};
+      if (not copy.substitute(sub_ctx, true)) {
+        co_return;
+      }
+      co_await ctx.spawn_sub(data{int64_t(i)}, std::move(copy), tag_v<void>);
+    }
+  }
+
+private:
+  uint64_t jobs_;
+  ir::pipeline pipe_;
+};
+
 /// Parallel operator that transforms events (subpipeline outputs events).
 class ParallelTransform final : public Operator<table_slice, table_slice> {
 public:
@@ -285,6 +312,53 @@ private:
   ParallelImpl impl_;
 };
 
+/// Parallel source operator (subpipeline outputs events).
+class ParallelSource final : public Operator<void, table_slice> {
+public:
+  explicit ParallelSource(ParallelArgs args) : impl_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return impl_.start(ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  ParallelSourceImpl impl_;
+};
+
+/// Parallel source operator (subpipeline outputs void).
+class ParallelVoid final : public Operator<void, void> {
+public:
+  explicit ParallelVoid(ParallelArgs args) : impl_{std::move(args)} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return impl_.start(ctx);
+  }
+
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_return FinalizeBehavior::done;
+  }
+
+private:
+  ParallelSourceImpl impl_;
+};
+
 class plugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -292,23 +366,56 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ParallelArgs, ParallelTransform, ParallelSink>{};
+    auto d = Describer<ParallelArgs>{};
     auto jobs = d.named("jobs", &ParallelArgs::jobs);
-    d.named("route_by", &ParallelArgs::route_by, "expression");
-    auto pipe_arg = d.pipeline(&ParallelArgs::pipe);
-    d.infer_output([pipe_arg](element_type_tag input, DescribeCtx& ctx)
-                     -> failure_or<std::optional<element_type_tag>> {
-      auto pipe = ctx.get(pipe_arg);
-      if (not pipe) {
-        return std::nullopt;
-      }
-      return pipe->inner.infer_type(input, ctx);
-    });
+    auto route_by = d.named("route_by", &ParallelArgs::route_by, "expression");
+    auto pipe = d.pipeline(&ParallelArgs::pipe);
     d.validate([jobs](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and j->inner == 0) {
         diagnostic::error("`jobs` must not be zero").primary(*j).emit(ctx);
       }
       return {};
+    });
+    d.spawner([pipe, route_by]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<ParallelArgs, Input>>> {
+      TRY(auto pipe, ctx.get(pipe));
+      TRY(auto output, pipe.inner.infer_type(tag_v<Input>, ctx));
+      if constexpr (std::same_as<Input, table_slice>) {
+        if (output == tag_v<table_slice>) {
+          return [](ParallelArgs args) {
+            return ParallelTransform{std::move(args)};
+          };
+        }
+        if (output == tag_v<void>) {
+          return [](ParallelArgs args) {
+            return ParallelSink{std::move(args)};
+          };
+        }
+      } else if constexpr (std::same_as<Input, void>) {
+        if (ctx.get(route_by)) {
+          diagnostic::error("`route_by` cannot be used when `parallel` is "
+                            "used as a source")
+            .primary(*ctx.get_location(route_by))
+            .emit(ctx);
+          return failure::promise();
+        }
+        if (output == tag_v<table_slice>) {
+          return [](ParallelArgs args) {
+            return ParallelSource{std::move(args)};
+          };
+        }
+        if (output == tag_v<void>) {
+          return [](ParallelArgs args) {
+            return ParallelVoid{std::move(args)};
+          };
+        }
+      } else {
+        return {};
+      }
+      diagnostic::error("subpipeline must not produce bytes")
+        .primary(pipe.source)
+        .emit(ctx);
+      return failure::promise();
     });
     return d.without_optimize();
   }

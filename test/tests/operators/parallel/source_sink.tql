@@ -1,0 +1,1 @@
+parallel jobs=2 { from {x: 1} | discard }
