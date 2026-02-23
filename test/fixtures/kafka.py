@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import fixture
-from tenzir_test.fixtures import FixtureUnavailable, current_options
+from tenzir_test.fixtures import FixtureUnavailable, current_context, current_options
 from tenzir_test.fixtures.container_runtime import (
     ContainerCommandError,
     ContainerReadinessTimeout,
@@ -66,6 +66,21 @@ HELPER_SHUTDOWN_TIMEOUT = 5  # seconds
 BROKER_SETTLE_SECONDS = 1.0
 LOG_TAIL_LINES = 80
 HELPER_DIR = Path(__file__).resolve().parent / "tools" / "kafka_iam_mock"
+GO_BUILD_PREREQUISITE_MARKERS = (
+    "no required module provides package",
+    "missing go.sum entry",
+    "toolchain not available",
+    "requires go >=",
+    "requires go1.",
+    "unknown revision",
+    "dial tcp",
+    "proxyconnect tcp",
+    "temporary failure in name resolution",
+    "i/o timeout",
+    "connection refused",
+    "tls: ",
+    "x509:",
+)
 
 
 @dataclass(frozen=True)
@@ -313,11 +328,32 @@ def _build_helper(binary_path: Path) -> None:
     if result.returncode != 0:
         stderr = result.stderr.strip() or "<no stderr>"
         stdout = result.stdout.strip() or "<no stdout>"
+        if _is_prerequisite_build_failure(result.stdout, result.stderr):
+            summary = _summarize_prerequisite_build_failure(result.stdout, result.stderr)
+            raise FixtureUnavailable(
+                "kafka_iam_mock helper prerequisites are unavailable"
+                f" ({summary})"
+            )
         raise RuntimeError(
             "failed to build kafka_iam_mock helper\n"
             f"stdout:\n{stdout}\n"
             f"stderr:\n{stderr}"
         )
+
+
+def _is_prerequisite_build_failure(stdout: str, stderr: str) -> bool:
+    combined = f"{stdout}\n{stderr}"
+    lowered = combined.lower()
+    return any(marker in lowered for marker in GO_BUILD_PREREQUISITE_MARKERS)
+
+
+def _summarize_prerequisite_build_failure(stdout: str, stderr: str) -> str:
+    candidates = [line.strip() for line in f"{stderr}\n{stdout}".splitlines() if line.strip()]
+    for line in candidates:
+        lowered = line.lower()
+        if any(marker in lowered for marker in GO_BUILD_PREREQUISITE_MARKERS):
+            return line
+    return candidates[-1] if candidates else "unknown go build prerequisite failure"
 
 
 def _start_helper(
@@ -420,10 +456,15 @@ def _verify_auth_events(http_url: str) -> None:
     if not isinstance(events, list):
         raise RuntimeError("auth_events endpoint returned invalid events payload")
     if not events:
-        logger.info(
-            "kafka_iam_mock observed no auth events; skipping success assertion"
+        if _is_explicit_error_only_run():
+            logger.info(
+                "kafka_iam_mock observed no auth events in explicit error-only run; "
+                "skipping success assertion"
+            )
+            return
+        raise RuntimeError(
+            "kafka_iam_mock did not observe any OAUTHBEARER authentication events"
         )
-        return
     had_success = bool(payload.get("had_success"))
     if had_success:
         return
@@ -437,6 +478,15 @@ def _verify_auth_events(http_url: str) -> None:
         "kafka_iam_mock did not observe a successful OAUTHBEARER authentication "
         f"(failures={failure_count}, {detail})"
     )
+
+
+def _is_explicit_error_only_run() -> bool:
+    ctx = current_context()
+    if ctx is None:
+        return False
+    if not bool(ctx.config.get("error")):
+        return False
+    return ctx.test.stem.startswith("error_")
 
 
 def _stop_helper(process: subprocess.Popen[str], log_path: Path) -> None:
