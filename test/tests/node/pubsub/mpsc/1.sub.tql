@@ -1,0 +1,4 @@
+subscribe "mpsc"
+deduplicate
+head 2
+sort

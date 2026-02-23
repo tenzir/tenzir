@@ -1,0 +1,3 @@
+subscribe "spmc"
+deduplicate
+head 1
