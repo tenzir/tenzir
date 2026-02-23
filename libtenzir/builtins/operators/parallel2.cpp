@@ -76,32 +76,33 @@ auto distribute_adaptive(uint64_t total_rows,
   std::sort(sorted.begin(), sorted.end(), [&](size_t a, size_t b) {
     return rows_assigned[a] < rows_assigned[b];
   });
+  auto alloc = std::vector<uint64_t>{};
   for (auto k = size_t{1}; k <= n; ++k) {
-    auto alloc
-      = water_fill(total_rows, std::span{sorted.data(), k}, rows_assigned);
-    // Compute post-distribution min/max across all workers.
+    alloc = water_fill(total_rows, std::span{sorted.data(), k}, rows_assigned);
+    if (k == n) {
+      break;
+    }
+    // Check whether this distribution satisfies the fairness constraint.
     auto new_totals = rows_assigned;
     for (auto i = size_t{0}; i < k; ++i) {
       new_totals[sorted[i]] += alloc[i];
     }
     auto [min_it, max_it]
       = std::minmax_element(new_totals.begin(), new_totals.end());
-    auto new_min = *min_it;
-    auto new_max = *max_it;
-    if (new_min == 0
-        or static_cast<double>(new_max)
-             <= static_cast<double>(new_min) * fairness_factor) {
-      auto result = std::vector<std::pair<size_t, uint64_t>>{};
-      for (auto i = size_t{0}; i < k; ++i) {
-        if (alloc[i] > 0) {
-          rows_assigned[sorted[i]] += alloc[i];
-          result.emplace_back(sorted[i], alloc[i]);
-        }
-      }
-      return result;
+    auto is_fair = static_cast<double>(*max_it)
+                   <= static_cast<double>(*min_it) * fairness_factor;
+    if (is_fair) {
+      break;
     }
   }
-  TENZIR_UNREACHABLE();
+  auto result = std::vector<std::pair<size_t, uint64_t>>{};
+  for (auto i = size_t{0}; i < alloc.size(); ++i) {
+    if (alloc[i] > 0) {
+      rows_assigned[sorted[i]] += alloc[i];
+      result.emplace_back(sorted[i], alloc[i]);
+    }
+  }
+  return result;
 }
 
 /// Shared implementation for both transform and sink variants.
