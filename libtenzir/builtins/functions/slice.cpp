@@ -22,7 +22,7 @@ namespace tenzir::plugins::slice {
 
 namespace {
 
-class Slice : public virtual function_plugin {
+class Plugin : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.slice";
@@ -62,6 +62,7 @@ public:
     if (stride) {
       if (stride->inner == 0) {
         diagnostic::error("`stride` must not be 0").primary(*stride).emit(ctx);
+        return failure::promise();
       }
     }
     return function_use::make([this, subject_expr = std::move(subject_expr),
@@ -171,4 +172,4 @@ public:
 
 } // namespace tenzir::plugins::slice
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::Slice)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::Plugin)
