@@ -26,8 +26,11 @@ namespace tenzir {
 namespace {
 
 auto formatted_resolved_host_suffix(const std::string& host) -> std::string {
-  const auto resolved_host
-    = caf::io::network::interfaces::native_address(host)->first;
+  auto resolved = caf::io::network::interfaces::native_address(host);
+  if (not resolved) {
+    return {};
+  }
+  auto const& resolved_host = resolved->first;
   if (std::equal(host.begin(), host.end(), resolved_host.begin(),
                  resolved_host.end(), [](char lhs, char rhs) {
                    return std::tolower(lhs) == std::tolower(rhs);
