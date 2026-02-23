@@ -22,7 +22,7 @@ namespace tenzir::plugins::slice {
 
 namespace {
 
-class slice : public virtual function_plugin {
+class Slice : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.slice";
@@ -34,7 +34,7 @@ public:
 
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
-    const auto normalize_bounds
+    auto const normalize_bounds
       = [](int64_t length, std::optional<int64_t> begin,
            std::optional<int64_t> end) {
           auto normalized_begin = begin.value_or(0);
@@ -70,7 +70,7 @@ public:
       auto result_type = string_type{};
       return map_series(eval(subject_expr), [&](series subject) {
         auto f = detail::overload{
-          [&](const arrow::StringArray& array) {
+          [&](arrow::StringArray const& array) {
             if (stride and stride->inner < 0) {
               diagnostic::error("`stride` must be greater 0, but got {}",
                                 stride->inner)
@@ -92,7 +92,7 @@ public:
             }
             return series{result_type, result.MoveValueUnsafe().make_array()};
           },
-          [&](const arrow::ListArray& array) -> series {
+          [&](arrow::ListArray const& array) -> series {
             auto list_subject = subject.as<list_type>();
             TENZIR_ASSERT(list_subject);
             auto builder
@@ -133,7 +133,7 @@ public:
                                          row_offset + row_end - 1, 1));
                 continue;
               }
-              const auto abs_stride = -slice_stride;
+              auto const abs_stride = -slice_stride;
               for (auto element = row_end - 1; element >= row_begin;
                    element -= abs_stride) {
                 check(append_array_slice(*builder->value_builder(), value_type,
@@ -146,13 +146,13 @@ public:
             }
             return series{list_subject->type, finish(*builder)};
           },
-          [&](const arrow::NullArray& array) {
+          [&](arrow::NullArray const& array) {
             if (is<list_type>(subject.type)) {
               return series::null(as<list_type>(subject.type), array.length());
             }
             return series::null(result_type, array.length());
           },
-          [&](const auto&) {
+          [&](auto const&) {
             diagnostic::warning("`{}` expected `string` or `list`, but got "
                                 "`{}`",
                                 name(), subject.type.kind())
@@ -171,4 +171,4 @@ public:
 
 } // namespace tenzir::plugins::slice
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::slice)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::Slice)
