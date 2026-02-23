@@ -381,8 +381,8 @@ struct unary_expr {
 struct lambda_expr {
   lambda_expr() = default;
 
-  lambda_expr(identifier left, location arrow, expression body)
-    : params{std::move(left)}, arrow{arrow}, body{std::move(body)} {
+  lambda_expr(identifier param, location arrow, expression body)
+    : params{std::move(param)}, arrow{arrow}, body{std::move(body)} {
   }
 
   lambda_expr(std::vector<identifier> params, location arrow, expression body)
@@ -412,7 +412,7 @@ struct lambda_expr {
     return params[idx];
   }
 
-  auto left_as_field_path() const -> field_path {
+  auto unary_param_as_field_path() const -> field_path {
     TENZIR_ASSERT(is_unary());
     return check(field_path::try_from(root_field{params.front(), false}));
   }

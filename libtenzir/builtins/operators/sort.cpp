@@ -69,19 +69,19 @@ private:
   diagnostic_deduplicator& deduplicator_;
 };
 
-auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& left,
-                         const data& right, const table_slice& scope,
+auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
+                         const data& rhs_value, const table_slice& scope,
                          comparator_warning_state& warning_state, session ctx)
   -> bool {
   TENZIR_ASSERT(cmp.is_binary());
-  auto left_series = data_to_series(left, int64_t{1});
-  auto right_series = data_to_series(right, int64_t{1});
-  auto lhs_path
+  auto lhs_series = data_to_series(lhs_value, int64_t{1});
+  auto rhs_series = data_to_series(rhs_value, int64_t{1});
+  auto lhs_param_path
     = check(ast::field_path::try_from(ast::root_field{cmp.param(0), false}));
-  auto rhs_path
+  auto rhs_param_path
     = check(ast::field_path::try_from(ast::root_field{cmp.param(1), false}));
-  auto slice = assign(lhs_path, std::move(left_series), scope, ctx.dh());
-  slice = assign(rhs_path, std::move(right_series), slice, ctx.dh());
+  auto slice = assign(lhs_param_path, std::move(lhs_series), scope, ctx.dh());
+  slice = assign(rhs_param_path, std::move(rhs_series), slice, ctx.dh());
   auto cmp_dh = deduplicating_diagnostic_handler{
     ctx.dh(), warning_state.eval_diagnostics};
   auto result = eval(cmp.body, slice, cmp_dh);
@@ -137,10 +137,11 @@ auto sort_list(const series& input, const std::optional<table_slice>& scope,
     if (cmp) {
       std::stable_sort(materialized.begin(), materialized.end(),
                        [&](const data& lhs, const data& rhs) {
-                         const auto& left = descending ? rhs : lhs;
-                         const auto& right = descending ? lhs : rhs;
-                         return eval_sort_predicate(
-                           *cmp, left, right, row_scope, warning_state, ctx);
+                         const auto& cmp_lhs = descending ? rhs : lhs;
+                         const auto& cmp_rhs = descending ? lhs : rhs;
+                         return eval_sort_predicate(*cmp, cmp_lhs, cmp_rhs,
+                                                    row_scope, warning_state,
+                                                    ctx);
                        });
     } else if (descending) {
       std::stable_sort(materialized.begin(), materialized.end(),
@@ -775,12 +776,12 @@ public:
     TRY(argument_parser2::function(name())
           .positional("x", expr, "list|record")
           .named_optional("desc", descending, "bool")
-          .named("cmp", cmp, "(left, right) => bool")
+          .named("cmp", cmp, "(a, b) => bool")
           .parse(inv, ctx));
     if (cmp and not cmp->is_binary()) {
       diagnostic::error("`cmp` must be a binary lambda")
         .primary(*cmp)
-        .hint("provide `cmp=(left, right) => ...`")
+        .hint("provide `cmp=(a, b) => ...`")
         .emit(ctx);
       return failure::promise();
     }
