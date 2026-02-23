@@ -96,11 +96,14 @@ public:
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<Box<ir::Operator>> override {
     for (auto& arg : inv.args) {
-      if (is<ast::assignment>(arg) or not is<ast::pipeline_expr>(arg)) {
-        TRY(arg.bind(ctx));
-      }
+      TRY(arg.bind(ctx));
     }
-    return make_set_ir(std::move(inv.args), ctx);
+    auto& dh = static_cast<diagnostic_handler&>(ctx);
+    auto assignments = make_select_assignments(std::move(inv.args), &dh);
+    if (not assignments) {
+      return failure::promise();
+    }
+    return make_set_ir(std::move(*assignments));
   }
 };
 

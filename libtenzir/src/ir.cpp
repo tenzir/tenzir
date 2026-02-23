@@ -208,37 +208,6 @@ private:
   event_order order_ = event_order::ordered;
 };
 
-auto make_select_assignments(std::vector<ast::expression> args,
-                             diagnostic_handler& dh)
-  -> failure_or<std::vector<ast::assignment>> {
-  auto assignments = std::vector<ast::assignment>{};
-  assignments.reserve(1 + args.size());
-  assignments.emplace_back(
-    ast::field_path::try_from(ast::this_{}).value(), location::unknown,
-    ast::record{location::unknown, {}, location::unknown});
-  for (auto& arg : args) {
-    if (auto* assignment = try_as<ast::assignment>(arg)) {
-      auto* selector = try_as<ast::field_path>(assignment->left);
-      if (not selector) {
-        diagnostic::error("expected selector").primary(assignment->left).emit(dh);
-        return failure::promise();
-      }
-      assignments.push_back(std::move(*assignment));
-      continue;
-    }
-    auto original_arg = arg;
-    auto selector = ast::field_path::try_from(std::move(arg));
-    if (not selector) {
-      diagnostic::error("expected selector").primary(original_arg).emit(dh);
-      return failure::promise();
-    }
-    auto rhs = selector->inner();
-    assignments.emplace_back(std::move(*selector), location::unknown,
-                             std::move(rhs));
-  }
-  return assignments;
-}
-
 /// Create a `set` operator with the given assignment.
 auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   auto assignments = std::vector<ast::assignment>{};
@@ -362,9 +331,8 @@ private:
 
 } // namespace
 
-auto make_set_ir(std::vector<ast::expression> args, diagnostic_handler& dh)
-  -> failure_or<Box<ir::Operator>> {
-  TRY(auto assignments, make_select_assignments(std::move(args), dh));
+auto make_set_ir(std::vector<ast::assignment> assignments)
+  -> Box<ir::Operator> {
   return set_ir{std::move(assignments)};
 }
 

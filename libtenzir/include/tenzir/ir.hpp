@@ -150,9 +150,9 @@ struct optimize_result {
 
 } // namespace ir
 
-/// Create a set-like IR operator from `select`-style arguments.
-auto make_set_ir(std::vector<ast::expression> args, diagnostic_handler& dh)
-  -> failure_or<Box<ir::Operator>>;
+/// Create a `set` IR operator from assignments.
+auto make_set_ir(std::vector<ast::assignment> assignments)
+  -> Box<ir::Operator>;
 
 template <>
 inline constexpr auto enable_default_formatter<ir::pipeline> = true;
