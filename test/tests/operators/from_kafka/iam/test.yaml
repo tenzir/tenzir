@@ -1,0 +1,10 @@
+suite: from-kafka-iam
+fixtures:
+  - kafka:
+      mode: aws_iam
+      topic: from_kafka_iam_test
+      partitions: 1
+      messages: 1
+timeout: 180
+skip:
+  on: fixture-unavailable

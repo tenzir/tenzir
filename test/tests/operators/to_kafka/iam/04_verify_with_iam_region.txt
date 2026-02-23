@@ -1,0 +1,6 @@
+{
+  message: "iam-message-0001",
+}
+{
+  message: "iam-message-0002",
+}

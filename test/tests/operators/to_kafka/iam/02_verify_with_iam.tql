@@ -1,0 +1,15 @@
+// Verify the produced message is readable with AWS IAM SASL/OAUTHBEARER.
+from_kafka env("KAFKA_TOPIC"),
+           count=1,
+           offset="beginning",
+           aws_region=env("KAFKA_AWS_REGION"),
+           aws_iam={
+             access_key_id: env("KAFKA_AWS_ACCESS_KEY_ID"),
+             secret_access_key: env("KAFKA_AWS_SECRET_ACCESS_KEY")
+           },
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "security.protocol": "SASL_PLAINTEXT",
+             "enable.metrics.push": false,
+             "group.id": "tenzir-test-to-kafka-iam-verify"
+           }
