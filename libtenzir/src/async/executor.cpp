@@ -354,8 +354,13 @@ public:
       dh_{dh},
       sys_{sys},
       input_is_void_{
+        match(op_,
+              []<class In, class Out>(const Box<Operator<In, Out>>&) {
+                return std::same_as<In, void>;
+              })},
+      output_is_void_{
         match(op_, []<class In, class Out>(const Box<Operator<In, Out>>&) {
-          return std::same_as<In, void>;
+          return std::same_as<Out, void>;
         })} {
   }
 
@@ -566,13 +571,15 @@ private:
           = exec_ctx_.make<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make<In>(sub_id.op(chain.size() - 1).to(id_));
+        auto output_is_void = std::same_as<Out, void>;
         queue_.scope().spawn(
-          [this, key, end_of_data,
+          [this, key, end_of_data, output_is_void,
            pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
             // Pulling from the subpipeline needs to happen independently from
             // the main operator logic. This is because we might block when
             // pushing to the subpipeline due to backpressure, but in order to
             // alleviate the backpressure, we need to pull from it.
+            auto saw_end_of_data = false;
             while (true) {
               auto output = co_await pull_downstream();
               if (not output) {
@@ -587,6 +594,7 @@ private:
                   co_await co_match(
                     signal,
                     [&](EndOfData) -> Task<void> {
+                      saw_end_of_data = true;
                       co_await queue_.insert(
                         SubPipelineEvent{key, SubPipelineFinished{}});
                       // TODO: Can we do this?
@@ -597,6 +605,13 @@ private:
                       co_return;
                     });
                 });
+            }
+            if (not saw_end_of_data) {
+              if (not output_is_void) {
+                LOGW("subpipeline channel closed without EndOfData");
+              }
+              co_await queue_.insert(
+                SubPipelineEvent{key, SubPipelineFinished{}});
             }
             end_of_data->notify_one();
           });
@@ -1120,8 +1135,10 @@ private:
     if (not is_done_ or not all_subpipelines_finished()) {
       co_return;
     }
-    LOGW("sending end of data from {}", id_);
-    co_await push_signal(EndOfData{});
+    if (not output_is_void_) {
+      LOGW("sending end of data from {}", id_);
+      co_await push_signal(EndOfData{});
+    }
   }
 
   auto try_ready_for_shutdown() -> Task<void> {
@@ -1142,6 +1159,7 @@ private:
   CensoringDiagHandler dh_;
   caf::actor_system& sys_;
   bool input_is_void_;
+  bool output_is_void_;
   std::shared_ptr<const registry> reg_ = global_registry();
   folly::Executor::KeepAlive<> io_executor_;
 
