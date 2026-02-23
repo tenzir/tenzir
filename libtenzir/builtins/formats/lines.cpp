@@ -25,6 +25,8 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/util/utf8.h>
+#include <folly/coro/BoundedQueue.h>
+#include <folly/coro/UnboundedQueue.h>
 
 #include <optional>
 
@@ -302,12 +304,14 @@ public:
 struct ReadLinesArgs {
   bool binary = false;
   bool skip_empty = false;
+  uint64_t jobs = 0;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, ReadLinesArgs& x) -> bool {
     return f.object(x)
       .pretty_name("ReadLinesArgs")
-      .fields(f.field("binary", x.binary), f.field("skip_empty", x.skip_empty));
+      .fields(f.field("binary", x.binary), f.field("skip_empty", x.skip_empty),
+              f.field("jobs", x.jobs));
   }
 };
 
@@ -318,61 +322,82 @@ public:
   explicit ReadLines(ReadLinesArgs args) : args_{args} {
   }
 
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    if (args_.jobs > 0) {
+      auto capacity = static_cast<uint32_t>(args_.jobs * 2);
+      read_input_queue_ = std::make_shared<ReadInputQueue>(capacity);
+      read_output_queue_ = std::make_shared<ReadOutputQueue>();
+      for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+        ctx.spawn_task(read_worker_loop(ctx.dh()));
+      }
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    if (args_.jobs > 0) {
+      co_return co_await read_output_queue_->dequeue();
+    }
+    co_return co_await Operator<chunk_ptr, table_slice>::await_task(dh);
+  }
+
+  auto state() -> OperatorState override {
+    if (not draining_) {
+      return OperatorState::unspecified;
+    }
+    return finished_workers_ == args_.jobs ? OperatorState::done
+                                           : OperatorState::unspecified;
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto slice = std::move(result).as<table_slice>();
+    if (slice.rows() == 0) {
+      ++finished_workers_;
+      co_return;
+    }
+    co_await push(std::move(slice));
+  }
+
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     if (not input or input->size() == 0) {
       co_return;
     }
-    const auto* begin = reinterpret_cast<const char*>(input->data());
-    const auto* const end = begin + input->size();
-    // Handle case where previous chunk ended on carriage return.
-    if (ended_on_carriage_return_ and *begin == '\n') {
-      ++begin;
-    }
-    ended_on_carriage_return_ = false;
-    for (const auto* current = begin; current != end; ++current) {
-      if (*current != '\n' and *current != '\r') {
-        continue;
+    if (args_.jobs > 0) {
+      co_await process_parallel(std::move(input));
+    } else {
+      process_sequential(std::move(input), ctx);
+      // Flush if we've accumulated enough data.
+      if (builder_.length() > 0) {
+        co_await push(builder_.finish_assert_one_slice("tenzir.line"));
       }
-      // Found a line ending.
-      auto line = std::string_view{};
-      if (buffer_.empty()) {
-        line = std::string_view{begin, current};
-      } else {
-        buffer_.append(begin, current);
-        line = buffer_;
-      }
-      emit_line(line, ctx);
-      if (not buffer_.empty()) {
-        buffer_.clear();
-      }
-      // Handle \r\n sequence.
-      if (*current == '\r') {
-        const auto* next = current + 1;
-        if (next == end) {
-          ended_on_carriage_return_ = true;
-        } else if (*next == '\n') {
-          ++current;
-        }
-      }
-      begin = current + 1;
-    }
-    // Buffer remaining data for the next chunk.
-    buffer_.append(begin, end);
-    // Flush if we've accumulated enough data.
-    if (builder_.length() > 0) {
-      co_await push(builder_.finish_assert_one_slice("tenzir.line"));
     }
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    // Emit any remaining buffered data as the final line.
+    draining_ = true;
+    if (args_.jobs > 0) {
+      if (finished_workers_ >= args_.jobs) {
+        co_return FinalizeBehavior::done;
+      }
+      // Send any remaining buffered data to a worker.
+      if (not buffer_.empty()) {
+        auto batch = chunk::make(std::string{buffer_},
+                                 chunk_metadata{.content_type = "text/plain"});
+        buffer_.clear();
+        co_await read_input_queue_->enqueue(std::move(batch));
+      }
+      co_await read_input_queue_->enqueue(std::nullopt);
+      co_return FinalizeBehavior::continue_;
+    }
+    // Non-parallel: emit any remaining buffered data as the final line.
     if (not buffer_.empty()) {
       emit_line(buffer_, ctx);
       buffer_.clear();
     }
-    // Flush any remaining events.
     if (builder_.length() > 0) {
       co_await push(builder_.finish_assert_one_slice("tenzir.line"));
     }
@@ -402,10 +427,218 @@ private:
     }
   }
 
+  auto emit_line(std::string_view line, diagnostic_handler& dh,
+                 series_builder& builder) const -> void {
+    if (line.empty() and args_.skip_empty) {
+      return;
+    }
+    if (args_.binary) {
+      builder.record().field("line", as_bytes(line));
+    } else {
+      if (not arrow::util::ValidateUTF8(line)) {
+        diagnostic::warning("got invalid UTF-8")
+          .hint("use `binary=true` if you are reading binary data")
+          .emit(dh);
+        return;
+      }
+      builder.record().field("line", line);
+    }
+  }
+
+  /// Sequential (non-parallel) processing of a chunk.
+  auto process_sequential(chunk_ptr input, OpCtx& ctx) -> void {
+    auto const* begin = reinterpret_cast<char const*>(input->data());
+    auto const* const end = begin + input->size();
+    // Handle case where previous chunk ended on carriage return.
+    if (ended_on_carriage_return_ and *begin == '\n') {
+      ++begin;
+    }
+    ended_on_carriage_return_ = false;
+    for (auto const* current = begin; current != end; ++current) {
+      if (*current != '\n' and *current != '\r') {
+        continue;
+      }
+      // Found a line ending.
+      auto line = std::string_view{};
+      if (buffer_.empty()) {
+        line = std::string_view{begin, current};
+      } else {
+        buffer_.append(begin, current);
+        line = buffer_;
+      }
+      emit_line(line, ctx);
+      if (not buffer_.empty()) {
+        buffer_.clear();
+      }
+      // Handle \r\n sequence.
+      if (*current == '\r') {
+        auto const* next = current + 1;
+        if (next == end) {
+          ended_on_carriage_return_ = true;
+        } else if (*next == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    // Buffer remaining data for the next chunk.
+    buffer_.append(begin, end);
+  }
+
+  /// Find the last newline (\n or \r) position in a string view.
+  static auto rfind_newline(std::string_view sv)
+    -> std::string_view::size_type {
+    auto pos = sv.rfind('\n');
+    if (pos == std::string_view::npos) {
+      pos = sv.rfind('\r');
+    }
+    return pos;
+  }
+
+  /// Determine the batch end accounting for \r\n pairs and set the
+  /// ended_on_carriage_return_ flag when the delimiter is a bare \r at the
+  /// very end of the available data.
+  auto batch_end_for(std::string_view data, std::string_view::size_type delim)
+    -> std::string_view::size_type {
+    auto batch_end = delim + 1;
+    if (data[delim] == '\r' and batch_end < data.size()
+        and data[batch_end] == '\n') {
+      ++batch_end;
+    } else if (data[delim] == '\r' and batch_end == data.size()) {
+      ended_on_carriage_return_ = true;
+    }
+    return batch_end;
+  }
+
+  /// Parallel processing: split at newline boundaries and dispatch to workers.
+  auto process_parallel(chunk_ptr input) -> Task<void> {
+    auto data = std::string_view{reinterpret_cast<char const*>(input->data()),
+                                 input->size()};
+    // Handle case where previous chunk ended on carriage return.
+    if (ended_on_carriage_return_ and not data.empty()
+        and data.front() == '\n') {
+      data.remove_prefix(1);
+    }
+    ended_on_carriage_return_ = false;
+    if (data.empty()) {
+      co_return;
+    }
+    // Compute offset of data within the original chunk.
+    auto offset = static_cast<size_t>(
+      data.data() - reinterpret_cast<char const*>(input->data()));
+    if (not buffer_.empty()) {
+      // Find the first newline in the new data to complete the buffered line.
+      auto first_delim = data.find('\n');
+      if (first_delim == std::string_view::npos) {
+        first_delim = data.find('\r');
+      }
+      if (first_delim == std::string_view::npos) {
+        // No newline in this chunk at all; keep accumulating.
+        buffer_.append(data);
+        co_return;
+      }
+      // Complete the buffered line with data up to the first delimiter.
+      auto first_end = first_delim + 1;
+      if (data[first_delim] == '\r' and first_end < data.size()
+          and data[first_end] == '\n') {
+        ++first_end;
+      } else if (data[first_delim] == '\r' and first_end == data.size()) {
+        ended_on_carriage_return_ = true;
+      }
+      buffer_.append(data.substr(0, first_end));
+      auto head = chunk::make(std::exchange(buffer_, {}),
+                              chunk_metadata{.content_type = "text/plain"});
+      co_await read_input_queue_->enqueue(std::move(head));
+      // Continue with the remainder of data as the fast path.
+      data.remove_prefix(first_end);
+      offset += first_end;
+      if (data.empty()) {
+        co_return;
+      }
+    }
+    // Fast path: slice the chunk directly.
+    auto last_delim = rfind_newline(data);
+    if (last_delim == std::string_view::npos) {
+      buffer_.append(data);
+      co_return;
+    }
+    auto end = batch_end_for(data, last_delim);
+    auto batch = input->slice(offset, end);
+    // Buffer the incomplete tail after the last delimiter.
+    if (end < data.size()) {
+      buffer_.append(data.substr(end));
+    }
+    co_await read_input_queue_->enqueue(std::move(batch));
+  }
+
+  /// Worker coroutine that splits lines on the CPU executor.
+  auto read_worker_loop(diagnostic_handler& dh) const -> Task<void> {
+    auto builder = series_builder{};
+    try {
+      while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
+        auto next = co_await read_input_queue_->dequeue();
+        if (not next) {
+          // Pass the stop sentinel to the next worker.
+          co_await read_input_queue_->enqueue(std::nullopt);
+          break;
+        }
+        auto const* begin = reinterpret_cast<char const*>((*next)->data());
+        auto const* const end = begin + (*next)->size();
+        for (auto const* current = begin; current != end; ++current) {
+          if (*current != '\n' and *current != '\r') {
+            continue;
+          }
+          auto line = std::string_view{begin, current};
+          emit_line(line, dh, builder);
+          // Handle \r\n.
+          if (*current == '\r') {
+            auto const* after = current + 1;
+            if (after != end and *after == '\n') {
+              ++current;
+            }
+          }
+          begin = current + 1;
+        }
+        // Emit any trailing data (incomplete line within this chunk).
+        if (begin != end) {
+          auto line = std::string_view{begin, end};
+          emit_line(line, dh, builder);
+        }
+        // Yield ready results to the output queue.
+        if (builder.length() > 0) {
+          for (auto& slice : builder.finish_as_table_slice("tenzir.line")) {
+            read_output_queue_->enqueue(std::move(slice));
+          }
+        }
+      }
+    } catch (folly::OperationCancelled const&) {
+    }
+    // Finalize: flush remaining data.
+    if (builder.length() > 0) {
+      for (auto& slice : builder.finish_as_table_slice("tenzir.line")) {
+        read_output_queue_->enqueue(std::move(slice));
+      }
+    }
+    read_output_queue_->enqueue(table_slice{});
+  }
+
+  using ReadInputQueue = folly::coro::BoundedQueue<std::optional<chunk_ptr>>;
+  /// The output queue is unbounded to avoid a theoretical deadlock where the
+  /// main thread wants to push to a full input queue while all workers want to
+  /// push to a full output queue.
+  using ReadOutputQueue = folly::coro::UnboundedQueue<table_slice>;
+
   ReadLinesArgs args_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
+  bool draining_ = false;
+  size_t finished_workers_ = 0;
+  // Non-parallel mode state.
   series_builder builder_;
+  // Parallel mode state.
+  std::shared_ptr<ReadInputQueue> read_input_queue_;
+  std::shared_ptr<ReadOutputQueue> read_output_queue_;
 };
 
 } // namespace
@@ -456,17 +689,72 @@ public:
     auto d = Describer<ReadLinesArgs, ReadLines>{};
     d.named("binary", &ReadLinesArgs::binary);
     d.named("skip_empty", &ReadLinesArgs::skip_empty);
+    auto jobs = d.named_optional("_jobs", &ReadLinesArgs::jobs);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      if (auto j = ctx.get(jobs); j and *j == 0) {
+        diagnostic::error("`_jobs` must be greater than zero")
+          .primary(ctx.get_location(jobs).value_or(location::unknown))
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 };
 
 struct WriteLinesArgs {
-  // write_lines takes no arguments.
+  uint64_t jobs = 0;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, WriteLinesArgs& x) -> bool {
+    return f.object(x)
+      .pretty_name("WriteLinesArgs")
+      .fields(f.field("jobs", x.jobs));
+  }
 };
 
 class WriteLines final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteLines(WriteLinesArgs args) : args_{args} {
+  }
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    co_await OperatorBase::start(ctx);
+    if (args_.jobs == 0) {
+      co_return;
+    }
+    auto capacity = static_cast<uint32_t>(args_.jobs * 2);
+    write_input_queue_ = std::make_shared<WriteInputQueue>(capacity);
+    write_output_queue_ = std::make_shared<WriteOutputQueue>();
+    for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
+      ctx.spawn_task(write_worker_loop());
+    }
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    if (args_.jobs == 0) {
+      co_return co_await Operator<table_slice, chunk_ptr>::await_task(dh);
+    }
+    co_return co_await write_output_queue_->dequeue();
+  }
+
+  auto state() -> OperatorState override {
+    if (not draining_) {
+      return OperatorState::unspecified;
+    }
+    return finished_workers_ == args_.jobs ? OperatorState::done
+                                           : OperatorState::unspecified;
+  }
+
+  auto process_task(Any result, Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    auto next = std::move(result).as<chunk_ptr>();
+    if (not next) {
+      ++finished_workers_;
+      co_return;
+    }
+    co_await push(std::move(next));
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
@@ -475,33 +763,68 @@ public:
     if (input.rows() == 0) {
       co_return;
     }
-    auto printer = lines_printer_impl{};
-    auto buffer = std::vector<char>{};
-    auto const expected_size
-      = total_size_written / total_rows_written * input.rows();
-    buffer.reserve(expected_size);
-    auto out_iter = std::back_inserter(buffer);
-    auto resolved_slice = flatten(resolve_enumerations(input)).slice;
-    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
-    for (const auto& row : values3(*array)) {
-      TENZIR_ASSERT(row);
-      const auto ok = printer.print_values(out_iter, *row);
-      TENZIR_ASSERT(ok);
-      out_iter = fmt::format_to(out_iter, "\n");
+    if (args_.jobs > 0) {
+      co_await write_input_queue_->enqueue(std::move(input));
+      co_return;
     }
-    auto chunk = chunk::make(std::move(buffer),
-                             chunk_metadata{.content_type = "text/plain"});
-    total_size_written += buffer.size();
-    total_rows_written += input.rows();
-    co_await push(std::move(chunk));
+    co_await push(print_slice(input));
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    draining_ = true;
+    if (args_.jobs > 0) {
+      if (finished_workers_ >= args_.jobs) {
+        co_return FinalizeBehavior::done;
+      }
+      co_await write_input_queue_->enqueue(std::nullopt);
+      co_return FinalizeBehavior::continue_;
+    }
+    co_return FinalizeBehavior::done;
   }
 
 private:
-  /// The total size the operator has written
-  std::size_t total_size_written = 0;
-  /// The total number of events the operator has written
-  std::size_t total_rows_written = 1;
-  [[maybe_unused, no_unique_address]] WriteLinesArgs args_;
+  static auto print_slice(table_slice const& input) -> chunk_ptr {
+    auto printer = lines_printer_impl{};
+    auto buffer = std::vector<char>{};
+    auto out_iter = std::back_inserter(buffer);
+    auto resolved_slice = flatten(resolve_enumerations(input)).slice;
+    auto array = check(to_record_batch(resolved_slice)->ToStructArray());
+    for (auto const& row : values3(*array)) {
+      TENZIR_ASSERT(row);
+      auto const ok = printer.print_values(out_iter, *row);
+      TENZIR_ASSERT(ok);
+      out_iter = fmt::format_to(out_iter, "\n");
+    }
+    return chunk::make(std::move(buffer),
+                       chunk_metadata{.content_type = "text/plain"});
+  }
+
+  auto write_worker_loop() const -> Task<void> {
+    try {
+      while (true) {
+        co_await folly::coro::co_reschedule_on_current_executor;
+        auto next = co_await write_input_queue_->dequeue();
+        if (not next) {
+          co_await write_input_queue_->enqueue(std::nullopt);
+          break;
+        }
+        write_output_queue_->enqueue(print_slice(*next));
+      }
+    } catch (folly::OperationCancelled const&) {
+    }
+    write_output_queue_->enqueue(chunk_ptr{});
+  }
+
+  using WriteInputQueue = folly::coro::BoundedQueue<std::optional<table_slice>>;
+  using WriteOutputQueue = folly::coro::UnboundedQueue<chunk_ptr>;
+
+  WriteLinesArgs args_;
+  bool draining_ = false;
+  uint64_t finished_workers_ = 0;
+  std::shared_ptr<WriteInputQueue> write_input_queue_;
+  std::shared_ptr<WriteOutputQueue> write_output_queue_;
 };
 
 class write_lines final
@@ -516,6 +839,15 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WriteLinesArgs, WriteLines>{};
+    auto jobs = d.named_optional("_jobs", &WriteLinesArgs::jobs);
+    d.validate([=](ValidateCtx& ctx) -> Empty {
+      if (auto j = ctx.get(jobs); j and *j == 0) {
+        diagnostic::error("`_jobs` must be greater than zero")
+          .primary(ctx.get_location(jobs).value_or(location::unknown))
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 };

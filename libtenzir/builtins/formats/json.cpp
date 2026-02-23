@@ -1305,6 +1305,11 @@ public:
     -> Task<FinalizeBehavior> override {
     draining_ = true;
     if (args_.jobs > 0) {
+      // The executor may call finalize() again after all workers have finished
+      // and state() returned done. In that case we are truly done.
+      if (finished_workers_ >= args_.jobs) {
+        co_return FinalizeBehavior::done;
+      }
       // Send any remaining buffered data to a worker.
       if (not buffer_.empty()) {
         auto batch = make_padded_chunk(buffer_);
@@ -1346,6 +1351,19 @@ private:
     return chunk::make(std::move(buffer),
                        chunk_metadata{.content_type = "application/x-ndjson"})
       ->slice(0, data.size());
+  }
+
+  /// Create a chunk with simdjson padding from a prefix + data.
+  static auto make_padded_chunk(std::string_view prefix, std::string_view data)
+    -> chunk_ptr {
+    auto total = prefix.size() + data.size();
+    auto buffer = std::vector<std::byte>(total + simdjson::SIMDJSON_PADDING);
+    std::memcpy(buffer.data(), prefix.data(), prefix.size());
+    std::memcpy(buffer.data() + prefix.size(), data.data(), data.size());
+    std::memset(buffer.data() + total, 0, simdjson::SIMDJSON_PADDING);
+    return chunk::make(std::move(buffer),
+                       chunk_metadata{.content_type = "application/x-ndjson"})
+      ->slice(0, total);
   }
 
   /// Sequential (non-parallel) processing of a chunk.
@@ -1408,30 +1426,30 @@ private:
       data.remove_prefix(1);
     }
     ended_on_carriage_return_ = false;
-    buffer_.append(data);
-    // Find the last delimiter.
+    // Find the last delimiter in the new data (buffer_ never contains one).
     auto delim = args_.split_mode == split_at::newline ? '\n' : '\0';
-    auto last_delim = buffer_.rfind(delim);
+    auto last_delim = data.rfind(delim);
     // Also check for \r in newline mode.
     if (args_.split_mode == split_at::newline
-        and last_delim == std::string::npos) {
-      last_delim = buffer_.rfind('\r');
+        and last_delim == std::string_view::npos) {
+      last_delim = data.rfind('\r');
     }
-    if (last_delim == std::string::npos) {
+    if (last_delim == std::string_view::npos) {
       // No complete line yet; keep buffering.
+      buffer_.append(data);
       co_return;
     }
-    // Extract complete lines and send to a worker.
-    auto batch_str = std::string_view{buffer_}.substr(0, last_delim + 1);
-    auto batch = make_padded_chunk(batch_str);
-    // Check for trailing \r\n split.
-    if (args_.split_mode == split_at::newline
-        and last_delim + 1 < buffer_.size() and buffer_[last_delim] == '\r'
-        and buffer_[last_delim + 1] == '\n') {
-      buffer_.erase(0, last_delim + 2);
-    } else {
-      buffer_.erase(0, last_delim + 1);
+    // Split data into complete lines and the leftover tail.
+    auto complete = data.substr(0, last_delim + 1);
+    auto tail = data.substr(last_delim + 1);
+    // Check for trailing \r\n split across the boundary.
+    if (args_.split_mode == split_at::newline and not tail.empty()
+        and data[last_delim] == '\r' and tail.front() == '\n') {
+      tail.remove_prefix(1);
     }
+    // Build padded chunk from buffered prefix + complete lines (one copy).
+    auto batch = make_padded_chunk(buffer_, complete);
+    buffer_.assign(tail.data(), tail.size());
     co_await read_input_queue_->enqueue(std::move(batch));
   }
 
