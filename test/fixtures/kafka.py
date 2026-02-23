@@ -317,14 +317,21 @@ def _build_helper(binary_path: Path) -> None:
     env["GOWORK"] = "off"
     cmd = [go, "build", "-o", str(binary_path), "."]
     logger.info("Building kafka_iam_mock helper: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        cwd=HELPER_DIR,
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=HELPER_BUILD_TIMEOUT,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=HELPER_DIR,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=HELPER_BUILD_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        summary = _summarize_build_output(exc.stdout, exc.stderr)
+        raise FixtureUnavailable(
+            "kafka_iam_mock helper build timed out "
+            f"after {HELPER_BUILD_TIMEOUT}s ({summary})"
+        ) from exc
     if result.returncode != 0:
         stderr = result.stderr.strip() or "<no stderr>"
         stdout = result.stdout.strip() or "<no stdout>"
@@ -348,12 +355,29 @@ def _is_prerequisite_build_failure(stdout: str, stderr: str) -> bool:
 
 
 def _summarize_prerequisite_build_failure(stdout: str, stderr: str) -> str:
-    candidates = [line.strip() for line in f"{stderr}\n{stdout}".splitlines() if line.strip()]
+    candidates = _collect_non_empty_output_lines(stdout, stderr)
     for line in candidates:
         lowered = line.lower()
         if any(marker in lowered for marker in GO_BUILD_PREREQUISITE_MARKERS):
             return line
     return candidates[-1] if candidates else "unknown go build prerequisite failure"
+
+
+def _summarize_build_output(stdout: object, stderr: object) -> str:
+    candidates = _collect_non_empty_output_lines(stdout, stderr)
+    return candidates[-1] if candidates else "no build output"
+
+
+def _collect_non_empty_output_lines(stdout: object, stderr: object) -> list[str]:
+    chunks: list[str] = []
+    for stream in (stderr, stdout):
+        if stream is None:
+            continue
+        if isinstance(stream, bytes):
+            chunks.append(stream.decode("utf-8", errors="replace"))
+            continue
+        chunks.append(str(stream))
+    return [line.strip() for line in "\n".join(chunks).splitlines() if line.strip()]
 
 
 def _start_helper(
