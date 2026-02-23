@@ -178,14 +178,11 @@ public:
     // Remember the order for potential rebatches.
     order_ = order;
     auto ops = std::vector<Box<ir::Operator>>{};
-    if (not filter.empty()) {
-      // TODO: FIXME
-      TENZIR_ASSERT(filter.size() == 1);
-      ops.reserve(2);
-      auto where = make_where_ir(filter[0]);
-      ops.push_back(std::move(where));
-    }
+    ops.reserve(1 + filter.size());
     ops.emplace_back(set_ir{std::move(*this)});
+    for (auto& expr : filter) {
+      ops.push_back(make_where_ir(expr));
+    }
     auto replacement = ir::pipeline{std::vector<ir::let>{}, std::move(ops)};
     return {{}, order_, std::move(replacement)};
   }
@@ -330,6 +327,11 @@ private:
 };
 
 } // namespace
+
+auto make_set_ir(std::vector<ast::assignment> assignments)
+  -> Box<ir::Operator> {
+  return set_ir{std::move(assignments)};
+}
 
 class IfIr final : public ir::Operator {
 public:
