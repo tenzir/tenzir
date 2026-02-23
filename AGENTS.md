@@ -5,27 +5,22 @@ shapes, enriches, and routes security telemetry with a unified dataflow
 language. The Tenzir Query Language (TQL) is a domain-specific language for
 building modular pipelines that process structured event data.
 
-### Project Structure
+### Project structure
 
 - `.claude/` - Claude Code configuration
-  - `agents/` - Custom agent definitions
-  - `commands/` - Custom slash commands
-  - `skills/` - Custom skills and their references
-  - `settings.json` - Project settings and enabled plugins
-- `.docs/` - Documentation website (Astro-based)
+- `.docs/` - Optional local clone of the `tenzir/docs` repository
 - `.github/` - GitHub configuration and CI/CD workflows
-  - `workflows/` - CI pipelines for testing, building, releases, style checks
-  - `dependabot.yml` - Dependency update automation
-  - `labeler.yml` - PR auto-labeling configuration
-- `changelog/` - Changelog entries and release configuration
+- `changelog/` - Changelog entries and release metadata
+  - Managed with the `tenzir-ship` framework
+  - Reference: https://docs.tenzir.com/reference/ship-framework.md
 - `cmake/` - CMake build system modules and utilities
-  - Various Find\*.cmake modules for dependencies
+  - Various CMake modules for dependencies
   - TenzirConfig.cmake.in - CMake configuration template
   - TenzirRegisterPlugin.cmake - Plugin registration utilities
 - `libtenzir/` - Core Tenzir library
   - `include/tenzir/` - Public headers
   - `src/` - Implementation files
-  - `builtins/` - Built-in TQL operators, functions, formats, connectors, etc.
+  - `builtins/` - Built-in operators, functions, formats, connectors, and related plugins
   - `aux/` - Vendored dependencies (CAF, simdjson, etc.)
   - `fbs/` - FlatBuffer schema definitions
   - `test/` - Unit tests
@@ -33,13 +28,9 @@ building modular pipelines that process structured event data.
 - `nix/` - Nix package management
   - `package.nix` - Main package definition
   - `overlay.nix` - Nix overlay for custom packages
-- `plugins/` - Extension plugins
+- `plugins/` - Additional plugins outside `libtenzir/builtins`
   - Each subdirectory is a plugin (amqp, kafka, s3, etc.)
-  - Plugins contain CMakeLists.txt, source, and tests
 - `python/` - Python packages and tooling
-  - `tenzir/` - Core Python package
-  - `tenzir-common/` - Common utilities
-  - `tenzir-operator/` - Kubernetes operator
 - `scripts/` - Utility and maintenance scripts
   - Platform-specific installation scripts
   - Development tools and helpers
@@ -47,13 +38,27 @@ building modular pipelines that process structured event data.
 - `tenzir/` - Main executable
   - `tenzir.cpp` - Main entry point
   - `services/` - System service configurations
-- `test/` - TQL integration test scenarios and expected outputs
+- `test/` - Integration tests and expected outputs
 
-## Key Tasks
+## Key tasks
 
-### Build Tenzir
+### Configure the build
 
-Compile via `/compile`. If this fails due to a missing build directory, run `cmake --list-presets`, and give the user the option to select a preset. Then run `cmake --preset <preset>` and try `/compile` again.
+A build is configured when its directory contains `CMakeCache.txt`.
+
+If no configured build exists, run:
+
+```sh
+cmake --list-presets
+cmake --preset <preset>
+```
+
+### Compile the project
+
+Run `/compile` to compile the build. Fall back to `scripts/build.sh` if
+`/compile` is unavailable.
+
+These commands auto-discover a configured build directory under `build/`.
 
 ### Run pipelines
 
@@ -65,7 +70,9 @@ Use the `tenzir` binary to execute a TQL program:
 - The pipeline may read stdin as data, based on the first operator.
 - The pipeline may produce data on stdout, based on the last operator.
 
-### Run Integration Tests
+### Run integration tests
+
+> Prerequisite: ensure your build's `bin/` directory is in `$PATH`.
 
 Run integration tests from the repository root:
 
@@ -75,17 +82,29 @@ uvx tenzir-test --root test
 
 Common options:
 
-- `--passthrough`: Generate output in terminal instead (does not compare reference)
+- `--passthrough`: Stream output to the terminal (skips reference comparison)
 - `--update`: Update reference outputs (check correctness before or after)
 - `--debug`: Show detailed test information
-- `--match`: Filter test paths with glob expression
+- `--match`: Filter test paths with substring or glob matching
 
 Reference documentation: https://docs.tenzir.com/reference/test-framework.md
 
-### Run Unit Tests
+### Run unit tests
 
 Run unit tests using the `tenzir-unit-test` binary:
 
 ```sh
 tenzir-unit-test
 ```
+
+### Update documentation
+
+User-facing documentation lives in the git-ignored `.docs/` directory, which is
+an optional clone of the `tenzir/docs` repository.
+
+When changing existing behavior or adding user-facing functionality, update
+`.docs/`, create a topic branch there, and open a companion PR against
+`tenzir/docs`.
+
+Skip this process for internal refactorings that do not affect the user-facing
+TQL surface or command line tools.
