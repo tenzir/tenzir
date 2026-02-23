@@ -543,31 +543,68 @@ private:
     auto sub_id = id_.sub(next_subpipeline_id_);
     next_subpipeline_id_ += 1;
     auto spawned = std::move(pipe).spawn(input);
-    // FIXME: Currently only subpipelines that return table slice are allowed.
-    auto chain = match(
-      input,
-      [&]<class In>(tag<In>) -> variant<OperatorChain<void, table_slice>,
-                                        OperatorChain<table_slice, table_slice>,
-                                        OperatorChain<chunk_ptr, table_slice>> {
-        auto result
-          = OperatorChain<In, table_slice>::try_from(std::move(spawned));
-        TENZIR_ASSERT(result);
-        return std::move(*result);
-      });
-    auto [push_downstream, pull_downstream]
-      = exec_ctx_.make<table_slice>(id_.to(sub_id.op(0)));
+    using AnySubChain = variant<
+      OperatorChain<void, table_slice>, OperatorChain<void, void>,
+      OperatorChain<table_slice, table_slice>, OperatorChain<table_slice, void>,
+      OperatorChain<chunk_ptr, table_slice>, OperatorChain<chunk_ptr, void>>;
+    auto chain = match(input, [&]<class In>(tag<In>) -> AnySubChain {
+      if (auto r
+          = OperatorChain<In, table_slice>::try_from(std::move(spawned))) {
+        return std::move(*r);
+      }
+      auto r = OperatorChain<In, void>::try_from(std::move(spawned));
+      TENZIR_ASSERT(r);
+      return std::move(*r);
+    });
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver]
       = bounded_channel<ToControl>(16);
+    auto end_of_data = std::make_shared<Notify>();
     auto [runner, push_upstream] = co_match(
       std::move(chain),
-      [&]<class In>(OperatorChain<In, table_slice> chain)
+      [&]<class In, class Out>(OperatorChain<In, Out> chain)
         -> std::pair<Task<void>, variant<Box<Push<OperatorMsg<void>>>,
                                          Box<Push<OperatorMsg<table_slice>>>,
                                          Box<Push<OperatorMsg<chunk_ptr>>>>> {
+        auto [push_downstream, pull_downstream]
+          = exec_ctx_.make<Out>(id_.to(sub_id.op(0)));
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make<In>(sub_id.op(chain.size() - 1).to(id_));
+        queue_.scope().spawn(
+          [this, key, end_of_data,
+           pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
+            // Pulling from the subpipeline needs to happen independently from
+            // the main operator logic. This is because we might block when
+            // pushing to the subpipeline due to backpressure, but in order to
+            // alleviate the backpressure, we need to pull from it.
+            while (true) {
+              auto output = co_await pull_downstream();
+              if (not output) {
+                break;
+              }
+              co_await co_match(
+                std::move(*output),
+                [&](table_slice output) -> Task<void> {
+                  co_await call_process_sub(make_view(key), std::move(output));
+                },
+                [&](Signal signal) -> Task<void> {
+                  co_await co_match(
+                    signal,
+                    [&](EndOfData) -> Task<void> {
+                      co_await queue_.insert(
+                        SubPipelineEvent{key, SubPipelineFinished{}});
+                      // TODO: Can we do this?
+                      end_of_data->notify_one();
+                    },
+                    [&](Checkpoint) -> Task<void> {
+                      // TODO: Handle checkpoint.
+                      co_return;
+                    });
+                });
+            }
+            end_of_data->notify_one();
+          });
         return {
           run_chain(std::move(chain), std::move(pull_upstream),
                     std::move(push_downstream),
@@ -576,41 +613,6 @@ private:
                     sys_, dh_),
           std::move(push_upstream),
         };
-      });
-    auto end_of_data = std::make_shared<Notify>();
-    queue_.scope().spawn(
-      [this, key, end_of_data,
-       pull_downstream = std::move(pull_downstream)] mutable -> Task<void> {
-        // Pulling from the subpipeline needs to happen independently from the
-        // main operator logic. This is because we might block when pushing to
-        // the subpipeline due to backpressure, but in order to alleviate the
-        // backpressure, we need to pull from it.
-        while (true) {
-          auto output = co_await pull_downstream();
-          if (not output) {
-            break;
-          }
-          co_await co_match(
-            std::move(*output),
-            [&](table_slice output) -> Task<void> {
-              co_await call_process_sub(make_view(key), std::move(output));
-            },
-            [&](Signal signal) -> Task<void> {
-              co_await co_match(
-                signal,
-                [&](EndOfData) -> Task<void> {
-                  co_await queue_.insert(
-                    SubPipelineEvent{key, SubPipelineFinished{}});
-                  // TODO: Can we do this?
-                  end_of_data->notify_one();
-                },
-                [&](Checkpoint) -> Task<void> {
-                  // TODO: Handle checkpoint.
-                  co_return;
-                });
-            });
-        }
-        end_of_data->notify_one();
       });
     // TODO: Should this even be a concurrent task?
     auto control_handle
@@ -1462,6 +1464,30 @@ template auto
 run_chain(OperatorChain<table_slice, table_slice> chain,
           Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
           Box<Push<OperatorMsg<table_slice>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<void, void> chain,
+          Box<Pull<OperatorMsg<void>>> pull_upstream,
+          Box<Push<OperatorMsg<void>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<table_slice, void> chain,
+          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+          Box<Push<OperatorMsg<void>>> push_downstream,
+          Receiver<FromControl> from_control, Sender<ToControl> to_control,
+          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
+  -> Task<void>;
+
+template auto
+run_chain(OperatorChain<chunk_ptr, void> chain,
+          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+          Box<Push<OperatorMsg<void>>> push_downstream,
           Receiver<FromControl> from_control, Sender<ToControl> to_control,
           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
   -> Task<void>;
