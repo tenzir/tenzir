@@ -1,0 +1,2 @@
+from {pivot: 10, xs: [17, 8, 12, 3]}
+xs = sort(xs, cmp=(l, r) => (l - pivot) * (l - pivot) < (r - pivot) * (r - pivot))

@@ -199,7 +199,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
     ensure_unary_lambda(lambda);
     TENZIR_ASSERT(std::cmp_equal(slice.rows(), input.length()));
     auto visitor = capture_extractor{};
-    visitor.visit(lambda.right);
+    visitor.visit(lambda.body);
     const auto captures = std::move(visitor).result();
     const auto ty = input.type.value_type();
     // The input list array may be a slice of a larger backing array (e.g.,
@@ -238,7 +238,7 @@ auto eval(const ast::lambda_expr& lambda, const basic_series<list_type>& input,
     };
     repeated.import_time(slice.import_time());
     const auto slice = assign(to, {ty, values}, repeated, dh);
-    return eval(lambda.right, slice, dh);
+    return eval(lambda.body, slice, dh);
   });
 }
 
@@ -266,7 +266,7 @@ auto eval(const ast::lambda_expr& lambda, const multi_series& input,
                                  arrow::ArrayVector{part.array}),
         std::move(schema),
       };
-      result.append(eval(lambda.right, slice, dh));
+      result.append(eval(lambda.body, slice, dh));
     }
     return result;
   });

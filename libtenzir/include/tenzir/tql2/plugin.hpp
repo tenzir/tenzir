@@ -136,7 +136,7 @@ public:
 
     auto length() const -> int64_t;
 
-    auto slice(int64_t begin, int64_t end) const -> std::optional<table_slice>;
+    auto get_input() const -> std::optional<table_slice>;
 
   private:
     void* self_;
