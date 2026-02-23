@@ -491,6 +491,13 @@ auto validate_paginate(std::optional<ast::expression> expr, session ctx)
     return std::nullopt;
   }
   if (const auto* lambda = try_as<ast::lambda_expr>(*expr)) {
+    if (not lambda->is_unary()) {
+      diagnostic::error("expected unary lambda")
+        .primary(*lambda)
+        .hint("binary lambdas are only supported for `sort(..., cmp=...)`")
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::optional<pagination_spec>{
       {tenzir::variant<ast::lambda_expr, std::string>{*lambda},
        expr->get_location()}};

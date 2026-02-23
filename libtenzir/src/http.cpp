@@ -348,7 +348,13 @@ public:
   }
 
   void connectError(folly::AsyncSocketException const& ex) override {
-    finish(Err{fmt::format("cannot_connect_to_node: {}", ex.what())});
+    auto message = std::string{ex.what()};
+    // AsyncSocketException details include platform-specific errno values.
+    // Strip that suffix to keep diagnostics stable across environments.
+    if (auto pos = message.find(", errno = "); pos != std::string::npos) {
+      message.erase(pos);
+    }
+    finish(Err{fmt::format("cannot_connect_to_node: {}", message)});
   }
 
   void setTransaction(proxygen::HTTPTransaction* txn) noexcept override {
