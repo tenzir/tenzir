@@ -239,7 +239,7 @@ public:
       }
       if (line == tail) {
         diagnostic::error("`kv` parsing did not make progress")
-          .note("check your field splitter")
+          .note("make sure `field_split` is a regular expression")
           .emit(dh);
         return;
       }
@@ -525,6 +525,25 @@ public:
   }
 };
 
+auto validate_split_expression(const located<std::string>& split,
+                               diagnostic_handler& dh) -> failure_or<void> {
+  if (split.inner == "|") {
+    diagnostic::error("regular expression `|` is not a valid splitter")
+      .primary(split)
+      .hint("use `\\|` if you want to split on the literal `|`")
+      .emit(dh);
+    return failure::promise();
+  }
+  if (split.inner == ".") {
+    diagnostic::error("regular expression `.` is not a valid splitter")
+      .primary(split)
+      .hint("use `\\.` if you want to split on the literal `.`")
+      .emit(dh);
+    return failure::promise();
+  }
+  return {};
+}
+
 class read_kv : public operator_plugin2<parser_adapter<kv_parser>> {
 public:
   auto name() const -> std::string override {
@@ -551,6 +570,8 @@ public:
     msb_parser.add_all_to_parser(parser);
     parser.named_optional("quotes", quoting.quotes);
     TRY(parser.parse(inv, ctx));
+    TRY(validate_split_expression(*field_split, ctx));
+    TRY(validate_split_expression(*value_split, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     opts.settings.default_schema_name = "tenzir.kv";
     return std::make_unique<parser_adapter<kv_parser>>(kv_parser{{
@@ -613,6 +634,8 @@ public:
     msb_parser.add_settings_to_parser(
       parser, true, multi_series_builder_argument_parser::merge_option::hidden);
     TRY(parser.parse(inv, ctx));
+    TRY(validate_split_expression(*field_split, ctx));
+    TRY(validate_split_expression(*value_split, ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
     return function_use::make([input = std::move(input),
                                parser = kv_parser{{
