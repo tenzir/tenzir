@@ -548,13 +548,17 @@ private:
       OperatorChain<table_slice, table_slice>, OperatorChain<table_slice, void>,
       OperatorChain<chunk_ptr, table_slice>, OperatorChain<chunk_ptr, void>>;
     auto chain = match(input, [&]<class In>(tag<In>) -> AnySubChain {
-      if (auto r
-          = OperatorChain<In, table_slice>::try_from(std::move(spawned))) {
-        return std::move(*r);
+      auto chain1
+        = OperatorChain<In, table_slice>::try_from(std::move(spawned));
+      if (chain1) {
+        return std::move(chain1).unwrap();
       }
-      auto r = OperatorChain<In, void>::try_from(std::move(spawned));
-      TENZIR_ASSERT(r);
-      return std::move(*r);
+      auto chain2
+        = OperatorChain<In, void>::try_from(std::move(chain1).unwrap_err());
+      if (chain2) {
+        return std::move(chain2).unwrap();
+      }
+      TENZIR_UNREACHABLE();
     });
     auto [from_control_sender, from_control_receiver]
       = bounded_channel<FromControl>(16);

@@ -50,6 +50,10 @@ public:
     }
   };
 
+  explicit operator bool() const {
+    return not is<Err<Error>>(value_);
+  }
+
   auto is_err() const -> bool {
     return is<Err<Error>>(value_);
   }

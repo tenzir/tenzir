@@ -14,6 +14,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/async/generator.hpp"
 #include "tenzir/async/signal.hpp"
+#include "tenzir/result.hpp"
 
 #include <folly/Executor.h>
 #include <folly/coro/Collect.h>
@@ -54,21 +55,26 @@ public:
   OperatorChain& operator=(OperatorChain&&) = default;
   ~OperatorChain() = default;
 
-  static auto try_from(std::vector<AnyOperator>&& operators)
-    -> std::optional<OperatorChain<Input, Output>> {
+  static auto try_from(std::vector<AnyOperator> operators)
+    -> Result<OperatorChain<Input, Output>, std::vector<AnyOperator>> {
     auto input = operator_type{tag_v<Input>};
     for (auto& op : operators) {
-      TRY(input, match(op,
-                       [&]<class In, class Out>(Box<Operator<In, Out>>&)
-                         -> std::optional<operator_type> {
-                         if (not input.is<In>()) {
-                           return std::nullopt;
-                         }
-                         return tag_v<Out>;
-                       }));
+      auto next
+        = match(op,
+                [&]<class In, class Out>(
+                  Box<Operator<In, Out>>&) -> std::optional<operator_type> {
+                  if (not input.is<In>()) {
+                    return std::nullopt;
+                  }
+                  return tag_v<Out>;
+                });
+      if (not next) {
+        return Err{std::move(operators)};
+      }
+      input = *next;
     }
     if (not input.is<Output>()) {
-      return std::nullopt;
+      return Err{std::move(operators)};
     }
     return OperatorChain{std::move(operators)};
   }
