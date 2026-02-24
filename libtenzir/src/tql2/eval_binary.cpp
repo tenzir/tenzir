@@ -929,6 +929,13 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
       self.eval(x.left),
       self.eval(fallback),
     };
+    // TODO: There is an optimization possibility here where the `predicate` is
+    // iterated independently of the `map_series` call, removing splits based on
+    // its type change, given that in the end we only care about
+    // `bool(predicate) == true` vs everything else. Notably this only matters
+    // for cases where the predicate itself evaluates to a heavily split series,
+    // which should be fairly rare, with the most common exception presumably
+    // being untyped nulls.
     return map_series(inputs, [&](std::span<series> parts) -> multi_series {
       TENZIR_ASSERT_EQ(parts.size(), 3u);
       const auto& predicate = parts[0];
