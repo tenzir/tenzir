@@ -527,20 +527,19 @@ public:
 
 auto validate_split_expression(const located<std::string>& split,
                                diagnostic_handler& dh) -> failure_or<void> {
-  if (split.inner == "|") {
-    diagnostic::error("regular expression `|` is not a valid splitter")
-      .primary(split)
-      .hint("use `\\|` if you want to split on the literal `|`")
-      .emit(dh);
-    return failure::promise();
-  }
-  if (split.inner == ".") {
-    diagnostic::error("regular expression `.` is not a valid splitter")
-      .primary(split)
-      .hint("use `\\.` if you want to split on the literal `.`")
-      .emit(dh);
-    return failure::promise();
-  }
+  auto const test = [&](char c) -> failure_or<void> {
+    if (split.inner.size() == 1 and split.inner.front() == c) {
+      diagnostic::error("regular expression `{}` is not a valid splitter", c)
+        .primary(split)
+        .hint("use `\\{}` if you want to split on the literal character `{}`",
+              c, c)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  TRY(test('|'));
+  TRY(test('.'));
   return {};
 }
 

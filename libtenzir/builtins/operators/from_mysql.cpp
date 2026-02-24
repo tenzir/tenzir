@@ -2201,10 +2201,12 @@ public:
     co_await close_client(ctx);
   }
 
-  auto finalize(Push<table_slice>& push, OpCtx& ctx) -> Task<void> override {
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     done_ = true;
     co_await close_client(ctx);
+    co_return FinalizeBehavior::done;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
