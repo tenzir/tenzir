@@ -805,7 +805,27 @@ public:
 
   /// Customize the spawning logic of the operator.
   ///
-  /// Note that this function will also be used for type inference.
+  /// This is particularly useful when the output type of the operator depends
+  /// on a subpipeline, but it can also be used to customize the spawning logic
+  /// based on other parameters.
+  ///
+  /// The given spawner `s` needs to be templated-callable. The template
+  /// parameter is the input type (void, bytes, or events). It can then return
+  /// one of three things:
+  /// - `failure` if the operator can not be spawned with that type and when a
+  ///   custom diagnostic is to be emitted.
+  /// - `None` if we don't know yet whether the operator can be be spawned for
+  ///   that input type.
+  /// - `SpawnWith<Args, Input>`, where `Input` is the template parameter. This
+  ///   is a variant of spawning functions for all possible output types. Return
+  ///   this if the operator can be spawned for that input type.
+  ///
+  /// When returning `None`, then the normaler spawning logic (that uses the
+  /// template parameters of `Describer` to get the implementation types) will
+  /// be used instead.
+  ///
+  /// Note that this function will also be used for type inference. There should
+  /// this be no side-effects besides potentially emitting diagnostics.
   template <class Spawner>
     requires requires(Spawner& s, DescribeCtx& ctx) {
       {
