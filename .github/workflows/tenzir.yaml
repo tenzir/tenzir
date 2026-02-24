@@ -178,7 +178,8 @@ jobs:
           fi
           # Run only what is requested for a workflow dispatch.
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "::notice Enabling workflow dispatch jobs"
+            echo "::notice Enabling workflow dispatch jobs (macOS nix package)"
+            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           # From here on we should be in a pull request.
@@ -365,7 +366,7 @@ jobs:
   tenzir-static-aarch64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true'
+    if: needs.configure.outputs.run-tenzir-nix == 'true' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubicloud-standard-4-arm
@@ -377,7 +378,7 @@ jobs:
   tenzir-static-x86_64-linux:
     name: Nix
     needs: [configure]
-    if: needs.configure.outputs.run-tenzir-nix == 'true'
+    if: needs.configure.outputs.run-tenzir-nix == 'true' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/nix-build-job.yaml
     with:
       runner: ubuntu-latest
@@ -396,7 +397,7 @@ jobs:
       os: darwin
       arch: arm64
       attribute: tenzir-static
-      notarize_macos: ${{ github.event_name == 'release' }}
+      notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
   push-manifest-slim:
