@@ -252,12 +252,9 @@ public:
   /// Process byte output from a spawned subpipeline in a *thread-safe* way.
   virtual auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
                            OpCtx& ctx) -> Task<void> {
-    TENZIR_UNUSED(key, ctx);
-    if constexpr (std::same_as<Output, chunk_ptr>) {
-      co_await push(std::move(chunk));
-    } else {
-      panic("subpipeline result handling is not implemented for this operator");
-    }
+    TENZIR_UNUSED(key, chunk, push, ctx);
+    panic("subpipeline chunk result handling is not implemented for this "
+          "operator");
   }
 
   /// This is *not* required to be thread-safe.
