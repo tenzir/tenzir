@@ -815,12 +815,14 @@ public:
   /// - `failure` if the operator can not be spawned with that type and when a
   ///   custom diagnostic is to be emitted.
   /// - `None` if we don't know yet whether the operator can be be spawned for
-  ///   that input type.
+  ///   that input type, OR if we don't want to customize the logic for a given
+  ///   case. If this remains the case after instantiation, then a generic error
+  ///   message will be produced.
   /// - `SpawnWith<Args, Input>`, where `Input` is the template parameter. This
   ///   is a variant of spawning functions for all possible output types. Return
   ///   this if the operator can be spawned for that input type.
   ///
-  /// When returning `None`, then the normaler spawning logic (that uses the
+  /// When returning `None`, then the normal spawning logic (that uses the
   /// template parameters of `Describer` to get the implementation types) will
   /// be used instead.
   ///
