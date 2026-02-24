@@ -18,6 +18,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/substitute_ctx.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/actor_registry.hpp>
@@ -542,6 +543,28 @@ private:
     -> Task<AnyOpenPipeline> override {
     auto sub_id = id_.sub(next_subpipeline_id_);
     next_subpipeline_id_ += 1;
+    // Instantiate for the case where it was not instantiated yet.
+    if (not pipe.substitute(substitute_ctx{base_ctx{dh_, *reg_}, nullptr},
+                            true)) {
+      // We just emitted an error. Either we return some placeholder no-op
+      // handle now, or we just sleep and wait for cancellation. For now, we
+      // pick the simple option, but we might need to reconsider how we want to
+      // handle such cases eventually.
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    // Optimize one more time in case it wasn't yet, or we just instantiated.
+    auto opt
+      = std::move(pipe).optimize(ir::optimize_filter{}, event_order::ordered);
+    pipe = std::move(opt.replacement);
+    if (not opt.filter.empty()) {
+      auto offset = pipe.operators.size();
+      for (auto& expr : opt.filter) {
+        pipe.operators.push_back(make_where_ir(std::move(expr)));
+      }
+      std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
+                  pipe.operators.end());
+    }
     auto spawned = std::move(pipe).spawn(input);
     using AnySubChain = variant<
       OperatorChain<void, table_slice>, OperatorChain<void, void>,

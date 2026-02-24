@@ -59,7 +59,8 @@ auto split_at_predicate(const table_slice& events,
   };
 }
 
-/// Create a `where` operator with the given expression.
+} // namespace
+
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   // TODO: This should just be a `where_ir{std::move(filter)}`.
   const auto* where = plugins::find<operator_compiler_plugin>("tql2.where");
@@ -74,6 +75,8 @@ auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
   return where->compile(ast::invocation{ast::entity{{}}, std::move(args)}, ctx)
     .unwrap();
 }
+
+namespace {
 
 class Set final : public Operator<table_slice, table_slice> {
 public:

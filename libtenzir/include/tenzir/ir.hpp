@@ -153,6 +153,9 @@ struct optimize_result {
 /// Create a `set` IR operator from assignments.
 auto make_set_ir(std::vector<ast::assignment> assignments) -> Box<ir::Operator>;
 
+/// Create a `where` operator with the given expression.
+auto make_where_ir(ast::expression filter) -> Box<ir::Operator>;
+
 template <>
 inline constexpr auto enable_default_formatter<ir::pipeline> = true;
 
