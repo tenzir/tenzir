@@ -1,6 +1,6 @@
-error: this operator was not ported yet
- --> tests/operators/parallel/error_source_bytes.tql:5:14
+error: subpipeline must not produce bytes
+ --> tests/operators/parallel/error_source_bytes.tql:5:12
   |
-5 | parallel 2 { load_file "/dev/null" }
-  |              ^^^^^^^^^ 
+5 | parallel 2 {
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |

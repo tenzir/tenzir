@@ -183,19 +183,14 @@ private:
   auto process_hash(table_slice input, OpCtx& ctx) -> Task<void> {
     auto values = eval(*route_by_, input, ctx.dh());
     auto num_rows = static_cast<int64_t>(input.rows());
-    // Partition rows by bucket.
-    auto row_buckets = std::vector<size_t>(num_rows);
-    for (auto row = int64_t{0}; row < num_rows; ++row) {
-      auto hash = std::hash<data_view>{}(values.value_at(row));
-      row_buckets[row] = hash % jobs_;
-    }
     // Find runs of same-bucket rows and push subslices.
-    auto begin = size_t{0};
-    while (begin < static_cast<size_t>(num_rows)) {
-      auto bucket = row_buckets[begin];
+    auto begin = int64_t{0};
+    while (begin < num_rows) {
+      auto bucket = std::hash<data_view>{}(values.value_at(begin)) % jobs_;
       auto end = begin + 1;
-      while (end < static_cast<size_t>(num_rows)
-             and row_buckets[end] == bucket) {
+      while (end < num_rows
+             and std::hash<data_view>{}(values.value_at(end)) % jobs_
+                   == bucket) {
         ++end;
       }
       auto slice = subslice(input, begin, end);
@@ -368,7 +363,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ParallelArgs>{};
     auto jobs = d.positional("jobs", &ParallelArgs::jobs);
-    auto route_by = d.named("route_by", &ParallelArgs::route_by, "expression");
+    auto route_by = d.named("route_by", &ParallelArgs::route_by, "any");
     auto pipe = d.pipeline(&ParallelArgs::pipe);
     d.validate([jobs](DescribeCtx& ctx) -> Empty {
       if (auto j = ctx.get(jobs); j and j->inner == 0) {
@@ -392,10 +387,10 @@ public:
           };
         }
       } else if constexpr (std::same_as<Input, void>) {
-        if (ctx.get(route_by)) {
+        if (auto route = ctx.get_location(route_by)) {
           diagnostic::error("`route_by` cannot be used when `parallel` is "
                             "used as a source")
-            .primary(*ctx.get_location(route_by))
+            .primary(*route)
             .emit(ctx);
           return failure::promise();
         }

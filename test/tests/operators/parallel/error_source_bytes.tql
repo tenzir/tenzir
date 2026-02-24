@@ -2,4 +2,7 @@
 error: true
 ---
 
-parallel 2 { load_file "/dev/null" }
+parallel 2 {
+  from {}
+  write_json
+}

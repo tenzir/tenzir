@@ -360,8 +360,9 @@ public:
       auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
       auto result = (*desc_->spawner)(input, ctx);
       TENZIR_ASSERT(result);
-      TENZIR_ASSERT(*result);
-      spawner = std::move(**result);
+      if (*result) {
+        spawner = std::move(**result);
+      }
     }
     auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
