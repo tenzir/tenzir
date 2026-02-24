@@ -1,0 +1,3 @@
+from {id: 1, cond: true}, {id: 2, cond: null}, {id: 3, cond: false}
+set out = "yes" if cond else "no"
+sort id

@@ -1,0 +1,172 @@
+=== default: all_true ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: true,
+  out: "yes",
+}
+=== default: all_false ===
+{
+  id: 1,
+  cond: false,
+  out: "no",
+}
+{
+  id: 2,
+  cond: false,
+  out: "no",
+}
+=== default: mixed_same_type ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: false,
+  out: "no",
+}
+{
+  id: 3,
+  cond: true,
+  out: "yes",
+}
+=== default: mixed_different_type ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: false,
+  out: 42,
+}
+{
+  id: 3,
+  cond: true,
+  out: "yes",
+}
+=== default: null_predicate ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: null,
+  out: "no",
+}
+{
+  id: 3,
+  cond: false,
+  out: "no",
+}
+=== default: non_bool_predicate ===
+{
+  id: 1,
+  cond: 1,
+  out: "no",
+}
+{
+  id: 2,
+  cond: 0,
+  out: "no",
+}
+{
+  id: 3,
+  cond: 2,
+  out: "no",
+}
+=== eager: all_true ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: true,
+  out: "yes",
+}
+=== eager: all_false ===
+{
+  id: 1,
+  cond: false,
+  out: "no",
+}
+{
+  id: 2,
+  cond: false,
+  out: "no",
+}
+=== eager: mixed_same_type ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: false,
+  out: "no",
+}
+{
+  id: 3,
+  cond: true,
+  out: "yes",
+}
+=== eager: mixed_different_type ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: false,
+  out: 42,
+}
+{
+  id: 3,
+  cond: true,
+  out: "yes",
+}
+=== eager: null_predicate ===
+{
+  id: 1,
+  cond: true,
+  out: "yes",
+}
+{
+  id: 2,
+  cond: null,
+  out: "no",
+}
+{
+  id: 3,
+  cond: false,
+  out: "no",
+}
+=== eager: non_bool_predicate ===
+{
+  id: 1,
+  cond: 1,
+  out: "no",
+}
+{
+  id: 2,
+  cond: 0,
+  out: "no",
+}
+{
+  id: 3,
+  cond: 2,
+  out: "no",
+}

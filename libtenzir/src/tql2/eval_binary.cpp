@@ -13,16 +13,40 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
+
+#include <arrow/compute/api_scalar.h>
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <ranges>
 
 // TODO: This file takes very long to compile. Consider splitting it up even more.
 
 namespace tenzir {
 
 namespace {
+
+auto disable_short_circuiting() -> bool {
+  static const auto result = [] {
+    auto value = detail::getenv("TENZIR_EVAL_DISABLE_SHORT_CIRCUITING");
+    if (not value) {
+      return false;
+    }
+    auto lower = *value;
+    std::ranges::transform(lower, lower.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    return lower != "0" and lower != "false" and lower != "no"
+           and lower != "off";
+  }();
+  return result;
+}
 
 [[maybe_unused]] constexpr auto is_arithmetic(ast::binary_op op) -> bool {
   using enum ast::binary_op;
@@ -679,7 +703,100 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
 }
 
 template <ast::binary_op Op>
+  requires(Op == ast::binary_op::and_ or Op == ast::binary_op::or_)
+auto eval_and_or_eager(evaluator& self, const ast::binary_expr& x) -> series {
+  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(builder.Reserve(self.length()));
+  for (auto [left, right] :
+       split_multi_series(self.eval(x.left), self.eval(x.right))) {
+    const auto length = left.length();
+    TENZIR_ASSERT_EQ(length, right.length());
+    const auto typed_left = left.as<bool_type>();
+    if (not typed_left) {
+      diagnostic::warning("expected `bool`, but got `{}`", left.type.kind())
+        .primary(x.left)
+        .hint("the result of this expression is `null`")
+        .emit(self.ctx());
+      const auto typed_right = right.as<bool_type>();
+      if (not typed_right) {
+        diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+          .primary(x.right)
+          .hint("the result of this expression is `null`")
+          .emit(self.ctx());
+      }
+      for (auto i = int64_t{0}; i < length; ++i) {
+        if constexpr (Op == ast::binary_op::or_) {
+          if (typed_right and typed_right->array->IsValid(i)
+              and typed_right->array->GetView(i)) {
+            check(builder.Append(true));
+          } else {
+            check(builder.AppendNull());
+          }
+        } else {
+          if (typed_right and typed_right->array->IsValid(i)
+              and not typed_right->array->GetView(i)) {
+            check(builder.Append(false));
+          } else {
+            check(builder.AppendNull());
+          }
+        }
+      }
+      continue;
+    }
+    auto* const right_array = try_as<arrow::BooleanArray>(right.array.get());
+    auto warned_right_mismatch = false;
+    const auto append_from_right = [&](int64_t i) {
+      if (right_array) {
+        if (right_array->IsValid(i)) {
+          check(builder.Append(right_array->GetView(i)));
+        } else {
+          check(builder.AppendNull());
+        }
+        return;
+      }
+      if (not warned_right_mismatch and not is<null_type>(right.type)) {
+        warned_right_mismatch = true;
+        diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+          .primary(x.right)
+          .hint("the result of this expression is `null`")
+          .emit(self.ctx());
+      }
+      check(builder.AppendNull());
+    };
+    for (auto i = int64_t{0}; i < length; ++i) {
+      const auto left_valid = typed_left->array->IsValid(i);
+      const auto left_true = left_valid and typed_left->array->GetView(i);
+      if constexpr (Op == ast::binary_op::and_) {
+        if (left_true) {
+          append_from_right(i);
+        } else if (left_valid) {
+          check(builder.Append(false));
+        } else {
+          check(builder.AppendNull());
+        }
+      } else {
+        static_assert(Op == ast::binary_op::or_);
+        if (left_true) {
+          check(builder.Append(true));
+        } else {
+          append_from_right(i);
+        }
+      }
+    }
+  }
+  auto result = finish(builder);
+  TENZIR_ASSERT_EQ(result->length(), self.length());
+  return series{
+    bool_type{},
+    std::move(result),
+  };
+}
+
+template <ast::binary_op Op>
 auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
+  if (disable_short_circuiting()) {
+    return eval_and_or_eager<Op>(self, x);
+  }
   auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
   check(builder.Reserve(self.length()));
   auto left_offset = int64_t{0};
@@ -806,6 +923,87 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
 auto eval_if(evaluator& self, const ast::binary_expr& x,
              const ast::expression& fallback
              = ast::constant{caf::none, location::unknown}) -> multi_series {
+  if (disable_short_circuiting()) {
+    auto inputs = std::array<multi_series, 3>{
+      self.eval(x.right),
+      self.eval(x.left),
+      self.eval(fallback),
+    };
+    return map_series(inputs, [&](std::span<series> parts) -> multi_series {
+      TENZIR_ASSERT_EQ(parts.size(), 3u);
+      const auto& predicate = parts[0];
+      const auto& then_branch = parts[1];
+      const auto& else_branch = parts[2];
+      const auto length = predicate.length();
+      TENZIR_ASSERT_EQ(length, then_branch.length());
+      TENZIR_ASSERT_EQ(length, else_branch.length());
+      const auto typed_predicate = predicate.as<bool_type>();
+      if (not typed_predicate) {
+        diagnostic::warning("expected `bool`, but got `{}`",
+                            predicate.type.kind())
+          .primary(x.right)
+          .hint("this will be treated as `false`")
+          .emit(self.ctx());
+        return else_branch;
+      }
+      if (typed_predicate->array->null_count() > 0) {
+        diagnostic::warning("expected `bool`, but got `null`")
+          .primary(x.right)
+          .hint("use `else` to provide a fallback value")
+          .emit(self.ctx());
+      }
+      if (typed_predicate->array->true_count() == length) {
+        return then_branch;
+      }
+      if (typed_predicate->array->true_count() == 0) {
+        return else_branch;
+      }
+      // Fast path: use Arrow's kernel when both branches have the same type.
+      if (then_branch.type == else_branch.type) {
+        auto predicate_array
+          = std::shared_ptr<arrow::BooleanArray>{typed_predicate->array};
+        // `if_else` promotes nulls in the predicate to null outputs. We treat
+        // null predicate values as false and pick the fallback branch instead.
+        if (typed_predicate->array->null_count() > 0) {
+          auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+          check(b.Reserve(length));
+          for (auto i = int64_t{0}; i < length; ++i) {
+            b.UnsafeAppend(typed_predicate->array->IsValid(i)
+                           and typed_predicate->array->GetView(i));
+          }
+          predicate_array = finish(b);
+        }
+        auto if_else_result = arrow::compute::IfElse(
+          predicate_array, then_branch.array, else_branch.array);
+        if (if_else_result.ok()) {
+          TENZIR_ASSERT(if_else_result->is_array());
+          return series{then_branch.type, if_else_result->make_array()};
+        }
+      }
+      const auto get_predicate = [&](int64_t i) -> bool {
+        return typed_predicate->array->IsValid(i)
+               and typed_predicate->array->GetView(i);
+      };
+      auto result = multi_series{};
+      auto range_offset = int64_t{0};
+      auto range_current = get_predicate(0);
+      const auto append_until = [&](int64_t end) {
+        result.append(
+          (range_current ? then_branch : else_branch).slice(range_offset, end));
+      };
+      for (auto i = int64_t{1}; i < length; ++i) {
+        if (range_current == get_predicate(i)) {
+          continue;
+        }
+        append_until(i);
+        range_offset = i;
+        range_current = not range_current;
+      }
+      append_until(length);
+      TENZIR_ASSERT_EQ(result.length(), length);
+      return result;
+    });
+  }
   auto right_offset = int64_t{0};
   return map_series(
     self.eval(x.right), [&](const series& right) -> multi_series {
@@ -853,7 +1051,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x,
         range_current = not range_current;
       }
       append_until(length);
-      TENZIR_ASSERT(result.length() == length);
+      TENZIR_ASSERT_EQ(result.length(), length);
       return result;
     });
 }
@@ -867,6 +1065,46 @@ auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
     if (binop->op.inner == ast::binary_op::if_) {
       return eval_if(self, *binop, x.right);
     }
+  }
+  if (disable_short_circuiting()) {
+    auto inputs = std::array<multi_series, 2>{
+      self.eval(x.left),
+      self.eval(x.right),
+    };
+    return map_series(inputs, [&](std::span<series> parts) -> multi_series {
+      TENZIR_ASSERT_EQ(parts.size(), 2u);
+      auto& left = parts[0];
+      auto& right = parts[1];
+      const auto length = left.length();
+      TENZIR_ASSERT_EQ(length, right.length());
+      if (left.array->null_count() == 0) {
+        return left;
+      }
+      if (left.array->null_count() == length) {
+        return right;
+      }
+      auto result = multi_series{};
+      auto range_offset = int64_t{0};
+      auto range_current = left.array->IsValid(0);
+      const auto append_until = [&](int64_t end) {
+        if (range_current) {
+          result.append(left.slice(range_offset, end));
+        } else {
+          result.append(right.slice(range_offset, end));
+        }
+      };
+      for (auto i = int64_t{1}; i < length; ++i) {
+        if (range_current == left.array->IsValid(i)) {
+          continue;
+        }
+        append_until(i);
+        range_offset = i;
+        range_current = not range_current;
+      }
+      append_until(length);
+      TENZIR_ASSERT_EQ(result.length(), length);
+      return result;
+    });
   }
   auto left_offset = int64_t{0};
   return map_series(self.eval(x.left), [&](series left) -> multi_series {
@@ -903,7 +1141,7 @@ auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_current = not range_current;
     }
     append_until(length);
-    TENZIR_ASSERT(result.length() == length);
+    TENZIR_ASSERT_EQ(result.length(), length);
     return result;
   });
 }
