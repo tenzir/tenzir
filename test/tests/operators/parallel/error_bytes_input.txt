@@ -1,0 +1,7 @@
+error: operator does not accept bytes
+ --> tests/operators/parallel/error_bytes_input.tql:7:1
+  |
+7 | parallel { pass }
+  | ^^^^^^^^ 
+  |
+  = docs: https://docs.tenzir.com/reference/operators/tql2.parallel

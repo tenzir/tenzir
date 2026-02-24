@@ -10,6 +10,7 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -318,6 +319,17 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
+    if (desc_->spawner) {
+      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, dh};
+      TRY(auto spawn, (*desc_->spawner)(input, ctx));
+      if (spawn) {
+        return match(*spawn,
+                     []<class Input, class Output>(
+                       Spawn<Input, Output>&) -> element_type_tag {
+                       return tag_v<Output>;
+                     });
+      }
+    }
     for (auto& spawn : desc_->spawns) {
       auto output = match(
         spawn,
@@ -340,6 +352,18 @@ public:
   }
 
   auto spawn(element_type_tag input) && -> AnyOperator override {
+    // The spawner must be retrieved before filling args, because we move them
+    // out and thus the passed `DescribeCtx` would be incomplete.
+    auto spawner = std::optional<AnySpawn>{};
+    if (desc_->spawner) {
+      auto noop_dh = null_diagnostic_handler{};
+      auto ctx = DescribeCtx{args_, named_args_, pipeline_, *desc_, noop_dh};
+      auto result = (*desc_->spawner)(input, ctx);
+      TENZIR_ASSERT(result);
+      if (*result) {
+        spawner = std::move(**result);
+      }
+    }
     auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
@@ -386,6 +410,11 @@ public:
     }
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
+    }
+    if (spawner) {
+      return match(*spawner, [&](auto& spawner) -> AnyOperator {
+        return spawner(std::move(args));
+      });
     }
     for (auto& spawn : desc_->spawns) {
       auto result = match(
@@ -545,7 +574,7 @@ public:
     if (desc_->validator) {
       auto error_tracker = error_tracking_handler{ctx};
       auto validate_ctx
-        = ValidateCtx{args_, named_args_, pipeline_, *desc_, error_tracker};
+        = DescribeCtx{args_, named_args_, pipeline_, *desc_, error_tracker};
       (*desc_->validator)(validate_ctx);
       if (error_tracker.had_error()) {
         return failure::promise();

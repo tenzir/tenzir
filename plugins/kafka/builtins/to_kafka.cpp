@@ -570,7 +570,7 @@ public:
     auto options_arg = d.named_optional("options", &ToKafkaArgs::options);
     auto aws_region_arg = d.named("aws_region", &ToKafkaArgs::aws_region);
     auto aws_iam_arg = d.named("aws_iam", &ToKafkaArgs::aws_iam);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto options = ctx.get(options_arg); options) {
         if (not validate_options(*options, ctx)) {
           return {};

@@ -1704,7 +1704,7 @@ public:
       "_fetch_wait_timeout", &FromKafkaArgs::_fetch_wait_timeout);
     d.named_optional("_json", &FromKafkaArgs::_json);
     d.named_optional("_raw", &FromKafkaArgs::_raw);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto mode = OptimizationMode::ordered;
       if (auto optimization = ctx.get(optimization_arg); optimization) {
         auto parsed = from_string<OptimizationMode>(*optimization);

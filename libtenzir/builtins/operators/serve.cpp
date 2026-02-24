@@ -1369,7 +1369,7 @@ public:
     auto d = Describer<ServeArgs, ServeImpl>{};
     d.positional("id", &ServeArgs::id);
     auto bs = d.named_optional("buffer_size", &ServeArgs::buffer_size);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto buffer_size, ctx.get(bs));
       if (buffer_size == 0) {
         diagnostic::error("buffer size must not be zero")

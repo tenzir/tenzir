@@ -315,7 +315,7 @@ public:
     d.named("min_events", &SampleArgs::min_events);
     d.named("max_rate", &SampleArgs::max_rate);
     d.named("max_samples", &SampleArgs::max_samples);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto period = ctx.get(period_arg)) {
         if (*period <= duration::zero()) {
           diagnostic::error("`period` must be a positive duration")

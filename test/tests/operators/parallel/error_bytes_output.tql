@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+parallel { write_json }

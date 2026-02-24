@@ -54,7 +54,7 @@ struct ArrowFsArgs {
     auto max_age_arg
       = d.template named<duration>("max_age", &ArrowFsArgs::max_age);
     auto pipe_arg = d.pipeline(&ArrowFsArgs::pipe);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
       if (remove_loc and rename_loc) {
@@ -87,7 +87,7 @@ struct ArrowFsArgs {
   /// Registers the common ArrowFsArgs fields with an extra validator.
   template <class Args, class... Impls, class F>
     requires std::derived_from<Args, ArrowFsArgs>
-             and std::invocable<F, ValidateCtx&>
+             and std::invocable<F, DescribeCtx&>
   static auto describe_to(Describer<Args, Impls...>& d, F extra) -> void {
     d.template positional<located<secret>>("url", &ArrowFsArgs::url);
     d.named("watch", &ArrowFsArgs::watch);
@@ -97,7 +97,7 @@ struct ArrowFsArgs {
     auto max_age_arg
       = d.template named<duration>("max_age", &ArrowFsArgs::max_age);
     auto pipe_arg = d.pipeline(&ArrowFsArgs::pipe);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
       if (remove_loc and rename_loc) {

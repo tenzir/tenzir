@@ -1,0 +1,5 @@
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+parallel {
+  y = x * 2
+}
+sort x

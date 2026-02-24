@@ -77,7 +77,8 @@ public:
 
   template <std::same_as<Input> In>
   auto push(In input) -> Task<Result<void, In>>;
-  auto close() -> Task<void>;
+  auto close() -> Task<void>
+    requires(not std::same_as<Input, void>);
 
 private:
   Ref<Push<OperatorMsg<Input>>> push_;
@@ -174,9 +175,6 @@ protected:
   ~OperatorInputOutputBase() = default;
 };
 
-template <class Output>
-class OperatorInputOutputBase<void, Output> {};
-
 template <class Input>
 class OperatorInputOutputBase<Input, void> {
 public:
@@ -185,6 +183,12 @@ public:
 protected:
   ~OperatorInputOutputBase() = default;
 };
+
+template <class Output>
+class OperatorInputOutputBase<void, Output> {};
+
+template <>
+class OperatorInputOutputBase<void, void> {};
 
 template <class Output>
 class OperatorOutputBase {
@@ -332,9 +336,10 @@ public:
 };
 
 using AnyOperator = variant<
-  Box<Operator<void, chunk_ptr>>, Box<Operator<void, table_slice>>,
-  Box<Operator<chunk_ptr, chunk_ptr>>, Box<Operator<chunk_ptr, table_slice>>,
-  Box<Operator<table_slice, chunk_ptr>>, Box<Operator<table_slice, table_slice>>,
-  Box<Operator<table_slice, void>>, Box<Operator<chunk_ptr, void>>>;
+  Box<Operator<void, void>>, Box<Operator<void, chunk_ptr>>,
+  Box<Operator<void, table_slice>>, Box<Operator<chunk_ptr, chunk_ptr>>,
+  Box<Operator<chunk_ptr, table_slice>>, Box<Operator<table_slice, chunk_ptr>>,
+  Box<Operator<table_slice, table_slice>>, Box<Operator<table_slice, void>>,
+  Box<Operator<chunk_ptr, void>>>;
 
 } // namespace tenzir

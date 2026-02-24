@@ -582,7 +582,7 @@ public:
     d.named("begin", &SliceArgs::begin);
     d.named("end", &SliceArgs::end);
     auto stride = d.named("stride", &SliceArgs::stride);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(stride));
       if (value == 0) {
         diagnostic::error("stride must not be zero")

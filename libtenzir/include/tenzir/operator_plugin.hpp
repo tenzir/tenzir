@@ -95,15 +95,23 @@ struct Pipeline {
   bool required = false;
 };
 
+template <class Args, class Input, class Output>
+using SpawnFn = std::function<auto(Args)->Box<Operator<Input, Output>>>;
+
 template <class Input, class Output>
-using Spawn = std::function<auto(Any)->Box<Operator<Input, Output>>>;
+using Spawn = SpawnFn<Any, Input, Output>;
 
 // Variant for different operator spawn functions (matches AnyOperator).
 using AnySpawn
-  = variant<Spawn<void, chunk_ptr>, Spawn<void, table_slice>,
+  = variant<Spawn<void, void>, Spawn<void, chunk_ptr>, Spawn<void, table_slice>,
             Spawn<chunk_ptr, chunk_ptr>, Spawn<chunk_ptr, table_slice>,
             Spawn<table_slice, chunk_ptr>, Spawn<table_slice, table_slice>,
             Spawn<table_slice, void>, Spawn<chunk_ptr, void>>;
+
+template <class Args, class Input>
+using SpawnWith
+  = variant<SpawnFn<Args, Input, void>, SpawnFn<Args, Input, chunk_ptr>,
+            SpawnFn<Args, Input, table_slice>>;
 
 // FIXME: Do we need this?
 class Empty {
@@ -114,26 +122,28 @@ public:
   }
 };
 
-class ValidateCtx;
+class DescribeCtx;
 
-using Validator = std::function<Empty(ValidateCtx&)>;
+using Spawner = std::function<
+  auto(element_type_tag input, DescribeCtx& ctx)->failure_or<Option<AnySpawn>>>;
+
+using Validator = std::function<auto(DescribeCtx&)->Empty>;
 
 struct Description {
-public:
-  Description() = default;
-
   std::string name;
   std::string docs;
-  std::function<Any()> make_args;
+  std::function<auto()->Any> make_args;
   std::vector<Positional> positional;
   std::optional<Pipeline> pipeline;
   std::optional<size_t> first_optional;
   std::optional<size_t> variadic_index;
   std::vector<Named> named;
-  std::vector<AnySpawn> spawns;
   std::optional<Validator> validator;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
+  // FIXME: Document.
+  std::optional<Spawner> spawner;
+  std::vector<AnySpawn> spawns;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -279,9 +289,9 @@ struct PipelineArg {
   }
 };
 
-class ValidateCtx {
+class DescribeCtx {
 public:
-  ValidateCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
+  DescribeCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
               std::optional<const PipelineArg> pipeline,
               const Description& desc, diagnostic_handler& dh)
     : args_{args},
@@ -793,6 +803,64 @@ public:
     desc_.validator = std::move(validator);
   }
 
+  /// Customize the spawning logic of the operator.
+  ///
+  /// This is particularly useful when the output type of the operator depends
+  /// on a subpipeline, but it can also be used to customize the spawning logic
+  /// based on other parameters.
+  ///
+  /// The given spawner `s` needs to be templated-callable. The template
+  /// parameter is the input type (void, bytes, or events). It can then return
+  /// one of three things:
+  /// - `failure` if the operator can not be spawned with that type and when a
+  ///   custom diagnostic is to be emitted.
+  /// - `None` if we don't know yet whether the operator can be be spawned for
+  ///   that input type, OR if we don't want to customize the logic for a given
+  ///   case. If this remains the case after instantiation, then a generic error
+  ///   message will be produced.
+  /// - `SpawnWith<Args, Input>`, where `Input` is the template parameter. This
+  ///   is a variant of spawning functions for all possible output types. Return
+  ///   this if the operator can be spawned for that input type.
+  ///
+  /// When returning `None`, then the normal spawning logic (that uses the
+  /// template parameters of `Describer` to get the implementation types) will
+  /// be used instead.
+  ///
+  /// Note that this function will also be used for type inference. There should
+  /// this be no side-effects besides potentially emitting diagnostics.
+  template <class Spawner>
+    requires requires(Spawner& s, DescribeCtx& ctx) {
+      {
+        s.template operator()<void>(ctx)
+      } -> std::same_as<failure_or<Option<SpawnWith<Args, void>>>>;
+      {
+        s.template operator()<chunk_ptr>(ctx)
+      } -> std::same_as<failure_or<Option<SpawnWith<Args, chunk_ptr>>>>;
+      {
+        s.template operator()<table_slice>(ctx)
+      } -> std::same_as<failure_or<Option<SpawnWith<Args, table_slice>>>>;
+    }
+  auto spawner(Spawner spawner) -> void {
+    desc_.spawner = [spawner = std::move(spawner)](
+                      element_type_tag input,
+                      DescribeCtx& ctx) -> failure_or<Option<AnySpawn>> {
+      return match(
+        input, [&]<class Input>(tag<Input>) -> failure_or<Option<AnySpawn>> {
+          auto result = spawner.template operator()<Input>(ctx);
+          TRY(auto option, std::move(result));
+          TRY(auto spawn, std::move(option));
+          return match(
+            spawn,
+            [&]<class Output>(SpawnFn<Args, Input, Output>& spawn) -> AnySpawn {
+              return [spawn = std::move(spawn)](
+                       Any args) -> Box<Operator<Input, Output>> {
+                return spawn(args.as<Args>());
+              };
+            });
+        });
+    };
+  }
+
   // TODO
   template <class F>
   auto optimize(F&& f) -> Description;
@@ -825,10 +893,12 @@ private:
 } // namespace _::operator_plugin
 
 using _::operator_plugin::Argument;
+using _::operator_plugin::DescribeCtx;
 using _::operator_plugin::Describer;
 using _::operator_plugin::Description;
 using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
-using _::operator_plugin::ValidateCtx;
+using _::operator_plugin::Spawn;
+using _::operator_plugin::SpawnWith;
 
 } // namespace tenzir

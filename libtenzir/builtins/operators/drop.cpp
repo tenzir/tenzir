@@ -223,7 +223,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<DropArgs, Drop>{};
     auto fields = d.variadic("fields", &DropArgs::fields, "field");
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);
       for (auto& value : values) {
         if (not value) {

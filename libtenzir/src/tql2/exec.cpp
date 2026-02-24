@@ -1474,7 +1474,7 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
     });
   }
   LOGW("blocking on pipeline");
-  co_await run_pipeline(std::move(*chain), exec_ctx, sys, dh);
+  co_await run_pipeline(std::move(chain).unwrap(), exec_ctx, sys, dh);
   LOGW("blocking on pipeline done");
   if (sampler) {
     stop_flag.store(true, std::memory_order::relaxed);

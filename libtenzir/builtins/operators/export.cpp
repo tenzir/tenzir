@@ -259,7 +259,7 @@ public:
     d.named("retro", &ExportArgs::retro);
     d.named("internal", &ExportArgs::internal);
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(parallel));
       if (value == 0) {
         diagnostic::error("parallel level must be greater than zero")

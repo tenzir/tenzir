@@ -317,7 +317,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<FromStdinArgs, FromStdin>{};
     auto pipe_arg = d.pipeline(&FromStdinArgs::pipe);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto pipe, ctx.get(pipe_arg));
       auto output = pipe.inner.infer_type(tag_v<chunk_ptr>, ctx);
       if (output.is_error()) {

@@ -29,7 +29,9 @@ auto OpenPipeline<Input>::push(In input) -> Task<Result<void, In>> {
 }
 
 template <class Input>
-auto OpenPipeline<Input>::close() -> Task<void> {
+auto OpenPipeline<Input>::close() -> Task<void>
+  requires(not std::same_as<Input, void>)
+{
   co_await push_(EndOfData{});
 }
 

@@ -2273,7 +2273,7 @@ public:
     auto live_arg = d.named("live", &FromMySQLArgs::live);
     auto tracking_column_arg
       = d.named("tracking_column", &FromMySQLArgs::tracking_column);
-    d.validate([=](ValidateCtx& ctx) -> Empty {
+    d.validate([=](DescribeCtx& ctx) -> Empty {
       auto has_table = ctx.get(table_arg).has_value();
       auto has_sql = ctx.get(sql_arg).has_value();
       auto has_show = ctx.get(show).has_value();
