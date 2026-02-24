@@ -71,7 +71,7 @@ public:
         if constexpr (not std::same_as<Input, void>) {
           auto pipe = as<OpenPipeline<Input>>(*last_pipe);
           // TODO: Does this get rid of it?
-          pipe.close();
+          co_await pipe.close();
         }
       } else {
         // FIXME
