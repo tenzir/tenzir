@@ -1,0 +1,5 @@
+created: 2026-02-24
+title: Tenzir Node v5.27.0
+intro: >-
+  This release enhances the sort function with custom comparators and descending order
+  support, and extends the slice function to work with lists.
