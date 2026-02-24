@@ -6,8 +6,7 @@ authors:
 created: 2026-02-24T16:40:29.768312Z
 ---
 
-The platform plugin did not correctly use the configured `certfile` and
-`keyfile` options for client certificate authentication. Global TLS defaults
-unconditionally overwrote plugin-specific settings, causing the custom CA and
-client certificates to be replaced by the system trust store. The plugin now
-correctly respects plugin-specific TLS configuration.
+Fixed in issue where the platform plugin did not correctly use the
+configured `certfile`, `keyfile` and `cafile` options for client
+certificate authentication, and improved the error messages for TLS
+issues during platform connection.
