@@ -141,6 +141,14 @@ public:
     return {};
   }
 
+  /// Create a throughput counter with the given label.
+  /// Returns a null counter if metrics collection is disabled.
+  virtual auto make_gauge(MetricsLabel label, MetricsDirection direction,
+                          MetricsVisibility visibility) -> MetricsGauge {
+    TENZIR_UNUSED(label, direction, visibility);
+    return {};
+  }
+
   virtual auto metrics() const -> std::shared_ptr<PipelineMetrics> const& {
     static auto empty = std::shared_ptr<PipelineMetrics>{};
     return empty;
