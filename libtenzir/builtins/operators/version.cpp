@@ -46,7 +46,6 @@ auto make_version(const caf::settings& settings) -> table_slice {
         "build",
         record_type{
           {"type", string_type{}},
-          {"tree_hash", string_type{}},
           {"assertions", bool_type{}},
           {
             "sanitizers",
@@ -78,7 +77,6 @@ auto make_version(const caf::settings& settings) -> table_slice {
   }
   auto build = event.field("build").record();
   build.field("type").data(tenzir::version::build::type);
-  build.field("tree_hash").data(tenzir::version::build::tree_hash);
   build.field("assertions").data(tenzir::version::build::has_assertions);
   auto sanitizers = build.field("sanitizers").record();
   sanitizers.field("address", tenzir::version::build::has_address_sanitizer);

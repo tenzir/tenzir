@@ -57,9 +57,6 @@ namespace build {
 /// The CMake build type used to build Tenzir.
 extern const char* type;
 
-/// Contains a hash of Tenzir's build tree.
-extern const char* tree_hash;
-
 /// Whether assertions, ASan, and UBSan are enabled respectively.
 extern bool has_assertions;
 extern bool has_address_sanitizer;

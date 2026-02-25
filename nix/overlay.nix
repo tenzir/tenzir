@@ -1,6 +1,6 @@
 finalPkgs: prevPkgs:
 let
-  inherit (prevPkgs) lib;
+  inherit (prevPkgs) lib config;
   inherit (finalPkgs.stdenv.hostPlatform) isDarwin isStatic;
 
   callFunctionWith = import ./callFunctionWith.nix { inherit lib; };
@@ -17,6 +17,7 @@ let
       ];
     });
   };
+
 in
 {
   curl = prevPkgs.curl.override (lib.optionalAttrs (isDarwin && isStatic) {
@@ -60,6 +61,7 @@ in
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
+  mold-unwrapped = callFunction ./overrides/mold.nix { inherit (prevPkgs) mold-unwrapped; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };

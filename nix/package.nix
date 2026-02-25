@@ -88,19 +88,22 @@ rec {
   unchecked =
     linkPkgs:
     let
-      tenzir-de = linkPkgs.callPackage ./tenzir (
-        {
-          inherit tenzir-source tenzirPythonPkgs toImageFn isReleaseBuild;
-        }
-        // lib.optionalAttrs forceClang {
-          stdenv = linkPkgs.clangStdenv;
-          caf = (
-            linkPkgs.caf.override {
-              stdenv = linkPkgs.clangStdenv;
-            }
-          );
-        }
-      );
+      baseStdenv = if forceClang then linkPkgs.clangStdenv else linkPkgs.stdenv;
+      canUseMold = linkPkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf";
+      linkAdapter  = if canUseMold then linkPkgs.stdenvAdapters.useMoldLinker else lib.trivial.id;
+      tenzirStdenv = linkAdapter baseStdenv;
+      tenzir-de = linkPkgs.callPackage ./tenzir {
+        inherit
+          tenzir-source
+          tenzirPythonPkgs
+          toImageFn
+          isReleaseBuild
+          ;
+        stdenv = tenzirStdenv;
+        caf = linkPkgs.caf.override {
+          stdenv = tenzirStdenv;
+        };
+      };
     in
     {
       inherit tenzir-de;

@@ -51,9 +51,6 @@
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++"
-      },
-      "environment": {
-        "LDFLAGS": "-fuse-ld=lld"
       }
     },
     {
@@ -107,9 +104,6 @@
       "binaryDir": "${sourceDir}/build/gcc/debug",
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/debug"
-      },
-      "environment": {
-        "LDFLAGS": "-fuse-ld=lld"
       }
     },
     {
@@ -128,9 +122,6 @@
       "binaryDir": "${sourceDir}/build/gcc/relwithdebinfo",
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/relwithdebinfo"
-      },
-      "environment": {
-        "LDFLAGS": "-fuse-ld=lld"
       }
     },
     {
@@ -140,9 +131,6 @@
       "binaryDir": "${sourceDir}/build/gcc/release",
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/release"
-      },
-      "environment": {
-        "LDFLAGS": "-fuse-ld=gold"
       }
     },
     {

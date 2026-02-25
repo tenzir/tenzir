@@ -1017,9 +1017,6 @@ extern const char* TENZIR_PLUGIN_VERSION;
     extern "C" auto tenzir_libtenzir_version() -> const char* {                \
       return ::tenzir::version::version;                                       \
     }                                                                          \
-    extern "C" auto tenzir_libtenzir_build_tree_hash() -> const char* {        \
-      return ::tenzir::version::build::tree_hash;                              \
-    }                                                                          \
     extern "C" auto tenzir_plugin_dependencies() -> const char* const* {       \
       static constexpr auto dependencies = [](auto... xs) {                    \
         return std::array<const char*, sizeof...(xs) + 1>{xs..., nullptr};     \

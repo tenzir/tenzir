@@ -641,20 +641,6 @@ auto plugin_ptr::make_dynamic(const char* filename) noexcept
     return caf::make_error(ec::version_error, "libtenzir version mismatch in",
                            filename, libtenzir_version(), version::version);
   }
-  auto libtenzir_build_tree_hash = reinterpret_cast<const char* (*)()>(
-    dlsym(library, "tenzir_libtenzir_build_tree_hash"));
-  if (not libtenzir_build_tree_hash) {
-    return caf::make_error(ec::system_error,
-                           "failed to resolve symbol "
-                           "tenzir_libtenzir_build_tree_hash in",
-                           filename, dlerror());
-  }
-  if (strcmp(libtenzir_build_tree_hash(), version::build::tree_hash) != 0) {
-    return caf::make_error(ec::version_error,
-                           "libtenzir build tree hash mismatch in", filename,
-                           libtenzir_build_tree_hash(),
-                           version::build::tree_hash);
-  }
   auto plugin_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_plugin_version"));
   if (not plugin_version) {

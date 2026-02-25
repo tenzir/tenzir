@@ -11,7 +11,6 @@ let
       cmake,
       ninja,
       pkg-config,
-      llvmPackages,
       boost,
       caf,
       curl,
@@ -226,9 +225,6 @@ let
             ++ lib.optionals stdenv.isLinux [
               dpkg
               rpm
-            ]
-            ++ lib.optionals stdenv.cc.isClang [
-              llvmPackages.bintools
             ];
           propagatedNativeBuildInputs = [ pkg-config ];
           buildInputs =
@@ -359,7 +355,6 @@ let
               "-DCMAKE_CXX_COMPILER_AR=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ar"
               "-DCMAKE_C_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
               "-DCMAKE_CXX_COMPILER_RANLIB=${lib.getBin pkgsBuildHost.llvm}/bin/llvm-ranlib"
-              "-DCMAKE_LINKER_TYPE=LLD"
             ]
             ++ lib.optionals stdenv.hostPlatform.isx86_64 [
               "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
@@ -393,9 +388,6 @@ let
             lib.optionals isStatic [
               "fortify"
               "pic"
-            ]
-            ++ lib.optionals (stdenv.cc.isClang && isStatic) [
-              "pie"
             ];
 
           preBuild =
