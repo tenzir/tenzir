@@ -1,0 +1,5 @@
+created: 2026-02-25
+title: Tenzir Node v5.27.1
+intro: >-
+  This release fixes an issue where the platform plugin did not correctly use the
+  configured certfile, keyfile, and cafile options for client certificate authentication.
