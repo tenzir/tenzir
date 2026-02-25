@@ -190,7 +190,6 @@ private:
     if (not writer_) {
       const auto sender = self_->current_sender();
       writer_ = sender->address();
-      enforce_writer_identity_ = monitor;
       if (monitor) {
         self_->monitor(sender, [this](const caf::error& err) {
           if (done_) {
@@ -897,10 +896,12 @@ public:
                             read_timeout, write_timeout)
           .request(cache_manager);
     if (not result) {
+      done_ = true;
       diagnostic::error(result.error()).note("failed to create cache").emit(ctx);
       co_return;
     }
     if (not *result) {
+      done_ = true;
       diagnostic::error("cache `{}` already has a writer", args_.id).emit(ctx);
       co_return;
     }
