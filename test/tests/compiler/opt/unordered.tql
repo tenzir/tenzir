@@ -1,4 +1,7 @@
 export
 unordered {
+  write_lines
+  read_ndjson
   where foo == 42
 }
+discard
