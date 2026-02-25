@@ -756,7 +756,9 @@ jobs:
       - python-package
       # TODO: Re-enable this after v4.26 was released.
       # - regression-tests
-      - tenzir
+      # TODO: Re-enable this when homebrew is fixed (aws-sdk-cpp issue).
+      # See: https://github.com/apache/arrow/issues/49347
+      # - tenzir
       - tenzir-static-arm64-darwin
       - tenzir-static-aarch64-linux
       - tenzir-static-x86_64-linux
