@@ -1,0 +1,4 @@
+{
+  has_pipeline_id: true,
+  has_operator_id: true,
+}

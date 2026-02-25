@@ -1729,14 +1729,7 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
-  // Enable profiling if --profile is set or the env var is set with a callback.
-  auto profiling = profile_path.has_value();
-  if (not profiling and profiler_fn) {
-    auto* env = std::getenv("TENZIR_ENABLE_OPERATOR_METRICS");
-    if (env and std::string_view{env} == "1") {
-      profiling = true;
-    }
-  }
+  auto profiling = profile_path.has_value() or static_cast<bool>(profiler_fn);
   auto exec_ctx
     = TestExecCtx{profiling, std::move(emit_fn), std::move(profiler_fn)};
   // Profiling: sample channel and executor stats periodically if requested.

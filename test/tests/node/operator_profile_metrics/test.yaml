@@ -1,0 +1,5 @@
+suite: operator-profile-metrics
+runner: tenzir
+fixtures: [node]
+timeout: 60
+retry: 5
