@@ -1685,9 +1685,8 @@ auto build_profiler_snapshot(
     });
   }
   // Drain backpressure events from all channels to prevent unbounded memory
-  // growth. This is safe even when `write_profile` also reads backpressure
-  // events, because that code path uses the non-destructive
-  // `backpressure_events()` accessor.
+  // growth. This is incompatible with `write_profile`, which reads events via
+  // `backpressure_events()` — see the assertion in `run_plan_impl`.
   // Convert steady_clock timestamps to wall-clock time.
   auto wall_now = time::clock::now();
   auto steady_now = std::chrono::steady_clock::now();
@@ -1732,6 +1731,11 @@ auto run_plan_impl(std::vector<AnyOperator> ops, caf::actor_system& sys,
   auto chain = OperatorChain<void, void>::try_from(std::move(ops));
   // TODO
   TENZIR_ASSERT(chain);
+  // Currently, the profile file and live profiler cannot be active at the same
+  // time because the live profiler drains backpressure events that the profile
+  // file needs. This can be lifted by accumulating drained events separately.
+  TENZIR_ASSERT(
+    not(profile_path.has_value() and static_cast<bool>(profiler_fn)));
   auto profiling = profile_path.has_value() or static_cast<bool>(profiler_fn);
   auto exec_ctx
     = TestExecCtx{profiling, std::move(emit_fn), std::move(profiler_fn)};
