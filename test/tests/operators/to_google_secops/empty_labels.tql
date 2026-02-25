@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {text: "CUSTOM_DNS_LOG"}
+to_google_secops _dry_run =true, region="REGION", customer_id="CUSTOMER",
+  private_key="PRIVATE_KEY", client_email="EMAIL", log_type="CUSTOM_DNS",
+  log_text=text, labels={}

@@ -1,0 +1,6 @@
+error: `region` must not be empty
+ --> tests/operators/to_google_secops/empty_region.tql:6:41
+  |
+6 | to_google_secops _dry_run =true, region="", customer_id="CUSTOMER",
+  |                                         ^^ 
+  |
