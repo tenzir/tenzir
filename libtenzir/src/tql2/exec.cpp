@@ -982,7 +982,6 @@ private:
   MetricsCallback emit_fn_;
   ProfilerCallback profiler_fn_;
   std::unordered_map<std::string, OpSnapshot> prev_snapshots_;
-  time prev_timestamp_ = time::clock::now();
   std::mutex mutex_;
   std::vector<ChannelProfile> channel_profiles_;
   std::vector<ExecutorProfile> executor_profiles_;
