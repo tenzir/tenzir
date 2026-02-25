@@ -6,4 +6,6 @@ assertions:
       state: removed
 timeout: 30
 skip:
-  on: fixture-unavailable
+  on:
+    - fixture-unavailable
+    - capability-unavailable

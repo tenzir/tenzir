@@ -1,9 +1,14 @@
 suite: from-gcs
 fixtures: [gcs]
+requires:
+  operators:
+    - from_gcs
 assertions:
   fixtures:
     gcs:
       state: unchanged
 timeout: 30
 skip:
-  on: fixture-unavailable
+  on:
+    - fixture-unavailable
+    - capability-unavailable
